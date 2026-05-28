@@ -50,6 +50,7 @@ pub enum PolicyDecision {
 pub struct ApprovalService {
     workspace_root: PathBuf,
     pending: Arc<Mutex<HashMap<String, Approval>>>,
+    decisions: Arc<Mutex<HashMap<String, PolicyDecision>>>,
 }
 
 impl ApprovalService {
@@ -57,6 +58,7 @@ impl ApprovalService {
         Self {
             workspace_root: std::fs::canonicalize(&workspace_root).unwrap_or(workspace_root),
             pending: Arc::new(Mutex::new(HashMap::new())),
+            decisions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -121,6 +123,32 @@ impl ApprovalService {
                 reason: "denied by user".to_string(),
             }
         }
+    }
+
+    pub async fn resolve_idempotent(
+        &self,
+        decision: ApprovalDecision,
+        idempotency_key: &str,
+    ) -> PolicyDecision {
+        if let Some(existing) = self.decisions.lock().await.get(idempotency_key).cloned() {
+            return existing;
+        }
+
+        let result = self.resolve(decision).await;
+        self.decisions
+            .lock()
+            .await
+            .insert(idempotency_key.to_string(), result.clone());
+        result
+    }
+
+    pub async fn safe_context(&self, request_id: &str) -> Option<String> {
+        self.pending.lock().await.get(request_id).map(|approval| {
+            format!(
+                "{} requested by {} for run {}",
+                approval.tool_name, approval.agent_id, approval.run_id
+            )
+        })
     }
 
     fn is_inside_workspace(&self, path: Option<&Path>) -> bool {

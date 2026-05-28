@@ -99,6 +99,41 @@ async fn approval_flow_exact_correlation_is_required_to_resume_pending_run() {
     assert!(matches!(accepted, PolicyDecision::Allow));
 }
 
+#[tokio::test]
+async fn approval_flow_pending_approval_exposes_safe_task_context_and_retry_is_idempotent() {
+    let workspace = temp_workspace();
+    let service = ApprovalService::for_tests(workspace.clone());
+    let pending = match service
+        .evaluate_tool_use(
+            PermissionPreset::Controlled,
+            tool_request("Write", workspace.join("src/main.ts")),
+        )
+        .await
+    {
+        PolicyDecision::Pending { approval } => approval,
+        other => panic!("expected pending approval, got {other:?}"),
+    };
+
+    let safe = service.safe_context(&pending.request_id).await.unwrap();
+    assert!(safe.contains("Write"));
+    assert!(!safe.contains("secret"));
+
+    let decision = ApprovalDecision {
+        request_id: pending.request_id,
+        run_id: pending.run_id,
+        tool_use_id: pending.tool_use_id,
+        agent_id: pending.agent_id,
+        allow: false,
+    };
+    let first = service
+        .resolve_idempotent(decision.clone(), "decision-1")
+        .await;
+    let retry = service.resolve_idempotent(decision, "decision-1").await;
+
+    assert_eq!(first, retry);
+    assert!(matches!(retry, PolicyDecision::Deny { .. }));
+}
+
 fn tool_request(tool_name: &str, path: PathBuf) -> ToolRequest {
     ToolRequest {
         request_id: format!("perm_{}", Uuid::new_v4().simple()),

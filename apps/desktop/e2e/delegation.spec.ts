@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { renderDelegationEntry } from "../src/features/chat/DelegationEntry";
+import { renderApprovalEntry } from "../src/features/chat/ApprovalEntry";
 import { renderNotificationCenter } from "../src/features/notifications/NotificationCenter";
 
 describe("visible delegation and human attention", () => {
@@ -27,5 +28,20 @@ describe("visible delegation and human attention", () => {
     expect(center).toContain("通知");
     expect(center).toContain("调研 harness");
     expect(center).toContain("@lei-lee 请确认");
+  });
+
+  it("renders pending approval in the task workflow", () => {
+    const approval = renderApprovalEntry({
+      taskTitle: "调研 harness",
+      action: "Write src/main.ts",
+      risk: "Controlled",
+      pending: true,
+    });
+
+    expect(approval).toContain("等待审批");
+    expect(approval).toContain("调研 harness");
+    expect(approval).toContain("Write src/main.ts");
+    expect(approval).toContain("允许");
+    expect(approval).toContain("拒绝");
   });
 });
