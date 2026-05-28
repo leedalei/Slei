@@ -126,9 +126,14 @@ mod tests {
 
     #[test]
     fn runtime_contract_types_round_trip_through_json() {
-        let kinds = vec![RuntimeKind::ClaudeCode, RuntimeKind::OpenCode, RuntimeKind::Codex];
+        let kinds = vec![
+            RuntimeKind::ClaudeCode,
+            RuntimeKind::OpenCode,
+            RuntimeKind::Codex,
+        ];
         let json = serde_json::to_string(&kinds).expect("runtime kinds serialize");
-        let decoded: Vec<RuntimeKind> = serde_json::from_str(&json).expect("runtime kinds deserialize");
+        let decoded: Vec<RuntimeKind> =
+            serde_json::from_str(&json).expect("runtime kinds deserialize");
         assert_eq!(decoded, kinds);
 
         let capabilities = RuntimeCapabilities {

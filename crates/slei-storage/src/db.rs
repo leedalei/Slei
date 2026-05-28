@@ -14,8 +14,13 @@ impl SleiDb {
         let options = SqliteConnectOptions::from_str(database_url)?
             .create_if_missing(true)
             .foreign_keys(true);
-        let pool = SqlitePoolOptions::new().max_connections(1).connect_with(options).await?;
-        sqlx::query("PRAGMA secure_delete = ON").execute(&pool).await?;
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
+        sqlx::query("PRAGMA secure_delete = ON")
+            .execute(&pool)
+            .await?;
         Ok(Self { pool })
     }
 

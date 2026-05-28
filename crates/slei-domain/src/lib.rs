@@ -65,11 +65,17 @@ mod tests {
     #[test]
     fn agent_permission_override_can_only_narrow_channel_access() {
         assert_eq!(
-            effective_permission(PermissionPreset::Controlled, Some(PermissionPreset::ReadOnly)),
+            effective_permission(
+                PermissionPreset::Controlled,
+                Some(PermissionPreset::ReadOnly)
+            ),
             PermissionPreset::ReadOnly
         );
         assert_eq!(
-            effective_permission(PermissionPreset::ReadOnly, Some(PermissionPreset::Controlled)),
+            effective_permission(
+                PermissionPreset::ReadOnly,
+                Some(PermissionPreset::Controlled)
+            ),
             PermissionPreset::ReadOnly
         );
         assert_eq!(

@@ -50,7 +50,10 @@ mod tests {
             .insert_human_message(message_id, Uuid::new_v4(), secret)
             .await
             .unwrap();
-        repos.delete_human_message_to_tombstone(message_id).await.unwrap();
+        repos
+            .delete_human_message_to_tombstone(message_id)
+            .await
+            .unwrap();
 
         let message = repos.message(message_id).await.unwrap().unwrap();
         assert_eq!(message.kind, "tombstone");
@@ -74,7 +77,13 @@ mod tests {
         let ciphertext = "cipher-runtime-token";
 
         repos
-            .upsert_runtime_session(Uuid::new_v4(), Uuid::new_v4(), "ClaudeCode", None, ciphertext)
+            .upsert_runtime_session(
+                Uuid::new_v4(),
+                Uuid::new_v4(),
+                "ClaudeCode",
+                None,
+                ciphertext,
+            )
             .await
             .unwrap();
 
@@ -97,14 +106,35 @@ mod tests {
         let message_id = Uuid::new_v4();
         let task_id = Uuid::new_v4();
 
-        repos.insert_human_message(message_id, channel_id, "task root").await.unwrap();
-        repos.insert_task(task_id, channel_id, message_id, "Demo").await.unwrap();
-        repos.insert_thread_reply(Uuid::new_v4(), task_id, message_id, "reply").await.unwrap();
-        repos.append_event("message.created", message_id, "{}").await.unwrap();
-        repos.append_event("task.created", task_id, "{}").await.unwrap();
+        repos
+            .insert_human_message(message_id, channel_id, "task root")
+            .await
+            .unwrap();
+        repos
+            .insert_task(task_id, channel_id, message_id, "Demo")
+            .await
+            .unwrap();
+        repos
+            .insert_thread_reply(Uuid::new_v4(), task_id, message_id, "reply")
+            .await
+            .unwrap();
+        repos
+            .append_event("message.created", message_id, "{}")
+            .await
+            .unwrap();
+        repos
+            .append_event("task.created", task_id, "{}")
+            .await
+            .unwrap();
 
         let events = repos.events_after_sequence(0).await.unwrap();
-        assert_eq!(events.iter().map(|event| event.sequence).collect::<Vec<_>>(), vec![1, 2]);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.sequence)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
 
         let thread = repos.find_task_thread(task_id).await.unwrap().unwrap();
         assert_eq!(thread.task_id, task_id);

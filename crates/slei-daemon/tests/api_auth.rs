@@ -13,7 +13,12 @@ async fn health_reports_versions_without_sensitive_configuration() {
     let app = build_router(state);
 
     let response = app
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -33,7 +38,12 @@ async fn protected_routes_require_the_native_broker_token() {
 
     let missing = app
         .clone()
-        .oneshot(Request::builder().uri("/v1/nodes").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/v1/nodes")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(missing.status(), StatusCode::UNAUTHORIZED);

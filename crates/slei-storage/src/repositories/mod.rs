@@ -74,8 +74,7 @@ impl Repositories {
             let id: String = row.try_get("id")?;
             let deleted: i64 = row.try_get("deleted")?;
             Ok(MessageRecord {
-                id: Uuid::parse_str(&id)
-                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                 kind: row.try_get("kind")?,
                 content: row.try_get("content")?,
                 deleted: deleted != 0,
@@ -153,14 +152,13 @@ impl Repositories {
         entity_id: Uuid,
         payload: &str,
     ) -> Result<i64, sqlx::Error> {
-        let result = sqlx::query(
-            "INSERT INTO event_log(event_type, entity_id, payload) VALUES (?, ?, ?)",
-        )
-        .bind(event_type)
-        .bind(entity_id.to_string())
-        .bind(payload)
-        .execute(&self.pool)
-        .await?;
+        let result =
+            sqlx::query("INSERT INTO event_log(event_type, entity_id, payload) VALUES (?, ?, ?)")
+                .bind(event_type)
+                .bind(entity_id.to_string())
+                .bind(payload)
+                .execute(&self.pool)
+                .await?;
         Ok(result.last_insert_rowid())
     }
 
