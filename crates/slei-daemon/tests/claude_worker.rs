@@ -1,0 +1,76 @@
+use serde_json::json;
+use slei_daemon::adapters::claude_worker::{ClaudeWorkerAdapter, CreateSessionRequest};
+use slei_daemon::adapters::worker_rpc::{WorkerEvent, WorkerTransport};
+
+#[test]
+fn claude_worker_create_session_reports_claude_mvp_capabilities() {
+    let transport = WorkerTransport::fake();
+    let adapter = ClaudeWorkerAdapter::new(transport);
+
+    let session = adapter
+        .create_session(CreateSessionRequest {
+            agent_id: "agent_coda".to_string(),
+            cwd: "/workspace/app".to_string(),
+        })
+        .unwrap();
+
+    assert_eq!(session.runtime, "ClaudeCode");
+    assert!(!session.persist_session);
+    assert!(!session.capabilities.resume_session);
+}
+
+#[test]
+fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
+    let transport = WorkerTransport::fake();
+    let adapter = ClaudeWorkerAdapter::new(transport.clone());
+    let session = adapter
+        .create_session(CreateSessionRequest {
+            agent_id: "agent_coda".to_string(),
+            cwd: "/workspace/app".to_string(),
+        })
+        .unwrap();
+
+    adapter
+        .start_run(
+            "run_1",
+            &session,
+            "Implement the task",
+            vec![json!({"role": "user", "content": "Previous undeleted message"})],
+        )
+        .unwrap();
+    adapter.cancel_run("run_1").unwrap();
+
+    let commands = transport.commands();
+    assert_eq!(commands[0]["type"], "start_run");
+    assert_eq!(commands[0]["session"]["persist_session"], false);
+    assert_eq!(commands[1], json!({"type": "cancel", "run_id": "run_1"}));
+}
+
+#[test]
+fn claude_worker_resume_session_is_rejected_for_claude_mvp() {
+    let adapter = ClaudeWorkerAdapter::new(WorkerTransport::fake());
+    let err = adapter.resume_session("opaque-token").unwrap_err();
+
+    assert!(err.to_string().contains("resume is not supported"));
+}
+
+#[test]
+fn claude_worker_events_map_to_daemon_events_with_correlation() {
+    let event = WorkerEvent::from_json(json!({
+        "type": "permission_requested",
+        "request_id": "perm_1",
+        "run_id": "run_1",
+        "tool_use_id": "tool_1",
+        "agent_id": "agent_coda",
+        "tool_name": "Write",
+        "risk": "controlled"
+    }))
+    .unwrap();
+
+    let mapped = event.to_run_event().unwrap();
+
+    assert_eq!(mapped["type"], "permission_requested");
+    assert_eq!(mapped["request_id"], "perm_1");
+    assert_eq!(mapped["tool_use_id"], "tool_1");
+    assert_eq!(mapped["agent_id"], "agent_coda");
+}

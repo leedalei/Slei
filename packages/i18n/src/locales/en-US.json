@@ -1,0 +1,71 @@
+{
+  "nav": {
+    "chat": "Chat",
+    "tasks": "Tasks",
+    "members": "Members",
+    "computers": "Computers",
+    "settings": "Settings"
+  },
+  "task": {
+    "status": {
+      "todo": "Todo",
+      "in_progress": "In Progress",
+      "in_review": "In Review",
+      "done": "Done",
+      "closed": "Closed"
+    },
+    "attention": {
+      "awaiting_human_reply": "Awaiting human reply",
+      "awaiting_confirmation": "Awaiting confirmation",
+      "awaiting_approval": "Awaiting approval",
+      "mentioned_user": "Mentioned you"
+    }
+  },
+  "approval": {
+    "pending": "Awaiting approval",
+    "allow": "Allow",
+    "deny": "Deny",
+    "timed_out": "Timed out and denied"
+  },
+  "onboarding": {
+    "profile": {
+      "nickname": "Nickname",
+      "handle": "Handle"
+    },
+    "connection": {
+      "daemon_missing": "Daemon is not running",
+      "runtime_ready": "Runtime ready"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "profile": {
+      "nickname": "Nickname",
+      "handle": "Handle",
+      "basic_info": "Basic info"
+    },
+    "notifications": {
+      "mentions": "Mention notifications",
+      "human_replies": "Human reply notifications",
+      "approvals": "Approval notifications"
+    }
+  },
+  "members": {
+    "title": "Members",
+    "agents": "Agents",
+    "humans": "Humans",
+    "primary_agent": "Primary agent",
+    "capabilities_unavailable": "Capability scan unavailable"
+  },
+  "error": {
+    "permission_violation": "Permission denied",
+    "protocol_version_mismatch": "Protocol version mismatch",
+    "auth_token_invalid": "Authentication failed",
+    "task_root_message_deletion_blocked": "Close the task before deleting its root message"
+  },
+  "message": {
+    "deleted": "Message deleted",
+    "edited": "edited"
+  }
+}

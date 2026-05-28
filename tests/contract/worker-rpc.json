@@ -1,0 +1,90 @@
+{
+  "protocol_version": "v1",
+  "commands": {
+    "hello": {
+      "type": "hello",
+      "protocol_version": "v1",
+      "launch_secret": "launch-secret"
+    },
+    "start_run": {
+      "type": "start_run",
+      "run_id": "run_1",
+      "session": {
+        "session_id": "session_1",
+        "agent_id": "agent_coda",
+        "runtime": "ClaudeCode",
+        "cwd": "/workspace/app",
+        "persist_session": false
+      },
+      "input": {
+        "prompt": "Implement the task",
+        "context": [{ "role": "user", "content": "Previous undeleted message" }]
+      }
+    },
+    "cancel": {
+      "type": "cancel",
+      "run_id": "run_1"
+    },
+    "resolve_permission": {
+      "type": "resolve_permission",
+      "request_id": "perm_1",
+      "decision": "approve"
+    },
+    "resolve_human_question": {
+      "type": "resolve_human_question",
+      "request_id": "question_1",
+      "answer": "Use option B"
+    }
+  },
+  "events": {
+    "output_delta": {
+      "type": "output_delta",
+      "run_id": "run_1",
+      "delta": "hello"
+    },
+    "tool_started": {
+      "type": "tool_started",
+      "run_id": "run_1",
+      "tool_use_id": "tool_1",
+      "name": "Read"
+    },
+    "permission_requested": {
+      "type": "permission_requested",
+      "request_id": "perm_1",
+      "run_id": "run_1",
+      "tool_use_id": "tool_1",
+      "agent_id": "agent_coda",
+      "tool_name": "Write",
+      "risk": "controlled"
+    },
+    "human_question_requested": {
+      "type": "human_question_requested",
+      "request_id": "question_1",
+      "run_id": "run_1",
+      "agent_id": "agent_coda",
+      "question": "Which option should I use?"
+    },
+    "product_tool_requested": {
+      "type": "product_tool_requested",
+      "run_id": "run_1",
+      "agent_id": "agent_coda",
+      "tool_name": "slei_request_visible_delegation",
+      "payload": { "target": "@alice", "summary": "Please review" }
+    },
+    "tool_completed": {
+      "type": "tool_completed",
+      "run_id": "run_1",
+      "tool_use_id": "tool_1",
+      "ok": true
+    },
+    "completed": {
+      "type": "completed",
+      "run_id": "run_1"
+    },
+    "failed": {
+      "type": "failed",
+      "run_id": "run_1",
+      "message": "worker failed"
+    }
+  }
+}

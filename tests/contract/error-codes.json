@@ -1,0 +1,18 @@
+[
+  {
+    "code": "E201",
+    "key": "error.protocol_version_mismatch"
+  },
+  {
+    "code": "E202",
+    "key": "error.auth_token_invalid"
+  },
+  {
+    "code": "E403",
+    "key": "error.permission_violation"
+  },
+  {
+    "code": "E604",
+    "key": "error.task_root_message_deletion_blocked"
+  }
+]

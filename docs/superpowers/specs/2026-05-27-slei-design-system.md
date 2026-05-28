@@ -8,10 +8,13 @@
 
 ---
 
-## 1. Primitive Tokens
+## 1. Reference Values
 
-These are the raw values. They must **never** be used directly in components —
-always go through semantic tokens.
+These raw values are implementation references for `tokens.css` only. Product
+components, feature styles and tests must **never** use `--primitive-*`
+directly; they consume only the semantic tokens in §2. This keeps the shipped
+UI themeable and prevents component recipes from depending on raw palette,
+spacing, border, shadow or motion values.
 
 ### 1.1 Color Primitives
 
@@ -149,8 +152,9 @@ always go through semantic tokens.
 
 ## 2. Semantic Tokens
 
-Semantic tokens map primitives to **roles**. Components use only semantic
-tokens, never primitives. This is the single place to update for theme changes.
+Semantic tokens map reference values to **roles**. Components use only semantic
+tokens, never reference values. This is the single place to update for theme
+changes.
 
 ### 2.1 Color Semantics
 
@@ -181,6 +185,9 @@ tokens, never primitives. This is the single place to update for theme changes.
 --color-focus-ring:     var(--primitive-amber-400);
 --color-disabled-bg:    var(--primitive-gray-100);
 --color-disabled-text:  var(--primitive-gray-400);
+--color-disabled-indicator: var(--primitive-gray-300);
+--color-scrollbar-thumb: var(--primitive-gray-300);
+--color-scrollbar-thumb-hover: var(--primitive-gray-400);
 
 /* Status */
 --color-success:       var(--primitive-green-500);
@@ -264,6 +271,7 @@ tokens, never primitives. This is the single place to update for theme changes.
 --gap-md:   var(--primitive-space-3);  /* 12px — between related items */
 --gap-lg:   var(--primitive-space-4);  /* 16px — between sections */
 --gap-xl:   var(--primitive-space-6);  /* 24px — between major blocks */
+--gap-2xl:  var(--primitive-space-8);  /* 32px — page/column gutters */
 
 /* Component padding */
 --padding-badge:     2px var(--primitive-space-2);
@@ -273,6 +281,12 @@ tokens, never primitives. This is the single place to update for theme changes.
 --padding-input:     var(--primitive-space-2) var(--primitive-space-3);
 --padding-card:      var(--primitive-space-4);
 --padding-panel:     var(--primitive-space-4);
+--padding-message-y:  var(--primitive-space-3);
+--padding-message-x:  var(--primitive-space-4);
+--padding-code:       var(--primitive-space-3);
+--padding-empty:      var(--primitive-space-12);
+--indent-message:     var(--primitive-space-6);
+--indent-list:        var(--primitive-space-5);
 ```
 
 ### 2.5 Motion Semantics
@@ -299,6 +313,22 @@ Disabled: translate(0, 0)        shadow: --shadow-none, reduced opacity
 ```
 
 Transition: `transform var(--duration-interaction) var(--ease-ui), box-shadow var(--duration-interaction) var(--ease-ui)`
+
+### 3.1 Accessibility Interaction Rules
+
+- Every interactive control must expose a visible `:focus-visible` ring using
+  `--color-focus-ring`, at least 2px thick with 2px offset.
+- Keyboard activation follows native semantics: `Enter`/`Space` activates
+  buttons and checkbox-like controls; `Escape` closes dialogs; `Tab` and
+  `Shift+Tab` stay trapped inside open modal dialogs.
+- Disabled controls remain perceivable but are removed from pointer activation;
+  they must not rely on color alone to communicate disabled state.
+- Text and essential icons must meet WCAG AA contrast against their background.
+  Accent fills use black text unless a component-specific contrast check proves
+  otherwise.
+- Under `prefers-reduced-motion: reduce`, press/hover transforms and animated
+  transitions are disabled; state changes remain visible through border,
+  shadow or color.
 
 ---
 
@@ -517,7 +547,7 @@ comes from spacing and the sender identity header only.
 | Property | Value |
 |----------|-------|
 | Layout | Full-width column |
-| Padding | `--primitive-space-3` vertical, `--primitive-space-4` horizontal |
+| Padding | `--padding-message-y` vertical, `--padding-message-x` horizontal |
 | Hover bg | `--color-surface-hover` (subtle, full-width) |
 | Sender header | Avatar (md) + display name (`--weight-semibold`, `--text-sm`) + timestamp (`--text-xs`, `--color-text-muted`) — one row |
 | Message body | `--text-md`, `--leading-body`, `--text-sans`; code spans use `--text-mono` |
@@ -560,7 +590,7 @@ Appears inside an agent message entry when the agent invokes tools.
 | Border | `--border-subtle solid --color-border` (1px) on left; `--border-card solid --color-border` on top/right/bottom |
 | Border radius | `--radius-control` |
 | Shadow | `--shadow-xs` |
-| Margin | `--gap-md` top, left indent `--primitive-space-6` |
+| Margin | `--gap-md` top, left indent `--indent-message` |
 | Collapsed height | 28px; shows tool name + status dot + expand chevron |
 | Expanded | full content; code/output uses `--text-mono`, `--text-sm` |
 | Status dot | `--radius-full`, 8×8px, color from `--color-run-*` |
@@ -657,7 +687,7 @@ Used for the Interactive Card confirmation flow and destructive confirmations.
 | Shadow | `--shadow-md` |
 | Border radius | `--radius-control` |
 | Max width | 360px |
-| Position | bottom-right, `--primitive-space-4` from edges |
+| Position | bottom-right, `--padding-panel` from edges |
 | Dismiss | auto after 4s or manual close icon |
 | Error variant | bg `--color-error`, text white |
 | Success variant | bg `--color-success`, text white |
@@ -670,8 +700,8 @@ Used for the Interactive Card confirmation flow and destructive confirmations.
 |----------|-------|
 | Width (vertical) | 6px |
 | Track bg | `--color-surface-alt` |
-| Thumb bg | `--primitive-gray-300` |
-| Thumb hover bg | `--primitive-gray-400` |
+| Thumb bg | `--color-scrollbar-thumb` |
+| Thumb hover bg | `--color-scrollbar-thumb-hover` |
 | Thumb radius | `--radius-full` |
 
 ---
@@ -688,7 +718,7 @@ Inline indicator on member list and agent headers.
 | Online / Running | `--color-success` |
 | Away / Idle | `--color-warning` |
 | Offline / Error | `--color-error` |
-| Disabled / Unknown | `--primitive-gray-300` |
+| Disabled / Unknown | `--color-disabled-indicator` |
 
 ---
 
@@ -701,7 +731,7 @@ Used inside Tool Call blocks, artifact previews and inline code in messages.
 | Background | `--color-surface-alt` |
 | Border | `--border-subtle solid --color-border` |
 | Border radius | `--radius-control` |
-| Padding | `--primitive-space-3` |
+| Padding | `--padding-code` |
 | Font | `--text-mono`, `--text-sm` |
 | Line height | `--leading-relaxed` |
 | Overflow | horizontal scroll |
@@ -867,7 +897,7 @@ Every list or content surface that can be empty defines its empty state. Do not 
 | Title | `--text-lg`, `--weight-bold` |
 | Subtitle | `--text-sm`, `--color-text-secondary`, max-width 320px |
 | CTA | Button.Secondary (sm) if action available |
-| Padding | `--primitive-space-12` top and bottom |
+| Padding | `--padding-empty` top and bottom |
 
 **Per-surface copy:**
 
@@ -908,7 +938,7 @@ All message body text is rendered as Markdown. Styles apply inside `.message-bod
 | `# H1` | `--text-2xl`, `--weight-black`; border-bottom `1px solid --color-border-subtle`; padding-bottom `--gap-sm`; margin-bottom `--gap-md` |
 | `## H2` | `--text-xl`, `--weight-bold`; margin-bottom `--gap-md` |
 | `### H3` | `--text-lg`, `--weight-semibold`; margin-bottom `--gap-sm` |
-| Unordered list | `--gap-xs` between items; bullet `--color-text-muted`; indent `--primitive-space-5` |
+| Unordered list | `--gap-xs` between items; bullet `--color-text-muted`; indent `--indent-list` |
 | Ordered list | same indent; counter `--color-text-muted` |
 | Blockquote | left border `3px solid --color-border`; padding-left `--gap-md`; text `--color-text-secondary` italic |
 | `inline code` | `--text-mono`, `--text-sm`; bg `--color-surface-alt`; border `--border-subtle solid --color-border`; radius `--radius-badge`; padding `1px 4px` |
