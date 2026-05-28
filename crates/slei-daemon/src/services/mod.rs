@@ -4,6 +4,7 @@ pub mod capability_service;
 pub mod card_service;
 pub mod channel_service;
 pub mod delegation_service;
+pub mod diagnostics_service;
 pub mod event_service;
 pub mod member_service;
 pub mod message_service;

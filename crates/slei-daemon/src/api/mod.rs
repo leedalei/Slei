@@ -4,6 +4,7 @@ pub mod capabilities;
 pub mod cards;
 pub mod channels;
 pub mod delegations;
+pub mod diagnostics;
 pub mod events;
 pub mod members;
 pub mod messages;
