@@ -37,6 +37,20 @@
       "runtime_ready": "运行时已就绪"
     }
   },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "profile": {
+      "nickname": "昵称",
+      "handle": "用户名",
+      "basic_info": "基本信息"
+    },
+    "notifications": {
+      "mentions": "提及通知",
+      "human_replies": "人工回复通知",
+      "approvals": "审批通知"
+    }
+  },
   "error": {
     "permission_violation": "权限不足",
     "protocol_version_mismatch": "协议版本不匹配",

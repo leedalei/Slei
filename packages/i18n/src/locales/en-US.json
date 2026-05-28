@@ -37,6 +37,20 @@
       "runtime_ready": "Runtime ready"
     }
   },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "profile": {
+      "nickname": "Nickname",
+      "handle": "Handle",
+      "basic_info": "Basic info"
+    },
+    "notifications": {
+      "mentions": "Mention notifications",
+      "human_replies": "Human reply notifications",
+      "approvals": "Approval notifications"
+    }
+  },
   "error": {
     "permission_violation": "Permission denied",
     "protocol_version_mismatch": "Protocol version mismatch",
