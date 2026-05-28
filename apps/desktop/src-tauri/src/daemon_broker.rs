@@ -29,6 +29,12 @@ pub struct EventReconnectReceipt {
     pub after: u64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct ArtifactOpenReceipt {
+    pub artifact_id: String,
+    pub open_token: String,
+}
+
 impl DaemonBroker {
     pub fn for_tests(descriptor: RuntimeDescriptor) -> Self {
         Self {
@@ -52,7 +58,32 @@ impl DaemonBroker {
         EventReconnectReceipt { after }
     }
 
+    pub fn request_artifact_open(
+        &self,
+        artifact_id: &str,
+    ) -> Result<ArtifactOpenReceipt, ArtifactOpenError> {
+        if !artifact_id.starts_with("artifact_")
+            || artifact_id.contains('/')
+            || artifact_id.starts_with("file:")
+        {
+            return Err(ArtifactOpenError::ArtifactIdRequired);
+        }
+
+        self.last_authorization_header
+            .replace(Some(format!("Bearer {}", self.descriptor.token)));
+        Ok(ArtifactOpenReceipt {
+            artifact_id: artifact_id.to_string(),
+            open_token: format!("open:{artifact_id}"),
+        })
+    }
+
     pub fn last_authorization_header(&self) -> Option<String> {
         self.last_authorization_header.borrow().clone()
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ArtifactOpenError {
+    #[error("artifact id is required")]
+    ArtifactIdRequired,
 }

@@ -5,5 +5,8 @@ export function sanitizeMarkdown(markdown: string): string {
     })
     .replace(/\[([^\]]+)]\((file:[^\s]+)\)/gi, (_match, label) => {
       return `[${label}](#blocked)`;
+    })
+    .replace(/\[([^\]]+)]\((\/[^\s]+)\)/g, (_match, label) => {
+      return `[${label}](#blocked)`;
     });
 }

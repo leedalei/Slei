@@ -1,4 +1,5 @@
 pub mod approvals;
+pub mod artifacts;
 pub mod cards;
 pub mod channels;
 pub mod delegations;

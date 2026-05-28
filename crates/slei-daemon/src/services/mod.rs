@@ -1,4 +1,5 @@
 pub mod approval_service;
+pub mod artifact_service;
 pub mod card_service;
 pub mod channel_service;
 pub mod delegation_service;
