@@ -1,10 +1,19 @@
 {
   "name": "@slei/claude-agent",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "slei-claude-agent": "dist/index.js"
+  },
   "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit false --outDir dist",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "slei": {
+    "workerHealthArg": "--slei-worker-health",
+    "distribution": "standalone-artifact"
   }
 }

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use crate::auth::AuthToken;
@@ -15,6 +16,17 @@ pub struct RuntimeDescriptor {
     pub port: u16,
     pub instance_id: Uuid,
     pub protocol_version: &'static str,
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkerLaunchConfig {
+    pub artifact_path: PathBuf,
+}
+
+impl WorkerLaunchConfig {
+    pub fn standalone(artifact_path: PathBuf) -> Self {
+        Self { artifact_path }
+    }
 }
 
 impl DaemonConfig {
