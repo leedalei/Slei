@@ -1,4 +1,5 @@
 pub mod approval_service;
+pub mod card_service;
 pub mod channel_service;
 pub mod event_service;
 pub mod member_service;
