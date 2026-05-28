@@ -14,4 +14,5 @@ tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+slei-storage = { path = "../slei-storage" }
 tower.workspace = true

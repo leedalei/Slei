@@ -1229,6 +1229,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slei-protocol",
+ "slei-storage",
  "thiserror",
  "tokio",
  "tower",
