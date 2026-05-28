@@ -1,0 +1,50 @@
+{
+  "nav": {
+    "chat": "会话",
+    "tasks": "任务",
+    "members": "成员",
+    "computers": "运行节点",
+    "settings": "设置"
+  },
+  "task": {
+    "status": {
+      "todo": "待处理",
+      "in_progress": "进行中",
+      "in_review": "待审查",
+      "done": "已完成",
+      "closed": "已关闭"
+    },
+    "attention": {
+      "awaiting_human_reply": "等待用户回复",
+      "awaiting_confirmation": "等待确认",
+      "awaiting_approval": "等待审批",
+      "mentioned_user": "提到了你"
+    }
+  },
+  "approval": {
+    "pending": "等待审批",
+    "allow": "允许",
+    "deny": "拒绝",
+    "timed_out": "已超时自动拒绝"
+  },
+  "onboarding": {
+    "profile": {
+      "nickname": "昵称",
+      "handle": "用户名"
+    },
+    "connection": {
+      "daemon_missing": "Daemon 未启动",
+      "runtime_ready": "运行时已就绪"
+    }
+  },
+  "error": {
+    "permission_violation": "权限不足",
+    "protocol_version_mismatch": "协议版本不匹配",
+    "auth_token_invalid": "认证失败",
+    "task_root_message_deletion_blocked": "任务进行中，不能删除根消息"
+  },
+  "message": {
+    "deleted": "消息已删除",
+    "edited": "已编辑"
+  }
+}
