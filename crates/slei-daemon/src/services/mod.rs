@@ -6,5 +6,6 @@ pub mod message_service;
 pub mod node_service;
 pub mod run_orchestrator;
 pub mod settings_service;
+pub mod task_service;
 pub mod worker_launch;
 pub mod workspace_service;

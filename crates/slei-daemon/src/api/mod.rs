@@ -6,4 +6,5 @@ pub mod messages;
 pub mod nodes;
 pub mod runs;
 pub mod settings;
+pub mod tasks;
 pub mod workspaces;
