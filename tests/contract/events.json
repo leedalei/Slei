@@ -1,0 +1,14 @@
+[
+  {
+    "type": "approval.created",
+    "description": "A runtime action is waiting for human approval."
+  },
+  {
+    "type": "approval.resolved",
+    "description": "A pending approval has been allowed or denied."
+  },
+  {
+    "type": "message.created",
+    "description": "A channel timeline message was created."
+  }
+]
