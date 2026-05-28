@@ -51,6 +51,13 @@
       "approvals": "Approval notifications"
     }
   },
+  "members": {
+    "title": "Members",
+    "agents": "Agents",
+    "humans": "Humans",
+    "primary_agent": "Primary agent",
+    "capabilities_unavailable": "Capability scan unavailable"
+  },
   "error": {
     "permission_violation": "Permission denied",
     "protocol_version_mismatch": "Protocol version mismatch",

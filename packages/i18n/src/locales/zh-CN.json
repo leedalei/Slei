@@ -51,6 +51,13 @@
       "approvals": "审批通知"
     }
   },
+  "members": {
+    "title": "成员",
+    "agents": "AGENTS",
+    "humans": "HUMANS",
+    "primary_agent": "主 Agent",
+    "capabilities_unavailable": "能力扫描暂不可用"
+  },
   "error": {
     "permission_violation": "权限不足",
     "protocol_version_mismatch": "协议版本不匹配",
