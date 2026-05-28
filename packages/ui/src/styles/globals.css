@@ -1,0 +1,102 @@
+.slei-button,
+.slei-input,
+.slei-badge,
+.slei-avatar,
+.slei-dialog,
+.slei-tabs {
+  font-family: var(--text-sans);
+}
+
+.slei-button {
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-ui);
+  padding: var(--padding-button-md);
+  transition:
+    transform var(--duration-interaction) var(--ease-ui),
+    box-shadow var(--duration-interaction) var(--ease-ui);
+}
+
+.slei-button:hover {
+  box-shadow: var(--shadow-md);
+  transform: translate(-1px, -1px);
+}
+
+.slei-button:active {
+  box-shadow: var(--shadow-none);
+  transform: translate(2px, 2px);
+}
+
+.slei-button:disabled {
+  background: var(--color-disabled-bg);
+  box-shadow: var(--shadow-none);
+  color: var(--color-disabled-text);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.slei-button--primary {
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+.slei-button--accent {
+  background: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
+.slei-button--secondary,
+.slei-button--ghost {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.slei-button--destructive {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.slei-input {
+  background: var(--color-surface);
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-control);
+  font-size: var(--text-base);
+  padding: var(--padding-input);
+}
+
+.slei-badge {
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-badge);
+  box-shadow: var(--shadow-xs);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  padding: var(--padding-badge);
+}
+
+.slei-badge--in_review {
+  background: var(--color-warning-bg);
+}
+
+.slei-avatar {
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-avatar);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slei-button,
+  .slei-button:hover,
+  .slei-button:active {
+    box-shadow: var(--shadow-sm);
+    transform: none;
+    transition: none;
+  }
+}
