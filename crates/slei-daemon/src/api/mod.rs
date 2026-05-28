@@ -2,6 +2,7 @@ pub mod approvals;
 pub mod channels;
 pub mod events;
 pub mod members;
+pub mod messages;
 pub mod nodes;
 pub mod runs;
 pub mod settings;

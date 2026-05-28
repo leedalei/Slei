@@ -2,6 +2,7 @@ pub mod approval_service;
 pub mod channel_service;
 pub mod event_service;
 pub mod member_service;
+pub mod message_service;
 pub mod node_service;
 pub mod run_orchestrator;
 pub mod settings_service;
