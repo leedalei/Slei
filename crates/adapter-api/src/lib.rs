@@ -25,6 +25,26 @@ pub struct RuntimeCapabilities {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AdapterReadiness {
+    Installed,
+    Missing,
+    Unsupported,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeAdapterDescriptor {
+    pub kind: RuntimeKind,
+    pub readiness: AdapterReadiness,
+    pub capabilities: RuntimeCapabilities,
+}
+
+impl RuntimeAdapterDescriptor {
+    pub fn can_start_runs(&self) -> bool {
+        self.readiness == AdapterReadiness::Installed
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtectedOpaqueToken(pub String);
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,5 +202,44 @@ mod tests {
         let decoded: PermissionDecision =
             serde_json::from_str(&json).expect("decision deserializes");
         assert_eq!(decoded, decision);
+    }
+
+    #[test]
+    fn future_runtime_descriptors_serialize_but_do_not_imply_readiness() {
+        let opencode = RuntimeAdapterDescriptor {
+            kind: RuntimeKind::OpenCode,
+            readiness: AdapterReadiness::Missing,
+            capabilities: RuntimeCapabilities {
+                streaming: true,
+                resumable_session: true,
+                approvals: true,
+                human_questions: true,
+                workspace_restrictions: true,
+                structured_output: true,
+                artifacts: true,
+            },
+        };
+        let codex = RuntimeAdapterDescriptor {
+            kind: RuntimeKind::Codex,
+            readiness: AdapterReadiness::Unsupported,
+            capabilities: RuntimeCapabilities {
+                streaming: true,
+                resumable_session: false,
+                approvals: false,
+                human_questions: false,
+                workspace_restrictions: false,
+                structured_output: true,
+                artifacts: false,
+            },
+        };
+
+        let json =
+            serde_json::to_string(&vec![opencode.clone(), codex.clone()]).expect("serialize");
+        let decoded: Vec<RuntimeAdapterDescriptor> =
+            serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(decoded, vec![opencode, codex]);
+        assert!(!decoded[0].can_start_runs());
+        assert!(!decoded[1].can_start_runs());
     }
 }
