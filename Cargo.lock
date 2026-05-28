@@ -1257,6 +1257,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "slei-desktop"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "slei-domain"
 version = "0.1.0"
 dependencies = [
