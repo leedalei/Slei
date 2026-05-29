@@ -25,8 +25,8 @@ describe("MVP accessibility and bilingual surface", () => {
     const tasks = renderTasksPage({ locale: "zh-CN", view: "board", filters: {}, tasks: [] });
     const members = renderMembersPage({ locale: "en-US", agents: [], humans: [] });
 
-    expect(zhChat).toContain("As Task");
-    expect(zhChat).toContain("Message #dev-team");
+    expect(zhChat).toContain("转为任务");
+    expect(zhChat).toContain("输入消息到 #dev-team");
     expect(enSettings).toContain("Settings");
     expect(tasks).toContain("看板");
     expect(members).toContain("Members");

@@ -7,13 +7,15 @@ export type ArtifactView = {
   contentHash: string;
 };
 
-export function renderArtifactChip(artifact: ArtifactView): string {
+export function renderArtifactChip(artifact: ArtifactView, locale: "zh-CN" | "en-US" = "en-US"): string {
+  const messages = createDesktopMessages(locale).chat;
   return [
-    "Artifact",
+    messages.artifact,
     artifact.displayName,
     artifact.id,
-    `Run: ${artifact.runId}`,
-    `Hash: ${artifact.contentHash}`,
-    "Open via daemon",
+    `${messages.run}: ${artifact.runId}`,
+    `${messages.hash}: ${artifact.contentHash}`,
+    messages.openViaDaemon,
   ].join(" ");
 }
+import { createDesktopMessages } from "../../i18n";

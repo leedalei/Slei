@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderFeatureShell } from "../shell/AppShell";
 
 export type DiagnosticsStatus = {
@@ -13,7 +14,7 @@ export function renderDiagnosticsPage(input: {
   locale: "zh-CN" | "en-US";
   status: DiagnosticsStatus;
 }): string {
-  const title = input.locale === "zh-CN" ? "诊断" : "Diagnostics";
+  const title = createDesktopMessages(input.locale).diagnostics.title;
   const content = [
     title,
     `Node: ${input.status.node}`,

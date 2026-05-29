@@ -8,18 +8,7 @@ export function renderProfileForm(
   profile: ProfileState,
   locale: "zh-CN" | "en-US",
 ): string {
-  const labels = {
-    "zh-CN": {
-      nickname: "昵称",
-      handle: "用户名",
-      bio: "基本信息",
-    },
-    "en-US": {
-      nickname: "Nickname",
-      handle: "Handle",
-      bio: "Basic info",
-    },
-  }[locale];
+  const labels = createDesktopMessages(locale).settings;
   return [
     labels.nickname,
     profile.nickname,
@@ -29,3 +18,4 @@ export function renderProfileForm(
     profile.bio ?? "",
   ].join(" ");
 }
+import { createDesktopMessages } from "../../i18n";

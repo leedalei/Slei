@@ -25,6 +25,12 @@ pub struct NotificationPreferences {
     pub approvals: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppearancePreferences {
+    pub theme: String,
+    pub font_size: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LocalePreference {
     ZhCn,
@@ -34,6 +40,8 @@ pub enum LocalePreference {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserPreferences {
     pub locale: LocalePreference,
+    pub time_zone: String,
+    pub appearance: AppearancePreferences,
     pub notifications: NotificationPreferences,
 }
 
@@ -54,6 +62,11 @@ impl Default for SettingsState {
             profile: None,
             preferences: UserPreferences {
                 locale: LocalePreference::ZhCn,
+                time_zone: "Asia/Shanghai".to_string(),
+                appearance: AppearancePreferences {
+                    theme: "system".to_string(),
+                    font_size: "md".to_string(),
+                },
                 notifications: NotificationPreferences {
                     mentions: true,
                     human_replies: true,
@@ -95,6 +108,30 @@ impl SettingsService {
         Ok(())
     }
 
+    pub async fn set_time_zone(&self, time_zone: String) -> Result<(), SettingsError> {
+        let trimmed = time_zone.trim();
+        if trimmed.is_empty() || trimmed.chars().count() > 64 {
+            return Err(SettingsError::InvalidTimeZone);
+        }
+        self.inner.lock().await.preferences.time_zone = trimmed.to_string();
+        Ok(())
+    }
+
+    pub async fn set_appearance(
+        &self,
+        appearance: AppearancePreferences,
+    ) -> Result<(), SettingsError> {
+        if !matches!(
+            appearance.theme.as_str(),
+            "system" | "light" | "dark" | "highContrast"
+        ) || !matches!(appearance.font_size.as_str(), "sm" | "md" | "lg")
+        {
+            return Err(SettingsError::InvalidAppearance);
+        }
+        self.inner.lock().await.preferences.appearance = appearance;
+        Ok(())
+    }
+
     pub async fn set_notifications(
         &self,
         notifications: NotificationPreferences,
@@ -116,6 +153,10 @@ pub enum SettingsError {
     HandleImmutable,
     #[error("invalid handle")]
     InvalidHandle,
+    #[error("invalid time zone")]
+    InvalidTimeZone,
+    #[error("invalid appearance")]
+    InvalidAppearance,
 }
 
 fn validate_handle(handle: &str) -> Result<(), SettingsError> {

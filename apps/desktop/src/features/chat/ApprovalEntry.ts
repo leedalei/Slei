@@ -1,15 +1,19 @@
+import { createDesktopMessages } from "../../i18n";
+
 export function renderApprovalEntry(input: {
   taskTitle: string;
   action: string;
   risk: string;
   pending: boolean;
+  locale?: "zh-CN" | "en-US";
 }): string {
+  const messages = createDesktopMessages(input.locale ?? "zh-CN");
   return [
-    input.pending ? "等待审批" : "审批已处理",
+    input.pending ? messages.chat.approvalPending : messages.chat.approvalHandled,
     input.taskTitle,
     input.action,
     input.risk,
-    "允许",
-    "拒绝",
+    messages.common.allow,
+    messages.common.deny,
   ].join(" ");
 }

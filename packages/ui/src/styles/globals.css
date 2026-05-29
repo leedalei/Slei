@@ -1,24 +1,75 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--text-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-ui);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus,
+input:focus,
+textarea:focus,
+select:focus,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 .slei-button,
 .slei-input,
+.slei-textarea,
+.slei-select,
+.slei-checkbox,
 .slei-badge,
 .slei-avatar,
 .slei-dialog,
-.slei-tabs {
+.slei-tabs,
+.slei-card,
+.slei-panel {
   font-family: var(--text-sans);
 }
 
 .slei-button {
+  align-items: center;
+  background: var(--color-surface);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-sm);
-  cursor: pointer;
+  color: var(--color-text-primary);
+  display: inline-flex;
   font-size: var(--text-base);
   font-weight: var(--weight-bold);
+  gap: var(--gap-sm);
+  justify-content: center;
   line-height: var(--leading-ui);
+  min-height: 36px;
   padding: var(--padding-button-md);
+  text-decoration: none;
   transition:
     transform var(--duration-interaction) var(--ease-ui),
-    box-shadow var(--duration-interaction) var(--ease-ui);
+    box-shadow var(--duration-interaction) var(--ease-ui),
+    background var(--duration-interaction) var(--ease-ui);
 }
 
 .slei-button:hover {
@@ -37,6 +88,18 @@
   color: var(--color-disabled-text);
   cursor: not-allowed;
   opacity: 0.45;
+  transform: none;
+}
+
+.slei-button--small {
+  font-size: var(--text-xs);
+  min-height: 28px;
+  padding: var(--padding-button-sm);
+}
+
+.slei-button--medium {
+  min-height: 36px;
+  padding: var(--padding-button-md);
 }
 
 .slei-button--primary {
@@ -49,9 +112,14 @@
   color: var(--color-text-primary);
 }
 
-.slei-button--secondary,
-.slei-button--ghost {
+.slei-button--secondary {
   background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.slei-button--ghost {
+  background: transparent;
+  box-shadow: none;
   color: var(--color-text-primary);
 }
 
@@ -60,30 +128,198 @@
   color: var(--color-error);
 }
 
-.slei-input {
+.slei-input,
+.slei-select,
+.slei-textarea {
   background: var(--color-surface);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-control);
+  color: var(--color-text-primary);
   font-size: var(--text-base);
+  line-height: var(--leading-ui);
   padding: var(--padding-input);
+  width: 100%;
+}
+
+.slei-input {
+  border-radius: var(--radius-none);
+}
+
+.slei-select {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+  position: relative;
+}
+
+.slei-select__control {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 36px;
+  padding: var(--padding-input);
+  padding-right: calc(var(--gap-xl) + var(--gap-md));
+  width: 100%;
+}
+
+.slei-select__icon {
+  color: var(--color-text-primary);
+  grid-column: 2;
+  grid-row: 1;
+  margin-right: var(--gap-sm);
+  pointer-events: none;
+}
+
+.slei-checkbox {
+  align-items: center;
+  cursor: pointer;
+  display: inline-grid;
+  font-weight: var(--weight-bold);
+  gap: var(--gap-sm);
+  grid-template-columns: auto minmax(0, 1fr);
+  position: relative;
+}
+
+.slei-checkbox__control {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.slei-checkbox__box {
+  align-items: center;
+  background: var(--color-surface);
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-xs);
+  color: var(--color-text-primary);
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  transition:
+    transform var(--duration-interaction) var(--ease-ui),
+    box-shadow var(--duration-interaction) var(--ease-ui),
+    background var(--duration-interaction) var(--ease-ui);
+  width: 20px;
+}
+
+.slei-checkbox__box svg {
+  opacity: 0;
+}
+
+.slei-checkbox__control:checked + .slei-checkbox__box {
+  background: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.slei-checkbox__control:checked + .slei-checkbox__box svg {
+  opacity: 1;
+}
+
+.slei-checkbox:hover .slei-checkbox__box {
+  box-shadow: var(--shadow-sm);
+  transform: translate(-1px, -1px);
+}
+
+.slei-checkbox:active .slei-checkbox__box {
+  box-shadow: var(--shadow-none);
+  transform: translate(1px, 1px);
+}
+
+.slei-checkbox:has(.slei-checkbox__control:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.slei-textarea {
+  line-height: var(--leading-body);
+  min-height: 64px;
+  resize: vertical;
+}
+
+.slei-input:hover,
+.slei-select:hover,
+.slei-textarea:hover,
+.slei-input:focus,
+.slei-select:focus-within,
+.slei-textarea:focus {
+  box-shadow: var(--shadow-sm);
 }
 
 .slei-badge {
+  align-items: center;
+  background: var(--color-surface);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-badge);
   box-shadow: var(--shadow-xs);
+  display: inline-flex;
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
+  line-height: var(--leading-ui);
   padding: var(--padding-badge);
 }
 
-.slei-badge--in_review {
+.slei-badge--todo {
+  background: var(--color-surface-alt);
+}
+
+.slei-badge--in_progress,
+.slei-badge--running {
+  background: var(--color-info-bg);
+}
+
+.slei-badge--in_review,
+.slei-badge--attention {
   background: var(--color-warning-bg);
 }
 
+.slei-badge--done,
+.slei-badge--closed,
+.slei-badge--ready {
+  background: var(--color-success-bg);
+}
+
+.slei-badge--error,
+.slei-badge--unavailable {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
 .slei-avatar {
+  align-items: center;
+  background: var(--color-accent-subtle);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-avatar);
+  display: inline-flex;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-black);
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.slei-dialog {
+  background: var(--color-surface);
+  border: var(--border-panel) solid var(--color-border);
+  border-radius: var(--radius-modal);
+  box-shadow: var(--shadow-lg);
+}
+
+.slei-panel {
+  background: var(--color-surface);
+  border: var(--border-panel) solid var(--color-border);
+}
+
+.slei-card {
+  background: var(--color-surface);
+  border: var(--border-card) solid var(--color-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-md);
 }
 
 :focus-visible {
@@ -91,12 +327,24 @@
   outline-offset: 2px;
 }
 
+::selection {
+  background: var(--color-accent);
+  color: var(--color-text-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+
   .slei-button,
   .slei-button:hover,
   .slei-button:active {
     box-shadow: var(--shadow-sm);
     transform: none;
-    transition: none;
   }
 }

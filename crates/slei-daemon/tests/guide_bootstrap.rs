@@ -6,6 +6,7 @@ fn guide_bootstrap_does_not_create_entities_until_claude_runtime_is_ready() {
     service.set_runtimes_for_tests(vec![RuntimeReadinessDto {
         kind: "ClaudeCode".to_string(),
         readiness: "unknown".to_string(),
+        version: None,
     }]);
 
     let result = service.bootstrap_guide_agent();
@@ -21,6 +22,7 @@ fn guide_bootstrap_creates_one_guide_agent_and_default_channel_idempotently() {
     service.set_runtimes_for_tests(vec![RuntimeReadinessDto {
         kind: "ClaudeCode".to_string(),
         readiness: "ready".to_string(),
+        version: Some("1.2.3".to_string()),
     }]);
 
     let first = service.bootstrap_guide_agent();

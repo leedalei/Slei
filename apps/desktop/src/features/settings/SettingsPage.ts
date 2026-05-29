@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderLanguageSettings } from "./LanguageSettings";
 import { renderNotificationSettings, type NotificationState } from "./NotificationSettings";
 import { renderProfileForm, type ProfileState } from "./ProfileForm";
@@ -7,7 +8,7 @@ export function renderSettingsPage(input: {
   profile: ProfileState;
   notifications: NotificationState;
 }): string {
-  const labels = dictionary[input.locale];
+  const labels = createDesktopMessages(input.locale).settings;
   return [
     labels.title,
     renderProfileForm(input.profile, input.locale),
@@ -15,12 +16,3 @@ export function renderSettingsPage(input: {
     renderNotificationSettings(input.notifications, input.locale),
   ].join(" ");
 }
-
-const dictionary = {
-  "zh-CN": {
-    title: "设置",
-  },
-  "en-US": {
-    title: "Settings",
-  },
-};

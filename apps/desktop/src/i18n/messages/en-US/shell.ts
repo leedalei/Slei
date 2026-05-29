@@ -1,0 +1,37 @@
+export const shell = {
+  mainNavigation: "Main navigation",
+  nav: {
+    chat: "Chat",
+    tasks: "Tasks",
+    members: "Members",
+    computers: "Computers",
+    settings: "Settings",
+  },
+  sidebarTitle: {
+    chat: "Slei",
+    search: "Slei",
+    tasks: "Slei",
+    members: "Members",
+    computers: "Computers",
+    settings: "Settings",
+  },
+  sidebarSubtitle: {
+    chat: "Workspace",
+    search: "Workspace",
+    tasks: "Workspace",
+    members: "Agents",
+    computers: "Device list",
+    settings: "Preferences",
+  },
+  sectionLabel: {
+    chat: "Channels",
+    search: "Search",
+    tasks: "Task queue",
+    members: "Members and agents",
+    computers: "Local nodes",
+    settings: "Preferences",
+  },
+  attentionNeeded: "Needs attention",
+  connectedComputers: "Connected computers",
+  availableAgents: "Available agents",
+};

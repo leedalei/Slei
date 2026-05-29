@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import type { ComputerNode } from "./types";
 
 export function renderNodeList(nodes: ComputerNode[], locale: "zh-CN" | "en-US"): string {
@@ -10,8 +11,6 @@ export function statusLabel(
   status: ComputerNode["status"],
   locale: "zh-CN" | "en-US",
 ): string {
-  if (locale === "zh-CN") {
-    return status === "connected" ? "已连接" : "离线";
-  }
-  return status === "connected" ? "Connected" : "Offline";
+  const messages = createDesktopMessages(locale).computers;
+  return status === "connected" ? messages.connected : messages.offline;
 }

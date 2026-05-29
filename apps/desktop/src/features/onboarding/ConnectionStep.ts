@@ -1,11 +1,12 @@
+import { createDesktopMessages } from "../../i18n";
+
 export function renderConnectionStep(input: {
   locale: "zh-CN" | "en-US";
   daemonConnected: boolean;
 }): string {
+  const messages = createDesktopMessages(input.locale).onboarding;
   if (input.daemonConnected) {
-    return input.locale === "zh-CN" ? "Daemon 已连接" : "Daemon connected";
+    return messages.connectionConnected;
   }
-  return input.locale === "zh-CN"
-    ? "Daemon 未启动 无法完成"
-    : "Daemon is not running Cannot finish";
+  return messages.connectionUnavailable;
 }

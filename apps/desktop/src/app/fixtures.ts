@@ -1,0 +1,243 @@
+import type { ConversationView, DesktopNodeView, InteractiveCardView, SkillView } from "../lib/daemon-bridge";
+
+export type SleiChannel = {
+  id: string;
+  name: string;
+  description: string;
+  unread: number;
+  projectName?: string;
+};
+
+export type SleiMessage = {
+  id: string;
+  author: string;
+  handle?: string;
+  avatar?: string;
+  role: "human" | "agent" | "system";
+  time: string;
+  body: string;
+  cards?: InteractiveCardView[];
+  channelId?: string;
+  status?: "running" | "approval" | "done";
+  toolCall?: string;
+};
+
+export type SleiTask = {
+  id: string;
+  title: string;
+  owner: string;
+  status: "todo" | "in_progress" | "in_review" | "done";
+  attention?: string;
+};
+
+export type SleiMember = {
+  id: string;
+  name: string;
+  handle: string;
+  avatar: string;
+  avatarSeed?: string;
+  type: "agent" | "human";
+  runtimeStatus: "idle" | "busy" | "offline";
+  role: string;
+  description: string;
+  computer: string;
+  nodeId?: string;
+  created: string;
+  creator: string;
+  runtime: string;
+  model: string;
+  instructions: string;
+  permissions: string[];
+  environmentVariables: string[];
+  createdAgents: string[];
+  activity: string;
+  capabilities: string[];
+  workspacePath?: string;
+  memoryPath?: string;
+  docsPath?: string;
+  skills?: SkillView[];
+};
+
+export type SleiFixtures = {
+  nodes: DesktopNodeView[];
+  conversations: ConversationView[];
+  channels: SleiChannel[];
+  messages: SleiMessage[];
+  tasks: SleiTask[];
+  members: SleiMember[];
+};
+
+export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiFixtures {
+  return {
+    nodes: overrides.nodes ?? [
+      {
+        id: "local-node",
+        name: "MacBookPro M4 MAX",
+        status: "connected",
+        daemonVersion: "0.54.1",
+        created: "20260526",
+        device: {
+          platform: "darwin",
+          osVersion: "darwin arm64",
+          arch: "arm64",
+          hostname: "MateBook-Pro-Max-3.local",
+        },
+        runtimes: [
+          { kind: "ClaudeCode", readiness: "ready", version: "v1.0.54" },
+          { kind: "CodexCLI", readiness: "ready", version: "v0.8.0" },
+          { kind: "CursorCLI", readiness: "unavailable" },
+        ],
+      },
+    ],
+    conversations: overrides.conversations ?? [],
+    channels: overrides.channels ?? [
+      { id: "all", name: "all", description: "所有成员的默认频道", unread: 0 },
+    ],
+    messages: overrides.messages ?? [
+      {
+        id: "m1",
+        author: "Lei",
+        role: "human",
+        time: "09:42",
+        body: "把桌面端首页默认落到 Chat，并且 runtime 没配好时直接引导用户。",
+        channelId: "all",
+      },
+      {
+        id: "m2",
+        author: "Slei 智能体",
+        role: "agent",
+        time: "09:44",
+        body: "已创建 Neo-Brutalism shell：三栏布局、频道上下文、timeline 和底部 composer。",
+        channelId: "all",
+        status: "running",
+        toolCall: "refresh_runtime_status",
+      },
+      {
+        id: "m3",
+        author: "System",
+        role: "system",
+        time: "09:45",
+        body: "本机节点已连接，ClaudeCode runtime 状态会通过桌面 broker 检测。",
+        channelId: "all",
+        status: "done",
+      },
+    ],
+    tasks: overrides.tasks ?? [
+      { id: "T-101", title: "接入 React 桌面壳", owner: "Slei 智能体", status: "done" },
+      { id: "T-102", title: "连接 runtime 引导弹窗", owner: "运行时智能体", status: "in_progress", attention: "等待节点刷新" },
+      { id: "T-103", title: "检查设备诊断入口", owner: "Lei", status: "todo" },
+      { id: "T-104", title: "统一 token 化样式", owner: "UI 智能体", status: "in_review", attention: "视觉检查" },
+    ],
+    members: overrides.members ?? [],
+  };
+}
+
+export function createDemoMembers(): SleiMember[] {
+  return [
+      {
+        id: "a1",
+        name: "Coda",
+        handle: "@Coda",
+        avatar: "▣",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "研发团队开发工程师",
+        description: "研发团队开发工程师。基于架构师的技术方案和任务分解进行实际编码工作，同时响应 QA 提出的问题和改进意见，确保代码质量与需求一致。",
+        computer: "MacBookPro M4 MAX",
+        created: "20260526",
+        creator: "lei lee @lei-lee",
+        runtime: "ClaudeCode",
+        model: "Sonnet",
+        instructions: "根据架构方案执行编码，响应 QA 反馈，保持实现与需求一致。",
+        permissions: ["文件读取", "文件写入", "命令执行"],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "正在 #all 中待命",
+        capabilities: ["代码实现", "问题修复", "工程协作"],
+      },
+      {
+        id: "a2",
+        name: "Cindy",
+        handle: "@cindy",
+        avatar: "CI",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "Onboarding Assistant",
+        description: "负责引导用户完成本地环境和成员初始化。",
+        computer: "MacBookPro M4 MAX",
+        created: "20260526",
+        creator: "lei lee @lei-lee",
+        runtime: "ClaudeCode",
+        model: "Haiku",
+        instructions: "引导用户完成 onboarding。",
+        permissions: ["文件读取"],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "等待 onboarding 任务",
+        capabilities: ["Onboarding", "诊断"],
+      },
+      {
+        id: "a3",
+        name: "Alice",
+        handle: "@alice",
+        avatar: "AL",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "研发团队架构师",
+        description: "负责技术方案、任务拆解和设计评审。",
+        computer: "MacBookPro M4 MAX",
+        created: "20260526",
+        creator: "lei lee @lei-lee",
+        runtime: "ClaudeCode",
+        model: "Sonnet",
+        instructions: "输出架构方案和任务拆分。",
+        permissions: ["文件读取", "命令执行"],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: " reviewing architecture",
+        capabilities: ["架构", "评审"],
+      },
+      {
+        id: "a4",
+        name: "运行时智能体",
+        handle: "@runtime",
+        avatar: "RA",
+        type: "agent",
+        runtimeStatus: "busy",
+        role: "本地 runtime 管理",
+        runtime: "ClaudeCode",
+        model: "claude-haiku",
+        instructions: "监控本机 Claude runtime、daemon 节点和诊断信息。",
+        permissions: ["文件读取", "命令执行", "网络访问"],
+        description: "监控本机 Claude runtime、daemon 节点和诊断信息。",
+        computer: "MacBookPro M4 MAX",
+        created: "20260526",
+        creator: "lei lee @lei-lee",
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "正在检查节点状态",
+        capabilities: ["ClaudeCode", "Diagnostics"],
+      },
+      {
+        id: "h1",
+        name: "Lei",
+        handle: "@lei",
+        avatar: "LL",
+        type: "human",
+        runtimeStatus: "offline",
+        role: "Owner",
+        description: "产品 Owner，负责验收和授权。",
+        computer: "MacBookPro M4 MAX",
+        created: "20260526",
+        creator: "lei lee @lei-lee",
+        runtime: "Human",
+        model: "手动审批",
+        instructions: "负责产品方向、权限审批和最终验收。",
+        permissions: ["审批", "产品决策"],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "正在验收 MVP",
+        capabilities: ["产品方向", "审批"],
+      },
+    ];
+}

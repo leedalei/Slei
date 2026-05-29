@@ -1,11 +1,12 @@
+import { createDesktopMessages } from "../../i18n";
+
 export function renderRuntimeStep(input: {
   locale: "zh-CN" | "en-US";
   runtimeReady: boolean;
 }): string {
+  const messages = createDesktopMessages(input.locale).onboarding;
   if (input.runtimeReady) {
-    return input.locale === "zh-CN" ? "运行时已就绪" : "Runtime ready";
+    return messages.runtimeReady;
   }
-  return input.locale === "zh-CN"
-    ? "运行时不可用 不会创建引导员"
-    : "Runtime unavailable Guide Agent will not be created";
+  return messages.runtimeUnavailableNoGuide;
 }

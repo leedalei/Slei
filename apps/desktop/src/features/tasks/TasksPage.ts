@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderFeatureShell } from "../shell/AppShell";
 import { renderBoardView } from "./BoardView";
 import { renderListView } from "./ListView";
@@ -10,10 +11,7 @@ export function renderTasksPage(input: {
   filters: TaskFilters;
   tasks: TaskView[];
 }): string {
-  const labels = {
-    "zh-CN": { title: "任务", board: "看板", list: "列表" },
-    "en-US": { title: "Tasks", board: "Board", list: "List" },
-  }[input.locale];
+  const labels = createDesktopMessages(input.locale).tasks;
   const view = input.view === "board" ? renderBoardView(input) : renderListView(input);
 
   return renderFeatureShell({

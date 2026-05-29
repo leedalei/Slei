@@ -3,14 +3,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "desktop": "tauri dev",
+    "build": "tsc -p tsconfig.json && vite build",
     "test": "vitest run",
     "test:e2e": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.2",
     "@slei/i18n": "workspace:*",
-    "@slei/protocol-client": "workspace:*"
+    "@slei/protocol-client": "workspace:*",
+    "@slei/ui": "workspace:*",
+    "@tauri-apps/api": "2.11.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.2",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "vite": "^7.3.3"
   }
 }

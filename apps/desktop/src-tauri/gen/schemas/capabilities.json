@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Slei Webview may only call narrow broker commands; daemon transport and OS actions stay in Rust.","local":true,"windows":["main"],"permissions":[]}}

@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderConnectionStep } from "./ConnectionStep";
 import { renderProfileStep } from "./ProfileStep";
 import { renderRuntimeStep } from "./RuntimeStep";
@@ -8,7 +9,7 @@ export function renderOnboardingPage(input: {
   daemonConnected: boolean;
   runtimeReady: boolean;
 }): string {
-  const title = input.locale === "zh-CN" ? "欢迎使用 Slei" : "Welcome to Slei";
+  const title = createDesktopMessages(input.locale).onboarding.welcome;
   return [
     title,
     input.hasProfile ? "" : renderProfileStep(input.locale),

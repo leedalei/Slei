@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderFeatureShell } from "../shell/AppShell";
 import { renderAgentForm } from "./AgentForm";
 import { renderAgentProfile } from "./AgentProfile";
@@ -9,7 +10,7 @@ export function renderMembersPage(input: {
   agents: AgentView[];
   humans: HumanView[];
 }): string {
-  const title = input.locale === "zh-CN" ? "成员" : "Members";
+  const title = createDesktopMessages(input.locale).shell.nav.members;
   const sidebar = renderMembersSidebar(input);
   const content = [
     title,

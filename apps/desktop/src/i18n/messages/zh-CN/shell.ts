@@ -1,0 +1,37 @@
+export const shell = {
+  mainNavigation: "主导航",
+  nav: {
+    chat: "聊天",
+    tasks: "任务",
+    members: "成员",
+    computers: "运行设备",
+    settings: "设置",
+  },
+  sidebarTitle: {
+    chat: "Slei",
+    search: "Slei",
+    tasks: "Slei",
+    members: "成员",
+    computers: "设备",
+    settings: "设置",
+  },
+  sidebarSubtitle: {
+    chat: "工作区",
+    search: "工作区",
+    tasks: "工作区",
+    members: "成员",
+    computers: "设备列表",
+    settings: "偏好设置",
+  },
+  sectionLabel: {
+    chat: "频道",
+    search: "搜索",
+    tasks: "任务队列",
+    members: "成员与智能体",
+    computers: "本机节点",
+    settings: "偏好设置",
+  },
+  attentionNeeded: "需要关注",
+  connectedComputers: "已连接设备",
+  availableAgents: "可用智能体",
+};

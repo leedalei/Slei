@@ -1,3 +1,4 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderFeatureShell } from "../shell/AppShell";
 import { renderNodeList } from "./NodeList";
 import { renderNodeProfile } from "./NodeProfile";
@@ -7,7 +8,7 @@ export function renderComputersPage(input: {
   locale: "zh-CN" | "en-US";
   nodes: ComputerNode[];
 }): string {
-  const title = input.locale === "zh-CN" ? "运行设备" : "Computers";
+  const title = createDesktopMessages(input.locale).shell.nav.computers;
   const sidebar = renderNodeList(input.nodes, input.locale);
   const content = [
     title,

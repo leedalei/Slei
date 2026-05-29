@@ -27,7 +27,7 @@ describe("channel chat timeline", () => {
     expect(html).toContain("Coda");
     expect(html).toContain("正在输入");
     expect(html).toContain("Tool: Read collapsed");
-    expect(html).toContain("Message #dev-team");
+    expect(html).toContain("输入消息到 #dev-team");
     expect(html).toContain("reconnect after 7");
   });
 

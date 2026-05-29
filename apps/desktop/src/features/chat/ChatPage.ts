@@ -14,8 +14,8 @@ export function renderChatPage(input: {
 }): string {
   const content = [
     renderChannelHeader(input.channel.name),
-    renderTimeline(input.messages),
-    renderComposer({ channelName: input.channel.name, asTask: input.composer.asTask }),
+    renderTimeline(input.messages, input.locale),
+    renderComposer({ channelName: input.channel.name, asTask: input.composer.asTask, locale: input.locale }),
     `reconnect after ${input.lastSequence}`,
   ].join("\n");
 

@@ -1,6 +1,14 @@
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
+use serde_json::Value;
+use slei_daemon::app::build_router;
+use slei_daemon::auth::AuthToken;
+use slei_daemon::services::notification_service::NotificationService;
 use slei_daemon::services::settings_service::{
     LocalePreference, NotificationPreferences, ProfileDraft, SettingsService,
 };
+use slei_daemon::state::AppState;
+use tower::ServiceExt;
 
 #[tokio::test]
 async fn settings_identity_creates_single_profile_and_rejects_handle_mutation() {
@@ -65,4 +73,92 @@ async fn settings_identity_rejects_invalid_handle_and_round_trips_preferences() 
     assert!(service.preferences().await.notifications.mentions);
     assert!(!service.preferences().await.notifications.human_replies);
     assert!(service.preferences().await.notifications.approvals);
+}
+
+#[tokio::test]
+async fn settings_preferences_api_requires_auth_and_round_trips_locale_notifications() {
+    let token = AuthToken::from_static("settings-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    let unauthorized = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/preferences")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+    let updated = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/preferences")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"locale":"en-US","notifications":{"mentions":true,"humanReplies":false,"approvals":true}}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), StatusCode::OK);
+
+    let fetched = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/preferences")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), StatusCode::OK);
+    let body = to_bytes(fetched.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["preferences"]["locale"], "en-US");
+    assert_eq!(json["preferences"]["notifications"]["mentions"], true);
+    assert_eq!(json["preferences"]["notifications"]["humanReplies"], false);
+    assert_eq!(json["preferences"]["notifications"]["approvals"], true);
+    assert!(
+        serde_json::to_string(&json)
+            .unwrap()
+            .contains("settings-token")
+            == false
+    );
+}
+
+#[tokio::test]
+async fn notification_preferences_gate_notification_service_categories() {
+    let settings = SettingsService::for_tests();
+    let notifications = NotificationService::for_tests_with_settings(settings.clone());
+
+    settings
+        .set_notifications(NotificationPreferences {
+            mentions: false,
+            human_replies: true,
+            approvals: false,
+        })
+        .await
+        .expect("notification preferences save");
+
+    notifications
+        .notify_mention("task_mentions", "human_lei", "@lei-lee 看这里")
+        .await;
+    notifications
+        .notify_human_attention("task_approval", "human_lei", "需要审批")
+        .await;
+    notifications
+        .notify_human_reply("task_reply", "human_lei", "Lei 回复了")
+        .await;
+
+    let entries = notifications.list_for_user("human_lei").await;
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].task_id, "task_reply");
 }

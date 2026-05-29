@@ -3,6 +3,7 @@ pub mod artifact_service;
 pub mod capability_service;
 pub mod card_service;
 pub mod channel_service;
+pub mod conversation_service;
 pub mod delegation_service;
 pub mod diagnostics_service;
 pub mod event_service;

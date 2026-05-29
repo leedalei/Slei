@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { Avatar, Badge, Button, Dialog, Input, Tabs } from "./primitives";
+import { Avatar, Badge, Button, Checkbox, Dialog, Input, Select, Tabs } from "./primitives";
 
 const stylesDir = fileURLToPath(new URL("../styles/", import.meta.url));
 const globalsCss = readFileSync(`${stylesDir}globals.css`, "utf8");
@@ -26,6 +26,32 @@ describe("Slei UI primitives", () => {
     expect(input.label).toBe("昵称");
     expect(input.className).toContain("slei-input");
     expect(badge.className).toContain("slei-badge--in_review");
+  });
+
+  it("select exposes combobox semantics and style class", () => {
+    const select = Select({
+      label: "语言",
+      value: "zh-CN",
+      options: [
+        { label: "中文", value: "zh-CN" },
+        { label: "English", value: "en-US" },
+      ],
+    });
+
+    expect(select.role).toBe("combobox");
+    expect(select.label).toBe("语言");
+    expect(select.value).toBe("zh-CN");
+    expect(select.className).toBe("slei-select");
+  });
+
+  it("checkbox exposes checked state and square style class", () => {
+    const checkbox = Checkbox({ label: "转为任务", checked: true });
+
+    expect(checkbox.role).toBe("checkbox");
+    expect(checkbox.label).toBe("转为任务");
+    expect(checkbox.checked).toBe(true);
+    expect(checkbox.disabled).toBe(false);
+    expect(checkbox.className).toBe("slei-checkbox");
   });
 
   it("dialog traps tab focus and escape closes it", () => {

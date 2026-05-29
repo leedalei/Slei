@@ -1,4 +1,5 @@
 import type { DaemonBridge } from "../lib/daemon-bridge";
+import { createDesktopMessages } from "../i18n";
 
 export async function renderAppShell(input: {
   bridge: DaemonBridge;
@@ -6,35 +7,14 @@ export async function renderAppShell(input: {
 }): Promise<string> {
   const locale = input.locale ?? "zh-CN";
   const status = await input.bridge.daemonStatus();
-  const labels = translations[locale];
+  const messages = createDesktopMessages(locale);
 
   return [
-    labels.chat,
-    labels.tasks,
-    labels.members,
-    labels.computers,
-    labels.settings,
-    status.connected ? labels.connected : labels.offline,
+    messages.shell.nav.chat,
+    messages.shell.nav.tasks,
+    messages.shell.nav.members,
+    messages.shell.nav.computers,
+    messages.shell.nav.settings,
+    status.connected ? messages.computers.connected : messages.computers.offline,
   ].join(" ");
 }
-
-const translations = {
-  "zh-CN": {
-    chat: "聊天",
-    tasks: "任务",
-    members: "成员",
-    computers: "运行设备",
-    settings: "设置",
-    connected: "已连接",
-    offline: "离线",
-  },
-  "en-US": {
-    chat: "Chat",
-    tasks: "Tasks",
-    members: "Members",
-    computers: "Computers",
-    settings: "Settings",
-    connected: "Connected",
-    offline: "Offline",
-  },
-};

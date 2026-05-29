@@ -2,6 +2,11 @@
   "name": "@slei/ui",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles/tokens.css": "./src/styles/tokens.css",
+    "./styles/globals.css": "./src/styles/globals.css"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",

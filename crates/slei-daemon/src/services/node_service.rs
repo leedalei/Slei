@@ -1,4 +1,9 @@
 use serde::Serialize;
+use std::{
+    env,
+    process::Command,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct NodeDto {
@@ -6,6 +11,7 @@ pub struct NodeDto {
     pub name: String,
     pub status: String,
     pub daemon_version: &'static str,
+    pub device: DeviceMetaDto,
     pub runtimes: Vec<RuntimeReadinessDto>,
 }
 
@@ -13,11 +19,20 @@ pub struct NodeDto {
 pub struct RuntimeReadinessDto {
     pub kind: String,
     pub readiness: String,
+    pub version: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct DeviceMetaDto {
+    pub platform: String,
+    pub os_version: String,
+    pub arch: String,
+    pub hostname: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct NodeService {
-    local_node: NodeDto,
+    local_node: Arc<Mutex<NodeDto>>,
     guide_agent_created: bool,
     default_channel_created: bool,
 }
@@ -25,36 +40,66 @@ pub struct NodeService {
 impl NodeService {
     pub fn for_tests() -> Self {
         Self {
-            local_node: NodeDto {
+            local_node: Arc::new(Mutex::new(NodeDto {
                 id: "local-node".to_string(),
-                name: "Local Computer".to_string(),
+                name: "本机设备".to_string(),
                 status: "connected".to_string(),
                 daemon_version: env!("CARGO_PKG_VERSION"),
-                runtimes: vec![RuntimeReadinessDto {
-                    kind: "ClaudeCode".to_string(),
-                    readiness: "unknown".to_string(),
-                }],
-            },
+                device: detect_device_meta(),
+                runtimes: vec![detect_claude_runtime()],
+            })),
             guide_agent_created: false,
             default_channel_created: false,
         }
     }
 
     pub fn list_nodes(&self) -> Vec<NodeDto> {
-        vec![self.local_node.clone()]
+        vec![self
+            .local_node
+            .lock()
+            .expect("local node mutex poisoned")
+            .clone()]
     }
 
     pub fn get_node(&self, id: &str) -> Option<NodeDto> {
-        (self.local_node.id == id).then(|| self.local_node.clone())
+        let local_node = self.local_node.lock().expect("local node mutex poisoned");
+        (local_node.id == id).then(|| local_node.clone())
     }
 
-    pub fn set_runtimes_for_tests(&mut self, runtimes: Vec<RuntimeReadinessDto>) {
-        self.local_node.runtimes = runtimes;
+    pub fn rename_local_node(&self, name: &str) -> Result<NodeDto, NodeRenameError> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(NodeRenameError::NameRequired);
+        }
+        if trimmed.chars().count() > 64 {
+            return Err(NodeRenameError::NameTooLong);
+        }
+
+        let mut local_node = self.local_node.lock().expect("local node mutex poisoned");
+        local_node.name = trimmed.to_string();
+        Ok(local_node.clone())
+    }
+
+    pub fn set_runtimes_for_tests(&self, runtimes: Vec<RuntimeReadinessDto>) {
+        self.local_node
+            .lock()
+            .expect("local node mutex poisoned")
+            .runtimes = runtimes;
+    }
+
+    pub fn set_runtime_ready_for_tests(&self, version: &str) {
+        self.set_runtimes_for_tests(vec![RuntimeReadinessDto {
+            kind: "ClaudeCode".to_string(),
+            readiness: "ready".to_string(),
+            version: Some(version.to_string()),
+        }]);
     }
 
     pub fn bootstrap_guide_agent(&mut self) -> GuideBootstrap {
         if !self
             .local_node
+            .lock()
+            .expect("local node mutex poisoned")
             .runtimes
             .iter()
             .any(|runtime| runtime.kind == "ClaudeCode" && runtime.readiness == "ready")
@@ -86,6 +131,54 @@ impl NodeService {
     }
 }
 
+fn detect_device_meta() -> DeviceMetaDto {
+    DeviceMetaDto {
+        platform: env::consts::OS.to_string(),
+        os_version: command_output("sw_vers", &["-productVersion"])
+            .or_else(|| command_output("uname", &["-r"]))
+            .unwrap_or_else(|| "unknown".to_string()),
+        arch: env::consts::ARCH.to_string(),
+        hostname: command_output("hostname", &[]).unwrap_or_else(|| "local-device".to_string()),
+    }
+}
+
+fn detect_claude_runtime() -> RuntimeReadinessDto {
+    let version = env::var("SLEI_CLAUDE_VERSION_OVERRIDE")
+        .ok()
+        .or_else(|| command_output("claude", &["--version"]));
+
+    RuntimeReadinessDto {
+        kind: "ClaudeCode".to_string(),
+        readiness: if version.is_some() {
+            "ready"
+        } else {
+            "unavailable"
+        }
+        .to_string(),
+        version: version.and_then(|output| parse_claude_version(&output)),
+    }
+}
+
+fn parse_claude_version(output: &str) -> Option<String> {
+    output
+        .split_whitespace()
+        .find(|part| part.chars().any(|ch| ch.is_ascii_digit()) && part.contains('.'))
+        .map(|part| {
+            part.trim_matches(|ch: char| ch == ',' || ch == ';')
+                .to_string()
+        })
+}
+
+fn command_output(program: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!stdout.is_empty()).then_some(stdout)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuideBootstrap {
     RuntimeUnavailable,
@@ -97,4 +190,10 @@ pub enum GuideBootstrap {
         agent_id: String,
         channel_id: String,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NodeRenameError {
+    NameRequired,
+    NameTooLong,
 }

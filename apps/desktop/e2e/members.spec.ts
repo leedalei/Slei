@@ -22,11 +22,11 @@ describe("members and agent configuration", () => {
     });
 
     expect(html).toContain("成员");
-    expect(html).toContain("AGENTS");
+    expect(html).toContain("智能体");
     expect(html).toContain("HUMANS");
     expect(html).toContain("Coda");
     expect(html).toContain("Claude Code");
-    expect(html).toContain("主 Agent");
+    expect(html).toContain("主智能体");
     expect(html).toContain("工作区权限：只读");
     expect(html).toContain("能力扫描暂不可用");
     expect(html).toContain("@lei-lee");

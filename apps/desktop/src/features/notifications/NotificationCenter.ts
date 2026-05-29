@@ -1,8 +1,10 @@
+import { createDesktopMessages } from "../../i18n";
+
 export function renderNotificationCenter(input: {
   locale: "zh-CN" | "en-US";
   notifications: Array<{ taskTitle: string; payload: string; read: boolean }>;
 }): string {
-  const title = input.locale === "zh-CN" ? "通知" : "Notifications";
+  const title = createDesktopMessages(input.locale).settings.notifications;
   return [
     title,
     ...input.notifications.map((notification) =>

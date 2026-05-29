@@ -1,8 +1,10 @@
+import { createDesktopMessages } from "../../i18n";
 import { renderPermissionsPanel } from "./PermissionsPanel";
 import type { AgentView } from "./types";
 
 export function renderAgentProfile(agent: AgentView, locale: "zh-CN" | "en-US"): string {
-  const primary = agent.primary ? (locale === "zh-CN" ? "主 Agent" : "Primary agent") : "";
+  const messages = createDesktopMessages(locale).members;
+  const primary = agent.primary ? messages.primaryAgent : "";
   return [
     agent.name,
     `@${agent.handle}`,
@@ -11,7 +13,7 @@ export function renderAgentProfile(agent: AgentView, locale: "zh-CN" | "en-US"):
     agent.presence,
     primary,
     renderPermissionsPanel(agent, locale),
-    locale === "zh-CN" ? "能力扫描暂不可用" : "Capability scan unavailable",
+    messages.capabilityScanUnavailable,
   ].join(" ");
 }
 

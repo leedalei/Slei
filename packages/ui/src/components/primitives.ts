@@ -8,14 +8,16 @@ export type PrimitiveNode = {
 export function Button(input: {
   children: string;
   variant?: "primary" | "secondary" | "accent" | "destructive" | "ghost";
+  size?: "sm" | "md";
   disabled?: boolean;
 }): PrimitiveNode {
   const variant = input.variant ?? "primary";
+  const sizeClass = input.size === "sm" ? "slei-button--small" : "slei-button--medium";
   return {
     role: "button",
     children: input.children,
     disabled: input.disabled ?? false,
-    className: joinClasses("slei-button", `slei-button--${variant}`),
+    className: joinClasses("slei-button", sizeClass, `slei-button--${variant}`),
   };
 }
 
@@ -30,6 +32,40 @@ export function Input(input: {
     value: input.value ?? "",
     disabled: input.disabled ?? false,
     className: "slei-input",
+  };
+}
+
+export function Select(input: {
+  label: string;
+  value?: string;
+  options: Array<{ label: string; value: string; disabled?: boolean }>;
+  disabled?: boolean;
+}): PrimitiveNode & {
+  label: string;
+  value: string;
+  options: Array<{ label: string; value: string; disabled?: boolean }>;
+} {
+  return {
+    role: "combobox",
+    label: input.label,
+    value: input.value ?? input.options[0]?.value ?? "",
+    options: input.options,
+    disabled: input.disabled ?? false,
+    className: "slei-select",
+  };
+}
+
+export function Checkbox(input: {
+  label: string;
+  checked?: boolean;
+  disabled?: boolean;
+}): PrimitiveNode & { label: string; checked: boolean } {
+  return {
+    role: "checkbox",
+    label: input.label,
+    checked: input.checked ?? false,
+    disabled: input.disabled ?? false,
+    className: "slei-checkbox",
   };
 }
 

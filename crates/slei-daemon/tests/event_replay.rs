@@ -28,8 +28,37 @@ async fn nodes_report_runtime_readiness_placeholders() {
     let node = &json["nodes"][0];
 
     assert_eq!(node["status"], "connected");
+    assert!(node["device"]["platform"].as_str().unwrap().len() > 1);
+    assert!(node["device"]["arch"].as_str().unwrap().len() > 1);
+    assert!(node["device"]["hostname"].as_str().unwrap().len() > 1);
     assert_eq!(node["runtimes"][0]["kind"], "ClaudeCode");
-    assert_eq!(node["runtimes"][0]["readiness"], "unknown");
+    assert!(node["runtimes"][0].get("version").is_some());
+}
+
+#[tokio::test]
+async fn local_node_name_can_be_updated_without_exposing_auth_material() {
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/nodes/local-node/name")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "name": "Lei MacBook" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(json["node"]["name"], "Lei MacBook");
+    assert!(json.get("token").is_none());
 }
 
 #[tokio::test]
