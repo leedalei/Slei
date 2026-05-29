@@ -131,9 +131,10 @@ mod tests {
         assert_eq!(nodes.nodes[0].runtimes[0].readiness, "ready");
         assert!(nodes.nodes[0].runtimes[0].version.is_some());
         assert!(!nodes.nodes[0].device.platform.is_empty());
-        assert!(!nodes.nodes[0].device.os_version.is_empty());
         assert!(!nodes.nodes[0].device.arch.is_empty());
         assert!(!nodes.nodes[0].device.hostname.is_empty());
+        assert!(!serialized.contains("osVersion"));
+        assert!(!serialized.contains("os_version"));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));

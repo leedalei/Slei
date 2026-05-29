@@ -6,6 +6,7 @@ use crate::services::event_service::EventService;
 use crate::services::member_service::MemberService;
 use crate::services::node_service::NodeService;
 use crate::services::settings_service::SettingsService;
+use crate::services::task_service::TaskService;
 use crate::services::workspace_service::WorkspaceService;
 use std::path::PathBuf;
 
@@ -22,6 +23,7 @@ pub struct AppState {
     workspace_service: WorkspaceService,
     event_service: EventService,
     settings_service: SettingsService,
+    task_service: TaskService,
 }
 
 impl AppState {
@@ -44,6 +46,7 @@ impl AppState {
             workspace_service: WorkspaceService::new(event_service.clone()),
             event_service,
             settings_service: SettingsService::for_tests(),
+            task_service: TaskService::for_tests(),
         }
     }
 
@@ -77,6 +80,10 @@ impl AppState {
 
     pub fn settings(&self) -> &SettingsService {
         &self.settings_service
+    }
+
+    pub fn tasks(&self) -> &TaskService {
+        &self.task_service
     }
 }
 

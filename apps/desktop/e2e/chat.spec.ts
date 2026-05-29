@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { renderChatPage } from "../src/features/chat/ChatPage";
@@ -41,5 +43,15 @@ describe("channel chat timeline", () => {
         { displayName: "Lei Lee", handle: "lei-lee", kind: "human" },
       ]),
     ).toEqual([{ displayName: "Alice", handle: "alice", kind: "agent" }]);
+  });
+
+  it("styles chat messages as flat rows until hover or focus", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const messageRule = css.match(/\.slei-message\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(messageRule).toContain("border: var(--border-subtle) solid transparent");
+    expect(messageRule).not.toMatch(/(^|\n)\s*box-shadow:/);
+    expect(css).toContain(".slei-message:hover");
+    expect(css).toContain(".slei-message:focus-within");
   });
 });

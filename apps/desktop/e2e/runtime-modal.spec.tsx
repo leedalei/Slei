@@ -1,4 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
@@ -15,7 +17,6 @@ describe("runtime setup onboarding modal", () => {
           daemonVersion: "0.1.0",
           device: {
             platform: "darwin",
-            osVersion: "15.5",
             arch: "arm64",
             hostname: "lei-macbook.local",
           },
@@ -41,8 +42,11 @@ describe("runtime setup onboarding modal", () => {
     expect(html).toContain("连接本地 Claude runtime");
     expect(html).toContain("给这台设备命名");
     expect(html).toContain("Lei MacBook");
-    expect(html).toContain("15.5");
-    expect(html).toContain("arm64");
+    expect(html).toContain("<dt>OS</dt><dd>darwin arm64</dd>");
+    expect(html).not.toContain("<dt>系统</dt>");
+    expect(html).not.toContain("<dt>平台</dt>");
+    expect(html).not.toContain("<dt>架构</dt>");
+    expect(html).not.toContain("15.5");
     expect(html).toContain("重新检测");
   });
 
@@ -56,7 +60,6 @@ describe("runtime setup onboarding modal", () => {
           daemonVersion: "0.1.0",
           device: {
             platform: "darwin",
-            osVersion: "15.5",
             arch: "arm64",
             hostname: "lei-macbook.local",
           },
@@ -100,5 +103,13 @@ describe("runtime setup onboarding modal", () => {
     );
 
     expect(html).not.toContain("连接本地 Claude runtime");
+  });
+
+  it("does not draw a divider above the first runtime row", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const runtimeRowRule = css.match(/\.slei-runtime-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(runtimeRowRule).not.toContain("border-top");
+    expect(css).toContain(".slei-runtime-row + .slei-runtime-row");
   });
 });

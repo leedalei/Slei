@@ -346,12 +346,19 @@
 }
 
 .slei-message {
-  border: var(--border-card) solid var(--color-border);
-  box-shadow: var(--shadow-md);
+  border: var(--border-subtle) solid transparent;
   display: grid;
   gap: var(--gap-md);
   grid-template-columns: auto minmax(0, 1fr);
   padding: var(--padding-message-y) var(--padding-message-x);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.slei-message:hover,
+.slei-message:focus-within {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .slei-message__meta {
@@ -368,6 +375,106 @@
 
 .slei-message p {
   margin: var(--gap-sm) 0;
+}
+
+.slei-markdown-message {
+  color: var(--color-text-primary);
+  display: grid;
+  gap: var(--gap-sm);
+  line-height: 1.55;
+  max-width: 100%;
+}
+
+.slei-markdown-message p {
+  margin: 0;
+}
+
+.slei-markdown-message ul,
+.slei-markdown-message ol {
+  margin: 0;
+  padding-left: 1.35rem;
+}
+
+.slei-markdown-message li + li {
+  margin-top: 2px;
+}
+
+.slei-markdown-message blockquote {
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+  margin: 0;
+  padding: var(--gap-xs) 0 var(--gap-xs) var(--gap-md);
+}
+
+.slei-markdown-message table {
+  border-collapse: collapse;
+  display: block;
+  font-size: var(--text-sm);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.slei-markdown-message th,
+.slei-markdown-message td {
+  border: var(--border-subtle) solid var(--color-border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.slei-markdown-message th {
+  background: var(--color-surface-alt);
+  font-weight: var(--weight-bold);
+}
+
+.slei-markdown-message code {
+  background: var(--color-surface-alt);
+  border: var(--border-subtle) solid var(--color-border);
+  border-radius: 4px;
+  font-family: var(--text-mono);
+  font-size: 0.92em;
+  padding: 1px 4px;
+}
+
+.slei-markdown-message pre {
+  background: var(--color-surface-alt);
+  border: var(--border-subtle) solid var(--color-border-subtle);
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  margin: 0;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.slei-markdown-message pre code {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: block;
+  padding: 0;
+  white-space: pre;
+}
+
+.slei-markdown-message a {
+  color: var(--color-accent-strong);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.slei-markdown-message a:hover,
+.slei-markdown-message a:focus-visible {
+  text-decoration: underline;
+}
+
+.slei-markdown-message .hljs-keyword {
+  color: var(--color-error);
+}
+
+.slei-markdown-message .hljs-string {
+  color: var(--color-info);
+}
+
+.slei-markdown-message .hljs-number {
+  color: var(--color-warning);
 }
 
 .slei-tool-call {
@@ -498,6 +605,10 @@
   grid-template-columns: repeat(4, minmax(150px, 1fr));
 }
 
+.slei-tasks-page {
+  position: relative;
+}
+
 .slei-column {
   background: var(--color-surface-alt);
   border: var(--border-card) solid var(--color-border);
@@ -521,6 +632,94 @@
   flex-direction: column;
   gap: var(--gap-sm);
   padding: var(--padding-card);
+}
+
+.slei-task-card__toolbar {
+  align-items: center;
+  display: flex;
+  gap: var(--gap-sm);
+  justify-content: space-between;
+}
+
+.slei-task-comment-button {
+  min-width: 48px;
+  width: auto;
+}
+
+.slei-task-comment-button span {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-black);
+}
+
+.slei-task-thread-drawer {
+  background: var(--color-surface);
+  border-left: var(--border-panel) solid var(--color-border);
+  bottom: 0;
+  box-shadow: var(--shadow-lg);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-width: calc(100vw - var(--rail-width));
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: var(--task-thread-width, 680px);
+  z-index: var(--z-overlay);
+}
+
+.slei-task-thread-drawer > header {
+  align-items: start;
+  border-bottom: var(--border-card) solid var(--color-border);
+  display: flex;
+  gap: var(--gap-md);
+  justify-content: space-between;
+  padding: var(--padding-panel);
+}
+
+.slei-task-thread-drawer h2 {
+  font-size: var(--text-xl);
+  margin: var(--gap-xs) 0;
+}
+
+.slei-task-thread-drawer p {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.slei-task-thread-replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-md);
+  overflow: auto;
+  padding: var(--padding-panel);
+}
+
+.slei-task-thread-reply {
+  border: var(--border-subtle) solid transparent;
+  display: grid;
+  gap: var(--gap-xs);
+  padding: var(--gap-sm);
+}
+
+.slei-task-thread-reply:hover,
+.slei-task-thread-reply:focus-within {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border-subtle);
+}
+
+.slei-task-thread-reply strong {
+  font-size: var(--text-sm);
+}
+
+.slei-task-thread-composer {
+  background: var(--color-surface-alt);
+  border-top: var(--border-card) solid var(--color-border);
+  display: grid;
+  gap: var(--gap-sm);
+  padding: var(--padding-panel);
+}
+
+.slei-task-thread-composer .slei-textarea {
+  min-height: 92px;
 }
 
 .slei-member-grid,
@@ -1046,9 +1245,12 @@
 
 .slei-runtime-row {
   align-items: center;
-  border-top: var(--border-subtle) solid var(--color-border-subtle);
   display: flex;
   justify-content: space-between;
+}
+
+.slei-runtime-row + .slei-runtime-row {
+  border-top: var(--border-subtle) solid var(--color-border-subtle);
   padding-top: var(--gap-sm);
 }
 

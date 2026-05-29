@@ -50,9 +50,10 @@ describe("Chinese-first desktop MVP", () => {
       <SleiAppFrame activeView="settings" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(computersHtml).toContain("平台");
-    expect(computersHtml).toContain("系统");
-    expect(computersHtml).toContain("架构");
+    expect(computersHtml).toContain("OS / 系统");
+    expect(computersHtml).toContain("darwin arm64");
+    expect(computersHtml).not.toContain("Platform / 平台");
+    expect(computersHtml).not.toContain("Arch / 架构");
     expect(computersHtml).toContain("主机名");
     expect(settingsHtml).toContain("个人资料");
     expect(settingsHtml).toContain("个人");

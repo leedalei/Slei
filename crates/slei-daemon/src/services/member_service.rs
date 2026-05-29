@@ -308,18 +308,18 @@ impl MemberService {
                 .cloned()
         };
         if let Some(agent) = existing_guide {
-            return Ok((agent, false));
+            return self.normalize_existing_guide_agent(agent).await.map(|agent| (agent, false));
         }
         {
             let state = self.inner.lock().await;
-            if state.product_agent_handles.contains_key("@leelei") {
+            if state.product_agent_handles.contains_key("@yeal") {
                 return Err(MemberError::DuplicateHandle);
             }
         }
 
         let draft = ProductAgentDraft {
-            name: "Leelei".to_string(),
-            handle: "@leelei".to_string(),
+            name: "Yeal".to_string(),
+            handle: "@yeal".to_string(),
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: node_id.to_string(),
@@ -335,6 +335,36 @@ impl MemberService {
             )
             .await?;
         Ok((agent, true))
+    }
+
+    async fn normalize_existing_guide_agent(
+        &self,
+        mut agent: ProductAgentRecord,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        if agent.name == "Yeal" && agent.handle == "@yeal" && agent.avatar_seed == "yeal" {
+            return Ok(agent);
+        }
+
+        let previous_handle = agent.handle.to_lowercase();
+        agent.name = "Yeal".to_string();
+        agent.handle = "@yeal".to_string();
+        agent.avatar_seed = "yeal".to_string();
+        agent.updated_at = current_timestamp();
+        write_default_skills(&agent)?;
+
+        let mut state = self.inner.lock().await;
+        if let Some(owner) = state.product_agent_handles.get("@yeal") {
+            if owner != &agent.id {
+                return Err(MemberError::DuplicateHandle);
+            }
+        }
+        state.product_agent_handles.remove(&previous_handle);
+        state
+            .product_agent_handles
+            .insert(agent.handle.to_lowercase(), agent.id.clone());
+        state.product_agents.insert(agent.id.clone(), agent.clone());
+        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
+        Ok(agent)
     }
 
     async fn create_product_agent_record(
@@ -367,7 +397,7 @@ impl MemberService {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             memory_path: memory_path.to_string_lossy().to_string(),
             docs_path: docs_path.to_string_lossy().to_string(),
-            avatar_seed: if system_owned { "leelei".to_string() } else { Uuid::new_v4().simple().to_string() },
+            avatar_seed: if system_owned { "yeal".to_string() } else { Uuid::new_v4().simple().to_string() },
             runtime_thread: RuntimeThreadRecord {
                 runtime_kind: draft.runtime_kind.trim().to_string(),
                 status: "ready".to_string(),
@@ -592,7 +622,7 @@ When triggered, append the requested fact to MEMORY.md under Key Knowledge or Ac
 }
 
 fn guide_create_skill() -> String {
-    "Trigger when the user asks Leelei to create an agent, member, channel, or 频道. Return a fixed interactive card draft instead of free-form prose.\n".to_string()
+    "Trigger when the user asks Yeal to create an agent, member, channel, or 频道. Return a fixed interactive card draft instead of free-form prose.\n".to_string()
 }
 
 fn write_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {

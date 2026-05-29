@@ -66,7 +66,7 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
 }
 
 #[tokio::test]
-async fn guide_bootstrap_creates_real_leelei_agent_dm_skills_and_all_membership() {
+async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("guide-bootstrap-real");
     let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
@@ -86,8 +86,8 @@ async fn guide_bootstrap_creates_real_leelei_agent_dm_skills_and_all_membership(
     let guide = &first_body["agent"];
     assert_eq!(first_body["status"], "created");
     assert_eq!(guide["id"], "agent_guide_local_node");
-    assert_eq!(guide["name"], "Leelei");
-    assert_eq!(guide["handle"], "@leelei");
+    assert_eq!(guide["name"], "Yeal");
+    assert_eq!(guide["handle"], "@yeal");
     assert_eq!(guide["agentKind"], "guide");
     assert_eq!(guide["systemOwned"], true);
     assert_eq!(guide["channelIds"], json!(["all"]));
@@ -117,7 +117,7 @@ async fn guide_bootstrap_creates_real_leelei_agent_dm_skills_and_all_membership(
     assert!(response_json(messages).await["messages"][0]["body"]
         .as_str()
         .unwrap()
-        .contains("Leelei"));
+        .contains("Yeal"));
 
     let second = post_json(
         &app,

@@ -15,7 +15,6 @@ export type RuntimeReadinessView = {
 
 export type DeviceMetaView = {
   platform: string;
-  osVersion: string;
   arch: string;
   hostname: string;
 };
@@ -273,7 +272,6 @@ export function createDaemonBridgeMock(input: {
       daemonVersion: "0.1.0",
       device: {
         platform: "darwin",
-        osVersion: "unknown",
         arch: "arm64",
         hostname: "local-device",
       },
@@ -327,17 +325,19 @@ export function createDaemonBridgeMock(input: {
     async bootstrapGuideAgent() {
       const hasReadyRuntime = nodes.some((node) => node.runtimes.some((runtime) => runtime.kind === "ClaudeCode" && runtime.readiness === "ready"));
       if (!hasReadyRuntime) return { status: "runtimeUnavailable" };
-      const existing = agents.find((agent) => agent.id === "agent_guide_local_node" || agent.handle === "@leelei");
+      const existing = agents.find((agent) => agent.id === "agent_guide_local_node" || agent.handle === "@yeal" || agent.handle === "@leelei");
       if (existing) {
+        const normalized = normalizeGuideAgentIdentity(existing);
+        agents = agents.map((agent) => (agent.id === normalized.id ? normalized : agent));
         const conversation = conversations.find((candidate) => candidate.agentId === existing.id);
-        return { status: "alreadyExists", agent: existing, conversation };
+        return { status: "alreadyExists", agent: normalized, conversation };
       }
       const now = new Date().toISOString();
       const workspacePath = "~/.slei/agents/agent_guide_local_node";
       const agent: DesktopAgentView = {
         id: "agent_guide_local_node",
-        name: "Leelei",
-        handle: "@leelei",
+        name: "Yeal",
+        handle: "@yeal",
         agentKind: "guide",
         systemOwned: true,
         runtimeKind: "ClaudeCode",
@@ -347,7 +347,7 @@ export function createDaemonBridgeMock(input: {
         workspacePath,
         memoryPath: `${workspacePath}/MEMORY.md`,
         docsPath: `${workspacePath}/docs`,
-        avatarSeed: "leelei",
+        avatarSeed: "yeal",
         runtimeThread: { runtimeKind: "ClaudeCode", status: "ready", createdAt: now },
         channelIds: ["all"],
         createdAt: now,
@@ -357,7 +357,7 @@ export function createDaemonBridgeMock(input: {
       channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now }];
       const conversation: ConversationView = { id: `dm:${agent.id}`, kind: "dm", agentId: agent.id, createdAt: now, updatedAt: now };
       conversations = [...conversations, conversation];
-      messages = [...messages, { id: "guide-welcome", conversationId: conversation.id, authorId: agent.id, body: "Leelei 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。", createdAt: now }];
+      messages = [...messages, { id: "guide-welcome", conversationId: conversation.id, authorId: agent.id, body: "Yeal 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。", createdAt: now }];
       return { status: "created", agent, conversation };
     },
     async listChannels() {
@@ -512,6 +512,16 @@ export function createDaemonBridgeMock(input: {
     async subscribeEvents(after) {
       eventSubscriptions.push({ after });
     },
+  };
+}
+
+function normalizeGuideAgentIdentity(agent: DesktopAgentView): DesktopAgentView {
+  if (agent.id !== "agent_guide_local_node" && agent.agentKind !== "guide") return agent;
+  return {
+    ...agent,
+    name: "Yeal",
+    handle: "@yeal",
+    avatarSeed: "yeal",
   };
 }
 

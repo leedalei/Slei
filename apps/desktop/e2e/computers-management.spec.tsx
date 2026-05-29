@@ -20,7 +20,6 @@ const nodes: DesktopNodeView[] = [
     created: "May 26, 2026",
     device: {
       platform: "darwin",
-      osVersion: "darwin arm64",
       arch: "arm64",
       hostname: "MateBook-Pro-Max-3.local",
     },
@@ -38,7 +37,6 @@ const nodes: DesktopNodeView[] = [
     created: "May 27, 2026",
     device: {
       platform: "windows",
-      osVersion: "Windows 11 Pro",
       arch: "x64",
       hostname: "office-win.local",
     },
@@ -72,6 +70,7 @@ describe("computers management page", () => {
     expect(html).toContain("NAME");
     expect(html).toContain("信息");
     expect(html).toContain("OS");
+    expect(html).toContain("darwin arm64");
     expect(html).toContain("Daemon Version");
     expect(html).toContain("检测到的运行时");
     expect(html).toContain("创建时间");
@@ -108,14 +107,15 @@ describe("computers management page", () => {
   });
 
   it("keeps computer helper updates immutable and derives hosted agents from real members", () => {
-    const draft = createDraftComputerNode("Design Mac", "macOS 15.5");
+    const draft = createDraftComputerNode("Design Mac", "darwin arm64");
     expect(draft.id).toMatch(/^computer-/);
     expect(draft.name).toBe("Design Mac");
-    expect(draft.device.osVersion).toBe("macOS 15.5");
+    expect(draft.device.platform).toBe("darwin");
+    expect(draft.device.arch).toBe("arm64");
 
     const updated = renameComputerNode(nodes, "office-win", "Office Windows");
     expect(updated.find((node) => node.id === "office-win")?.name).toBe("Office Windows");
-    expect(updated.find((node) => node.id === "office-win")?.device.osVersion).toBe("Windows 11 Pro");
+    expect(updated.find((node) => node.id === "office-win")?.device.platform).toBe("windows");
     expect(nodes.find((node) => node.id === "office-win")?.name).toBe("公司台式Win");
 
     expect(deleteComputerNode(updated, "office-win")).toHaveLength(1);

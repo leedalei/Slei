@@ -24,6 +24,9 @@ async fn nodes_report_runtime_readiness_placeholders() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let serialized = String::from_utf8(body.to_vec()).unwrap();
+    assert!(!serialized.contains("osVersion"));
+    assert!(!serialized.contains("os_version"));
     let json: Value = serde_json::from_slice(&body).unwrap();
     let node = &json["nodes"][0];
 

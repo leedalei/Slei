@@ -90,9 +90,15 @@ export type DesktopMessages = {
   tasks: {
     attentionRequired: string;
     board: string;
+    closeThread: string;
+    commentThread: string;
     description: string;
     list: string;
+    replies: string;
+    replyPlaceholder: string;
+    sendReply: string;
     status: Record<SleiTask["status"], string>;
+    thread: string;
     title: string;
   };
   members: {
@@ -226,9 +232,7 @@ export type DesktopMessages = {
     saveDeviceName: string;
     title: string;
     description: string;
-    platform: string;
-    system: string;
-    arch: string;
+    os: string;
     hostname: string;
     profileStep: string;
     runtimeReady: string;

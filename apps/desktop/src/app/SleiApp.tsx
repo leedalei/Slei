@@ -18,6 +18,7 @@ import {
   Info,
   ListTodo,
   MessageCircle,
+  MessageSquare,
   Monitor,
   Paperclip,
   Palette,
@@ -28,6 +29,7 @@ import {
   Server,
   Settings,
   Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +49,7 @@ import {
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
+import { MarkdownMessage } from "../features/chat/MarkdownMessage";
 import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage, type SleiTask } from "./fixtures";
 import { createMemberAvatar, memberFromMessage, type AvatarIdentity } from "./member-avatar";
 import "./app.css";
@@ -148,6 +151,75 @@ export function createLocalChatMessage(input: {
   };
 }
 
+export function createTaskFromChatMessage(message: SleiMessage, channelId: string): SleiTask {
+  const title = message.body.trim().split(/\n+/)[0]?.slice(0, 80) || "Untitled task";
+  return {
+    id: `T-${Date.now()}`,
+    title,
+    owner: message.author,
+    status: "todo",
+    channelId,
+    sourceMessageId: message.id,
+    replies: [{ id: `root-${message.id}`, sender: message.author, body: message.body }],
+  };
+}
+
+export function appendTaskReply(tasks: SleiTask[], taskId: string, reply: { sender: string; body: string }): SleiTask[] {
+  const body = reply.body.trim();
+  if (!body) return tasks;
+  return tasks.map((task) =>
+    task.id === taskId
+      ? {
+          ...task,
+          replies: [...(task.replies ?? []), { id: `reply-${Date.now()}`, sender: reply.sender, body }],
+        }
+      : task,
+  );
+}
+
+function conversationMessageToSleiMessage(message: ConversationMessageView, members: SleiMember[], profile: UserProfile): SleiMessage {
+  const member = members.find((candidate) => candidate.id === message.authorId);
+  const isHuman = message.authorId.startsWith("human:");
+  return {
+    id: message.id,
+    author: member?.name ?? (isHuman ? profile.displayName : message.authorId),
+    handle: member?.handle ?? (isHuman ? profile.handle : undefined),
+    avatar: member?.avatar ?? (isHuman ? profile.avatar : undefined),
+    role: member?.type ?? (isHuman ? "human" : "agent"),
+    time: formatMessageTime(message.createdAt),
+    body: message.body,
+    cards: message.cards,
+    channelId: message.conversationId,
+  };
+}
+
+function formatMessageTime(value: string): string {
+  const raw = value.trim();
+  let date: Date;
+  if (/^\d+$/.test(raw)) {
+    const numeric = BigInt(raw);
+    const milliseconds =
+      raw.length >= 16
+        ? numeric / 1_000_000n
+        : raw.length >= 13
+          ? numeric
+          : numeric * 1_000n;
+    date = new Date(Number(milliseconds));
+  } else {
+    date = new Date(raw);
+  }
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function replaceConversationMessages(current: SleiMessage[], conversationMessages: SleiMessage[], conversationIds?: string[]): SleiMessage[] {
+  const ids = new Set(conversationIds ?? conversationMessages.map((message) => message.channelId).filter((id): id is string => Boolean(id)));
+  return [
+    ...current.filter((message) => !message.channelId || !ids.has(message.channelId)),
+    ...conversationMessages,
+  ];
+}
+
 export function filterConversationMessages(messages: SleiMessage[], filters: ChatSearchFilters): SleiMessage[] {
   const query = normalizeSearch(filters.query);
   const user = normalizeSearch(filters.user);
@@ -233,8 +305,9 @@ export function detectAgentMemoryRequest(message: string, members: SleiMember[])
   return { agentId: member.id, fact };
 }
 
-export function createDraftComputerNode(name: string, osVersion: string): DesktopNodeView {
+export function createDraftComputerNode(name: string, osLabel: string): DesktopNodeView {
   const trimmedName = name.trim() || "新设备";
+  const [platform = "custom", ...archParts] = osLabel.trim().split(/\s+/).filter(Boolean);
   return {
     id: `computer-${Date.now()}`,
     name: trimmedName,
@@ -242,9 +315,8 @@ export function createDraftComputerNode(name: string, osVersion: string): Deskto
     daemonVersion: "0.54.1",
     created: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     device: {
-      platform: "custom",
-      osVersion: osVersion.trim() || "unknown",
-      arch: "unknown",
+      platform,
+      arch: archParts.join(" ") || "unknown",
       hostname: `${trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "computer"}.local`,
     },
     runtimes: [{ kind: "ClaudeCode", readiness: "unknown" }],
@@ -267,6 +339,10 @@ export function renameComputerNode(nodes: DesktopNodeView[], nodeId: string, nam
 export function deleteComputerNode(nodes: DesktopNodeView[], nodeId: string): DesktopNodeView[] {
   if (nodeId === "local-node") return nodes;
   return nodes.filter((node) => node.id !== nodeId);
+}
+
+function deviceOsLabel(device: DesktopNodeView["device"]) {
+  return [device.platform, device.arch].filter(Boolean).join(" ");
 }
 
 export function agentsForComputerNode(node: DesktopNodeView, members: SleiMember[]): SleiMember[] {
@@ -361,17 +437,14 @@ function upsertConversation(conversations: ConversationView[], conversation: Con
     : [...conversations, conversation];
 }
 
-function syntheticDmConversation(conversationId: string | undefined, members: SleiMember[]): ConversationView | undefined {
-  if (!conversationId?.startsWith("dm:")) return undefined;
-  const agentId = conversationId.slice(3);
-  if (!members.some((member) => member.id === agentId && member.type === "agent")) return undefined;
-  return {
-    id: conversationId,
-    kind: "dm",
-    agentId,
-    createdAt: "",
-    updatedAt: "",
-  };
+async function loadSleiConversationMessages(
+  bridge: DaemonBridge,
+  conversations: ConversationView[],
+  members: SleiMember[],
+  profile: UserProfile,
+) {
+  const receipts = await Promise.all(conversations.map((conversation) => bridge.listConversationMessages(conversation.id)));
+  return receipts.flatMap((receipt) => receipt.messages.map((message) => conversationMessageToSleiMessage(message, members, profile)));
 }
 
 function MemberAvatar({ identity, large = false }: { identity: AvatarIdentity; large?: boolean }) {
@@ -505,12 +578,15 @@ export function SleiApp() {
       setGuideBootstrapping(false);
       const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
       const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+      const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
+      if (!mounted) return;
       setData((current) =>
         createSleiFixtures({
           ...current,
           nodes: next.nodes,
           channels: channelReceipt.channels.map((channel) => channelFromView(channel, messagesForLocale)),
           conversations: conversationReceipt.conversations,
+          messages: replaceConversationMessages(current.messages, conversationMessages, conversationReceipt.conversations.map((conversation) => conversation.id)),
           members,
         }),
       );
@@ -591,12 +667,14 @@ export function SleiApp() {
     setNotifications(preferencesReceipt.preferences.notifications);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
     const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+    const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
     setData((current) =>
       createSleiFixtures({
         ...current,
         nodes: next.nodes,
         channels: channelReceipt.channels.map((channel) => channelFromView(channel, messagesForLocale)),
         conversations: conversationReceipt.conversations,
+        messages: replaceConversationMessages(current.messages, conversationMessages, conversationReceipt.conversations.map((conversation) => conversation.id)),
         members,
       }),
     );
@@ -635,8 +713,8 @@ export function SleiApp() {
     );
   }
 
-  function handleCreateComputer(name: string, osVersion: string) {
-    const node = createDraftComputerNode(name, osVersion);
+  function handleCreateComputer(name: string, osLabel: string) {
+    const node = createDraftComputerNode(name, osLabel);
     setData((current) => createSleiFixtures({ ...current, nodes: [...current.nodes, node] }));
     setRuntimeSetup((current) => {
       const nextNodes = [...current.nodes, node];
@@ -674,10 +752,13 @@ export function SleiApp() {
 
   async function handleMessageMember(memberId: string) {
     const receipt = await bridge.createDmConversation(memberId);
+    const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id);
+    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
     setData((current) =>
       createSleiFixtures({
         ...current,
         conversations: upsertConversation(current.conversations, receipt.conversation),
+        messages: replaceConversationMessages(current.messages, conversationMessages, [receipt.conversation.id]),
       }),
     );
     setActiveConversationId(receipt.conversation.id);
@@ -686,18 +767,40 @@ export function SleiApp() {
     setActiveView("chat");
   }
 
-  async function handleSendMessage(body: string) {
+  async function handleSendMessage(body: string, options?: { asTask?: boolean }) {
     const targetId = activeConversationId ?? activeChannelId;
-    const message = createLocalChatMessage({ body, messages, profile, channelId: targetId });
-    if (!message) return;
     const memoryRequest = detectAgentMemoryRequest(body, data.members);
     if (activeConversationId) {
+      if (!body.trim()) return;
       const receipt = await bridge.sendConversationMessage(activeConversationId, {
         authorId: "human:local",
-        body: message.body,
+        body: body.trim(),
       });
-      message.cards = receipt.message.cards;
+      const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile);
+      if (memoryRequest) {
+        void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
+        const agent = data.members.find((member) => member.id === memoryRequest.agentId);
+        const systemMessage: SleiMessage = {
+          id: `memory-${Date.now()}`,
+          author: messages.common.system,
+          role: "system",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          body: messages.chat.memoryUpdated(agent?.handle ?? messages.agentCreate.fallbackAgent),
+          channelId: targetId,
+          status: "done",
+          toolCall: "remember_agent_fact",
+        };
+        setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage, systemMessage] }));
+        return;
+      }
+      setData((current) => {
+        const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(conversationMessage, targetId)] : current.tasks;
+        return createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage], tasks: nextTasks });
+      });
+      return;
     }
+    const message = createLocalChatMessage({ body, messages, profile, channelId: targetId });
+    if (!message) return;
     if (memoryRequest) {
       void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
       const agent = data.members.find((member) => member.id === memoryRequest.agentId);
@@ -715,7 +818,14 @@ export function SleiApp() {
       return;
     }
 
-    setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, message] }));
+    setData((current) => {
+      const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(message, targetId)] : current.tasks;
+      return createSleiFixtures({ ...current, messages: [...current.messages, message], tasks: nextTasks });
+    });
+  }
+
+  function handleTaskReply(taskId: string, body: string) {
+    setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, body }) }));
   }
 
   async function handleCreateChannel(input: { name: string; projectName?: string }) {
@@ -838,6 +948,7 @@ export function SleiApp() {
       onSearchResultSelect={handleSearchResultSelect}
       onSearchToggle={() => setActiveView("search")}
       onSendMessage={handleSendMessage}
+      onTaskReply={handleTaskReply}
       onViewChange={setActiveView}
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
@@ -874,6 +985,7 @@ export function SleiAppFrame(input: {
   activeChannelId?: string;
   activeConversationId?: string;
   activeMemberId?: string;
+  activeTaskId?: string;
   data: SleiFixtures;
   initialChatDraft?: string;
   initialAgentCreateModalOpen?: boolean;
@@ -896,7 +1008,7 @@ export function SleiAppFrame(input: {
   onChannelSelect?: (channelId: string) => void;
   onInteractiveCardComplete?: (cardId: string) => Promise<void> | void;
   onConversationSelect?: (conversationId: string) => void;
-  onComputerCreate?: (name: string, osVersion: string) => void;
+  onComputerCreate?: (name: string, osLabel: string) => void;
   onComputerDelete?: (nodeId: string) => void;
   onComputerRename?: (nodeId: string, name: string) => void;
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void;
@@ -910,15 +1022,14 @@ export function SleiAppFrame(input: {
   onMemberSelect?: (memberId: string) => void;
   onMemberMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
-  onSendMessage?: (body: string) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void;
+  onTaskReply?: (taskId: string, body: string) => void;
   onViewChange?: (view: AppView) => void;
   onRenameLocalNode?: (name: string) => Promise<void> | void;
   onRefreshRuntime?: () => Promise<void> | void;
 }) {
   const activeChannel = input.data.channels.find((channel) => channel.id === input.activeChannelId) ?? input.data.channels[0];
-  const activeConversation =
-    input.data.conversations.find((conversation) => conversation.id === input.activeConversationId) ??
-    syntheticDmConversation(input.activeConversationId, input.data.members);
+  const activeConversation = input.data.conversations.find((conversation) => conversation.id === input.activeConversationId);
   const firstComputer = input.runtimeSetup.nodes[0];
   const [activeComputerId, setActiveComputerId] = useState(firstComputer?.id ?? "");
   const [computerCreateOpen, setComputerCreateOpen] = useState(false);
@@ -966,7 +1077,7 @@ export function SleiAppFrame(input: {
         </div>
         {input.activeView === "chat" || input.activeView === "search" ? (
           <ChannelList
-            activeChannelId={activeChannel.id}
+            activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
             activeConversationId={input.activeConversationId}
             data={input.data}
             initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
@@ -1009,7 +1120,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -1022,8 +1133,8 @@ export function SleiAppFrame(input: {
         <ComputerCreateModal
           messages={messages}
           onClose={() => setComputerCreateOpen(false)}
-          onCreate={(name, osVersion) => {
-            input.onComputerCreate?.(name, osVersion);
+          onCreate={(name, osLabel) => {
+            input.onComputerCreate?.(name, osLabel);
             setComputerCreateOpen(false);
           }}
         />
@@ -1072,7 +1183,7 @@ export function SleiAppFrame(input: {
 }
 
 function ChannelList(input: {
-  activeChannelId: string;
+  activeChannelId?: string;
   activeConversationId?: string;
   data: SleiFixtures;
   initialCreateChannelModalOpen?: boolean;
@@ -1087,12 +1198,7 @@ function ChannelList(input: {
   const [name, setName] = useState("");
   const [projectName, setProjectName] = useState("");
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
-  const dmAgents = input.data.members.filter((member) => member.type === "agent");
-  const conversationsByAgent = new Map(
-    input.data.conversations
-      .filter((conversation) => conversation.kind === "dm")
-      .map((conversation) => [conversation.agentId, conversation]),
-  );
+  const directMessageConversations = input.data.conversations.filter((conversation) => conversation.kind === "dm");
 
   function submitChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1120,7 +1226,7 @@ function ChannelList(input: {
             onClick={() => input.onChannelSelect?.(channel.id)}
             type="button"
           >
-            <span><Hash aria-hidden="true" size={14} /># {stripChannelHash(channel.name)}</span>
+            <span><Hash aria-hidden="true" size={14} />{stripChannelHash(channel.name)}</span>
             {channel.unread > 0 ? <b>{channel.unread}</b> : null}
             <small>{channel.projectName ? input.messages.chat.projectPrefix(channel.projectName) : channel.description}</small>
           </button>
@@ -1129,15 +1235,16 @@ function ChannelList(input: {
           ) : null}
         </div>
       ))}
-      <div className="slei-channel-group-header"><span>{input.messages.chat.directMessages} {dmAgents.length}</span><div><button aria-label={input.messages.chat.sortDirectMessages} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button></div></div>
-      {dmAgents.map((member) => {
-        const conversation = conversationsByAgent.get(member.id);
-        const conversationId = conversation?.id ?? `dm:${member.id}`;
+      <div className="slei-channel-group-header"><span>{input.messages.chat.directMessages} {directMessageConversations.length}</span><div><button aria-label={input.messages.chat.sortDirectMessages} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button></div></div>
+      {directMessageConversations.map((conversation) => {
+        const member = input.data.members.find((candidate) => candidate.id === conversation.agentId && candidate.type === "agent");
+        if (!member) return null;
+        const conversationId = conversation.id;
         return (
           <button
             aria-current={input.activeConversationId === conversationId ? "true" : undefined}
             className="slei-channel slei-channel--dm"
-            key={member.id}
+            key={conversation.id}
             onClick={() => input.onConversationSelect?.(conversationId)}
             type="button"
           >
@@ -1336,7 +1443,7 @@ function renderWorkspace(
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void,
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void,
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void,
-  onSendMessage?: (body: string) => Promise<void> | void,
+  onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void,
   initialChatDraft?: string,
   initialSearchFilters?: ChatSearchFilters,
   onSearchResultSelect?: (channelId: string, messageId: string) => void,
@@ -1344,6 +1451,8 @@ function renderWorkspace(
   onComputerCreateRequest?: () => void,
   onComputerRename?: (nodeId: string, name: string) => void,
   activeMemberId?: string,
+  activeTaskId?: string,
+  onTaskReply?: (taskId: string, body: string) => void,
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void,
   onMemberMessage?: (memberId: string) => void,
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void,
@@ -1351,7 +1460,7 @@ function renderWorkspace(
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
 ) {
   if (activeView === "search") return <SearchPage data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
-  if (activeView === "tasks") return <TasksPage data={data} messages={messages} />;
+  if (activeView === "tasks") return <TasksPage activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} />;
   if (activeView === "members") return <MembersPage activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} />;
   if (activeView === "computers") {
     return (
@@ -1453,7 +1562,7 @@ function InteractiveCard({ card, messages, onCreate }: { card: InteractiveCardVi
   );
 }
 
-function ChatPage({ activeChannel, activeConversation, data, initialDraft, messages, onAgentDraftCreate, onChannelDraftCreate, onSendMessage, profile }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; data: SleiFixtures; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onSendMessage?: (body: string) => Promise<void> | void; profile: UserProfile }) {
+function ChatPage({ activeChannel, activeConversation, data, initialDraft, messages, onAgentDraftCreate, onChannelDraftCreate, onSendMessage, profile }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; data: SleiFixtures; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void; profile: UserProfile }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
@@ -1469,7 +1578,7 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
   function submitMessage() {
     const message = createLocalChatMessage({ body: draft, profile, channelId: activeTargetId });
     if (!message) return;
-    onSendMessage?.(draft);
+    onSendMessage?.(draft, { asTask });
     setDraft("");
     setAsTask(false);
   }
@@ -1505,7 +1614,7 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
                 <span>{message.time}</span>
                 {message.status ? <span className={`slei-badge slei-badge--${message.status}`}>{message.status}</span> : null}
               </div>
-              <p>{message.body}</p>
+              <MarkdownMessage markdown={message.body} />
               {message.toolCall ? <code className="slei-tool-call">{message.toolCall}</code> : null}
               {message.cards?.map((card) => (
                 <InteractiveCard
@@ -1604,10 +1713,22 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
   );
 }
 
-function TasksPage({ data, messages }: { data: SleiFixtures; messages: DesktopMessages }) {
+function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activeTaskId?: string; data: SleiFixtures; messages: DesktopMessages; onTaskReply?: (taskId: string, body: string) => void }) {
   const columns: SleiTask["status"][] = ["todo", "in_progress", "in_review", "done"];
+  const [selectedTaskId, setSelectedTaskId] = useState(activeTaskId);
+  const [replyDraft, setReplyDraft] = useState("");
+  const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
+
+  function submitReply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = replyDraft.trim();
+    if (!selectedTask || !body) return;
+    onTaskReply?.(selectedTask.id, body);
+    setReplyDraft("");
+  }
+
   return (
-    <section>
+    <section className="slei-tasks-page">
       <header className="slei-workspace-header">
         <div>
           <h1>{messages.tasks.title}</h1>
@@ -1621,7 +1742,13 @@ function TasksPage({ data, messages }: { data: SleiFixtures; messages: DesktopMe
             <h2>{taskStatusLabel(column, messages)}</h2>
             {data.tasks.filter((task) => task.status === column).map((task) => (
               <article className="slei-card slei-task-card" key={task.id}>
-                <span>{task.id}</span>
+                <div className="slei-task-card__toolbar">
+                  <span>{task.id}</span>
+                  <button aria-label={messages.tasks.commentThread} className="slei-icon-button slei-task-comment-button" onClick={() => setSelectedTaskId(task.id)} type="button">
+                    <MessageSquare aria-hidden="true" size={15} />
+                    <span>{task.replies?.length ?? 0}</span>
+                  </button>
+                </div>
                 <strong>{task.title}</strong>
                 <small>{task.owner}</small>
                 {task.attention ? <b className="slei-badge slei-badge--attention">{task.attention}</b> : null}
@@ -1630,6 +1757,38 @@ function TasksPage({ data, messages }: { data: SleiFixtures; messages: DesktopMe
           </div>
         ))}
       </div>
+      {selectedTask ? (
+        <aside aria-label={messages.tasks.thread} className="slei-task-thread-drawer" style={{ "--task-thread-width": "680px" } as CSSProperties}>
+          <header>
+            <div>
+              <span className="slei-badge">{taskStatusLabel(selectedTask.status, messages)}</span>
+              <h2>{selectedTask.title}</h2>
+              <p>{selectedTask.owner} · {(selectedTask.replies?.length ?? 0)} {messages.tasks.replies}</p>
+            </div>
+            <button aria-label={messages.tasks.closeThread} className="slei-icon-button" onClick={() => setSelectedTaskId(undefined)} type="button">
+              <X aria-hidden="true" size={16} />
+            </button>
+          </header>
+          <div className="slei-task-thread-replies">
+            {(selectedTask.replies ?? []).map((reply) => (
+              <article className="slei-task-thread-reply" key={reply.id}>
+                <strong>{reply.sender}</strong>
+                <MarkdownMessage markdown={reply.body} />
+              </article>
+            ))}
+          </div>
+          <form className="slei-task-thread-composer" onSubmit={submitReply}>
+            <textarea
+              aria-label={messages.tasks.replyPlaceholder}
+              className="slei-textarea"
+              onChange={(event) => setReplyDraft(event.currentTarget.value)}
+              placeholder={messages.tasks.replyPlaceholder}
+              value={replyDraft}
+            />
+            <button className="slei-button slei-button--accent" type="submit"><Send aria-hidden="true" size={15} />{messages.tasks.sendReply}</button>
+          </form>
+        </aside>
+      ) : null}
     </section>
   );
 }
@@ -1862,9 +2021,7 @@ function ComputersPage(input: {
         <section className="slei-computer-section">
           <h2>{input.messages.computers.info}</h2>
           <dl className="slei-computer-info">
-            <div><dt>{input.messages.computers.os}</dt><dd>{selectedNode.device.osVersion}</dd></div>
-            <div><dt>{input.messages.computers.platform}</dt><dd>{selectedNode.device.platform}</dd></div>
-            <div><dt>{input.messages.computers.arch}</dt><dd>{selectedNode.device.arch}</dd></div>
+            <div><dt>{input.messages.computers.os}</dt><dd>{deviceOsLabel(selectedNode.device)}</dd></div>
             <div><dt>{input.messages.computers.hostname}</dt><dd>{selectedNode.device.hostname}</dd></div>
             <div><dt>{input.messages.computers.daemonVersion}</dt><dd><strong>{selectedNode.daemonVersion}</strong></dd></div>
             <div><dt>{input.messages.computers.created}</dt><dd>{selectedNode.created ?? "May 26, 2026"}</dd></div>
@@ -1905,7 +2062,7 @@ function ComputersPage(input: {
 function ComputerCreateModal(input: {
   messages: DesktopMessages;
   onClose: () => void;
-  onCreate?: (name: string, osVersion: string) => void;
+  onCreate?: (name: string, osLabel: string) => void;
 }) {
   const [newName, setNewName] = useState("");
   const [newOs, setNewOs] = useState("");
@@ -1929,8 +2086,8 @@ function ComputerCreateModal(input: {
             <input aria-label={input.messages.computers.deviceName} className="slei-input" onChange={(event) => setNewName(event.currentTarget.value)} placeholder="Design Mac" value={newName} />
           </label>
           <label className="slei-field">
-            <span>{input.messages.computers.systemInfo}</span>
-            <input aria-label={input.messages.computers.systemInfo} className="slei-input" onChange={(event) => setNewOs(event.currentTarget.value)} placeholder="macOS 15.5" value={newOs} />
+            <span>{input.messages.computers.os}</span>
+            <input aria-label={input.messages.computers.os} className="slei-input" onChange={(event) => setNewOs(event.currentTarget.value)} placeholder="darwin arm64" value={newOs} />
           </label>
           <div className="slei-modal-actions">
             <button className="slei-button" onClick={input.onClose} type="button">{input.messages.common.cancel}</button>
@@ -2363,9 +2520,7 @@ function RuntimeOnboardingModal(input: {
         </div>
         {localNode ? (
           <dl className="slei-device-meta">
-            <div><dt>{input.messages.onboarding.platform}</dt><dd>{localNode.device.platform}</dd></div>
-            <div><dt>{input.messages.onboarding.system}</dt><dd>{localNode.device.osVersion}</dd></div>
-            <div><dt>{input.messages.onboarding.arch}</dt><dd>{localNode.device.arch}</dd></div>
+            <div><dt>{input.messages.onboarding.os}</dt><dd>{deviceOsLabel(localNode.device)}</dd></div>
             <div><dt>{input.messages.onboarding.hostname}</dt><dd>{localNode.device.hostname}</dd></div>
           </dl>
         ) : null}

@@ -89,7 +89,7 @@ pub async fn bootstrap_guide(
                 .append_message(
                     &conversation.id,
                     &agent.id,
-                    "Leelei 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。",
+                    "Yeal 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。",
                     Some("guide-welcome"),
                 )
                 .await;

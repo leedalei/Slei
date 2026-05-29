@@ -18,7 +18,6 @@ const nodes: DesktopNodeView[] = [
     daemonVersion: "0.54.1",
     device: {
       platform: "darwin",
-      osVersion: "15.5",
       arch: "arm64",
       hostname: "local-mac.local",
     },
@@ -31,7 +30,6 @@ const nodes: DesktopNodeView[] = [
     daemonVersion: "0.54.1",
     device: {
       platform: "linux",
-      osVersion: "Ubuntu 24.04",
       arch: "x64",
       hostname: "remote-linux.local",
     },
@@ -239,10 +237,10 @@ describe("agent creation, device association, and memory MVP", () => {
       />,
     );
 
-    expect(html).toContain("# all");
     expect(html).toContain("输入消息到 #all");
     expect(html).not.toContain("##all");
     expect(html).not.toContain("# #all");
+    expect(html).not.toContain("># all</span>");
   });
 
   it("renders guide interactive cards and disables completed cards", () => {
@@ -255,7 +253,7 @@ describe("agent creation, device association, and memory MVP", () => {
           messages: [
             {
               id: "m-card",
-              author: "Leelei",
+              author: "Yeal",
               role: "agent",
               time: "10:00",
               body: "我整理了一个创建草案。",

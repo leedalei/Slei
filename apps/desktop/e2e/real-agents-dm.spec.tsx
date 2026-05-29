@@ -41,6 +41,14 @@ const readyRuntime = {
   nodes,
 };
 
+const codaDm = {
+  id: "dm:agent_coda",
+  kind: "dm",
+  agentId: "agent_coda",
+  createdAt: "2026-05-29T10:00:00Z",
+  updatedAt: "2026-05-29T10:00:00Z",
+} as const;
+
 describe("real agent members and direct messages", () => {
   it("does not ship fake default members", () => {
     expect(createSleiFixtures().members).toEqual([]);
@@ -63,7 +71,7 @@ describe("real agent members and direct messages", () => {
     expect(html).not.toContain("Lei");
   });
 
-  it("shows direct messages in chat sidebar from real agents", () => {
+  it("keeps the chat direct message list empty until a conversation exists", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -73,9 +81,56 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
+    expect(html).toContain("私聊 0");
+    expect(html).not.toContain("@coda");
+    expect(html).not.toContain("Coda");
+  });
+
+  it("shows direct messages in chat sidebar from created conversations", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({ conversations: [codaDm], members: [agent] })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
     expect(html).toContain("私聊 1");
     expect(html).toContain("@coda");
     expect(html).toContain("Coda");
+  });
+
+  it("highlights only the selected direct message while a dm is active", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeView="chat"
+        data={createSleiFixtures({ conversations: [codaDm], members: [agent] })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+    expect(html).toContain('aria-current="true" class="slei-channel slei-channel--dm"');
+    expect(html).not.toContain('aria-current="true" class="slei-channel"');
+  });
+
+  it("highlights only the selected channel while a channel is active", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeChannelId="all"
+        activeView="chat"
+        data={createSleiFixtures({ conversations: [codaDm], members: [agent] })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html.match(/aria-current="true"/g)).toHaveLength(1);
+    expect(html).toContain('aria-current="true" class="slei-channel"');
+    expect(html).not.toContain('aria-current="true" class="slei-channel slei-channel--dm"');
   });
 
   it("uses compact detail edit buttons and a 440px modal width", () => {

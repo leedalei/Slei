@@ -65,8 +65,6 @@ pub struct RuntimeReadinessView {
 #[serde(rename_all = "camelCase")]
 pub struct DeviceMetaView {
     pub platform: String,
-    #[serde(alias = "os_version")]
-    pub os_version: String,
     pub arch: String,
     pub hostname: String,
 }
@@ -537,9 +535,11 @@ impl DaemonBroker {
             .lock()
             .expect("agents mutex poisoned")
             .iter()
-            .find(|agent| agent.id == "agent_guide_local_node" || agent.handle == "@leelei")
+            .find(|agent| agent.id == "agent_guide_local_node" || agent.handle == "@yeal" || agent.handle == "@leelei")
             .cloned()
         {
+            let existing = normalize_guide_agent_identity(existing);
+            self.upsert_local_agent(existing.clone());
             let conversation = self
                 .create_dm_conversation(&existing.id)
                 .ok()
@@ -554,8 +554,8 @@ impl DaemonBroker {
         let workspace_path = default_agent_workspace("agent_guide_local_node");
         let agent = DesktopAgentView {
             id: "agent_guide_local_node".to_string(),
-            name: "Leelei".to_string(),
-            handle: "@leelei".to_string(),
+            name: "Yeal".to_string(),
+            handle: "@yeal".to_string(),
             agent_kind: Some("guide".to_string()),
             system_owned: Some(true),
             runtime_kind: "ClaudeCode".to_string(),
@@ -565,7 +565,7 @@ impl DaemonBroker {
             workspace_path: workspace_path.clone(),
             memory_path: format!("{workspace_path}/MEMORY.md"),
             docs_path: format!("{workspace_path}/docs"),
-            avatar_seed: "leelei".to_string(),
+            avatar_seed: "yeal".to_string(),
             runtime_thread: Some(RuntimeThreadView {
                 runtime_kind: "ClaudeCode".to_string(),
                 status: "ready".to_string(),
@@ -1309,6 +1309,15 @@ fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentErr
     Ok(())
 }
 
+fn normalize_guide_agent_identity(mut agent: DesktopAgentView) -> DesktopAgentView {
+    if agent.id == "agent_guide_local_node" || agent.agent_kind.as_deref() == Some("guide") {
+        agent.name = "Yeal".to_string();
+        agent.handle = "@yeal".to_string();
+        agent.avatar_seed = "yeal".to_string();
+    }
+    agent
+}
+
 fn read_local_agent_skills(agent: &DesktopAgentView) -> Result<Vec<SkillView>, AgentError> {
     let skills_index = format!("{}/skills/index.json", agent.workspace_path);
     match fs::read_to_string(&skills_index) {
@@ -1507,9 +1516,6 @@ fn parse_http_endpoint(endpoint: &str) -> Option<(String, String)> {
 fn detect_device_meta() -> DeviceMetaView {
     DeviceMetaView {
         platform: env::consts::OS.to_string(),
-        os_version: command_output("sw_vers", &["-productVersion"])
-            .or_else(|| command_output("uname", &["-r"]))
-            .unwrap_or_else(|| "unknown".to_string()),
         arch: env::consts::ARCH.to_string(),
         hostname: command_output("hostname", &[]).unwrap_or_else(|| "local-device".to_string()),
     }

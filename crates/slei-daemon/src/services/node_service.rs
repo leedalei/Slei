@@ -25,7 +25,6 @@ pub struct RuntimeReadinessDto {
 #[derive(Clone, Debug, Serialize)]
 pub struct DeviceMetaDto {
     pub platform: String,
-    pub os_version: String,
     pub arch: String,
     pub hostname: String,
 }
@@ -134,9 +133,6 @@ impl NodeService {
 fn detect_device_meta() -> DeviceMetaDto {
     DeviceMetaDto {
         platform: env::consts::OS.to_string(),
-        os_version: command_output("sw_vers", &["-productVersion"])
-            .or_else(|| command_output("uname", &["-r"]))
-            .unwrap_or_else(|| "unknown".to_string()),
         arch: env::consts::ARCH.to_string(),
         hostname: command_output("hostname", &[]).unwrap_or_else(|| "local-device".to_string()),
     }

@@ -28,6 +28,15 @@ export type SleiTask = {
   owner: string;
   status: "todo" | "in_progress" | "in_review" | "done";
   attention?: string;
+  channelId?: string;
+  sourceMessageId?: string;
+  replies?: SleiTaskReply[];
+};
+
+export type SleiTaskReply = {
+  id: string;
+  sender: string;
+  body: string;
 };
 
 export type SleiMember = {
@@ -78,7 +87,6 @@ export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiF
         created: "20260526",
         device: {
           platform: "darwin",
-          osVersion: "darwin arm64",
           arch: "arm64",
           hostname: "MateBook-Pro-Max-3.local",
         },
