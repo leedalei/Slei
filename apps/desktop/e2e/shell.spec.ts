@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createDaemonBridgeMock } from "../src/lib/daemon-bridge";
+import { createDaemonBridgeMock, type DesktopAgentView } from "../src/lib/daemon-bridge";
 import { createEventBridge } from "../src/lib/event-bridge";
 import { renderAppShell } from "../src/app/App";
 
@@ -35,5 +35,47 @@ describe("desktop shell daemon connectivity", () => {
     expect(serialized).not.toContain("secret-token");
     expect(serialized).not.toContain("127.0.0.1");
     expect(serialized).not.toContain("ws://");
+  });
+
+  it("resetting a DM clears current session messages without creating a new session", async () => {
+    const agent: DesktopAgentView = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "研发团队开发工程师。",
+      workspacePath: "/tmp/coda",
+      memoryPath: "/tmp/coda/MEMORY.md",
+      docsPath: "/tmp/coda/docs",
+      avatarSeed: "agent_coda",
+      createdAt: "2026-05-29T10:00:00Z",
+      updatedAt: "2026-05-29T10:00:00Z",
+    };
+    const bridge = createDaemonBridgeMock({ connected: true, agents: [agent] });
+    const { conversation } = await bridge.createDmConversation(agent.id);
+    const sessionId = conversation.activeSessionId;
+
+    await bridge.sendConversationMessage(conversation.id, {
+      authorId: "human:local",
+      body: "第一句",
+      sessionId,
+    });
+    const beforeResetSessions = await bridge.listConversationSessions(conversation.id);
+
+    const reset = await bridge.resetConversationRuntimeSession(conversation.id);
+    const afterResetSessions = await bridge.listConversationSessions(conversation.id);
+    const afterResetMessages = await bridge.listConversationMessages(conversation.id);
+
+    expect(reset.conversation.activeSessionId).toBe(sessionId);
+    expect(beforeResetSessions.sessions).toHaveLength(1);
+    expect(afterResetSessions.sessions).toHaveLength(1);
+    expect(afterResetSessions.sessions[0]).toMatchObject({
+      id: sessionId,
+      title: "新会话",
+      runtimeSession: undefined,
+    });
+    expect(afterResetMessages.messages).toEqual([]);
   });
 });

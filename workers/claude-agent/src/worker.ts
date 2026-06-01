@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
 
 import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events";
-import type { StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol";
+import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol";
 
 export type WorkerIO = {
   writeEvent(event: WorkerEvent): void;
 };
 
 export type RuntimeRunner = (command: StartRunCommand) => AsyncIterable<ClaudeSdkEvent>;
+export type RuntimeClearer = (command: ClearSessionCommand) => Promise<void>;
 
 export class ClaudeAgentWorker {
   #authorized = false;
@@ -16,6 +17,7 @@ export class ClaudeAgentWorker {
     private readonly launchSecret: string,
     private readonly io: WorkerIO,
     private readonly runner: RuntimeRunner = runClaudeCode,
+    private readonly clearer: RuntimeClearer = clearClaudeCodeSession,
   ) {}
 
   async handleCommand(command: WorkerCommand): Promise<void> {
@@ -40,6 +42,11 @@ export class ClaudeAgentWorker {
       return;
     }
 
+    if (command.type === "clear_session") {
+      await this.clearSession(command);
+      return;
+    }
+
     if (command.type === "cancel") {
       this.io.writeEvent({ type: "completed", run_id: command.run_id });
     }
@@ -54,6 +61,18 @@ export class ClaudeAgentWorker {
       this.io.writeEvent({
         type: "failed",
         run_id: command.run_id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async clearSession(command: ClearSessionCommand): Promise<void> {
+    try {
+      await this.clearer(command);
+    } catch (error) {
+      this.io.writeEvent({
+        type: "failed",
+        run_id: "unknown",
         message: error instanceof Error ? error.message : String(error),
       });
     }
@@ -108,6 +127,38 @@ export function buildClaudeCliArgs(command: StartRunCommand): string[] {
     args.push("--no-session-persistence");
   }
   return args;
+}
+
+export function buildClearClaudeSessionCliArgs(command: ClearSessionCommand): string[] {
+  const args = ["-p", "/clear", "--output-format", "text"];
+  if (command.session.persist_session) {
+    args.push("--resume", command.session.session_id);
+  } else {
+    args.push("--no-session-persistence");
+  }
+  return args;
+}
+
+async function clearClaudeCodeSession(command: ClearSessionCommand): Promise<void> {
+  const child = spawn("claude", buildClearClaudeSessionCliArgs(command), {
+    cwd: command.session.cwd,
+    env: process.env,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const code = await new Promise<number | null>((resolve) => {
+    child.once("close", resolve);
+  });
+
+  if (code !== 0) {
+    throw new Error(stderr.trim() || `claude clear exited with code ${code}`);
+  }
 }
 
 function promptForRun(command: StartRunCommand): string {

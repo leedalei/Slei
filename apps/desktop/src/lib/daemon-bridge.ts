@@ -542,6 +542,12 @@ export function createDaemonBridgeMock(input: {
       if (!existing) throw new Error("conversation not found");
       const conversation = { ...existing, runtimeSession: undefined, updatedAt: new Date().toISOString() };
       conversations = conversations.map((candidate) => candidate.id === conversationId ? conversation : candidate);
+      if (conversation.activeSessionId) {
+        messages = messages.filter((message) => message.conversationId !== conversationId || message.sessionId !== conversation.activeSessionId);
+        conversationSessions = conversationSessions.map((session) => (
+          session.id === conversation.activeSessionId ? { ...session, title: "新会话", runtimeSession: undefined, status: "ready", updatedAt: conversation.updatedAt } : session
+        ));
+      }
       return { conversation };
     },
     async listConversationSessions(conversationId) {

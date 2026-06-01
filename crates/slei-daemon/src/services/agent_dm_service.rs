@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::adapters::claude_worker::{
-    ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest,
+    ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest, RuntimeSession,
 };
 use crate::adapters::worker_rpc::{WorkerEvent, WorkerRpcError};
 use crate::services::card_service::{CardError, CardService};
@@ -106,6 +106,35 @@ impl AgentDmService {
             )
             .await?;
         Ok(Some(run_id))
+    }
+
+    pub async fn reset_runtime_session(
+        &self,
+        conversation_id: &str,
+    ) -> Result<crate::services::conversation_service::ConversationRecord, AgentDmError> {
+        let conversation = self.conversations.get_conversation(conversation_id).await?;
+        if let Some(runtime_session) = conversation.runtime_session.clone() {
+            let agent = self
+                .members
+                .get_product_agent(&conversation.agent_id)
+                .await?;
+            let session = RuntimeSession {
+                session_id: runtime_session.session_id,
+                agent_id: agent.id,
+                runtime: runtime_session.runtime_kind,
+                cwd: agent.workspace_path,
+                persist_session: true,
+                resume_session: true,
+                capabilities: crate::adapters::claude_worker::RuntimeCapabilities {
+                    resume_session: true,
+                },
+            };
+            self.worker.clear_session(&session)?;
+        }
+        Ok(self
+            .conversations
+            .reset_runtime_session(conversation_id)
+            .await?)
     }
 
     pub async fn handle_worker_event(&self, value: Value) -> Result<(), AgentDmError> {

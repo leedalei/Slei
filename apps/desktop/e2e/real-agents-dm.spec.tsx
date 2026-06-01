@@ -406,4 +406,38 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain('data-testid="slei-send-button"');
     expect(html).toContain("disabled");
   });
+
+  it("does not disable send for stale running messages from another session", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-current"
+        activeView="chat"
+        data={createSleiFixtures({
+          conversations: [codaDm],
+          conversationSessions: codaSessions,
+          members: [agent],
+          messages: [
+            {
+              id: "run-old",
+              author: "Coda",
+              role: "agent",
+              time: "09:00",
+              body: "旧会话仍在处理中",
+              channelId: "dm:agent_coda",
+              sessionId: "session-old",
+              status: "running",
+            },
+          ],
+        })}
+        initialChatDraft="新的消息"
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-send-button"');
+    expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
+    expect(html).not.toContain("旧会话仍在处理中");
+  });
 });

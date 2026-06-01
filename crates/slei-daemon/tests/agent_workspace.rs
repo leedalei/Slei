@@ -998,9 +998,39 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     )
     .await;
     assert_eq!(reset.status(), StatusCode::OK);
-    assert!(response_json(reset).await["conversation"]
+    let reset_body = response_json(reset).await;
+    assert!(reset_body["conversation"].get("runtimeSession").is_none());
+    assert_eq!(
+        reset_body["conversation"]["activeSessionId"],
+        format!("session:{}:default", conversation_id.replace(':', "_"))
+    );
+    let reset_sessions = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{conversation_id}/sessions"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(reset_sessions["sessions"].as_array().unwrap().len(), 1);
+    assert_eq!(reset_sessions["sessions"][0]["title"], "新会话");
+    assert!(reset_sessions["sessions"][0]
         .get("runtimeSession")
         .is_none());
+    let reset_messages = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{conversation_id}/messages"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(reset_messages["messages"].as_array().unwrap().len(), 0);
+    let commands = state.worker_commands();
+    assert_eq!(commands[2]["type"], "clear_session");
+    assert_eq!(commands[2]["session"]["session_id"], first_session_id);
 
     let third = post_json(
         &app,
@@ -1012,9 +1042,9 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     .await;
     assert_eq!(third.status(), StatusCode::CREATED);
     let commands = state.worker_commands();
-    let reset_session_id = commands[2]["session"]["session_id"].as_str().unwrap();
+    let reset_session_id = commands[3]["session"]["session_id"].as_str().unwrap();
     assert_ne!(reset_session_id, first_session_id);
-    assert_eq!(commands[2]["session"]["resume_session"], false);
+    assert_eq!(commands[3]["session"]["resume_session"], false);
 }
 
 #[tokio::test]

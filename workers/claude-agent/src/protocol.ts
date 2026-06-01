@@ -3,6 +3,7 @@ export type RuntimeKind = "ClaudeCode";
 export type WorkerCommand =
   | HelloCommand
   | StartRunCommand
+  | ClearSessionCommand
   | CancelCommand
   | ResolvePermissionCommand
   | ResolveHumanQuestionCommand;
@@ -18,6 +19,11 @@ export type StartRunCommand = {
   run_id: string;
   session: RuntimeSession;
   input: RunInput;
+};
+
+export type ClearSessionCommand = {
+  type: "clear_session";
+  session: RuntimeSession;
 };
 
 export type CancelCommand = {

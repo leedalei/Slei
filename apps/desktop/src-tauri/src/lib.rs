@@ -260,6 +260,48 @@ mod tests {
     }
 
     #[test]
+    fn broker_agent_workspaces_keep_broker_data_root_when_env_changes() {
+        let first_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-root-stable-first-{}",
+            std::process::id()
+        ));
+        let second_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-root-stable-second-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &first_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        std::env::set_var("SLEI_DATA_ROOT", &second_root);
+        let agent = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "开发 Agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+
+        assert!(agent.workspace_path.starts_with(first_root.to_str().unwrap()));
+        assert!(!agent.workspace_path.starts_with(second_root.to_str().unwrap()));
+        let skills = list_agent_skills(&broker, &agent.id).unwrap();
+        assert!(skills.skills.iter().any(|skill| skill.id == "memory"));
+
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
     fn conversation_commands_create_dm_and_round_trip_messages() {
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-conversation-test-{}",

@@ -5,6 +5,7 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::services::agent_dm_service::AgentDmError;
 use crate::services::conversation_service::ConversationError;
 use crate::state::AppState;
 
@@ -239,9 +240,16 @@ pub async fn reset_runtime_session(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    match state.conversations().reset_runtime_session(&id).await {
+    match state.agent_dm().reset_runtime_session(&id).await {
         Ok(conversation) => Json(json!({ "conversation": conversation })).into_response(),
-        Err(error) => conversation_error_response(error),
+        Err(error) => agent_dm_error_response(error),
+    }
+}
+
+fn agent_dm_error_response(error: AgentDmError) -> Response {
+    match error {
+        AgentDmError::Conversation(error) => conversation_error_response(error),
+        other => error_response(StatusCode::INTERNAL_SERVER_ERROR, &other.to_string()),
     }
 }
 

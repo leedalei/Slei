@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -262,6 +262,7 @@ impl ConversationService {
         conversation_id: &str,
     ) -> Result<ConversationRecord, ConversationError> {
         let mut state = self.inner.lock().await;
+        ensure_legacy_session(&mut state, conversation_id);
         let conversation = state
             .conversations
             .get_mut(conversation_id)
@@ -273,11 +274,20 @@ impl ConversationService {
         if let Some(active_session_id) = active_session_id {
             if let Some(record) = state.sessions.get_mut(&active_session_id) {
                 record.runtime_session = None;
+                record.title = "新会话".to_string();
+                record.status = "ready".to_string();
                 record.updated_at = current_timestamp();
             }
+            clear_session_messages(&mut state, conversation_id, &active_session_id);
         }
         persist_index(&self.root, &state.conversations)?;
         persist_sessions(&self.root, &state.sessions)?;
+        persist_messages(
+            &self.root,
+            conversation_id,
+            state.messages.get(conversation_id),
+        )?;
+        persist_attachments(&self.root, &state.attachments)?;
         Ok(updated)
     }
 
@@ -914,6 +924,51 @@ fn ensure_legacy_session(state: &mut ConversationState, conversation_id: &str) {
             .sessions
             .entry(active)
             .or_insert_with(|| legacy_session_for_conversation(conversation));
+    }
+}
+
+fn clear_session_messages(
+    state: &mut ConversationState,
+    conversation_id: &str,
+    active_session_id: &str,
+) {
+    let Some(messages) = state.messages.get_mut(conversation_id) else {
+        return;
+    };
+    let removed_attachment_ids = messages
+        .iter()
+        .filter(|message| message.session_id.as_deref() == Some(active_session_id))
+        .flat_map(|message| {
+            message
+                .attachments
+                .iter()
+                .map(|attachment| attachment.id.clone())
+        })
+        .collect::<HashSet<_>>();
+    messages.retain(|message| message.session_id.as_deref() != Some(active_session_id));
+    if removed_attachment_ids.is_empty() {
+        return;
+    }
+    let referenced_attachment_ids = state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter())
+        .flat_map(|message| {
+            message
+                .attachments
+                .iter()
+                .map(|attachment| attachment.id.clone())
+        })
+        .collect::<HashSet<_>>();
+    for attachment_id in removed_attachment_ids.difference(&referenced_attachment_ids) {
+        if let Some(attachment) = state.attachments.remove(attachment_id) {
+            if let Some(path) = attachment.cache_path {
+                let _ = fs::remove_file(&path);
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    let _ = fs::remove_dir(parent);
+                }
+            }
+        }
     }
 }
 
