@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildClaudeCliArgs, ClaudeAgentWorker, type RuntimeRunner } from "./worker";
+import { buildClaudeCliArgs, buildClearClaudeSessionCliArgs, ClaudeAgentWorker, type RuntimeRunner } from "./worker";
 import type { WorkerEvent } from "./protocol";
 
 describe("ClaudeAgentWorker start_run", () => {
@@ -134,6 +134,27 @@ describe("ClaudeAgentWorker start_run", () => {
       "text",
       "--permission-mode",
       "bypassPermissions",
+      "--resume",
+      "11111111-1111-4111-8111-111111111111",
+    ]);
+  });
+
+  it("uses Claude slash clear against the active persisted session", () => {
+    expect(buildClearClaudeSessionCliArgs({
+      type: "clear_session",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_coda",
+        runtime: "ClaudeCode",
+        cwd: "/workspace",
+        persist_session: true,
+        resume_session: true,
+      },
+    })).toEqual([
+      "-p",
+      "/clear",
+      "--output-format",
+      "text",
       "--resume",
       "11111111-1111-4111-8111-111111111111",
     ]);

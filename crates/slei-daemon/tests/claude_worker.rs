@@ -44,12 +44,16 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
         )
         .unwrap();
     adapter.cancel_run("run_1").unwrap();
+    adapter.clear_session(&session).unwrap();
 
     let commands = transport.commands();
     assert_eq!(commands[0]["type"], "start_run");
     assert_eq!(commands[0]["session"]["persist_session"], true);
     assert_eq!(commands[0]["session"]["resume_session"], true);
     assert_eq!(commands[1], json!({"type": "cancel", "run_id": "run_1"}));
+    assert_eq!(commands[2]["type"], "clear_session");
+    assert_eq!(commands[2]["session"]["session_id"], session.session_id);
+    assert_eq!(commands[2]["session"]["resume_session"], true);
 }
 
 #[test]

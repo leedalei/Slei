@@ -644,7 +644,7 @@ impl DaemonBroker {
             };
         }
         let now = monotonic_id();
-        let workspace_path = default_agent_workspace("agent_guide_local_node");
+        let workspace_path = self.local_agent_workspace("agent_guide_local_node");
         let mut agent = DesktopAgentView {
             id: "agent_guide_local_node".to_string(),
             name: "Yeal".to_string(),
@@ -777,7 +777,7 @@ impl DaemonBroker {
         }
 
         let id = format!("agent_{}", monotonic_id());
-        let workspace_path = default_agent_workspace(&id);
+        let workspace_path = self.local_agent_workspace(&id);
         let now = monotonic_id();
         let mut agent = DesktopAgentView {
             id: id.clone(),
@@ -1013,7 +1013,29 @@ impl DaemonBroker {
     ) -> Result<ConversationReceipt, ConversationError> {
         if let Some(receipt) = self.reset_conversation_runtime_session_in_daemon(conversation_id) {
             self.upsert_local_conversation(receipt.conversation.clone())?;
+            self.clear_local_active_session_cache(conversation_id)?;
             return Ok(receipt);
+        }
+
+        let existing = self
+            .conversations
+            .lock()
+            .expect("conversations mutex poisoned")
+            .iter()
+            .find(|conversation| conversation.id == conversation_id)
+            .cloned()
+            .ok_or(ConversationError::ConversationNotFound)?;
+        if let Some(runtime_session) = existing.runtime_session.clone() {
+            let agent = self
+                .agents
+                .lock()
+                .expect("agents mutex poisoned")
+                .iter()
+                .find(|agent| agent.id == existing.agent_id)
+                .cloned()
+                .ok_or(ConversationError::AgentNotFound)?;
+            run_local_claude_clear_session(&agent, &runtime_session)
+                .map_err(ConversationError::RuntimeClearFailed)?;
         }
 
         let mut conversations = self
@@ -1028,6 +1050,8 @@ impl DaemonBroker {
         conversation.updated_at = monotonic_id();
         let updated = conversation.clone();
         persist_local_conversations_at_root(&self.data_root, &conversations)?;
+        drop(conversations);
+        self.clear_local_active_session_cache(conversation_id)?;
         Ok(ConversationReceipt {
             conversation: updated,
         })
@@ -1629,6 +1653,10 @@ impl DaemonBroker {
         }
     }
 
+    fn local_agent_workspace(&self, id: &str) -> String {
+        format!("{}/agents/{id}", self.data_root)
+    }
+
     fn upsert_local_channel(&self, channel: ChannelView) {
         let mut channels = self.channels.lock().expect("channels mutex poisoned");
         match channels
@@ -1736,6 +1764,106 @@ impl DaemonBroker {
             Some(existing) => *existing = attachment,
             None => attachments.push(attachment),
         }
+        persist_local_attachments_at_root(&self.data_root, &attachments)
+    }
+
+    fn clear_local_active_session_cache(
+        &self,
+        conversation_id: &str,
+    ) -> Result<(), ConversationError> {
+        let active_session_id = self
+            .conversations
+            .lock()
+            .expect("conversations mutex poisoned")
+            .iter()
+            .find(|conversation| conversation.id == conversation_id)
+            .and_then(|conversation| conversation.active_session_id.clone())
+            .ok_or(ConversationError::ConversationNotFound)?;
+
+        let removed_attachment_ids = {
+            let mut messages = self
+                .conversation_messages
+                .lock()
+                .expect("conversation messages mutex poisoned");
+            let removed_attachment_ids = messages
+                .iter()
+                .filter(|message| {
+                    message.conversation_id == conversation_id
+                        && message.session_id.as_deref() == Some(&active_session_id)
+                })
+                .flat_map(|message| {
+                    message
+                        .attachments
+                        .as_deref()
+                        .unwrap_or(&[])
+                        .iter()
+                        .map(|attachment| attachment.id.clone())
+                })
+                .collect::<std::collections::HashSet<_>>();
+            messages.retain(|message| {
+                message.conversation_id != conversation_id
+                    || message.session_id.as_deref() != Some(&active_session_id)
+            });
+            persist_local_conversation_messages_at_root(
+                &self.data_root,
+                conversation_id,
+                &messages,
+            )?;
+            removed_attachment_ids
+        };
+
+        {
+            let mut sessions = self
+                .conversation_sessions
+                .lock()
+                .expect("conversation sessions mutex poisoned");
+            if let Some(session) = sessions
+                .iter_mut()
+                .find(|session| session.id == active_session_id)
+            {
+                session.title = "新会话".to_string();
+                session.status = "ready".to_string();
+                session.runtime_session = None;
+                session.updated_at = monotonic_id();
+            }
+            persist_local_conversation_sessions_at_root(&self.data_root, &sessions)?;
+        }
+
+        if removed_attachment_ids.is_empty() {
+            return Ok(());
+        }
+        let referenced_attachment_ids = self
+            .conversation_messages
+            .lock()
+            .expect("conversation messages mutex poisoned")
+            .iter()
+            .flat_map(|message| {
+                message
+                    .attachments
+                    .as_deref()
+                    .unwrap_or(&[])
+                    .iter()
+                    .map(|attachment| attachment.id.clone())
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let mut attachments = self
+            .conversation_attachments
+            .lock()
+            .expect("conversation attachments mutex poisoned");
+        attachments.retain(|attachment| {
+            if !removed_attachment_ids.contains(&attachment.id)
+                || referenced_attachment_ids.contains(&attachment.id)
+            {
+                return true;
+            }
+            if let Some(path) = &attachment.cache_path {
+                let _ = fs::remove_file(path);
+                if let Some(parent) = Path::new(path).parent() {
+                    let _ = fs::remove_dir(parent);
+                }
+            }
+            false
+        });
         persist_local_attachments_at_root(&self.data_root, &attachments)
     }
 
@@ -1870,10 +1998,6 @@ fn normalize_channel_name(name: &str) -> Result<String, ChannelError> {
     } else {
         Err(ChannelError::InvalidChannel)
     }
-}
-
-fn default_agent_workspace(id: &str) -> String {
-    format!("{}/agents/{id}", local_data_root())
 }
 
 fn local_data_root() -> String {
@@ -2495,6 +2619,21 @@ fn run_local_claude_agent(
     run_local_claude_agent_impl(agent, prompt, runtime_session)
 }
 
+fn run_local_claude_clear_session(
+    agent: &DesktopAgentView,
+    runtime_session: &RuntimeSessionView,
+) -> Result<(), String> {
+    run_local_claude_clear_session_impl(agent, runtime_session)
+}
+
+#[cfg(test)]
+fn run_local_claude_clear_session_impl(
+    _agent: &DesktopAgentView,
+    _runtime_session: &RuntimeSessionView,
+) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(test)]
 fn run_local_claude_agent_impl(
     _agent: &DesktopAgentView,
@@ -2505,6 +2644,36 @@ fn run_local_claude_agent_impl(
         std::thread::sleep(Duration::from_millis(250));
     }
     Ok(String::new())
+}
+
+#[cfg(not(test))]
+fn run_local_claude_clear_session_impl(
+    agent: &DesktopAgentView,
+    runtime_session: &RuntimeSessionView,
+) -> Result<(), String> {
+    let mut command = Command::new("claude");
+    command
+        .arg("-p")
+        .arg("/clear")
+        .arg("--output-format")
+        .arg("text")
+        .arg("--resume")
+        .arg(&runtime_session.session_id);
+    let output = command
+        .current_dir(&agent.workspace_path)
+        .output()
+        .map_err(|error| format!("failed to clear ClaudeCode session: {error}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            format!("ClaudeCode clear exited with status {}", output.status)
+        } else {
+            stderr
+        })
+    }
 }
 
 #[cfg(not(test))]
@@ -2632,6 +2801,8 @@ pub enum ConversationError {
     InvalidConversation,
     #[error("invalid message")]
     InvalidMessage,
+    #[error("conversation runtime clear failed: {0}")]
+    RuntimeClearFailed(String),
     #[error("conversation io error: {0}")]
     Io(std::io::Error),
     #[error("conversation json error: {0}")]

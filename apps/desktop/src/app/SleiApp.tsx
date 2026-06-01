@@ -91,6 +91,30 @@ export type AgentDraftInput = {
   description: string;
 };
 
+export async function submitComposerDraft(input: {
+  draft: string;
+  asTask: boolean;
+  attachments: ConversationAttachmentView[];
+  sessionId?: string;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+}) {
+  if (!input.draft.trim() && input.attachments.length === 0) {
+    return {
+      sent: false,
+      draft: input.draft,
+      attachments: input.attachments,
+      asTask: input.asTask,
+    };
+  }
+
+  await input.onSendMessage?.(input.draft, {
+    asTask: input.asTask,
+    attachmentIds: input.attachments.map((attachment) => attachment.id),
+    sessionId: input.sessionId,
+  });
+  return { sent: true, draft: "", attachments: [], asTask: false };
+}
+
 export type AgentMemoryRequest = {
   agentId: string;
   fact: string;
@@ -876,18 +900,24 @@ export function SleiApp() {
   }
 
   async function handleResetConversationRuntimeSession(conversationId: string) {
-    const receipt = await bridge.createConversationSession(conversationId);
+    const receipt = await bridge.resetConversationRuntimeSession(conversationId);
+    const [sessionsReceipt, messagesReceipt] = await Promise.all([
+      bridge.listConversationSessions(conversationId),
+      bridge.listConversationMessages(conversationId),
+    ]);
+    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
     setData((current) =>
       createSleiFixtures({
         ...current,
         conversations: upsertConversation(current.conversations, receipt.conversation),
         conversationSessions: [
-          ...current.conversationSessions.filter((session) => session.id !== receipt.session.id),
-          receipt.session,
+          ...current.conversationSessions.filter((session) => session.conversationId !== conversationId),
+          ...sessionsReceipt.sessions,
         ],
+        messages: replaceConversationMessages(current.messages, conversationMessages, [conversationId]),
       }),
     );
-    setActiveSessionId(receipt.session.id);
+    setActiveSessionId(receipt.conversation.activeSessionId ?? sessionsReceipt.sessions[0]?.id);
     setSessionDrawerOpen(false);
   }
 
@@ -1912,6 +1942,7 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
   const [isComposing, setIsComposing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1927,15 +1958,27 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? activeSessions[0];
   const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : `# ${stripChannelHash(activeChannel.name)}`;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
-  const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending);
+  const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
 
-  function submitMessage() {
+  async function submitMessage() {
     if (sendDisabled) return;
-    const attachmentIds = attachments.map((attachment) => attachment.id);
-    onSendMessage?.(draft, { asTask, attachmentIds, sessionId: currentSessionId });
-    setDraft("");
-    setAttachments([]);
-    setAsTask(false);
+    setSubmitting(true);
+    try {
+      const result = await submitComposerDraft({
+        draft,
+        asTask,
+        attachments,
+        sessionId: currentSessionId,
+        onSendMessage,
+      });
+      if (result.sent) {
+        setDraft(result.draft);
+        setAttachments(result.attachments);
+        setAsTask(result.asTask);
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function addFiles(fileList: FileList | null) {
@@ -2052,7 +2095,7 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
           <button className="slei-back-bottom" type="button"><ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}</button>
         </section>
       ) : null}
-      <form className="slei-composer" onSubmit={(event) => { event.preventDefault(); submitMessage(); }}>
+      <form className="slei-composer" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
         {attachments.length > 0 ? (
           <AttachmentList
             attachments={attachments}
@@ -2092,7 +2135,7 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
             }
             if (action === "submit") {
               event.preventDefault();
-              submitMessage();
+              void submitMessage();
             }
           }}
           placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}

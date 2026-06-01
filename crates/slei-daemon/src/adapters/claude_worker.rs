@@ -84,6 +84,21 @@ impl ClaudeWorkerAdapter {
         Ok(())
     }
 
+    pub fn clear_session(&self, session: &RuntimeSession) -> Result<(), ClaudeWorkerError> {
+        self.transport.send(json!({
+            "type": "clear_session",
+            "session": {
+                "session_id": session.session_id,
+                "agent_id": session.agent_id,
+                "runtime": session.runtime,
+                "cwd": session.cwd,
+                "persist_session": session.persist_session,
+                "resume_session": true,
+            }
+        }))?;
+        Ok(())
+    }
+
     pub fn resume_session(&self, _opaque_token: &str) -> Result<RuntimeSession, ClaudeWorkerError> {
         Err(ClaudeWorkerError::ResumeRequiresConversationSession)
     }
