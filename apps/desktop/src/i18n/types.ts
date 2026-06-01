@@ -10,11 +10,14 @@ export type DesktopMessages = {
     cancel: string;
     confirmExecute: string;
     create: string;
+    closeWindow: string;
     delete: string;
     deny: string;
     done: string;
     edit: string;
     input: string;
+    maximizeWindow: string;
+    minimizeWindow: string;
     resizeSidebar: string;
     retry: string;
     runtimeCheckFailed: string;
@@ -62,6 +65,9 @@ export type DesktopMessages = {
     noFiles: string;
     openViaDaemon: string;
     rejected: string;
+    history: string;
+    newSession: string;
+    resetSession: string;
     run: string;
     hash: string;
     stopFollowingRuns: string;

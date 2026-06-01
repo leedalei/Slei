@@ -20,6 +20,7 @@ describe("Slei product MCP tools", () => {
 
     const event = delegation.handle({
       run_id: "run_1",
+      tool_use_id: "tool_1",
       agent_id: "agent_coda",
       payload: { target: "@alice", summary: "Review this task" },
     });
@@ -27,6 +28,7 @@ describe("Slei product MCP tools", () => {
     expect(event).toEqual({
       type: "product_tool_requested",
       run_id: "run_1",
+      tool_use_id: "tool_1",
       agent_id: "agent_coda",
       tool_name: "slei_request_visible_delegation",
       payload: { target: "@alice", summary: "Review this task" },

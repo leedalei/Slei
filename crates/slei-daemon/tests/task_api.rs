@@ -79,5 +79,8 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
     let json: Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["thread"]["taskId"], task_id);
     assert_eq!(json["thread"]["replyCount"], 1);
-    assert!(json["thread"]["context"].as_str().unwrap().contains("任务 session"));
+    assert!(json["thread"]["context"]
+        .as_str()
+        .unwrap()
+        .contains("任务 session"));
 }

@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   agentsForComputerNode,
-  createAgentDraftFromGuideMessage,
   detectAgentMemoryRequest,
   SleiAppFrame,
 } from "../src/app/SleiApp";
@@ -191,11 +190,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("描述");
   });
 
-  it("detects guide-created agent drafts and explicit remember requests", () => {
-    expect(createAgentDraftFromGuideMessage("帮我创建一个叫 Nancy 的 QA Agent")).toMatchObject({
-      name: "Nancy",
-      description: expect.stringContaining("QA"),
-    });
+  it("detects explicit remember requests without deriving guide-created agent drafts", () => {
     expect(detectAgentMemoryRequest("@nancy 记住：以后优先检查安全漏洞", data.members)).toEqual({
       agentId: "agent_nancy",
       fact: "以后优先检查安全漏洞",
@@ -206,7 +201,7 @@ describe("agent creation, device association, and memory MVP", () => {
     });
   });
 
-  it("renders a guide draft card with a create button in chat", () => {
+  it("does not render guide draft cards from composer text", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -217,9 +212,8 @@ describe("agent creation, device association, and memory MVP", () => {
       />,
     );
 
-    expect(html).toContain("slei-agent-draft-card");
-    expect(html).toContain("创建智能体草案");
-    expect(html).toContain("创建");
+    expect(html).not.toContain("slei-agent-draft-card");
+    expect(html).not.toContain("创建智能体草案");
   });
 
   it("renders channel hash as UI chrome only and never doubles it", () => {
@@ -282,5 +276,75 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
     expect(html).toContain("disabled=\"\"");
     expect(html).toContain("DONE");
+  });
+
+  it("renders multiple persisted guide card messages separately", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          members,
+          nodes,
+          messages: [
+            {
+              id: "m-guide-summary",
+              author: "Yeal",
+              role: "agent",
+              time: "10:00",
+              body: "识别到 2 个成员创建请求。",
+              channelId: "all",
+            },
+            {
+              id: "card_message_card_1",
+              author: "Yeal",
+              role: "agent",
+              time: "10:01",
+              body: "",
+              channelId: "all",
+              status: "done",
+              cards: [
+                {
+                  id: "card_1",
+                  kind: "createAgent",
+                  state: "pending",
+                  title: "创建智能体草案",
+                  summary: "Nancy · ClaudeCode / Sonnet",
+                  draft: { name: "Nancy" },
+                  actionLabel: "创建",
+                  doneLabel: "DONE",
+                },
+              ],
+            },
+            {
+              id: "card_message_card_2",
+              author: "Yeal",
+              role: "agent",
+              time: "10:02",
+              body: "",
+              channelId: "all",
+              status: "done",
+              cards: [
+                {
+                  id: "card_2",
+                  kind: "createAgent",
+                  state: "pending",
+                  title: "创建智能体草案",
+                  summary: "Alice · ClaudeCode / Sonnet",
+                  draft: { name: "Alice" },
+                  actionLabel: "创建",
+                  doneLabel: "DONE",
+                },
+              ],
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html.match(/slei-interactive-card--createAgent/g)).toHaveLength(2);
+    expect(html).toContain("Nancy · ClaudeCode / Sonnet");
+    expect(html).toContain("Alice · ClaudeCode / Sonnet");
   });
 });

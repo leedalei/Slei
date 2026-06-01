@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -19,6 +19,23 @@ pub struct CreateDmRequest {
 pub struct SendConversationMessageRequest {
     author_id: String,
     body: String,
+    session_id: Option<String>,
+    #[serde(default)]
+    attachment_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadAttachmentRequest {
+    name: String,
+    mime_type: String,
+    bytes_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListMessagesQuery {
+    session_id: Option<String>,
 }
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -66,6 +83,7 @@ pub async fn create_dm(
 pub async fn messages(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    Query(query): Query<ListMessagesQuery>,
     headers: HeaderMap,
 ) -> Response {
     if !state.auth_token.is_authorized(&headers) {
@@ -73,7 +91,99 @@ pub async fn messages(
     }
 
     match state.conversations().list_messages(&id).await {
-        Ok(messages) => Json(json!({ "messages": messages })).into_response(),
+        Ok(messages) => {
+            let messages = match query
+                .session_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                Some(session_id) => messages
+                    .into_iter()
+                    .filter(|message| message.session_id.as_deref() == Some(session_id))
+                    .collect::<Vec<_>>(),
+                None => messages,
+            };
+            Json(json!({ "messages": messages })).into_response()
+        }
+        Err(error) => conversation_error_response(error),
+    }
+}
+
+pub async fn sessions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.conversations().list_sessions(&id).await {
+        Ok(sessions) => Json(json!({ "sessions": sessions })).into_response(),
+        Err(error) => conversation_error_response(error),
+    }
+}
+
+pub async fn create_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.conversations().create_session(&id).await {
+        Ok((conversation, session)) => (
+            StatusCode::CREATED,
+            Json(json!({ "conversation": conversation, "session": session })),
+        )
+            .into_response(),
+        Err(error) => conversation_error_response(error),
+    }
+}
+
+pub async fn activate_session(
+    State(state): State<AppState>,
+    Path((id, session_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state
+        .conversations()
+        .activate_session(&id, &session_id)
+        .await
+    {
+        Ok((conversation, session)) => {
+            Json(json!({ "conversation": conversation, "session": session })).into_response()
+        }
+        Err(error) => conversation_error_response(error),
+    }
+}
+
+pub async fn upload_attachment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<UploadAttachmentRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state
+        .conversations()
+        .store_attachment(&payload.name, &payload.mime_type, &payload.bytes_base64)
+        .await
+    {
+        Ok(attachment) => (
+            StatusCode::CREATED,
+            Json(json!({ "attachment": attachment })),
+        )
+            .into_response(),
         Err(error) => conversation_error_response(error),
     }
 }
@@ -94,35 +204,43 @@ pub async fn send_message(
 
     match state
         .conversations()
-        .append_message(&id, &payload.author_id, &payload.body, idempotency_key)
+        .append_message_with_session(
+            &id,
+            &payload.author_id,
+            &payload.body,
+            idempotency_key,
+            payload.session_id.as_deref(),
+            &payload.attachment_ids,
+        )
         .await
     {
         Ok(message) => {
-            let mut response_message = message.clone();
-            if id == "dm:agent_guide_local_node" && payload.author_id.starts_with("human:") {
-                let card_key = idempotency_key
-                    .map(|key| format!("guide-card-{key}"))
-                    .unwrap_or_else(|| format!("guide-card-{}", message.id));
-                match state
-                    .cards()
-                    .propose_guide_card(&id, &message.id, &payload.body, &card_key)
+            if payload.author_id.starts_with("human:") {
+                if let Err(error) = state
+                    .agent_dm()
+                    .start_for_human_message(&id, &message)
                     .await
                 {
-                    Ok(Some(card)) => {
-                        if let Ok(updated) = state
-                            .conversations()
-                            .attach_cards(&id, &message.id, vec![card])
-                            .await
-                        {
-                            response_message = updated;
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(error) => return error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
                 }
             }
-            (StatusCode::CREATED, Json(json!({ "message": response_message }))).into_response()
+            (StatusCode::CREATED, Json(json!({ "message": message }))).into_response()
         }
+        Err(error) => conversation_error_response(error),
+    }
+}
+
+pub async fn reset_runtime_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.conversations().reset_runtime_session(&id).await {
+        Ok(conversation) => Json(json!({ "conversation": conversation })).into_response(),
         Err(error) => conversation_error_response(error),
     }
 }

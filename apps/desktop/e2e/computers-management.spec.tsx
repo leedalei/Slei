@@ -61,7 +61,8 @@ describe("computers management page", () => {
     expect(html).toContain("slei-computers-page");
     expect(html).toContain("slei-computers-list");
     expect(html).toContain("slei-computer-detail");
-    expect(html).toContain('<aside class="slei-context-sidebar"><div class="slei-sidebar__header"><strong>设备</strong>');
+    expect(html).toContain('<aside class="slei-context-sidebar">');
+    expect(html).toContain('<div class="slei-sidebar__header" data-tauri-drag-region="deep"><strong>设备</strong>');
     expect(html).toContain('<main class="slei-workspace"><section class="slei-computers-page"><article class="slei-computer-detail"');
     expect(html).not.toContain('<section class="slei-computers-page"><aside class="slei-computers-list"');
     expect(html).toContain("设备 2");

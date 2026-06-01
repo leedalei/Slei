@@ -54,4 +54,38 @@ describe("channel chat timeline", () => {
     expect(css).toContain(".slei-message:hover");
     expect(css).toContain(".slei-message:focus-within");
   });
+
+  it("keeps chat scrolling inside the timeline instead of the whole workspace", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const rootRule = css.match(/html,\s*\nbody,\s*\n#app\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const shellRule = css.match(/\.slei-shell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const workspaceRule = css.match(/\.slei-workspace\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const chatPageRule = css.match(/\.slei-chat-page\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const timelineRule = css.match(/\.slei-timeline\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const composerRule = css.match(/\.slei-composer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const modalBackdropRule = css.match(/\.slei-modal-backdrop\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const drawerRule = css.match(/\.slei-task-thread-drawer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+
+    expect(rootRule).toContain("height: 100%");
+    expect(rootRule).toContain("overflow: hidden");
+    expect(rootRule).toContain("background: transparent");
+    expect(shellRule).toContain("--app-window-radius: 14px");
+    expect(shellRule).toContain("border-radius: var(--app-window-radius)");
+    expect(shellRule).toContain("min-height: 0");
+    expect(shellRule).toContain("overflow: hidden");
+    expect(workspaceRule).toContain("min-height: 0");
+    expect(workspaceRule).toContain("overflow: hidden");
+    expect(chatPageRule).toContain("display: flex");
+    expect(chatPageRule).toContain("flex-direction: column");
+    expect(chatPageRule).toContain("height: 100%");
+    expect(chatPageRule).toContain("min-height: 0");
+    expect(chatPageRule).toContain("overflow: hidden");
+    expect(timelineRule).toContain("flex: 1 1 auto");
+    expect(timelineRule).toContain("min-height: 0");
+    expect(timelineRule).toContain("overflow-y: auto");
+    expect(composerRule).toContain("flex: 0 0 auto");
+    expect(modalBackdropRule).toContain("border-radius: var(--app-window-radius)");
+    expect(modalBackdropRule).toContain("overflow: hidden");
+    expect(drawerRule).toContain("border-radius: 0 var(--app-window-radius) var(--app-window-radius) 0");
+  });
 });

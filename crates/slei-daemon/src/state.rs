@@ -1,4 +1,7 @@
+use crate::adapters::claude_worker::ClaudeWorkerAdapter;
+use crate::adapters::worker_rpc::WorkerTransport;
 use crate::auth::AuthToken;
+use crate::services::agent_dm_service::{AgentDmRunStore, AgentDmService};
 use crate::services::card_service::CardService;
 use crate::services::channel_service::ChannelService;
 use crate::services::conversation_service::ConversationService;
@@ -8,6 +11,7 @@ use crate::services::node_service::NodeService;
 use crate::services::settings_service::SettingsService;
 use crate::services::task_service::TaskService;
 use crate::services::workspace_service::WorkspaceService;
+use serde_json::Value;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -24,6 +28,8 @@ pub struct AppState {
     event_service: EventService,
     settings_service: SettingsService,
     task_service: TaskService,
+    worker_transport: WorkerTransport,
+    agent_dm_runs: AgentDmRunStore,
 }
 
 impl AppState {
@@ -47,6 +53,8 @@ impl AppState {
             event_service,
             settings_service: SettingsService::for_tests(),
             task_service: TaskService::for_tests(),
+            worker_transport: WorkerTransport::fake(),
+            agent_dm_runs: AgentDmRunStore::default(),
         }
     }
 
@@ -84,6 +92,27 @@ impl AppState {
 
     pub fn tasks(&self) -> &TaskService {
         &self.task_service
+    }
+
+    pub fn agent_dm(&self) -> AgentDmService {
+        AgentDmService::new(
+            self.conversation_service.clone(),
+            self.card_service.clone(),
+            self.member_service.clone(),
+            ClaudeWorkerAdapter::new(self.worker_transport.clone()),
+            self.agent_dm_runs.clone(),
+        )
+    }
+
+    pub fn worker_commands(&self) -> Vec<Value> {
+        self.worker_transport.commands()
+    }
+
+    pub async fn handle_worker_event(
+        &self,
+        event: Value,
+    ) -> Result<(), crate::services::agent_dm_service::AgentDmError> {
+        self.agent_dm().handle_worker_event(event).await
     }
 }
 

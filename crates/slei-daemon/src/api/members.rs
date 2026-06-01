@@ -42,7 +42,11 @@ pub async fn create_agent(
         .await
     {
         Ok(agent) => {
-            if let Err(error) = state.channels().ensure_default_agent_membership(&agent.id).await {
+            if let Err(error) = state
+                .channels()
+                .ensure_default_agent_membership(&agent.id)
+                .await
+            {
                 return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
             }
             (StatusCode::CREATED, Json(json!({ "agent": agent }))).into_response()
@@ -54,10 +58,7 @@ pub async fn create_agent(
     }
 }
 
-pub async fn bootstrap_guide(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn bootstrap_guide(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
@@ -75,14 +76,24 @@ pub async fn bootstrap_guide(
         .and_then(|value| value.to_str().ok())
         .unwrap_or("bootstrap-guide");
 
-    match state.members().create_guide_agent("local-node", idempotency_key).await {
+    match state
+        .members()
+        .create_guide_agent("local-node", idempotency_key)
+        .await
+    {
         Ok((agent, created)) => {
-            if let Err(error) = state.channels().ensure_default_agent_membership(&agent.id).await {
+            if let Err(error) = state
+                .channels()
+                .ensure_default_agent_membership(&agent.id)
+                .await
+            {
                 return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
             }
             let (conversation, _) = match state.conversations().create_dm(&agent.id).await {
                 Ok(receipt) => receipt,
-                Err(error) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
+                Err(error) => {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+                }
             };
             let _ = state
                 .conversations()
@@ -94,7 +105,11 @@ pub async fn bootstrap_guide(
                 )
                 .await;
             (
-                if created { StatusCode::CREATED } else { StatusCode::OK },
+                if created {
+                    StatusCode::CREATED
+                } else {
+                    StatusCode::OK
+                },
                 Json(json!({
                     "status": if created { "created" } else { "alreadyExists" },
                     "agent": agent,

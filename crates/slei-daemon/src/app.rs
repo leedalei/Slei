@@ -16,10 +16,7 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/channels",
             get(api::channels::list).post(api::channels::create),
         )
-        .route(
-            "/v1/channels/{id}/members",
-            get(api::channels::members),
-        )
+        .route("/v1/channels/{id}/members", get(api::channels::members))
         .route(
             "/v1/agents",
             get(api::members::list_agents).post(api::members::create_agent),
@@ -41,9 +38,28 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/conversations", get(api::conversations::list))
         .route("/v1/conversations/dm", post(api::conversations::create_dm))
         .route(
+            "/v1/attachments",
+            post(api::conversations::upload_attachment),
+        )
+        .route(
+            "/v1/conversations/{id}/sessions",
+            get(api::conversations::sessions).post(api::conversations::create_session),
+        )
+        .route(
+            "/v1/conversations/{id}/sessions/{session_id}/active",
+            patch(api::conversations::activate_session),
+        )
+        .route(
             "/v1/conversations/{id}/messages",
             get(api::conversations::messages).post(api::conversations::send_message),
         )
+        .route(
+            "/v1/conversations/{id}/runtime-session/reset",
+            post(api::conversations::reset_runtime_session),
+        )
+        .route("/v1/tasks", post(api::tasks::create))
+        .route("/v1/tasks/{id}/replies", post(api::tasks::reply))
+        .route("/v1/tasks/{id}/thread", get(api::tasks::thread))
         .route(
             "/v1/workspaces",
             get(api::workspaces::list).post(api::workspaces::create),

@@ -70,8 +70,20 @@ pub async fn members(
 
 fn channel_error_response(error: ChannelError) -> Response {
     match error {
-        ChannelError::MissingChannel => (StatusCode::NOT_FOUND, Json(json!({ "error": error.to_string() }))).into_response(),
-        ChannelError::InvalidChannel => (StatusCode::BAD_REQUEST, Json(json!({ "error": error.to_string() }))).into_response(),
-        ChannelError::Io(_) | ChannelError::Json(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": error.to_string() }))).into_response(),
+        ChannelError::MissingChannel => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::InvalidChannel => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::Io(_) | ChannelError::Json(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
     }
 }

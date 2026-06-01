@@ -2,6 +2,7 @@ import type { ProductToolRequestedEvent } from "./protocol";
 
 export type SleiToolInvocation = {
   run_id: string;
+  tool_use_id: string;
   agent_id: string;
   payload: Record<string, unknown>;
 };
@@ -30,6 +31,7 @@ function tool(name: ProductToolRequestedEvent["tool_name"]): SleiTool {
       return {
         type: "product_tool_requested",
         run_id: invocation.run_id,
+        tool_use_id: invocation.tool_use_id,
         agent_id: invocation.agent_id,
         tool_name: name,
         payload: invocation.payload,

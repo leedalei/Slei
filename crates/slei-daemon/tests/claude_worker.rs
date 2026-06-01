@@ -11,12 +11,15 @@ fn claude_worker_create_session_reports_claude_mvp_capabilities() {
         .create_session(CreateSessionRequest {
             agent_id: "agent_coda".to_string(),
             cwd: "/workspace/app".to_string(),
+            session_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            resume_session: false,
         })
         .unwrap();
 
     assert_eq!(session.runtime, "ClaudeCode");
-    assert!(!session.persist_session);
-    assert!(!session.capabilities.resume_session);
+    assert!(session.persist_session);
+    assert!(session.capabilities.resume_session);
+    assert!(!session.resume_session);
 }
 
 #[test]
@@ -27,6 +30,8 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
         .create_session(CreateSessionRequest {
             agent_id: "agent_coda".to_string(),
             cwd: "/workspace/app".to_string(),
+            session_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            resume_session: true,
         })
         .unwrap();
 
@@ -42,7 +47,8 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
 
     let commands = transport.commands();
     assert_eq!(commands[0]["type"], "start_run");
-    assert_eq!(commands[0]["session"]["persist_session"], false);
+    assert_eq!(commands[0]["session"]["persist_session"], true);
+    assert_eq!(commands[0]["session"]["resume_session"], true);
     assert_eq!(commands[1], json!({"type": "cancel", "run_id": "run_1"}));
 }
 
@@ -51,7 +57,9 @@ fn claude_worker_resume_session_is_rejected_for_claude_mvp() {
     let adapter = ClaudeWorkerAdapter::new(WorkerTransport::fake());
     let err = adapter.resume_session("opaque-token").unwrap_err();
 
-    assert!(err.to_string().contains("resume is not supported"));
+    assert!(err
+        .to_string()
+        .contains("requires a persisted conversation session"));
 }
 
 #[test]

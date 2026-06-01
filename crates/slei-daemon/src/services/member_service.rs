@@ -258,6 +258,19 @@ impl MemberService {
         agents
     }
 
+    pub async fn get_product_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        self.inner
+            .lock()
+            .await
+            .product_agents
+            .get(agent_id)
+            .cloned()
+            .ok_or(MemberError::AgentNotFound)
+    }
+
     pub async fn create_product_agent(
         &self,
         draft: ProductAgentDraft,
@@ -308,7 +321,10 @@ impl MemberService {
                 .cloned()
         };
         if let Some(agent) = existing_guide {
-            return self.normalize_existing_guide_agent(agent).await.map(|agent| (agent, false));
+            return self
+                .normalize_existing_guide_agent(agent)
+                .await
+                .map(|agent| (agent, false));
         }
         {
             let state = self.inner.lock().await;
@@ -323,7 +339,8 @@ impl MemberService {
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: node_id.to_string(),
-            description: "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。".to_string(),
+            description: "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。"
+                .to_string(),
         };
         let agent = self
             .create_product_agent_record(
@@ -397,7 +414,11 @@ impl MemberService {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             memory_path: memory_path.to_string_lossy().to_string(),
             docs_path: docs_path.to_string_lossy().to_string(),
-            avatar_seed: if system_owned { "yeal".to_string() } else { Uuid::new_v4().simple().to_string() },
+            avatar_seed: if system_owned {
+                "yeal".to_string()
+            } else {
+                Uuid::new_v4().simple().to_string()
+            },
             runtime_thread: RuntimeThreadRecord {
                 runtime_kind: draft.runtime_kind.trim().to_string(),
                 status: "ready".to_string(),
@@ -515,7 +536,9 @@ impl MemberService {
         let skills_path = PathBuf::from(&record.workspace_path).join("skills/index.json");
         fs::read_to_string(skills_path)
             .map_err(MemberError::Io)
-            .and_then(|raw| serde_json::from_str::<Vec<SkillRecord>>(&raw).map_err(MemberError::Json))
+            .and_then(|raw| {
+                serde_json::from_str::<Vec<SkillRecord>>(&raw).map_err(MemberError::Json)
+            })
     }
 }
 
@@ -622,7 +645,7 @@ When triggered, append the requested fact to MEMORY.md under Key Knowledge or Ac
 }
 
 fn guide_create_skill() -> String {
-    "Trigger when the user asks Yeal to create an agent, member, channel, or 频道. Return a fixed interactive card draft instead of free-form prose.\n".to_string()
+    "Trigger when the user asks Yeal to create an agent or member. For each detected member, call the product tool `slei_propose_interactive_card` with kind `createAgent`, title, summary, draft{name, handle, runtimeKind, model, nodeId, description}, actionLabel and doneLabel. Do not return executable JSON text and do not rely on the frontend parsing natural language.\n".to_string()
 }
 
 fn write_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {
@@ -634,17 +657,26 @@ fn write_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {
         trigger: format!("提及 {} 并使用 remember、learn 或 记住", agent.handle),
         path: format!("{}/skills/memory.skill.md", agent.workspace_path),
     }];
-    fs::write(skills_path.join("memory.skill.md"), default_memory_skill(agent))
-        .map_err(MemberError::Io)?;
+    fs::write(
+        skills_path.join("memory.skill.md"),
+        default_memory_skill(agent),
+    )
+    .map_err(MemberError::Io)?;
     if agent.agent_kind == "guide" {
-        skills.insert(0, SkillRecord {
-            id: "guide-create".to_string(),
-            name: "引导创建".to_string(),
-            trigger: "识别创建智能体、成员、频道的请求".to_string(),
-            path: format!("{}/skills/guide-create.skill.md", agent.workspace_path),
-        });
-        fs::write(skills_path.join("guide-create.skill.md"), guide_create_skill())
-            .map_err(MemberError::Io)?;
+        skills.insert(
+            0,
+            SkillRecord {
+                id: "guide-create".to_string(),
+                name: "引导创建".to_string(),
+                trigger: "识别创建智能体、成员、频道的请求".to_string(),
+                path: format!("{}/skills/guide-create.skill.md", agent.workspace_path),
+            },
+        );
+        fs::write(
+            skills_path.join("guide-create.skill.md"),
+            guide_create_skill(),
+        )
+        .map_err(MemberError::Io)?;
     }
     let payload = serde_json::to_string_pretty(&skills).map_err(MemberError::Json)?;
     fs::write(skills_path.join("index.json"), payload).map_err(MemberError::Io)

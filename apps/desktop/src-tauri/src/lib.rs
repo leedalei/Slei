@@ -19,12 +19,17 @@ pub fn run() {
             commands::list_conversations_command,
             commands::create_agent_command,
             commands::create_dm_conversation_command,
+            commands::reset_conversation_runtime_session_command,
+            commands::list_conversation_sessions_command,
+            commands::create_conversation_session_command,
+            commands::activate_conversation_session_command,
             commands::update_agent_command,
             commands::update_preferences_command,
             commands::remember_agent_fact_command,
             commands::open_agent_path_command,
             commands::list_conversation_messages_command,
             commands::send_conversation_message_command,
+            commands::upload_conversation_attachment_command,
             commands::refresh_runtime_status_command,
             commands::rename_local_node_command,
         ])
@@ -35,15 +40,18 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        create_agent, create_dm_conversation, daemon_status, list_agents,
-        list_conversation_messages, list_conversations, list_nodes, list_preferences,
-        list_agent_skills, open_agent_path, reconnect_events, remember_agent_fact,
-        rename_local_node, request_artifact_open, send_conversation_message, update_agent,
-        update_preferences,
+        activate_conversation_session, bootstrap_guide_agent, create_agent,
+        create_conversation_session, create_dm_conversation, daemon_status, list_agent_skills,
+        list_agents, list_conversation_messages, list_conversation_sessions, list_conversations,
+        list_nodes, list_preferences, open_agent_path, reconnect_events, remember_agent_fact,
+        rename_local_node, request_artifact_open, reset_conversation_runtime_session,
+        send_conversation_message, update_agent, update_preferences,
+        upload_conversation_attachment,
     };
     use super::daemon_broker::{
-        AgentCreateRequest, AgentUpdateRequest, ConversationMessageRequest, DaemonBroker,
-        NotificationPreferencesView, PreferencesUpdateRequest, RuntimeDescriptor,
+        AgentCreateRequest, AgentUpdateRequest, ConversationAttachmentUploadRequest,
+        ConversationMessageRequest, DaemonBroker, NotificationPreferencesView,
+        PreferencesUpdateRequest, RuntimeDescriptor,
     };
     use std::fs;
 
@@ -297,6 +305,8 @@ mod tests {
             ConversationMessageRequest {
                 author_id: "human:local".to_string(),
                 body: "你好 Coda".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
             },
         )
         .unwrap();
@@ -307,6 +317,273 @@ mod tests {
         let serialized = serde_json::to_string(&messages).unwrap();
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn conversation_sessions_and_attachments_round_trip() {
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-session-attachment-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        let agent = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "开发 Agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+        let dm = create_dm_conversation(&broker, &agent.id)
+            .unwrap()
+            .conversation;
+
+        let sessions = list_conversation_sessions(&broker, &dm.id).sessions;
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(
+            dm.active_session_id.as_deref(),
+            Some(sessions[0].id.as_str())
+        );
+        let attachment = upload_conversation_attachment(
+            &broker,
+            ConversationAttachmentUploadRequest {
+                name: "../notes.md".to_string(),
+                mime_type: "text/markdown".to_string(),
+                bytes_base64: "aGVsbG8=".to_string(),
+            },
+        )
+        .unwrap()
+        .attachment;
+        assert_eq!(attachment.name, "notes.md");
+        assert!(attachment
+            .cache_path
+            .as_deref()
+            .unwrap()
+            .contains("/attachments/"));
+
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: String::new(),
+                session_id: Some(sessions[0].id.clone()),
+                attachment_ids: vec![attachment.id.clone()],
+            },
+        )
+        .unwrap();
+        let messages = list_conversation_messages(&broker, &dm.id);
+        assert_eq!(
+            messages.messages[0].session_id.as_deref(),
+            Some(sessions[0].id.as_str())
+        );
+        assert_eq!(messages.messages[0].body, "");
+        assert_eq!(
+            messages.messages[0].attachments.as_ref().unwrap()[0].name,
+            "notes.md"
+        );
+
+        let created = create_conversation_session(&broker, &dm.id).unwrap();
+        assert_ne!(created.session.id, sessions[0].id);
+        assert_eq!(
+            list_conversations(&broker).conversations[0]
+                .active_session_id
+                .as_deref(),
+            Some(created.session.id.as_str())
+        );
+        let activated = activate_conversation_session(&broker, &dm.id, &sessions[0].id).unwrap();
+        assert_eq!(
+            activated.conversation.active_session_id.as_deref(),
+            Some(sessions[0].id.as_str())
+        );
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn agent_dm_send_returns_with_running_runtime_message() {
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-conversation-running-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        let agent = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "开发 Agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+        let dm = create_dm_conversation(&broker, &agent.id)
+            .unwrap()
+            .conversation;
+
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "__slei_delay_runtime__".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        let messages = list_conversation_messages(&broker, &dm.id);
+        assert_eq!(messages.messages.len(), 2);
+        assert_eq!(messages.messages[1].author_id, agent.id);
+        assert_eq!(messages.messages[1].status.as_deref(), Some("running"));
+        assert!(messages.messages[1].run_id.is_some());
+        let conversations = list_conversations(&broker);
+        let runtime_session = conversations.conversations[0]
+            .runtime_session
+            .as_ref()
+            .unwrap();
+        assert_eq!(runtime_session.runtime_kind, "ClaudeCode");
+        assert_eq!(runtime_session.status, "pending");
+        assert!(uuid::Uuid::parse_str(&runtime_session.session_id).is_ok());
+
+        let reset = reset_conversation_runtime_session(&broker, &dm.id).unwrap();
+        assert!(reset.conversation.runtime_session.is_none());
+        let serialized = serde_json::to_string(&reset).unwrap();
+        assert!(!serialized.contains("secret-token"));
+        assert!(!serialized.contains("127.0.0.1"));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn agent_dm_local_runtime_session_is_reused_after_completion() {
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-conversation-resume-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        let agent = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "开发 Agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+        let dm = create_dm_conversation(&broker, &agent.id)
+            .unwrap()
+            .conversation;
+
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "第一句".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let first_session = list_conversations(&broker).conversations[0]
+            .runtime_session
+            .clone()
+            .unwrap();
+        assert_eq!(first_session.status, "ready");
+
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "第二句".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+        let second_session = list_conversations(&broker).conversations[0]
+            .runtime_session
+            .clone()
+            .unwrap();
+        assert_eq!(second_session.session_id, first_session.session_id);
+        assert_eq!(second_session.status, "ready");
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn guide_dm_without_card_shortcut_returns_running_runtime_message() {
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-guide-runtime-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = bootstrap_guide_agent(&broker);
+        assert_eq!(receipt.status, "created");
+        let dm = list_conversations(&broker).conversations[0].clone();
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "__slei_delay_runtime__".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        let messages = list_conversation_messages(&broker, &dm.id);
+        assert!(messages.messages.iter().any(|message| {
+            message.author_id == "agent_guide_local_node"
+                && message.run_id.is_some()
+                && message.status.as_deref() == Some("running")
+        }));
+        std::env::remove_var("SLEI_CLAUDE_VERSION_OVERRIDE");
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 

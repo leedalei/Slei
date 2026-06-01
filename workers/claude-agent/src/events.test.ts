@@ -5,6 +5,7 @@ import { mapClaudeSdkEvent } from "./events";
 import type {
   HelloCommand,
   PermissionRequestedEvent,
+  ProductToolRequestedEvent,
   StartRunCommand,
 } from "./protocol";
 
@@ -29,13 +30,14 @@ describe("worker RPC contract", () => {
     ]);
   });
 
-  it("models commands with protocol version, launch secret and persistSession disabled", () => {
+  it("models commands with protocol version, launch secret and persistent session fields", () => {
     const hello = workerRpc.commands.hello as HelloCommand;
     const startRun = workerRpc.commands.start_run as StartRunCommand;
 
     expect(hello.protocol_version).toBe("v1");
     expect(hello.launch_secret).toBeTruthy();
-    expect(startRun.session.persist_session).toBe(false);
+    expect(startRun.session.persist_session).toBe(true);
+    expect(startRun.session.resume_session).toBe(false);
   });
 
   it("maps Claude SDK output and tool events before crossing into daemon code", () => {
@@ -82,6 +84,7 @@ describe("worker RPC contract", () => {
     const productTool = mapClaudeSdkEvent({
       type: "product_tool",
       runId: "run_1",
+      toolUseId: "tool_1",
       agentId: "agent_coda",
       toolName: "slei_request_visible_delegation",
       payload: { target: "@alice", summary: "Please review" },
@@ -90,6 +93,8 @@ describe("worker RPC contract", () => {
     expect(permission).toEqual(workerRpc.events.permission_requested);
     expect(question).toEqual(workerRpc.events.human_question_requested);
     expect(productTool).toEqual(workerRpc.events.product_tool_requested);
+    const productToolRequest = productTool as ProductToolRequestedEvent;
+    expect(productToolRequest.tool_use_id).toBe("tool_1");
     const permissionRequest = permission as PermissionRequestedEvent;
     expect(permissionRequest.request_id).toBe("perm_1");
     expect(permissionRequest.tool_use_id).toBe("tool_1");

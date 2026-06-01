@@ -37,6 +37,7 @@ export type ClaudeSdkEvent =
   | {
       type: "product_tool";
       runId: string;
+      toolUseId: string;
       agentId: string;
       toolName:
         | "slei_propose_interactive_card"
@@ -101,6 +102,7 @@ export function mapClaudeSdkEvent(event: ClaudeSdkEvent): WorkerEvent {
       return {
         type: "product_tool_requested",
         run_id: event.runId,
+        tool_use_id: event.toolUseId,
         agent_id: event.agentId,
         tool_name: event.toolName,
         payload: event.payload,

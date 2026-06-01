@@ -145,7 +145,10 @@ impl ChannelService {
             return Err(ChannelError::MissingChannel);
         }
         let members = state.members.entry(channel_id.to_string()).or_default();
-        if let Some(existing) = members.iter().find(|member| member.agent_id == trimmed_agent_id) {
+        if let Some(existing) = members
+            .iter()
+            .find(|member| member.agent_id == trimmed_agent_id)
+        {
             return Ok(existing.clone());
         }
         let member = ChannelMemberRecord {
@@ -218,13 +221,15 @@ impl ChannelState {
     }
 
     fn ensure_default_channel(&mut self) {
-        self.channels.entry("all".to_string()).or_insert(ChannelRecord {
-            id: "all".to_string(),
-            name: "all".to_string(),
-            description: Some("默认团队频道".to_string()),
-            is_default: true,
-            permission: PermissionPreset::Controlled,
-        });
+        self.channels
+            .entry("all".to_string())
+            .or_insert(ChannelRecord {
+                id: "all".to_string(),
+                name: "all".to_string(),
+                description: Some("默认团队频道".to_string()),
+                is_default: true,
+                permission: PermissionPreset::Controlled,
+            });
     }
 }
 
@@ -261,7 +266,9 @@ fn load_channels(root: &PathBuf) -> HashMap<String, ChannelRecord> {
 fn load_members(root: &PathBuf) -> HashMap<String, Vec<ChannelMemberRecord>> {
     fs::read_to_string(root.join("channels/members.json"))
         .ok()
-        .and_then(|raw| serde_json::from_str::<HashMap<String, Vec<ChannelMemberRecord>>>(&raw).ok())
+        .and_then(|raw| {
+            serde_json::from_str::<HashMap<String, Vec<ChannelMemberRecord>>>(&raw).ok()
+        })
         .unwrap_or_default()
 }
 

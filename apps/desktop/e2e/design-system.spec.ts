@@ -23,4 +23,14 @@ describe("desktop design-system wiring", () => {
     expect(tokensCss).toContain("--sidebar-width: 240px;");
     expect(tokensCss).toContain("--radius-control: var(--radius-none);");
   });
+
+  it("keeps global scrollbars compact and neutral", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+
+    expect(appCss).toContain("--scrollbar-size: 8px");
+    expect(appCss).toContain("--scrollbar-radius: 8px");
+    expect(appCss).toContain("--scrollbar-thumb: rgb(128 128 128 / 48%)");
+    expect(appCss).toContain("scrollbar-width: thin");
+    expect(appCss).toContain("border-radius: var(--scrollbar-radius)");
+  });
 });

@@ -1,7 +1,5 @@
-use serde_json::{json, Value};
-use uuid::Uuid;
-
 use crate::adapters::worker_rpc::{WorkerRpcError, WorkerTransport};
+use serde_json::{json, Value};
 
 #[derive(Clone, Debug)]
 pub struct ClaudeWorkerAdapter {
@@ -12,6 +10,8 @@ pub struct ClaudeWorkerAdapter {
 pub struct CreateSessionRequest {
     pub agent_id: String,
     pub cwd: String,
+    pub session_id: String,
+    pub resume_session: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -21,6 +21,7 @@ pub struct RuntimeSession {
     pub runtime: String,
     pub cwd: String,
     pub persist_session: bool,
+    pub resume_session: bool,
     pub capabilities: RuntimeCapabilities,
 }
 
@@ -39,13 +40,14 @@ impl ClaudeWorkerAdapter {
         request: CreateSessionRequest,
     ) -> Result<RuntimeSession, ClaudeWorkerError> {
         Ok(RuntimeSession {
-            session_id: format!("session_{}", Uuid::new_v4().simple()),
+            session_id: request.session_id,
             agent_id: request.agent_id,
             runtime: "ClaudeCode".to_string(),
             cwd: request.cwd,
-            persist_session: false,
+            persist_session: true,
+            resume_session: request.resume_session,
             capabilities: RuntimeCapabilities {
-                resume_session: false,
+                resume_session: true,
             },
         })
     }
@@ -65,7 +67,8 @@ impl ClaudeWorkerAdapter {
                 "agent_id": session.agent_id,
                 "runtime": session.runtime,
                 "cwd": session.cwd,
-                "persist_session": false,
+                "persist_session": session.persist_session,
+                "resume_session": session.resume_session,
             },
             "input": {
                 "prompt": prompt,
@@ -82,14 +85,14 @@ impl ClaudeWorkerAdapter {
     }
 
     pub fn resume_session(&self, _opaque_token: &str) -> Result<RuntimeSession, ClaudeWorkerError> {
-        Err(ClaudeWorkerError::ResumeUnsupported)
+        Err(ClaudeWorkerError::ResumeRequiresConversationSession)
     }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClaudeWorkerError {
-    #[error("Claude MVP resume is not supported")]
-    ResumeUnsupported,
+    #[error("Claude resume requires a persisted conversation session")]
+    ResumeRequiresConversationSession,
     #[error(transparent)]
     WorkerRpc(#[from] WorkerRpcError),
 }

@@ -1,4 +1,5 @@
-import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ArrowDown,
   ArrowUpDown,
@@ -14,6 +15,7 @@ import {
   FolderOpen,
   Globe2,
   Hash,
+  History,
   Image as ImageIcon,
   Info,
   ListTodo,
@@ -24,6 +26,7 @@ import {
   Palette,
   Pencil,
   Plus,
+  RefreshCcw,
   Search,
   Send,
   Server,
@@ -38,8 +41,11 @@ import {
   type AppearancePreferences,
   type AppLocale,
   type ChannelView,
+  type ConversationAttachmentView,
+  type ConversationAttachmentUploadRequest,
   type ConversationView,
   type ConversationMessageView,
+  type ConversationSessionView,
   type DaemonBridge,
   type DesktopAgentView,
   type DesktopNodeView,
@@ -52,6 +58,7 @@ import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import { MarkdownMessage } from "../features/chat/MarkdownMessage";
 import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage, type SleiTask } from "./fixtures";
 import { createMemberAvatar, memberFromMessage, type AvatarIdentity } from "./member-avatar";
+import sleiSquareLogo from "../../src-tauri/icons/Square44x44Logo.png";
 import "./app.css";
 
 export type AppView = "chat" | "search" | "tasks" | "members" | "computers" | "settings";
@@ -154,24 +161,27 @@ export function createLocalChatMessage(input: {
 export function createTaskFromChatMessage(message: SleiMessage, channelId: string): SleiTask {
   const title = message.body.trim().split(/\n+/)[0]?.slice(0, 80) || "Untitled task";
   return {
-    id: `T-${Date.now()}`,
+    id: `task-${message.id}`,
     title,
     owner: message.author,
     status: "todo",
     channelId,
     sourceMessageId: message.id,
-    replies: [{ id: `root-${message.id}`, sender: message.author, body: message.body }],
+    replies: [{ id: `root-${message.id}`, sender: message.author, role: message.role, body: message.body }],
   };
 }
 
-export function appendTaskReply(tasks: SleiTask[], taskId: string, reply: { sender: string; body: string }): SleiTask[] {
+export function appendTaskReply(tasks: SleiTask[], taskId: string, reply: { sender: string; role?: SleiMessage["role"]; body: string }): SleiTask[] {
   const body = reply.body.trim();
   if (!body) return tasks;
   return tasks.map((task) =>
     task.id === taskId
       ? {
           ...task,
-          replies: [...(task.replies ?? []), { id: `reply-${Date.now()}`, sender: reply.sender, body }],
+          replies: [
+            ...(task.replies ?? []),
+            { id: `reply-${taskId}-${(task.replies?.length ?? 0) + 1}`, sender: reply.sender, role: reply.role, body },
+          ],
         }
       : task,
   );
@@ -188,9 +198,39 @@ function conversationMessageToSleiMessage(message: ConversationMessageView, memb
     role: member?.type ?? (isHuman ? "human" : "agent"),
     time: formatMessageTime(message.createdAt),
     body: message.body,
+    sessionId: message.sessionId,
+    attachments: message.attachments,
     cards: message.cards,
     channelId: message.conversationId,
+    status: conversationMessageStatus(message.status),
   };
+}
+
+function conversationMessageStatus(status?: string): SleiMessage["status"] | undefined {
+  return status === "running" || status === "done" || status === "failed" || status === "approval" || status === "pending" || status === "undecided"
+    ? status
+    : undefined;
+}
+
+function messageStatusSquare(status?: SleiMessage["status"]): "running" | "approval" | "failed" | "pending" | undefined {
+  if (status === "running") return "running";
+  if (status === "approval") return "approval";
+  if (status === "failed") return "failed";
+  if (status === "pending" || status === "undecided") return "pending";
+  return undefined;
+}
+
+function MessageStatusSquare({ status }: { status?: SleiMessage["status"] }) {
+  const tone = messageStatusSquare(status);
+  if (!tone) return null;
+  return (
+    <span
+      aria-label={status}
+      className={`slei-message-status-square slei-message-status-square--${tone}`}
+      role="img"
+      title={status}
+    />
+  );
 }
 
 function formatMessageTime(value: string): string {
@@ -274,25 +314,6 @@ function mentionSuggestions(query: string, members: SleiMember[]): SleiMember[] 
     const name = normalizeSearch(member.name);
     return !normalized || handle.includes(normalized) || name.includes(normalized);
   });
-}
-
-export function createAgentDraftFromGuideMessage(message: string, messages: DesktopMessages = createDesktopMessages("zh-CN")): Partial<AgentDraftInput> | null {
-  const normalized = message.trim();
-  if (!/(创建|新增|create|add).*(agent|Agent|成员)/u.test(normalized)) return null;
-  const nameMatch = /(?:叫|名为|named|called)\s*([A-Za-z][\w-]*)/iu.exec(normalized);
-  const qa = /\bQA\b|质保|测试/u.test(normalized);
-  const architect = /架构|architect/iu.test(normalized);
-  const draftKind = qa ? "qa" : architect ? "architect" : "developer";
-  const name = nameMatch?.[1] ?? (qa ? "Nancy" : architect ? "Alice" : "Coda");
-
-  return {
-    name,
-    handle: `@${name.toLowerCase()}`,
-    runtimeKind: "ClaudeCode",
-    model: "Sonnet",
-    nodeId: "local-node",
-    description: messages.agentCreate.draftDescription[draftKind],
-  };
 }
 
 export function detectAgentMemoryRequest(message: string, members: SleiMember[]): AgentMemoryRequest | null {
@@ -447,6 +468,11 @@ async function loadSleiConversationMessages(
   return receipts.flatMap((receipt) => receipt.messages.map((message) => conversationMessageToSleiMessage(message, members, profile)));
 }
 
+async function loadSleiConversationSessions(bridge: DaemonBridge, conversations: ConversationView[]) {
+  const receipts = await Promise.all(conversations.map((conversation) => bridge.listConversationSessions(conversation.id)));
+  return receipts.flatMap((receipt) => receipt.sessions);
+}
+
 function MemberAvatar({ identity, large = false }: { identity: AvatarIdentity; large?: boolean }) {
   const fallback = identity.avatar || identity.name.slice(0, 2);
   return (
@@ -536,7 +562,10 @@ export function SleiApp() {
   const [data, setData] = useState(createSleiFixtures());
   const [activeChannelId, setActiveChannelId] = useState("all");
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
   const [activeMemberId, setActiveMemberId] = useState<string | undefined>(undefined);
+  const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
+  const [sendingConversationIds, setSendingConversationIds] = useState<string[]>([]);
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [locale, setLocale] = useState<AppLocale>("zh-CN");
   const [timeZone, setTimeZone] = useState(defaultTimeZone);
@@ -578,6 +607,7 @@ export function SleiApp() {
       setGuideBootstrapping(false);
       const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
       const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+      const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
       if (!mounted) return;
       setData((current) =>
@@ -586,13 +616,16 @@ export function SleiApp() {
           nodes: next.nodes,
           channels: channelReceipt.channels.map((channel) => channelFromView(channel, messagesForLocale)),
           conversations: conversationReceipt.conversations,
+          conversationSessions,
           messages: replaceConversationMessages(current.messages, conversationMessages, conversationReceipt.conversations.map((conversation) => conversation.id)),
           members,
         }),
       );
       setActiveMemberId((current) => current ?? members[0]?.id);
       if (activeConversation) {
+        const conversation = conversationReceipt.conversations.find((candidate) => candidate.id === activeConversation);
         setActiveConversationId(activeConversation);
+        setActiveSessionId(conversation?.activeSessionId);
         setActiveChannelId("all");
       }
     }
@@ -636,6 +669,26 @@ export function SleiApp() {
     };
   }, [activeMemberId, bridge, data.members]);
 
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const hasRunningMessage = data.messages.some((message) => message.channelId === activeConversationId && message.status === "running");
+    if (!hasRunningMessage) return;
+    const refreshConversation = async () => {
+      const receipt = await bridge.listConversationMessages(activeConversationId);
+      const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+      setData((current) =>
+        createSleiFixtures({
+          ...current,
+          messages: replaceConversationMessages(current.messages, conversationMessages, [activeConversationId]),
+        }),
+      );
+    };
+    const interval = window.setInterval(() => {
+      void refreshConversation();
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeConversationId, bridge, data.members, data.messages, profile]);
+
   async function handleOpenAgentPath(agentId: string, target: AgentPathTarget) {
     await bridge.openAgentPath(agentId, target);
   }
@@ -667,6 +720,7 @@ export function SleiApp() {
     setNotifications(preferencesReceipt.preferences.notifications);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
     const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+    const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
     const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
     setData((current) =>
       createSleiFixtures({
@@ -674,6 +728,7 @@ export function SleiApp() {
         nodes: next.nodes,
         channels: channelReceipt.channels.map((channel) => channelFromView(channel, messagesForLocale)),
         conversations: conversationReceipt.conversations,
+        conversationSessions,
         messages: replaceConversationMessages(current.messages, conversationMessages, conversationReceipt.conversations.map((conversation) => conversation.id)),
         members,
       }),
@@ -752,52 +807,112 @@ export function SleiApp() {
 
   async function handleMessageMember(memberId: string) {
     const receipt = await bridge.createDmConversation(memberId);
+    const sessionsReceipt = await bridge.listConversationSessions(receipt.conversation.id);
     const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id);
     const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
     setData((current) =>
       createSleiFixtures({
         ...current,
         conversations: upsertConversation(current.conversations, receipt.conversation),
+        conversationSessions: [
+          ...current.conversationSessions.filter((session) => session.conversationId !== receipt.conversation.id),
+          ...sessionsReceipt.sessions,
+        ],
         messages: replaceConversationMessages(current.messages, conversationMessages, [receipt.conversation.id]),
       }),
     );
     setActiveConversationId(receipt.conversation.id);
+    setActiveSessionId(receipt.conversation.activeSessionId ?? sessionsReceipt.sessions[0]?.id);
     setActiveChannelId("all");
     setActiveMemberId(memberId);
     setActiveView("chat");
   }
 
-  async function handleSendMessage(body: string, options?: { asTask?: boolean }) {
+  async function handleResetConversationRuntimeSession(conversationId: string) {
+    const receipt = await bridge.createConversationSession(conversationId);
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        conversations: upsertConversation(current.conversations, receipt.conversation),
+        conversationSessions: [
+          ...current.conversationSessions.filter((session) => session.id !== receipt.session.id),
+          receipt.session,
+        ],
+      }),
+    );
+    setActiveSessionId(receipt.session.id);
+    setSessionDrawerOpen(false);
+  }
+
+  async function handleConversationSessionSelect(conversationId: string, sessionId: string) {
+    const receipt = await bridge.activateConversationSession(conversationId, sessionId);
+    const messagesReceipt = await bridge.listConversationMessages(conversationId);
+    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        conversations: upsertConversation(current.conversations, receipt.conversation),
+        conversationSessions: current.conversationSessions.map((session) => (session.id === receipt.session.id ? receipt.session : session)),
+        messages: replaceConversationMessages(current.messages, conversationMessages, [conversationId]),
+      }),
+    );
+    setActiveConversationId(conversationId);
+    setActiveSessionId(sessionId);
+    setSessionDrawerOpen(false);
+  }
+
+  async function handleUploadConversationAttachment(request: ConversationAttachmentUploadRequest) {
+    return bridge.uploadConversationAttachment(request);
+  }
+
+  async function handleSendMessage(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) {
     const targetId = activeConversationId ?? activeChannelId;
     const memoryRequest = detectAgentMemoryRequest(body, data.members);
     if (activeConversationId) {
-      if (!body.trim()) return;
-      const receipt = await bridge.sendConversationMessage(activeConversationId, {
-        authorId: "human:local",
-        body: body.trim(),
-      });
-      const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile);
-      if (memoryRequest) {
-        void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
-        const agent = data.members.find((member) => member.id === memoryRequest.agentId);
-        const systemMessage: SleiMessage = {
-          id: `memory-${Date.now()}`,
-          author: messages.common.system,
-          role: "system",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          body: messages.chat.memoryUpdated(agent?.handle ?? messages.agentCreate.fallbackAgent),
-          channelId: targetId,
-          status: "done",
-          toolCall: "remember_agent_fact",
-        };
-        setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage, systemMessage] }));
-        return;
+      const attachmentIds = options?.attachmentIds ?? [];
+      if (!body.trim() && attachmentIds.length === 0) return;
+      setSendingConversationIds((current) => [...new Set([...current, activeConversationId])]);
+      try {
+        const receipt = await bridge.sendConversationMessage(activeConversationId, {
+          authorId: "human:local",
+          body: body.trim(),
+          sessionId: options?.sessionId ?? activeSessionId,
+          attachmentIds,
+        });
+        const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile);
+        if (memoryRequest) {
+          void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
+          const agent = data.members.find((member) => member.id === memoryRequest.agentId);
+          const systemMessage: SleiMessage = {
+            id: `memory-${Date.now()}`,
+            author: messages.common.system,
+            role: "system",
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            body: messages.chat.memoryUpdated(agent?.handle ?? messages.agentCreate.fallbackAgent),
+            channelId: targetId,
+            sessionId: options?.sessionId ?? activeSessionId,
+            status: "done",
+            toolCall: "remember_agent_fact",
+          };
+          setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage, systemMessage] }));
+          return;
+        }
+        setData((current) => {
+          const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(conversationMessage, targetId)] : current.tasks;
+          return createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage], tasks: nextTasks });
+        });
+        const messagesReceipt = await bridge.listConversationMessages(activeConversationId);
+        const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+        setData((current) =>
+          createSleiFixtures({
+            ...current,
+            messages: replaceConversationMessages(current.messages, conversationMessages, [activeConversationId]),
+          }),
+        );
+      } finally {
+        setSendingConversationIds((current) => current.filter((id) => id !== activeConversationId));
       }
-      setData((current) => {
-        const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(conversationMessage, targetId)] : current.tasks;
-        return createSleiFixtures({ ...current, messages: [...current.messages, conversationMessage], tasks: nextTasks });
-      });
-      return;
+        return;
     }
     const message = createLocalChatMessage({ body, messages, profile, channelId: targetId });
     if (!message) return;
@@ -825,7 +940,7 @@ export function SleiApp() {
   }
 
   function handleTaskReply(taskId: string, body: string) {
-    setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, body }) }));
+    setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, role: "human", body }) }));
   }
 
   async function handleCreateChannel(input: { name: string; projectName?: string }) {
@@ -918,6 +1033,7 @@ export function SleiApp() {
       activeView={activeView}
       activeChannelId={activeChannelId}
       activeConversationId={activeConversationId}
+      activeSessionId={activeSessionId}
       activeMemberId={activeMemberId}
       data={data}
       guideBootstrapping={guideBootstrapping}
@@ -933,6 +1049,7 @@ export function SleiApp() {
       onChannelSelect={(channelId) => {
         setActiveChannelId(channelId);
         setActiveConversationId(undefined);
+        setActiveSessionId(undefined);
       }}
       onComputerCreate={handleCreateComputer}
       onComputerDelete={handleDeleteComputer}
@@ -948,17 +1065,25 @@ export function SleiApp() {
       onSearchResultSelect={handleSearchResultSelect}
       onSearchToggle={() => setActiveView("search")}
       onSendMessage={handleSendMessage}
+      onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}
       onViewChange={setActiveView}
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
       onOpenAgentPath={handleOpenAgentPath}
+      onConversationRuntimeReset={handleResetConversationRuntimeSession}
+      onConversationHistoryToggle={() => setSessionDrawerOpen((current) => !current)}
       onConversationSelect={(conversationId) => {
+        const conversation = data.conversations.find((candidate) => candidate.id === conversationId);
         setActiveConversationId(conversationId);
+        setActiveSessionId(conversation?.activeSessionId);
         setActiveView("chat");
       }}
+      onConversationSessionSelect={handleConversationSessionSelect}
       profile={profile}
       runtimeSetup={runtimeSetup}
+      sessionDrawerOpen={sessionDrawerOpen}
+      sendingConversationIds={sendingConversationIds}
       sidebarWidth={sidebarWidth}
     />
   );
@@ -984,10 +1109,13 @@ export function SleiAppFrame(input: {
   activeView: AppView;
   activeChannelId?: string;
   activeConversationId?: string;
+  activeSessionId?: string;
   activeMemberId?: string;
   activeTaskId?: string;
   data: SleiFixtures;
   initialChatDraft?: string;
+  initialComposerAttachments?: ConversationAttachmentView[];
+  initialConversationHistoryOpen?: boolean;
   initialAgentCreateModalOpen?: boolean;
   initialCreateChannelModalOpen?: boolean;
   guideBootstrapping?: boolean;
@@ -1000,12 +1128,18 @@ export function SleiAppFrame(input: {
   profile?: UserProfile;
   runtimeSetup: RuntimeSetupState;
   searchOpen?: boolean;
+  sessionDrawerOpen?: boolean;
+  sendingConversationIds?: string[];
   sidebarWidth?: number;
   onAgentCreate?: (request: AgentDraftInput) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onChannelCreate?: (input: { name: string; projectName?: string }) => Promise<void> | void;
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
+  onConversationRuntimeReset?: (conversationId: string) => Promise<void> | void;
+  onConversationHistoryToggle?: () => void;
+  onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void;
+  onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>;
   onInteractiveCardComplete?: (cardId: string) => Promise<void> | void;
   onConversationSelect?: (conversationId: string) => void;
   onComputerCreate?: (name: string, osLabel: string) => void;
@@ -1022,7 +1156,7 @@ export function SleiAppFrame(input: {
   onMemberSelect?: (memberId: string) => void;
   onMemberMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
-  onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
   onTaskReply?: (taskId: string, body: string) => void;
   onViewChange?: (view: AppView) => void;
   onRenameLocalNode?: (name: string) => Promise<void> | void;
@@ -1030,6 +1164,7 @@ export function SleiAppFrame(input: {
 }) {
   const activeChannel = input.data.channels.find((channel) => channel.id === input.activeChannelId) ?? input.data.channels[0];
   const activeConversation = input.data.conversations.find((conversation) => conversation.id === input.activeConversationId);
+  const activeSessionId = input.activeSessionId ?? activeConversation?.activeSessionId;
   const firstComputer = input.runtimeSetup.nodes[0];
   const [activeComputerId, setActiveComputerId] = useState(firstComputer?.id ?? "");
   const [computerCreateOpen, setComputerCreateOpen] = useState(false);
@@ -1052,8 +1187,10 @@ export function SleiAppFrame(input: {
 
   return (
     <div className="slei-shell" data-active-view={input.activeView} data-theme={appearance.theme} style={shellStyle}>
-      <nav className="slei-rail" aria-label={messages.shell.mainNavigation}>
-        <div className="slei-brand">SL</div>
+      <nav className="slei-rail" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+        <div className="slei-brand">
+          <img alt="Slei" className="slei-brand__logo" src={sleiSquareLogo} />
+        </div>
         {navItems.map((item) => (
           <button
             aria-label={messages.shell.nav[item.id]}
@@ -1071,7 +1208,8 @@ export function SleiAppFrame(input: {
       </nav>
 
       <aside className="slei-context-sidebar">
-        <div className="slei-sidebar__header">
+        <WindowControls messages={messages} />
+        <div className="slei-sidebar__header" data-tauri-drag-region="deep">
           <strong>{messages.shell.sidebarTitle[input.activeView]}</strong>
           <span>{messages.shell.sidebarSubtitle[input.activeView]}</span>
         </div>
@@ -1120,7 +1258,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationRuntimeReset, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -1178,6 +1316,46 @@ export function SleiAppFrame(input: {
           </section>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function WindowControls({ messages }: { messages: DesktopMessages }) {
+  function runWindowAction(action: "close" | "minimize" | "toggleMaximize") {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+    const currentWindow = getCurrentWindow();
+    const operation =
+      action === "close"
+        ? currentWindow.close()
+        : action === "minimize"
+          ? currentWindow.minimize()
+          : currentWindow.toggleMaximize();
+    void operation.catch(() => undefined);
+  }
+
+  return (
+    <div className="slei-window-controls" data-tauri-drag-region="deep">
+      <button
+        aria-label={messages.common.closeWindow}
+        className="slei-window-control slei-window-control--close"
+        onClick={() => runWindowAction("close")}
+        title={messages.common.closeWindow}
+        type="button"
+      />
+      <button
+        aria-label={messages.common.minimizeWindow}
+        className="slei-window-control slei-window-control--minimize"
+        onClick={() => runWindowAction("minimize")}
+        title={messages.common.minimizeWindow}
+        type="button"
+      />
+      <button
+        aria-label={messages.common.maximizeWindow}
+        className="slei-window-control slei-window-control--maximize"
+        onClick={() => runWindowAction("toggleMaximize")}
+        title={messages.common.maximizeWindow}
+        type="button"
+      />
     </div>
   );
 }
@@ -1430,6 +1608,7 @@ function renderWorkspace(
   data: SleiFixtures,
   activeChannel: SleiFixtures["channels"][number],
   activeConversation: ConversationView | undefined,
+  activeSessionId: string | undefined,
   runtimeSetup: RuntimeSetupState,
   profile: UserProfile,
   locale: AppLocale,
@@ -1443,8 +1622,9 @@ function renderWorkspace(
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void,
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void,
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void,
-  onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void,
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void,
   initialChatDraft?: string,
+  initialComposerAttachments?: ConversationAttachmentView[],
   initialSearchFilters?: ChatSearchFilters,
   onSearchResultSelect?: (channelId: string, messageId: string) => void,
   activeComputerId?: string,
@@ -1456,6 +1636,12 @@ function renderWorkspace(
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void,
   onMemberMessage?: (memberId: string) => void,
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void,
+  onConversationRuntimeReset?: (conversationId: string) => Promise<void> | void,
+  onConversationHistoryToggle?: () => void,
+  onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void,
+  onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
+  sessionDrawerOpen?: boolean,
+  sendingConversationIds: string[] = [],
   onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void,
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
 ) {
@@ -1493,7 +1679,7 @@ function renderWorkspace(
       />
     );
   }
-  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} data={data} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onChannelDraftCreate={onChannelDraftCreate} onSendMessage={onSendMessage} profile={profile} />;
+  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} initialAttachments={initialComposerAttachments} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationRuntimeReset={onConversationRuntimeReset} onConversationSessionSelect={onConversationSessionSelect} onSendMessage={onSendMessage} profile={profile} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function SearchPage({ data, initialFilters, messages, onResultSelect }: { data: SleiFixtures; initialFilters?: ChatSearchFilters; messages: DesktopMessages; onResultSelect?: (channelId: string, messageId: string) => void }) {
@@ -1506,7 +1692,7 @@ function SearchPage({ data, initialFilters, messages, onResultSelect }: { data: 
 
   return (
     <section className="slei-search-page">
-      <header className="slei-workspace-header">
+      <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
           <h1><Search aria-hidden="true" size={22} />{messages.search.title}</h1>
           <p>{messages.search.description}</p>
@@ -1562,25 +1748,100 @@ function InteractiveCard({ card, messages, onCreate }: { card: InteractiveCardVi
   );
 }
 
-function ChatPage({ activeChannel, activeConversation, data, initialDraft, messages, onAgentDraftCreate, onChannelDraftCreate, onSendMessage, profile }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; data: SleiFixtures; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onSendMessage?: (body: string, options?: { asTask?: boolean }) => Promise<void> | void; profile: UserProfile }) {
+function AttachmentList({ attachments, messageAttachments = false, onRemove }: { attachments: ConversationAttachmentView[]; messageAttachments?: boolean; onRemove?: (attachmentId: string) => void }) {
+  if (attachments.length === 0) return null;
+  return (
+    <div className={messageAttachments ? "slei-message-attachments" : "slei-composer-attachments"}>
+      {attachments.map((attachment) => {
+        const isImage = attachment.mimeType.startsWith("image/");
+        return (
+          <span className="slei-attachment-chip" key={attachment.id}>
+            {isImage && attachment.url ? <img alt="" className="slei-attachment-preview" src={attachment.url} /> : <FileText aria-hidden="true" size={14} />}
+            <span>{attachment.name}</span>
+            <small>{formatAttachmentSize(attachment.size)}</small>
+            {onRemove ? (
+              <button aria-label={`Remove ${attachment.name}`} onClick={() => onRemove(attachment.id)} type="button">
+                <X aria-hidden="true" size={12} />
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatAttachmentSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  const kilobytes = size / 1024;
+  if (kilobytes < 1024) return `${Math.round(kilobytes)} KB`;
+  return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
+async function uploadComposerFile(
+  file: File,
+  onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
+): Promise<ConversationAttachmentView | null> {
+  const bytesBase64 = await fileToBase64(file);
+  if (onAttachmentUpload) {
+    return (await onAttachmentUpload({ name: file.name, mimeType: file.type || "application/octet-stream", bytesBase64 })).attachment;
+  }
+  return {
+    id: `local-${file.name}-${file.size}`,
+    name: file.name,
+    mimeType: file.type || "application/octet-stream",
+    size: file.size,
+    url: file.type.startsWith("image/") ? `data:${file.type};base64,${bytesBase64}` : undefined,
+  };
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = String(reader.result ?? "");
+      resolve(result.includes(",") ? result.split(",").pop() ?? "" : result);
+    });
+    reader.addEventListener("error", () => reject(reader.error ?? new Error("file read failed")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationRuntimeReset, onConversationSessionSelect, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationRuntimeReset?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
+  const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
-  const agentDraft = createAgentDraftFromGuideMessage(draft);
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
+  const currentSessionId = activeSessionId ?? activeConversation?.activeSessionId;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
-  });
+  }).filter((message) => !activeConversation || !currentSessionId || !message.sessionId || message.sessionId === currentSessionId);
+  const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
+  const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? activeSessions[0];
+  const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : `# ${stripChannelHash(activeChannel.name)}`;
+  const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
+  const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending);
 
   function submitMessage() {
-    const message = createLocalChatMessage({ body: draft, profile, channelId: activeTargetId });
-    if (!message) return;
-    onSendMessage?.(draft, { asTask });
+    if (sendDisabled) return;
+    const attachmentIds = attachments.map((attachment) => attachment.id);
+    onSendMessage?.(draft, { asTask, attachmentIds, sessionId: currentSessionId });
     setDraft("");
+    setAttachments([]);
     setAsTask(false);
+  }
+
+  async function addFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    const files = Array.from(fileList);
+    const uploaded = await Promise.all(files.map((file) => uploadComposerFile(file, onAttachmentUpload)));
+    setAttachments((current) => [...current, ...uploaded.filter((attachment): attachment is ConversationAttachmentView => Boolean(attachment))]);
   }
 
   function selectMention(index = selectedMentionIndex) {
@@ -1591,18 +1852,53 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
 
   return (
     <section className="slei-chat-page">
-      <header className="slei-workspace-header">
+      <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
-          <h1>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}{dmMember ? dmMember.name : `# ${stripChannelHash(activeChannel.name)}`}</h1>
+          <h1>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}{detailTitle}</h1>
           <p>{dmMember ? `${dmMember.handle} · ${messages.chat.directMessage}` : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description}</p>
         </div>
-        <nav aria-label={messages.chat.channelView} className="slei-chat-tabs">
-          <button aria-current="page" type="button"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</button>
-          <button type="button"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</button>
-          <button type="button"><FileText aria-hidden="true" size={14} />{messages.chat.files}</button>
-        </nav>
-        <span className="slei-badge slei-badge--ready">{messages.chat.runtimeDetected}</span>
+        {dmMember && activeConversation ? (
+          <div className="slei-chat-header-actions">
+            <button className="slei-button slei-button--small" onClick={() => onConversationRuntimeReset?.(activeConversation.id)} type="button">
+              <RefreshCcw aria-hidden="true" size={14} />{messages.chat.resetSession}
+            </button>
+            <button className="slei-button slei-button--small" onClick={onConversationHistoryToggle} type="button">
+              <History aria-hidden="true" size={14} />{messages.chat.history}
+            </button>
+          </div>
+        ) : (
+          <>
+            <nav aria-label={messages.chat.channelView} className="slei-chat-tabs">
+              <button aria-current="page" type="button"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</button>
+              <button type="button"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</button>
+              <button type="button"><FileText aria-hidden="true" size={14} />{messages.chat.files}</button>
+            </nav>
+            <span className="slei-badge slei-badge--ready">{messages.chat.runtimeDetected}</span>
+          </>
+        )}
       </header>
+      {sessionDrawerOpen && activeConversation ? (
+        <aside aria-label={messages.chat.history} className="slei-session-drawer">
+          <header>
+            <h2>{messages.chat.history}</h2>
+            <button aria-label={messages.common.cancel} className="slei-icon-button" onClick={onConversationHistoryToggle} type="button"><X aria-hidden="true" size={14} /></button>
+          </header>
+          <div className="slei-session-list">
+            {activeSessions.map((session) => (
+              <button
+                aria-current={session.id === currentSessionId ? "true" : undefined}
+                className="slei-session-item"
+                key={session.id}
+                onClick={() => onConversationSessionSelect?.(activeConversation.id, session.id)}
+                type="button"
+              >
+                <strong>{session.title || messages.chat.newSession}</strong>
+                <small>{formatMessageTime(session.updatedAt)}</small>
+              </button>
+            ))}
+          </div>
+        </aside>
+      ) : null}
       <div className="slei-timeline">
         {visibleMessages.map((message) => (
           <article className="slei-message" key={message.id}>
@@ -1612,9 +1908,10 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
                 <strong>{message.author}</strong>
                 {message.handle ? <span>{message.handle}</span> : null}
                 <span>{message.time}</span>
-                {message.status ? <span className={`slei-badge slei-badge--${message.status}`}>{message.status}</span> : null}
+                <MessageStatusSquare status={message.status} />
               </div>
               <MarkdownMessage markdown={message.body} />
+              <AttachmentList attachments={message.attachments ?? []} messageAttachments />
               {message.toolCall ? <code className="slei-tool-call">{message.toolCall}</code> : null}
               {message.cards?.map((card) => (
                 <InteractiveCard
@@ -1654,17 +1951,13 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
           <button className="slei-back-bottom" type="button"><ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}</button>
         </section>
       ) : null}
-      {agentDraft ? (
-        <article className="slei-agent-draft-card">
-          <div>
-            <span className="slei-badge slei-badge--attention">{messages.chat.guide}</span>
-            <h2>{messages.chat.agentDraftTitle}</h2>
-            <p>{agentDraft.name} · {agentDraft.description}</p>
-          </div>
-          <button className="slei-button slei-button--accent" onClick={() => onAgentDraftCreate?.(agentDraft)} type="button">{messages.common.create}</button>
-        </article>
-      ) : null}
       <form className="slei-composer" onSubmit={(event) => { event.preventDefault(); submitMessage(); }}>
+        {attachments.length > 0 ? (
+          <AttachmentList
+            attachments={attachments}
+            onRemove={(attachmentId) => setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
+          />
+        ) : null}
         <textarea
           className="slei-textarea"
           onChange={(event) => setDraft(event.currentTarget.value)}
@@ -1703,10 +1996,12 @@ function ChatPage({ activeChannel, activeConversation, data, initialDraft, messa
         <div className="slei-composer__actions">
           <CheckboxControl checked={asTask} className="slei-task-toggle" label={messages.chat.asTask} onChange={setAsTask} />
           <div className="slei-composer__tools">
-            <button aria-label={messages.common.addImage} className="slei-icon-button" type="button"><ImageIcon aria-hidden="true" size={15} /></button>
-            <button aria-label={messages.common.addAttachment} className="slei-icon-button" type="button"><Paperclip aria-hidden="true" size={15} /></button>
+            <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
+            <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
+            <button aria-label={messages.common.addImage} className="slei-icon-button" onClick={() => imageInputRef.current?.click()} type="button"><ImageIcon aria-hidden="true" size={15} /></button>
+            <button aria-label={messages.common.addAttachment} className="slei-icon-button" onClick={() => fileInputRef.current?.click()} type="button"><Paperclip aria-hidden="true" size={15} /></button>
           </div>
-          <button className="slei-button slei-button--accent" type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</button>
+          <button className="slei-button slei-button--primary slei-send-button" data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</button>
         </div>
       </form>
     </section>
@@ -1729,7 +2024,7 @@ function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activeTaskId
 
   return (
     <section className="slei-tasks-page">
-      <header className="slei-workspace-header">
+      <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
           <h1>{messages.tasks.title}</h1>
           <p>{messages.tasks.description}</p>
@@ -1771,7 +2066,7 @@ function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activeTaskId
           </header>
           <div className="slei-task-thread-replies">
             {(selectedTask.replies ?? []).map((reply) => (
-              <article className="slei-task-thread-reply" key={reply.id}>
+              <article className={`slei-task-thread-reply slei-task-thread-reply--${reply.role ?? "human"}`} key={reply.id}>
                 <strong>{reply.sender}</strong>
                 <MarkdownMessage markdown={reply.body} />
               </article>
@@ -2137,7 +2432,7 @@ function SettingsPage(input: {
 
   return (
     <section className="slei-settings-page" data-settings-panel={input.activePanel}>
-      <header className="slei-workspace-header">
+      <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
           <h1>{labels.panelTitle[input.activePanel]}</h1>
           <p>{labels.panelSubtitle[input.activePanel]}</p>

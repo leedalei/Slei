@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
+import { appendTaskReply, createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMessage } from "../src/app/fixtures";
 
 const readyRuntime = {
@@ -24,12 +24,34 @@ describe("chat to task thread flow", () => {
 
     const task = createTaskFromChatMessage(message, "all");
 
+    expect(task.id).toBe("task-message_1");
     expect(task.title).toBe("帮我把私聊任务线程做完");
     expect(task.status).toBe("todo");
     expect(task.owner).toBe("Lei");
     expect(task.channelId).toBe("all");
     expect(task.sourceMessageId).toBe("message_1");
-    expect(task.replies).toEqual([{ id: "root-message_1", sender: "Lei", body: "帮我把私聊任务线程做完" }]);
+    expect(task.replies).toEqual([{ id: "root-message_1", sender: "Lei", role: "human", body: "帮我把私聊任务线程做完" }]);
+  });
+
+  it("appends trimmed human and agent replies with stable per-task ids", () => {
+    const tasks = [
+      {
+        id: "task-message_1",
+        title: "帮我把私聊任务线程做完",
+        owner: "Lei",
+        status: "todo" as const,
+        replies: [{ id: "root-message_1", sender: "Lei", role: "human" as const, body: "帮我把私聊任务线程做完" }],
+      },
+    ];
+
+    const withHumanReply = appendTaskReply(tasks, "task-message_1", { sender: "Lei", role: "human", body: "  我补充一个约束  " });
+    const withAgentReply = appendTaskReply(withHumanReply, "task-message_1", { sender: "Coda", role: "agent", body: "我会继续处理" });
+
+    expect(withAgentReply[0].replies).toEqual([
+      { id: "root-message_1", sender: "Lei", role: "human", body: "帮我把私聊任务线程做完" },
+      { id: "reply-task-message_1-2", sender: "Lei", role: "human", body: "我补充一个约束" },
+      { id: "reply-task-message_1-3", sender: "Coda", role: "agent", body: "我会继续处理" },
+    ]);
   });
 
   it("renders a comment button and a 680px task thread drawer with replies", () => {

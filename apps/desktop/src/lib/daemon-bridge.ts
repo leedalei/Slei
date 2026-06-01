@@ -136,6 +136,35 @@ export type ConversationView = {
   id: string;
   kind: "dm" | string;
   agentId: string;
+  activeSessionId?: string;
+  runtimeSession?: RuntimeSessionView;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationSessionView = {
+  id: string;
+  conversationId: string;
+  title: string;
+  status: "pending" | "ready" | string;
+  runtimeSession?: RuntimeSessionView;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationAttachmentView = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  url?: string;
+  cachePath?: string;
+};
+
+export type RuntimeSessionView = {
+  runtimeKind: string;
+  sessionId: string;
+  status: "pending" | "ready" | string;
   createdAt: string;
   updatedAt: string;
 };
@@ -143,9 +172,13 @@ export type ConversationView = {
 export type ConversationMessageView = {
   id: string;
   conversationId: string;
+  sessionId?: string;
   authorId: string;
   body: string;
+  attachments?: ConversationAttachmentView[];
   cards?: InteractiveCardView[];
+  runId?: string;
+  status?: "running" | "done" | "failed" | string;
   createdAt: string;
 };
 
@@ -208,6 +241,15 @@ export type ConversationReceipt = {
   conversation: ConversationView;
 };
 
+export type ConversationSessionListReceipt = {
+  sessions: ConversationSessionView[];
+};
+
+export type ConversationSessionReceipt = {
+  conversation: ConversationView;
+  session: ConversationSessionView;
+};
+
 export type ConversationMessageListReceipt = {
   messages: ConversationMessageView[];
 };
@@ -219,6 +261,18 @@ export type ConversationMessageReceipt = {
 export type ConversationMessageRequest = {
   authorId: string;
   body: string;
+  sessionId?: string;
+  attachmentIds?: string[];
+};
+
+export type ConversationAttachmentUploadRequest = {
+  name: string;
+  mimeType: string;
+  bytesBase64: string;
+};
+
+export type ConversationAttachmentReceipt = {
+  attachment: ConversationAttachmentView;
 };
 
 export type RuntimeSetupState = {
@@ -244,8 +298,13 @@ export type DaemonBridge = {
   openAgentPath(agentId: string, target: AgentPathTarget): Promise<AgentPathOpenReceipt>;
   listConversations(): Promise<ConversationListReceipt>;
   createDmConversation(agentId: string): Promise<ConversationReceipt>;
+  resetConversationRuntimeSession(conversationId: string): Promise<ConversationReceipt>;
+  listConversationSessions(conversationId: string): Promise<ConversationSessionListReceipt>;
+  createConversationSession(conversationId: string): Promise<ConversationSessionReceipt>;
+  activateConversationSession(conversationId: string, sessionId: string): Promise<ConversationSessionReceipt>;
   listConversationMessages(conversationId: string): Promise<ConversationMessageListReceipt>;
-  sendConversationMessage(conversationId: string, request: ConversationMessageRequest): Promise<ConversationMessageReceipt>;
+  sendConversationMessage(conversationId: string, request: ConversationMessageRequest, sessionId?: string): Promise<ConversationMessageReceipt>;
+  uploadConversationAttachment(request: ConversationAttachmentUploadRequest): Promise<ConversationAttachmentReceipt>;
   listPreferences(): Promise<PreferencesReceipt>;
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
@@ -282,7 +341,9 @@ export function createDaemonBridgeMock(input: {
   let channels: ChannelView[] = [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
   let channelMembers: ChannelMemberView[] = [];
   let conversations: ConversationView[] = [];
+  let conversationSessions: ConversationSessionView[] = [];
   let messages: ConversationMessageView[] = [];
+  let attachments: ConversationAttachmentView[] = [];
   let cards: InteractiveCardView[] = [];
   let preferences: UserPreferences = {
     locale: "zh-CN",
@@ -355,9 +416,18 @@ export function createDaemonBridgeMock(input: {
       };
       agents = [...agents, agent];
       channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now }];
-      const conversation: ConversationView = { id: `dm:${agent.id}`, kind: "dm", agentId: agent.id, createdAt: now, updatedAt: now };
+      const session: ConversationSessionView = {
+        id: `session:${agent.id}:default`,
+        conversationId: `dm:${agent.id}`,
+        title: "新会话",
+        status: "ready",
+        createdAt: now,
+        updatedAt: now,
+      };
+      const conversation: ConversationView = { id: `dm:${agent.id}`, kind: "dm", agentId: agent.id, activeSessionId: session.id, createdAt: now, updatedAt: now };
       conversations = [...conversations, conversation];
-      messages = [...messages, { id: "guide-welcome", conversationId: conversation.id, authorId: agent.id, body: "Yeal 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。", createdAt: now }];
+      conversationSessions = [...conversationSessions, session];
+      messages = [...messages, { id: "guide-welcome", conversationId: conversation.id, sessionId: session.id, authorId: agent.id, body: "Yeal 已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。", createdAt: now }];
       return { status: "created", agent, conversation };
     },
     async listChannels() {
@@ -447,15 +517,62 @@ export function createDaemonBridgeMock(input: {
       const existing = conversations.find((conversation) => conversation.kind === "dm" && conversation.agentId === agentId);
       if (existing) return { conversation: existing };
       const now = new Date().toISOString();
+      const session: ConversationSessionView = {
+        id: `session:${agentId}:default`,
+        conversationId: `dm:${agentId}`,
+        title: "新会话",
+        status: "ready",
+        createdAt: now,
+        updatedAt: now,
+      };
       const conversation: ConversationView = {
         id: `dm:${agentId}`,
         kind: "dm",
         agentId,
+        activeSessionId: session.id,
         createdAt: now,
         updatedAt: now,
       };
       conversations = [...conversations, conversation];
+      conversationSessions = [...conversationSessions, session];
       return { conversation };
+    },
+    async resetConversationRuntimeSession(conversationId) {
+      const existing = conversations.find((candidate) => candidate.id === conversationId);
+      if (!existing) throw new Error("conversation not found");
+      const conversation = { ...existing, runtimeSession: undefined, updatedAt: new Date().toISOString() };
+      conversations = conversations.map((candidate) => candidate.id === conversationId ? conversation : candidate);
+      return { conversation };
+    },
+    async listConversationSessions(conversationId) {
+      const existing = conversations.find((candidate) => candidate.id === conversationId);
+      if (!existing) throw new Error("conversation not found");
+      return { sessions: conversationSessions.filter((session) => session.conversationId === conversationId) };
+    },
+    async createConversationSession(conversationId) {
+      const existing = conversations.find((candidate) => candidate.id === conversationId);
+      if (!existing) throw new Error("conversation not found");
+      const now = new Date().toISOString();
+      const session: ConversationSessionView = {
+        id: `session:${conversationId}:${Date.now()}`,
+        conversationId,
+        title: "新会话",
+        status: "ready",
+        createdAt: now,
+        updatedAt: now,
+      };
+      const conversation = { ...existing, activeSessionId: session.id, runtimeSession: undefined, updatedAt: now };
+      conversations = conversations.map((candidate) => candidate.id === conversationId ? conversation : candidate);
+      conversationSessions = [...conversationSessions, session];
+      return { conversation, session };
+    },
+    async activateConversationSession(conversationId, sessionId) {
+      const existing = conversations.find((candidate) => candidate.id === conversationId);
+      const session = conversationSessions.find((candidate) => candidate.conversationId === conversationId && candidate.id === sessionId);
+      if (!existing || !session) throw new Error("conversation session not found");
+      const conversation = { ...existing, activeSessionId: sessionId, runtimeSession: session.runtimeSession, updatedAt: new Date().toISOString() };
+      conversations = conversations.map((candidate) => candidate.id === conversationId ? conversation : candidate);
+      return { conversation, session };
     },
     async listConversationMessages(conversationId) {
       return { messages: messages.filter((message) => message.conversationId === conversationId) };
@@ -464,25 +581,38 @@ export function createDaemonBridgeMock(input: {
       const conversation = conversations.find((candidate) => candidate.id === conversationId);
       if (!conversation) throw new Error("conversation not found");
       const now = new Date().toISOString();
+      const sessionId = request.sessionId ?? conversation.activeSessionId;
+      const selectedAttachments = attachments.filter((attachment) => request.attachmentIds?.includes(attachment.id));
       const message: ConversationMessageView = {
         id: `msg_${Date.now()}`,
         conversationId,
+        sessionId,
         authorId: request.authorId,
         body: request.body,
+        attachments: selectedAttachments,
         createdAt: now,
       };
-      if (conversationId === "dm:agent_guide_local_node" && request.authorId.startsWith("human:")) {
-        const card = createGuideCardFromText(request.body);
-        if (card) {
-          cards = [...cards, card];
-          message.cards = [card];
-        }
-      }
       messages = [...messages, message];
+      if (sessionId) {
+        conversationSessions = conversationSessions.map((session) => (
+          session.id === sessionId ? { ...session, title: session.title === "新会话" && request.body.trim() ? request.body.trim().slice(0, 40) : session.title, updatedAt: now } : session
+        ));
+      }
       conversations = conversations.map((candidate) => (
         candidate.id === conversation.id ? { ...candidate, updatedAt: now } : candidate
       ));
       return { message };
+    },
+    async uploadConversationAttachment(request) {
+      const attachment: ConversationAttachmentView = {
+        id: `att_${Date.now()}`,
+        name: request.name,
+        mimeType: request.mimeType || "application/octet-stream",
+        size: Math.ceil(request.bytesBase64.length * 0.75),
+        url: request.mimeType.startsWith("image/") ? `data:${request.mimeType};base64,${request.bytesBase64}` : undefined,
+      };
+      attachments = [...attachments, attachment];
+      return { attachment };
     },
     async listPreferences() {
       return { preferences };
@@ -543,8 +673,13 @@ export function createDaemonBridge(): DaemonBridge {
       openAgentPath: (agentId: string, target: AgentPathTarget) => invoke<AgentPathOpenReceipt>("open_agent_path_command", { agentId, target }),
       listConversations: () => invoke<ConversationListReceipt>("list_conversations_command"),
       createDmConversation: (agentId: string) => invoke<ConversationReceipt>("create_dm_conversation_command", { agentId }),
+      resetConversationRuntimeSession: (conversationId: string) => invoke<ConversationReceipt>("reset_conversation_runtime_session_command", { conversationId }),
+      listConversationSessions: (conversationId: string) => invoke<ConversationSessionListReceipt>("list_conversation_sessions_command", { conversationId }),
+      createConversationSession: (conversationId: string) => invoke<ConversationSessionReceipt>("create_conversation_session_command", { conversationId }),
+      activateConversationSession: (conversationId: string, sessionId: string) => invoke<ConversationSessionReceipt>("activate_conversation_session_command", { conversationId, sessionId }),
       listConversationMessages: (conversationId: string) => invoke<ConversationMessageListReceipt>("list_conversation_messages_command", { conversationId }),
-      sendConversationMessage: (conversationId: string, request: ConversationMessageRequest) => invoke<ConversationMessageReceipt>("send_conversation_message_command", { conversationId, request }),
+      sendConversationMessage: (conversationId: string, request: ConversationMessageRequest, sessionId?: string) => invoke<ConversationMessageReceipt>("send_conversation_message_command", { conversationId, request, sessionId }),
+      uploadConversationAttachment: (request: ConversationAttachmentUploadRequest) => invoke<ConversationAttachmentReceipt>("upload_conversation_attachment_command", { request }),
       listPreferences: () => invoke<PreferencesReceipt>("list_preferences_command"),
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),
@@ -554,44 +689,6 @@ export function createDaemonBridge(): DaemonBridge {
   }
 
   return createDaemonBridgeMock({ connected: false });
-}
-
-function createGuideCardFromText(text: string): InteractiveCardView | undefined {
-  const lower = text.toLowerCase();
-  if ((text.includes("创建") || lower.includes("create")) && (lower.includes("agent") || text.includes("成员"))) {
-    const name = /(?:叫|名为|named|called)\s*([A-Za-z][\w-]*)/iu.exec(text)?.[1] ?? (lower.includes("qa") ? "Nancy" : "Coda");
-    return {
-      id: `card_${Date.now()}`,
-      kind: "createAgent",
-      state: "pending",
-      title: "创建智能体草案",
-      summary: `${name} · ClaudeCode / Sonnet`,
-      draft: {
-        name,
-        handle: `@${name.toLowerCase()}`,
-        runtimeKind: "ClaudeCode",
-        model: "Sonnet",
-        nodeId: "local-node",
-        description: lower.includes("qa") ? "QA 质保员，负责审查代码质量、安全漏洞，提出改进意见。" : "研发团队开发工程师，负责基于任务分解进行实际编码工作。",
-      },
-      actionLabel: "创建",
-      doneLabel: "DONE",
-    };
-  }
-  if ((text.includes("创建") || lower.includes("create")) && (lower.includes("channel") || text.includes("频道"))) {
-    const name = /(?:叫|名为|named|called)\s*(#?[\w-]+)/iu.exec(text)?.[1]?.replace(/^#/, "") ?? "dev-team";
-    return {
-      id: `card_${Date.now()}`,
-      kind: "createChannel",
-      state: "pending",
-      title: "创建频道草案",
-      summary: `#${name}`,
-      draft: { name, description: "团队会话频道" },
-      actionLabel: "创建",
-      doneLabel: "DONE",
-    };
-  }
-  return undefined;
 }
 
 function hasTauriRuntime() {

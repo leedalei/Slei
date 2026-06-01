@@ -33,11 +33,11 @@ Run: `pnpm --filter @slei/desktop test -- e2e/task-thread-flow.spec.tsx`
 
 Expected: FAIL because `createTaskFromChatMessage` does not exist.
 
-- [ ] **Step 2: Implement task root helper**
+- [x] **Step 2: Implement task root helper**
 
 Create a deterministic helper that maps a valid chat message to an `SleiTask` with `status: "todo"`, source metadata, and the original message as the first reply.
 
-- [ ] **Step 3: Wire composer `asTask`**
+- [x] **Step 3: Wire composer `asTask`**
 
 Pass `{ asTask }` into `onSendMessage`, append the local chat message, and append the task root when checked.
 
@@ -47,24 +47,24 @@ Pass `{ asTask }` into `onSendMessage`, append the local chat message, and appen
 
 Expected: FAIL because task cards do not render a comment button or drawer.
 
-- [ ] **Step 2: Add task card comment action**
+- [x] **Step 2: Add task card comment action**
 
 Each task card gets an icon-only comment button with accessible label, reply count, and stable dimensions.
 
-- [ ] **Step 3: Add 680px drawer**
+- [x] **Step 3: Add 680px drawer**
 
 Render a right-side drawer with width `680px`, task title/status, root context, reply list, and reply composer.
 
-- [ ] **Step 4: Add replies**
+- [x] **Step 4: Add replies**
 
 Submitting a drawer reply appends it to the task. Agent/runtime replies will later use the same `replies` shape when daemon task sessions are wired.
 
 ## Verification
 
-- [ ] Run `pnpm --filter @slei/desktop test -- e2e/task-thread-flow.spec.tsx`
-- [ ] Run `pnpm --filter @slei/desktop test`
-- [ ] Run `pnpm --filter @slei/desktop typecheck`
-- [ ] Run `git diff --check`
+- [x] Run `pnpm --filter @slei/desktop test -- e2e/task-thread-flow.spec.tsx`
+- [x] Run `pnpm --filter @slei/desktop test`
+- [x] Run `pnpm --filter @slei/desktop typecheck`
+- [x] Run `git diff --check`
 
 ## Follow-Up
 

@@ -14,7 +14,8 @@
         "agent_id": "agent_coda",
         "runtime": "ClaudeCode",
         "cwd": "/workspace/app",
-        "persist_session": false
+        "persist_session": true,
+        "resume_session": false
       },
       "input": {
         "prompt": "Implement the task",
@@ -67,6 +68,7 @@
     "product_tool_requested": {
       "type": "product_tool_requested",
       "run_id": "run_1",
+      "tool_use_id": "tool_1",
       "agent_id": "agent_coda",
       "tool_name": "slei_request_visible_delegation",
       "payload": { "target": "@alice", "summary": "Please review" }

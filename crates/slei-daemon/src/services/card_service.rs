@@ -47,6 +47,8 @@ pub struct InteractiveCard {
     pub conversation_id: Option<String>,
     pub message_id: Option<String>,
     pub action: CardAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view: Option<InteractiveCardTemplate>,
     pub state: CardState,
 }
 
@@ -101,6 +103,7 @@ impl CardService {
             conversation_id: None,
             message_id: None,
             action: proposal.action,
+            view: None,
             state: CardState::Pending,
         };
         state
@@ -113,6 +116,55 @@ impl CardService {
 
     pub async fn propose_from_freeform(&self, _text: &str) -> Result<InteractiveCard, CardError> {
         Err(CardError::FreeformRejected)
+    }
+
+    pub async fn propose_product_tool_card(
+        &self,
+        run_id: &str,
+        agent_id: &str,
+        conversation_id: &str,
+        payload: &Value,
+        idempotency_key: &str,
+    ) -> Result<InteractiveCardView, CardError> {
+        let template = product_tool_template(payload)?;
+        let name = required_string(&template.draft, "name")?.to_string();
+        let action = CardAction::CreateAgent {
+            name,
+            permission: "Controlled".to_string(),
+        };
+        let proposal = CardProposal {
+            run_id: run_id.to_string(),
+            agent_id: agent_id.to_string(),
+            action: action.clone(),
+        };
+        validate_action(&proposal)?;
+
+        let mut state = self.inner.lock().expect("card state lock");
+        if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
+            let card = state
+                .cards
+                .get(card_id)
+                .cloned()
+                .ok_or(CardError::CardNotFound)?;
+            return Ok(card.to_view());
+        }
+
+        let card = InteractiveCard {
+            id: format!("card_{}", Uuid::new_v4().simple()),
+            run_id: run_id.to_string(),
+            agent_id: agent_id.to_string(),
+            conversation_id: Some(conversation_id.to_string()),
+            message_id: None,
+            action,
+            view: Some(template),
+            state: CardState::Pending,
+        };
+        state
+            .proposal_idempotency
+            .insert(idempotency_key.to_string(), card.id.clone());
+        state.cards.insert(card.id.clone(), card.clone());
+        persist_cards(&self.root, &state.cards)?;
+        Ok(card.to_view())
     }
 
     pub async fn decide(
@@ -154,45 +206,11 @@ impl CardService {
         Ok(())
     }
 
-    pub async fn propose_guide_card(
+    pub async fn complete(
         &self,
-        conversation_id: &str,
-        message_id: &str,
-        text: &str,
+        card_id: &str,
         idempotency_key: &str,
-    ) -> Result<Option<InteractiveCardView>, CardError> {
-        let Some(action) = guide_action_from_text(text) else {
-            return Ok(None);
-        };
-
-        let mut state = self.inner.lock().expect("card state lock");
-        if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
-            let card = state
-                .cards
-                .get(card_id)
-                .cloned()
-                .ok_or(CardError::CardNotFound)?;
-            return Ok(Some(card.to_view()));
-        }
-
-        let card = InteractiveCard {
-            id: format!("card_{}", Uuid::new_v4().simple()),
-            run_id: format!("guide_{message_id}"),
-            agent_id: "agent_guide_local_node".to_string(),
-            conversation_id: Some(conversation_id.to_string()),
-            message_id: Some(message_id.to_string()),
-            action,
-            state: CardState::Pending,
-        };
-        state
-            .proposal_idempotency
-            .insert(idempotency_key.to_string(), card.id.clone());
-        state.cards.insert(card.id.clone(), card.clone());
-        persist_cards(&self.root, &state.cards)?;
-        Ok(Some(card.to_view()))
-    }
-
-    pub async fn complete(&self, card_id: &str, idempotency_key: &str) -> Result<InteractiveCardView, CardError> {
+    ) -> Result<InteractiveCardView, CardError> {
         let mut state = self.inner.lock().expect("card state lock");
         if let Some(existing_state) = state.decision_idempotency.get(idempotency_key) {
             let card = state
@@ -249,8 +267,32 @@ pub struct InteractiveCardView {
     pub done_label: String,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct InteractiveCardTemplate {
+    pub kind: String,
+    pub title: String,
+    pub summary: String,
+    pub draft: Value,
+    pub action_label: String,
+    pub done_label: String,
+}
+
 impl InteractiveCard {
     pub fn to_view(&self) -> InteractiveCardView {
+        if let Some(template) = &self.view {
+            return InteractiveCardView {
+                id: self.id.clone(),
+                kind: template.kind.clone(),
+                state: card_state_label(self.state.clone()),
+                title: template.title.clone(),
+                summary: template.summary.clone(),
+                draft: template.draft.clone(),
+                action_label: template.action_label.clone(),
+                done_label: template.done_label.clone(),
+            };
+        }
+
         match &self.action {
             CardAction::CreateAgent { name, .. } => InteractiveCardView {
                 id: self.id.clone(),
@@ -307,54 +349,44 @@ fn card_state_label(state: CardState) -> String {
     .to_string()
 }
 
-fn guide_action_from_text(text: &str) -> Option<CardAction> {
-    let normalized = text.trim();
-    if normalized.is_empty() {
-        return None;
+fn product_tool_template(payload: &Value) -> Result<InteractiveCardTemplate, CardError> {
+    let kind = required_string(payload, "kind")?;
+    if kind != "createAgent" {
+        return Err(CardError::UnsupportedProductToolCardKind(kind.to_string()));
     }
-    let lower = normalized.to_lowercase();
-    if (normalized.contains("创建") || lower.contains("create") || normalized.contains("新增"))
-        && (lower.contains("agent") || normalized.contains("成员"))
-    {
-        let name = extract_named_value(normalized).unwrap_or_else(|| {
-            if lower.contains("qa") || normalized.contains("测试") || normalized.contains("质保") {
-                "Nancy".to_string()
-            } else {
-                "Coda".to_string()
-            }
-        });
-        return Some(CardAction::CreateAgent {
-            name,
-            permission: "Controlled".to_string(),
-        });
+
+    let draft = payload
+        .get("draft")
+        .filter(|value| value.is_object())
+        .cloned()
+        .ok_or(CardError::InvalidProductToolPayload("draft"))?;
+    for key in [
+        "name",
+        "handle",
+        "runtimeKind",
+        "model",
+        "nodeId",
+        "description",
+    ] {
+        required_string(&draft, key)?;
     }
-    if (normalized.contains("创建") || lower.contains("create") || normalized.contains("新增"))
-        && (lower.contains("channel") || normalized.contains("频道"))
-    {
-        let name = extract_named_value(normalized)
-            .unwrap_or_else(|| "dev-team".to_string())
-            .trim_start_matches('#')
-            .to_string();
-        return Some(CardAction::CreateChannel { name });
-    }
-    None
+
+    Ok(InteractiveCardTemplate {
+        kind: kind.to_string(),
+        title: required_string(payload, "title")?.to_string(),
+        summary: required_string(payload, "summary")?.to_string(),
+        draft,
+        action_label: required_string(payload, "actionLabel")?.to_string(),
+        done_label: required_string(payload, "doneLabel")?.to_string(),
+    })
 }
 
-fn extract_named_value(text: &str) -> Option<String> {
-    for marker in ["叫", "名为", "named", "called"] {
-        if let Some((_, tail)) = text.split_once(marker) {
-            let value = tail
-                .split_whitespace()
-                .next()
-                .unwrap_or("")
-                .trim_matches(|ch: char| ch == '的' || ch == ',' || ch == '，')
-                .to_string();
-            if !value.is_empty() {
-                return Some(value);
-            }
-        }
-    }
-    None
+fn required_string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, CardError> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|candidate| !candidate.trim().is_empty())
+        .ok_or(CardError::InvalidProductToolPayload(key))
 }
 
 fn normalize_handle_seed(name: &str) -> String {
@@ -362,7 +394,9 @@ fn normalize_handle_seed(name: &str) -> String {
         .trim()
         .to_lowercase()
         .chars()
-        .filter(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || *character == '-')
+        .filter(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || *character == '-'
+        })
         .collect::<String>();
     if seed.is_empty() {
         "agent".to_string()
@@ -437,6 +471,10 @@ pub enum CardError {
     WorkspaceMountRejected,
     #[error("interactive card cannot grant privileges above proposing agent")]
     PrivilegeEscalationRejected,
+    #[error("unsupported product tool card kind: {0}")]
+    UnsupportedProductToolCardKind(String),
+    #[error("invalid product tool card payload: missing or invalid {0}")]
+    InvalidProductToolPayload(&'static str),
     #[error("interactive card io error: {0}")]
     Io(std::io::Error),
     #[error("interactive card json error: {0}")]

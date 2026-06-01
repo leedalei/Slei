@@ -29,16 +29,24 @@ pub async fn complete(
 
 fn card_error_response(error: CardError) -> Response {
     match error {
-        CardError::CardNotFound => {
-            (StatusCode::NOT_FOUND, Json(json!({ "error": error.to_string() }))).into_response()
-        }
+        CardError::CardNotFound => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
         CardError::FreeformRejected
         | CardError::WorkspaceMountRejected
-        | CardError::PrivilegeEscalationRejected => {
-            (StatusCode::BAD_REQUEST, Json(json!({ "error": error.to_string() }))).into_response()
-        }
-        CardError::Io(_) | CardError::Json(_) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": error.to_string() }))).into_response()
-        }
+        | CardError::PrivilegeEscalationRejected
+        | CardError::UnsupportedProductToolCardKind(_)
+        | CardError::InvalidProductToolPayload(_) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        CardError::Io(_) | CardError::Json(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
     }
 }

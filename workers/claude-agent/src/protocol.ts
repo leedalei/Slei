@@ -42,7 +42,8 @@ export type RuntimeSession = {
   agent_id: string;
   runtime: RuntimeKind;
   cwd: string;
-  persist_session: false;
+  persist_session: boolean;
+  resume_session: boolean;
 };
 
 export type RunInput = {
@@ -94,6 +95,7 @@ export type HumanQuestionRequestedEvent = {
 export type ProductToolRequestedEvent = {
   type: "product_tool_requested";
   run_id: string;
+  tool_use_id: string;
   agent_id: string;
   tool_name:
     | "slei_propose_interactive_card"

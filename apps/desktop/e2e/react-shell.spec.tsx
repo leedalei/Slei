@@ -32,6 +32,100 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain("转为任务");
   });
 
+  it("marks only shell chrome regions as draggable", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: createSleiFixtures().nodes,
+        }}
+        data={createSleiFixtures()}
+      />,
+    );
+
+    expect(html).toContain('<nav class="slei-rail" data-tauri-drag-region="deep"');
+    expect(html).toContain('<div class="slei-window-controls" data-tauri-drag-region="deep"');
+    expect(html).toContain('<div class="slei-sidebar__header" data-tauri-drag-region="deep"');
+    expect(html).toContain('<header class="slei-workspace-header" data-tauri-drag-region="deep"');
+    expect(html).not.toContain('class="slei-rail__button" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-window-control slei-window-control--close" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-window-control slei-window-control--minimize" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-window-control slei-window-control--maximize" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-timeline" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-composer" data-tauri-drag-region');
+    expect(html).not.toContain('class="slei-textarea" data-tauri-drag-region');
+  });
+
+  it("renders sidebar window controls on every shared sidebar page", () => {
+    const data = createSleiFixtures();
+    const views = ["chat", "search", "tasks", "members", "computers", "settings"] as const;
+
+    for (const activeView of views) {
+      const html = renderToStaticMarkup(
+        <SleiAppFrame
+          activeView={activeView}
+          locale="zh-CN"
+          runtimeSetup={{
+            loading: false,
+            error: undefined,
+            hasClaudeRuntimeReady: true,
+            nodes: data.nodes,
+          }}
+          data={data}
+        />,
+      );
+
+      expect(html).toContain(`data-active-view="${activeView}"`);
+      expect(html).toContain('class="slei-window-controls" data-tauri-drag-region="deep"');
+      expect(html).toContain('aria-label="关闭窗口"');
+      expect(html).toContain('aria-label="最小化窗口"');
+      expect(html).toContain('aria-label="最大化窗口"');
+    }
+  });
+
+  it("localizes sidebar window control labels in English", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="en-US"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: createSleiFixtures().nodes,
+        }}
+        data={createSleiFixtures()}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Close window"');
+    expect(html).toContain('aria-label="Minimize window"');
+    expect(html).toContain('aria-label="Maximize window"');
+  });
+
+  it("uses the primary button color for the composer send action", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: createSleiFixtures().nodes,
+        }}
+        data={createSleiFixtures()}
+      />,
+    );
+
+    expect(html).toContain('class="slei-button slei-button--primary slei-send-button"');
+    expect(html).not.toContain('class="slei-button slei-button--accent slei-send-button"');
+  });
+
   it("renders all primary destinations from the single shell", () => {
     const data = createSleiFixtures();
     const views = ["chat", "tasks", "members", "computers", "settings"] as const;

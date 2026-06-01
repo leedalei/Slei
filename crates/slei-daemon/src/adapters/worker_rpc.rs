@@ -60,6 +60,15 @@ impl WorkerEvent {
             require_string(&self.value, "tool_use_id")?;
             require_string(&self.value, "agent_id")?;
         }
+        if self.value["type"] == "product_tool_requested" {
+            require_string(&self.value, "run_id")?;
+            require_string(&self.value, "tool_use_id")?;
+            require_string(&self.value, "agent_id")?;
+            require_string(&self.value, "tool_name")?;
+            self.value
+                .get("payload")
+                .ok_or(WorkerRpcError::MissingField("payload"))?;
+        }
 
         Ok(self.value.clone())
     }

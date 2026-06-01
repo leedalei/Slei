@@ -1,4 +1,4 @@
-import type { ConversationView, DesktopNodeView, InteractiveCardView, SkillView } from "../lib/daemon-bridge";
+import type { ConversationAttachmentView, ConversationSessionView, ConversationView, DesktopNodeView, InteractiveCardView, SkillView } from "../lib/daemon-bridge";
 
 export type SleiChannel = {
   id: string;
@@ -16,9 +16,11 @@ export type SleiMessage = {
   role: "human" | "agent" | "system";
   time: string;
   body: string;
+  sessionId?: string;
+  attachments?: ConversationAttachmentView[];
   cards?: InteractiveCardView[];
   channelId?: string;
-  status?: "running" | "approval" | "done";
+  status?: "running" | "approval" | "done" | "failed" | "pending" | "undecided";
   toolCall?: string;
 };
 
@@ -36,6 +38,7 @@ export type SleiTask = {
 export type SleiTaskReply = {
   id: string;
   sender: string;
+  role?: SleiMessage["role"];
   body: string;
 };
 
@@ -70,6 +73,7 @@ export type SleiMember = {
 export type SleiFixtures = {
   nodes: DesktopNodeView[];
   conversations: ConversationView[];
+  conversationSessions: ConversationSessionView[];
   channels: SleiChannel[];
   messages: SleiMessage[];
   tasks: SleiTask[];
@@ -98,6 +102,7 @@ export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiF
       },
     ],
     conversations: overrides.conversations ?? [],
+    conversationSessions: overrides.conversationSessions ?? [],
     channels: overrides.channels ?? [
       { id: "all", name: "all", description: "所有成员的默认频道", unread: 0 },
     ],

@@ -1,12 +1,14 @@
 use crate::daemon_broker::{
-    AgentCreateRequest, AgentError, AgentListReceipt, AgentReceipt, AgentUpdateRequest,
-    AgentPathError, AgentPathOpenReceipt, ArtifactOpenError, ArtifactOpenReceipt, CardError, ChannelCreateRequest, ChannelError,
-    ChannelListReceipt, ChannelMemberListReceipt, ChannelReceipt, ConversationError, ConversationListReceipt,
-    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
-    ConversationReceipt, DaemonBroker, EventReconnectReceipt, GuideBootstrapReceipt,
-    InteractiveCardReceipt, NodeListReceipt, NodeNameError,
-    NodeRenameReceipt, PreferencesError, PreferencesReceipt, PreferencesUpdateRequest,
-    SanitizedDaemonStatus, SkillListReceipt,
+    AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
+    AgentReceipt, AgentUpdateRequest, ArtifactOpenError, ArtifactOpenReceipt, CardError,
+    ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberListReceipt,
+    ChannelReceipt, ConversationAttachmentReceipt, ConversationAttachmentUploadRequest,
+    ConversationError, ConversationListReceipt, ConversationMessageListReceipt,
+    ConversationMessageReceipt, ConversationMessageRequest, ConversationReceipt,
+    ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
+    EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
+    NodeNameError, NodeRenameReceipt, PreferencesError, PreferencesReceipt,
+    PreferencesUpdateRequest, SanitizedDaemonStatus, SkillListReceipt,
 };
 
 pub fn daemon_status(broker: &DaemonBroker) -> SanitizedDaemonStatus {
@@ -58,10 +60,7 @@ pub fn create_channel(
     broker.create_channel(request)
 }
 
-pub fn list_channel_members(
-    broker: &DaemonBroker,
-    channel_id: &str,
-) -> ChannelMemberListReceipt {
+pub fn list_channel_members(broker: &DaemonBroker, channel_id: &str) -> ChannelMemberListReceipt {
     broker.list_channel_members(channel_id)
 }
 
@@ -130,6 +129,42 @@ pub fn create_dm_conversation(
     agent_id: &str,
 ) -> Result<ConversationReceipt, ConversationError> {
     broker.create_dm_conversation(agent_id)
+}
+
+pub fn reset_conversation_runtime_session(
+    broker: &DaemonBroker,
+    conversation_id: &str,
+) -> Result<ConversationReceipt, ConversationError> {
+    broker.reset_conversation_runtime_session(conversation_id)
+}
+
+pub fn list_conversation_sessions(
+    broker: &DaemonBroker,
+    conversation_id: &str,
+) -> ConversationSessionListReceipt {
+    broker.list_conversation_sessions(conversation_id)
+}
+
+pub fn create_conversation_session(
+    broker: &DaemonBroker,
+    conversation_id: &str,
+) -> Result<ConversationSessionReceipt, ConversationError> {
+    broker.create_conversation_session(conversation_id)
+}
+
+pub fn activate_conversation_session(
+    broker: &DaemonBroker,
+    conversation_id: &str,
+    session_id: &str,
+) -> Result<ConversationSessionReceipt, ConversationError> {
+    broker.activate_conversation_session(conversation_id, session_id)
+}
+
+pub fn upload_conversation_attachment(
+    broker: &DaemonBroker,
+    request: ConversationAttachmentUploadRequest,
+) -> Result<ConversationAttachmentReceipt, ConversationError> {
+    broker.upload_conversation_attachment(request)
 }
 
 pub fn list_conversation_messages(
@@ -291,11 +326,46 @@ pub fn create_dm_conversation_command(
 }
 
 #[tauri::command]
+pub fn reset_conversation_runtime_session_command(
+    state: tauri::State<'_, DaemonBroker>,
+    conversation_id: String,
+) -> Result<ConversationReceipt, String> {
+    reset_conversation_runtime_session(state.inner(), &conversation_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub fn list_conversation_messages_command(
     state: tauri::State<'_, DaemonBroker>,
     conversation_id: String,
 ) -> ConversationMessageListReceipt {
     list_conversation_messages(state.inner(), &conversation_id)
+}
+
+#[tauri::command]
+pub fn list_conversation_sessions_command(
+    state: tauri::State<'_, DaemonBroker>,
+    conversation_id: String,
+) -> ConversationSessionListReceipt {
+    list_conversation_sessions(state.inner(), &conversation_id)
+}
+
+#[tauri::command]
+pub fn create_conversation_session_command(
+    state: tauri::State<'_, DaemonBroker>,
+    conversation_id: String,
+) -> Result<ConversationSessionReceipt, String> {
+    create_conversation_session(state.inner(), &conversation_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn activate_conversation_session_command(
+    state: tauri::State<'_, DaemonBroker>,
+    conversation_id: String,
+    session_id: String,
+) -> Result<ConversationSessionReceipt, String> {
+    activate_conversation_session(state.inner(), &conversation_id, &session_id)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -306,4 +376,12 @@ pub fn send_conversation_message_command(
 ) -> Result<ConversationMessageReceipt, String> {
     send_conversation_message(state.inner(), &conversation_id, request)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn upload_conversation_attachment_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: ConversationAttachmentUploadRequest,
+) -> Result<ConversationAttachmentReceipt, String> {
+    upload_conversation_attachment(state.inner(), request).map_err(|error| error.to_string())
 }
