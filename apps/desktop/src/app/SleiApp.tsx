@@ -158,6 +158,25 @@ export function createLocalChatMessage(input: {
   };
 }
 
+export type ComposerShortcutAction = "none" | "selectMention" | "submit";
+
+export function isComposerImeComposing(input: { composing?: boolean; nativeEvent?: { isComposing?: boolean } }): boolean {
+  return Boolean(input.composing || input.nativeEvent?.isComposing);
+}
+
+export function composerShortcutAction(input: {
+  composing?: boolean;
+  hasMentionTargets?: boolean;
+  key: string;
+  shiftKey?: boolean;
+}): ComposerShortcutAction {
+  if (input.composing) return "none";
+  if (input.key === "Enter" && input.shiftKey) return "none";
+  if (input.hasMentionTargets && (input.key === "Enter" || input.key === "Tab")) return "selectMention";
+  if (input.key === "Enter" && !input.shiftKey) return "submit";
+  return "none";
+}
+
 export function createTaskFromChatMessage(message: SleiMessage, channelId: string): SleiTask {
   const title = message.body.trim().split(/\n+/)[0]?.slice(0, 80) || "Untitled task";
   return {
@@ -210,6 +229,11 @@ function conversationMessageStatus(status?: string): SleiMessage["status"] | und
   return status === "running" || status === "done" || status === "failed" || status === "approval" || status === "pending" || status === "undecided"
     ? status
     : undefined;
+}
+
+export function shouldRefreshConversationMessages(messages: SleiMessage[], conversationId?: string): boolean {
+  if (!conversationId) return false;
+  return messages.some((message) => message.channelId === conversationId && (message.status === "running" || message.status === "pending"));
 }
 
 function messageStatusSquare(status?: SleiMessage["status"]): "running" | "approval" | "failed" | "pending" | undefined {
@@ -439,6 +463,24 @@ function mergeAgentViewsIntoMembers(current: SleiMember[], agents: DesktopAgentV
   return agents.map((agent) => memberFromAgentView(agent, nodes, messages));
 }
 
+async function loadGuideSkillsForMembers(bridge: DaemonBridge, members: SleiMember[]): Promise<SleiMember[]> {
+  return Promise.all(
+    members.map(async (member) => {
+      if (member.type !== "agent" || member.skills || !isGuideMember(member)) return member;
+      try {
+        const receipt = await bridge.listAgentSkills(member.id);
+        return { ...member, skills: receipt.skills };
+      } catch {
+        return member;
+      }
+    }),
+  );
+}
+
+function isGuideMember(member: SleiMember): boolean {
+  return member.id === "agent_guide_local_node" || member.handle.toLowerCase() === "@yeal";
+}
+
 function channelFromView(channel: ChannelView, messages: DesktopMessages): SleiChannel {
   return {
     id: channel.id,
@@ -606,7 +648,10 @@ export function SleiApp() {
       if (!mounted) return;
       setGuideBootstrapping(false);
       const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
-      const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+      const members = await loadGuideSkillsForMembers(
+        bridge,
+        mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale),
+      );
       const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
       if (!mounted) return;
@@ -671,8 +716,7 @@ export function SleiApp() {
 
   useEffect(() => {
     if (!activeConversationId) return;
-    const hasRunningMessage = data.messages.some((message) => message.channelId === activeConversationId && message.status === "running");
-    if (!hasRunningMessage) return;
+    if (!shouldRefreshConversationMessages(data.messages, activeConversationId)) return;
     const refreshConversation = async () => {
       const receipt = await bridge.listConversationMessages(activeConversationId);
       const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
@@ -685,7 +729,7 @@ export function SleiApp() {
     };
     const interval = window.setInterval(() => {
       void refreshConversation();
-    }, 1500);
+    }, 300);
     return () => window.clearInterval(interval);
   }, [activeConversationId, bridge, data.members, data.messages, profile]);
 
@@ -719,7 +763,10 @@ export function SleiApp() {
     setAppearance(preferencesReceipt.preferences.appearance);
     setNotifications(preferencesReceipt.preferences.notifications);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
-    const members = mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale);
+    const members = await loadGuideSkillsForMembers(
+      bridge,
+      mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale),
+    );
     const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
     const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
     setData((current) =>
@@ -1118,6 +1165,7 @@ export function SleiAppFrame(input: {
   initialConversationHistoryOpen?: boolean;
   initialAgentCreateModalOpen?: boolean;
   initialCreateChannelModalOpen?: boolean;
+  initialWindowCloseConfirmOpen?: boolean;
   guideBootstrapping?: boolean;
   initialSettingsPanel?: SettingsPanel;
   initialSearchFilters?: ChatSearchFilters;
@@ -1208,7 +1256,7 @@ export function SleiAppFrame(input: {
       </nav>
 
       <aside className="slei-context-sidebar">
-        <WindowControls messages={messages} />
+        <WindowControls initialCloseConfirmOpen={input.initialWindowCloseConfirmOpen} messages={messages} />
         <div className="slei-sidebar__header" data-tauri-drag-region="deep">
           <strong>{messages.shell.sidebarTitle[input.activeView]}</strong>
           <span>{messages.shell.sidebarSubtitle[input.activeView]}</span>
@@ -1320,42 +1368,95 @@ export function SleiAppFrame(input: {
   );
 }
 
-function WindowControls({ messages }: { messages: DesktopMessages }) {
-  function runWindowAction(action: "close" | "minimize" | "toggleMaximize") {
+export type WindowAction = "close" | "minimize" | "toggleMaximize";
+
+type DesktopWindowControlsHandle = {
+  close: () => Promise<void>;
+  minimize: () => Promise<void>;
+  toggleMaximize: () => Promise<void>;
+};
+
+export function runWindowAction(input: { action: WindowAction; currentWindow?: DesktopWindowControlsHandle }) {
+  if (!input.currentWindow) return;
+
+  const operation =
+    input.action === "close"
+      ? input.currentWindow.close()
+      : input.action === "minimize"
+        ? input.currentWindow.minimize()
+        : input.currentWindow.toggleMaximize();
+  void operation.catch(() => undefined);
+}
+
+function WindowControls({ initialCloseConfirmOpen, messages }: { initialCloseConfirmOpen?: boolean; messages: DesktopMessages }) {
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(initialCloseConfirmOpen ?? false);
+
+  function runTauriWindowAction(action: WindowAction) {
     if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
-    const currentWindow = getCurrentWindow();
-    const operation =
-      action === "close"
-        ? currentWindow.close()
-        : action === "minimize"
-          ? currentWindow.minimize()
-          : currentWindow.toggleMaximize();
-    void operation.catch(() => undefined);
+    runWindowAction({
+      action,
+      currentWindow: getCurrentWindow(),
+    });
   }
 
   return (
-    <div className="slei-window-controls" data-tauri-drag-region="deep">
-      <button
-        aria-label={messages.common.closeWindow}
-        className="slei-window-control slei-window-control--close"
-        onClick={() => runWindowAction("close")}
-        title={messages.common.closeWindow}
-        type="button"
-      />
-      <button
-        aria-label={messages.common.minimizeWindow}
-        className="slei-window-control slei-window-control--minimize"
-        onClick={() => runWindowAction("minimize")}
-        title={messages.common.minimizeWindow}
-        type="button"
-      />
-      <button
-        aria-label={messages.common.maximizeWindow}
-        className="slei-window-control slei-window-control--maximize"
-        onClick={() => runWindowAction("toggleMaximize")}
-        title={messages.common.maximizeWindow}
-        type="button"
-      />
+    <>
+      <div className="slei-window-controls" data-tauri-drag-region="deep">
+        <button
+          aria-label={messages.common.minimizeWindow}
+          className="slei-window-control slei-window-control--minimize"
+          onClick={() => runTauriWindowAction("minimize")}
+          title={messages.common.minimizeWindow}
+          type="button"
+        >
+          <span aria-hidden="true" className="slei-window-control__glyph" />
+        </button>
+        <button
+          aria-label={messages.common.maximizeWindow}
+          className="slei-window-control slei-window-control--maximize"
+          onClick={() => runTauriWindowAction("toggleMaximize")}
+          title={messages.common.maximizeWindow}
+          type="button"
+        >
+          <span aria-hidden="true" className="slei-window-control__glyph" />
+        </button>
+        <button
+          aria-label={messages.common.closeWindow}
+          className="slei-window-control slei-window-control--close"
+          onClick={() => setCloseConfirmOpen(true)}
+          title={messages.common.closeWindow}
+          type="button"
+        >
+          <span aria-hidden="true" className="slei-window-control__glyph" />
+        </button>
+      </div>
+      {closeConfirmOpen ? (
+        <WindowCloseConfirmModal
+          messages={messages}
+          onCancel={() => setCloseConfirmOpen(false)}
+          onConfirm={() => {
+            setCloseConfirmOpen(false);
+            runTauriWindowAction("close");
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function WindowCloseConfirmModal(input: { messages: DesktopMessages; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="slei-modal-backdrop" role="presentation">
+      <section aria-modal="true" className="slei-dialog slei-window-close-confirm" role="dialog">
+        <header>
+          <span className="slei-badge slei-badge--attention">{input.messages.common.closeWindow}</span>
+          <h2>{input.messages.common.confirmCloseWindow}</h2>
+        </header>
+        <div className="slei-modal-actions">
+          <button className="slei-button" onClick={input.onCancel} type="button">{input.messages.common.cancel}</button>
+          <button className="slei-button slei-button--accent" onClick={input.onConfirm} type="button">{input.messages.common.closeWindow}</button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1435,7 +1536,6 @@ function ChannelList(input: {
         <div className="slei-modal-backdrop" role="presentation">
           <section aria-modal="true" className="slei-dialog slei-channel-modal" role="dialog">
             <header>
-              <span className="slei-badge slei-badge--attention">{input.messages.chat.channel}</span>
               <h2><Hash aria-hidden="true" size={20} />{input.messages.chat.createChannel}</h2>
               <p>{input.messages.chat.createChannelDescription}</p>
             </header>
@@ -1811,6 +1911,7 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
+  const [isComposing, setIsComposing] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1960,9 +2061,13 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
         ) : null}
         <textarea
           className="slei-textarea"
+          onCompositionEnd={() => setIsComposing(false)}
+          onCompositionStart={() => setIsComposing(true)}
           onChange={(event) => setDraft(event.currentTarget.value)}
           onKeyDown={(event) => {
-            if (mention && mentionTargets.length > 0) {
+            const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
+            const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
+            if (!composing && mention && mentionTargets.length > 0) {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
@@ -1973,18 +2078,19 @@ function ChatPage({ activeChannel, activeConversation, activeSessionId, data, in
                 setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
                 return;
               }
-              if (event.key === "Enter" || event.key === "Tab") {
-                event.preventDefault();
-                selectMention();
-                return;
-              }
               if (event.key === "Escape") {
                 event.preventDefault();
                 setDraft(draft.slice(0, mention.start));
                 return;
               }
             }
-            if (event.key === "Enter" && !event.shiftKey) {
+            const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
+            if (action === "selectMention") {
+              event.preventDefault();
+              selectMention();
+              return;
+            }
+            if (action === "submit") {
               event.preventDefault();
               submitMessage();
             }

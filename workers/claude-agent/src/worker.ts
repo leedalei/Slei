@@ -101,7 +101,14 @@ async function* runClaudeCode(command: StartRunCommand): AsyncIterable<ClaudeSdk
 }
 
 export function buildClaudeCliArgs(command: StartRunCommand): string[] {
-  const args = ["-p", promptForRun(command), "--output-format", "text"];
+  const args = [
+    "-p",
+    promptForRun(command),
+    "--output-format",
+    "text",
+    "--permission-mode",
+    "bypassPermissions",
+  ];
   if (command.session.persist_session) {
     args.push(command.session.resume_session ? "--resume" : "--session-id", command.session.session_id);
   } else {

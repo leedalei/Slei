@@ -11,6 +11,7 @@ export type DesktopMessages = {
     confirmExecute: string;
     create: string;
     closeWindow: string;
+    confirmCloseWindow: string;
     delete: string;
     deny: string;
     done: string;

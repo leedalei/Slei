@@ -630,6 +630,8 @@ impl DaemonBroker {
             .cloned()
         {
             let existing = normalize_guide_agent_identity(existing);
+            let _ = sanitize_legacy_guide_memory(&existing);
+            let _ = write_local_agent_skills(&existing);
             self.upsert_local_agent(existing.clone());
             let conversation = self
                 .create_dm_conversation(&existing.id)
@@ -643,7 +645,7 @@ impl DaemonBroker {
         }
         let now = monotonic_id();
         let workspace_path = default_agent_workspace("agent_guide_local_node");
-        let agent = DesktopAgentView {
+        let mut agent = DesktopAgentView {
             id: "agent_guide_local_node".to_string(),
             name: "Yeal".to_string(),
             handle: "@yeal".to_string(),
@@ -668,6 +670,7 @@ impl DaemonBroker {
             created_at: now.clone(),
             updated_at: now.clone(),
         };
+        agent.skills = Some(default_skill_records(&agent));
         let _ = create_local_agent_workspace(&agent);
         self.upsert_local_agent(agent.clone());
         self.ensure_channel_membership("all", &agent.id);
@@ -776,7 +779,7 @@ impl DaemonBroker {
         let id = format!("agent_{}", monotonic_id());
         let workspace_path = default_agent_workspace(&id);
         let now = monotonic_id();
-        let agent = DesktopAgentView {
+        let mut agent = DesktopAgentView {
             id: id.clone(),
             name: request.name.trim().to_string(),
             handle,
@@ -800,6 +803,7 @@ impl DaemonBroker {
             created_at: now.clone(),
             updated_at: now,
         };
+        agent.skills = Some(default_skill_records(&agent));
         create_local_agent_workspace(&agent)?;
         agents.push(agent.clone());
         drop(agents);
@@ -1428,7 +1432,13 @@ impl DaemonBroker {
     fn bootstrap_guide_agent_in_daemon(&self) -> Option<GuideBootstrapReceipt> {
         let response =
             self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"))?;
-        serde_json::from_str::<GuideBootstrapReceipt>(&response).ok()
+        let mut receipt = serde_json::from_str::<GuideBootstrapReceipt>(&response).ok()?;
+        if let Some(agent) = receipt.agent.as_mut() {
+            if let Some(skills) = self.fetch_agent_skills_from_daemon(&agent.id) {
+                agent.skills = Some(skills.skills);
+            }
+        }
+        Some(receipt)
     }
 
     fn fetch_channels_from_daemon(&self) -> Option<ChannelListReceipt> {
@@ -1472,7 +1482,15 @@ impl DaemonBroker {
 
     fn fetch_agents_from_daemon(&self) -> Option<AgentListReceipt> {
         let response = self.send_daemon_request("GET", "/v1/agents", None)?;
-        serde_json::from_str::<AgentListReceipt>(&response).ok()
+        let mut receipt = serde_json::from_str::<AgentListReceipt>(&response).ok()?;
+        for agent in &mut receipt.agents {
+            if agent.agent_kind.as_deref() == Some("guide") {
+                if let Some(skills) = self.fetch_agent_skills_from_daemon(&agent.id) {
+                    agent.skills = Some(skills.skills);
+                }
+            }
+        }
+        Some(receipt)
     }
 
     fn fetch_agent_skills_from_daemon(&self, agent_id: &str) -> Option<SkillListReceipt> {
@@ -1868,6 +1886,10 @@ fn local_data_root() -> String {
 fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentError> {
     fs::create_dir_all(&agent.docs_path).map_err(AgentError::Io)?;
     fs::write(&agent.memory_path, initial_memory(agent)).map_err(AgentError::Io)?;
+    write_local_agent_skills(agent)
+}
+
+fn write_local_agent_skills(agent: &DesktopAgentView) -> Result<(), AgentError> {
     let skills_path = format!("{}/skills", agent.workspace_path);
     fs::create_dir_all(&skills_path).map_err(AgentError::Io)?;
     let skills = default_skill_records(agent);
@@ -1891,6 +1913,42 @@ fn normalize_guide_agent_identity(mut agent: DesktopAgentView) -> DesktopAgentVi
         agent.avatar_seed = "yeal".to_string();
     }
     agent
+}
+
+fn sanitize_legacy_guide_memory(agent: &DesktopAgentView) -> Result<(), AgentError> {
+    if agent.agent_kind.as_deref() != Some("guide") {
+        return Ok(());
+    }
+    let memory = match fs::read_to_string(&agent.memory_path) {
+        Ok(memory) => memory,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(AgentError::Io(error)),
+    };
+    let cleaned = remove_legacy_guide_memory_lines(&memory);
+    if cleaned != memory {
+        fs::write(&agent.memory_path, cleaned).map_err(AgentError::Io)?;
+    }
+    Ok(())
+}
+
+fn remove_legacy_guide_memory_lines(memory: &str) -> String {
+    let mut cleaned = memory
+        .lines()
+        .filter(|line| !is_legacy_guide_memory_line(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if memory.ends_with('\n') {
+        cleaned.push('\n');
+    }
+    cleaned
+}
+
+fn is_legacy_guide_memory_line(line: &str) -> bool {
+    line.contains("@Alice")
+        || line.contains("@Nancy")
+        || line.contains("@Cindy")
+        || line.contains("Alice + Coda + Nancy")
+        || line.contains("团队协作流程：用户/Alice")
 }
 
 fn read_local_agent_skills(agent: &DesktopAgentView) -> Result<Vec<SkillView>, AgentError> {
@@ -1981,6 +2039,11 @@ fn append_local_agent_memory(agent: &DesktopAgentView, fact: &str) -> Result<(),
 }
 
 fn initial_memory(agent: &DesktopAgentView) -> String {
+    let key_knowledge = if agent.agent_kind.as_deref() == Some("guide") {
+        "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
+    } else {
+        "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
+    };
     format!(
         r#"# {name}
 
@@ -1989,22 +2052,18 @@ fn initial_memory(agent: &DesktopAgentView) -> String {
 
 ## Team
 @lei-lee — 人类用户，项目发起人
-@Alice — 研发团队架构师，负责头脑风暴、技术方案、验收标准、架构设计，不参与实际编码
 {handle} — 我自己，{name}
-@Nancy — QA 质保员，审查代码质量、安全漏洞，提出改进意见
-@Cindy — Onboarding 助手
 
 ## Key Knowledge
-团队协作流程：用户/Alice 发起需求 → Alice 设计技术方案 → Coda 实现编码 → Nancy QA 审查 → 迭代
-主频道：#all（目前唯一频道）
-优先通过 slock 消息进行任务协作
+{key_knowledge}
 
 ## Active Context
-首次启动，等待任务分配
+首次启动，等待用户提出需要引导的任务
 "#,
         name = agent.name,
         description = agent.description,
-        handle = agent.handle
+        handle = agent.handle,
+        key_knowledge = key_knowledge
     )
 }
 

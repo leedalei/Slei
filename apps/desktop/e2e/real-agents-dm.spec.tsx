@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SleiAppFrame } from "../src/app/SleiApp";
+import { shouldRefreshConversationMessages, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMember } from "../src/app/fixtures";
 
 const nodes = createSleiFixtures().nodes;
@@ -252,6 +252,41 @@ describe("real agent members and direct messages", () => {
     expect(html).not.toContain("slei-badge--running");
     expect(html).not.toContain("slei-badge--failed");
     expect(html).not.toContain("slei-badge--done");
+  });
+
+  it("keeps polling active direct messages while output is running or pending", () => {
+    expect(
+      shouldRefreshConversationMessages(
+        [
+          {
+            id: "run-pending",
+            author: "Coda",
+            role: "agent",
+            time: "10:00",
+            body: "收到，",
+            channelId: "dm:agent_coda",
+            status: "pending",
+          },
+        ],
+        "dm:agent_coda",
+      ),
+    ).toBe(true);
+    expect(
+      shouldRefreshConversationMessages(
+        [
+          {
+            id: "run-done",
+            author: "Coda",
+            role: "agent",
+            time: "10:01",
+            body: "收到，我来处理。",
+            channelId: "dm:agent_coda",
+            status: "done",
+          },
+        ],
+        "dm:agent_coda",
+      ),
+    ).toBe(false);
   });
 
   it("renders only reset and history actions for active direct messages", () => {

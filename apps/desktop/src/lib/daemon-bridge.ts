@@ -410,6 +410,11 @@ export function createDaemonBridgeMock(input: {
         docsPath: `${workspacePath}/docs`,
         avatarSeed: "yeal",
         runtimeThread: { runtimeKind: "ClaudeCode", status: "ready", createdAt: now },
+        skills: defaultSkillViews({
+          handle: "@yeal",
+          kind: "guide",
+          workspacePath,
+        }),
         channelIds: ["all"],
         createdAt: now,
         updatedAt: now,
@@ -652,7 +657,32 @@ function normalizeGuideAgentIdentity(agent: DesktopAgentView): DesktopAgentView 
     name: "Yeal",
     handle: "@yeal",
     avatarSeed: "yeal",
+    skills: defaultSkillViews({
+      handle: "@yeal",
+      kind: "guide",
+      workspacePath: agent.workspacePath,
+    }),
   };
+}
+
+function defaultSkillViews(input: { handle: string; kind?: string; workspacePath: string }): SkillView[] {
+  const skills: SkillView[] = [
+    {
+      id: "memory",
+      name: "记忆",
+      trigger: `提及 ${input.handle} 并使用 remember、learn 或 记住`,
+      path: `${input.workspacePath}/skills/memory.skill.md`,
+    },
+  ];
+  if (input.kind === "guide") {
+    skills.unshift({
+      id: "guide-create",
+      name: "引导创建",
+      trigger: "识别创建智能体、成员、频道的请求",
+      path: `${input.workspacePath}/skills/guide-create.skill.md`,
+    });
+  }
+  return skills;
 }
 
 export function createDaemonBridge(): DaemonBridge {

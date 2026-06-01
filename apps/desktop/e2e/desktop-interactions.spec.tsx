@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { createLocalChatMessage, SleiAppFrame } from "../src/app/SleiApp";
+import { composerShortcutAction, createLocalChatMessage, isComposerImeComposing, SleiAppFrame } from "../src/app/SleiApp";
 import { createDemoMembers, createSleiFixtures } from "../src/app/fixtures";
 
 const readyRuntime = {
@@ -62,6 +62,20 @@ describe("desktop interaction fixes", () => {
     expect(sent?.body).toBe("ship the composer");
     expect(sent?.handle).toBe("@lei");
     expect(createLocalChatMessage({ body: "   ", profile: { displayName: "Lei", handle: "@lei", avatar: "LL" } })).toBeNull();
+  });
+
+  it("does not submit or choose mentions while an IME composition is active", () => {
+    expect(isComposerImeComposing({ nativeEvent: { isComposing: true } })).toBe(true);
+    expect(isComposerImeComposing({ composing: true, nativeEvent: { isComposing: false } })).toBe(true);
+    expect(composerShortcutAction({ key: "Enter", composing: true })).toBe("none");
+    expect(composerShortcutAction({ key: "Enter", composing: true, hasMentionTargets: true })).toBe("none");
+    expect(composerShortcutAction({ key: "Tab", composing: true, hasMentionTargets: true })).toBe("none");
+
+    expect(composerShortcutAction({ key: "Enter" })).toBe("submit");
+    expect(composerShortcutAction({ key: "Enter", hasMentionTargets: true })).toBe("selectMention");
+    expect(composerShortcutAction({ key: "Tab", hasMentionTargets: true })).toBe("selectMention");
+    expect(composerShortcutAction({ key: "Enter", shiftKey: true })).toBe("none");
+    expect(composerShortcutAction({ key: "Enter", shiftKey: true, hasMentionTargets: true })).toBe("none");
   });
 
   it("shows runtime status dots for idle busy and offline agents", () => {

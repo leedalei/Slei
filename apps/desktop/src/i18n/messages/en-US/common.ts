@@ -6,6 +6,7 @@ export const common = {
   confirmExecute: "Confirm",
   create: "Create",
   closeWindow: "Close window",
+  confirmCloseWindow: "Close this window?",
   delete: "Delete",
   deny: "Deny",
   done: "DONE",

@@ -83,7 +83,9 @@ describe("channel chat timeline", () => {
     expect(timelineRule).toContain("flex: 1 1 auto");
     expect(timelineRule).toContain("min-height: 0");
     expect(timelineRule).toContain("overflow-y: auto");
+    expect(timelineRule).toContain("padding: var(--gap-xl) var(--padding-panel)");
     expect(composerRule).toContain("flex: 0 0 auto");
+    expect(composerRule).toContain("padding: var(--padding-panel)");
     expect(modalBackdropRule).toContain("border-radius: var(--app-window-radius)");
     expect(modalBackdropRule).toContain("overflow: hidden");
     expect(drawerRule).toContain("border-radius: 0 var(--app-window-radius) var(--app-window-radius) 0");

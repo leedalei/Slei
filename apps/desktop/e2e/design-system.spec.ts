@@ -33,4 +33,19 @@ describe("desktop design-system wiring", () => {
     expect(appCss).toContain("scrollbar-width: thin");
     expect(appCss).toContain("border-radius: var(--scrollbar-radius)");
   });
+
+  it("keeps custom window controls compact and visually quiet", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const windowControlRule = appCss.match(/\.slei-window-control\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(appCss).toContain(".slei-window-control__glyph");
+    expect(windowControlRule).toContain("height: 22px");
+    expect(windowControlRule).toContain("width: 22px");
+    expect(windowControlRule).toContain("background: transparent");
+    expect(windowControlRule).toContain("border: 0");
+    expect(windowControlRule).not.toContain("box-shadow");
+    expect(appCss).not.toContain(".slei-window-control--close::before {\n  background: var(--color-danger);");
+    expect(appCss).not.toContain(".slei-window-control--minimize::before {\n  background: var(--color-warning);");
+    expect(appCss).not.toContain(".slei-window-control--maximize::before {\n  background: var(--color-success);");
+  });
 });

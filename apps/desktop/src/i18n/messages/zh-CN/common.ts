@@ -6,6 +6,7 @@ export const common = {
   confirmExecute: "确认执行",
   create: "创建",
   closeWindow: "关闭窗口",
+  confirmCloseWindow: "确定要关闭窗口吗？",
   delete: "删除",
   deny: "拒绝",
   done: "DONE",

@@ -104,6 +104,14 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(workspace.join("skills/index.json").is_file());
     assert!(workspace.join("skills/guide-create.skill.md").is_file());
     assert!(workspace.join("skills/memory.skill.md").is_file());
+    let memory = fs::read_to_string(workspace.join("MEMORY.md")).unwrap();
+    assert!(!memory.contains("@Alice"));
+    assert!(!memory.contains("@Nancy"));
+    assert!(!memory.contains("@Cindy"));
+    assert!(!memory.contains("Alice + Coda + Nancy"));
+    assert!(!memory.contains("团队协作流程：用户/Alice"));
+    assert!(memory.contains("@lei-lee"));
+    assert!(memory.contains("@yeal"));
 
     let skills = get_json(&app, &token, "/v1/agents/agent_guide_local_node/skills").await;
     assert_eq!(skills.status(), StatusCode::OK);
@@ -132,6 +140,14 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
         .unwrap()
         .contains("Yeal"));
 
+    fs::write(
+        workspace.join("MEMORY.md"),
+        format!(
+            "{memory}\n@Alice — mock\n@Nancy — mock\n@Cindy — mock\n团队协作流程：用户/Alice mock\n用户刚搭建完研发团队（Alice + Coda + Nancy）\n- 用户真实补充的信息\n"
+        ),
+    )
+    .unwrap();
+
     let second = post_json(
         &app,
         &token,
@@ -141,6 +157,13 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     )
     .await;
     assert_eq!(second.status(), StatusCode::OK);
+    let cleaned_memory = fs::read_to_string(workspace.join("MEMORY.md")).unwrap();
+    assert!(!cleaned_memory.contains("@Alice"));
+    assert!(!cleaned_memory.contains("@Nancy"));
+    assert!(!cleaned_memory.contains("@Cindy"));
+    assert!(!cleaned_memory.contains("Alice + Coda + Nancy"));
+    assert!(!cleaned_memory.contains("团队协作流程：用户/Alice"));
+    assert!(cleaned_memory.contains("用户真实补充的信息"));
     assert_eq!(response_json(second).await["status"], "alreadyExists");
 
     let listed = get_json(&app, &token, "/v1/agents").await;

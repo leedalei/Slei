@@ -359,6 +359,8 @@ impl MemberService {
         mut agent: ProductAgentRecord,
     ) -> Result<ProductAgentRecord, MemberError> {
         if agent.name == "Yeal" && agent.handle == "@yeal" && agent.avatar_seed == "yeal" {
+            write_default_skills(&agent)?;
+            sanitize_legacy_guide_memory(&agent)?;
             return Ok(agent);
         }
 
@@ -368,6 +370,7 @@ impl MemberService {
         agent.avatar_seed = "yeal".to_string();
         agent.updated_at = current_timestamp();
         write_default_skills(&agent)?;
+        sanitize_legacy_guide_memory(&agent)?;
 
         let mut state = self.inner.lock().await;
         if let Some(owner) = state.product_agent_handles.get("@yeal") {
@@ -603,6 +606,11 @@ fn default_agent_kind() -> String {
 }
 
 fn initial_memory(agent: &ProductAgentRecord) -> String {
+    let key_knowledge = if agent.agent_kind == "guide" {
+        "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
+    } else {
+        "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
+    };
     format!(
         r#"# {name}
 
@@ -611,23 +619,18 @@ fn initial_memory(agent: &ProductAgentRecord) -> String {
 
 ## Team
 @lei-lee — 人类用户，项目发起人
-@Alice — 研发团队架构师，负责头脑风暴、技术方案、验收标准、架构设计，不参与实际编码
 {handle} — 我自己，{name}
-@Nancy — QA 质保员，审查代码质量、安全漏洞，提出改进意见
-@Cindy — Onboarding 助手
 
 ## Key Knowledge
-团队协作流程：用户/Alice 发起需求 → Alice 设计技术方案 → Coda 实现编码 → Nancy QA 审查 → 迭代
-主频道：#all（目前唯一频道）
-优先通过 slock 消息进行任务协作
+{key_knowledge}
 
 ## Active Context
-首次启动，等待任务分配
-用户刚搭建完研发团队（Alice + Coda + Nancy）
+首次启动，等待用户提出需要引导的任务
 "#,
         name = agent.name,
         description = agent.description,
-        handle = agent.handle
+        handle = agent.handle,
+        key_knowledge = key_knowledge
     )
 }
 
@@ -642,6 +645,42 @@ When triggered, append the requested fact to MEMORY.md under Key Knowledge or Ac
         name = agent.name,
         handle = agent.handle
     )
+}
+
+fn sanitize_legacy_guide_memory(agent: &ProductAgentRecord) -> Result<(), MemberError> {
+    if agent.agent_kind != "guide" {
+        return Ok(());
+    }
+    let memory = match fs::read_to_string(&agent.memory_path) {
+        Ok(memory) => memory,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(MemberError::Io(error)),
+    };
+    let cleaned = remove_legacy_guide_memory_lines(&memory);
+    if cleaned != memory {
+        fs::write(&agent.memory_path, cleaned).map_err(MemberError::Io)?;
+    }
+    Ok(())
+}
+
+fn remove_legacy_guide_memory_lines(memory: &str) -> String {
+    let mut cleaned = memory
+        .lines()
+        .filter(|line| !is_legacy_guide_memory_line(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if memory.ends_with('\n') {
+        cleaned.push('\n');
+    }
+    cleaned
+}
+
+fn is_legacy_guide_memory_line(line: &str) -> bool {
+    line.contains("@Alice")
+        || line.contains("@Nancy")
+        || line.contains("@Cindy")
+        || line.contains("Alice + Coda + Nancy")
+        || line.contains("团队协作流程：用户/Alice")
 }
 
 fn guide_create_skill() -> String {

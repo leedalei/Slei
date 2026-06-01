@@ -564,6 +564,35 @@ mod tests {
 
         let receipt = bootstrap_guide_agent(&broker);
         assert_eq!(receipt.status, "created");
+        assert_eq!(
+            receipt
+                .agent
+                .as_ref()
+                .and_then(|agent| agent.skills.as_ref())
+                .unwrap()
+                .iter()
+                .map(|skill| skill.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["guide-create", "memory"]
+        );
+        let memory =
+            fs::read_to_string(receipt.agent.as_ref().unwrap().memory_path.clone()).unwrap();
+        assert!(!memory.contains("@Alice"));
+        assert!(!memory.contains("@Nancy"));
+        assert!(!memory.contains("@Cindy"));
+        assert!(!memory.contains("Alice + Coda + Nancy"));
+        assert!(!memory.contains("团队协作流程：用户/Alice"));
+        assert!(memory.contains("@lei-lee"));
+        assert!(memory.contains("@yeal"));
+        let skills = list_agent_skills(&broker, "agent_guide_local_node").unwrap();
+        assert_eq!(
+            skills
+                .skills
+                .iter()
+                .map(|skill| skill.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["guide-create", "memory"]
+        );
         let dm = list_conversations(&broker).conversations[0].clone();
         send_conversation_message(
             &broker,

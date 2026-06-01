@@ -106,6 +106,8 @@ describe("ClaudeAgentWorker start_run", () => {
       "Previous conversation context:\n\nUser: previous\n\nCurrent user message:\nhello",
       "--output-format",
       "text",
+      "--permission-mode",
+      "bypassPermissions",
       "--session-id",
       "11111111-1111-4111-8111-111111111111",
     ]);
@@ -130,6 +132,8 @@ describe("ClaudeAgentWorker start_run", () => {
       "follow up",
       "--output-format",
       "text",
+      "--permission-mode",
+      "bypassPermissions",
       "--resume",
       "11111111-1111-4111-8111-111111111111",
     ]);

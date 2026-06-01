@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SleiAppFrame } from "../src/app/SleiApp";
+import { runWindowAction, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/app/fixtures";
 
 describe("Slei React desktop shell", () => {
@@ -105,6 +105,52 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain('aria-label="Close window"');
     expect(html).toContain('aria-label="Minimize window"');
     expect(html).toContain('aria-label="Maximize window"');
+  });
+
+  it("orders window controls as minimize maximize close and renders the close confirmation dialog", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: createSleiFixtures().nodes,
+        }}
+        data={createSleiFixtures()}
+        initialWindowCloseConfirmOpen
+      />,
+    );
+
+    expect(html.indexOf('aria-label="最小化窗口"')).toBeLessThan(html.indexOf('aria-label="最大化窗口"'));
+    expect(html.indexOf('aria-label="最大化窗口"')).toBeLessThan(html.indexOf('aria-label="关闭窗口"'));
+    expect(html).toContain('class="slei-dialog slei-window-close-confirm"');
+    expect(html).toContain("确定要关闭窗口吗？");
+  });
+
+  it("runs the selected Tauri window action", () => {
+    const calls: string[] = [];
+    const currentWindow = {
+      close: () => {
+        calls.push("close");
+        return Promise.resolve();
+      },
+      minimize: () => {
+        calls.push("minimize");
+        return Promise.resolve();
+      },
+      toggleMaximize: () => {
+        calls.push("toggleMaximize");
+        return Promise.resolve();
+      },
+    };
+
+    runWindowAction({ action: "minimize", currentWindow });
+    runWindowAction({ action: "toggleMaximize", currentWindow });
+    runWindowAction({ action: "close", currentWindow });
+
+    expect(calls).toEqual(["minimize", "toggleMaximize", "close"]);
   });
 
   it("uses the primary button color for the composer send action", () => {
