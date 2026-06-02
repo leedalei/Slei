@@ -1,7 +1,7 @@
 import { createAvatar } from "@dicebear/core";
 import { pixelArt } from "@dicebear/collection";
 
-import type { SleiMember, SleiMessage } from "./fixtures";
+import type { SleiMember, SleiMessage } from "../app/fixtures";
 
 export type AvatarIdentity = Pick<SleiMember, "id" | "name" | "handle" | "avatar"> & {
   avatarSeed?: string;

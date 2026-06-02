@@ -5,7 +5,7 @@ describe("desktop design-system wiring", () => {
   it("loads shared Neo-Brutalism tokens instead of local hard-coded shell colors", () => {
     const webEntry = readFileSync("src/web.ts", "utf8");
     const appCss = readFileSync("src/app/app.css", "utf8");
-    const formControlsTsx = readFileSync("src/app/form-controls.tsx", "utf8");
+    const formControlsTsx = readFileSync("src/components/FormControls.tsx", "utf8");
     const tokensCss = readFileSync("../../packages/ui/src/styles/tokens.css", "utf8");
 
     expect(webEntry).toContain("@slei/ui/styles/tokens.css");

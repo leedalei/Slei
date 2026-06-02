@@ -4,7 +4,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/fixtures";
 import { agentsForComputerNode, deviceOsLabel } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../app/shared-ui";
+import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 export function ComputersPage(input: {
   activeNodeId?: string;
   members: SleiMember[];

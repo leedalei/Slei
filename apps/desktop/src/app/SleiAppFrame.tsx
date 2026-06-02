@@ -52,7 +52,7 @@ import { MembersPage } from "../features/members/MembersPageView";
 import { SearchPage } from "../features/search/SearchPageView";
 import { SettingsPage } from "../features/settings/SettingsPageView";
 import { TasksPage } from "../features/tasks/TasksPageView";
-import { CheckboxControl, SelectControl } from "./form-controls";
+import { CheckboxControl, EditableDetailField, Empty, MemberAvatar, MessageStatusSquare, SelectControl, StatusDot } from "../components";
 import { type SleiFixtures, type SleiMember, type SleiTask } from "./fixtures";
 import {
   defaultAppearance,
@@ -67,7 +67,6 @@ import {
   type SettingsPanel,
   type UserProfile,
 } from "./model";
-import { EditableDetailField, Empty, MemberAvatar, MessageStatusSquare, StatusDot } from "./shared-ui";
 import sleiSquareLogo from "../../src-tauri/icons/Square44x44Logo.png";
 
 const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [

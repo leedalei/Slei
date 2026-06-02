@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { AgentPathTarget, DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiFixtures } from "../../app/fixtures";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../app/shared-ui";
+import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 export function MembersPage(input: {
   activeMemberId?: string;
   data: SleiFixtures;

@@ -4,7 +4,7 @@ import { Hash, Search } from "lucide-react";
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures } from "../../app/fixtures";
 import { filterConversationMessages, stripChannelHash, type ChatSearchFilters } from "../../app/model";
-import { Empty } from "../../app/shared-ui";
+import { Empty } from "../../components";
 export function SearchPage({ data, initialFilters, messages, onResultSelect }: { data: SleiFixtures; initialFilters?: ChatSearchFilters; messages: DesktopMessages; onResultSelect?: (channelId: string, messageId: string) => void }) {
   const [filters, setFilters] = useState<ChatSearchFilters>(initialFilters ?? {});
   const results = filterConversationMessages(data.messages, filters);

@@ -5,10 +5,8 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView } from "../../lib/daemon-bridge";
 import type { SleiFixtures } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { CheckboxControl } from "../../app/form-controls";
-import { memberFromMessage } from "../../app/member-avatar";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { MemberAvatar, MessageStatusSquare, StatusDot } from "../../app/shared-ui";
+import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot } from "../../components";
 function InteractiveCard({ card, messages, onCreate }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void }) {
   const done = card.state === "done";
   return (

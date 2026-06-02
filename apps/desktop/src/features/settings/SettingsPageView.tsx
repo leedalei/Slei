@@ -1,8 +1,7 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
-import { CheckboxControl, SelectControl } from "../../app/form-controls";
 import { defaultTimeZone, desktopVersion, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { MemberAvatar } from "../../app/shared-ui";
+import { CheckboxControl, MemberAvatar, SelectControl } from "../../components";
 export function SettingsPage(input: {
   activePanel: SettingsPanel;
   appearance: AppearancePreferences;

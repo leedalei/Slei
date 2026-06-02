@@ -72,7 +72,7 @@ export {
   shouldRefreshConversationMessages,
   submitComposerDraft,
 } from "./model";
-export { EditableDetailField, Empty } from "./shared-ui";
+export { EditableDetailField, Empty } from "../components";
 
 function conversationMessageToSleiMessage(message: ConversationMessageView, members: SleiMember[], profile: UserProfile): SleiMessage {
   const member = members.find((candidate) => candidate.id === message.authorId);
