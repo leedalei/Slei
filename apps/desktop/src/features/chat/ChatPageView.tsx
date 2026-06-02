@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { ArrowDown, AtSign, CheckSquare, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, RefreshCcw, Send, X } from "lucide-react";
+import { ArrowDown, AtSign, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView } from "../../lib/daemon-bridge";
-import type { SleiFixtures } from "../../app/fixtures";
+import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot } from "../../components";
@@ -53,6 +53,25 @@ function formatAttachmentSize(size: number) {
   return `${(kilobytes / 1024).toFixed(1)} MB`;
 }
 
+function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): SleiMember | undefined {
+  const normalizedHandle = message.handle?.toLowerCase();
+  const normalizedAuthor = message.author.toLowerCase();
+  return members.find(
+    (member) =>
+      member.handle.toLowerCase() === normalizedHandle ||
+      member.name.toLowerCase() === normalizedAuthor,
+  );
+}
+
+function messageRoleDescription(message: SleiMessage, members: SleiMember[], messages: DesktopMessages): string {
+  return memberMatchingMessage(message, members)?.role ?? messages.chat.roleLabels[message.role];
+}
+
+async function copyMessageBody(body: string) {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
+  await navigator.clipboard.writeText(body);
+}
+
 async function uploadComposerFile(
   file: File,
   onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
@@ -82,7 +101,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationRuntimeReset, onConversationSessionSelect, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationRuntimeReset?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -98,7 +117,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const currentSessionId = activeSessionId ?? activeConversation?.activeSessionId;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
-  }).filter((message) => !activeConversation || !currentSessionId || !message.sessionId || message.sessionId === currentSessionId);
+  }).filter((message) => {
+    if (!activeConversation) return true;
+    if (!currentSessionId) return false;
+    return message.sessionId === currentSessionId;
+  });
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? activeSessions[0];
   const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
@@ -152,8 +175,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         </div>
         {dmMember && activeConversation ? (
           <div className="slei-chat-header-actions">
-            <button className="slei-button slei-button--small" onClick={() => onConversationRuntimeReset?.(activeConversation.id)} type="button">
-              <RefreshCcw aria-hidden="true" size={14} />{messages.chat.resetSession}
+            <button className="slei-button slei-button--small" onClick={() => onConversationNewSession?.(activeConversation.id)} type="button">
+              <Plus aria-hidden="true" size={14} />{messages.chat.newSession}
             </button>
             <button className="slei-button slei-button--small" onClick={onConversationHistoryToggle} type="button">
               <History aria-hidden="true" size={14} />{messages.chat.history}
@@ -198,10 +221,21 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             <MemberAvatar identity={memberFromMessage(message, data.members)} />
             <div>
               <div className="slei-message__meta">
-                <strong>{message.author}</strong>
-                {message.handle ? <span>{message.handle}</span> : null}
-                <span>{message.time}</span>
-                <MessageStatusSquare status={message.status} />
+                <div className="slei-message__identity">
+                  <strong>{message.author}</strong>
+                  {message.handle ? <span>{message.handle}</span> : null}
+                  <span aria-hidden="true">｜</span>
+                  <span>{messageRoleDescription(message, data.members, messages)}</span>
+                </div>
+                <div className="slei-message__actions">
+                  <span className="slei-message__time-row">
+                    <time>{message.time}</time>
+                    <MessageStatusSquare status={message.status} />
+                  </span>
+                  <button aria-label={messages.chat.copyMessage} className="slei-message__copy" onClick={() => void copyMessageBody(message.body)} type="button">
+                    <Copy aria-hidden="true" size={13} />{messages.chat.copyMessage}
+                  </button>
+                </div>
               </div>
               <MarkdownMessage markdown={message.body} />
               <AttachmentList attachments={message.attachments ?? []} messageAttachments />

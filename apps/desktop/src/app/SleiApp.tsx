@@ -485,25 +485,19 @@ export function SleiApp() {
     navigateToView("chat");
   }
 
-  async function handleResetConversationRuntimeSession(conversationId: string) {
-    const receipt = await bridge.resetConversationRuntimeSession(conversationId);
-    const [sessionsReceipt, messagesReceipt] = await Promise.all([
-      bridge.listConversationSessions(conversationId),
-      bridge.listConversationMessages(conversationId),
-    ]);
-    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+  async function handleCreateConversationSession(conversationId: string) {
+    const receipt = await bridge.createConversationSession(conversationId);
     setData((current) =>
       createSleiFixtures({
         ...current,
         conversations: upsertConversation(current.conversations, receipt.conversation),
         conversationSessions: [
-          ...current.conversationSessions.filter((session) => session.conversationId !== conversationId),
-          ...sessionsReceipt.sessions,
+          ...current.conversationSessions.filter((session) => session.id !== receipt.session.id),
+          receipt.session,
         ],
-        messages: replaceConversationMessages(current.messages, conversationMessages, [conversationId]),
       }),
     );
-    setActiveSessionId(receipt.conversation.activeSessionId ?? sessionsReceipt.sessions[0]?.id);
+    setActiveSessionId(receipt.session.id);
     setSessionDrawerOpen(false);
   }
 
@@ -746,7 +740,7 @@ export function SleiApp() {
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
       onOpenAgentPath={handleOpenAgentPath}
-      onConversationRuntimeReset={handleResetConversationRuntimeSession}
+      onConversationNewSession={handleCreateConversationSession}
       onConversationHistoryToggle={() => setSessionDrawerOpen((current) => !current)}
       onConversationSelect={(conversationId) => {
         const conversation = data.conversations.find((candidate) => candidate.id === conversationId);

@@ -66,9 +66,11 @@ export type DesktopMessages = {
     noFiles: string;
     openViaDaemon: string;
     rejected: string;
+    copyMessage: string;
     history: string;
     newSession: string;
     resetSession: string;
+    roleLabels: Record<"human" | "agent" | "system", string>;
     run: string;
     hash: string;
     stopFollowingRuns: string;

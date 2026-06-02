@@ -187,6 +187,7 @@ describe("real agent members and direct messages", () => {
               time: "10:00",
               body: "请给我一个方案",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
             },
             {
               id: "run-1",
@@ -195,6 +196,7 @@ describe("real agent members and direct messages", () => {
               time: "10:01",
               body: "我正在处理",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
               status: "running",
             },
             {
@@ -204,6 +206,7 @@ describe("real agent members and direct messages", () => {
               time: "10:02",
               body: "Claude auth missing",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
               status: "failed",
             },
             {
@@ -213,6 +216,7 @@ describe("real agent members and direct messages", () => {
               time: "10:03",
               body: "已经发送完成",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
               status: "done",
             },
             {
@@ -222,6 +226,7 @@ describe("real agent members and direct messages", () => {
               time: "10:04",
               body: "审批已通过",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
               status: "approval",
             },
             {
@@ -231,6 +236,7 @@ describe("real agent members and direct messages", () => {
               time: "10:05",
               body: "等待决断",
               channelId: "dm:agent_coda",
+              sessionId: "session-current",
               status: "pending",
             },
           ],
@@ -289,7 +295,7 @@ describe("real agent members and direct messages", () => {
     ).toBe(false);
   });
 
-  it("renders only reset and history actions for active direct messages", () => {
+  it("renders only new session and history actions for active direct messages", () => {
     const dmHtml = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -297,7 +303,7 @@ describe("real agent members and direct messages", () => {
         activeView="chat"
         data={createSleiFixtures({ conversations: [codaDm], conversationSessions: codaSessions, members: [agent] })}
         locale="zh-CN"
-        onConversationRuntimeReset={() => undefined}
+        onConversationNewSession={() => undefined}
         onConversationHistoryToggle={() => undefined}
         runtimeSetup={readyRuntime}
       />,
@@ -308,17 +314,86 @@ describe("real agent members and direct messages", () => {
         activeView="chat"
         data={createSleiFixtures({ conversations: [codaDm], members: [agent] })}
         locale="zh-CN"
-        onConversationRuntimeReset={() => undefined}
+        onConversationNewSession={() => undefined}
         runtimeSetup={readyRuntime}
       />,
     );
 
-    expect(dmHtml).toContain("重置会话");
+    expect(dmHtml).toContain("新会话");
+    expect(dmHtml).not.toContain("重置会话");
     expect(dmHtml).toContain("历史对话");
     expect(dmHtml).not.toContain("Runtime 已检测");
     expect(dmHtml).not.toContain("slei-chat-tabs");
     expect(channelHtml).not.toContain("重置会话");
     expect(channelHtml).not.toContain("历史对话");
+  });
+
+  it("renders direct message identity, role, time, and copy action in message cards", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-current"
+        activeView="chat"
+        data={createSleiFixtures({
+          conversations: [codaDm],
+          conversationSessions: codaSessions,
+          members: [agent],
+          messages: [
+            {
+              id: "current-1",
+              author: "Coda",
+              handle: "@coda",
+              role: "agent",
+              time: "10:00",
+              body: "当前消息",
+              channelId: "dm:agent_coda",
+              sessionId: "session-current",
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("Coda");
+    expect(html).toContain("@coda");
+    expect(html).toContain("研发团队开发工程师");
+    expect(html).toContain("10:00");
+    expect(html).toContain("复制");
+  });
+
+  it("uses localized fallback role labels for unmatched direct message authors", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-current"
+        activeView="chat"
+        data={createSleiFixtures({
+          conversations: [codaDm],
+          conversationSessions: codaSessions,
+          members: [agent],
+          messages: [
+            {
+              id: "current-1",
+              author: "Lei",
+              handle: "@lei",
+              role: "human",
+              time: "10:00",
+              body: "当前消息",
+              channelId: "dm:agent_coda",
+              sessionId: "session-current",
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("Lei");
+    expect(html).toContain("@lei");
+    expect(html).toContain("用户");
   });
 
   it("uses the active session title as the direct message detail title", () => {
@@ -490,5 +565,34 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain('data-testid="slei-send-button"');
     expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
     expect(html).not.toContain("旧会话仍在处理中");
+  });
+
+  it("does not show sessionless direct messages in a fresh active session", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-current"
+        activeView="chat"
+        data={createSleiFixtures({
+          conversations: [codaDm],
+          conversationSessions: codaSessions,
+          members: [agent],
+          messages: [
+            {
+              id: "legacy-1",
+              author: "Lei",
+              role: "human",
+              time: "09:00",
+              body: "缺少 session 的旧消息",
+              channelId: "dm:agent_coda",
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).not.toContain("缺少 session 的旧消息");
   });
 });

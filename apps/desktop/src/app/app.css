@@ -534,15 +534,62 @@ body,
 }
 
 .slei-message__meta {
-  align-items: center;
+  align-items: start;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-sm);
+  gap: var(--gap-md);
+  justify-content: space-between;
+  min-width: 0;
 }
 
-.slei-message__meta span {
+.slei-message__identity {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-xs);
+  min-width: 0;
+}
+
+.slei-message__identity span {
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
+}
+
+.slei-message__actions {
+  align-items: flex-end;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: var(--gap-xs);
+  margin-left: auto;
+}
+
+.slei-message__time-row {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: inline-flex;
+  font-size: var(--text-sm);
+  gap: var(--gap-xs);
+  line-height: var(--leading-ui);
+}
+
+.slei-message__copy {
+  align-items: center;
+  background: transparent;
+  border: var(--border-subtle) solid transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--text-sm);
+  gap: 4px;
+  min-height: 44px;
+  padding: 5px 8px;
+}
+
+.slei-message__copy:hover,
+.slei-message__copy:focus-visible {
+  background: var(--color-surface-alt);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
 }
 
 .slei-message-status-square {
@@ -550,7 +597,6 @@ body,
   display: inline-block;
   flex: 0 0 auto;
   height: 9px;
-  margin-left: auto;
   width: 9px;
 }
 
