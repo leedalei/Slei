@@ -210,8 +210,6 @@ export function buildClaudeSdkOptions(
     cwd: command.session.cwd,
     persistSession: command.session.persist_session,
     permissionMode: isolatedOptions.permissionMode,
-    settingSources: isolatedOptions.settingSources,
-    strictMcpConfig: isolatedOptions.strictMcpConfig,
     allowedTools: isolatedOptions.allowedTools,
     disallowedTools: isolatedOptions.disallowedTools,
     toolAliases: isolatedOptions.toolAliases,

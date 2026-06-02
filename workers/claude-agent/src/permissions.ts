@@ -4,13 +4,9 @@ export type PermissionPreset = "ReadOnly" | "Edit" | "Controlled";
 
 export type IsolatedSdkOptions = {
   persistSession: false;
-  settingSources: [];
-  nativeSubagents: [];
-  externalMcpServers: [];
   permissionMode: "default" | "acceptEdits" | "plan";
   allowedTools: string[];
   disallowedTools: string[];
-  strictMcpConfig: true;
   toolAliases: Record<string, string>;
   cwd: string;
 };
@@ -30,13 +26,9 @@ export function buildIsolatedSdkOptions(
 ): IsolatedSdkOptions {
   return {
     persistSession: false,
-    settingSources: [],
-    nativeSubagents: [],
-    externalMcpServers: [],
     permissionMode: preset === "ReadOnly" ? "plan" : "default",
     allowedTools: SLEI_PRODUCT_TOOL_NAMES.map(toSleiMcpToolName),
     disallowedTools: ["Task", "Plugin:*", "Bash:curl", "Bash:wget"],
-    strictMcpConfig: true,
     toolAliases: createSleiToolAliases(),
     cwd,
   };

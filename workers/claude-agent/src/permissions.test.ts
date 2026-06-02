@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { buildIsolatedSdkOptions, toPermissionRequest } from "./permissions.js";
 
-describe("isolated Claude SDK permission profile", () => {
-  it("disables persistence, settings, native subagents and unregistered tools", () => {
+describe("Slei Claude SDK permission profile", () => {
+  it("keeps local Claude settings while overriding the Slei permission boundary", () => {
     const options = buildIsolatedSdkOptions("Controlled", "/workspace/app");
 
     expect(options.persistSession).toBe(false);
-    expect(options.settingSources).toEqual([]);
-    expect(options.nativeSubagents).toEqual([]);
-    expect(options.externalMcpServers).toEqual([]);
+    expect(options).not.toHaveProperty("settingSources");
+    expect(options).not.toHaveProperty("strictMcpConfig");
     expect(options.allowedTools).toEqual([
       "mcp__slei__slei_propose_interactive_card",
       "mcp__slei__slei_request_visible_delegation",
@@ -24,9 +23,8 @@ describe("isolated Claude SDK permission profile", () => {
       const options = buildIsolatedSdkOptions(preset, "/workspace/app");
 
       expect(options.persistSession).toBe(false);
-      expect(options.settingSources).toEqual([]);
-      expect(options.nativeSubagents).toEqual([]);
-      expect(options.externalMcpServers).toEqual([]);
+      expect(options).not.toHaveProperty("settingSources");
+      expect(options).not.toHaveProperty("strictMcpConfig");
       expect(options.disallowedTools).toEqual(
         expect.arrayContaining(["Task", "Plugin:*"]),
       );

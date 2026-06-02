@@ -233,8 +233,9 @@ describe("ClaudeAgentWorker start_run", () => {
         "mcp__slei__slei_request_human_reply",
       ],
       mcpServers: { slei: expect.any(Object) },
-      strictMcpConfig: true,
     });
+    expect(seenOptions[0]).not.toHaveProperty("settingSources");
+    expect(seenOptions[0]).not.toHaveProperty("strictMcpConfig");
     expect(events).toEqual([
       {
         type: "assistant",
