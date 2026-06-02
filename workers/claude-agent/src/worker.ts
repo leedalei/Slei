@@ -109,11 +109,21 @@ export async function* runClaudeCode(
         emittedTerminalEvent = true;
       }
       yield event;
+      if (event.type === "failed") {
+        closeSdkMessages(sdkMessages);
+        return;
+      }
     }
   }
 
   if (!emittedTerminalEvent) {
     yield { type: "completed", runId: command.run_id };
+  }
+}
+
+function closeSdkMessages(messages: AsyncIterable<unknown>): void {
+  if (isRecord(messages) && typeof messages.close === "function") {
+    messages.close();
   }
 }
 
@@ -160,6 +170,10 @@ export function buildClaudeSdkOptions(command: StartRunCommand): Record<string, 
       slei: createSleiMcpServer(),
     },
   };
+  const model = claudeModelName(command.session.model);
+  if (model) {
+    options.model = model;
+  }
 
   if (command.session.persist_session) {
     if (command.session.resume_session) {
@@ -170,6 +184,18 @@ export function buildClaudeSdkOptions(command: StartRunCommand): Record<string, 
   }
 
   return options;
+}
+
+function claudeModelName(model: string | undefined): string | undefined {
+  const normalized = model?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const label = normalized.toLowerCase();
+  if (label === "sonnet") return "sonnet";
+  if (label === "opus") return "opus";
+  if (label === "haiku") return "haiku";
+  return normalized;
 }
 
 function buildSleiSystemPrompt(cwd: string): Record<string, string> {
@@ -257,6 +283,16 @@ function sdkMessageToClaudeEvents(
     return sdkAssistantMessageToClaudeEvents(command, message);
   }
 
+  if (message.type === "system" && message.subtype === "api_retry") {
+    return [
+      {
+        type: "failed",
+        runId: command.run_id,
+        message: apiRetryMessage(message),
+      },
+    ];
+  }
+
   if (message.type === "result") {
     if (message.is_error === true) {
       return [
@@ -271,6 +307,16 @@ function sdkMessageToClaudeEvents(
   }
 
   return [];
+}
+
+function apiRetryMessage(message: Record<string, unknown>): string {
+  const error = typeof message.error === "string" ? message.error : "api_retry";
+  const status = typeof message.error_status === "number" ? ` (HTTP ${message.error_status})` : "";
+  const attempt = typeof message.attempt === "number" ? message.attempt : "?";
+  const maxRetries = typeof message.max_retries === "number" ? message.max_retries : "?";
+  const delay =
+    typeof message.retry_delay_ms === "number" ? ` after ${Math.round(message.retry_delay_ms)}ms` : "";
+  return `Claude API ${error}${status}. Retry ${attempt}/${maxRetries} was scheduled${delay}.`;
 }
 
 function sdkAssistantMessageToClaudeEvents(

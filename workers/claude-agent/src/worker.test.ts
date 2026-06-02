@@ -257,6 +257,51 @@ describe("ClaudeAgentWorker start_run", () => {
     ]);
   });
 
+  it("fails fast when Claude Agent SDK reports an API retry", async () => {
+    const command = {
+      type: "start_run" as const,
+      run_id: "run_1",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode" as const,
+        cwd: "/workspace/agent_guide",
+        persist_session: true,
+        resume_session: false,
+      },
+      input: {
+        prompt: "帮我创建 Bob",
+        context: [],
+      },
+    };
+    const query = () =>
+      (async function* () {
+        yield {
+          type: "system",
+          subtype: "api_retry",
+          attempt: 1,
+          max_retries: 10,
+          retry_delay_ms: 500,
+          error_status: 429,
+          error: "rate_limit",
+        };
+        yield { type: "result" };
+      })();
+
+    const events: unknown[] = [];
+    for await (const event of runClaudeCode(command, query)) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "failed",
+        runId: "run_1",
+        message: "Claude API rate_limit (HTTP 429). Retry 1/10 was scheduled after 500ms.",
+      },
+    ]);
+  });
+
   it("injects Slei agent identity and skills into the SDK system prompt", () => {
     const cwd = mkdtempSync(join(tmpdir(), "slei-agent-context-"));
     mkdirSync(join(cwd, "skills"));
@@ -287,5 +332,24 @@ describe("ClaudeAgentWorker start_run", () => {
     });
     expect(JSON.stringify(options.systemPrompt)).toContain("guide-create.skill.md");
     expect(JSON.stringify(options.systemPrompt)).toContain("slei_propose_interactive_card");
+  });
+
+  it("passes the Slei runtime model to Claude Agent SDK", () => {
+    const options = buildClaudeSdkOptions({
+      type: "start_run",
+      run_id: "run_1",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode",
+        cwd: "/workspace/agent_guide",
+        model: "Sonnet",
+        persist_session: true,
+        resume_session: false,
+      },
+      input: { prompt: "hello", context: [] },
+    });
+
+    expect(options.model).toBe("sonnet");
   });
 });

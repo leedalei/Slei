@@ -48,6 +48,7 @@ export type RuntimeSession = {
   agent_id: string;
   runtime: RuntimeKind;
   cwd: string;
+  model?: string;
   persist_session: boolean;
   resume_session: boolean;
 };

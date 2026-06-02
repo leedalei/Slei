@@ -2869,6 +2869,7 @@ fn local_claude_agent_runner_payload(
             "agent_id": agent.id,
             "runtime": "ClaudeCode",
             "cwd": agent.workspace_path,
+            "model": agent.model,
             "persist_session": true,
             "resume_session": runtime_session.status == "ready",
         },
