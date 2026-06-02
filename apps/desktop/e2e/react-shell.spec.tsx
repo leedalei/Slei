@@ -129,6 +129,41 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain("确定要关闭窗口吗？");
   });
 
+  it("does not render attention badges inside shell modals", () => {
+    const data = createSleiFixtures();
+    const closeHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: data.nodes,
+        }}
+        data={data}
+        initialWindowCloseConfirmOpen
+      />,
+    );
+    const guideHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: data.nodes,
+        }}
+        data={data}
+        guideBootstrapping
+      />,
+    );
+
+    expect(closeHtml).not.toContain("slei-badge--attention");
+    expect(guideHtml).not.toContain("slei-badge--attention");
+  });
+
   it("runs the selected Tauri window action", () => {
     const calls: string[] = [];
     const currentWindow = {
@@ -153,7 +188,7 @@ describe("Slei React desktop shell", () => {
     expect(calls).toEqual(["minimize", "toggleMaximize", "close"]);
   });
 
-  it("uses the primary button color for the composer send action", () => {
+  it("uses the accent button color for the composer send action", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -168,8 +203,8 @@ describe("Slei React desktop shell", () => {
       />,
     );
 
-    expect(html).toContain('class="slei-button slei-button--primary slei-send-button"');
-    expect(html).not.toContain('class="slei-button slei-button--accent slei-send-button"');
+    expect(html).toContain('class="slei-button slei-button--accent slei-send-button"');
+    expect(html).not.toContain('class="slei-button slei-button--primary slei-send-button"');
   });
 
   it("renders all primary destinations from the single shell", () => {

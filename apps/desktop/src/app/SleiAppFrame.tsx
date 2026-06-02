@@ -284,7 +284,6 @@ export function SleiAppFrame(input: {
       {input.guideBootstrapping ? (
         <div className="slei-modal-backdrop" role="presentation">
           <section aria-live="polite" className="slei-dialog slei-guide-loading" role="status">
-            <span className="slei-badge slei-badge--attention">{messages.chat.guide}</span>
             <h2>{messages.onboarding.creatingGuide}</h2>
           </section>
         </div>
@@ -374,7 +373,6 @@ function WindowCloseConfirmModal(input: { messages: DesktopMessages; onCancel: (
     <div className="slei-modal-backdrop" role="presentation">
       <section aria-modal="true" className="slei-dialog slei-window-close-confirm" role="dialog">
         <header>
-          <span className="slei-badge slei-badge--attention">{input.messages.common.closeWindow}</span>
           <h2>{input.messages.common.confirmCloseWindow}</h2>
         </header>
         <div className="slei-modal-actions">
@@ -725,7 +723,6 @@ function ComputerCreateModal(input: {
     <div className="slei-modal-backdrop" role="presentation">
       <section aria-modal="true" className="slei-dialog slei-computer-modal" role="dialog">
         <header>
-          <span className="slei-badge slei-badge--attention">{input.messages.computers.computer}</span>
           <h2><Monitor aria-hidden="true" size={20} />{input.messages.computers.newComputer}</h2>
         </header>
         <form className="slei-channel-modal__form" onSubmit={submitCreate}>
@@ -872,7 +869,6 @@ function RuntimeOnboardingModal(input: {
     <div className="slei-modal-backdrop" role="presentation">
       <section aria-modal="true" className="slei-dialog slei-runtime-modal" role="dialog">
         <div>
-          <span className="slei-badge slei-badge--attention">{input.messages.onboarding.runtimeSetup}</span>
           <h2>{input.messages.onboarding.title}</h2>
           <p>{input.messages.onboarding.description}</p>
         </div>

@@ -41,10 +41,12 @@ body,
 
   background: var(--color-bg);
   border-radius: var(--app-window-radius);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 20%);
   color: var(--color-text-primary);
   display: grid;
   grid-template-columns: var(--rail-width) var(--slei-sidebar-width, var(--sidebar-width)) 8px minmax(0, 1fr);
-  height: 100vh;
+  height: calc(100vh - 16px);
+  margin: 8px;
   min-height: 0;
   overflow: hidden;
 }
@@ -387,6 +389,10 @@ body,
   padding: var(--padding-panel);
 }
 
+.slei-workspace-header > div:first-child {
+  min-width: 0;
+}
+
 .slei-workspace-header h1 {
   align-items: center;
   display: flex;
@@ -394,10 +400,24 @@ body,
   font-size: var(--text-2xl);
   line-height: var(--leading-tight);
   margin: var(--gap-xs) 0;
+  min-width: 0;
+}
+
+.slei-workspace-header h1 svg {
+  flex: 0 0 auto;
+}
+
+.slei-workspace-header h1 span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slei-workspace-header p {
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: var(--leading-ui);
   margin: 0;
 }
 
@@ -429,8 +449,13 @@ body,
 
 .slei-chat-header-actions {
   display: inline-flex;
+  flex: 0 0 auto;
   gap: var(--gap-sm);
   margin-left: auto;
+}
+
+.slei-chat-header-actions .slei-button {
+  flex: 0 0 auto;
 }
 
 .slei-search-panel {

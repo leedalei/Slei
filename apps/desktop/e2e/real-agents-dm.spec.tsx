@@ -336,6 +336,22 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("帮我检查历史会话");
   });
 
+  it("renders the member name and created time under direct message session titles", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-old"
+        activeView="chat"
+        data={createSleiFixtures({ conversations: [codaDm], conversationSessions: codaSessions, members: [agent] })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("Coda ｜");
+    expect(html).not.toContain("@coda · 私聊");
+  });
+
   it("falls back to the new session title for unnamed direct message sessions", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

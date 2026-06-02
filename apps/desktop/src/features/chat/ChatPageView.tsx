@@ -101,7 +101,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   }).filter((message) => !activeConversation || !currentSessionId || !message.sessionId || message.sessionId === currentSessionId);
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? activeSessions[0];
-  const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : `# ${stripChannelHash(activeChannel.name)}`;
+  const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
+  const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
+  const detailSubtitle = dmMember
+    ? `${dmMember.name} ｜ ${formatMessageTime(activeSession?.createdAt ?? activeConversation?.createdAt ?? "")}`
+    : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
 
@@ -143,8 +147,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     <section className="slei-chat-page">
       <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
-          <h1>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}{detailTitle}</h1>
-          <p>{dmMember ? `${dmMember.handle} · ${messages.chat.directMessage}` : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description}</p>
+          <h1 aria-label={detailAriaLabel}>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}<span>{detailTitle}</span></h1>
+          <p>{detailSubtitle}</p>
         </div>
         {dmMember && activeConversation ? (
           <div className="slei-chat-header-actions">
@@ -295,7 +299,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             <button aria-label={messages.common.addImage} className="slei-icon-button" onClick={() => imageInputRef.current?.click()} type="button"><ImageIcon aria-hidden="true" size={15} /></button>
             <button aria-label={messages.common.addAttachment} className="slei-icon-button" onClick={() => fileInputRef.current?.click()} type="button"><Paperclip aria-hidden="true" size={15} /></button>
           </div>
-          <button className="slei-button slei-button--primary slei-send-button" data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</button>
+          <button className="slei-button slei-button--accent slei-send-button" data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</button>
         </div>
       </form>
     </section>

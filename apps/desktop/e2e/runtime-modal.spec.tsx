@@ -50,6 +50,42 @@ describe("runtime setup onboarding modal", () => {
     expect(html).toContain("重新检测");
   });
 
+  it("does not render an attention badge inside the runtime modal", () => {
+    const data = createSleiFixtures({
+      nodes: [
+        {
+          id: "local-node",
+          name: "Lei MacBook",
+          status: "connected",
+          daemonVersion: "0.1.0",
+          device: {
+            platform: "darwin",
+            arch: "arm64",
+            hostname: "lei-macbook.local",
+          },
+          runtimes: [{ kind: "ClaudeCode", readiness: "unknown" }],
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: false,
+          nodes: data.nodes,
+        }}
+        data={data}
+      />,
+    );
+
+    const modalHtml = html.match(/<section aria-modal="true" class="slei-dialog slei-runtime-modal"[\s\S]*?<\/section>/)?.[0] ?? "";
+    expect(modalHtml).not.toContain("slei-badge--attention");
+  });
+
   it("shows detected Claude runtime version when available", () => {
     const data = createSleiFixtures({
       nodes: [
