@@ -302,6 +302,90 @@ describe("ClaudeAgentWorker start_run", () => {
     ]);
   });
 
+  it("includes Claude Agent SDK stderr when the query throws", async () => {
+    const command = {
+      type: "start_run" as const,
+      run_id: "run_1",
+      session: {
+        session_id: "bad-session",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode" as const,
+        cwd: "/workspace/agent_guide",
+        persist_session: true,
+        resume_session: true,
+      },
+      input: { prompt: "hello", context: [] },
+    };
+    const query = (params: { options?: Record<string, unknown> }) =>
+      (async function* () {
+        const stderr = params.options?.stderr;
+        if (typeof stderr === "function") {
+          stderr("No conversation found for session bad-session\n");
+        }
+        throw new Error("Claude Code process exited with code 1");
+      })();
+
+    const events: unknown[] = [];
+    for await (const event of runClaudeCode(command, query)) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "failed",
+        runId: "run_1",
+        message: "Claude Code process exited with code 1\nNo conversation found for session bad-session",
+      },
+    ]);
+  });
+
+  it("retries resumed runs as a fresh session when Claude exits before producing events", async () => {
+    const command = {
+      type: "start_run" as const,
+      run_id: "run_1",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode" as const,
+        cwd: "/workspace/agent_guide",
+        persist_session: true,
+        resume_session: true,
+      },
+      input: { prompt: "hello", context: [] },
+    };
+    const seenOptions: unknown[] = [];
+    const query = (params: { options?: Record<string, unknown> }) =>
+      (async function* () {
+        seenOptions.push(params.options);
+        if (params.options?.resume) {
+          throw new Error("Claude Code process exited with code 1");
+        }
+        yield {
+          type: "assistant",
+          message: { content: [{ type: "text", text: "hello" }] },
+        };
+        yield { type: "result" };
+      })();
+
+    const events: unknown[] = [];
+    for await (const event of runClaudeCode(command, query)) {
+      events.push(event);
+    }
+
+    expect(seenOptions).toMatchObject([
+      { resume: "11111111-1111-4111-8111-111111111111" },
+      { sessionId: "11111111-1111-4111-8111-111111111111" },
+    ]);
+    expect(events).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "hello" }] },
+      },
+      { type: "completed", runId: "run_1" },
+    ]);
+  });
+
   it("injects Slei agent identity and skills into the SDK system prompt", () => {
     const cwd = mkdtempSync(join(tmpdir(), "slei-agent-context-"));
     mkdirSync(join(cwd, "skills"));

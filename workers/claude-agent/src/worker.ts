@@ -97,27 +97,54 @@ export async function* runClaudeCode(
   command: StartRunCommand,
   query: ClaudeAgentQuery = claudeAgentQuery as ClaudeAgentQuery,
 ): AsyncIterable<ClaudeSdkEvent> {
-  let emittedTerminalEvent = false;
-  const sdkMessages = query({
-    prompt: promptForRun(command),
-    options: buildClaudeSdkOptions(command),
-  });
-
-  for await (const message of sdkMessages) {
-    for (const event of sdkMessageToClaudeEvents(command, message)) {
-      if (event.type === "completed" || event.type === "failed") {
-        emittedTerminalEvent = true;
-      }
-      yield event;
-      if (event.type === "failed") {
-        closeSdkMessages(sdkMessages);
-        return;
-      }
+  for (const forceFreshSession of [false, true]) {
+    if (forceFreshSession && !command.session.resume_session) {
+      break;
     }
-  }
+    let emittedAnyEvent = false;
+    let emittedTerminalEvent = false;
+    let stderr = "";
+    const sdkMessages = query({
+      prompt: promptForRun(command),
+      options: {
+        ...buildClaudeSdkOptions(command, forceFreshSession),
+        stderr(data: string) {
+          stderr += data;
+        },
+      },
+    });
 
-  if (!emittedTerminalEvent) {
-    yield { type: "completed", runId: command.run_id };
+    try {
+      for await (const message of sdkMessages) {
+        for (const event of sdkMessageToClaudeEvents(command, message)) {
+          emittedAnyEvent = true;
+          if (event.type === "completed" || event.type === "failed") {
+            emittedTerminalEvent = true;
+          }
+          yield event;
+          if (event.type === "failed") {
+            closeSdkMessages(sdkMessages);
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      closeSdkMessages(sdkMessages);
+      if (shouldRetryResumeAsFreshSession(command, forceFreshSession, emittedAnyEvent, error)) {
+        continue;
+      }
+      yield {
+        type: "failed",
+        runId: command.run_id,
+        message: queryErrorMessage(error, stderr),
+      };
+      return;
+    }
+
+    if (!emittedTerminalEvent) {
+      yield { type: "completed", runId: command.run_id };
+    }
+    return;
   }
 }
 
@@ -125,6 +152,26 @@ function closeSdkMessages(messages: AsyncIterable<unknown>): void {
   if (isRecord(messages) && typeof messages.close === "function") {
     messages.close();
   }
+}
+
+function queryErrorMessage(error: unknown, stderr: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const details = stderr.trim();
+  return details ? `${message}\n${details}` : message;
+}
+
+function shouldRetryResumeAsFreshSession(
+  command: StartRunCommand,
+  forceFreshSession: boolean,
+  emittedAnyEvent: boolean,
+  error: unknown,
+): boolean {
+  return (
+    command.session.resume_session &&
+    !forceFreshSession &&
+    !emittedAnyEvent &&
+    queryErrorMessage(error, "").includes("Claude Code process exited with code 1")
+  );
 }
 
 export function buildClaudeCliArgs(command: StartRunCommand): string[] {
@@ -154,7 +201,10 @@ export function buildClearClaudeSessionCliArgs(command: ClearSessionCommand): st
   return args;
 }
 
-export function buildClaudeSdkOptions(command: StartRunCommand): Record<string, unknown> {
+export function buildClaudeSdkOptions(
+  command: StartRunCommand,
+  forceFreshSession = false,
+): Record<string, unknown> {
   const isolatedOptions = buildIsolatedSdkOptions("Controlled", command.session.cwd);
   const options: Record<string, unknown> = {
     cwd: command.session.cwd,
@@ -176,7 +226,7 @@ export function buildClaudeSdkOptions(command: StartRunCommand): Record<string, 
   }
 
   if (command.session.persist_session) {
-    if (command.session.resume_session) {
+    if (command.session.resume_session && !forceFreshSession) {
       options.resume = command.session.session_id;
     } else {
       options.sessionId = command.session.session_id;
