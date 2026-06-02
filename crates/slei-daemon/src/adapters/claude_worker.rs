@@ -84,6 +84,19 @@ impl ClaudeWorkerAdapter {
         Ok(())
     }
 
+    pub fn resolve_permission(
+        &self,
+        request_id: &str,
+        decision: &str,
+    ) -> Result<(), ClaudeWorkerError> {
+        self.transport.send(json!({
+            "type": "resolve_permission",
+            "request_id": request_id,
+            "decision": decision,
+        }))?;
+        Ok(())
+    }
+
     pub fn clear_session(&self, session: &RuntimeSession) -> Result<(), ClaudeWorkerError> {
         self.transport.send(json!({
             "type": "clear_session",

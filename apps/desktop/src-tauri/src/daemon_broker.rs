@@ -402,6 +402,13 @@ pub struct ConversationMessageReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PermissionResolveRequest {
+    pub request_id: String,
+    pub decision: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ConversationMessageRequest {
     pub author_id: String,
     pub body: String,
@@ -442,7 +449,7 @@ impl DaemonBroker {
             data_root: data_root.clone(),
             last_authorization_header: Mutex::new(None),
             local_node_name: Mutex::new("本机设备".to_string()),
-            agents: Mutex::new(Vec::new()),
+            agents: Mutex::new(load_local_agents_at_root(&data_root)),
             channels: Mutex::new(vec![ChannelView {
                 id: "all".to_string(),
                 name: "all".to_string(),
@@ -617,18 +624,18 @@ impl DaemonBroker {
                 conversation: None,
             };
         }
-        if let Some(existing) = self
-            .agents
-            .lock()
-            .expect("agents mutex poisoned")
-            .iter()
-            .find(|agent| {
-                agent.id == "agent_guide_local_node"
-                    || agent.handle == "@yeal"
-                    || agent.handle == "@leelei"
-            })
-            .cloned()
-        {
+        let existing_guide = {
+            let agents = self.agents.lock().expect("agents mutex poisoned");
+            agents
+                .iter()
+                .find(|agent| {
+                    agent.id == "agent_guide_local_node"
+                        || agent.handle == "@yeal"
+                        || agent.handle == "@leelei"
+                })
+                .cloned()
+        };
+        if let Some(existing) = existing_guide {
             let existing = normalize_guide_agent_identity(existing);
             let _ = sanitize_legacy_guide_memory(&existing);
             let _ = write_local_agent_skills(&existing);
@@ -752,6 +759,65 @@ impl DaemonBroker {
         Err(CardError::CardNotFound)
     }
 
+    pub fn resolve_permission(
+        &self,
+        request: PermissionResolveRequest,
+    ) -> Result<ConversationMessageReceipt, ConversationError> {
+        let mut messages = self
+            .conversation_messages
+            .lock()
+            .expect("conversation messages mutex poisoned");
+        for message in messages.iter_mut() {
+            let Some(cards) = message.cards.as_mut() else {
+                continue;
+            };
+            if !cards.iter().any(|card| {
+                card.kind == "permissionApproval"
+                    && card
+                        .draft
+                        .get("requestId")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(request.request_id.as_str())
+            }) {
+                continue;
+            }
+            let state = if request.decision == "deny" {
+                "rejected"
+            } else {
+                "done"
+            };
+            for card in cards.iter_mut() {
+                if card.kind == "permissionApproval"
+                    && card
+                        .draft
+                        .get("requestId")
+                        .and_then(serde_json::Value::as_str)
+                        == Some(request.request_id.as_str())
+                {
+                    card.state = state.to_string();
+                    card.done_label = if request.decision == "deny" {
+                        "已拒绝".to_string()
+                    } else {
+                        "已允许".to_string()
+                    };
+                }
+            }
+            message.status = Some(if request.decision == "deny" {
+                "failed".to_string()
+            } else {
+                "done".to_string()
+            });
+            let updated = message.clone();
+            persist_local_conversation_messages_at_root(
+                &self.data_root,
+                &updated.conversation_id,
+                &messages,
+            )?;
+            return Ok(ConversationMessageReceipt { message: updated });
+        }
+        Err(ConversationError::ConversationNotFound)
+    }
+
     pub fn list_agents(&self) -> AgentListReceipt {
         if let Some(receipt) = self.fetch_agents_from_daemon() {
             for agent in &receipt.agents {
@@ -812,6 +878,7 @@ impl DaemonBroker {
         agent.skills = Some(default_skill_records(&agent));
         create_local_agent_workspace(&agent)?;
         agents.push(agent.clone());
+        persist_local_agents_at_root(&self.data_root, &agents)?;
         drop(agents);
         self.ensure_channel_membership("all", &agent.id);
         Ok(AgentReceipt { agent })
@@ -851,9 +918,9 @@ impl DaemonBroker {
             agent.node_id = node_id.trim().to_string();
         }
         agent.updated_at = monotonic_id();
-        Ok(AgentReceipt {
-            agent: agent.clone(),
-        })
+        let updated = agent.clone();
+        persist_local_agents_at_root(&self.data_root, &agents)?;
+        Ok(AgentReceipt { agent: updated })
     }
 
     pub fn remember_agent_fact(
@@ -1657,6 +1724,7 @@ impl DaemonBroker {
             Some(existing) => *existing = agent,
             None => agents.push(agent),
         }
+        let _ = persist_local_agents_at_root(&self.data_root, &agents);
     }
 
     fn local_agent_workspace(&self, id: &str) -> String {
@@ -2011,6 +2079,162 @@ fn local_data_root() -> String {
         .or_else(|_| env::var("HOME").map(|home| format!("{home}/.slei")))
         .unwrap_or_else(|_| ".slei".to_string());
     root
+}
+
+fn load_local_agents_at_root(root: &str) -> Vec<DesktopAgentView> {
+    let index_path = Path::new(root).join("agents/index.json");
+    let mut agents = fs::read_to_string(&index_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Vec<DesktopAgentView>>(&raw).ok())
+        .unwrap_or_default();
+
+    let mut should_persist = false;
+    for agent in &mut agents {
+        if let Some(handle) = recover_local_agent_handle(agent) {
+            if agent.handle != handle {
+                agent.handle = handle;
+                should_persist = true;
+            }
+        }
+    }
+
+    let recovered = recover_local_agent_workspaces(root, &agents);
+    if !recovered.is_empty() {
+        agents.extend(recovered);
+        should_persist = true;
+    }
+
+    agents.sort_by(|left, right| left.created_at.cmp(&right.created_at));
+    if should_persist {
+        let _ = persist_local_agents_at_root(root, &agents);
+    }
+    agents
+}
+
+fn persist_local_agents_at_root(root: &str, agents: &[DesktopAgentView]) -> Result<(), AgentError> {
+    let agents_dir = Path::new(root).join("agents");
+    fs::create_dir_all(&agents_dir).map_err(AgentError::Io)?;
+    let payload = serde_json::to_string_pretty(agents).map_err(AgentError::Json)?;
+    fs::write(agents_dir.join("index.json"), payload).map_err(AgentError::Io)
+}
+
+fn recover_local_agent_workspaces(
+    root: &str,
+    indexed_agents: &[DesktopAgentView],
+) -> Vec<DesktopAgentView> {
+    let agents_dir = Path::new(root).join("agents");
+    let Ok(entries) = fs::read_dir(&agents_dir) else {
+        return Vec::new();
+    };
+
+    entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            if !path.is_dir() {
+                return None;
+            }
+            let id = path.file_name()?.to_string_lossy().to_string();
+            if indexed_agents.iter().any(|agent| agent.id == id) {
+                return None;
+            }
+            recover_local_agent_workspace(&path, id)
+        })
+        .collect()
+}
+
+fn recover_local_agent_workspace(path: &Path, id: String) -> Option<DesktopAgentView> {
+    let memory_path = path.join("MEMORY.md");
+    let memory = fs::read_to_string(&memory_path).ok()?;
+    let name = memory
+        .lines()
+        .find_map(|line| line.strip_prefix("# "))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())?
+        .to_string();
+    let handle = recover_self_handle_from_memory(&memory, &name)
+        .unwrap_or_else(|| format!("@{}", name.to_lowercase().replace(' ', "-")));
+    let description = recover_agent_role(&memory).unwrap_or_else(|| "本地恢复的 Agent".to_string());
+    let workspace_path = path.to_string_lossy().to_string();
+    let docs_path = path.join("docs").to_string_lossy().to_string();
+    let created_at = id.strip_prefix("agent_").unwrap_or(&id).to_string();
+    let mut agent = DesktopAgentView {
+        id: id.clone(),
+        name,
+        handle,
+        agent_kind: Some(
+            if id == "agent_guide_local_node" {
+                "guide"
+            } else {
+                "agent"
+            }
+            .to_string(),
+        ),
+        system_owned: Some(id == "agent_guide_local_node"),
+        runtime_kind: "ClaudeCode".to_string(),
+        model: "Sonnet".to_string(),
+        node_id: "local-node".to_string(),
+        description,
+        workspace_path,
+        memory_path: memory_path.to_string_lossy().to_string(),
+        docs_path,
+        avatar_seed: id.clone(),
+        runtime_thread: Some(RuntimeThreadView {
+            runtime_kind: "ClaudeCode".to_string(),
+            status: "ready".to_string(),
+            created_at: created_at.clone(),
+        }),
+        skills: None,
+        channel_ids: Some(vec!["all".to_string()]),
+        created_at: created_at.clone(),
+        updated_at: created_at,
+    };
+    agent.skills = read_local_agent_skills(&agent).ok();
+    Some(agent)
+}
+
+fn recover_local_agent_handle(agent: &DesktopAgentView) -> Option<String> {
+    let memory = fs::read_to_string(&agent.memory_path).ok()?;
+    recover_self_handle_from_memory(&memory, &agent.name)
+}
+
+fn recover_self_handle_from_memory(memory: &str, name: &str) -> Option<String> {
+    let team_lines = memory
+        .lines()
+        .skip_while(|line| line.trim() != "## Team")
+        .skip(1)
+        .take_while(|line| !line.trim_start().starts_with("## "));
+
+    let candidates = team_lines
+        .filter(|line| line.trim_start().starts_with('@'))
+        .collect::<Vec<_>>();
+    candidates
+        .iter()
+        .copied()
+        .find(|line| line.contains("我自己"))
+        .or_else(|| {
+            candidates
+                .iter()
+                .copied()
+                .find(|line| line.to_lowercase().contains(&name.to_lowercase()))
+        })
+        .and_then(recover_handle_from_team_line)
+}
+
+fn recover_handle_from_team_line(line: &str) -> Option<String> {
+    let handle = line.trim().split_whitespace().next()?;
+    normalize_handle(handle).ok()
+}
+
+fn recover_agent_role(memory: &str) -> Option<String> {
+    let role_start = memory.find("## Role")?;
+    let after_role = &memory[role_start + "## Role".len()..];
+    let role = after_role
+        .split("\n## ")
+        .next()
+        .map(str::trim)
+        .filter(|role| !role.is_empty())?;
+    Some(role.to_string())
 }
 
 fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentError> {

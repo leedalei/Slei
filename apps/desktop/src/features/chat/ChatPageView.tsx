@@ -2,12 +2,39 @@ import { useRef, useState } from "react";
 import { ArrowDown, AtSign, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView } from "../../lib/daemon-bridge";
+import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot } from "../../components";
-function InteractiveCard({ card, messages, onCreate }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void }) {
+function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
+  if (card.kind === "permissionApproval") {
+    const done = card.state !== "pending";
+    const requestId = typeof card.draft.requestId === "string" ? card.draft.requestId : "";
+    const targetPath = typeof card.draft.targetPath === "string" ? card.draft.targetPath : card.summary;
+    const toolName = typeof card.draft.toolName === "string" ? card.draft.toolName : "Write";
+    return (
+      <article className="slei-agent-draft-card slei-interactive-card slei-interactive-card--permissionApproval">
+        <div>
+          <span className="slei-badge slei-badge--attention">权限申请</span>
+          <h2>{card.title}</h2>
+          <p>{toolName} 需要写入工作区外路径：{targetPath}</p>
+          <small>仅影响当前会话；新会话会重新申请。</small>
+        </div>
+        <div className="slei-permission-actions">
+          <button className="slei-button slei-button--accent" disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_once")} type="button">
+            允许一次
+          </button>
+          <button className="slei-button" disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_session")} type="button">
+            本会话始终允许
+          </button>
+          <button className="slei-button slei-button--danger" disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "deny")} type="button">
+            拒绝
+          </button>
+        </div>
+      </article>
+    );
+  }
   const done = card.state === "done";
   return (
     <article className={`slei-agent-draft-card slei-interactive-card slei-interactive-card--${card.kind}`}>
@@ -101,7 +128,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onPermissionResolve, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -252,6 +279,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                       onChannelDraftCreate?.(card.draft, card.id);
                     }
                   }}
+                  onPermissionResolve={onPermissionResolve}
                 />
               ))}
             </div>

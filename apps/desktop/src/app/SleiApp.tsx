@@ -13,6 +13,7 @@ import {
   type DesktopAgentView,
   type DesktopNodeView,
   type NotificationPreferences,
+  type PermissionDecision,
   type AgentPathTarget,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
@@ -395,9 +396,13 @@ export function SleiApp() {
 
   async function handleCreateAgent(request: AgentDraftInput) {
     const receipt = await bridge.createAgent(request);
-    const member = memberFromAgentView(receipt.agent, runtimeSetup.nodes, messages);
-    setData((current) => createSleiFixtures({ ...current, members: [...current.members, member] }));
-    setActiveMemberId(member.id);
+    const agentReceipt = await bridge.listAgents();
+    const members = await loadGuideSkillsForMembers(
+      bridge,
+      mergeAgentViewsIntoMembers([], agentReceipt.agents, runtimeSetup.nodes, messages),
+    );
+    setData((current) => createSleiFixtures({ ...current, members }));
+    setActiveMemberId(receipt.agent.id);
     navigateToView("members");
   }
 
@@ -410,6 +415,19 @@ export function SleiApp() {
           ...message,
           cards: message.cards?.map((card) => (card.id === cardId ? receipt.card : card)),
         })),
+      }),
+    );
+  }
+
+  async function handlePermissionResolve(requestId: string, decision: PermissionDecision) {
+    const receipt = await bridge.resolvePermission({ requestId, decision });
+    const message = conversationMessageToSleiMessage(receipt.message, data.members, profile);
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        messages: current.messages.some((candidate) => candidate.id === message.id)
+          ? current.messages.map((candidate) => (candidate.id === message.id ? message : candidate))
+          : [...current.messages, message],
       }),
     );
   }
@@ -715,6 +733,7 @@ export function SleiApp() {
       onChannelCreate={handleCreateChannel}
       onChannelDelete={handleDeleteChannel}
       onInteractiveCardComplete={handleInteractiveCardComplete}
+      onPermissionResolve={handlePermissionResolve}
       onChannelSelect={(channelId) => {
         setActiveChannelId(channelId);
         setActiveConversationId(undefined);

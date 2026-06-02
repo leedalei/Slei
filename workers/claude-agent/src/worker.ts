@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { query as claudeAgentQuery } from "@anthropic-ai/claude-agent-sdk";
 
 import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events.js";
-import { buildIsolatedSdkOptions } from "./permissions.js";
+import { buildIsolatedSdkOptions, createRunPermissionController, type RunPermissionController } from "./permissions.js";
 import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol.js";
 import {
   createSleiMcpServer,
@@ -17,20 +17,24 @@ export type WorkerIO = {
   writeEvent(event: WorkerEvent): void;
 };
 
-export type RuntimeRunner = (command: StartRunCommand) => AsyncIterable<ClaudeSdkEvent>;
+export type RuntimeRunner = (command: StartRunCommand, controller?: RunPermissionController) => AsyncIterable<ClaudeSdkEvent>;
 export type RuntimeClearer = (command: ClearSessionCommand) => Promise<void>;
 export type ClaudeAgentQuery = (params: {
   prompt: string;
   options?: Record<string, unknown>;
 }) => AsyncIterable<unknown>;
 
+const defaultRuntimeRunner: RuntimeRunner = (command, controller) =>
+  runClaudeCode(command, claudeAgentQuery as ClaudeAgentQuery, controller);
+
 export class ClaudeAgentWorker {
   #authorized = false;
+  #permissionControllers = new Map<string, RunPermissionController>();
 
   constructor(
     private readonly launchSecret: string,
     private readonly io: WorkerIO,
-    private readonly runner: RuntimeRunner = runClaudeCode,
+    private readonly runner: RuntimeRunner = defaultRuntimeRunner,
     private readonly clearer: RuntimeClearer = clearClaudeCodeSession,
   ) {}
 
@@ -63,12 +67,28 @@ export class ClaudeAgentWorker {
 
     if (command.type === "cancel") {
       this.io.writeEvent({ type: "completed", run_id: command.run_id });
+      return;
+    }
+
+    if (command.type === "resolve_permission") {
+      for (const controller of this.#permissionControllers.values()) {
+        if (controller.resolvePermission({ requestId: command.request_id, decision: command.decision })) {
+          return;
+        }
+      }
     }
   }
 
   private async startRun(command: StartRunCommand): Promise<void> {
+    const controller = createRunPermissionController({
+      runId: command.run_id,
+      agentId: command.session.agent_id,
+      cwd: command.session.cwd,
+      sessionId: command.session.session_id,
+    });
+    this.#permissionControllers.set(command.run_id, controller);
     try {
-      for await (const event of this.runner(command)) {
+      for await (const event of this.runner(command, controller)) {
         this.io.writeEvent(mapClaudeSdkEvent(event));
       }
     } catch (error) {
@@ -77,6 +97,8 @@ export class ClaudeAgentWorker {
         run_id: command.run_id,
         message: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      this.#permissionControllers.delete(command.run_id);
     }
   }
 
@@ -96,6 +118,12 @@ export class ClaudeAgentWorker {
 export async function* runClaudeCode(
   command: StartRunCommand,
   query: ClaudeAgentQuery = claudeAgentQuery as ClaudeAgentQuery,
+  controller: RunPermissionController = createRunPermissionController({
+    runId: command.run_id,
+    agentId: command.session.agent_id,
+    cwd: command.session.cwd,
+    sessionId: command.session.session_id,
+  }),
 ): AsyncIterable<ClaudeSdkEvent> {
   for (const forceFreshSession of [false, true]) {
     if (forceFreshSession && !command.session.resume_session) {
@@ -107,7 +135,7 @@ export async function* runClaudeCode(
     const sdkMessages = query({
       prompt: promptForRun(command),
       options: {
-        ...buildClaudeSdkOptions(command, forceFreshSession),
+        ...buildClaudeSdkOptions(command, forceFreshSession, controller),
         stderr(data: string) {
           stderr += data;
         },
@@ -115,7 +143,7 @@ export async function* runClaudeCode(
     });
 
     try {
-      for await (const message of sdkMessages) {
+      for await (const message of streamSdkMessagesWithPermissionRequests(sdkMessages, controller)) {
         for (const event of sdkMessageToClaudeEvents(command, message)) {
           emittedAnyEvent = true;
           if (event.type === "completed" || event.type === "failed") {
@@ -204,15 +232,23 @@ export function buildClearClaudeSessionCliArgs(command: ClearSessionCommand): st
 export function buildClaudeSdkOptions(
   command: StartRunCommand,
   forceFreshSession = false,
+  controller: RunPermissionController = createRunPermissionController({
+    runId: command.run_id,
+    agentId: command.session.agent_id,
+    cwd: command.session.cwd,
+    sessionId: command.session.session_id,
+  }),
 ): Record<string, unknown> {
-  const isolatedOptions = buildIsolatedSdkOptions("Controlled", command.session.cwd);
+  const isolatedOptions = buildIsolatedSdkOptions("Controlled", command.session.cwd, controller);
   const options: Record<string, unknown> = {
     cwd: command.session.cwd,
     persistSession: command.session.persist_session,
+    tools: isolatedOptions.tools,
     permissionMode: isolatedOptions.permissionMode,
     allowedTools: isolatedOptions.allowedTools,
     disallowedTools: isolatedOptions.disallowedTools,
     toolAliases: isolatedOptions.toolAliases,
+    canUseTool: isolatedOptions.canUseTool,
     systemPrompt: buildSleiSystemPrompt(command.session.cwd),
     mcpServers: {
       slei: createSleiMcpServer(),
@@ -232,6 +268,34 @@ export function buildClaudeSdkOptions(
   }
 
   return options;
+}
+
+async function* streamSdkMessagesWithPermissionRequests(
+  messages: AsyncIterable<unknown>,
+  controller: RunPermissionController,
+): AsyncIterable<unknown | ClaudeSdkEvent> {
+  const iterator = messages[Symbol.asyncIterator]();
+  let nextMessage = iterator.next();
+  let nextPermission = controller.nextPermissionRequest();
+
+  for (;;) {
+    const winner = await Promise.race([
+      nextMessage.then((result) => ({ kind: "message" as const, result })),
+      nextPermission.then((result) => ({ kind: "permission" as const, result })),
+    ]);
+
+    if (winner.kind === "permission") {
+      nextPermission = controller.nextPermissionRequest();
+      yield winner.result;
+      continue;
+    }
+
+    if (winner.result.done) {
+      return;
+    }
+    nextMessage = iterator.next();
+    yield winner.result.value;
+  }
 }
 
 function claudeModelName(model: string | undefined): string | undefined {
@@ -325,6 +389,23 @@ function sdkMessageToClaudeEvents(
 ): ClaudeSdkEvent[] {
   if (!isRecord(message)) {
     return [];
+  }
+
+  if (message.type === "permission_request") {
+    return [
+      {
+        type: "permission_request",
+        requestId: stringField(message, "requestId"),
+        runId: stringField(message, "runId"),
+        toolUseId: stringField(message, "toolUseId"),
+        agentId: stringField(message, "agentId"),
+        toolName: stringField(message, "toolName"),
+        risk: riskField(message.risk),
+        input: recordPayload(message.input),
+        targetPath: typeof message.targetPath === "string" ? message.targetPath : undefined,
+        sessionId: typeof message.sessionId === "string" ? message.sessionId : undefined,
+      },
+    ];
   }
 
   if (message.type === "assistant") {
@@ -430,6 +511,14 @@ function assistantContent(message: Record<string, unknown>): Array<Record<string
 
 function recordPayload(input: unknown): Record<string, unknown> {
   return isRecord(input) ? input : { value: input };
+}
+
+function stringField(value: Record<string, unknown>, key: string): string {
+  return typeof value[key] === "string" ? value[key] : "";
+}
+
+function riskField(value: unknown): "read_only" | "controlled" | "dangerous" {
+  return value === "read_only" || value === "controlled" || value === "dangerous" ? value : "controlled";
 }
 
 function resultErrorMessage(message: Record<string, unknown>): string {

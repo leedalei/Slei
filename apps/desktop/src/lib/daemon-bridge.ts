@@ -227,6 +227,13 @@ export type InteractiveCardReceipt = {
   card: InteractiveCardView;
 };
 
+export type PermissionDecision = "approve_once" | "approve_session" | "deny";
+
+export type PermissionResolveRequest = {
+  requestId: string;
+  decision: PermissionDecision;
+};
+
 export type GuideBootstrapReceipt = {
   status: "created" | "alreadyExists" | "runtimeUnavailable" | "conflict" | string;
   agent?: DesktopAgentView;
@@ -304,6 +311,7 @@ export type DaemonBridge = {
   activateConversationSession(conversationId: string, sessionId: string): Promise<ConversationSessionReceipt>;
   listConversationMessages(conversationId: string): Promise<ConversationMessageListReceipt>;
   sendConversationMessage(conversationId: string, request: ConversationMessageRequest, sessionId?: string): Promise<ConversationMessageReceipt>;
+  resolvePermission(request: PermissionResolveRequest): Promise<ConversationMessageReceipt>;
   uploadConversationAttachment(request: ConversationAttachmentUploadRequest): Promise<ConversationAttachmentReceipt>;
   listPreferences(): Promise<PreferencesReceipt>;
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
@@ -459,6 +467,27 @@ export function createDaemonBridgeMock(input: {
         cards: message.cards?.map((candidate) => candidate.id === cardId ? next : candidate),
       }));
       return { card: next };
+    },
+    async resolvePermission(request) {
+      const state = request.decision === "deny" ? "rejected" : "done";
+      const doneLabel = request.decision === "deny" ? "已拒绝" : "已允许";
+      let updated: ConversationMessageView | undefined;
+      messages = messages.map((message) => {
+        const hasCard = message.cards?.some((card) => card.kind === "permissionApproval" && card.draft.requestId === request.requestId);
+        if (!hasCard) return message;
+        updated = {
+          ...message,
+          status: request.decision === "deny" ? "failed" : "done",
+          cards: message.cards?.map((card) => (
+            card.kind === "permissionApproval" && card.draft.requestId === request.requestId
+              ? { ...card, state, doneLabel }
+              : card
+          )),
+        };
+        return updated;
+      });
+      if (!updated) throw new Error("permission request not found");
+      return { message: updated };
     },
     async listAgents() {
       return { agents };
@@ -715,6 +744,7 @@ export function createDaemonBridge(): DaemonBridge {
       activateConversationSession: (conversationId: string, sessionId: string) => invoke<ConversationSessionReceipt>("activate_conversation_session_command", { conversationId, sessionId }),
       listConversationMessages: (conversationId: string) => invoke<ConversationMessageListReceipt>("list_conversation_messages_command", { conversationId }),
       sendConversationMessage: (conversationId: string, request: ConversationMessageRequest, sessionId?: string) => invoke<ConversationMessageReceipt>("send_conversation_message_command", { conversationId, request, sessionId }),
+      resolvePermission: (request: PermissionResolveRequest) => invoke<ConversationMessageReceipt>("resolve_permission_command", { request }),
       uploadConversationAttachment: (request: ConversationAttachmentUploadRequest) => invoke<ConversationAttachmentReceipt>("upload_conversation_attachment_command", { request }),
       listPreferences: () => invoke<PreferencesReceipt>("list_preferences_command"),
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),

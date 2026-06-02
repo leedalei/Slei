@@ -7,7 +7,7 @@ use crate::daemon_broker::{
     ConversationMessageReceipt, ConversationMessageRequest, ConversationReceipt,
     ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
     EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
-    NodeNameError, NodeRenameReceipt, PreferencesError, PreferencesReceipt,
+    NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
     PreferencesUpdateRequest, SanitizedDaemonStatus, SkillListReceipt,
 };
 
@@ -180,6 +180,13 @@ pub fn send_conversation_message(
     request: ConversationMessageRequest,
 ) -> Result<ConversationMessageReceipt, ConversationError> {
     broker.send_conversation_message(conversation_id, request)
+}
+
+pub fn resolve_permission(
+    broker: &DaemonBroker,
+    request: PermissionResolveRequest,
+) -> Result<ConversationMessageReceipt, ConversationError> {
+    broker.resolve_permission(request)
 }
 
 #[tauri::command]
@@ -384,4 +391,12 @@ pub fn upload_conversation_attachment_command(
     request: ConversationAttachmentUploadRequest,
 ) -> Result<ConversationAttachmentReceipt, String> {
     upload_conversation_attachment(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn resolve_permission_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: PermissionResolveRequest,
+) -> Result<ConversationMessageReceipt, String> {
+    resolve_permission(state.inner(), request).map_err(|error| error.to_string())
 }

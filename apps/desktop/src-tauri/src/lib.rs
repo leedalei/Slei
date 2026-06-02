@@ -30,6 +30,7 @@ pub fn run() {
             commands::list_conversation_messages_command,
             commands::send_conversation_message_command,
             commands::upload_conversation_attachment_command,
+            commands::resolve_permission_command,
             commands::refresh_runtime_status_command,
             commands::rename_local_node_command,
         ])
@@ -54,6 +55,15 @@ mod tests {
         PreferencesUpdateRequest, RuntimeDescriptor,
     };
     use std::fs;
+    use std::sync::{Mutex, MutexGuard};
+
+    static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn test_env_lock() -> MutexGuard<'static, ()> {
+        TEST_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     #[test]
     fn broker_sanitizes_status_for_webview() {
@@ -122,6 +132,7 @@ mod tests {
 
     #[test]
     fn node_commands_sanitize_runtime_status_and_support_device_name() {
+        let _env_guard = test_env_lock();
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: "http://127.0.0.1:4319".to_string(),
@@ -155,6 +166,7 @@ mod tests {
 
     #[test]
     fn agent_commands_sanitize_dto_and_support_create_update_memory() {
+        let _env_guard = test_env_lock();
         let agent_root =
             std::env::temp_dir().join(format!("slei-desktop-agent-test-{}", std::process::id()));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
@@ -215,7 +227,132 @@ mod tests {
     }
 
     #[test]
+    fn created_agents_persist_and_reload_from_local_registry() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-persist-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&agent_root);
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let descriptor = RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        };
+        let broker = DaemonBroker::for_tests(descriptor.clone());
+
+        let created = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Bob".to_string(),
+                handle: "bob".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "架构工程师".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+
+        assert!(agent_root.join("agents/index.json").is_file());
+
+        let reloaded = DaemonBroker::for_tests(descriptor);
+        let agents = list_agents(&reloaded);
+        assert_eq!(agents.agents.len(), 1);
+        assert_eq!(agents.agents[0].id, created.id);
+        assert_eq!(agents.agents[0].name, "Bob");
+        assert_eq!(agents.agents[0].handle, "@bob");
+        assert_eq!(
+            agents.agents[0].channel_ids.as_deref(),
+            Some(&["all".to_string()][..])
+        );
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn local_agent_registry_recovers_self_handle_from_memory() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-handle-recover-test-{}",
+            std::process::id()
+        ));
+        let agent_id = "agent_123";
+        let agent_dir = agent_root.join("agents").join(agent_id);
+        let _ = fs::remove_dir_all(&agent_root);
+        fs::create_dir_all(agent_dir.join("docs")).unwrap();
+        fs::write(
+            agent_dir.join("MEMORY.md"),
+            "# Bob\n\n## Role\n架构工程师\n\n## Team\n@lei-lee — 人类用户，项目发起人\n@bob — 我自己，Bob\n",
+        )
+        .unwrap();
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let descriptor = RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        };
+
+        let recovered = list_agents(&DaemonBroker::for_tests(descriptor.clone()));
+        assert_eq!(recovered.agents[0].handle, "@bob");
+
+        let index_path = agent_root.join("agents/index.json");
+        let mut indexed_agents = recovered.agents;
+        indexed_agents[0].handle = "@lei-lee".to_string();
+        fs::write(&index_path, serde_json::to_string_pretty(&indexed_agents).unwrap()).unwrap();
+
+        let healed = list_agents(&DaemonBroker::for_tests(descriptor));
+        assert_eq!(healed.agents[0].handle, "@bob");
+        let index = fs::read_to_string(&index_path).unwrap();
+        assert!(index.contains("\"handle\": \"@bob\""));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn bootstrap_existing_guide_agent_does_not_deadlock() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-guide-bootstrap-deadlock-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&agent_root);
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let descriptor = RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        };
+
+        assert_eq!(
+            bootstrap_guide_agent(&DaemonBroker::for_tests(descriptor.clone())).status,
+            "created"
+        );
+        let broker = DaemonBroker::for_tests(descriptor);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let receipt = bootstrap_guide_agent(&broker);
+            let _ = sender.send(receipt.status);
+        });
+
+        let status = receiver
+            .recv_timeout(std::time::Duration::from_millis(500))
+            .expect("bootstrap should not block on the local agents mutex");
+        assert_eq!(status, "alreadyExists");
+        std::env::remove_var("SLEI_CLAUDE_VERSION_OVERRIDE");
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
     fn agent_workspace_commands_list_skills_and_open_only_agent_paths() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-agent-open-test-{}",
             std::process::id()
@@ -261,6 +398,7 @@ mod tests {
 
     #[test]
     fn broker_agent_workspaces_keep_broker_data_root_when_env_changes() {
+        let _env_guard = test_env_lock();
         let first_root = std::env::temp_dir().join(format!(
             "slei-desktop-agent-root-stable-first-{}",
             std::process::id()
@@ -293,8 +431,12 @@ mod tests {
         .unwrap()
         .agent;
 
-        assert!(agent.workspace_path.starts_with(first_root.to_str().unwrap()));
-        assert!(!agent.workspace_path.starts_with(second_root.to_str().unwrap()));
+        assert!(agent
+            .workspace_path
+            .starts_with(first_root.to_str().unwrap()));
+        assert!(!agent
+            .workspace_path
+            .starts_with(second_root.to_str().unwrap()));
         let skills = list_agent_skills(&broker, &agent.id).unwrap();
         assert!(skills.skills.iter().any(|skill| skill.id == "memory"));
 
@@ -303,6 +445,7 @@ mod tests {
 
     #[test]
     fn conversation_commands_create_dm_and_round_trip_messages() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-conversation-test-{}",
             std::process::id()
@@ -364,6 +507,7 @@ mod tests {
 
     #[test]
     fn conversation_sessions_and_attachments_round_trip() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-session-attachment-test-{}",
             std::process::id()
@@ -456,6 +600,7 @@ mod tests {
 
     #[test]
     fn agent_dm_send_returns_with_running_runtime_message() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-conversation-running-test-{}",
             std::process::id()
@@ -521,6 +666,7 @@ mod tests {
 
     #[test]
     fn agent_dm_local_runtime_session_is_reused_after_completion() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-conversation-resume-test-{}",
             std::process::id()
@@ -590,6 +736,7 @@ mod tests {
 
     #[test]
     fn guide_dm_without_card_shortcut_returns_running_runtime_message() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-guide-runtime-test-{}",
             std::process::id()
@@ -660,6 +807,7 @@ mod tests {
 
     #[test]
     fn guide_local_product_tool_appends_card_message() {
+        let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-guide-product-tool-test-{}",
             std::process::id()
@@ -693,7 +841,10 @@ mod tests {
         for _ in 0..10 {
             if messages.iter().any(|message| {
                 message.author_id == "agent_guide_local_node"
-                    && message.cards.as_ref().is_some_and(|cards| !cards.is_empty())
+                    && message
+                        .cards
+                        .as_ref()
+                        .is_some_and(|cards| !cards.is_empty())
             }) {
                 break;
             }
@@ -705,7 +856,10 @@ mod tests {
             .iter()
             .find(|message| {
                 message.author_id == "agent_guide_local_node"
-                    && message.cards.as_ref().is_some_and(|cards| !cards.is_empty())
+                    && message
+                        .cards
+                        .as_ref()
+                        .is_some_and(|cards| !cards.is_empty())
             })
             .expect("guide product tool should append a card-only message");
         assert_eq!(card_message.body, "");
@@ -722,6 +876,7 @@ mod tests {
 
     #[test]
     fn preferences_commands_round_trip_locale_and_notifications_without_secrets() {
+        let _env_guard = test_env_lock();
         let root = std::env::temp_dir().join(format!(
             "slei-desktop-preferences-test-{}",
             std::process::id()

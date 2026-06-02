@@ -12,6 +12,7 @@ import {
   runClaudeCode,
   type RuntimeRunner,
 } from "./worker.js";
+import { createRunPermissionController } from "./permissions.js";
 import type { WorkerEvent } from "./protocol.js";
 
 describe("ClaudeAgentWorker start_run", () => {
@@ -228,10 +229,15 @@ describe("ClaudeAgentWorker start_run", () => {
       sessionId: "11111111-1111-4111-8111-111111111111",
       permissionMode: "default",
       allowedTools: [
+        "Read",
+        "Grep",
+        "Glob",
+        "LS",
         "mcp__slei__slei_propose_interactive_card",
         "mcp__slei__slei_request_visible_delegation",
         "mcp__slei__slei_request_human_reply",
       ],
+      tools: ["Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"],
       mcpServers: { slei: expect.any(Object) },
     });
     expect(seenOptions[0]).not.toHaveProperty("settingSources");
@@ -253,6 +259,76 @@ describe("ClaudeAgentWorker start_run", () => {
           title: "创建 Bob",
           draft: { name: "Bob" },
         },
+      },
+      { type: "completed", runId: "run_1" },
+    ]);
+  });
+
+  it("emits permission requests while the SDK waits for canUseTool resolution", async () => {
+    const command = {
+      type: "start_run" as const,
+      run_id: "run_1",
+      session: {
+        session_id: "session_1",
+        agent_id: "agent_coda",
+        runtime: "ClaudeCode" as const,
+        cwd: "/workspace/app",
+        persist_session: true,
+        resume_session: false,
+      },
+      input: { prompt: "write outside", context: [] },
+    };
+    const controller = createRunPermissionController({
+      runId: command.run_id,
+      agentId: command.session.agent_id,
+      cwd: command.session.cwd,
+      sessionId: command.session.session_id,
+    });
+    const query = (params: { options?: Record<string, unknown> }) =>
+      (async function* () {
+        const canUseTool = params.options?.canUseTool;
+        if (typeof canUseTool !== "function") {
+          throw new Error("canUseTool missing");
+        }
+        const result = await canUseTool(
+          "Write",
+          { file_path: "/Users/lei/outside.ts" },
+          { signal: new AbortController().signal, toolUseID: "tool_1" },
+        );
+        yield {
+          type: "assistant",
+          message: { content: [{ type: "text", text: `permission:${result.behavior}` }] },
+        };
+        yield { type: "result" };
+      })();
+
+    const iterator = runClaudeCode(command, query, controller)[Symbol.asyncIterator]();
+    const first = await iterator.next();
+
+    expect(first.value).toMatchObject({
+      type: "permission_request",
+      requestId: expect.stringMatching(/^perm_/),
+      runId: "run_1",
+      toolUseId: "tool_1",
+      agentId: "agent_coda",
+      toolName: "Write",
+      targetPath: "/Users/lei/outside.ts",
+    });
+
+    controller.resolvePermission({ requestId: first.value.requestId, decision: "approve_once" });
+
+    const remaining: unknown[] = [];
+    for (;;) {
+      const next = await iterator.next();
+      if (next.done) break;
+      remaining.push(next.value);
+    }
+
+    expect(remaining).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "permission:allow" }] },
       },
       { type: "completed", runId: "run_1" },
     ]);

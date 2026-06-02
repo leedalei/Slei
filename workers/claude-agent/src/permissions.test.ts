@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIsolatedSdkOptions, toPermissionRequest } from "./permissions.js";
+import { buildIsolatedSdkOptions, createRunPermissionController, toPermissionRequest } from "./permissions.js";
 
 describe("Slei Claude SDK permission profile", () => {
   it("keeps local Claude settings while overriding the Slei permission boundary", () => {
@@ -10,12 +10,120 @@ describe("Slei Claude SDK permission profile", () => {
     expect(options).not.toHaveProperty("settingSources");
     expect(options).not.toHaveProperty("strictMcpConfig");
     expect(options.allowedTools).toEqual([
+      "Read",
+      "Grep",
+      "Glob",
+      "LS",
       "mcp__slei__slei_propose_interactive_card",
       "mcp__slei__slei_request_visible_delegation",
       "mcp__slei__slei_request_human_reply",
     ]);
+    expect(options.tools).toEqual([
+      "Read",
+      "Grep",
+      "Glob",
+      "LS",
+      "Write",
+      "Edit",
+      "MultiEdit",
+    ]);
     expect(options.disallowedTools).toContain("Task");
     expect(options.disallowedTools).not.toContain("mcp__*");
+  });
+
+  it("allows reads everywhere and writes inside the current workspace", async () => {
+    const controller = createRunPermissionController({
+      runId: "run_1",
+      agentId: "agent_coda",
+      cwd: "/workspace/app",
+      sessionId: "session_1",
+    });
+    const options = buildIsolatedSdkOptions("Controlled", "/workspace/app", controller);
+    const canUseTool = options.canUseTool;
+
+    await expect(canUseTool("Read", { file_path: "/Users/lei/private.txt" }, toolOptions("tool_read"))).resolves.toMatchObject({
+      behavior: "allow",
+    });
+    await expect(canUseTool("Write", { file_path: "/workspace/app/src/main.ts" }, toolOptions("tool_write"))).resolves.toMatchObject({
+      behavior: "allow",
+    });
+  });
+
+  it("requests approval for outside-workspace writes and resolves approve once", async () => {
+    const controller = createRunPermissionController({
+      runId: "run_1",
+      agentId: "agent_coda",
+      cwd: "/workspace/app",
+      sessionId: "session_1",
+    });
+    const options = buildIsolatedSdkOptions("Controlled", "/workspace/app", controller);
+    const pending = options.canUseTool("Write", { file_path: "/Users/lei/outside.ts" }, toolOptions("tool_1"));
+    const request = await controller.nextPermissionRequest();
+
+    expect(request).toMatchObject({
+      type: "permission_request",
+      requestId: expect.stringMatching(/^perm_/),
+      runId: "run_1",
+      toolUseId: "tool_1",
+      agentId: "agent_coda",
+      toolName: "Write",
+      risk: "controlled",
+      input: { file_path: "/Users/lei/outside.ts" },
+    });
+
+    controller.resolvePermission({ requestId: request.requestId, decision: "approve_once" });
+
+    await expect(pending).resolves.toMatchObject({
+      behavior: "allow",
+      toolUseID: "tool_1",
+    });
+  });
+
+  it("remembers approve session only for the current session", async () => {
+    const first = createRunPermissionController({
+      runId: "run_1",
+      agentId: "agent_coda",
+      cwd: "/workspace/app",
+      sessionId: "session_1",
+    });
+    const firstOptions = buildIsolatedSdkOptions("Controlled", "/workspace/app", first);
+    const pending = firstOptions.canUseTool("Edit", { file_path: "/Users/lei/outside.ts" }, toolOptions("tool_1"));
+    const request = await first.nextPermissionRequest();
+    first.resolvePermission({ requestId: request.requestId, decision: "approve_session" });
+    await expect(pending).resolves.toMatchObject({ behavior: "allow" });
+
+    await expect(firstOptions.canUseTool("Edit", { file_path: "/Users/lei/outside.ts" }, toolOptions("tool_2"))).resolves.toMatchObject({
+      behavior: "allow",
+    });
+
+    const second = createRunPermissionController({
+      runId: "run_2",
+      agentId: "agent_coda",
+      cwd: "/workspace/app",
+      sessionId: "session_2",
+    });
+    const secondOptions = buildIsolatedSdkOptions("Controlled", "/workspace/app", second);
+    void secondOptions.canUseTool("Edit", { file_path: "/Users/lei/outside.ts" }, toolOptions("tool_3"));
+
+    await expect(second.nextPermissionRequest()).resolves.toMatchObject({
+      runId: "run_2",
+      toolUseId: "tool_3",
+    });
+  });
+
+  it("denies unsupported dangerous tools without prompting", async () => {
+    const controller = createRunPermissionController({
+      runId: "run_1",
+      agentId: "agent_coda",
+      cwd: "/workspace/app",
+      sessionId: "session_1",
+    });
+    const options = buildIsolatedSdkOptions("Controlled", "/workspace/app", controller);
+
+    await expect(options.canUseTool("Bash", { command: "rm -rf /tmp/x" }, toolOptions("tool_bash"))).resolves.toMatchObject({
+      behavior: "deny",
+      message: expect.stringContaining("not allowed"),
+    });
   });
 
   it("applies the same isolation boundary to every Slei permission preset", () => {
@@ -54,3 +162,10 @@ describe("Slei Claude SDK permission profile", () => {
     });
   });
 });
+
+function toolOptions(toolUseID: string) {
+  return {
+    signal: new AbortController().signal,
+    toolUseID,
+  };
+}

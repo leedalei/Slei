@@ -889,6 +889,18 @@ body,
   padding: var(--padding-button-sm);
 }
 
+.slei-button--danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.slei-permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-xs);
+  justify-content: flex-end;
+}
+
 .slei-session-drawer {
   background: var(--color-surface);
   border-left: var(--border-panel) solid var(--color-border);

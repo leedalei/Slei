@@ -35,6 +35,10 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/interactive-cards/{id}/complete",
             post(api::cards::complete),
         )
+        .route(
+            "/v1/approvals/permissions/resolve",
+            post(api::approvals::resolve_permission),
+        )
         .route("/v1/conversations", get(api::conversations::list))
         .route("/v1/conversations/dm", post(api::conversations::create_dm))
         .route(

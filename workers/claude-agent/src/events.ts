@@ -26,6 +26,9 @@ export type ClaudeSdkEvent =
       agentId: string;
       toolName: string;
       risk: "read_only" | "controlled" | "dangerous";
+      input?: Record<string, unknown>;
+      targetPath?: string;
+      sessionId?: string;
     }
   | {
       type: "human_question";
@@ -81,7 +84,7 @@ export function mapClaudeSdkEvent(event: ClaudeSdkEvent): WorkerEvent {
         ok: !event.isError,
       };
     case "permission_request":
-      return {
+      return omitUndefined({
         type: "permission_requested",
         request_id: event.requestId,
         run_id: event.runId,
@@ -89,7 +92,10 @@ export function mapClaudeSdkEvent(event: ClaudeSdkEvent): WorkerEvent {
         agent_id: event.agentId,
         tool_name: event.toolName,
         risk: event.risk,
-      };
+        input: event.input,
+        target_path: event.targetPath,
+        session_id: event.sessionId,
+      });
     case "human_question":
       return {
         type: "human_question_requested",
@@ -119,4 +125,8 @@ export function mapClaudeSdkEvent(event: ClaudeSdkEvent): WorkerEvent {
         message: event.message,
       };
   }
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
 }

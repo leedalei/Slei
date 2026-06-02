@@ -34,7 +34,7 @@ export type CancelCommand = {
 export type ResolvePermissionCommand = {
   type: "resolve_permission";
   request_id: string;
-  decision: "approve" | "deny";
+  decision: "approve" | "approve_once" | "approve_session" | "deny";
 };
 
 export type ResolveHumanQuestionCommand = {
@@ -89,6 +89,9 @@ export type PermissionRequestedEvent = {
   agent_id: string;
   tool_name: string;
   risk: "read_only" | "controlled" | "dangerous";
+  input?: Record<string, unknown>;
+  target_path?: string;
+  session_id?: string;
 };
 
 export type HumanQuestionRequestedEvent = {
