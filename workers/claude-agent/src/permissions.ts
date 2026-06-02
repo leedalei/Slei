@@ -1,3 +1,5 @@
+import { createSleiToolAliases, SLEI_PRODUCT_TOOL_NAMES, toSleiMcpToolName } from "./slei-tools";
+
 export type PermissionPreset = "ReadOnly" | "Edit" | "Controlled";
 
 export type IsolatedSdkOptions = {
@@ -8,6 +10,8 @@ export type IsolatedSdkOptions = {
   permissionMode: "default" | "acceptEdits" | "plan";
   allowedTools: string[];
   disallowedTools: string[];
+  strictMcpConfig: true;
+  toolAliases: Record<string, string>;
   cwd: string;
 };
 
@@ -30,12 +34,10 @@ export function buildIsolatedSdkOptions(
     nativeSubagents: [],
     externalMcpServers: [],
     permissionMode: preset === "ReadOnly" ? "plan" : "default",
-    allowedTools: [
-      "slei_propose_interactive_card",
-      "slei_request_visible_delegation",
-      "slei_request_human_reply",
-    ],
-    disallowedTools: ["Task", "mcp__*", "Plugin:*", "Bash:curl", "Bash:wget"],
+    allowedTools: SLEI_PRODUCT_TOOL_NAMES.map(toSleiMcpToolName),
+    disallowedTools: ["Task", "Plugin:*", "Bash:curl", "Bash:wget"],
+    strictMcpConfig: true,
+    toolAliases: createSleiToolAliases(),
     cwd,
   };
 }

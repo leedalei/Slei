@@ -11,11 +11,12 @@ describe("isolated Claude SDK permission profile", () => {
     expect(options.nativeSubagents).toEqual([]);
     expect(options.externalMcpServers).toEqual([]);
     expect(options.allowedTools).toEqual([
-      "slei_propose_interactive_card",
-      "slei_request_visible_delegation",
-      "slei_request_human_reply",
+      "mcp__slei__slei_propose_interactive_card",
+      "mcp__slei__slei_request_visible_delegation",
+      "mcp__slei__slei_request_human_reply",
     ]);
     expect(options.disallowedTools).toContain("Task");
+    expect(options.disallowedTools).not.toContain("mcp__*");
   });
 
   it("applies the same isolation boundary to every Slei permission preset", () => {
@@ -27,8 +28,9 @@ describe("isolated Claude SDK permission profile", () => {
       expect(options.nativeSubagents).toEqual([]);
       expect(options.externalMcpServers).toEqual([]);
       expect(options.disallowedTools).toEqual(
-        expect.arrayContaining(["Task", "mcp__*", "Plugin:*"]),
+        expect.arrayContaining(["Task", "Plugin:*"]),
       );
+      expect(options.disallowedTools).not.toContain("mcp__*");
     }
   });
 

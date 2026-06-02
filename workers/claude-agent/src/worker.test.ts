@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { buildClaudeCliArgs, buildClearClaudeSessionCliArgs, ClaudeAgentWorker, type RuntimeRunner } from "./worker";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  buildClaudeCliArgs,
+  buildClaudeSdkOptions,
+  buildClearClaudeSessionCliArgs,
+  ClaudeAgentWorker,
+  runClaudeCode,
+  type RuntimeRunner,
+} from "./worker";
 import type { WorkerEvent } from "./protocol";
 
 describe("ClaudeAgentWorker start_run", () => {
@@ -158,5 +169,123 @@ describe("ClaudeAgentWorker start_run", () => {
       "--resume",
       "11111111-1111-4111-8111-111111111111",
     ]);
+  });
+
+  it("runs through Claude Agent SDK and maps Slei MCP tools to daemon product tool events", async () => {
+    const command = {
+      type: "start_run" as const,
+      run_id: "run_1",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode" as const,
+        cwd: "/workspace/agent_guide",
+        persist_session: true,
+        resume_session: false,
+      },
+      input: {
+        prompt: "帮我创建 Bob",
+        context: [],
+      },
+    };
+    const seenOptions: unknown[] = [];
+    const query = (params: { options?: unknown }) =>
+      (async function* () {
+        seenOptions.push(params.options);
+        yield {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: "准备创建。" }],
+          },
+        };
+        yield {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "tool_1",
+                name: "mcp__slei__slei_propose_interactive_card",
+                input: {
+                  kind: "createAgent",
+                  title: "创建 Bob",
+                  draft: { name: "Bob" },
+                },
+              },
+            ],
+          },
+        };
+        yield { type: "result" };
+      })();
+
+    const events: unknown[] = [];
+    for await (const event of runClaudeCode(command, query)) {
+      events.push(event);
+    }
+
+    expect(seenOptions[0]).toMatchObject({
+      cwd: "/workspace/agent_guide",
+      sessionId: "11111111-1111-4111-8111-111111111111",
+      permissionMode: "default",
+      allowedTools: [
+        "mcp__slei__slei_propose_interactive_card",
+        "mcp__slei__slei_request_visible_delegation",
+        "mcp__slei__slei_request_human_reply",
+      ],
+      mcpServers: { slei: expect.any(Object) },
+      strictMcpConfig: true,
+    });
+    expect(events).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "准备创建。" }] },
+      },
+      {
+        type: "product_tool",
+        runId: "run_1",
+        toolUseId: "tool_1",
+        agentId: "agent_guide",
+        toolName: "slei_propose_interactive_card",
+        payload: {
+          kind: "createAgent",
+          title: "创建 Bob",
+          draft: { name: "Bob" },
+        },
+      },
+      { type: "completed", runId: "run_1" },
+    ]);
+  });
+
+  it("injects Slei agent identity and skills into the SDK system prompt", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "slei-agent-context-"));
+    mkdirSync(join(cwd, "skills"));
+    writeFileSync(join(cwd, "MEMORY.md"), "# Yeal\n\n## Role\nSlei guide");
+    writeFileSync(
+      join(cwd, "skills", "guide-create.skill.md"),
+      "Trigger when the user asks Yeal to create an agent or member.",
+    );
+
+    const options = buildClaudeSdkOptions({
+      type: "start_run",
+      run_id: "run_1",
+      session: {
+        session_id: "11111111-1111-4111-8111-111111111111",
+        agent_id: "agent_guide",
+        runtime: "ClaudeCode",
+        cwd,
+        persist_session: true,
+        resume_session: false,
+      },
+      input: { prompt: "hello", context: [] },
+    });
+
+    expect(options.systemPrompt).toMatchObject({
+      type: "preset",
+      preset: "claude_code",
+      append: expect.stringContaining("Slei guide"),
+    });
+    expect(JSON.stringify(options.systemPrompt)).toContain("guide-create.skill.md");
+    expect(JSON.stringify(options.systemPrompt)).toContain("slei_propose_interactive_card");
   });
 });

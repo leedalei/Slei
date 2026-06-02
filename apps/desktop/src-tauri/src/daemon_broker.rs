@@ -738,12 +738,18 @@ impl DaemonBroker {
             return Ok(receipt);
         }
         let mut cards = self.cards.lock().expect("cards mutex poisoned");
-        let card = cards
-            .iter_mut()
-            .find(|card| card.id == card_id)
-            .ok_or(CardError::CardNotFound)?;
-        card.state = "done".to_string();
-        Ok(InteractiveCardReceipt { card: card.clone() })
+        if let Some(card) = cards.iter_mut().find(|card| card.id == card_id) {
+            card.state = "done".to_string();
+            return Ok(InteractiveCardReceipt { card: card.clone() });
+        }
+        drop(cards);
+        let card = complete_local_message_card(&self.data_root, card_id)
+            .map_err(CardError::Conversation)?;
+        if let Some(card) = card {
+            self.upsert_local_card(card.clone());
+            return Ok(InteractiveCardReceipt { card });
+        }
+        Err(CardError::CardNotFound)
     }
 
     pub fn list_agents(&self) -> AgentListReceipt {
@@ -2497,6 +2503,48 @@ fn persist_local_conversation_messages_at_root(
     fs::write(path, payload).map_err(ConversationError::Io)
 }
 
+fn complete_local_message_card(
+    data_root: &str,
+    card_id: &str,
+) -> Result<Option<InteractiveCardView>, ConversationError> {
+    let messages_root = Path::new(data_root).join("conversations/messages");
+    let entries = match fs::read_dir(&messages_root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(ConversationError::Io(error)),
+    };
+    for entry in entries {
+        let entry = entry.map_err(ConversationError::Io)?;
+        if entry.path().extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        let raw = fs::read_to_string(entry.path()).map_err(ConversationError::Io)?;
+        let mut messages: Vec<ConversationMessageView> =
+            serde_json::from_str(&raw).map_err(ConversationError::Json)?;
+        let mut completed = None;
+        for message in &mut messages {
+            let Some(cards) = message.cards.as_mut() else {
+                continue;
+            };
+            let Some(card) = cards.iter_mut().find(|card| card.id == card_id) else {
+                continue;
+            };
+            card.state = "done".to_string();
+            completed = Some(card.clone());
+            break;
+        }
+        if let Some(card) = completed {
+            let conversation_id = messages
+                .first()
+                .map(|message| message.conversation_id.clone())
+                .unwrap_or_default();
+            persist_local_conversation_messages_at_root(data_root, &conversation_id, &messages)?;
+            return Ok(Some(card));
+        }
+    }
+    Ok(None)
+}
+
 fn run_local_agent_dm_background(
     data_root: String,
     conversations: Arc<Mutex<Vec<ConversationView>>>,
@@ -2518,7 +2566,7 @@ fn run_local_agent_dm_background(
                 &conversations,
                 &conversation_id,
                 &run_id,
-                run_local_claude_agent(&agent, &prompt, &runtime_session),
+                run_local_claude_agent(&agent, &run_id, &prompt, &runtime_session),
                 started,
             );
         }
@@ -2544,7 +2592,7 @@ fn complete_local_agent_run(
     conversations: &Arc<Mutex<Vec<ConversationView>>>,
     conversation_id: &str,
     run_id: &str,
-    result: Result<String, String>,
+    result: Result<LocalAgentRunOutput, String>,
     started: Instant,
 ) {
     let mut messages = load_local_conversation_messages_at_root(data_root, conversation_id, None);
@@ -2552,10 +2600,27 @@ fn complete_local_agent_run(
         .iter_mut()
         .find(|candidate| candidate.run_id.as_deref() == Some(run_id))
     {
+        let mut card_messages = Vec::new();
         match result {
             Ok(output) => {
-                reply.body = output;
+                let reply_session_id = reply.session_id.clone();
+                let reply_author_id = reply.author_id.clone();
+                reply.body = output.body;
                 reply.status = Some("done".to_string());
+                for card in output.cards {
+                    card_messages.push(ConversationMessageView {
+                        id: format!("card_message_{}", card.id),
+                        conversation_id: conversation_id.to_string(),
+                        session_id: reply_session_id.clone(),
+                        author_id: reply_author_id.clone(),
+                        body: String::new(),
+                        attachments: None,
+                        cards: Some(vec![card]),
+                        run_id: None,
+                        status: Some("done".to_string()),
+                        created_at: monotonic_id(),
+                    });
+                }
                 mark_local_runtime_session_ready(data_root, conversations, conversation_id);
                 eprintln!(
                     "[slei-runtime] completed run_id={} elapsed_ms={}",
@@ -2574,6 +2639,7 @@ fn complete_local_agent_run(
                 );
             }
         }
+        messages.extend(card_messages);
         if let Err(error) =
             persist_local_conversation_messages_at_root(data_root, conversation_id, &messages)
         {
@@ -2613,10 +2679,11 @@ fn mark_local_runtime_session_ready(
 
 fn run_local_claude_agent(
     agent: &DesktopAgentView,
+    run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
-) -> Result<String, String> {
-    run_local_claude_agent_impl(agent, prompt, runtime_session)
+) -> Result<LocalAgentRunOutput, String> {
+    run_local_claude_agent_impl(agent, run_id, prompt, runtime_session)
 }
 
 fn run_local_claude_clear_session(
@@ -2637,13 +2704,36 @@ fn run_local_claude_clear_session_impl(
 #[cfg(test)]
 fn run_local_claude_agent_impl(
     _agent: &DesktopAgentView,
+    _run_id: &str,
     _prompt: &str,
     _runtime_session: &RuntimeSessionView,
-) -> Result<String, String> {
+) -> Result<LocalAgentRunOutput, String> {
     if _prompt.contains("__slei_delay_runtime__") {
         std::thread::sleep(Duration::from_millis(250));
     }
-    Ok(String::new())
+    if _prompt.contains("__slei_product_tool_create_bob__") {
+        return Ok(LocalAgentRunOutput {
+            body: "准备创建 Bob。".to_string(),
+            cards: vec![InteractiveCardView {
+                id: "card_test_bob".to_string(),
+                kind: "createAgent".to_string(),
+                state: "pending".to_string(),
+                title: "创建 Bob".to_string(),
+                summary: "Bob · ClaudeCode / Sonnet".to_string(),
+                draft: serde_json::json!({
+                    "name": "Bob",
+                    "handle": "@bob",
+                    "runtimeKind": "ClaudeCode",
+                    "model": "Sonnet",
+                    "nodeId": "local-node",
+                    "description": "架构工程师"
+                }),
+                action_label: "创建".to_string(),
+                done_label: "DONE".to_string(),
+            }],
+        });
+    }
+    Ok(LocalAgentRunOutput::default())
 }
 
 #[cfg(not(test))]
@@ -2679,40 +2769,180 @@ fn run_local_claude_clear_session_impl(
 #[cfg(not(test))]
 fn run_local_claude_agent_impl(
     agent: &DesktopAgentView,
+    run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
-) -> Result<String, String> {
+) -> Result<LocalAgentRunOutput, String> {
     eprintln!(
-        "[slei-runtime] spawn claude cwd={} prompt_chars={}",
+        "[slei-runtime] spawn claude-agent-sdk cwd={} prompt_chars={}",
         agent.workspace_path,
         prompt.chars().count()
     );
-    let mut command = Command::new("claude");
-    command
-        .arg("-p")
-        .arg(prompt)
-        .arg("--output-format")
-        .arg("text");
-    if runtime_session.status == "ready" {
-        command.arg("--resume").arg(&runtime_session.session_id);
-    } else {
-        command.arg("--session-id").arg(&runtime_session.session_id);
-    }
+    let runner_path = local_claude_agent_runner_path()?;
+    let command_payload = local_claude_agent_runner_payload(agent, run_id, prompt, runtime_session)?;
+    let mut command = Command::new("node");
+    command.arg(runner_path);
+    command.stdin(std::process::Stdio::piped());
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
     let output = command
         .current_dir(&agent.workspace_path)
-        .output()
-        .map_err(|error| format!("failed to start ClaudeCode: {error}"))?;
+        .spawn()
+        .and_then(|mut child| {
+            if let Some(stdin) = child.stdin.as_mut() {
+                stdin.write_all(command_payload.as_bytes())?;
+            }
+            child.wait_with_output()
+        })
+        .map_err(|error| format!("failed to start Claude Agent SDK runner: {error}"))?;
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
+    if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        Err(if stderr.is_empty() {
-            format!("ClaudeCode exited with status {}", output.status)
+        return Err(if stderr.is_empty() {
+            format!("Claude Agent SDK runner exited with status {}", output.status)
         } else {
             stderr
-        })
+        });
     }
+
+    local_agent_run_output_from_worker_stdout(&String::from_utf8_lossy(&output.stdout))
+}
+
+#[derive(Clone, Debug, Default)]
+struct LocalAgentRunOutput {
+    body: String,
+    cards: Vec<InteractiveCardView>,
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg(not(test))]
+struct LocalWorkerEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
+    delta: String,
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    tool_use_id: String,
+    #[serde(default)]
+    tool_name: String,
+    #[serde(default)]
+    payload: serde_json::Value,
+    #[serde(default)]
+    run_id: String,
+}
+
+#[cfg(not(test))]
+fn local_claude_agent_runner_path() -> Result<PathBuf, String> {
+    if let Ok(path) = env::var("SLEI_CLAUDE_AGENT_RUNNER") {
+        return Ok(PathBuf::from(path));
+    }
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .ok_or_else(|| "failed to resolve Slei repository root".to_string())?;
+    let path = repo_root.join("workers/claude-agent/dist/local-runner.js");
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(format!(
+            "Claude Agent SDK runner is missing at {}. Run `pnpm --filter @slei/claude-agent build`.",
+            path.display()
+        ))
+    }
+}
+
+#[cfg(not(test))]
+fn local_claude_agent_runner_payload(
+    agent: &DesktopAgentView,
+    run_id: &str,
+    prompt: &str,
+    runtime_session: &RuntimeSessionView,
+) -> Result<String, String> {
+    serde_json::to_string(&serde_json::json!({
+        "type": "start_run",
+        "run_id": run_id,
+        "session": {
+            "session_id": runtime_session.session_id,
+            "agent_id": agent.id,
+            "runtime": "ClaudeCode",
+            "cwd": agent.workspace_path,
+            "persist_session": true,
+            "resume_session": runtime_session.status == "ready",
+        },
+        "input": {
+            "prompt": prompt,
+            "context": [],
+        }
+    }))
+    .map_err(|error| format!("failed to serialize Claude Agent SDK runner payload: {error}"))
+}
+
+#[cfg(not(test))]
+fn local_agent_run_output_from_worker_stdout(stdout: &str) -> Result<LocalAgentRunOutput, String> {
+    let mut output = LocalAgentRunOutput::default();
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let event: LocalWorkerEvent = serde_json::from_str(line)
+            .map_err(|error| format!("invalid Claude Agent SDK runner event: {error}"))?;
+        match event.event_type.as_str() {
+            "output_delta" => output.body.push_str(&event.delta),
+            "product_tool_requested" => {
+                if event.tool_name == "slei_propose_interactive_card" {
+                    output.cards.push(local_card_from_product_tool_event(&event)?);
+                }
+            }
+            "failed" => return Err(event.message),
+            "completed" | "tool_started" | "tool_completed" | "permission_requested"
+            | "human_question_requested" => {}
+            _ => {}
+        }
+    }
+    Ok(output)
+}
+
+#[cfg(not(test))]
+fn local_card_from_product_tool_event(
+    event: &LocalWorkerEvent,
+) -> Result<InteractiveCardView, String> {
+    let payload = event
+        .payload
+        .as_object()
+        .ok_or_else(|| "slei_propose_interactive_card payload must be an object".to_string())?;
+    let kind = required_payload_string(payload, "kind")?;
+    if kind != "createAgent" {
+        return Err("local Slei interactive cards only support createAgent".to_string());
+    }
+    Ok(InteractiveCardView {
+        id: format!(
+            "card_{}_{}",
+            safe_conversation_id(&event.run_id),
+            safe_conversation_id(&event.tool_use_id)
+        ),
+        kind,
+        state: "pending".to_string(),
+        title: required_payload_string(payload, "title")?,
+        summary: required_payload_string(payload, "summary")?,
+        draft: payload
+            .get("draft")
+            .cloned()
+            .ok_or_else(|| "slei_propose_interactive_card missing draft".to_string())?,
+        action_label: required_payload_string(payload, "actionLabel")?,
+        done_label: required_payload_string(payload, "doneLabel")?,
+    })
+}
+
+#[cfg(not(test))]
+fn required_payload_string(
+    payload: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Result<String, String> {
+    payload
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| format!("slei_propose_interactive_card missing {key}"))
 }
 
 fn safe_conversation_id(conversation_id: &str) -> String {
@@ -2789,6 +3019,8 @@ pub enum ChannelError {
 pub enum CardError {
     #[error("card not found")]
     CardNotFound,
+    #[error(transparent)]
+    Conversation(#[from] ConversationError),
 }
 
 #[derive(Debug, thiserror::Error)]

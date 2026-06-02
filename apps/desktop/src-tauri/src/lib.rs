@@ -659,6 +659,68 @@ mod tests {
     }
 
     #[test]
+    fn guide_local_product_tool_appends_card_message() {
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-guide-product-tool-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = bootstrap_guide_agent(&broker);
+        assert_eq!(receipt.status, "created");
+        let dm = list_conversations(&broker).conversations[0].clone();
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "__slei_product_tool_create_bob__".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        let mut messages = list_conversation_messages(&broker, &dm.id).messages;
+        for _ in 0..10 {
+            if messages.iter().any(|message| {
+                message.author_id == "agent_guide_local_node"
+                    && message.cards.as_ref().is_some_and(|cards| !cards.is_empty())
+            }) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            messages = list_conversation_messages(&broker, &dm.id).messages;
+        }
+
+        let card_message = messages
+            .iter()
+            .find(|message| {
+                message.author_id == "agent_guide_local_node"
+                    && message.cards.as_ref().is_some_and(|cards| !cards.is_empty())
+            })
+            .expect("guide product tool should append a card-only message");
+        assert_eq!(card_message.body, "");
+        assert_eq!(card_message.status.as_deref(), Some("done"));
+        let card = &card_message.cards.as_ref().unwrap()[0];
+        assert_eq!(card.kind, "createAgent");
+        assert_eq!(card.state, "pending");
+        assert_eq!(card.draft["name"], "Bob");
+        assert_eq!(card.action_label, "创建");
+        assert_eq!(card.done_label, "DONE");
+        std::env::remove_var("SLEI_CLAUDE_VERSION_OVERRIDE");
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
     fn preferences_commands_round_trip_locale_and_notifications_without_secrets() {
         let root = std::env::temp_dir().join(format!(
             "slei-desktop-preferences-test-{}",

@@ -1,7 +1,17 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
+import { query as claudeAgentQuery } from "@anthropic-ai/claude-agent-sdk";
 
 import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events";
+import { buildIsolatedSdkOptions } from "./permissions";
 import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol";
+import {
+  createSleiMcpServer,
+  fromSleiMcpToolName,
+  type SleiToolInvocation,
+} from "./slei-tools";
 
 export type WorkerIO = {
   writeEvent(event: WorkerEvent): void;
@@ -9,6 +19,10 @@ export type WorkerIO = {
 
 export type RuntimeRunner = (command: StartRunCommand) => AsyncIterable<ClaudeSdkEvent>;
 export type RuntimeClearer = (command: ClearSessionCommand) => Promise<void>;
+export type ClaudeAgentQuery = (params: {
+  prompt: string;
+  options?: Record<string, unknown>;
+}) => AsyncIterable<unknown>;
 
 export class ClaudeAgentWorker {
   #authorized = false;
@@ -79,43 +93,27 @@ export class ClaudeAgentWorker {
   }
 }
 
-async function* runClaudeCode(command: StartRunCommand): AsyncIterable<ClaudeSdkEvent> {
-  const child = spawn("claude", buildClaudeCliArgs(command), {
-    cwd: command.session.cwd,
-    env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stderr = "";
-
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-
-  child.stderr.on("data", (chunk: string) => {
-    stderr += chunk;
+export async function* runClaudeCode(
+  command: StartRunCommand,
+  query: ClaudeAgentQuery = claudeAgentQuery as ClaudeAgentQuery,
+): AsyncIterable<ClaudeSdkEvent> {
+  let emittedTerminalEvent = false;
+  const sdkMessages = query({
+    prompt: promptForRun(command),
+    options: buildClaudeSdkOptions(command),
   });
 
-  for await (const chunk of child.stdout) {
-    if (chunk) {
-      yield {
-        type: "assistant",
-        runId: command.run_id,
-        message: { content: [{ type: "text", text: String(chunk) }] },
-      };
+  for await (const message of sdkMessages) {
+    for (const event of sdkMessageToClaudeEvents(command, message)) {
+      if (event.type === "completed" || event.type === "failed") {
+        emittedTerminalEvent = true;
+      }
+      yield event;
     }
   }
 
-  const code = await new Promise<number | null>((resolve) => {
-    child.once("close", resolve);
-  });
-
-  if (code === 0) {
+  if (!emittedTerminalEvent) {
     yield { type: "completed", runId: command.run_id };
-  } else {
-    yield {
-      type: "failed",
-      runId: command.run_id,
-      message: stderr.trim() || `claude exited with code ${code}`,
-    };
   }
 }
 
@@ -144,6 +142,68 @@ export function buildClearClaudeSessionCliArgs(command: ClearSessionCommand): st
     args.push("--no-session-persistence");
   }
   return args;
+}
+
+export function buildClaudeSdkOptions(command: StartRunCommand): Record<string, unknown> {
+  const isolatedOptions = buildIsolatedSdkOptions("Controlled", command.session.cwd);
+  const options: Record<string, unknown> = {
+    cwd: command.session.cwd,
+    persistSession: command.session.persist_session,
+    permissionMode: isolatedOptions.permissionMode,
+    settingSources: isolatedOptions.settingSources,
+    strictMcpConfig: isolatedOptions.strictMcpConfig,
+    allowedTools: isolatedOptions.allowedTools,
+    disallowedTools: isolatedOptions.disallowedTools,
+    toolAliases: isolatedOptions.toolAliases,
+    systemPrompt: buildSleiSystemPrompt(command.session.cwd),
+    mcpServers: {
+      slei: createSleiMcpServer(),
+    },
+  };
+
+  if (command.session.persist_session) {
+    if (command.session.resume_session) {
+      options.resume = command.session.session_id;
+    } else {
+      options.sessionId = command.session.session_id;
+    }
+  }
+
+  return options;
+}
+
+function buildSleiSystemPrompt(cwd: string): Record<string, string> {
+  return {
+    type: "preset",
+    preset: "claude_code",
+    append: [
+      "You are running inside Slei as the agent represented by this workspace.",
+      "Use the Slei product tools when a skill asks for them. In particular, member creation must call slei_propose_interactive_card instead of explaining that the tool is unavailable.",
+      loadAgentWorkspaceContext(cwd),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  };
+}
+
+function loadAgentWorkspaceContext(cwd: string): string {
+  const sections: string[] = [];
+  const memoryPath = join(cwd, "MEMORY.md");
+  if (existsSync(memoryPath)) {
+    sections.push(`Agent MEMORY.md:\n${readFileSync(memoryPath, "utf8")}`);
+  }
+  const skillsPath = join(cwd, "skills");
+  if (existsSync(skillsPath)) {
+    const skills = readdirSync(skillsPath)
+      .filter((name) => name.endsWith(".skill.md"))
+      .sort()
+      .map((name) => {
+        const path = join(skillsPath, name);
+        return `Skill ${name}:\n${readFileSync(path, "utf8")}`;
+      });
+    sections.push(...skills);
+  }
+  return sections.join("\n\n");
 }
 
 async function clearClaudeCodeSession(command: ClearSessionCommand): Promise<void> {
@@ -183,4 +243,108 @@ function roleLabel(role: "user" | "assistant" | "system") {
   if (role === "user") return "User";
   if (role === "assistant") return "Assistant";
   return "System";
+}
+
+function sdkMessageToClaudeEvents(
+  command: StartRunCommand,
+  message: unknown,
+): ClaudeSdkEvent[] {
+  if (!isRecord(message)) {
+    return [];
+  }
+
+  if (message.type === "assistant") {
+    return sdkAssistantMessageToClaudeEvents(command, message);
+  }
+
+  if (message.type === "result") {
+    if (message.is_error === true) {
+      return [
+        {
+          type: "failed",
+          runId: command.run_id,
+          message: resultErrorMessage(message),
+        },
+      ];
+    }
+    return [{ type: "completed", runId: command.run_id }];
+  }
+
+  return [];
+}
+
+function sdkAssistantMessageToClaudeEvents(
+  command: StartRunCommand,
+  message: Record<string, unknown>,
+): ClaudeSdkEvent[] {
+  const content = assistantContent(message);
+  const events: ClaudeSdkEvent[] = [];
+  const text = content
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+
+  if (text) {
+    events.push({
+      type: "assistant",
+      runId: command.run_id,
+      message: { content: [{ type: "text", text }] },
+    });
+  }
+
+  for (const part of content) {
+    if (part.type !== "tool_use" || typeof part.name !== "string" || typeof part.id !== "string") {
+      continue;
+    }
+    const toolName = fromSleiMcpToolName(part.name);
+    if (!toolName) {
+      events.push({
+        type: "tool_use",
+        runId: command.run_id,
+        id: part.id,
+        name: part.name,
+      });
+      continue;
+    }
+    const invocation: SleiToolInvocation = {
+      run_id: command.run_id,
+      tool_use_id: part.id,
+      agent_id: command.session.agent_id,
+      payload: recordPayload(part.input),
+    };
+    events.push({
+      type: "product_tool",
+      runId: invocation.run_id,
+      toolUseId: invocation.tool_use_id,
+      agentId: invocation.agent_id,
+      toolName,
+      payload: invocation.payload,
+    });
+  }
+
+  return events;
+}
+
+function assistantContent(message: Record<string, unknown>): Array<Record<string, unknown>> {
+  const sdkMessage = isRecord(message.message) ? message.message : {};
+  const content = sdkMessage.content;
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  return content.filter(isRecord);
+}
+
+function recordPayload(input: unknown): Record<string, unknown> {
+  return isRecord(input) ? input : { value: input };
+}
+
+function resultErrorMessage(message: Record<string, unknown>): string {
+  if (Array.isArray(message.errors) && message.errors.every((error) => typeof error === "string")) {
+    return message.errors.join("\n");
+  }
+  return typeof message.subtype === "string" ? message.subtype : "Claude Agent SDK run failed";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
