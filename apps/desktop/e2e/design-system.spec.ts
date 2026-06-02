@@ -5,7 +5,7 @@ describe("desktop design-system wiring", () => {
   it("loads shared Neo-Brutalism tokens instead of local hard-coded shell colors", () => {
     const webEntry = readFileSync("src/web.ts", "utf8");
     const appCss = readFileSync("src/app/app.css", "utf8");
-    const appTsx = readFileSync("src/app/SleiApp.tsx", "utf8");
+    const formControlsTsx = readFileSync("src/app/form-controls.tsx", "utf8");
     const tokensCss = readFileSync("../../packages/ui/src/styles/tokens.css", "utf8");
 
     expect(webEntry).toContain("@slei/ui/styles/tokens.css");
@@ -15,10 +15,10 @@ describe("desktop design-system wiring", () => {
     expect(appCss).toContain("var(--border-panel)");
     expect(appCss).toContain("var(--shadow-lg)");
     expect(appCss).not.toMatch(/#[0-9a-fA-F]{3,8}/);
-    expect(appTsx.match(/<select/g)).toHaveLength(1);
-    expect(appTsx).toContain("function SelectControl");
-    expect(appTsx.match(/type=\"checkbox\"/g)).toHaveLength(1);
-    expect(appTsx).toContain("function CheckboxControl");
+    expect(formControlsTsx.match(/<select/g)).toHaveLength(1);
+    expect(formControlsTsx).toContain("function SelectControl");
+    expect(formControlsTsx.match(/type=\"checkbox\"/g)).toHaveLength(1);
+    expect(formControlsTsx).toContain("function CheckboxControl");
     expect(tokensCss).toContain("--rail-width: var(--primitive-space-16);");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
     expect(tokensCss).toContain("--radius-control: var(--radius-none);");
