@@ -1,4 +1,4 @@
-import { createSleiToolAliases, SLEI_PRODUCT_TOOL_NAMES, toSleiMcpToolName } from "./slei-tools";
+import { createSleiToolAliases, SLEI_PRODUCT_TOOL_NAMES, toSleiMcpToolName } from "./slei-tools.js";
 
 export type PermissionPreset = "ReadOnly" | "Edit" | "Controlled";
 

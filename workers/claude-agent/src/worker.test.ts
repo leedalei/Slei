@@ -11,8 +11,8 @@ import {
   ClaudeAgentWorker,
   runClaudeCode,
   type RuntimeRunner,
-} from "./worker";
-import type { WorkerEvent } from "./protocol";
+} from "./worker.js";
+import type { WorkerEvent } from "./protocol.js";
 
 describe("ClaudeAgentWorker start_run", () => {
   it("rejects start_run before hello authorization", async () => {

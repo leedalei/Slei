@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool as sdkTool } from "@anthropic-ai/claude-agent-
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-import type { ProductToolRequestedEvent } from "./protocol";
+import type { ProductToolRequestedEvent } from "./protocol.js";
 
 export const SLEI_MCP_SERVER_NAME = "slei";
 

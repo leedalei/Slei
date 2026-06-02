@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import workerRpc from "../../../tests/contract/worker-rpc.json";
-import { mapClaudeSdkEvent } from "./events";
+import { mapClaudeSdkEvent } from "./events.js";
 import type {
   HelloCommand,
   PermissionRequestedEvent,
   ProductToolRequestedEvent,
   StartRunCommand,
-} from "./protocol";
+} from "./protocol.js";
 
 describe("worker RPC contract", () => {
   it("covers every private command and event required by the daemon", () => {

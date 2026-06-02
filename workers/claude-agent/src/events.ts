@@ -1,4 +1,4 @@
-import type { WorkerEvent } from "./protocol";
+import type { WorkerEvent } from "./protocol.js";
 
 export type ClaudeSdkEvent =
   | {

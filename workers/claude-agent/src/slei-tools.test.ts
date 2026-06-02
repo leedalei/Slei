@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createSleiTools, parseFreeformAssistantText } from "./slei-tools";
+import { createSleiTools, parseFreeformAssistantText } from "./slei-tools.js";
 
 describe("Slei product MCP tools", () => {
   it("registers only typed in-process product tools", () => {

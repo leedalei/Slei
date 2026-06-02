@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIsolatedSdkOptions, toPermissionRequest } from "./permissions";
+import { buildIsolatedSdkOptions, toPermissionRequest } from "./permissions.js";
 
 describe("isolated Claude SDK permission profile", () => {
   it("disables persistence, settings, native subagents and unregistered tools", () => {

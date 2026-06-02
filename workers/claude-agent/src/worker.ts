@@ -4,14 +4,14 @@ import { join } from "node:path";
 
 import { query as claudeAgentQuery } from "@anthropic-ai/claude-agent-sdk";
 
-import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events";
-import { buildIsolatedSdkOptions } from "./permissions";
-import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol";
+import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events.js";
+import { buildIsolatedSdkOptions } from "./permissions.js";
+import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol.js";
 import {
   createSleiMcpServer,
   fromSleiMcpToolName,
   type SleiToolInvocation,
-} from "./slei-tools";
+} from "./slei-tools.js";
 
 export type WorkerIO = {
   writeEvent(event: WorkerEvent): void;

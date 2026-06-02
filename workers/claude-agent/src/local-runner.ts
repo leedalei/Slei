@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 
-import { mapClaudeSdkEvent } from "./events";
-import type { StartRunCommand } from "./protocol";
-import { runClaudeCode } from "./worker";
+import { mapClaudeSdkEvent } from "./events.js";
+import type { StartRunCommand } from "./protocol.js";
+import { runClaudeCode } from "./worker.js";
 
 const raw = readFileSync(0, "utf8");
 const command = JSON.parse(raw) as StartRunCommand;
