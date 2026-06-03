@@ -89,4 +89,15 @@ describe("desktop design-system wiring", () => {
       expect(colorDeclarations).not.toContain("  color: var(--color-error);");
     }
   });
+
+  it("keeps settings navigation readable in both themes", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const settingsNavItemRule = appCss.match(/\.slei-settings-nav__item\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const settingsNavLabelRule = appCss.match(/\.slei-settings-nav__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const settingsNavEmptyRule = appCss.match(/\.slei-settings-nav__empty\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(settingsNavItemRule).toContain("color: var(--color-text-primary)");
+    expect(settingsNavLabelRule).toContain("color: var(--color-text-secondary)");
+    expect(settingsNavEmptyRule).toContain("color: var(--color-text-secondary)");
+  });
 });

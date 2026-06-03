@@ -2354,6 +2354,7 @@ body,
   background: var(--color-surface);
   border: var(--border-subtle) solid transparent;
   border-radius: var(--radius-card);
+  color: var(--color-text-primary);
   display: grid;
   gap: var(--gap-sm);
   grid-template-columns: 18px minmax(0, 1fr);
