@@ -1704,6 +1704,15 @@ body,
   width: 16px;
 }
 
+.slei-empty__pixel--mark {
+  background: var(--color-surface);
+  border: var(--border-subtle) solid var(--color-border);
+  bottom: -8px;
+  height: 16px;
+  right: -8px;
+  width: 16px;
+}
+
 .slei-empty--noresult .slei-empty__pixel--mouth {
   bottom: 14px;
   height: 16px;
