@@ -10,6 +10,13 @@ import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, 
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
+type ChannelFileEntry = {
+  attachment: ConversationAttachmentView;
+  author: string;
+  messageId: string;
+  time: string;
+};
+
 function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
   if (card.kind === "permissionApproval") {
     const done = card.state !== "pending";
@@ -131,8 +138,45 @@ function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks
   );
 }
 
-function ChannelFileList({ messages }: { messages: DesktopMessages }) {
-  return <section className="slei-channel-empty">{messages.chat.channelFileEmpty}</section>;
+function ChannelFileList({ files, messages }: { files: ChannelFileEntry[]; messages: DesktopMessages }) {
+  if (files.length === 0) {
+    return <section className="slei-channel-empty">{messages.chat.channelFileEmpty}</section>;
+  }
+
+  function openAttachment(attachment: ConversationAttachmentView) {
+    if (!attachment.url || typeof window === "undefined") return;
+    window.open(attachment.url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <section aria-label={messages.chat.files} className="slei-channel-file-list">
+      {files.map(({ attachment, author, messageId, time }) => {
+        const isImage = attachment.mimeType.startsWith("image/");
+        const canOpen = Boolean(attachment.url);
+        return (
+          <button
+            aria-label={messages.chat.openAttachment(attachment.name)}
+            className="slei-channel-file-row"
+            disabled={!canOpen}
+            key={`${messageId}-${attachment.id}`}
+            onClick={() => openAttachment(attachment)}
+            type="button"
+          >
+            {isImage && attachment.url ? (
+              <img alt="" className="slei-channel-file-thumbnail" src={attachment.url} />
+            ) : (
+              <span className="slei-channel-file-icon"><FileText aria-hidden="true" size={16} /></span>
+            )}
+            <span className="slei-channel-file-row__copy">
+              <strong>{attachment.name}</strong>
+              <small>{author} · {time}</small>
+            </span>
+            <small>{formatAttachmentSize(attachment.size)}</small>
+          </button>
+        );
+      })}
+    </section>
+  );
 }
 
 function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): SleiMember | undefined {
@@ -250,6 +294,16 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return false;
     return message.sessionId === currentSessionId;
   });
+  const channelFiles: ChannelFileEntry[] = visibleMessages
+    .flatMap((message) =>
+      (message.attachments ?? []).map((attachment) => ({
+        attachment,
+        author: message.author,
+        messageId: message.id,
+        time: message.time,
+      })),
+    )
+    .reverse();
   const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id);
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
@@ -425,7 +479,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       ) : effectiveChannelView === "tasks" ? (
         <ChannelTaskList messages={messages} tasks={channelTasks} />
       ) : (
-        <ChannelFileList messages={messages} />
+        <ChannelFileList files={channelFiles} messages={messages} />
       )}
       {effectiveChannelView === "chat" && mention && mentionTargets.length > 0 ? (
         <section aria-label={messages.chat.chooseMentionMember} className="slei-mention-panel">
