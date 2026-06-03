@@ -6,8 +6,8 @@ use uuid::Uuid;
 async fn coordinator_internal_events_survive_restart() {
     let db_path = std::env::temp_dir().join(format!("slei-coordinator-{}.sqlite", Uuid::new_v4()));
     let database_url = format!("sqlite://{}", db_path.display());
-    let channel_id = Uuid::new_v4();
-    let message_id = Uuid::new_v4();
+    let channel_id = "dev";
+    let message_id = "msg_1";
     let decision_id = Uuid::new_v4();
 
     {
@@ -50,6 +50,18 @@ async fn coordinator_internal_events_survive_restart() {
             )
             .await
             .unwrap();
+        repos
+            .insert_memory_update_event(
+                Uuid::new_v4(),
+                "agent_alice",
+                "memory_requested",
+                Some(message_id),
+                Some("MEMORY.md"),
+                Some("Active Context"),
+                "pending",
+            )
+            .await
+            .unwrap();
     }
 
     let restarted = SleiDb::connect(&database_url).await.unwrap();
@@ -64,6 +76,10 @@ async fn coordinator_internal_events_survive_restart() {
         .await
         .unwrap();
     let inbox = repos.agent_inbox_events("agent_alice").await.unwrap();
+    let memory = repos
+        .memory_update_events_for_agent("agent_alice")
+        .await
+        .unwrap();
     let packages = repos
         .routing_context_packages_for_decision(decision_id)
         .await
@@ -74,6 +90,13 @@ async fn coordinator_internal_events_survive_restart() {
     assert_eq!(decisions[0].action, "create_task_and_assign");
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].event_type, "task_assigned");
+    assert_eq!(memory.len(), 1);
+    assert_eq!(memory[0].source_message_id.as_deref(), Some("msg_1"));
+    assert_eq!(
+        memory[0].document_section.as_deref(),
+        Some("Active Context")
+    );
     assert_eq!(packages.len(), 1);
+    assert_eq!(packages[0].source_message_id, "msg_1");
     assert_eq!(packages[0].contains_deleted_body, false);
 }

@@ -27,8 +27,8 @@ pub struct TaskThreadSummary {
 #[derive(Debug, PartialEq, Eq)]
 pub struct CoordinatorDecisionRecord {
     pub id: Uuid,
-    pub channel_id: Uuid,
-    pub message_id: Uuid,
+    pub channel_id: String,
+    pub message_id: String,
     pub intent: String,
     pub action: String,
     pub assignee_agent_id: Option<String>,
@@ -46,7 +46,7 @@ pub struct AgentInboxEventRecord {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ChannelCoordinatorRecord {
-    pub channel_id: Uuid,
+    pub channel_id: String,
     pub strategy: String,
     pub enabled: bool,
 }
@@ -55,9 +55,20 @@ pub struct ChannelCoordinatorRecord {
 pub struct RoutingContextPackageRecord {
     pub id: Uuid,
     pub decision_id: Uuid,
-    pub source_message_id: Uuid,
+    pub source_message_id: String,
     pub payload: String,
     pub contains_deleted_body: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MemoryUpdateEventRecord {
+    pub id: Uuid,
+    pub agent_id: String,
+    pub event_type: String,
+    pub source_message_id: Option<String>,
+    pub document_path: Option<String>,
+    pub document_section: Option<String>,
+    pub status: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -267,7 +278,7 @@ impl Repositories {
 
     pub async fn insert_channel_coordinator(
         &self,
-        channel_id: Uuid,
+        channel_id: &str,
         strategy: &str,
         enabled: bool,
     ) -> Result<(), sqlx::Error> {
@@ -279,7 +290,7 @@ impl Repositories {
                 enabled = excluded.enabled,
                 updated_at = CURRENT_TIMESTAMP",
         )
-        .bind(channel_id.to_string())
+        .bind(channel_id)
         .bind(strategy)
         .bind(if enabled { 1 } else { 0 })
         .execute(&self.pool)
@@ -289,14 +300,14 @@ impl Repositories {
 
     pub async fn channel_coordinator(
         &self,
-        channel_id: Uuid,
+        channel_id: &str,
     ) -> Result<Option<ChannelCoordinatorRecord>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT channel_id, strategy, enabled
              FROM channel_coordinators
              WHERE channel_id = ?",
         )
-        .bind(channel_id.to_string())
+        .bind(channel_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -304,7 +315,7 @@ impl Repositories {
             let channel_id: String = row.try_get("channel_id")?;
             let enabled: i64 = row.try_get("enabled")?;
             Ok(ChannelCoordinatorRecord {
-                channel_id: parse_uuid(&channel_id)?,
+                channel_id,
                 strategy: row.try_get("strategy")?,
                 enabled: enabled != 0,
             })
@@ -315,8 +326,8 @@ impl Repositories {
     pub async fn insert_coordinator_decision(
         &self,
         id: Uuid,
-        channel_id: Uuid,
-        message_id: Uuid,
+        channel_id: &str,
+        message_id: &str,
         intent: &str,
         action: &str,
         assignee_agent_id: Option<&str>,
@@ -329,8 +340,8 @@ impl Repositories {
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id.to_string())
-        .bind(channel_id.to_string())
-        .bind(message_id.to_string())
+        .bind(channel_id)
+        .bind(message_id)
         .bind(intent)
         .bind(action)
         .bind(assignee_agent_id)
@@ -342,7 +353,7 @@ impl Repositories {
 
     pub async fn coordinator_decisions_for_message(
         &self,
-        message_id: Uuid,
+        message_id: &str,
     ) -> Result<Vec<CoordinatorDecisionRecord>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, channel_id, message_id, intent, action, assignee_agent_id, reason
@@ -350,7 +361,7 @@ impl Repositories {
              WHERE message_id = ?
              ORDER BY created_at ASC, id ASC",
         )
-        .bind(message_id.to_string())
+        .bind(message_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -361,8 +372,8 @@ impl Repositories {
                 let message_id: String = row.try_get("message_id")?;
                 Ok(CoordinatorDecisionRecord {
                     id: parse_uuid(&id)?,
-                    channel_id: parse_uuid(&channel_id)?,
-                    message_id: parse_uuid(&message_id)?,
+                    channel_id,
+                    message_id,
                     intent: row.try_get("intent")?,
                     action: row.try_get("action")?,
                     assignee_agent_id: row.try_get("assignee_agent_id")?,
@@ -427,7 +438,7 @@ impl Repositories {
         id: Uuid,
         agent_id: &str,
         event_type: &str,
-        source_message_id: Option<Uuid>,
+        source_message_id: Option<&str>,
         document_path: Option<&str>,
         document_section: Option<&str>,
         status: &str,
@@ -441,13 +452,43 @@ impl Repositories {
         .bind(id.to_string())
         .bind(agent_id)
         .bind(event_type)
-        .bind(source_message_id.map(|id| id.to_string()))
+        .bind(source_message_id)
         .bind(document_path)
         .bind(document_section)
         .bind(status)
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn memory_update_events_for_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<MemoryUpdateEventRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, agent_id, event_type, source_message_id, document_path, document_section, status
+             FROM memory_update_events
+             WHERE agent_id = ?
+             ORDER BY created_at ASC, id ASC",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                Ok(MemoryUpdateEventRecord {
+                    id: parse_uuid(&id)?,
+                    agent_id: row.try_get("agent_id")?,
+                    event_type: row.try_get("event_type")?,
+                    source_message_id: row.try_get("source_message_id")?,
+                    document_path: row.try_get("document_path")?,
+                    document_section: row.try_get("document_section")?,
+                    status: row.try_get("status")?,
+                })
+            })
+            .collect()
     }
 
     pub async fn upsert_memory_document_state(
@@ -508,7 +549,7 @@ impl Repositories {
         &self,
         id: Uuid,
         decision_id: Uuid,
-        source_message_id: Uuid,
+        source_message_id: &str,
         payload: &str,
         contains_deleted_body: bool,
     ) -> Result<(), sqlx::Error> {
@@ -520,7 +561,7 @@ impl Repositories {
         )
         .bind(id.to_string())
         .bind(decision_id.to_string())
-        .bind(source_message_id.to_string())
+        .bind(source_message_id)
         .bind(payload)
         .bind(if contains_deleted_body { 1 } else { 0 })
         .execute(&self.pool)
@@ -551,7 +592,7 @@ impl Repositories {
                 Ok(RoutingContextPackageRecord {
                     id: parse_uuid(&id)?,
                     decision_id: parse_uuid(&decision_id)?,
-                    source_message_id: parse_uuid(&source_message_id)?,
+                    source_message_id,
                     payload: row.try_get("payload")?,
                     contains_deleted_body: contains_deleted_body != 0,
                 })
@@ -561,14 +602,14 @@ impl Repositories {
 
     pub async fn mark_context_packages_deleted(
         &self,
-        source_message_id: Uuid,
+        source_message_id: &str,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE routing_context_packages
              SET contains_deleted_body = 1
              WHERE source_message_id = ?",
         )
-        .bind(source_message_id.to_string())
+        .bind(source_message_id)
         .execute(&self.pool)
         .await?;
         Ok(())

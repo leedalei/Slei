@@ -21,7 +21,7 @@ impl OrchestrationStore {
 
     pub async fn record_channel_coordinator(
         &self,
-        channel_id: Uuid,
+        channel_id: &str,
         strategy: &str,
     ) -> Result<(), sqlx::Error> {
         self.repos
@@ -32,8 +32,8 @@ impl OrchestrationStore {
     pub async fn record_decision(
         &self,
         id: Uuid,
-        channel_id: Uuid,
-        message_id: Uuid,
+        channel_id: &str,
+        message_id: &str,
         intent: &str,
         action: &str,
         assignee_agent_id: Option<&str>,
@@ -70,7 +70,7 @@ impl OrchestrationStore {
         id: Uuid,
         agent_id: &str,
         event_type: &str,
-        source_message_id: Option<Uuid>,
+        source_message_id: Option<&str>,
         document_path: Option<&str>,
         document_section: Option<&str>,
         status: &str,
@@ -111,7 +111,7 @@ impl OrchestrationStore {
         &self,
         id: Uuid,
         decision_id: Uuid,
-        source_message_id: Uuid,
+        source_message_id: &str,
         payload: &str,
         contains_deleted_body: bool,
     ) -> Result<(), sqlx::Error> {
@@ -128,7 +128,7 @@ impl OrchestrationStore {
 
     pub async fn mark_context_packages_deleted(
         &self,
-        source_message_id: Uuid,
+        source_message_id: &str,
     ) -> Result<(), sqlx::Error> {
         self.repos
             .mark_context_packages_deleted(source_message_id)
