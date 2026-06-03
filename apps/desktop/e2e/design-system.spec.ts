@@ -24,7 +24,7 @@ describe("desktop design-system wiring", () => {
     expect(formControlsTsx).toContain("function CheckboxControl");
     expect(tokensCss).toContain("--rail-width: 80px;");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
-    expect(tokensCss).toContain("--radius-control: var(--radius-none);");
+    expect(tokensCss).toContain("--radius-control: 999px;");
   });
 
   it("keeps global scrollbars compact and neutral", () => {
