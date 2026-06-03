@@ -4,6 +4,7 @@ use crate::auth::AuthToken;
 use crate::services::agent_dm_service::{AgentDmRunStore, AgentDmService};
 use crate::services::agent_inbox_service::AgentInboxService;
 use crate::services::card_service::CardService;
+use crate::services::channel_orchestrator_service::ChannelOrchestratorService;
 use crate::services::channel_service::ChannelService;
 use crate::services::conversation_service::ConversationService;
 use crate::services::coordinator_service::CoordinatorService;
@@ -40,6 +41,7 @@ pub struct AppState {
     memory_event_service: MemoryEventService,
     memory_maintainer_service: MemoryMaintainerService,
     message_service: MessageService,
+    channel_orchestrator_service: ChannelOrchestratorService,
     worker_transport: WorkerTransport,
     agent_dm_runs: AgentDmRunStore,
 }
@@ -74,12 +76,22 @@ impl AppState {
         let coordinator_service = CoordinatorService::new(orchestration_store.clone());
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
+        let task_service = TaskService::for_tests();
         let memory_maintainer_service = MemoryMaintainerService::new(
             member_service.clone(),
             channel_service.clone(),
             memory_event_service.clone(),
         );
         let message_service = MessageService::for_tests();
+        let channel_orchestrator_service = ChannelOrchestratorService::new(
+            message_service.clone(),
+            channel_service.clone(),
+            coordinator_service.clone(),
+            task_service.clone(),
+            agent_inbox_service.clone(),
+            orchestration_store.clone(),
+            member_service.clone(),
+        );
         Self {
             auth_token,
             daemon_version: env!("CARGO_PKG_VERSION"),
@@ -92,13 +104,14 @@ impl AppState {
             workspace_service: WorkspaceService::new(event_service.clone()),
             event_service,
             settings_service: SettingsService::for_tests(),
-            task_service: TaskService::for_tests(),
+            task_service,
             orchestration_store,
             coordinator_service,
             agent_inbox_service,
             memory_event_service,
             memory_maintainer_service,
             message_service,
+            channel_orchestrator_service,
             worker_transport: WorkerTransport::fake(),
             agent_dm_runs: AgentDmRunStore::default(),
         }
@@ -162,6 +175,17 @@ impl AppState {
 
     pub fn messages(&self) -> &MessageService {
         &self.message_service
+    }
+
+    pub fn channel_orchestrator(&self) -> &ChannelOrchestratorService {
+        &self.channel_orchestrator_service
+    }
+
+    pub async fn channel_messages_for_tests(
+        &self,
+        channel_id: &str,
+    ) -> Vec<crate::services::message_service::MessageRecord> {
+        self.messages().channel_messages_for_tests(channel_id).await
     }
 
     pub async fn run_channel_join_memory_updates(

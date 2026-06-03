@@ -1,7 +1,8 @@
 use std::fmt;
 
 use slei_storage::repositories::{
-    AgentInboxEventRecord, BlockedMemorySectionRecord, MemoryUpdateEventRecord, Repositories,
+    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord,
+    MemoryUpdateEventRecord, Repositories, RoutingContextPackageRecord,
 };
 use uuid::Uuid;
 
@@ -149,6 +150,33 @@ impl OrchestrationStore {
         self.repos
             .mark_context_packages_deleted(source_message_id)
             .await
+    }
+
+    pub async fn decisions_for_message_for_tests(
+        &self,
+        message_id: &str,
+    ) -> Vec<CoordinatorDecisionRecord> {
+        self.repos
+            .coordinator_decisions_for_message(message_id)
+            .await
+            .expect("read coordinator decisions for tests")
+    }
+
+    pub async fn routing_context_packages_for_message_for_tests(
+        &self,
+        message_id: &str,
+    ) -> Vec<RoutingContextPackageRecord> {
+        let decisions = self.decisions_for_message_for_tests(message_id).await;
+        let mut packages = Vec::new();
+        for decision in decisions {
+            packages.extend(
+                self.repos
+                    .routing_context_packages_for_decision(decision.id)
+                    .await
+                    .expect("read routing context packages for tests"),
+            );
+        }
+        packages
     }
 
     pub async fn blocked_memory_sections(

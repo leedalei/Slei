@@ -21,6 +21,9 @@ pub struct TaskRecord {
     pub channel_id: String,
     pub creator_id: String,
     pub assignee_id: Option<String>,
+    pub source_message_id: Option<String>,
+    pub assignment_reason: Option<String>,
+    pub needs_assignment: bool,
     pub title: String,
     pub status: TaskStatus,
     pub attention_required: bool,
@@ -107,6 +110,48 @@ impl TaskService {
             channel_id: channel_id.to_string(),
             creator_id: creator_id.to_string(),
             assignee_id: None,
+            source_message_id: None,
+            assignment_reason: None,
+            needs_assignment: true,
+            title: title.to_string(),
+            status: TaskStatus::InProgress,
+            attention_required: false,
+            root_deleted: false,
+        };
+        state
+            .task_idempotency
+            .insert(idempotency_key.to_string(), task.id.clone());
+        state.tasks.insert(task.id.clone(), task.clone());
+        Ok(task)
+    }
+
+    pub async fn create_from_coordinator(
+        &self,
+        channel_id: &str,
+        creator_id: &str,
+        source_message_id: &str,
+        title: &str,
+        assignee_id: Option<String>,
+        assignment_reason: &str,
+        idempotency_key: &str,
+    ) -> Result<TaskRecord, TaskError> {
+        let mut state = self.inner.lock().expect("task state lock");
+        if let Some(task_id) = state.task_idempotency.get(idempotency_key) {
+            return state
+                .tasks
+                .get(task_id)
+                .cloned()
+                .ok_or(TaskError::TaskNotFound);
+        }
+
+        let task = TaskRecord {
+            id: format!("task_{}", Uuid::new_v4().simple()),
+            channel_id: channel_id.to_string(),
+            creator_id: creator_id.to_string(),
+            needs_assignment: assignee_id.is_none(),
+            assignee_id,
+            source_message_id: Some(source_message_id.to_string()),
+            assignment_reason: Some(assignment_reason.to_string()),
             title: title.to_string(),
             status: TaskStatus::InProgress,
             attention_required: false,
@@ -194,6 +239,7 @@ impl TaskService {
             .tasks
             .get_mut(task_id)
             .ok_or(TaskError::TaskNotFound)?;
+        task.needs_assignment = assignee_id.is_none();
         task.assignee_id = assignee_id;
         Ok(())
     }
