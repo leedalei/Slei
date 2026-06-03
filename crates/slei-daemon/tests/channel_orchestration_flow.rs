@@ -245,6 +245,120 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
 }
 
 #[tokio::test]
+async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_bob", "@bob-win"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-replay-handoff",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_coda", "agent_bob"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let task_a = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "agent_alice",
+            "msg_root_a",
+            "实现频道 Coordinator",
+            Some("agent_alice".to_string()),
+            "initial architecture assignment",
+            "task-handoff-replay-a",
+        )
+        .await
+        .unwrap();
+    let task_b = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "agent_bob",
+            "msg_root_b",
+            "实现频道 Inbox",
+            Some("agent_bob".to_string()),
+            "retry target should be ignored",
+            "task-handoff-replay-b",
+        )
+        .await
+        .unwrap();
+
+    let original_body = "架构方案完成。@coda-win 请根据方案实现。";
+    let reply = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task_a.id,
+            "agent_alice",
+            original_body,
+            "task-handoff-replay",
+        )
+        .await
+        .unwrap();
+    let retry = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task_b.id,
+            "agent_bob",
+            "改派：@bob-win 请接手这个重试请求。",
+            "task-handoff-replay",
+        )
+        .await
+        .unwrap();
+    assert_eq!(reply.id, retry.id);
+    assert_eq!(retry.sender_id, "agent_alice");
+    assert_eq!(retry.body, original_body);
+
+    let coda_handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_coda")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert_eq!(coda_handoffs.len(), 1);
+    assert_eq!(
+        coda_handoffs[0].task_id.as_deref(),
+        Some(task_a.id.as_str())
+    );
+    assert_eq!(coda_handoffs[0].message_id, reply.id);
+    assert_eq!(coda_handoffs[0].sender_id.as_deref(), Some("agent_alice"));
+    assert_eq!(
+        coda_handoffs[0].handoff_text.as_deref(),
+        Some(original_body)
+    );
+
+    let bob_handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_bob")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert!(bob_handoffs.is_empty());
+}
+
+#[tokio::test]
 async fn command_message_retry_replays_outcome_without_duplicate_side_effects() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state

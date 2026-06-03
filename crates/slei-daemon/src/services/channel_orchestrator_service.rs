@@ -244,18 +244,21 @@ impl ChannelOrchestratorService {
         idempotency_key: &str,
     ) -> Result<TaskReply, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
-        let reply = self
+        let reply_outcome = self
             .tasks
-            .add_reply(task_id, sender_id, body, idempotency_key)
+            .add_reply_with_task(task_id, sender_id, body, idempotency_key)
             .await?;
-        let task = self.tasks.task(task_id).await?;
+        let reply = reply_outcome.reply;
+        let task = self.tasks.task(&reply_outcome.task_id).await?;
         let channel_members = self.channels.channel_members(&task.channel_id).await?;
         let readiness_by_agent = channel_members
             .iter()
             .map(|member| (member.agent_id.clone(), member.readiness.clone()))
             .collect::<HashMap<_, _>>();
         let member_ids = readiness_by_agent.keys().cloned().collect::<HashSet<_>>();
-        let explicit_agent_ids = self.resolve_explicit_mentions(body, &member_ids).await;
+        let explicit_agent_ids = self
+            .resolve_explicit_mentions(&reply.body, &member_ids)
+            .await;
 
         for agent_id in explicit_agent_ids {
             if let Some(readiness) = readiness_by_agent.get(&agent_id) {
@@ -264,8 +267,8 @@ impl ChannelOrchestratorService {
                     &task.channel_id,
                     &task.id,
                     &reply.id,
-                    sender_id,
-                    body,
+                    &reply.sender_id,
+                    &reply.body,
                     readiness.clone(),
                 )
                 .await;

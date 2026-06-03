@@ -39,6 +39,12 @@ pub struct TaskReply {
     pub body: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AddTaskReplyOutcome {
+    pub task_id: String,
+    pub reply: TaskReply,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskThreadContext {
@@ -172,16 +178,33 @@ impl TaskService {
         body: &str,
         idempotency_key: &str,
     ) -> Result<TaskReply, TaskError> {
+        Ok(self
+            .add_reply_with_task(task_id, sender_id, body, idempotency_key)
+            .await?
+            .reply)
+    }
+
+    pub async fn add_reply_with_task(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<AddTaskReplyOutcome, TaskError> {
         let mut state = self.inner.lock().expect("task state lock");
         if let Some((existing_task_id, existing_reply_id)) =
             state.reply_idempotency.get(idempotency_key)
         {
-            return state
+            let reply = state
                 .replies
                 .get(existing_task_id)
                 .and_then(|replies| replies.iter().find(|reply| reply.id == *existing_reply_id))
                 .cloned()
-                .ok_or(TaskError::TaskNotFound);
+                .ok_or(TaskError::TaskNotFound)?;
+            return Ok(AddTaskReplyOutcome {
+                task_id: existing_task_id.clone(),
+                reply,
+            });
         }
         if !state.tasks.contains_key(task_id) {
             return Err(TaskError::TaskNotFound);
@@ -202,7 +225,10 @@ impl TaskService {
             .entry(task_id.to_string())
             .or_default()
             .push(reply.clone());
-        Ok(reply)
+        Ok(AddTaskReplyOutcome {
+            task_id: task_id.to_string(),
+            reply,
+        })
     }
 
     pub async fn thread_context(&self, task_id: &str) -> Result<TaskThreadContext, TaskError> {
