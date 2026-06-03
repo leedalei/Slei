@@ -35,6 +35,7 @@ pub struct DaemonBroker {
     conversation_sessions: Mutex<Vec<ConversationSessionView>>,
     conversation_messages: Mutex<Vec<ConversationMessageView>>,
     conversation_attachments: Mutex<Vec<ConversationAttachmentView>>,
+    saved_messages: Mutex<Vec<SavedMessageView>>,
     preferences: Mutex<UserPreferencesView>,
 }
 
@@ -431,6 +432,39 @@ pub struct ConversationAttachmentReceipt {
     pub attachment: ConversationAttachmentView,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedMessageView {
+    pub id: String,
+    pub message_id: String,
+    pub source_id: String,
+    pub source_kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    pub saved_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedMessageListReceipt {
+    pub saved_messages: Vec<SavedMessageView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedMessageReceipt {
+    pub saved_message: SavedMessageView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveMessageRequest {
+    pub message_id: String,
+    pub source_id: String,
+    pub source_kind: String,
+    pub session_id: Option<String>,
+}
+
 impl DaemonBroker {
     pub fn default_local() -> Self {
         Self::for_tests(RuntimeDescriptor {
@@ -464,6 +498,7 @@ impl DaemonBroker {
                 &data_root,
             )),
             conversation_attachments: Mutex::new(load_local_attachments_at_root(&data_root)),
+            saved_messages: Mutex::new(load_local_saved_messages_at_root(&data_root)),
             preferences: Mutex::new(load_local_preferences()),
         }
     }
@@ -1501,6 +1536,75 @@ impl DaemonBroker {
         attachments.push(attachment.clone());
         persist_local_attachments_at_root(&self.data_root, &attachments)?;
         Ok(ConversationAttachmentReceipt { attachment })
+    }
+
+    pub fn list_saved_messages(&self) -> SavedMessageListReceipt {
+        let mut saved_messages = self
+            .saved_messages
+            .lock()
+            .expect("saved messages mutex poisoned")
+            .clone();
+        saved_messages.sort_by(|left, right| right.saved_at.cmp(&left.saved_at));
+        SavedMessageListReceipt { saved_messages }
+    }
+
+    pub fn save_message(
+        &self,
+        request: SaveMessageRequest,
+    ) -> Result<SavedMessageReceipt, ConversationError> {
+        let message_id = request.message_id.trim();
+        let source_id = request.source_id.trim();
+        let source_kind = request.source_kind.trim();
+        if message_id.is_empty()
+            || source_id.is_empty()
+            || !matches!(source_kind, "channel" | "dm")
+        {
+            return Err(ConversationError::InvalidMessage);
+        }
+
+        let mut saved_messages = self
+            .saved_messages
+            .lock()
+            .expect("saved messages mutex poisoned");
+        if let Some(existing) = saved_messages
+            .iter()
+            .find(|saved| saved.message_id == message_id)
+            .cloned()
+        {
+            return Ok(SavedMessageReceipt {
+                saved_message: existing,
+            });
+        }
+
+        let saved_message = SavedMessageView {
+            id: format!("saved:{source_kind}:{source_id}:{message_id}"),
+            message_id: message_id.to_string(),
+            source_id: source_id.to_string(),
+            source_kind: source_kind.to_string(),
+            session_id: request
+                .session_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string),
+            saved_at: monotonic_id(),
+        };
+        saved_messages.push(saved_message.clone());
+        persist_local_saved_messages_at_root(&self.data_root, &saved_messages)?;
+        Ok(SavedMessageReceipt { saved_message })
+    }
+
+    pub fn unsave_message(&self, message_id: &str) -> Result<(), ConversationError> {
+        let message_id = message_id.trim();
+        if message_id.is_empty() {
+            return Err(ConversationError::InvalidMessage);
+        }
+        let mut saved_messages = self
+            .saved_messages
+            .lock()
+            .expect("saved messages mutex poisoned");
+        saved_messages.retain(|saved| saved.message_id != message_id);
+        persist_local_saved_messages_at_root(&self.data_root, &saved_messages)
     }
 
     pub fn last_authorization_header(&self) -> Option<String> {
@@ -2618,6 +2722,25 @@ fn persist_local_attachments_at_root(
         fs::create_dir_all(parent).map_err(ConversationError::Io)?;
     }
     let payload = serde_json::to_string_pretty(attachments).map_err(ConversationError::Json)?;
+    fs::write(path, payload).map_err(ConversationError::Io)
+}
+
+fn load_local_saved_messages_at_root(root: &str) -> Vec<SavedMessageView> {
+    fs::read_to_string(format!("{root}/saved/messages.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Vec<SavedMessageView>>(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn persist_local_saved_messages_at_root(
+    root: &str,
+    saved_messages: &[SavedMessageView],
+) -> Result<(), ConversationError> {
+    let path = format!("{root}/saved/messages.json");
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
+    }
+    let payload = serde_json::to_string_pretty(saved_messages).map_err(ConversationError::Json)?;
     fs::write(path, payload).map_err(ConversationError::Io)
 }
 

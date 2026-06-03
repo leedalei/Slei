@@ -28,6 +28,8 @@ export const chat = {
   openViaDaemon: "通过 daemon 打开",
   rejected: "已拒绝",
   history: "历史对话",
+  saveMessage: "收藏",
+  unsaveMessage: "取消收藏",
   newSession: "新会话",
   resetSession: "重置会话",
   roleLabels: {

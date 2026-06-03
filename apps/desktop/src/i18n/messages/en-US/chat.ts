@@ -28,6 +28,8 @@ export const chat = {
   openViaDaemon: "Open via daemon",
   rejected: "Rejected",
   history: "History",
+  saveMessage: "Save",
+  unsaveMessage: "Unsave",
   newSession: "New session",
   resetSession: "Reset session",
   roleLabels: {

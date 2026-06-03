@@ -28,19 +28,17 @@ describe("desktop i18n", () => {
     );
 
     expect(english).toContain('aria-label="Main navigation"');
-    expect(english).toContain("Workspace");
     expect(english).toContain("CHANNELS");
     expect(english).toContain("DIRECT MESSAGES");
     expect(english).toContain("Runtime detected");
     expect(english).toContain("As Task");
     expect(english).toContain("Send");
     expect(english).not.toContain("主导航");
-    expect(english).not.toContain("工作区");
     expect(english).not.toContain("转为任务");
     expect(english).not.toContain("发送");
 
     expect(chinese).toContain('aria-label="主导航"');
-    expect(chinese).toContain("工作区");
+    expect(chinese).not.toContain("Slei</strong><span>工作区</span>");
     expect(chinese).toContain("转为任务");
     expect(chinese).toContain("发送");
   });
@@ -67,7 +65,6 @@ describe("desktop i18n", () => {
     expect(html).toContain("附件");
     expect(html).toContain("成员");
     expect(html).toContain("设备");
-    expect(html).toContain("工作区");
     expect(html).toContain("设置");
     expect(html).toContain("个人");
     expect(html).toContain("服务端");

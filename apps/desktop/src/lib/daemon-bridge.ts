@@ -282,6 +282,30 @@ export type ConversationAttachmentReceipt = {
   attachment: ConversationAttachmentView;
 };
 
+export type SavedMessageView = {
+  id: string;
+  messageId: string;
+  sourceId: string;
+  sourceKind: "channel" | "dm" | string;
+  sessionId?: string;
+  savedAt: string;
+};
+
+export type SavedMessageListReceipt = {
+  savedMessages: SavedMessageView[];
+};
+
+export type SavedMessageReceipt = {
+  savedMessage: SavedMessageView;
+};
+
+export type SaveMessageRequest = {
+  messageId: string;
+  sourceId: string;
+  sourceKind: "channel" | "dm";
+  sessionId?: string;
+};
+
 export type RuntimeSetupState = {
   loading: boolean;
   error?: string;
@@ -313,6 +337,9 @@ export type DaemonBridge = {
   sendConversationMessage(conversationId: string, request: ConversationMessageRequest, sessionId?: string): Promise<ConversationMessageReceipt>;
   resolvePermission(request: PermissionResolveRequest): Promise<ConversationMessageReceipt>;
   uploadConversationAttachment(request: ConversationAttachmentUploadRequest): Promise<ConversationAttachmentReceipt>;
+  listSavedMessages(): Promise<SavedMessageListReceipt>;
+  saveMessage(request: SaveMessageRequest): Promise<SavedMessageReceipt>;
+  unsaveMessage(messageId: string): Promise<void>;
   listPreferences(): Promise<PreferencesReceipt>;
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
@@ -352,6 +379,7 @@ export function createDaemonBridgeMock(input: {
   let conversationSessions: ConversationSessionView[] = [];
   let messages: ConversationMessageView[] = [];
   let attachments: ConversationAttachmentView[] = [];
+  let savedMessages: SavedMessageView[] = [];
   let cards: InteractiveCardView[] = [];
   let preferences: UserPreferences = {
     locale: "zh-CN",
@@ -654,6 +682,26 @@ export function createDaemonBridgeMock(input: {
       attachments = [...attachments, attachment];
       return { attachment };
     },
+    async listSavedMessages() {
+      return { savedMessages };
+    },
+    async saveMessage(request) {
+      const existing = savedMessages.find((saved) => saved.messageId === request.messageId);
+      if (existing) return { savedMessage: existing };
+      const savedMessage: SavedMessageView = {
+        id: `saved:${request.sourceKind}:${request.sourceId}:${request.messageId}`,
+        messageId: request.messageId,
+        sourceId: request.sourceId,
+        sourceKind: request.sourceKind,
+        sessionId: request.sessionId,
+        savedAt: new Date().toISOString(),
+      };
+      savedMessages = [savedMessage, ...savedMessages];
+      return { savedMessage };
+    },
+    async unsaveMessage(messageId) {
+      savedMessages = savedMessages.filter((saved) => saved.messageId !== messageId);
+    },
     async listPreferences() {
       return { preferences };
     },
@@ -746,6 +794,9 @@ export function createDaemonBridge(): DaemonBridge {
       sendConversationMessage: (conversationId: string, request: ConversationMessageRequest, sessionId?: string) => invoke<ConversationMessageReceipt>("send_conversation_message_command", { conversationId, request, sessionId }),
       resolvePermission: (request: PermissionResolveRequest) => invoke<ConversationMessageReceipt>("resolve_permission_command", { request }),
       uploadConversationAttachment: (request: ConversationAttachmentUploadRequest) => invoke<ConversationAttachmentReceipt>("upload_conversation_attachment_command", { request }),
+      listSavedMessages: () => invoke<SavedMessageListReceipt>("list_saved_messages_command"),
+      saveMessage: (request: SaveMessageRequest) => invoke<SavedMessageReceipt>("save_message_command", { request }),
+      unsaveMessage: (messageId: string) => invoke<void>("unsave_message_command", { messageId }),
       listPreferences: () => invoke<PreferencesReceipt>("list_preferences_command"),
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),

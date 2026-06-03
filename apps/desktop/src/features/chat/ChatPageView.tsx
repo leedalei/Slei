@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ArrowDown, AtSign, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown, AtSign, Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
@@ -170,7 +170,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onPermissionResolve, onSendMessage, profile, sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -178,6 +178,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [toastMessage, setToastMessage] = useState("");
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -204,6 +205,17 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
+
+  useEffect(() => {
+    if (!focusedMessageId || typeof document === "undefined") return;
+    const target = document.querySelector<HTMLElement>(`[data-message-id="${escapeAttributeSelector(focusedMessageId)}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center" });
+    target.focus({ preventScroll: true });
+    setHighlightedMessageId(focusedMessageId);
+    const timer = window.setTimeout(() => setHighlightedMessageId(undefined), 2200);
+    return () => window.clearTimeout(timer);
+  }, [focusedMessageId, visibleMessages.length]);
 
   async function submitMessage() {
     if (sendDisabled) return;
@@ -298,8 +310,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         </aside>
       ) : null}
       <div className="slei-timeline">
-        {visibleMessages.map((message) => (
-          <article className="slei-message" key={message.id}>
+        {visibleMessages.map((message) => {
+          const saved = savedMessageIds.includes(message.id);
+          const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+          return (
+          <article className={`slei-message${highlightedMessageId === message.id ? " slei-message--focused" : ""}`} data-message-id={message.id} key={message.id} tabIndex={focusedMessageId === message.id ? -1 : undefined}>
             <MemberAvatar identity={memberFromMessage(message, data.members)} />
             <div>
               <div className="slei-message__meta">
@@ -312,6 +327,9 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 <div className="slei-message__actions">
                   <button aria-label={messages.chat.copyMessage} className="slei-message__copy" onClick={() => void copyMessage(message)} title={messages.chat.copyMessage} type="button">
                     <Copy aria-hidden="true" size={14} />
+                  </button>
+                  <button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="slei-message__copy slei-message__save" onClick={() => void onMessageSaveToggle?.(message)} title={saveLabel} type="button">
+                    <Bookmark aria-hidden="true" size={14} />
                   </button>
                   <span aria-hidden="true" className="slei-message__meta-separator">｜</span>
                   <span className="slei-message__time-row">
@@ -340,7 +358,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
               ))}
             </div>
           </article>
-        ))}
+        );})}
       </div>
       {mention && mentionTargets.length > 0 ? (
         <section aria-label={messages.chat.chooseMentionMember} className="slei-mention-panel">
@@ -422,4 +440,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       </form>
     </section>
   );
+}
+
+function escapeAttributeSelector(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
 }
