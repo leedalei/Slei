@@ -30,10 +30,18 @@ pub async fn send_channel_message(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let idempotency_key = headers
+    let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
 
     match state
         .channel_orchestrator()

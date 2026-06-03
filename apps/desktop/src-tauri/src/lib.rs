@@ -292,6 +292,99 @@ mod tests {
     }
 
     #[test]
+    fn channel_message_command_does_not_fallback_when_daemon_connection_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = send_channel_message(
+            &broker,
+            "remote-dev",
+            SendChannelMessageRequest {
+                author_id: "human_lei".to_string(),
+                body: "实现一个 API 路由".to_string(),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("daemon request failed"));
+        assert!(error.contains("daemon connection failed"));
+        assert!(!error.contains("msg_channel_remote-dev"));
+        assert!(!error.contains("task_msg_channel_remote-dev"));
+    }
+
+    #[test]
+    fn channel_message_command_does_not_fallback_when_daemon_response_is_invalid() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let response = r#"{"unexpected":true}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = send_channel_message(
+            &broker,
+            "remote-dev",
+            SendChannelMessageRequest {
+                author_id: "human_lei".to_string(),
+                body: "实现一个 API 路由".to_string(),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("POST /v1/channels/remote-dev/messages HTTP/1.1"));
+        assert!(error.contains("daemon response invalid"));
+        assert!(!error.contains("msg_channel_remote-dev"));
+        assert!(!error.contains("task_msg_channel_remote-dev"));
+    }
+
+    #[test]
     fn node_commands_sanitize_runtime_status_and_support_device_name() {
         let _env_guard = test_env_lock();
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
