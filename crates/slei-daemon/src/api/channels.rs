@@ -21,6 +21,7 @@ pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response
 pub struct CreateChannelRequest {
     name: String,
     description: Option<String>,
+    agent_ids: Option<Vec<String>>,
 }
 
 pub async fn create(
@@ -36,6 +37,7 @@ pub async fn create(
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
 
+    let agent_ids = payload.agent_ids.unwrap_or_default();
     match state
         .channels()
         .create_channel(
@@ -48,7 +50,22 @@ pub async fn create(
         )
         .await
     {
-        Ok(channel) => (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response(),
+        Ok(channel) => {
+            for agent_id in agent_ids {
+                if let Err(error) = state
+                    .channels()
+                    .add_agent_to_channel(&channel.id, &agent_id)
+                    .await
+                {
+                    return channel_error_response(error);
+                }
+                state
+                    .memory_events()
+                    .request_channel_join_update(&agent_id, &channel.id)
+                    .await;
+            }
+            (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response()
+        }
         Err(error) => channel_error_response(error),
     }
 }
@@ -70,7 +87,7 @@ pub async fn members(
 
 fn channel_error_response(error: ChannelError) -> Response {
     match error {
-        ChannelError::MissingChannel => (
+        ChannelError::MissingChannel | ChannelError::MissingMember => (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": error.to_string() })),
         )

@@ -7,6 +7,9 @@ use crate::services::channel_service::ChannelService;
 use crate::services::conversation_service::ConversationService;
 use crate::services::event_service::EventService;
 use crate::services::member_service::MemberService;
+use crate::services::memory_event_service::MemoryEventService;
+use crate::services::memory_maintainer_service::{MemoryMaintainerError, MemoryMaintainerService};
+use crate::services::message_service::MessageService;
 use crate::services::node_service::NodeService;
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::settings_service::SettingsService;
@@ -30,6 +33,9 @@ pub struct AppState {
     settings_service: SettingsService,
     task_service: TaskService,
     orchestration_store: OrchestrationStore,
+    memory_event_service: MemoryEventService,
+    memory_maintainer_service: MemoryMaintainerService,
+    message_service: MessageService,
     worker_transport: WorkerTransport,
     agent_dm_runs: AgentDmRunStore,
 }
@@ -59,13 +65,22 @@ impl AppState {
     ) -> Self {
         let event_service = EventService::new();
         let data_root = agent_data_root.clone();
+        let member_service = MemberService::for_tests_with_data_root(agent_data_root);
+        let channel_service = ChannelService::new(data_root.clone());
+        let memory_event_service = MemoryEventService::new(orchestration_store.clone());
+        let memory_maintainer_service = MemoryMaintainerService::new(
+            member_service.clone(),
+            channel_service.clone(),
+            memory_event_service.clone(),
+        );
+        let message_service = MessageService::for_tests();
         Self {
             auth_token,
             daemon_version: env!("CARGO_PKG_VERSION"),
             protocol_version: slei_protocol::PROTOCOL_VERSION,
             node_service: NodeService::for_tests(),
-            member_service: MemberService::for_tests_with_data_root(agent_data_root),
-            channel_service: ChannelService::new(data_root.clone()),
+            member_service,
+            channel_service,
             card_service: CardService::new(data_root.clone()),
             conversation_service: ConversationService::new(data_root),
             workspace_service: WorkspaceService::new(event_service.clone()),
@@ -73,6 +88,9 @@ impl AppState {
             settings_service: SettingsService::for_tests(),
             task_service: TaskService::for_tests(),
             orchestration_store,
+            memory_event_service,
+            memory_maintainer_service,
+            message_service,
             worker_transport: WorkerTransport::fake(),
             agent_dm_runs: AgentDmRunStore::default(),
         }
@@ -116,6 +134,50 @@ impl AppState {
 
     pub fn orchestration(&self) -> &OrchestrationStore {
         &self.orchestration_store
+    }
+
+    pub fn memory_events(&self) -> &MemoryEventService {
+        &self.memory_event_service
+    }
+
+    pub fn memory_maintainer(&self) -> &MemoryMaintainerService {
+        &self.memory_maintainer_service
+    }
+
+    pub fn messages(&self) -> &MessageService {
+        &self.message_service
+    }
+
+    pub async fn run_channel_join_memory_updates(
+        &self,
+        channel_id: &str,
+    ) -> Result<(), MemoryMaintainerError> {
+        let ready_agent_ids = self
+            .memory_maintainer()
+            .run_pending_channel_join_updates(channel_id)
+            .await?;
+        for agent_id in ready_agent_ids {
+            self.messages()
+                .create_agent_channel_message(channel_id, &agent_id, "已就位")
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn fail_agent_channel_memory_update(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<(), MemoryMaintainerError> {
+        self.memory_events().fail_update(agent_id, channel_id).await;
+        self.channels()
+            .set_member_readiness(
+                channel_id,
+                agent_id,
+                crate::services::channel_service::ChannelMemberReadiness::MemoryFailed,
+            )
+            .await?;
+        Ok(())
     }
 
     pub fn agent_dm(&self) -> AgentDmService {

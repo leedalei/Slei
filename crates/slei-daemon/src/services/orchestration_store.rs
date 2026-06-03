@@ -1,6 +1,8 @@
 use std::fmt;
 
-use slei_storage::repositories::{BlockedMemorySectionRecord, Repositories};
+use slei_storage::repositories::{
+    BlockedMemorySectionRecord, MemoryUpdateEventRecord, Repositories,
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -86,6 +88,13 @@ impl OrchestrationStore {
                 status,
             )
             .await
+    }
+
+    pub async fn memory_update_events_for_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<MemoryUpdateEventRecord>, sqlx::Error> {
+        self.repos.memory_update_events_for_agent(agent_id).await
     }
 
     pub async fn record_memory_document_state(

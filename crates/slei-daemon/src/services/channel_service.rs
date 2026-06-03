@@ -32,6 +32,18 @@ pub struct ChannelMemberRecord {
     pub channel_id: String,
     pub agent_id: String,
     pub joined_at: String,
+    #[serde(default = "default_channel_member_readiness")]
+    pub readiness: ChannelMemberReadiness,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelMemberReadiness {
+    Joining,
+    MemorySyncing,
+    Ready,
+    MemoryFailed,
+    Unavailable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -155,10 +167,34 @@ impl ChannelService {
             channel_id: channel_id.to_string(),
             agent_id: trimmed_agent_id.to_string(),
             joined_at: current_timestamp(),
+            readiness: ChannelMemberReadiness::Joining,
         };
         members.push(member.clone());
         persist_members(&self.root, &state.members)?;
         Ok(member)
+    }
+
+    pub async fn set_member_readiness(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+        readiness: ChannelMemberReadiness,
+    ) -> Result<(), ChannelError> {
+        let mut state = self.inner.lock().await;
+        if !state.channels.contains_key(channel_id) {
+            return Err(ChannelError::MissingChannel);
+        }
+        let members = state
+            .members
+            .get_mut(channel_id)
+            .ok_or(ChannelError::MissingMember)?;
+        let member = members
+            .iter_mut()
+            .find(|member| member.agent_id == agent_id)
+            .ok_or(ChannelError::MissingMember)?;
+        member.readiness = readiness;
+        persist_members(&self.root, &state.members)?;
+        Ok(())
     }
 
     pub async fn channel_members(
@@ -310,6 +346,10 @@ fn current_timestamp() -> String {
         .unwrap_or_else(|_| "0".to_string())
 }
 
+fn default_channel_member_readiness() -> ChannelMemberReadiness {
+    ChannelMemberReadiness::Joining
+}
+
 impl ChannelService {
     fn persist_snapshot(&self) {
         if let Ok(state) = self.inner.try_lock() {
@@ -323,6 +363,8 @@ impl ChannelService {
 pub enum ChannelError {
     #[error("channel not found")]
     MissingChannel,
+    #[error("channel member not found")]
+    MissingMember,
     #[error("invalid channel")]
     InvalidChannel,
     #[error("channel io error: {0}")]

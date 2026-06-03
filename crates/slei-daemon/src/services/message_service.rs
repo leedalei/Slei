@@ -163,6 +163,20 @@ impl MessageService {
             .await
     }
 
+    pub async fn create_agent_channel_message(
+        &self,
+        channel_id: &str,
+        author_id: &str,
+        body: &str,
+    ) -> Result<String, MessageError> {
+        if channel_id.trim().is_empty() || author_id.trim().is_empty() || body.trim().is_empty() {
+            return Err(MessageError::InvalidMessage);
+        }
+        Ok(self
+            .insert_for_tests(channel_id, author_id, body, MessageKind::Agent)
+            .await)
+    }
+
     pub async fn delete_human_message(&self, message_id: &str) -> Result<(), MessageError> {
         let mut state = self.inner.lock().expect("message state lock");
         let message = state
@@ -268,4 +282,6 @@ pub enum MessageError {
     MessageNotFound,
     #[error("agent messages are immutable")]
     AgentMessageImmutable,
+    #[error("invalid message")]
+    InvalidMessage,
 }

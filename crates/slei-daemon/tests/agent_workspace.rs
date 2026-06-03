@@ -242,6 +242,168 @@ async fn channels_normalize_hash_prefix_and_default_all_is_persistent() {
 }
 
 #[tokio::test]
+async fn create_channel_with_agents_is_immediately_usable_and_requests_memory_updates() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("channel-join-memory-request");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
+    let app = build_router(state.clone());
+
+    let created_agent = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-alice"),
+        json!({
+            "name": "Alice",
+            "handle": "@alice",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "架构师，负责拆解需求和协调方案。"
+        }),
+    )
+    .await;
+    assert_eq!(created_agent.status(), StatusCode::CREATED);
+    let alice_id = response_json(created_agent).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let created_channel = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-ready-channel"),
+        json!({
+            "name": "#Ready Channel",
+            "description": "Project readiness",
+            "agentIds": [alice_id]
+        }),
+    )
+    .await;
+    assert_eq!(created_channel.status(), StatusCode::CREATED);
+    let created_channel_body = response_json(created_channel).await;
+    assert_eq!(created_channel_body["channel"]["id"], "ready-channel");
+
+    let members = get_json(&app, &token, "/v1/channels/ready-channel/members").await;
+    assert_eq!(members.status(), StatusCode::OK);
+    let members_body = response_json(members).await;
+    let selected = members_body["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|member| member["agentId"] == alice_id)
+        .expect("selected agent should be a channel member");
+    assert_eq!(selected["readiness"], "joining");
+
+    let events = state.memory_events().events_for_agent(&alice_id).await;
+    assert!(events
+        .iter()
+        .any(|event| event.event_type == "memory_update_requested"
+            && event.status == "pending"
+            && event.channel_id.as_deref() == Some("ready-channel")));
+}
+
+#[tokio::test]
+async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("channel-join-memory-complete");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
+    let app = build_router(state.clone());
+
+    let created_agent = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-alice-complete"),
+        json!({
+            "name": "Alice",
+            "handle": "@alice",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "架构师，负责拆解需求和协调方案。"
+        }),
+    )
+    .await;
+    assert_eq!(created_agent.status(), StatusCode::CREATED);
+    let created_agent_body = response_json(created_agent).await;
+    let alice_id = created_agent_body["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let workspace = PathBuf::from(
+        created_agent_body["agent"]["workspacePath"]
+            .as_str()
+            .unwrap(),
+    );
+
+    let created_channel = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-ready-channel-complete"),
+        json!({
+            "name": "#Ready Channel",
+            "description": "Project readiness",
+            "agentIds": [alice_id]
+        }),
+    )
+    .await;
+    assert_eq!(created_channel.status(), StatusCode::CREATED);
+
+    assert!(state
+        .messages()
+        .reconstructed_context("ready-channel")
+        .await
+        .is_empty());
+    assert!(!state
+        .memory_events()
+        .events_for_agent(&alice_id)
+        .await
+        .iter()
+        .any(|event| event.event_type == "memory_updated"));
+
+    state
+        .run_channel_join_memory_updates("ready-channel")
+        .await
+        .unwrap();
+
+    let members =
+        response_json(get_json(&app, &token, "/v1/channels/ready-channel/members").await).await;
+    let selected = members["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|member| member["agentId"] == alice_id)
+        .expect("selected agent should be a channel member");
+    assert_eq!(selected["readiness"], "ready");
+
+    let messages = state
+        .messages()
+        .reconstructed_context("ready-channel")
+        .await;
+    assert!(messages.contains("已就位"));
+
+    let events = state.memory_events().events_for_agent(&alice_id).await;
+    let updated_position = events
+        .iter()
+        .position(|event| {
+            event.event_type == "memory_updated"
+                && event.status == "ready"
+                && event.channel_id.as_deref() == Some("ready-channel")
+        })
+        .expect("memory update completion event should be emitted before ready message");
+    assert!(updated_position < events.len());
+
+    let memory = fs::read_to_string(workspace.join("MEMORY.md")).unwrap();
+    let channels = fs::read_to_string(workspace.join("notes/channels.md")).unwrap();
+    assert!(memory.contains("notes/channels.md"));
+    assert!(memory.contains("notes/relationships.md"));
+    assert!(channels.contains("ready-channel"));
+}
+
+#[tokio::test]
 async fn guide_create_request_starts_runtime_without_user_text_cards() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("interactive-cards");
