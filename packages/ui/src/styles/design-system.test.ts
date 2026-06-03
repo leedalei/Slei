@@ -42,6 +42,7 @@ describe("Slei Animal Island design tokens", () => {
 
   it("keeps component styles on semantic tokens only", () => {
     expect(globalsCss).not.toContain("var(--primitive-");
+    expect(globalsCss).not.toMatch(/#[0-9a-fA-F]{3,8}|rgb\(/);
     expect(globalsCss).toContain("--border-panel");
     expect(globalsCss).toContain(".slei-select");
     expect(globalsCss).toContain(".slei-checkbox");

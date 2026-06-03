@@ -55,7 +55,7 @@ select:focus-visible {
   background: var(--color-surface);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-control);
-  box-shadow: 0 3px 0 0 rgb(121 79 39 / 22%);
+  box-shadow: 0 3px 0 0 color-mix(in srgb, var(--color-text-primary) 22%, transparent);
   color: var(--color-text-primary);
   display: inline-flex;
   font-size: var(--text-base);
@@ -75,12 +75,12 @@ select:focus-visible {
 
 .slei-button:hover {
   border-color: var(--color-accent);
-  box-shadow: 0 4px 0 0 rgb(121 79 39 / 24%);
+  box-shadow: 0 4px 0 0 color-mix(in srgb, var(--color-text-primary) 24%, transparent);
   transform: translateY(-1px);
 }
 
 .slei-button:active {
-  box-shadow: 0 1px 0 0 rgb(121 79 39 / 20%);
+  box-shadow: 0 1px 0 0 color-mix(in srgb, var(--color-text-primary) 20%, transparent);
   transform: translateY(2px);
 }
 
@@ -140,7 +140,7 @@ select:focus-visible {
   background: var(--color-surface);
   border: var(--border-card) solid var(--color-border);
   border-radius: var(--radius-control);
-  box-shadow: 0 3px 0 0 rgb(121 79 39 / 12%);
+  box-shadow: 0 3px 0 0 color-mix(in srgb, var(--color-text-primary) 12%, transparent);
   color: var(--color-text-primary);
   font-size: var(--text-base);
   line-height: var(--leading-ui);
