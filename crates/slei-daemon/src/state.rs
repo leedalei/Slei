@@ -6,6 +6,7 @@ use crate::services::agent_inbox_service::AgentInboxService;
 use crate::services::card_service::CardService;
 use crate::services::channel_service::ChannelService;
 use crate::services::conversation_service::ConversationService;
+use crate::services::coordinator_service::CoordinatorService;
 use crate::services::event_service::EventService;
 use crate::services::member_service::MemberService;
 use crate::services::memory_event_service::MemoryEventService;
@@ -34,6 +35,7 @@ pub struct AppState {
     settings_service: SettingsService,
     task_service: TaskService,
     orchestration_store: OrchestrationStore,
+    coordinator_service: CoordinatorService,
     agent_inbox_service: AgentInboxService,
     memory_event_service: MemoryEventService,
     memory_maintainer_service: MemoryMaintainerService,
@@ -69,6 +71,7 @@ impl AppState {
         let data_root = agent_data_root.clone();
         let member_service = MemberService::for_tests_with_data_root(agent_data_root);
         let channel_service = ChannelService::new(data_root.clone());
+        let coordinator_service = CoordinatorService::new(orchestration_store.clone());
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let memory_maintainer_service = MemoryMaintainerService::new(
@@ -91,6 +94,7 @@ impl AppState {
             settings_service: SettingsService::for_tests(),
             task_service: TaskService::for_tests(),
             orchestration_store,
+            coordinator_service,
             agent_inbox_service,
             memory_event_service,
             memory_maintainer_service,
@@ -138,6 +142,10 @@ impl AppState {
 
     pub fn orchestration(&self) -> &OrchestrationStore {
         &self.orchestration_store
+    }
+
+    pub fn coordinator(&self) -> &CoordinatorService {
+        &self.coordinator_service
     }
 
     pub fn agent_inbox(&self) -> &AgentInboxService {

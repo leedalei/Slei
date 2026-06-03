@@ -1,5 +1,8 @@
 use slei_daemon::services::agent_inbox_service::{AgentInboxService, DeliveryState};
 use slei_daemon::services::channel_service::ChannelMemberReadiness;
+use slei_daemon::services::coordinator_service::{
+    CoordinatorAction, CoordinatorInput, CoordinatorService, IntentKind,
+};
 use slei_daemon::services::orchestration_store::OrchestrationStore;
 use uuid::Uuid;
 
@@ -79,4 +82,50 @@ async fn inbox_replay_skips_malformed_payloads_without_hiding_valid_events() {
     let replayed = restarted.events_for_agent("agent_alice").await;
 
     assert_eq!(replayed, vec![assigned]);
+}
+
+#[tokio::test]
+async fn coordinator_classifies_consultation_without_task_creation() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+    let decision = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "channel_dev".to_string(),
+            message_id: "msg_consult".to_string(),
+            body: "这个架构方案你怎么看？".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+
+    assert_eq!(decision.intent, IntentKind::Consultation);
+    assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
+    assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_alice"));
+}
+
+#[tokio::test]
+async fn coordinator_creates_task_for_command_intent_and_needs_assignment_without_ready_agents() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+    let task = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "channel_dev".to_string(),
+            message_id: "msg_task".to_string(),
+            body: "实现频道创建时选择 Agent 的功能".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+    let unassigned = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "channel_dev".to_string(),
+            message_id: "msg_no_ready".to_string(),
+            body: "实现一个导出功能".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec![],
+        })
+        .await;
+
+    assert_eq!(task.intent, IntentKind::TaskCommand);
+    assert_eq!(task.action, CoordinatorAction::CreateTaskAndAssign);
+    assert_eq!(task.assignee_agent_id.as_deref(), Some("agent_alice"));
+    assert_eq!(unassigned.action, CoordinatorAction::NeedsManualAssignment);
 }
