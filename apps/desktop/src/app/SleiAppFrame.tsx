@@ -305,6 +305,33 @@ export function SleiAppFrame(input: {
 
 export type WindowAction = "close" | "minimize" | "toggleMaximize";
 
+export type ChannelDraftState = {
+  name: string;
+  projectName: string;
+  selectedAgentIds: string[];
+};
+
+export function resetChannelDraft(): ChannelDraftState {
+  return { name: "", projectName: "", selectedAgentIds: [] };
+}
+
+export function toggleChannelDraftAgent(draft: ChannelDraftState, agentId: string): ChannelDraftState {
+  return {
+    ...draft,
+    selectedAgentIds: draft.selectedAgentIds.includes(agentId)
+      ? draft.selectedAgentIds.filter((id) => id !== agentId)
+      : [...draft.selectedAgentIds, agentId],
+  };
+}
+
+export function channelDraftCreateInput(draft: ChannelDraftState): { name: string; projectName?: string; agentIds: string[] } {
+  return {
+    name: draft.name,
+    projectName: draft.projectName,
+    agentIds: draft.selectedAgentIds,
+  };
+}
+
 type DesktopWindowControlsHandle = {
   close: () => Promise<void>;
   minimize: () => Promise<void>;
@@ -411,9 +438,7 @@ function ChannelList(input: {
   onSavedMessageSelect?: (savedMessage: SavedMessageView) => void;
   onSearchToggle?: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [activePanel, setActivePanel] = useState<"channels" | "saved">(input.initialSavedPanelOpen ? "saved" : "channels");
   const directMessageConversations = input.data.conversations.filter((conversation) => conversation.kind === "dm");
@@ -421,17 +446,17 @@ function ChannelList(input: {
 
   async function submitChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await input.onChannelCreate?.({ name, projectName, agentIds: selectedAgentIds });
-    setName("");
-    setProjectName("");
-    setSelectedAgentIds([]);
+    await input.onChannelCreate?.(channelDraftCreateInput(channelDraft));
+    closeCreateChannelModal();
+  }
+
+  function closeCreateChannelModal() {
+    setChannelDraft(resetChannelDraft());
     setCreateOpen(false);
   }
 
   function toggleSelectedAgent(agentId: string) {
-    setSelectedAgentIds((current) => (
-      current.includes(agentId) ? current.filter((id) => id !== agentId) : [...current, agentId]
-    ));
+    setChannelDraft((current) => toggleChannelDraftAgent(current, agentId));
   }
 
   return (
@@ -504,22 +529,34 @@ function ChannelList(input: {
             <form className="slei-channel-modal__form" onSubmit={submitChannel}>
               <label className="slei-field">
                 <span>{input.messages.chat.channelName}</span>
-                <input aria-label={input.messages.chat.channelName} className="slei-input" onChange={(event) => setName(event.currentTarget.value)} placeholder="dev-team" value={name} />
+                <input
+                  aria-label={input.messages.chat.channelName}
+                  className="slei-input"
+                  onChange={(event) => setChannelDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                  placeholder="dev-team"
+                  value={channelDraft.name}
+                />
               </label>
               <label className="slei-field">
                 <span>{input.messages.chat.project}</span>
-                <input aria-label={input.messages.chat.project} className="slei-input" onChange={(event) => setProjectName(event.currentTarget.value)} placeholder="Slei Desktop" value={projectName} />
+                <input
+                  aria-label={input.messages.chat.project}
+                  className="slei-input"
+                  onChange={(event) => setChannelDraft((current) => ({ ...current, projectName: event.currentTarget.value }))}
+                  placeholder="Slei Desktop"
+                  value={channelDraft.projectName}
+                />
               </label>
               {agentMembers.length > 0 ? (
                 <fieldset className="slei-channel-agent-select">
                   <legend>{input.messages.chat.selectAgents}</legend>
                   {agentMembers.map((member) => {
-                    const readiness = member.channelReadiness?.[stripChannelHash(name)] ?? member.channelReadiness?.__create__ ?? "memory_syncing";
+                    const readiness = member.channelReadiness?.[stripChannelHash(channelDraft.name)] ?? member.channelReadiness?.__create__ ?? "memory_syncing";
                     return (
                       <label className="slei-channel-agent-option" key={member.id}>
                         <input
                           aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
-                          checked={selectedAgentIds.includes(member.id)}
+                          checked={channelDraft.selectedAgentIds.includes(member.id)}
                           onChange={() => toggleSelectedAgent(member.id)}
                           type="checkbox"
                         />
@@ -537,7 +574,7 @@ function ChannelList(input: {
                 </fieldset>
               ) : null}
               <div className="slei-modal-actions">
-                <button className="slei-button" onClick={() => setCreateOpen(false)} type="button">{input.messages.common.cancel}</button>
+                <button className="slei-button" onClick={closeCreateChannelModal} type="button">{input.messages.common.cancel}</button>
                 <button className="slei-button slei-button--accent" type="submit"><Plus aria-hidden="true" size={14} />{input.messages.common.create}</button>
               </div>
             </form>

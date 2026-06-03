@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeMentionQuery,
+  channelDraftCreateInput,
+  resetChannelDraft,
+  toggleChannelDraftAgent,
   filterConversationMessages,
   insertMention,
   moveMentionSelection,
@@ -172,6 +175,21 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("@alice");
     expect(html).toContain("记忆同步中");
     expect(html).not.toContain("@lei");
+  });
+
+  it("resets canceled create channel agent selections before the next submit", () => {
+    const canceledDraft = toggleChannelDraftAgent(
+      { name: "old-dev", projectName: "Old Project", selectedAgentIds: [] },
+      "a1",
+    );
+    const reopenedDraft = { ...resetChannelDraft(), name: "new-dev" };
+
+    expect(canceledDraft.selectedAgentIds).toEqual(["a1"]);
+    expect(channelDraftCreateInput(reopenedDraft)).toEqual({
+      name: "new-dev",
+      projectName: "",
+      agentIds: [],
+    });
   });
 
   it("detects, navigates, and inserts composer mention selections", () => {
