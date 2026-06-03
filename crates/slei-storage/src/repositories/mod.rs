@@ -604,11 +604,16 @@ impl Repositories {
         &self,
         source_message_id: &str,
     ) -> Result<(), sqlx::Error> {
+        let tombstone_payload = format!(
+            r#"{{"sourceMessageId":"{}","bodyRemoved":true}}"#,
+            escape_json_string(source_message_id)
+        );
         sqlx::query(
             "UPDATE routing_context_packages
-             SET contains_deleted_body = 1
+             SET payload = ?, contains_deleted_body = 1
              WHERE source_message_id = ?",
         )
+        .bind(tombstone_payload)
         .bind(source_message_id)
         .execute(&self.pool)
         .await?;
@@ -618,4 +623,22 @@ impl Repositories {
 
 fn parse_uuid(value: &str) -> Result<Uuid, sqlx::Error> {
     Uuid::parse_str(value).map_err(|err| sqlx::Error::Decode(Box::new(err)))
+}
+
+fn escape_json_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            character if character.is_control() => {
+                escaped.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => escaped.push(character),
+        }
+    }
+    escaped
 }

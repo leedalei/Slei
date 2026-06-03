@@ -100,3 +100,53 @@ async fn coordinator_internal_events_survive_restart() {
     assert_eq!(packages[0].source_message_id, "msg_1");
     assert_eq!(packages[0].contains_deleted_body, false);
 }
+
+#[tokio::test]
+async fn routing_context_cleanup_scrubs_deleted_body_bytes() {
+    let db_path = std::env::temp_dir().join(format!("slei-coordinator-{}.sqlite", Uuid::new_v4()));
+    let database_url = format!("sqlite://{}", db_path.display());
+    let decision_id = Uuid::new_v4();
+    let source_message_id = "msg_deleted";
+    let deleted_body = format!("deleted-body-sentinel-{}", Uuid::new_v4());
+
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+    repos
+        .insert_coordinator_decision(
+            decision_id,
+            "dev",
+            source_message_id,
+            "task_command",
+            "create_task_and_assign",
+            Some("agent_alice"),
+            "needs architecture",
+        )
+        .await
+        .unwrap();
+    repos
+        .insert_routing_context_package(
+            Uuid::new_v4(),
+            decision_id,
+            source_message_id,
+            &format!(r#"{{"currentMessageId":"{source_message_id}","body":"{deleted_body}"}}"#),
+            false,
+        )
+        .await
+        .unwrap();
+
+    repos
+        .mark_context_packages_deleted(source_message_id)
+        .await
+        .unwrap();
+
+    let packages = repos
+        .routing_context_packages_for_decision(decision_id)
+        .await
+        .unwrap();
+
+    assert_eq!(packages.len(), 1);
+    assert!(packages[0].contains_deleted_body);
+    assert!(!packages[0].payload.contains(&deleted_body));
+    assert!(packages[0].payload.contains(source_message_id));
+}
