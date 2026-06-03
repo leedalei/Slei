@@ -1,6 +1,7 @@
 use slei_daemon::services::agent_inbox_service::{AgentInboxService, DeliveryState};
 use slei_daemon::services::channel_service::ChannelMemberReadiness;
 use slei_daemon::services::orchestration_store::OrchestrationStore;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn human_mentions_preserve_target_and_reflect_readiness() {
@@ -53,4 +54,29 @@ async fn inbox_events_replay_from_persisted_store_after_restart() {
     assert_eq!(replayed[0].message_id, "msg_3");
     assert_eq!(replayed[0].event_type, "task_assigned");
     assert_eq!(replayed[0].delivery_state, DeliveryState::Pending);
+}
+
+#[tokio::test]
+async fn inbox_replay_skips_malformed_payloads_without_hiding_valid_events() {
+    let store = OrchestrationStore::for_tests().await;
+    let inbox = AgentInboxService::new(store.clone());
+
+    let assigned = inbox
+        .create_task_assignment("agent_alice", "channel_dev", "task_1", "msg_3")
+        .await;
+    store
+        .record_inbox_event(
+            Uuid::new_v4(),
+            "agent_alice",
+            "task_assigned",
+            "pending",
+            "{malformed-json",
+        )
+        .await
+        .unwrap();
+
+    let restarted = AgentInboxService::new(store);
+    let replayed = restarted.events_for_agent("agent_alice").await;
+
+    assert_eq!(replayed, vec![assigned]);
 }

@@ -80,16 +80,10 @@ impl AgentInboxService {
 
     pub async fn events_for_agent(&self, agent_id: &str) -> Vec<AgentInboxEvent> {
         match self.store.agent_inbox_events_for_agent(agent_id).await {
-            Ok(records) => {
-                let events = records
-                    .into_iter()
-                    .map(|record| serde_json::from_str::<AgentInboxEvent>(&record.payload))
-                    .collect::<Result<Vec<_>, _>>();
-                match events {
-                    Ok(events) => events,
-                    Err(_) => self.cached_events_for_agent(agent_id).await,
-                }
-            }
+            Ok(records) => records
+                .into_iter()
+                .filter_map(|record| serde_json::from_str::<AgentInboxEvent>(&record.payload).ok())
+                .collect(),
             Err(_) => self.cached_events_for_agent(agent_id).await,
         }
     }
