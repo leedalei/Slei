@@ -32,6 +32,29 @@ describe("diagnostics and localized recovery", () => {
     expect(browse).not.toContain("Search");
   });
 
+  it("renders coordinator and inbox diagnostics counts", () => {
+    const html = renderDiagnosticsPage({
+      locale: "en-US",
+      status: {
+        node: "MacBookPro M4 MAX",
+        runtime: "Claude Code",
+        worker: "claude-agent",
+        protocolVersion: "v1",
+        schemaVersion: "2026-05-27",
+        coordinatorDecisionCount: 3,
+        agentInboxEventCount: 5,
+        memoryUpdateEventCount: 8,
+      },
+    });
+
+    expect(html).toContain("Coordinator");
+    expect(html).toContain("3");
+    expect(html).toContain("Inbox");
+    expect(html).toContain("5");
+    expect(html).toContain("Memory updates");
+    expect(html).toContain("8");
+  });
+
   it("renders actionable bilingual E1xx-E4xx errors and sanitized log export", () => {
     expect(renderErrorPanel({ locale: "zh-CN", code: "E101" })).toContain("检查本地 daemon");
     expect(renderErrorPanel({ locale: "en-US", code: "E201" })).toContain("Check runtime permissions");

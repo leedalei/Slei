@@ -21,6 +21,9 @@ pub struct TaskRecord {
     pub channel_id: String,
     pub creator_id: String,
     pub assignee_id: Option<String>,
+    pub source_message_id: Option<String>,
+    pub assignment_reason: Option<String>,
+    pub needs_assignment: bool,
     pub title: String,
     pub status: TaskStatus,
     pub attention_required: bool,
@@ -32,7 +35,14 @@ pub struct TaskRecord {
 pub struct TaskReply {
     pub id: String,
     pub sender_id: String,
+    pub role: Option<String>,
     pub body: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AddTaskReplyOutcome {
+    pub task_id: String,
+    pub reply: TaskReply,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -107,6 +117,48 @@ impl TaskService {
             channel_id: channel_id.to_string(),
             creator_id: creator_id.to_string(),
             assignee_id: None,
+            source_message_id: None,
+            assignment_reason: None,
+            needs_assignment: true,
+            title: title.to_string(),
+            status: TaskStatus::InProgress,
+            attention_required: false,
+            root_deleted: false,
+        };
+        state
+            .task_idempotency
+            .insert(idempotency_key.to_string(), task.id.clone());
+        state.tasks.insert(task.id.clone(), task.clone());
+        Ok(task)
+    }
+
+    pub async fn create_from_coordinator(
+        &self,
+        channel_id: &str,
+        creator_id: &str,
+        source_message_id: &str,
+        title: &str,
+        assignee_id: Option<String>,
+        assignment_reason: &str,
+        idempotency_key: &str,
+    ) -> Result<TaskRecord, TaskError> {
+        let mut state = self.inner.lock().expect("task state lock");
+        if let Some(task_id) = state.task_idempotency.get(idempotency_key) {
+            return state
+                .tasks
+                .get(task_id)
+                .cloned()
+                .ok_or(TaskError::TaskNotFound);
+        }
+
+        let task = TaskRecord {
+            id: format!("task_{}", Uuid::new_v4().simple()),
+            channel_id: channel_id.to_string(),
+            creator_id: creator_id.to_string(),
+            needs_assignment: assignee_id.is_none(),
+            assignee_id,
+            source_message_id: Some(source_message_id.to_string()),
+            assignment_reason: Some(assignment_reason.to_string()),
             title: title.to_string(),
             status: TaskStatus::InProgress,
             attention_required: false,
@@ -126,16 +178,33 @@ impl TaskService {
         body: &str,
         idempotency_key: &str,
     ) -> Result<TaskReply, TaskError> {
+        Ok(self
+            .add_reply_with_task(task_id, sender_id, body, idempotency_key)
+            .await?
+            .reply)
+    }
+
+    pub async fn add_reply_with_task(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<AddTaskReplyOutcome, TaskError> {
         let mut state = self.inner.lock().expect("task state lock");
         if let Some((existing_task_id, existing_reply_id)) =
             state.reply_idempotency.get(idempotency_key)
         {
-            return state
+            let reply = state
                 .replies
                 .get(existing_task_id)
                 .and_then(|replies| replies.iter().find(|reply| reply.id == *existing_reply_id))
                 .cloned()
-                .ok_or(TaskError::TaskNotFound);
+                .ok_or(TaskError::TaskNotFound)?;
+            return Ok(AddTaskReplyOutcome {
+                task_id: existing_task_id.clone(),
+                reply,
+            });
         }
         if !state.tasks.contains_key(task_id) {
             return Err(TaskError::TaskNotFound);
@@ -144,6 +213,7 @@ impl TaskService {
         let reply = TaskReply {
             id: format!("reply_{}", Uuid::new_v4().simple()),
             sender_id: sender_id.to_string(),
+            role: role_for_sender(sender_id),
             body: body.to_string(),
         };
         state.reply_idempotency.insert(
@@ -155,7 +225,10 @@ impl TaskService {
             .entry(task_id.to_string())
             .or_default()
             .push(reply.clone());
-        Ok(reply)
+        Ok(AddTaskReplyOutcome {
+            task_id: task_id.to_string(),
+            reply,
+        })
     }
 
     pub async fn thread_context(&self, task_id: &str) -> Result<TaskThreadContext, TaskError> {
@@ -194,6 +267,7 @@ impl TaskService {
             .tasks
             .get_mut(task_id)
             .ok_or(TaskError::TaskNotFound)?;
+        task.needs_assignment = assignee_id.is_none();
         task.assignee_id = assignee_id;
         Ok(())
     }
@@ -288,6 +362,26 @@ impl TaskService {
             .get(task_id)
             .cloned()
             .ok_or(TaskError::TaskNotFound)
+    }
+
+    pub async fn task_for_source_message(&self, source_message_id: &str) -> Option<TaskRecord> {
+        self.inner
+            .lock()
+            .expect("task state lock")
+            .tasks
+            .values()
+            .find(|task| task.source_message_id.as_deref() == Some(source_message_id))
+            .cloned()
+    }
+}
+
+fn role_for_sender(sender_id: &str) -> Option<String> {
+    if sender_id.starts_with("agent") {
+        Some("agent".to_string())
+    } else if sender_id.starts_with("human") {
+        Some("human".to_string())
+    } else {
+        None
     }
 }
 

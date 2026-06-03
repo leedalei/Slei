@@ -7,9 +7,10 @@ use crate::daemon_broker::{
     ConversationMessageReceipt, ConversationMessageRequest, ConversationReceipt,
     ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
     EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
-    NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
-    PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
-    SavedMessageReceipt, SkillListReceipt,
+    NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
+    PreferencesReceipt, PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest,
+    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
+    SendChannelMessageRequest, SkillListReceipt,
 };
 use serde::Deserialize;
 
@@ -93,6 +94,14 @@ pub fn create_channel(
 
 pub fn list_channel_members(broker: &DaemonBroker, channel_id: &str) -> ChannelMemberListReceipt {
     broker.list_channel_members(channel_id)
+}
+
+pub fn send_channel_message(
+    broker: &DaemonBroker,
+    channel_id: &str,
+    request: SendChannelMessageRequest,
+) -> Result<SendChannelMessageReceipt, ChannelError> {
+    broker.send_channel_message(channel_id, request)
 }
 
 pub fn complete_interactive_card(
@@ -310,6 +319,15 @@ pub fn list_channel_members_command(
     channel_id: String,
 ) -> ChannelMemberListReceipt {
     list_channel_members(state.inner(), &channel_id)
+}
+
+#[tauri::command]
+pub fn send_channel_message_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+    request: SendChannelMessageRequest,
+) -> Result<SendChannelMessageReceipt, String> {
+    send_channel_message(state.inner(), &channel_id, request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

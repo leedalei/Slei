@@ -27,6 +27,7 @@ pub struct MessageRecord {
 pub enum MessageKind {
     Human,
     Agent,
+    TaskCard,
     Tombstone,
 }
 
@@ -64,6 +65,7 @@ struct MessageState {
     primary_agents: HashMap<String, String>,
     agent_handles: HashMap<String, String>,
     event_payloads: Vec<String>,
+    channel_message_idempotency: HashMap<String, String>,
 }
 
 impl MessageService {
@@ -163,6 +165,113 @@ impl MessageService {
             .await
     }
 
+    pub async fn create_agent_channel_message(
+        &self,
+        channel_id: &str,
+        author_id: &str,
+        body: &str,
+    ) -> Result<MessageRecord, MessageError> {
+        if channel_id.trim().is_empty() || author_id.trim().is_empty() || body.trim().is_empty() {
+            return Err(MessageError::InvalidMessage);
+        }
+        self.insert_channel_message(channel_id, author_id, body, MessageKind::Agent)
+            .await
+    }
+
+    pub async fn create_human_channel_message(
+        &self,
+        channel_id: &str,
+        author_id: &str,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<MessageRecord, MessageError> {
+        if channel_id.trim().is_empty()
+            || author_id.trim().is_empty()
+            || body.trim().is_empty()
+            || idempotency_key.trim().is_empty()
+        {
+            return Err(MessageError::InvalidMessage);
+        }
+        let mut state = self.inner.lock().expect("message state lock");
+        if let Some(message_id) = state.channel_message_idempotency.get(idempotency_key) {
+            return state
+                .messages
+                .get(message_id)
+                .cloned()
+                .ok_or(MessageError::MessageNotFound);
+        }
+
+        let message = build_message(channel_id, author_id, Some(body), MessageKind::Human);
+        state
+            .channel_message_idempotency
+            .insert(idempotency_key.to_string(), message.id.clone());
+        state.messages.insert(message.id.clone(), message.clone());
+        state
+            .event_payloads
+            .push(format!("message.created:{}", message.id));
+        Ok(message)
+    }
+
+    pub async fn channel_message_for_idempotency(
+        &self,
+        idempotency_key: &str,
+    ) -> Option<MessageRecord> {
+        let state = self.inner.lock().expect("message state lock");
+        state
+            .channel_message_idempotency
+            .get(idempotency_key)
+            .and_then(|message_id| state.messages.get(message_id))
+            .cloned()
+    }
+
+    pub async fn create_task_card_message(
+        &self,
+        channel_id: &str,
+        task_id: &str,
+        source_message_id: &str,
+    ) -> Result<MessageRecord, MessageError> {
+        if channel_id.trim().is_empty()
+            || task_id.trim().is_empty()
+            || source_message_id.trim().is_empty()
+        {
+            return Err(MessageError::InvalidMessage);
+        }
+        let body = format!("task_card:{task_id}:source:{source_message_id}");
+        {
+            let state = self.inner.lock().expect("message state lock");
+            if let Some(existing) = state.messages.values().find(|message| {
+                message.channel_id == channel_id
+                    && message.kind == MessageKind::TaskCard
+                    && message.body.as_deref() == Some(body.as_str())
+                    && !message.deleted
+            }) {
+                return Ok(existing.clone());
+            }
+        }
+        self.insert_channel_message(
+            channel_id,
+            "channel_coordinator",
+            &body,
+            MessageKind::TaskCard,
+        )
+        .await
+    }
+
+    pub async fn channel_messages_for_tests(&self, channel_id: &str) -> Vec<MessageRecord> {
+        let mut messages = self
+            .inner
+            .lock()
+            .expect("message state lock")
+            .messages
+            .values()
+            .filter(|message| message.channel_id == channel_id)
+            .filter(|message| !message.deleted)
+            .cloned()
+            .collect::<Vec<_>>();
+        messages.sort_by(|left, right| left.id.cmp(&right.id));
+        messages
+    }
+
     pub async fn delete_human_message(&self, message_id: &str) -> Result<(), MessageError> {
         let mut state = self.inner.lock().expect("message state lock");
         let message = state
@@ -253,6 +362,39 @@ impl MessageService {
         );
         id
     }
+
+    async fn insert_channel_message(
+        &self,
+        channel_id: &str,
+        author_id: &str,
+        body: &str,
+        kind: MessageKind,
+    ) -> Result<MessageRecord, MessageError> {
+        let mut state = self.inner.lock().expect("message state lock");
+        let message = build_message(channel_id, author_id, Some(body), kind);
+        state.messages.insert(message.id.clone(), message.clone());
+        state
+            .event_payloads
+            .push(format!("message.created:{}", message.id));
+        Ok(message)
+    }
+}
+
+fn build_message(
+    channel_id: &str,
+    author_id: &str,
+    body: Option<&str>,
+    kind: MessageKind,
+) -> MessageRecord {
+    MessageRecord {
+        id: format!("msg_{}", Uuid::new_v4().simple()),
+        channel_id: channel_id.to_string(),
+        author_id: author_id.to_string(),
+        body: body.map(ToString::to_string),
+        kind,
+        deleted: false,
+        edited: false,
+    }
 }
 
 fn first_mention(body: &str) -> Option<String> {
@@ -268,4 +410,6 @@ pub enum MessageError {
     MessageNotFound,
     #[error("agent messages are immutable")]
     AgentMessageImmutable,
+    #[error("invalid message")]
+    InvalidMessage,
 }

@@ -9,10 +9,11 @@ axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slei-protocol = { path = "../slei-protocol" }
+slei-storage = { path = "../slei-storage" }
+sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-slei-storage = { path = "../slei-storage" }
 tower.workspace = true

@@ -310,6 +310,7 @@ pub struct ChannelMemberView {
     pub channel_id: String,
     pub agent_id: String,
     pub joined_at: String,
+    pub readiness: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -329,12 +330,38 @@ pub struct ChannelReceipt {
 pub struct ChannelCreateRequest {
     pub name: String,
     pub description: Option<String>,
+    #[serde(default, alias = "agentIds")]
+    pub agent_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMemberListReceipt {
     pub members: Vec<ChannelMemberView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageRequest {
+    pub author_id: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageOutcome {
+    pub message_id: String,
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageReceipt {
+    pub outcome: SendChannelMessageOutcome,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -742,19 +769,9 @@ impl DaemonBroker {
         &self,
         request: ChannelCreateRequest,
     ) -> Result<ChannelReceipt, ChannelError> {
-        if let Some(receipt) = self.create_channel_in_daemon(&request) {
-            self.upsert_local_channel(receipt.channel.clone());
-            return Ok(receipt);
-        }
-        let name = normalize_channel_name(&request.name)?;
-        let channel = ChannelView {
-            id: name.clone(),
-            name,
-            description: request.description,
-            is_default: Some(false),
-        };
-        self.upsert_local_channel(channel.clone());
-        Ok(ChannelReceipt { channel })
+        let receipt = self.create_channel_in_daemon(&request)?;
+        self.upsert_local_channel(receipt.channel.clone());
+        Ok(receipt)
     }
 
     pub fn list_channel_members(&self, channel_id: &str) -> ChannelMemberListReceipt {
@@ -769,6 +786,14 @@ impl DaemonBroker {
                     .cloned()
                     .collect(),
             })
+    }
+
+    pub fn send_channel_message(
+        &self,
+        channel_id: &str,
+        request: SendChannelMessageRequest,
+    ) -> Result<SendChannelMessageReceipt, ChannelError> {
+        self.send_channel_message_to_daemon(channel_id, &request)
     }
 
     pub fn complete_interactive_card(
@@ -1630,25 +1655,25 @@ impl DaemonBroker {
     }
 
     fn fetch_nodes_from_daemon(&self) -> Option<NodeListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/nodes", None)?;
+        let response = self.send_daemon_request("GET", "/v1/nodes", None, &[])?;
         serde_json::from_str::<NodeListReceipt>(&response).ok()
     }
 
     fn rename_local_node_in_daemon(&self, name: &str) -> Option<NodeRenameReceipt> {
         let payload = serde_json::json!({ "name": name }).to_string();
         let response =
-            self.send_daemon_request("PATCH", "/v1/nodes/local-node/name", Some(&payload))?;
+            self.send_daemon_request("PATCH", "/v1/nodes/local-node/name", Some(&payload), &[])?;
         serde_json::from_str::<NodeRenameReceipt>(&response).ok()
     }
 
     fn fetch_preferences_from_daemon(&self) -> Option<PreferencesReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/settings/preferences", None)?;
+        let response = self.send_daemon_request("GET", "/v1/settings/preferences", None, &[])?;
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
     }
 
     fn bootstrap_guide_agent_in_daemon(&self) -> Option<GuideBootstrapReceipt> {
         let response =
-            self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"))?;
+            self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"), &[])?;
         let mut receipt = serde_json::from_str::<GuideBootstrapReceipt>(&response).ok()?;
         if let Some(agent) = receipt.agent.as_mut() {
             if let Some(skills) = self.fetch_agent_skills_from_daemon(&agent.id) {
@@ -1659,14 +1684,27 @@ impl DaemonBroker {
     }
 
     fn fetch_channels_from_daemon(&self) -> Option<ChannelListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/channels", None)?;
+        let response = self.send_daemon_request("GET", "/v1/channels", None, &[])?;
         serde_json::from_str::<ChannelListReceipt>(&response).ok()
     }
 
-    fn create_channel_in_daemon(&self, request: &ChannelCreateRequest) -> Option<ChannelReceipt> {
-        let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/channels", Some(&payload))?;
-        serde_json::from_str::<ChannelReceipt>(&response).ok()
+    fn create_channel_in_daemon(
+        &self,
+        request: &ChannelCreateRequest,
+    ) -> Result<ChannelReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let idempotency_key = format!("desktop-channel-create-{}", monotonic_id());
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                "/v1/channels",
+                Some(&payload),
+                &[("Idempotency-Key", idempotency_key.as_str())],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
     }
 
     fn fetch_channel_members_from_daemon(
@@ -1674,8 +1712,28 @@ impl DaemonBroker {
         channel_id: &str,
     ) -> Option<ChannelMemberListReceipt> {
         let response =
-            self.send_daemon_request("GET", &format!("/v1/channels/{channel_id}/members"), None)?;
+            self.send_daemon_request("GET", &format!("/v1/channels/{channel_id}/members"), None, &[])?;
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
+    }
+
+    fn send_channel_message_to_daemon(
+        &self,
+        channel_id: &str,
+        request: &SendChannelMessageRequest,
+    ) -> Result<SendChannelMessageReceipt, ChannelError> {
+        let payload =
+            serde_json::to_string(request).map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let idempotency_key = format!("desktop-channel-message-{}", monotonic_id());
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                &format!("/v1/channels/{channel_id}/messages"),
+                Some(&payload),
+                &[("Idempotency-Key", idempotency_key.as_str())],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<SendChannelMessageReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
     }
 
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
@@ -1683,6 +1741,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/interactive-cards/{card_id}/complete"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<InteractiveCardReceipt>(&response).ok()
     }
@@ -1693,12 +1752,12 @@ impl DaemonBroker {
     ) -> Option<PreferencesReceipt> {
         let payload = serde_json::to_string(request).ok()?;
         let response =
-            self.send_daemon_request("PATCH", "/v1/settings/preferences", Some(&payload))?;
+            self.send_daemon_request("PATCH", "/v1/settings/preferences", Some(&payload), &[])?;
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
     }
 
     fn fetch_agents_from_daemon(&self) -> Option<AgentListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/agents", None)?;
+        let response = self.send_daemon_request("GET", "/v1/agents", None, &[])?;
         let mut receipt = serde_json::from_str::<AgentListReceipt>(&response).ok()?;
         for agent in &mut receipt.agents {
             if agent.agent_kind.as_deref() == Some("guide") {
@@ -1712,13 +1771,13 @@ impl DaemonBroker {
 
     fn fetch_agent_skills_from_daemon(&self, agent_id: &str) -> Option<SkillListReceipt> {
         let response =
-            self.send_daemon_request("GET", &format!("/v1/agents/{agent_id}/skills"), None)?;
+            self.send_daemon_request("GET", &format!("/v1/agents/{agent_id}/skills"), None, &[])?;
         serde_json::from_str::<SkillListReceipt>(&response).ok()
     }
 
     fn create_agent_in_daemon(&self, request: &AgentCreateRequest) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/agents", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/agents", Some(&payload), &[])?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -1729,7 +1788,7 @@ impl DaemonBroker {
     ) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
         let response =
-            self.send_daemon_request("PATCH", &format!("/v1/agents/{agent_id}"), Some(&payload))?;
+            self.send_daemon_request("PATCH", &format!("/v1/agents/{agent_id}"), Some(&payload), &[])?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -1739,18 +1798,19 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/agents/{agent_id}/memory/remember"),
             Some(&payload),
+            &[],
         )?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
     fn fetch_conversations_from_daemon(&self) -> Option<ConversationListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/conversations", None)?;
+        let response = self.send_daemon_request("GET", "/v1/conversations", None, &[])?;
         serde_json::from_str::<ConversationListReceipt>(&response).ok()
     }
 
     fn create_dm_conversation_in_daemon(&self, agent_id: &str) -> Option<ConversationReceipt> {
         let payload = serde_json::json!({ "agentId": agent_id }).to_string();
-        let response = self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload), &[])?;
         serde_json::from_str::<ConversationReceipt>(&response).ok()
     }
 
@@ -1762,6 +1822,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/runtime-session/reset"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationReceipt>(&response).ok()
     }
@@ -1774,6 +1835,7 @@ impl DaemonBroker {
             "GET",
             &format!("/v1/conversations/{conversation_id}/messages"),
             None,
+            &[],
         )?;
         serde_json::from_str::<ConversationMessageListReceipt>(&response).ok()
     }
@@ -1786,6 +1848,7 @@ impl DaemonBroker {
             "GET",
             &format!("/v1/conversations/{conversation_id}/sessions"),
             None,
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionListReceipt>(&response).ok()
     }
@@ -1798,6 +1861,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/sessions"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionReceipt>(&response).ok()
     }
@@ -1811,6 +1875,7 @@ impl DaemonBroker {
             "PATCH",
             &format!("/v1/conversations/{conversation_id}/sessions/{session_id}/active"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionReceipt>(&response).ok()
     }
@@ -1825,6 +1890,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/messages"),
             Some(&payload),
+            &[],
         )?;
         serde_json::from_str::<ConversationMessageReceipt>(&response).ok()
     }
@@ -1834,7 +1900,7 @@ impl DaemonBroker {
         request: &ConversationAttachmentUploadRequest,
     ) -> Option<ConversationAttachmentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/attachments", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/attachments", Some(&payload), &[])?;
         serde_json::from_str::<ConversationAttachmentReceipt>(&response).ok()
     }
 
@@ -1912,6 +1978,7 @@ impl DaemonBroker {
             channel_id: channel_id.to_string(),
             agent_id: agent_id.to_string(),
             joined_at: monotonic_id(),
+            readiness: "joining".to_string(),
         });
     }
 
@@ -2128,22 +2195,45 @@ impl DaemonBroker {
         *self.preferences.lock().expect("preferences mutex poisoned") = preferences;
     }
 
-    fn send_daemon_request(&self, method: &str, path: &str, body: Option<&str>) -> Option<String> {
+    fn send_daemon_request(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> Option<String> {
+        self.send_daemon_request_checked(method, path, body, extra_headers)
+            .ok()
+    }
+
+    fn send_daemon_request_checked(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<String, String> {
         self.last_authorization_header
             .lock()
             .expect("authorization mutex poisoned")
             .replace(format!("Bearer {}", self.descriptor.token));
 
-        let (host_header, socket_addr) = parse_http_endpoint(&self.descriptor.endpoint)?;
-        let socket_addr = socket_addr.to_socket_addrs().ok()?.next()?;
+        let (host_header, socket_addr) = parse_http_endpoint(&self.descriptor.endpoint)
+            .ok_or_else(|| "invalid daemon endpoint".to_string())?;
+        let socket_addr = socket_addr
+            .to_socket_addrs()
+            .map_err(|error| format!("daemon endpoint resolution failed: {error}"))?
+            .next()
+            .ok_or_else(|| "daemon endpoint resolution returned no addresses".to_string())?;
         let mut stream =
-            TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80)).ok()?;
+            TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80))
+                .map_err(|error| format!("daemon connection failed: {error}"))?;
         stream
             .set_read_timeout(Some(Duration::from_millis(160)))
-            .ok()?;
+            .map_err(|error| format!("daemon read timeout setup failed: {error}"))?;
         stream
             .set_write_timeout(Some(Duration::from_millis(80)))
-            .ok()?;
+            .map_err(|error| format!("daemon write timeout setup failed: {error}"))?;
 
         let body = body.unwrap_or("");
         let content_headers = if body.is_empty() {
@@ -2154,14 +2244,22 @@ impl DaemonBroker {
                 body.as_bytes().len()
             )
         };
+        let extra_headers = extra_headers
+            .iter()
+            .map(|(name, value)| format!("{name}: {value}\r\n"))
+            .collect::<String>();
         let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {}\r\n{content_headers}Connection: close\r\n\r\n{body}",
+            "{method} {path} HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {}\r\n{content_headers}{extra_headers}Connection: close\r\n\r\n{body}",
             self.descriptor.token
         );
-        stream.write_all(request.as_bytes()).ok()?;
+        stream
+            .write_all(request.as_bytes())
+            .map_err(|error| format!("daemon request write failed: {error}"))?;
 
         let mut response = String::new();
-        stream.read_to_string(&mut response).ok()?;
+        stream
+            .read_to_string(&mut response)
+            .map_err(|error| format!("daemon response read failed: {error}"))?;
         if !response.starts_with("HTTP/1.1 200")
             && !response.starts_with("HTTP/1.0 200")
             && !response.starts_with("HTTP/1.1 201")
@@ -2169,10 +2267,16 @@ impl DaemonBroker {
             && !response.starts_with("HTTP/1.1 202")
             && !response.starts_with("HTTP/1.0 202")
         {
-            return None;
+            let status = response.lines().next().unwrap_or("HTTP response missing status");
+            let body = response.split("\r\n\r\n").nth(1).unwrap_or("");
+            return Err(format!("{status}: {body}"));
         }
 
-        response.split("\r\n\r\n").nth(1).map(str::to_string)
+        response
+            .split("\r\n\r\n")
+            .nth(1)
+            .map(str::to_string)
+            .ok_or_else(|| "daemon response missing body separator".to_string())
     }
 }
 
@@ -2198,26 +2302,6 @@ fn normalize_handle(handle: &str) -> Result<String, AgentError> {
         Ok(format!("@{trimmed}"))
     } else {
         Err(AgentError::InvalidHandle)
-    }
-}
-
-fn normalize_channel_name(name: &str) -> Result<String, ChannelError> {
-    let normalized = name
-        .trim()
-        .trim_start_matches('#')
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("-");
-    let valid = !normalized.is_empty()
-        && normalized.chars().count() <= 48
-        && !normalized.contains('#')
-        && !normalized.contains('/');
-    if valid {
-        Ok(normalized)
-    } else {
-        Err(ChannelError::InvalidChannel)
     }
 }
 
@@ -3404,6 +3488,10 @@ pub enum AgentPathError {
 pub enum ChannelError {
     #[error("invalid channel")]
     InvalidChannel,
+    #[error("daemon request failed: {0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
 }
 
 #[derive(Debug, thiserror::Error)]

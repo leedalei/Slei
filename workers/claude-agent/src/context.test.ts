@@ -69,6 +69,47 @@ describe("Claude context reconstruction", () => {
     ]);
   });
 
+  it("excludes memory snippets blocked by deletion cleanup", () => {
+    const context = assembleContext(
+      { channelId: "channel_dev", agentId: "agent_coda" },
+      records,
+      {
+        memorySnippets: [
+          {
+            agentId: "agent_coda",
+            documentPath: "MEMORY.md",
+            documentSection: "Active Context",
+            content: "SENTINEL_DELETED_SOURCE_MEMORY",
+          },
+          {
+            agentId: "agent_coda",
+            documentPath: "MEMORY.md",
+            documentSection: "Stable Facts",
+            content: "safe memory snippet",
+          },
+          {
+            agentId: "agent_alice",
+            documentPath: "MEMORY.md",
+            documentSection: "Stable Facts",
+            content: "other agent memory snippet",
+          },
+        ],
+        blockedMemorySections: [
+          {
+            agentId: "agent_coda",
+            documentPath: "MEMORY.md",
+            documentSection: "Active Context",
+          },
+        ],
+      },
+    );
+
+    expect(context).toEqual([
+      { role: "user", content: "channel message" },
+      { role: "system", content: "safe memory snippet" },
+    ]);
+  });
+
   it("always disables Claude persistence and emits no resume token", () => {
     const query = buildClaudeQuery({
       prompt: "Continue",

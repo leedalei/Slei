@@ -2317,6 +2317,67 @@ body,
   margin: 0;
 }
 
+.slei-channel-agent-select {
+  border: var(--border-card) solid var(--color-border);
+  display: grid;
+  gap: var(--gap-sm);
+  margin: 0;
+  min-width: 0;
+  padding: var(--gap-sm);
+}
+
+.slei-channel-agent-select legend {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 0 var(--gap-xs);
+  text-transform: uppercase;
+}
+
+.slei-channel-agent-option {
+  align-items: center;
+  display: grid;
+  gap: var(--gap-sm);
+  grid-template-columns: 20px 32px minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.slei-channel-agent-option input {
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.slei-channel-agent-option .slei-avatar {
+  height: 32px;
+  width: 32px;
+}
+
+.slei-channel-agent-option__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.slei-channel-agent-option__copy strong,
+.slei-channel-agent-option__copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slei-channel-agent-option__copy small,
+.slei-channel-agent-option__readiness {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.slei-channel-agent-option__readiness {
+  justify-self: end;
+  white-space: nowrap;
+}
+
 .slei-runtime-modal h2 {
   font-size: var(--text-2xl);
   margin: var(--gap-md) 0 var(--gap-sm);

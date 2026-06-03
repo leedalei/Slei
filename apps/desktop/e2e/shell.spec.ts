@@ -37,6 +37,77 @@ describe("desktop shell daemon connectivity", () => {
     expect(serialized).not.toContain("ws://");
   });
 
+  it("validates fake channel messages and mirrors coordinator outcome categories", async () => {
+    const bridge = createDaemonBridgeMock({ connected: true });
+    await bridge.createChannel({ name: "dev", agentIds: ["agent_alice"] });
+    await expect(bridge.listChannelMembers("dev")).resolves.toMatchObject({
+      members: [{ agentId: "agent_alice", readiness: "joining" }],
+    });
+
+    await expect(bridge.sendChannelMessage("missing", { authorId: "human:local", body: "实现 API" })).rejects.toThrow(
+      "channel not found",
+    );
+    await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "   " })).rejects.toThrow(
+      "message body is required",
+    );
+
+    await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "实现 API" })).resolves.toMatchObject({
+      outcome: {
+        action: "needs_manual_assignment",
+        taskId: expect.any(String),
+      },
+    });
+    await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "这个方案怎么看？" })).resolves.toMatchObject({
+      outcome: {
+        action: "archive_only",
+      },
+    });
+
+    const readyBridge = createDaemonBridgeMock({
+      connected: true,
+      channels: [{ id: "dev", name: "dev", description: "研发频道" }],
+      channelMembers: [
+        {
+          channelId: "dev",
+          agentId: "agent_alice",
+          joinedAt: "2026-06-03T00:00:00Z",
+          readiness: "ready",
+        },
+      ],
+      agents: [
+        {
+          id: "agent_alice",
+          name: "Alice",
+          handle: "@alice",
+          runtimeKind: "ClaudeCode",
+          model: "Sonnet",
+          nodeId: "local-node",
+          description: "研发工程师",
+          workspacePath: "/tmp/alice",
+          memoryPath: "/tmp/alice/MEMORY.md",
+          docsPath: "/tmp/alice/docs",
+          avatarSeed: "alice",
+          runtimeThread: { runtimeKind: "ClaudeCode", status: "ready", createdAt: "2026-06-03T00:00:00Z" },
+          createdAt: "2026-06-03T00:00:00Z",
+          updatedAt: "2026-06-03T00:00:00Z",
+        },
+      ],
+    });
+    await expect(readyBridge.sendChannelMessage("dev", { authorId: "human:local", body: "实现 API" })).resolves.toMatchObject({
+      outcome: {
+        action: "create_task_and_assign",
+        assigneeAgentId: "agent_alice",
+      },
+    });
+    await expect(readyBridge.sendChannelMessage("dev", { authorId: "human:local", body: "这个方案怎么看？" })).resolves.toMatchObject({
+      outcome: {
+        action: "request_agent_reply",
+        taskId: undefined,
+        assigneeAgentId: "agent_alice",
+      },
+    });
+  });
+
   it("loads guide creation and memory skills for the mock Yeal agent", async () => {
     const bridge = createDaemonBridgeMock({
       connected: true,

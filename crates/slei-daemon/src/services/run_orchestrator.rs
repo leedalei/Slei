@@ -132,6 +132,14 @@ pub struct ContextMessageRecord {
     pub deleted: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct MemorySnippetRecord {
+    pub agent_id: String,
+    pub document_path: String,
+    pub document_section: String,
+    pub content: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct ContextMessage {
     pub role: String,
@@ -152,5 +160,37 @@ impl ContextAssembler {
                 })
             })
             .collect()
+    }
+
+    pub fn assemble_with_memory(
+        records: Vec<ContextMessageRecord>,
+        memory_snippets: Vec<MemorySnippetRecord>,
+        blocked_sections: Vec<crate::services::memory_event_service::MemorySectionRef>,
+    ) -> Vec<ContextMessage> {
+        let blocked_sections = blocked_sections
+            .into_iter()
+            .map(|section| {
+                (
+                    section.agent_id,
+                    section.document_path,
+                    section.document_section,
+                )
+            })
+            .collect::<HashSet<_>>();
+        let mut context = Self::assemble(records);
+
+        context.extend(memory_snippets.into_iter().filter_map(|snippet| {
+            let key = (
+                snippet.agent_id,
+                snippet.document_path,
+                snippet.document_section,
+            );
+            (!blocked_sections.contains(&key)).then_some(ContextMessage {
+                role: "system".to_string(),
+                content: snippet.content,
+            })
+        }));
+
+        context
     }
 }

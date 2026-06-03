@@ -1,6 +1,16 @@
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
+use serde_json::Value;
+use slei_daemon::app::build_router;
+use slei_daemon::auth::AuthToken;
+use slei_daemon::services::channel_service::ChannelMemberReadiness;
+use slei_daemon::services::coordinator_service::CoordinatorInput;
 use slei_daemon::services::diagnostics_service::{
     DiagnosticEvent, DiagnosticsInput, DiagnosticsService,
 };
+use slei_daemon::state::AppState;
+use tower::ServiceExt;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
@@ -16,6 +26,9 @@ async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
                 "Bearer secret-token failed in /Users/leelei/Documents/Slei/work with body={\"prompt\":\"secret\"}"
                     .to_string(),
             ),
+            coordinator_decision_count: 3,
+            agent_inbox_event_count: 5,
+            memory_update_event_count: 8,
         })
         .await;
 
@@ -29,6 +42,9 @@ async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
     assert!(!serialized.contains("/Users/leelei"));
     assert!(!serialized.contains("\"prompt\""));
     assert!(serialized.contains("[redacted-token]"));
+    assert!(serialized.contains("\"coordinatorDecisionCount\":3"));
+    assert!(serialized.contains("\"agentInboxEventCount\":5"));
+    assert!(serialized.contains("\"memoryUpdateEventCount\":8"));
 
     let export = service
         .export_logs(vec![
@@ -51,4 +67,56 @@ async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
     assert!(!export.contains("private answer"));
     assert!(!export.contains("\"message\""));
     assert!(!export.contains("abc"));
+}
+
+#[tokio::test]
+async fn diagnostics_endpoint_reports_orchestration_aggregate_counts() {
+    let token = AuthToken::from_static("test-token");
+    let data_root = std::env::temp_dir().join(format!("slei-diagnostics-{}", Uuid::new_v4()));
+    let state = AppState::for_tests_with_agent_root(token.clone(), data_root);
+    state
+        .coordinator()
+        .decide(CoordinatorInput {
+            channel_id: "dev".to_string(),
+            message_id: "message-1".to_string(),
+            body: "怎么看这个实现？".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+    state
+        .agent_inbox()
+        .create_human_mention(
+            "agent_alice",
+            "dev",
+            "message-1",
+            ChannelMemberReadiness::Ready,
+        )
+        .await;
+    state
+        .memory_events()
+        .complete_update("agent_alice", "dev")
+        .await;
+
+    let app = build_router(state);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/diagnostics")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["coordinatorDecisionCount"], 1);
+    assert_eq!(json["agentInboxEventCount"], 1);
+    assert_eq!(json["memoryUpdateEventCount"], 1);
+    assert!(json.get("coordinatorDecisions").is_none());
+    assert!(json.get("agentInboxEvents").is_none());
+    assert!(json.get("memoryUpdateEvents").is_none());
 }

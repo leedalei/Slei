@@ -31,6 +31,12 @@ mod tests {
             "runtime_sessions",
             "event_log",
             "idempotent_mutations",
+            "channel_coordinators",
+            "coordinator_decisions",
+            "agent_inbox_events",
+            "memory_update_events",
+            "memory_document_states",
+            "routing_context_packages",
             "schema_migrations",
         ] {
             assert!(db.table_exists(table).await.unwrap(), "missing {table}");

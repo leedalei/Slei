@@ -1,4 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  ChannelCreateRequest as ProtocolChannelCreateRequest,
+  ChannelMemberReadiness as ProtocolChannelMemberReadiness,
+  ChannelMemberView as ProtocolChannelMemberView,
+  SendChannelMessageOutcome as ProtocolSendChannelMessageOutcome,
+  SendChannelMessageReceipt as ProtocolSendChannelMessageReceipt,
+  SendChannelMessageRequest as ProtocolSendChannelMessageRequest,
+} from "@slei/protocol-client";
 
 export type SanitizedDaemonStatus = {
   connected: boolean;
@@ -189,11 +197,9 @@ export type ChannelView = {
   isDefault?: boolean;
 };
 
-export type ChannelMemberView = {
-  channelId: string;
-  agentId: string;
-  joinedAt: string;
-};
+export type ChannelMemberReadiness = ProtocolChannelMemberReadiness;
+
+export type ChannelMemberView = ProtocolChannelMemberView;
 
 export type ChannelListReceipt = {
   channels: ChannelView[];
@@ -203,14 +209,17 @@ export type ChannelReceipt = {
   channel: ChannelView;
 };
 
-export type ChannelCreateRequest = {
-  name: string;
-  description?: string;
-};
+export type ChannelCreateRequest = ProtocolChannelCreateRequest;
 
 export type ChannelMemberListReceipt = {
   members: ChannelMemberView[];
 };
+
+export type SendChannelMessageRequest = ProtocolSendChannelMessageRequest;
+
+export type SendChannelMessageOutcome = ProtocolSendChannelMessageOutcome;
+
+export type SendChannelMessageReceipt = ProtocolSendChannelMessageReceipt;
 
 export type InteractiveCardView = {
   id: string;
@@ -320,6 +329,7 @@ export type DaemonBridge = {
   listChannels(): Promise<ChannelListReceipt>;
   createChannel(request: ChannelCreateRequest): Promise<ChannelReceipt>;
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
+  sendChannelMessage(channelId: string, request: SendChannelMessageRequest): Promise<SendChannelMessageReceipt>;
   completeInteractiveCard(cardId: string): Promise<InteractiveCardReceipt>;
   listAgents(): Promise<AgentListReceipt>;
   createAgent(request: AgentCreateRequest): Promise<AgentReceipt>;
@@ -356,6 +366,8 @@ export function createDaemonBridgeMock(input: {
   connected: boolean;
   nodes?: DesktopNodeView[];
   agents?: DesktopAgentView[];
+  channels?: ChannelView[];
+  channelMembers?: ChannelMemberView[];
 }): DaemonBridgeMock {
   let connected = input.connected;
   let nodes = input.nodes ?? [
@@ -373,8 +385,9 @@ export function createDaemonBridgeMock(input: {
     },
   ];
   let agents = input.agents ?? [];
-  let channels: ChannelView[] = [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
-  let channelMembers: ChannelMemberView[] = [];
+  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
+  let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
+  let channelMessageCounter = 0;
   let conversations: ConversationView[] = [];
   let conversationSessions: ConversationSessionView[] = [];
   let messages: ConversationMessageView[] = [];
@@ -456,7 +469,7 @@ export function createDaemonBridgeMock(input: {
         updatedAt: now,
       };
       agents = [...agents, agent];
-      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now }];
+      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now, readiness: "joining" }];
       const session: ConversationSessionView = {
         id: `session:${agent.id}:default`,
         conversationId: `dm:${agent.id}`,
@@ -477,13 +490,57 @@ export function createDaemonBridgeMock(input: {
     async createChannel(request) {
       const name = request.name.trim().replace(/^#+/, "").toLowerCase();
       const existing = channels.find((channel) => channel.id === name);
-      if (existing) return { channel: existing };
-      const channel: ChannelView = { id: name, name, description: request.description, isDefault: false };
-      channels = [...channels, channel];
+      const channel: ChannelView = existing ?? { id: name, name, description: request.description, isDefault: false };
+      if (!existing) {
+        channels = [...channels, channel];
+      }
+      const joinedAt = new Date().toISOString();
+      const selectedMembers = (request.agentIds ?? []).map((agentId) => ({
+        channelId: channel.id,
+        agentId,
+        joinedAt,
+        readiness: "joining" as const,
+      }));
+      channelMembers = [
+        ...channelMembers.filter((member) => member.channelId !== channel.id || !selectedMembers.some((selected) => selected.agentId === member.agentId)),
+        ...selectedMembers,
+      ];
       return { channel };
     },
     async listChannelMembers(channelId) {
       return { members: channelMembers.filter((member) => member.channelId === channelId) };
+    },
+    async sendChannelMessage(channelId, request) {
+      const channel = channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error("channel not found");
+      const body = request.body.trim();
+      if (!body) throw new Error("message body is required");
+      channelMessageCounter += 1;
+      const messageId = `msg_channel_${channelId}_${channelMessageCounter}`;
+      const memberIds = channelMembers.filter((candidate) => candidate.channelId === channelId).map((member) => member.agentId);
+      const explicitMember = agents.find((agent) => memberIds.includes(agent.id) && body.toLowerCase().includes(agent.handle.toLowerCase()));
+      const readyMember = channelMembers.find((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
+      const isTaskCommand = containsAny(body, ["实现", "修复", "检查", "整理", "创建", "改一下", "写一个", "生成", "调查", "验证"]);
+      const isConsultation = containsAny(body, ["?", "？", "怎么看", "为什么"]);
+      const action = explicitMember
+        ? "request_agent_reply"
+        : isTaskCommand
+          ? readyMember
+            ? "create_task_and_assign"
+            : "needs_manual_assignment"
+          : isConsultation && readyMember
+            ? "request_agent_reply"
+            : "archive_only";
+      const assigneeAgentId = explicitMember?.id ?? (action === "create_task_and_assign" || action === "request_agent_reply" ? readyMember?.agentId : undefined);
+      const taskId = action === "create_task_and_assign" || action === "needs_manual_assignment" ? `task_${messageId}` : undefined;
+      return {
+        outcome: {
+          messageId,
+          action,
+          taskId,
+          assigneeAgentId,
+        },
+      };
     },
     async completeInteractiveCard(cardId) {
       const card = cards.find((candidate) => candidate.id === cardId);
@@ -544,7 +601,7 @@ export function createDaemonBridgeMock(input: {
         updatedAt: new Date().toISOString(),
       };
       agents = [...agents, agent];
-      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: agent.createdAt }];
+      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: agent.createdAt, readiness: "joining" }];
       return { agent };
     },
     async updateAgent(agentId, request) {
@@ -768,6 +825,10 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
   return skills;
 }
 
+function containsAny(body: string, markers: string[]) {
+  return markers.some((marker) => body.includes(marker));
+}
+
 export function createDaemonBridge(): DaemonBridge {
   if (hasTauriRuntime()) {
     return {
@@ -777,6 +838,7 @@ export function createDaemonBridge(): DaemonBridge {
       listChannels: () => invoke<ChannelListReceipt>("list_channels_command"),
       createChannel: (request: ChannelCreateRequest) => invoke<ChannelReceipt>("create_channel_command", { request }),
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
+      sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) => invoke<SendChannelMessageReceipt>("send_channel_message_command", { channelId, request }),
       completeInteractiveCard: (cardId: string) => invoke<InteractiveCardReceipt>("complete_interactive_card_command", { cardId }),
       listAgents: () => invoke<AgentListReceipt>("list_agents_command"),
       createAgent: (request: AgentCreateRequest) => invoke<AgentReceipt>("create_agent_command", { request }),

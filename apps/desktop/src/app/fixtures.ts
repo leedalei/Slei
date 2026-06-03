@@ -8,6 +8,8 @@ export type SleiChannel = {
   projectName?: string;
 };
 
+export type SleiChannelMemberReadiness = "joining" | "memory_syncing" | "ready" | "memory_failed" | "unavailable";
+
 export type SleiMessage = {
   id: string;
   author: string;
@@ -68,6 +70,7 @@ export type SleiMember = {
   memoryPath?: string;
   docsPath?: string;
   skills?: SkillView[];
+  channelReadiness?: Record<string, SleiChannelMemberReadiness>;
 };
 
 export type SleiFixtures = {
