@@ -73,24 +73,31 @@ select:focus-visible {
     border-color var(--duration-interaction) var(--ease-ui);
 }
 
-.slei-button:hover {
+.slei-button:not(:disabled):hover {
   border-color: var(--color-accent);
   box-shadow: 0 4px 0 0 color-mix(in srgb, var(--color-text-primary) 24%, transparent);
   transform: translateY(-1px);
 }
 
-.slei-button:active {
+.slei-button:not(:disabled):active {
   box-shadow: 0 1px 0 0 color-mix(in srgb, var(--color-text-primary) 20%, transparent);
   transform: translateY(2px);
 }
 
 .slei-button:disabled {
   background: var(--color-disabled-bg);
+  border-color: var(--color-disabled-indicator);
   box-shadow: var(--shadow-none);
   color: var(--color-disabled-text);
   cursor: not-allowed;
   opacity: 0.45;
   transform: none;
+}
+
+.slei-button:focus-visible {
+  border-color: var(--color-focus-ring);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .slei-button--small {
@@ -384,8 +391,8 @@ select:focus-visible {
   }
 
   .slei-button,
-  .slei-button:hover,
-  .slei-button:active {
+  .slei-button:not(:disabled):hover,
+  .slei-button:not(:disabled):active {
     box-shadow: var(--shadow-sm);
     transform: none;
   }

@@ -42,7 +42,7 @@ describe("Slei Animal Island design tokens", () => {
 
   it("keeps component styles on semantic tokens only", () => {
     expect(globalsCss).not.toContain("var(--primitive-");
-    expect(globalsCss).not.toMatch(/#[0-9a-fA-F]{3,8}|rgb\(/);
+    expect(globalsCss).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(|hsla?\(/);
     expect(globalsCss).toContain("--border-panel");
     expect(globalsCss).toContain(".slei-select");
     expect(globalsCss).toContain(".slei-checkbox");
@@ -59,7 +59,10 @@ describe("Slei Animal Island design tokens", () => {
 
   it("styles shared controls with Animal Island soft geometry", () => {
     expect(globalsCss).toMatch(/\.slei-button\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
-    expect(globalsCss).toMatch(/\.slei-button:hover\s*\{[^}]*transform:\s*translateY\(-1px\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:not\(:disabled\):hover\s*\{[^}]*transform:\s*translateY\(-1px\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:not\(:disabled\):active\s*\{[^}]*transform:\s*translateY\(2px\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:disabled\s*\{[^}]*border-color:\s*var\(--color-disabled-indicator\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--color-focus-ring\);/s);
     expect(globalsCss).toMatch(/\.slei-card\s*\{[^}]*border-radius:\s*var\(--radius-card\);/s);
     expect(globalsCss).toMatch(/\.slei-avatar\s*\{[^}]*border-radius:\s*var\(--radius-avatar\);/s);
   });
