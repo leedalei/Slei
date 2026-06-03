@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use serde_json::json;
@@ -39,6 +40,7 @@ pub struct ChannelOrchestratorService {
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
     members: MemberService,
+    outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
 }
 
 impl ChannelOrchestratorService {
@@ -59,6 +61,7 @@ impl ChannelOrchestratorService {
             agent_inbox,
             orchestration,
             members,
+            outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -66,6 +69,16 @@ impl ChannelOrchestratorService {
         &self,
         input: SendChannelMessageInput,
     ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
+        if let Some(outcome) = self
+            .outcome_idempotency
+            .lock()
+            .expect("channel orchestrator idempotency lock")
+            .get(&input.idempotency_key)
+            .cloned()
+        {
+            return Ok(outcome);
+        }
+
         let message = self
             .messages
             .create_human_channel_message(
@@ -167,12 +180,17 @@ impl ChannelOrchestratorService {
         )
         .await?;
 
-        Ok(SendChannelMessageOutcome {
+        let outcome = SendChannelMessageOutcome {
             message_id: message.id,
             action: enum_storage_str(&decision.action),
             task_id,
             assignee_agent_id: decision.assignee_agent_id,
-        })
+        };
+        self.outcome_idempotency
+            .lock()
+            .expect("channel orchestrator idempotency lock")
+            .insert(input.idempotency_key, outcome.clone());
+        Ok(outcome)
     }
 
     async fn resolve_explicit_mentions(
