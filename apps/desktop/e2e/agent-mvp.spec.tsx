@@ -1,5 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   agentsForComputerNode,
@@ -237,7 +239,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).not.toContain("># all</span>");
   });
 
-  it("renders guide interactive cards and disables completed cards", () => {
+  it("renders compact create interactive cards and disables completed cards", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -274,8 +276,15 @@ describe("agent creation, device association, and memory MVP", () => {
 
     expect(html).toContain("slei-interactive-card--createAgent");
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
+    expect(html).not.toContain("slei-badge--attention");
+    expect(html).toContain("slei-button--small");
     expect(html).toContain("disabled=\"\"");
-    expect(html).toContain("DONE");
+    expect(html).toContain("已完成");
+
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    expect(css).toContain(".slei-interactive-card h2");
+    expect(css).toContain("font-size: 14px");
+    expect(css).toContain("font-weight: var(--weight-bold)");
   });
 
   it("renders multiple persisted guide card messages separately", () => {

@@ -451,8 +451,11 @@ function ChannelList(input: {
             onClick={() => input.onConversationSelect?.(conversationId)}
             type="button"
           >
-            <span><MemberAvatar identity={member} />{member.name}</span>
-            <small>{member.handle}</small>
+            <MemberAvatar identity={member} />
+            <span className="slei-channel__dm-copy">
+              <strong>{member.name}</strong>
+              <small>{member.description}</small>
+            </span>
           </button>
         );
       })}

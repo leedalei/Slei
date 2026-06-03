@@ -67,6 +67,7 @@ export type DesktopMessages = {
     openViaDaemon: string;
     rejected: string;
     copyMessage: string;
+    copySuccess: string;
     history: string;
     newSession: string;
     resetSession: string;

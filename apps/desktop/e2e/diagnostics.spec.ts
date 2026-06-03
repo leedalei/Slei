@@ -4,6 +4,7 @@ import { renderBasicTimelineBrowse } from "../src/features/search/BasicTimelineB
 import { renderDiagnosticsPage } from "../src/features/diagnostics/DiagnosticsPage";
 import { renderErrorPanel } from "../src/features/diagnostics/ErrorPanel";
 import { renderLogExportDialog } from "../src/features/diagnostics/LogExportDialog";
+import { createFrontendCrashReport } from "../src/lib/frontend-crash-logging";
 
 describe("diagnostics and localized recovery", () => {
   it("renders sanitized diagnostics and paginated timeline browsing", () => {
@@ -44,5 +45,18 @@ describe("diagnostics and localized recovery", () => {
     expect(exportDialog).toContain("导出日志");
     expect(exportDialog).toContain("[redacted-token]");
     expect(exportDialog).not.toContain("secret-token");
+  });
+
+  it("creates sanitized frontend crash reports for desktop logs", () => {
+    const report = createFrontendCrashReport(
+      "react",
+      new Error("token=secret-token Cannot read properties of null"),
+      "at SearchPage",
+    );
+
+    expect(report.kind).toBe("react");
+    expect(report.message).toContain("[redacted-token]");
+    expect(report.message).not.toContain("secret-token");
+    expect(report.componentStack).toContain("SearchPage");
   });
 });

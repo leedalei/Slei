@@ -331,6 +331,8 @@ export function stripChannelHash(name: string) {
   return name.trim().replace(/^#+/, "");
 }
 
-function normalizeSearch(value?: string) {
-  return (value ?? "").trim().toLowerCase();
+function normalizeSearch(value?: unknown) {
+  if (typeof value === "string") return value.trim().toLowerCase();
+  if (typeof value === "number" || typeof value === "boolean") return String(value).trim().toLowerCase();
+  return "";
 }

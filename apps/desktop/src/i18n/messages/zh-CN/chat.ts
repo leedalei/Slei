@@ -22,6 +22,7 @@ export const chat = {
   dismissed: "已忽略",
   confirmed: "已确认",
   copyMessage: "复制",
+  copySuccess: "复制成功",
   interactivePending: "等待确认",
   noFiles: "暂无附件",
   openViaDaemon: "通过 daemon 打开",

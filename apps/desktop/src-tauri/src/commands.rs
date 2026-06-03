@@ -10,6 +10,36 @@ use crate::daemon_broker::{
     NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
     PreferencesUpdateRequest, SanitizedDaemonStatus, SkillListReceipt,
 };
+use serde::Deserialize;
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendCrashReport {
+    pub kind: String,
+    pub message: String,
+    pub stack: Option<String>,
+    pub component_stack: Option<String>,
+    pub url: String,
+}
+
+fn truncate_frontend_log_value(value: &str) -> String {
+    value.chars().take(4000).collect()
+}
+
+pub fn format_frontend_crash_log(report: &FrontendCrashReport) -> String {
+    format!(
+        "[slei-frontend-crash] kind={} url={} message={} stack={} component_stack={}",
+        truncate_frontend_log_value(&report.kind),
+        truncate_frontend_log_value(&report.url),
+        truncate_frontend_log_value(&report.message),
+        truncate_frontend_log_value(report.stack.as_deref().unwrap_or("")),
+        truncate_frontend_log_value(report.component_stack.as_deref().unwrap_or(""))
+    )
+}
+
+pub fn log_frontend_crash(report: FrontendCrashReport) {
+    eprintln!("{}", format_frontend_crash_log(&report));
+}
 
 pub fn daemon_status(broker: &DaemonBroker) -> SanitizedDaemonStatus {
     broker.status()
@@ -187,6 +217,11 @@ pub fn resolve_permission(
     request: PermissionResolveRequest,
 ) -> Result<ConversationMessageReceipt, ConversationError> {
     broker.resolve_permission(request)
+}
+
+#[tauri::command]
+pub fn log_frontend_crash_command(report: FrontendCrashReport) {
+    log_frontend_crash(report);
 }
 
 #[tauri::command]

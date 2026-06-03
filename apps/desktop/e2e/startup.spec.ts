@@ -16,11 +16,11 @@ describe("desktop startup contract", () => {
 
     expect(packageJson.scripts?.dev).toContain("vite");
     expect(packageJson.scripts?.dev).toContain("1420");
-    expect(tauriConfig.build?.devUrl).toBe("http://localhost:1420");
+    expect(tauriConfig.build?.devUrl).toBe("http://127.0.0.1:1420");
     expect(indexHtml).toContain("/src/web.ts");
   });
 
-  it("uses a frameless Tauri window without native operation controls", async () => {
+  it("uses a frameless opaque Tauri window without native operation controls", async () => {
     const tauriConfig = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
     ) as {
@@ -38,11 +38,11 @@ describe("desktop startup contract", () => {
     const windowConfig = tauriConfig.app?.windows?.[0];
 
     expect(windowConfig?.decorations).toBe(false);
-    expect(windowConfig?.transparent).toBe(true);
-    expect(windowConfig?.backgroundColor).toBe("#00000000");
-    expect(windowConfig?.shadow).toBe(true);
+    expect(windowConfig).not.toHaveProperty("transparent");
+    expect(windowConfig).not.toHaveProperty("backgroundColor");
+    expect(windowConfig).not.toHaveProperty("shadow");
     expect(windowConfig?.acceptFirstMouse).toBe(true);
-    expect(tauriConfig.app?.macOSPrivateApi).toBe(true);
+    expect(tauriConfig.app).not.toHaveProperty("macOSPrivateApi");
   });
 
   it("allows only the window permissions needed by custom chrome controls", async () => {

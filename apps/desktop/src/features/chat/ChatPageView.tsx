@@ -6,7 +6,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot } from "../../components";
+import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast } from "../../components";
 function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
   if (card.kind === "permissionApproval") {
     const done = card.state !== "pending";
@@ -35,16 +35,16 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
       </article>
     );
   }
-  const done = card.state === "done";
+  const done = card.state !== "pending";
+  const doneLabel = card.doneLabel === "DONE" ? messages.common.done : card.doneLabel || messages.common.done;
   return (
     <article className={`slei-agent-draft-card slei-interactive-card slei-interactive-card--${card.kind}`}>
       <div>
-        <span className="slei-badge slei-badge--attention">{messages.chat.guide}</span>
         <h2>{card.title}</h2>
         <p>{card.summary}</p>
       </div>
-      <button className="slei-button slei-button--accent" disabled={done} onClick={onCreate} type="button">
-        {done ? card.doneLabel || messages.common.done : card.actionLabel || messages.common.create}
+      <button className="slei-button slei-button--accent slei-button--small" disabled={done} onClick={onCreate} type="button">
+        {done ? doneLabel : card.actionLabel || messages.common.create}
       </button>
     </article>
   );
@@ -95,8 +95,50 @@ function messageRoleDescription(message: SleiMessage, members: SleiMember[], mes
 }
 
 async function copyMessageBody(body: string) {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
-  await navigator.clipboard.writeText(body);
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(body);
+    return true;
+  }
+  if (typeof document === "undefined") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = body;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  return copied;
+}
+
+function formatConversationDateTime(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const direct = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  if (direct) return `${direct[1]} ${direct[2]}`;
+
+  let date: Date;
+  if (/^\d+$/.test(raw)) {
+    const numeric = BigInt(raw);
+    const milliseconds =
+      raw.length >= 16
+        ? numeric / 1_000_000n
+        : raw.length >= 13
+          ? numeric
+          : numeric * 1_000n;
+    date = new Date(Number(milliseconds));
+  } else {
+    date = new Date(raw);
+  }
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
+
+function sessionCreatedTime(session: { createdAt: string }) {
+  const parsed = Date.parse(session.createdAt);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 async function uploadComposerFile(
@@ -135,8 +177,10 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [toastMessage, setToastMessage] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -150,11 +194,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     return message.sessionId === currentSessionId;
   });
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
-  const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? activeSessions[0];
+  const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
+  const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
+  const allowAsTask = !dmMember;
   const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
   const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
   const detailSubtitle = dmMember
-    ? `${dmMember.name} ｜ ${formatMessageTime(activeSession?.createdAt ?? activeConversation?.createdAt ?? "")}`
+    ? `${dmMember.name} ｜ ${formatConversationDateTime(activeSession?.createdAt ?? activeConversation?.createdAt ?? "")}`
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
@@ -165,7 +211,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     try {
       const result = await submitComposerDraft({
         draft,
-        asTask,
+        asTask: allowAsTask ? asTask : false,
         attachments,
         sessionId: currentSessionId,
         onSendMessage,
@@ -193,8 +239,17 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     setSelectedMentionIndex(0);
   }
 
+  async function copyMessage(message: SleiMessage) {
+    const copied = await copyMessageBody(message.body);
+    if (!copied) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(messages.chat.copySuccess);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 1800);
+  }
+
   return (
     <section className="slei-chat-page">
+      <Toast message={toastMessage} />
       <header className="slei-workspace-header" data-tauri-drag-region="deep">
         <div>
           <h1 aria-label={detailAriaLabel}>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}<span>{detailTitle}</span></h1>
@@ -227,7 +282,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             <button aria-label={messages.common.cancel} className="slei-icon-button" onClick={onConversationHistoryToggle} type="button"><X aria-hidden="true" size={14} /></button>
           </header>
           <div className="slei-session-list">
-            {activeSessions.map((session) => (
+            {sortedActiveSessions.map((session) => (
               <button
                 aria-current={session.id === currentSessionId ? "true" : undefined}
                 className="slei-session-item"
@@ -236,7 +291,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 type="button"
               >
                 <strong>{session.title || messages.chat.newSession}</strong>
-                <small>{formatMessageTime(session.updatedAt)}</small>
+                <small>{formatConversationDateTime(session.createdAt)}</small>
               </button>
             ))}
           </div>
@@ -255,13 +310,14 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                   <span>{messageRoleDescription(message, data.members, messages)}</span>
                 </div>
                 <div className="slei-message__actions">
+                  <button aria-label={messages.chat.copyMessage} className="slei-message__copy" onClick={() => void copyMessage(message)} title={messages.chat.copyMessage} type="button">
+                    <Copy aria-hidden="true" size={14} />
+                  </button>
+                  <span aria-hidden="true" className="slei-message__meta-separator">｜</span>
                   <span className="slei-message__time-row">
                     <time>{message.time}</time>
                     <MessageStatusSquare status={message.status} />
                   </span>
-                  <button aria-label={messages.chat.copyMessage} className="slei-message__copy" onClick={() => void copyMessageBody(message.body)} type="button">
-                    <Copy aria-hidden="true" size={13} />{messages.chat.copyMessage}
-                  </button>
                 </div>
               </div>
               <MarkdownMessage markdown={message.body} />
@@ -354,7 +410,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           value={draft}
         />
         <div className="slei-composer__actions">
-          <CheckboxControl checked={asTask} className="slei-task-toggle" label={messages.chat.asTask} onChange={setAsTask} />
+          {allowAsTask ? <CheckboxControl checked={asTask} className="slei-task-toggle" label={messages.chat.asTask} onChange={setAsTask} /> : null}
           <div className="slei-composer__tools">
             <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
             <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />

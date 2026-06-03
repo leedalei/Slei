@@ -46,4 +46,33 @@ describe("chat Markdown rendering", () => {
     expect(html).toContain('href="https://example.com"');
     expect(html).not.toContain("<script>");
   });
+
+  it("renders common inline and gfm Markdown syntax from chat replies", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage
+        markdown={[
+          "## Reply summary",
+          "",
+          "**Bold point** with *emphasis*, ~~removed text~~, and [safe mail](mailto:test@example.com).",
+          "",
+          "- [x] handled",
+          "- [ ] follow up",
+          "",
+          "https://example.com/docs",
+          "",
+          "---",
+        ].join("\n")}
+      />,
+    );
+
+    expect(html).toContain("<h2>Reply summary</h2>");
+    expect(html).toContain("<strong>Bold point</strong>");
+    expect(html).toContain("<em>emphasis</em>");
+    expect(html).toContain("<del>removed text</del>");
+    expect(html).toContain('href="mailto:test@example.com"');
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("checked");
+    expect(html).toContain('href="https://example.com/docs"');
+    expect(html).toContain("<hr");
+  });
 });

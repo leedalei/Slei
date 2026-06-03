@@ -33,6 +33,48 @@ describe("chat search, channel management, and mentions", () => {
     expect(filterConversationMessages(data.messages, { time: "10:15" }).map((message) => message.id)).toEqual(["m2"]);
   });
 
+  it("keeps search stable when runtime messages have missing text fields", () => {
+    const messages = [
+      { id: "m1", author: "Lei", handle: "@lei", role: "human", time: "09:42", body: "all channel", channelId: "all" },
+      { id: "m2", author: { name: "Coda" }, handle: undefined, role: "agent", time: 1717040400000, body: { text: "runtime payload" }, channelId: { id: "dm:agent_coda" } },
+    ] as unknown as ReturnType<typeof createSleiFixtures>["messages"];
+
+    expect(() => filterConversationMessages(messages, { query: "all" })).not.toThrow();
+    expect(filterConversationMessages(messages, { query: "all" }).map((message) => message.id)).toEqual(["m1"]);
+    expect(() =>
+      renderToStaticMarkup(
+        <SleiAppFrame
+          activeView="search"
+          data={createSleiFixtures({ messages })}
+          initialSearchFilters={{ query: "all" }}
+          locale="zh-CN"
+          runtimeSetup={readyRuntime}
+        />,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      renderToStaticMarkup(
+        <SleiAppFrame
+          activeView="search"
+          data={createSleiFixtures({ messages })}
+          locale="zh-CN"
+          runtimeSetup={readyRuntime}
+        />,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      renderToStaticMarkup(
+        <SleiAppFrame
+          activeView="search"
+          data={createSleiFixtures({ messages })}
+          initialSearchFilters={{ query: "object" }}
+          locale="zh-CN"
+          runtimeSetup={readyRuntime}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
   it("renders screenshot-aligned sidebar search and channel management controls", () => {
     const data = createSleiFixtures({
       channels: [

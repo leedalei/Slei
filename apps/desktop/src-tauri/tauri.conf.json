@@ -5,7 +5,7 @@
   "identifier": "ai.slei.desktop",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:1420",
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build"
   },
@@ -13,16 +13,12 @@
     "security": {
       "csp": "default-src 'self' ipc:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc:"
     },
-    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Slei",
         "width": 1280,
         "height": 800,
         "decorations": false,
-        "transparent": true,
-        "backgroundColor": "#00000000",
-        "shadow": true,
         "acceptFirstMouse": true
       }
     ]

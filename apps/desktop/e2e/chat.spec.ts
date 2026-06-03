@@ -68,9 +68,11 @@ describe("channel chat timeline", () => {
 
     expect(rootRule).toContain("height: 100%");
     expect(rootRule).toContain("overflow: hidden");
-    expect(rootRule).toContain("background: transparent");
-    expect(shellRule).toContain("--app-window-radius: 14px");
-    expect(shellRule).toContain("border-radius: var(--app-window-radius)");
+    expect(rootRule).toContain("background: var(--color-bg)");
+    expect(shellRule).toContain("height: 100vh");
+    expect(shellRule).toContain("margin: 0");
+    expect(shellRule).not.toContain("--app-window-radius");
+    expect(shellRule).not.toContain("border-radius");
     expect(shellRule).toContain("min-height: 0");
     expect(shellRule).toContain("overflow: hidden");
     expect(workspaceRule).toContain("min-height: 0");
@@ -86,8 +88,8 @@ describe("channel chat timeline", () => {
     expect(timelineRule).toContain("padding: var(--gap-xl) var(--padding-panel)");
     expect(composerRule).toContain("flex: 0 0 auto");
     expect(composerRule).toContain("padding: var(--padding-panel)");
-    expect(modalBackdropRule).toContain("border-radius: var(--app-window-radius)");
     expect(modalBackdropRule).toContain("overflow: hidden");
-    expect(drawerRule).toContain("border-radius: 0 var(--app-window-radius) var(--app-window-radius) 0");
+    expect(modalBackdropRule).not.toContain("border-radius");
+    expect(drawerRule).not.toContain("border-radius");
   });
 });

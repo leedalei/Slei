@@ -5,6 +5,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(daemon_broker::DaemonBroker::default_local())
         .invoke_handler(tauri::generate_handler![
+            commands::log_frontend_crash_command,
             commands::daemon_status_command,
             commands::reconnect_events_command,
             commands::list_nodes_command,
@@ -41,13 +42,13 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_conversation_session, bootstrap_guide_agent, create_agent,
-        create_conversation_session, create_dm_conversation, daemon_status, list_agent_skills,
-        list_agents, list_conversation_messages, list_conversation_sessions, list_conversations,
-        list_nodes, list_preferences, open_agent_path, reconnect_events, remember_agent_fact,
-        rename_local_node, request_artifact_open, reset_conversation_runtime_session,
-        send_conversation_message, update_agent, update_preferences,
-        upload_conversation_attachment,
+        activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
+        create_agent, create_conversation_session, create_dm_conversation, daemon_status,
+        format_frontend_crash_log, list_agent_skills, list_agents, list_conversation_messages,
+        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
+        open_agent_path, reconnect_events, remember_agent_fact, rename_local_node,
+        request_artifact_open, reset_conversation_runtime_session, send_conversation_message,
+        update_agent, update_preferences, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ConversationAttachmentUploadRequest,
@@ -82,6 +83,22 @@ mod tests {
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
+    }
+
+    #[test]
+    fn frontend_crash_log_includes_searchable_context() {
+        let log = format_frontend_crash_log(&FrontendCrashReport {
+            kind: "react".to_string(),
+            message: "Cannot read properties of null (reading 'value')".to_string(),
+            stack: Some("SearchPageView.tsx:51".to_string()),
+            component_stack: Some("at SearchPage".to_string()),
+            url: "http://127.0.0.1:1420/search".to_string(),
+        });
+
+        assert!(log.contains("[slei-frontend-crash]"));
+        assert!(log.contains("kind=react"));
+        assert!(log.contains("SearchPageView.tsx:51"));
+        assert!(log.contains("/search"));
     }
 
     #[test]
@@ -870,6 +887,20 @@ mod tests {
         assert_eq!(card.draft["name"], "Bob");
         assert_eq!(card.action_label, "创建");
         assert_eq!(card.done_label, "DONE");
+
+        let completed = complete_interactive_card(&broker, &card.id).unwrap();
+        assert_eq!(completed.card.state, "done");
+        let reloaded_messages = list_conversation_messages(&broker, &dm.id).messages;
+        let reloaded_card = reloaded_messages
+            .iter()
+            .find_map(|message| {
+                message
+                    .cards
+                    .as_ref()
+                    .and_then(|cards| cards.iter().find(|candidate| candidate.id == card.id))
+            })
+            .expect("completed card should remain in the conversation messages");
+        assert_eq!(reloaded_card.state, "done");
         std::env::remove_var("SLEI_CLAUDE_VERSION_OVERRIDE");
         std::env::remove_var("SLEI_DATA_ROOT");
     }

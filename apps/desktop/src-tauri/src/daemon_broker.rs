@@ -742,19 +742,35 @@ impl DaemonBroker {
     ) -> Result<InteractiveCardReceipt, CardError> {
         if let Some(receipt) = self.complete_interactive_card_in_daemon(card_id) {
             self.upsert_local_card(receipt.card.clone());
+            if let Some(card) = self
+                .complete_loaded_message_card(card_id)
+                .map_err(CardError::Conversation)?
+            {
+                self.upsert_local_card(card);
+            } else if let Some(card) = complete_local_message_card(&self.data_root, card_id)
+                .map_err(CardError::Conversation)?
+            {
+                self.upsert_local_card(card);
+            }
             return Ok(receipt);
         }
-        let mut cards = self.cards.lock().expect("cards mutex poisoned");
-        if let Some(card) = cards.iter_mut().find(|card| card.id == card_id) {
-            card.state = "done".to_string();
-            return Ok(InteractiveCardReceipt { card: card.clone() });
+        if let Some(card) = self
+            .complete_loaded_message_card(card_id)
+            .map_err(CardError::Conversation)?
+        {
+            self.upsert_local_card(card.clone());
+            return Ok(InteractiveCardReceipt { card });
         }
-        drop(cards);
         let card = complete_local_message_card(&self.data_root, card_id)
             .map_err(CardError::Conversation)?;
         if let Some(card) = card {
             self.upsert_local_card(card.clone());
             return Ok(InteractiveCardReceipt { card });
+        }
+        let mut cards = self.cards.lock().expect("cards mutex poisoned");
+        if let Some(card) = cards.iter_mut().find(|card| card.id == card_id) {
+            card.state = "done".to_string();
+            return Ok(InteractiveCardReceipt { card: card.clone() });
         }
         Err(CardError::CardNotFound)
     }
@@ -1748,6 +1764,33 @@ impl DaemonBroker {
             Some(existing) => *existing = card,
             None => cards.push(card),
         }
+    }
+
+    fn complete_loaded_message_card(
+        &self,
+        card_id: &str,
+    ) -> Result<Option<InteractiveCardView>, ConversationError> {
+        let mut messages = self
+            .conversation_messages
+            .lock()
+            .expect("conversation messages mutex poisoned");
+        let mut completed = None;
+        for message in messages.iter_mut() {
+            let Some(cards) = message.cards.as_mut() else {
+                continue;
+            };
+            let Some(card) = cards.iter_mut().find(|card| card.id == card_id) else {
+                continue;
+            };
+            card.state = "done".to_string();
+            completed = Some((message.conversation_id.clone(), card.clone()));
+            break;
+        }
+        let Some((conversation_id, card)) = completed else {
+            return Ok(None);
+        };
+        persist_local_conversation_messages_at_root(&self.data_root, &conversation_id, &messages)?;
+        Ok(Some(card))
     }
 
     fn ensure_channel_membership(&self, channel_id: &str, agent_id: &str) {

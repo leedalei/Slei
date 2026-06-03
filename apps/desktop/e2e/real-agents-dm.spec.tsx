@@ -117,8 +117,11 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html).toContain("私聊 1");
-    expect(html).toContain("@coda");
     expect(html).toContain("Coda");
+    expect(html).toContain("slei-channel__dm-copy");
+    expect(html).toContain("<strong>Coda</strong>");
+    expect(html).toContain("真实创建的开发 Agent。");
+    expect(html).not.toContain("<small>@coda</small>");
   });
 
   it("highlights only the selected direct message while a dm is active", () => {
@@ -328,7 +331,27 @@ describe("real agent members and direct messages", () => {
     expect(channelHtml).not.toContain("历史对话");
   });
 
-  it("renders direct message identity, role, time, and copy action in message cards", () => {
+  it("hides the as-task composer toggle in direct messages", () => {
+    const dmHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:agent_coda"
+        activeSessionId="session-current"
+        activeView="chat"
+        data={createSleiFixtures({ conversations: [codaDm], conversationSessions: codaSessions, members: [agent] })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    const channelHtml = renderToStaticMarkup(
+      <SleiAppFrame activeView="chat" data={createSleiFixtures({ members: [agent] })} locale="zh-CN" runtimeSetup={readyRuntime} />,
+    );
+
+    expect(dmHtml).not.toContain("转为任务");
+    expect(dmHtml).not.toContain("slei-task-toggle");
+    expect(channelHtml).toContain("转为任务");
+  });
+
+  it("renders direct message identity, role, time, and icon-only copy action in message cards", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -360,7 +383,10 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("@coda");
     expect(html).toContain("研发团队开发工程师");
     expect(html).toContain("10:00");
-    expect(html).toContain("复制");
+    expect(html).toContain('aria-label="复制"');
+    expect(html).toContain("slei-message__meta-separator");
+    expect(html).not.toContain(">复制</button>");
+    expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf("<time>10:00</time>"));
   });
 
   it("uses localized fallback role labels for unmatched direct message authors", () => {
@@ -424,6 +450,7 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html).toContain("Coda ｜");
+    expect(html).toContain("2026-05-29 09:00:00");
     expect(html).not.toContain("@coda · 私聊");
   });
 
@@ -455,7 +482,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("新会话");
   });
 
-  it("renders direct message history drawer with sessions and filters messages by active session", () => {
+  it("renders direct message history drawer with sessions newest first and filters messages by active session", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -496,6 +523,8 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("历史对话");
     expect(html).toContain("帮我检查历史会话");
     expect(html).toContain("新会话");
+    const sessionListHtml = html.slice(html.indexOf("slei-session-list"));
+    expect(sessionListHtml.indexOf("新会话")).toBeLessThan(sessionListHtml.indexOf("帮我检查历史会话"));
     expect(html).toContain("当前消息");
     expect(html).not.toContain("旧消息");
   });

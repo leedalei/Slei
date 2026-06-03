@@ -22,6 +22,7 @@ export const chat = {
   dismissed: "Dismissed",
   confirmed: "Confirmed",
   copyMessage: "Copy",
+  copySuccess: "Copied",
   interactivePending: "Waiting for confirmation",
   noFiles: "No files",
   openViaDaemon: "Open via daemon",

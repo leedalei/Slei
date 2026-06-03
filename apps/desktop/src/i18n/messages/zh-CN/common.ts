@@ -9,7 +9,7 @@ export const common = {
   confirmCloseWindow: "确定要关闭窗口吗？",
   delete: "删除",
   deny: "拒绝",
-  done: "DONE",
+  done: "已完成",
   edit: "编辑",
   input: "输入",
   maximizeWindow: "最大化窗口",
