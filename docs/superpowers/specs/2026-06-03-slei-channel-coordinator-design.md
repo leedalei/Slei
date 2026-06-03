@@ -233,6 +233,17 @@ Explicit mentions are routed directly to mentioned Agents. The Coordinator may
 still package context and persist a decision, but it should not override the
 human's explicit target.
 
+Human-directed mentions can target Agents that are not yet ready. Readiness
+only blocks Coordinator auto-assignment. If a human explicitly mentions an
+Agent:
+
+- `joining` or `memory_syncing`: queue a low-priority inbox event and show that
+  delivery is pending memory readiness
+- `memory_failed`: keep the mention visible, mark delivery blocked, and offer
+  memory retry
+- `unavailable`: keep the mention visible, mark delivery blocked by runtime
+  availability
+
 For messages without mentions:
 
 - consultation intent routes to the most relevant ready Agent to reply in the
@@ -320,6 +331,11 @@ from scoped records:
 This aligns with the existing worker direction of reconstructing provider
 context from Slei-owned records and disabling provider transcript persistence.
 
+Memory snippets are eligible for runtime context only if their document version
+is not blocked by deletion cleanup. If a deleted source message may have been
+incorporated into an Agent memory document, the affected document or section is
+excluded from runtime context until the Agent completes a memory cleanup run.
+
 ## Persistence Model
 
 The daemon and SQLite remain the authoritative local product store.
@@ -369,9 +385,14 @@ visible storage and runtime context material. Only tombstone metadata remains.
 Coordinator decisions and context packages that copied deleted body text must
 clear that body text or retain only references to tombstoned ids.
 
-Agent memory updates that incorporated deleted user content need a future
-cleanup policy. For this design, memory update events must record source
-message ids so later cleanup can identify affected notes.
+Memory update events must record source message ids and the document paths or
+sections they modified. If a deleted message was used by a prior memory update,
+the daemon creates a `memory_cleanup_requested` event for each affected Agent.
+Until cleanup succeeds, affected memory document versions or sections are marked
+blocked for runtime-context injection. The Agent then runs its memory-maintainer
+Skill to remove or rewrite the affected note content. After the Agent reports
+`memory_cleanup_completed`, the cleaned document version becomes eligible for
+runtime context again.
 
 ## Error Handling
 
