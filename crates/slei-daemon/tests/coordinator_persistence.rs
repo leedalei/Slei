@@ -150,3 +150,33 @@ async fn routing_context_cleanup_scrubs_deleted_body_bytes() {
     assert!(!packages[0].payload.contains(&deleted_body));
     assert!(packages[0].payload.contains(source_message_id));
 }
+
+#[tokio::test]
+async fn agent_inbox_events_replay_in_insertion_order_not_uuid_order() {
+    let db_path = std::env::temp_dir().join(format!("slei-coordinator-{}.sqlite", Uuid::new_v4()));
+    let database_url = format!("sqlite://{}", db_path.display());
+    let high_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap();
+    let low_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+    repos
+        .insert_agent_inbox_event(high_id, "agent_alice", "first", "pending", "{}")
+        .await
+        .unwrap();
+    repos
+        .insert_agent_inbox_event(low_id, "agent_alice", "second", "pending", "{}")
+        .await
+        .unwrap();
+
+    let events = repos.agent_inbox_events("agent_alice").await.unwrap();
+
+    assert_eq!(
+        events
+            .iter()
+            .map(|event| event.event_type.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first", "second"]
+    );
+}

@@ -359,7 +359,7 @@ impl Repositories {
             "SELECT id, channel_id, message_id, intent, action, assignee_agent_id, reason
              FROM coordinator_decisions
              WHERE message_id = ?
-             ORDER BY created_at ASC, id ASC",
+             ORDER BY sequence ASC",
         )
         .bind(message_id)
         .fetch_all(&self.pool)
@@ -413,7 +413,7 @@ impl Repositories {
             "SELECT id, agent_id, event_type, delivery_state, payload
              FROM agent_inbox_events
              WHERE agent_id = ?
-             ORDER BY created_at ASC, id ASC",
+             ORDER BY sequence ASC",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -469,7 +469,7 @@ impl Repositories {
             "SELECT id, agent_id, event_type, source_message_id, document_path, document_section, status
              FROM memory_update_events
              WHERE agent_id = ?
-             ORDER BY created_at ASC, id ASC",
+             ORDER BY sequence ASC",
         )
         .bind(agent_id)
         .fetch_all(&self.pool)
@@ -577,7 +577,7 @@ impl Repositories {
             "SELECT id, decision_id, source_message_id, payload, contains_deleted_body
              FROM routing_context_packages
              WHERE decision_id = ?
-             ORDER BY created_at ASC, id ASC",
+             ORDER BY sequence ASC",
         )
         .bind(decision_id.to_string())
         .fetch_all(&self.pool)

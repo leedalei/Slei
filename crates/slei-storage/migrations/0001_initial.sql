@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS channel_coordinators (
 );
 
 CREATE TABLE IF NOT EXISTS coordinator_decisions (
-    id TEXT PRIMARY KEY,
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
     channel_id TEXT NOT NULL,
     message_id TEXT NOT NULL,
     intent TEXT NOT NULL,
@@ -86,7 +87,8 @@ CREATE INDEX IF NOT EXISTS idx_coordinator_decisions_message_id
     ON coordinator_decisions(message_id);
 
 CREATE TABLE IF NOT EXISTS agent_inbox_events (
-    id TEXT PRIMARY KEY,
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
     agent_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
     delivery_state TEXT NOT NULL,
@@ -98,7 +100,8 @@ CREATE INDEX IF NOT EXISTS idx_agent_inbox_events_agent_id
     ON agent_inbox_events(agent_id);
 
 CREATE TABLE IF NOT EXISTS memory_update_events (
-    id TEXT PRIMARY KEY,
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
     agent_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
     source_message_id TEXT,
@@ -125,7 +128,8 @@ CREATE TABLE IF NOT EXISTS memory_document_states (
 );
 
 CREATE TABLE IF NOT EXISTS routing_context_packages (
-    id TEXT PRIMARY KEY,
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
     decision_id TEXT NOT NULL REFERENCES coordinator_decisions(id),
     source_message_id TEXT NOT NULL,
     payload TEXT NOT NULL,
