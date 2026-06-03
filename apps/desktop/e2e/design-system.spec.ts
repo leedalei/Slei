@@ -10,6 +10,7 @@ describe("desktop design-system wiring", () => {
 
     expect(webEntry).toContain("animal-island-ui/style");
     expect(webEntry.indexOf("animal-island-ui/style")).toBeLessThan(webEntry.indexOf("@slei/ui/styles/tokens.css"));
+    expect(webEntry.indexOf("animal-island-ui/style")).toBeLessThan(webEntry.indexOf("@slei/ui/styles/globals.css"));
     expect(webEntry).toContain("@slei/ui/styles/tokens.css");
     expect(webEntry).toContain("@slei/ui/styles/globals.css");
     expect(webEntry).not.toContain("./web.css");
@@ -23,6 +24,7 @@ describe("desktop design-system wiring", () => {
     expect(formControlsTsx).toContain("function CheckboxControl");
     expect(tokensCss).toContain("--rail-width: 80px;");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
+    expect(tokensCss).toContain("--radius-control: var(--radius-none);");
   });
 
   it("keeps global scrollbars compact and neutral", () => {
