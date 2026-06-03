@@ -1243,7 +1243,7 @@ body,
 .slei-button--danger {
   background: var(--color-danger-bg);
   border-color: var(--color-danger);
-  color: var(--color-danger);
+  color: var(--color-text-primary);
 }
 
 .slei-permission-actions {
@@ -1846,7 +1846,7 @@ body,
   background: var(--color-danger-bg);
   border: var(--border-subtle) solid var(--color-danger);
   border-radius: var(--radius-card);
-  color: var(--color-error);
+  color: var(--color-text-primary);
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   margin: 0;
@@ -2252,7 +2252,7 @@ body,
 .slei-runtime-pill--error {
   background: var(--color-danger-bg);
   border-color: var(--color-danger);
-  color: var(--color-danger);
+  color: var(--color-text-primary);
 }
 
 .slei-computer-agent-list {
