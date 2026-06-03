@@ -30,7 +30,7 @@ describe("desktop i18n", () => {
     expect(english).toContain('aria-label="Main navigation"');
     expect(english).toContain("CHANNELS");
     expect(english).toContain("DIRECT MESSAGES");
-    expect(english).toContain("Runtime detected");
+    expect(english).toContain("Files");
     expect(english).toContain("As Task");
     expect(english).toContain("Send");
     expect(english).not.toContain("主导航");
