@@ -47,6 +47,12 @@ pub enum ChannelMemberReadiness {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AddChannelMemberOutcome {
+    pub member: ChannelMemberRecord,
+    pub created: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceMount {
     pub path: String,
     pub label: String,
@@ -147,6 +153,17 @@ impl ChannelService {
         channel_id: &str,
         agent_id: &str,
     ) -> Result<ChannelMemberRecord, ChannelError> {
+        Ok(self
+            .add_agent_to_channel_with_outcome(channel_id, agent_id)
+            .await?
+            .member)
+    }
+
+    pub async fn add_agent_to_channel_with_outcome(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<AddChannelMemberOutcome, ChannelError> {
         let trimmed_agent_id = agent_id.trim();
         if trimmed_agent_id.is_empty() {
             return Err(ChannelError::InvalidChannel);
@@ -161,7 +178,10 @@ impl ChannelService {
             .iter()
             .find(|member| member.agent_id == trimmed_agent_id)
         {
-            return Ok(existing.clone());
+            return Ok(AddChannelMemberOutcome {
+                member: existing.clone(),
+                created: false,
+            });
         }
         let member = ChannelMemberRecord {
             channel_id: channel_id.to_string(),
@@ -171,7 +191,10 @@ impl ChannelService {
         };
         members.push(member.clone());
         persist_members(&self.root, &state.members)?;
-        Ok(member)
+        Ok(AddChannelMemberOutcome {
+            member,
+            created: true,
+        })
     }
 
     pub async fn set_member_readiness(

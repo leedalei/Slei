@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -37,7 +39,13 @@ pub async fn create(
         .and_then(|value| value.to_str().ok())
         .unwrap_or("");
 
-    let agent_ids = payload.agent_ids.unwrap_or_default();
+    let agent_ids = dedupe_agent_ids(payload.agent_ids.unwrap_or_default());
+    for agent_id in &agent_ids {
+        if let Err(error) = state.members().get_product_agent(agent_id).await {
+            return error_response(StatusCode::BAD_REQUEST, &error.to_string());
+        }
+    }
+
     match state
         .channels()
         .create_channel(
@@ -52,17 +60,20 @@ pub async fn create(
     {
         Ok(channel) => {
             for agent_id in agent_ids {
-                if let Err(error) = state
+                let outcome = match state
                     .channels()
-                    .add_agent_to_channel(&channel.id, &agent_id)
+                    .add_agent_to_channel_with_outcome(&channel.id, &agent_id)
                     .await
                 {
-                    return channel_error_response(error);
+                    Ok(outcome) => outcome,
+                    Err(error) => return channel_error_response(error),
+                };
+                if outcome.created {
+                    state
+                        .memory_events()
+                        .request_channel_join_update(&agent_id, &channel.id)
+                        .await;
                 }
-                state
-                    .memory_events()
-                    .request_channel_join_update(&agent_id, &channel.id)
-                    .await;
             }
             (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response()
         }
@@ -85,6 +96,21 @@ pub async fn members(
     }
 }
 
+fn dedupe_agent_ids(agent_ids: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    agent_ids
+        .into_iter()
+        .filter_map(|agent_id| {
+            let trimmed = agent_id.trim().to_string();
+            if !seen.insert(trimmed.clone()) {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .collect()
+}
+
 fn channel_error_response(error: ChannelError) -> Response {
     match error {
         ChannelError::MissingChannel | ChannelError::MissingMember => (
@@ -103,4 +129,8 @@ fn channel_error_response(error: ChannelError) -> Response {
         )
             .into_response(),
     }
+}
+
+fn error_response(status: StatusCode, error: &str) -> Response {
+    (status, Json(json!({ "error": error }))).into_response()
 }
