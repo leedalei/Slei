@@ -7,6 +7,9 @@ import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { CheckboxControl, MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast } from "../../components";
+
+export type ChannelEmbeddedView = "chat" | "tasks" | "files";
+
 function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
   if (card.kind === "permissionApproval") {
     const done = card.state !== "pending";
@@ -170,10 +173,11 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
+  const [channelView, setChannelView] = useState<ChannelEmbeddedView>(initialChannelView ?? "chat");
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
@@ -198,6 +202,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
   const allowAsTask = !dmMember;
+  const effectiveChannelView: ChannelEmbeddedView = dmMember ? "chat" : channelView;
   const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
   const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
   const detailSubtitle = dmMember
@@ -205,6 +210,10 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
+
+  useEffect(() => {
+    setChannelView(initialChannelView ?? "chat");
+  }, [activeChannel.id, activeConversation?.id, initialChannelView]);
 
   useEffect(() => {
     if (!focusedMessageId || typeof document === "undefined") return;
@@ -279,11 +288,10 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         ) : (
           <>
             <nav aria-label={messages.chat.channelView} className="slei-chat-tabs">
-              <button aria-current="page" type="button"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</button>
-              <button type="button"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</button>
-              <button type="button"><FileText aria-hidden="true" size={14} />{messages.chat.files}</button>
+              <button aria-current={effectiveChannelView === "chat" ? "page" : undefined} onClick={() => setChannelView("chat")} type="button"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</button>
+              <button aria-current={effectiveChannelView === "tasks" ? "page" : undefined} onClick={() => setChannelView("tasks")} type="button"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</button>
+              <button aria-current={effectiveChannelView === "files" ? "page" : undefined} onClick={() => setChannelView("files")} type="button"><FileText aria-hidden="true" size={14} />{messages.chat.files}</button>
             </nav>
-            <span className="slei-badge slei-badge--ready">{messages.chat.runtimeDetected}</span>
           </>
         )}
       </header>

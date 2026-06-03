@@ -45,7 +45,7 @@ import {
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
-import { ChatPage } from "../features/chat/ChatPageView";
+import { ChatPage, type ChannelEmbeddedView } from "../features/chat/ChatPageView";
 import { ComputersPage } from "../features/computers/ComputersPageView";
 import { MembersPage } from "../features/members/MembersPageView";
 import { SearchPage } from "../features/search/SearchPageView";
@@ -86,6 +86,7 @@ export function SleiAppFrame(input: {
   focusedMessageId?: string;
   data: SleiFixtures;
   initialChatDraft?: string;
+  initialChannelView?: ChannelEmbeddedView;
   initialComposerAttachments?: ConversationAttachmentView[];
   initialConversationHistoryOpen?: boolean;
   initialSavedPanelOpen?: boolean;
@@ -234,7 +235,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -729,6 +730,7 @@ function renderWorkspace(
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void,
   onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void,
   initialChatDraft?: string,
+  initialChannelView?: ChannelEmbeddedView,
   initialComposerAttachments?: ConversationAttachmentView[],
   initialSearchFilters?: ChatSearchFilters,
   onSearchResultSelect?: (channelId: string, messageId: string) => void,
@@ -788,7 +790,7 @@ function renderWorkspace(
       />
     );
   }
-  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {
