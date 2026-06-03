@@ -806,42 +806,7 @@ impl DaemonBroker {
         channel_id: &str,
         request: SendChannelMessageRequest,
     ) -> Result<SendChannelMessageReceipt, ChannelError> {
-        if let Some(receipt) = self.send_channel_message_to_daemon(channel_id, &request) {
-            return Ok(receipt);
-        }
-
-        if !self
-            .channels
-            .lock()
-            .expect("channels mutex poisoned")
-            .iter()
-            .any(|channel| channel.id == channel_id)
-        {
-            return Err(ChannelError::InvalidChannel);
-        }
-
-        let assignee_agent_id = self
-            .channel_members
-            .lock()
-            .expect("channel members mutex poisoned")
-            .iter()
-            .find(|member| member.channel_id == channel_id)
-            .map(|member| member.agent_id.clone());
-        let message_id = format!("msg_channel_{}_{}", channel_id, monotonic_id());
-        let action = if request.body.trim_start().starts_with('@') {
-            "request_agent_reply"
-        } else {
-            "create_task_and_assign"
-        };
-        Ok(SendChannelMessageReceipt {
-            outcome: SendChannelMessageOutcome {
-                message_id: message_id.clone(),
-                action: action.to_string(),
-                task_id: (action == "create_task_and_assign")
-                    .then(|| format!("task_{message_id}")),
-                assignee_agent_id,
-            },
-        })
+        self.send_channel_message_to_daemon(channel_id, &request)
     }
 
     pub fn complete_interactive_card(
@@ -1755,16 +1720,20 @@ impl DaemonBroker {
         &self,
         channel_id: &str,
         request: &SendChannelMessageRequest,
-    ) -> Option<SendChannelMessageReceipt> {
-        let payload = serde_json::to_string(request).ok()?;
+    ) -> Result<SendChannelMessageReceipt, ChannelError> {
+        let payload =
+            serde_json::to_string(request).map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
         let idempotency_key = format!("desktop-channel-message-{}", monotonic_id());
-        let response = self.send_daemon_request(
-            "POST",
-            &format!("/v1/channels/{channel_id}/messages"),
-            Some(&payload),
-            &[("Idempotency-Key", idempotency_key.as_str())],
-        )?;
-        serde_json::from_str::<SendChannelMessageReceipt>(&response).ok()
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                &format!("/v1/channels/{channel_id}/messages"),
+                Some(&payload),
+                &[("Idempotency-Key", idempotency_key.as_str())],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<SendChannelMessageReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
     }
 
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
@@ -2233,21 +2202,38 @@ impl DaemonBroker {
         body: Option<&str>,
         extra_headers: &[(&str, &str)],
     ) -> Option<String> {
+        self.send_daemon_request_checked(method, path, body, extra_headers)
+            .ok()
+    }
+
+    fn send_daemon_request_checked(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> Result<String, String> {
         self.last_authorization_header
             .lock()
             .expect("authorization mutex poisoned")
             .replace(format!("Bearer {}", self.descriptor.token));
 
-        let (host_header, socket_addr) = parse_http_endpoint(&self.descriptor.endpoint)?;
-        let socket_addr = socket_addr.to_socket_addrs().ok()?.next()?;
+        let (host_header, socket_addr) = parse_http_endpoint(&self.descriptor.endpoint)
+            .ok_or_else(|| "invalid daemon endpoint".to_string())?;
+        let socket_addr = socket_addr
+            .to_socket_addrs()
+            .map_err(|error| format!("daemon endpoint resolution failed: {error}"))?
+            .next()
+            .ok_or_else(|| "daemon endpoint resolution returned no addresses".to_string())?;
         let mut stream =
-            TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80)).ok()?;
+            TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80))
+                .map_err(|error| format!("daemon connection failed: {error}"))?;
         stream
             .set_read_timeout(Some(Duration::from_millis(160)))
-            .ok()?;
+            .map_err(|error| format!("daemon read timeout setup failed: {error}"))?;
         stream
             .set_write_timeout(Some(Duration::from_millis(80)))
-            .ok()?;
+            .map_err(|error| format!("daemon write timeout setup failed: {error}"))?;
 
         let body = body.unwrap_or("");
         let content_headers = if body.is_empty() {
@@ -2266,10 +2252,14 @@ impl DaemonBroker {
             "{method} {path} HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {}\r\n{content_headers}{extra_headers}Connection: close\r\n\r\n{body}",
             self.descriptor.token
         );
-        stream.write_all(request.as_bytes()).ok()?;
+        stream
+            .write_all(request.as_bytes())
+            .map_err(|error| format!("daemon request write failed: {error}"))?;
 
         let mut response = String::new();
-        stream.read_to_string(&mut response).ok()?;
+        stream
+            .read_to_string(&mut response)
+            .map_err(|error| format!("daemon response read failed: {error}"))?;
         if !response.starts_with("HTTP/1.1 200")
             && !response.starts_with("HTTP/1.0 200")
             && !response.starts_with("HTTP/1.1 201")
@@ -2277,10 +2267,16 @@ impl DaemonBroker {
             && !response.starts_with("HTTP/1.1 202")
             && !response.starts_with("HTTP/1.0 202")
         {
-            return None;
+            let status = response.lines().next().unwrap_or("HTTP response missing status");
+            let body = response.split("\r\n\r\n").nth(1).unwrap_or("");
+            return Err(format!("{status}: {body}"));
         }
 
-        response.split("\r\n\r\n").nth(1).map(str::to_string)
+        response
+            .split("\r\n\r\n")
+            .nth(1)
+            .map(str::to_string)
+            .ok_or_else(|| "daemon response missing body separator".to_string())
     }
 }
 
@@ -3512,6 +3508,10 @@ pub enum AgentPathError {
 pub enum ChannelError {
     #[error("invalid channel")]
     InvalidChannel,
+    #[error("daemon request failed: {0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
 }
 
 #[derive(Debug, thiserror::Error)]
