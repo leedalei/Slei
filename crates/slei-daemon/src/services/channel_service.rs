@@ -112,6 +112,11 @@ impl ChannelService {
         draft: ChannelDraft,
         idempotency_key: &str,
     ) -> Result<ChannelRecord, ChannelError> {
+        let idempotency_key = idempotency_key.trim();
+        if idempotency_key.is_empty() {
+            return Err(ChannelError::MissingIdempotencyKey);
+        }
+
         let mut state = self.inner.lock().await;
         if let Some(id) = state.channel_idempotency.get(idempotency_key) {
             return state
@@ -388,6 +393,8 @@ pub enum ChannelError {
     MissingChannel,
     #[error("channel member not found")]
     MissingMember,
+    #[error("idempotency-key is required")]
+    MissingIdempotencyKey,
     #[error("invalid channel")]
     InvalidChannel,
     #[error("channel io error: {0}")]

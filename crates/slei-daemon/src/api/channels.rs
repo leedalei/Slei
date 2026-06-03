@@ -34,10 +34,18 @@ pub async fn create(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let idempotency_key = headers
+    let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
 
     let agent_ids = dedupe_agent_ids(payload.agent_ids.unwrap_or_default());
     for agent_id in &agent_ids {
@@ -119,6 +127,11 @@ fn channel_error_response(error: ChannelError) -> Response {
         )
             .into_response(),
         ChannelError::InvalidChannel => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::MissingIdempotencyKey => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": error.to_string() })),
         )

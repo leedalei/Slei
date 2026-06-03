@@ -908,6 +908,52 @@ async fn public_channel_message_api_maps_missing_channel_to_not_found() {
 }
 
 #[tokio::test]
+async fn public_channel_create_api_rejects_missing_idempotency_key() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        None,
+        serde_json::json!({
+            "name": "api-dev",
+            "description": null,
+            "agentIds": []
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_json(response).await;
+    assert_eq!(body["error"], "idempotency-key is required");
+}
+
+#[tokio::test]
+async fn public_channel_create_api_rejects_empty_idempotency_key() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some(""),
+        serde_json::json!({
+            "name": "api-dev",
+            "description": null,
+            "agentIds": []
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response_json(response).await;
+    assert_eq!(body["error"], "idempotency-key is required");
+}
+
+#[tokio::test]
 async fn public_channel_message_api_rejects_missing_idempotency_key_before_orchestration() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");

@@ -5,6 +5,9 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
+use crate::services::channel_service::ChannelError;
+use crate::services::message_service::MessageError;
 use crate::services::task_service::TaskError;
 use crate::state::AppState;
 
@@ -68,12 +71,12 @@ pub async fn reply(
         .unwrap_or("");
 
     match state
-        .tasks()
-        .add_reply(&id, &payload.sender_id, &payload.body, idempotency_key)
+        .channel_orchestrator()
+        .add_task_reply(&id, &payload.sender_id, &payload.body, idempotency_key)
         .await
     {
         Ok(reply) => (StatusCode::CREATED, Json(json!({ "reply": reply }))).into_response(),
-        Err(error) => task_error_response(error),
+        Err(error) => task_reply_error_response(error),
     }
 }
 
@@ -105,4 +108,26 @@ fn task_error_response(error: TaskError) -> Response {
         )
             .into_response(),
     }
+}
+
+fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
+    let status = match &error {
+        ChannelOrchestratorError::Task(TaskError::TaskNotFound)
+        | ChannelOrchestratorError::Channel(ChannelError::MissingChannel)
+        | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
+        | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
+        ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
+        | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
+        | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Message(MessageError::InvalidMessage)
+        | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
+        | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
+        | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
+        ChannelOrchestratorError::Channel(ChannelError::Io(_))
+        | ChannelOrchestratorError::Channel(ChannelError::Json(_))
+        | ChannelOrchestratorError::InvalidDecisionId
+        | ChannelOrchestratorError::Json(_)
+        | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    (status, Json(json!({ "error": error.to_string() }))).into_response()
 }

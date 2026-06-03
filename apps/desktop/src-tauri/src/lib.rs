@@ -47,19 +47,20 @@ pub fn run() {
 mod tests {
     use super::commands::{
         activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
-        create_agent, create_conversation_session, create_dm_conversation, daemon_status,
-        format_frontend_crash_log, list_agent_skills, list_agents, list_conversation_messages,
-        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
-        list_saved_messages,
-        open_agent_path, reconnect_events, remember_agent_fact, rename_local_node,
-        request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        create_agent, create_channel, create_conversation_session, create_dm_conversation,
+        daemon_status, format_frontend_crash_log, list_agent_skills, list_agents,
+        list_conversation_messages, list_conversation_sessions, list_conversations, list_nodes,
+        list_preferences, list_saved_messages, open_agent_path, reconnect_events,
+        remember_agent_fact, rename_local_node, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
-        AgentCreateRequest, AgentUpdateRequest, ConversationAttachmentUploadRequest,
-        ConversationMessageRequest, DaemonBroker, NotificationPreferencesView,
-        PreferencesUpdateRequest, RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest,
+        AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
+        ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
+        NotificationPreferencesView, PreferencesUpdateRequest, RuntimeDescriptor,
+        SaveMessageRequest, SendChannelMessageRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -382,6 +383,231 @@ mod tests {
         assert!(error.contains("daemon response invalid"));
         assert!(!error.contains("msg_channel_remote-dev"));
         assert!(!error.contains("task_msg_channel_remote-dev"));
+    }
+
+    #[test]
+    fn channel_create_command_uses_daemon_route_with_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            let response = serde_json::json!({
+                "channel": {
+                    "id": "remote-dev",
+                    "name": "remote-dev",
+                    "description": "远程频道",
+                    "isDefault": false
+                }
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = create_channel(
+            &broker,
+            ChannelCreateRequest {
+                name: "remote-dev".to_string(),
+                description: Some("远程频道".to_string()),
+                agent_ids: vec!["agent_alice".to_string()],
+            },
+        )
+        .unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.channel.id, "remote-dev");
+        assert!(request.contains("POST /v1/channels HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains("Idempotency-Key: desktop-channel-create-"));
+    }
+
+    #[test]
+    fn channel_create_command_does_not_fallback_when_daemon_rejects_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let response = r#"{"error":"idempotency-key is required"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = create_channel(
+            &broker,
+            ChannelCreateRequest {
+                name: "remote-dev".to_string(),
+                description: None,
+                agent_ids: vec![],
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("POST /v1/channels HTTP/1.1"));
+        assert!(error.contains("daemon request failed"));
+        assert!(error.contains("400"));
+        assert!(!error.contains("invalid channel"));
+    }
+
+    #[test]
+    fn channel_create_command_does_not_fallback_when_daemon_connection_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = create_channel(
+            &broker,
+            ChannelCreateRequest {
+                name: "remote-dev".to_string(),
+                description: None,
+                agent_ids: vec![],
+            },
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("daemon request failed"));
+        assert!(error.contains("daemon connection failed"));
+        assert!(!error.contains("invalid channel"));
+    }
+
+    #[test]
+    fn channel_create_command_does_not_fallback_when_daemon_response_is_invalid() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let response = r#"{"unexpected":true}"#;
+            write!(
+                stream,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = create_channel(
+            &broker,
+            ChannelCreateRequest {
+                name: "remote-dev".to_string(),
+                description: None,
+                agent_ids: vec![],
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("POST /v1/channels HTTP/1.1"));
+        assert!(error.contains("daemon response invalid"));
+        assert!(!error.contains("invalid channel"));
     }
 
     #[test]

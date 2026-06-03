@@ -769,22 +769,9 @@ impl DaemonBroker {
         &self,
         request: ChannelCreateRequest,
     ) -> Result<ChannelReceipt, ChannelError> {
-        if let Some(receipt) = self.create_channel_in_daemon(&request) {
-            self.upsert_local_channel(receipt.channel.clone());
-            return Ok(receipt);
-        }
-        let name = normalize_channel_name(&request.name)?;
-        let channel = ChannelView {
-            id: name.clone(),
-            name,
-            description: request.description,
-            is_default: Some(false),
-        };
-        self.upsert_local_channel(channel.clone());
-        for agent_id in request.agent_ids {
-            self.ensure_channel_membership(&channel.id, &agent_id);
-        }
-        Ok(ChannelReceipt { channel })
+        let receipt = self.create_channel_in_daemon(&request)?;
+        self.upsert_local_channel(receipt.channel.clone());
+        Ok(receipt)
     }
 
     pub fn list_channel_members(&self, channel_id: &str) -> ChannelMemberListReceipt {
@@ -1701,10 +1688,23 @@ impl DaemonBroker {
         serde_json::from_str::<ChannelListReceipt>(&response).ok()
     }
 
-    fn create_channel_in_daemon(&self, request: &ChannelCreateRequest) -> Option<ChannelReceipt> {
-        let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/channels", Some(&payload), &[])?;
-        serde_json::from_str::<ChannelReceipt>(&response).ok()
+    fn create_channel_in_daemon(
+        &self,
+        request: &ChannelCreateRequest,
+    ) -> Result<ChannelReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let idempotency_key = format!("desktop-channel-create-{}", monotonic_id());
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                "/v1/channels",
+                Some(&payload),
+                &[("Idempotency-Key", idempotency_key.as_str())],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
     }
 
     fn fetch_channel_members_from_daemon(
@@ -2302,26 +2302,6 @@ fn normalize_handle(handle: &str) -> Result<String, AgentError> {
         Ok(format!("@{trimmed}"))
     } else {
         Err(AgentError::InvalidHandle)
-    }
-}
-
-fn normalize_channel_name(name: &str) -> Result<String, ChannelError> {
-    let normalized = name
-        .trim()
-        .trim_start_matches('#')
-        .trim()
-        .to_lowercase()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("-");
-    let valid = !normalized.is_empty()
-        && normalized.chars().count() <= 48
-        && !normalized.contains('#')
-        && !normalized.contains('/');
-    if valid {
-        Ok(normalized)
-    } else {
-        Err(ChannelError::InvalidChannel)
     }
 }
 

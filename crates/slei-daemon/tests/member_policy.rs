@@ -4,6 +4,25 @@ use slei_daemon::services::member_service::{
 };
 
 #[tokio::test]
+async fn channel_service_rejects_blank_create_idempotency_keys() {
+    let channels = ChannelService::for_tests();
+
+    let error = channels
+        .create_channel(
+            ChannelDraft {
+                name: "AI咨询".to_string(),
+                description: None,
+                permission: PermissionPreset::ReadOnly,
+            },
+            " \t",
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("idempotency-key is required"));
+}
+
+#[tokio::test]
 async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempotent() {
     let channels = ChannelService::for_tests();
     let members = MemberService::for_tests();
