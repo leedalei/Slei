@@ -55,4 +55,11 @@ describe("Slei Animal Island design tokens", () => {
     expect(tokensCss).toContain("--radius-badge: 999px;");
     expect(tokensCss).toContain("--radius-avatar: 50%;");
   });
+
+  it("styles shared controls with Animal Island soft geometry", () => {
+    expect(globalsCss).toMatch(/\.slei-button\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:hover\s*\{[^}]*transform:\s*translateY\(-1px\);/s);
+    expect(globalsCss).toMatch(/\.slei-card\s*\{[^}]*border-radius:\s*var\(--radius-card\);/s);
+    expect(globalsCss).toMatch(/\.slei-avatar\s*\{[^}]*border-radius:\s*var\(--radius-avatar\);/s);
+  });
 });
