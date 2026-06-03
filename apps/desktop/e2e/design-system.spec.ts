@@ -31,8 +31,8 @@ describe("desktop design-system wiring", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
 
     expect(appCss).toContain("--scrollbar-size: 8px");
-    expect(appCss).toContain("--scrollbar-radius: 8px");
-    expect(appCss).toContain("--scrollbar-thumb: rgb(128 128 128 / 48%)");
+    expect(appCss).toContain("--scrollbar-radius: 999px");
+    expect(appCss).toContain("--scrollbar-thumb: color-mix(in srgb, var(--color-border) 62%, transparent)");
     expect(appCss).toContain("scrollbar-width: thin");
     expect(appCss).toContain("border-radius: var(--scrollbar-radius)");
   });
@@ -44,9 +44,10 @@ describe("desktop design-system wiring", () => {
     const railLabelRule = appCss.match(/\.slei-rail__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
 
     expect(railRule).toContain("align-items: center");
-    expect(railRule).toContain("box-shadow: var(--border-panel) 0 0 var(--color-border)");
+    expect(railRule).toContain("background: var(--color-rail-bg)");
     expect(railRule).not.toContain("border-right");
     expect(railRule).toContain("padding: var(--titlebar-height) var(--gap-sm) var(--gap-sm)");
+    expect(railButtonRule).toContain("border-radius: var(--radius-control)");
     expect(railButtonRule).toContain("width: 64px");
     expect(railButtonRule).toContain("justify-items: center");
     expect(railLabelRule).toContain("font-size: 12px");
