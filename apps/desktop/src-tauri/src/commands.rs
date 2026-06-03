@@ -8,7 +8,8 @@ use crate::daemon_broker::{
     ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
     EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
     NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
-    PreferencesUpdateRequest, SanitizedDaemonStatus, SkillListReceipt,
+    PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
+    SavedMessageReceipt, SkillListReceipt,
 };
 use serde::Deserialize;
 
@@ -195,6 +196,21 @@ pub fn upload_conversation_attachment(
     request: ConversationAttachmentUploadRequest,
 ) -> Result<ConversationAttachmentReceipt, ConversationError> {
     broker.upload_conversation_attachment(request)
+}
+
+pub fn list_saved_messages(broker: &DaemonBroker) -> SavedMessageListReceipt {
+    broker.list_saved_messages()
+}
+
+pub fn save_message(
+    broker: &DaemonBroker,
+    request: SaveMessageRequest,
+) -> Result<SavedMessageReceipt, ConversationError> {
+    broker.save_message(request)
+}
+
+pub fn unsave_message(broker: &DaemonBroker, message_id: &str) -> Result<(), ConversationError> {
+    broker.unsave_message(message_id)
 }
 
 pub fn list_conversation_messages(
@@ -434,4 +450,27 @@ pub fn resolve_permission_command(
     request: PermissionResolveRequest,
 ) -> Result<ConversationMessageReceipt, String> {
     resolve_permission(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_saved_messages_command(
+    state: tauri::State<'_, DaemonBroker>,
+) -> SavedMessageListReceipt {
+    list_saved_messages(state.inner())
+}
+
+#[tauri::command]
+pub fn save_message_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: SaveMessageRequest,
+) -> Result<SavedMessageReceipt, String> {
+    save_message(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn unsave_message_command(
+    state: tauri::State<'_, DaemonBroker>,
+    message_id: String,
+) -> Result<(), String> {
+    unsave_message(state.inner(), &message_id).map_err(|error| error.to_string())
 }

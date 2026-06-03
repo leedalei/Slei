@@ -42,6 +42,7 @@ import {
   type InteractiveCardView,
   type NotificationPreferences,
   type PermissionDecision,
+  type SavedMessageView,
   type AgentPathTarget,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
@@ -53,7 +54,7 @@ import { SearchPage } from "../features/search/SearchPageView";
 import { SettingsPage } from "../features/settings/SettingsPageView";
 import { TasksPage } from "../features/tasks/TasksPageView";
 import { CheckboxControl, EditableDetailField, Empty, MemberAvatar, MessageStatusSquare, SelectControl, StatusDot } from "../components";
-import { type SleiFixtures, type SleiMember, type SleiTask } from "./fixtures";
+import { type SleiFixtures, type SleiMember, type SleiMessage, type SleiTask } from "./fixtures";
 import {
   defaultAppearance,
   defaultNotifications,
@@ -84,10 +85,12 @@ export function SleiAppFrame(input: {
   activeSessionId?: string;
   activeMemberId?: string;
   activeTaskId?: string;
+  focusedMessageId?: string;
   data: SleiFixtures;
   initialChatDraft?: string;
   initialComposerAttachments?: ConversationAttachmentView[];
   initialConversationHistoryOpen?: boolean;
+  initialSavedPanelOpen?: boolean;
   initialAgentCreateModalOpen?: boolean;
   initialCreateChannelModalOpen?: boolean;
   initialWindowCloseConfirmOpen?: boolean;
@@ -104,6 +107,7 @@ export function SleiAppFrame(input: {
   sessionDrawerOpen?: boolean;
   sendingConversationIds?: string[];
   sidebarWidth?: number;
+  savedMessages?: SavedMessageView[];
   onAgentCreate?: (request: AgentDraftInput) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onChannelCreate?: (input: { name: string; projectName?: string }) => Promise<void> | void;
@@ -127,6 +131,8 @@ export function SleiAppFrame(input: {
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onSearchResultSelect?: (channelId: string, messageId: string) => void;
   onSearchToggle?: () => void;
+  onSavedMessageSelect?: (savedMessage: SavedMessageView) => void;
+  onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void;
   onMemberSelect?: (memberId: string) => void;
   onMemberMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
@@ -183,21 +189,20 @@ export function SleiAppFrame(input: {
 
       <aside className="slei-context-sidebar">
         <WindowControls initialCloseConfirmOpen={input.initialWindowCloseConfirmOpen} messages={messages} />
-        <div className="slei-sidebar__header" data-tauri-drag-region="deep">
-          <strong>{messages.shell.sidebarTitle[input.activeView]}</strong>
-          <span>{messages.shell.sidebarSubtitle[input.activeView]}</span>
-        </div>
         {input.activeView === "chat" || input.activeView === "search" ? (
           <ChannelList
             activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
             activeConversationId={input.activeConversationId}
             data={input.data}
             initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
+            initialSavedPanelOpen={input.initialSavedPanelOpen}
             onChannelCreate={input.onChannelCreate}
             onChannelDelete={input.onChannelDelete}
             onChannelSelect={input.onChannelSelect}
             onConversationSelect={input.onConversationSelect}
+            onSavedMessageSelect={input.onSavedMessageSelect}
             onSearchToggle={input.onSearchToggle}
+            savedMessages={input.savedMessages ?? []}
             searchOpen={input.activeView === "search"}
             messages={messages}
           />
@@ -232,7 +237,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -390,17 +395,21 @@ function ChannelList(input: {
   activeConversationId?: string;
   data: SleiFixtures;
   initialCreateChannelModalOpen?: boolean;
+  initialSavedPanelOpen?: boolean;
   messages: DesktopMessages;
+  savedMessages: SavedMessageView[];
   searchOpen?: boolean;
   onChannelCreate?: (input: { name: string; projectName?: string }) => Promise<void> | void;
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
+  onSavedMessageSelect?: (savedMessage: SavedMessageView) => void;
   onSearchToggle?: () => void;
 }) {
   const [name, setName] = useState("");
   const [projectName, setProjectName] = useState("");
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
+  const [activePanel, setActivePanel] = useState<"channels" | "saved">(input.initialSavedPanelOpen ? "saved" : "channels");
   const directMessageConversations = input.data.conversations.filter((conversation) => conversation.kind === "dm");
 
   function submitChannel(event: FormEvent<HTMLFormElement>) {
@@ -415,50 +424,62 @@ function ChannelList(input: {
     <div className="slei-channel-list">
       <div className="slei-sidebar-tools">
         <button aria-pressed={input.searchOpen ? "true" : "false"} className="slei-sidebar-tool" onClick={input.onSearchToggle} type="button"><Search aria-hidden="true" size={14} /> {input.messages.common.search} <span>Command K</span></button>
-        <button className="slei-sidebar-tool" type="button"><Bookmark aria-hidden="true" size={14} /> {input.messages.common.saved}</button>
+        <button aria-pressed={activePanel === "saved" ? "true" : "false"} className="slei-sidebar-tool" onClick={() => setActivePanel("saved")} type="button"><Bookmark aria-hidden="true" size={14} /> {input.messages.common.saved}</button>
       </div>
-      <div className="slei-channel-group-header">
-        <span>{input.messages.chat.channels} {input.data.channels.length}</span>
-        <div><button aria-label={input.messages.chat.sortChannels} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button><button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} type="button"><Plus aria-hidden="true" size={14} /></button></div>
-      </div>
-      {input.data.channels.map((channel) => (
-        <div className="slei-channel-row" key={channel.id}>
-          <button
-            aria-current={input.activeChannelId === channel.id ? "true" : undefined}
-            className="slei-channel"
-            onClick={() => input.onChannelSelect?.(channel.id)}
-            type="button"
-          >
-            <span><Hash aria-hidden="true" size={14} />{stripChannelHash(channel.name)}</span>
-            {channel.unread > 0 ? <b>{channel.unread}</b> : null}
-            <small>{channel.projectName ? input.messages.chat.projectPrefix(channel.projectName) : channel.description}</small>
-          </button>
-          {channel.id !== "all" ? (
-            <button aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))} className="slei-channel-delete" onClick={() => input.onChannelDelete?.(channel.id)} type="button"><Trash2 aria-hidden="true" size={14} /></button>
-          ) : null}
-        </div>
-      ))}
-      <div className="slei-channel-group-header"><span>{input.messages.chat.directMessages} {directMessageConversations.length}</span><div><button aria-label={input.messages.chat.sortDirectMessages} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button></div></div>
-      {directMessageConversations.map((conversation) => {
-        const member = input.data.members.find((candidate) => candidate.id === conversation.agentId && candidate.type === "agent");
-        if (!member) return null;
-        const conversationId = conversation.id;
-        return (
-          <button
-            aria-current={input.activeConversationId === conversationId ? "true" : undefined}
-            className="slei-channel slei-channel--dm"
-            key={conversation.id}
-            onClick={() => input.onConversationSelect?.(conversationId)}
-            type="button"
-          >
-            <MemberAvatar identity={member} />
-            <span className="slei-channel__dm-copy">
-              <strong>{member.name}</strong>
-              <small>{member.description}</small>
-            </span>
-          </button>
-        );
-      })}
+      {activePanel === "saved" ? (
+        <SavedMessagesPanel
+          data={input.data}
+          messages={input.messages}
+          onClose={() => setActivePanel("channels")}
+          onSelect={input.onSavedMessageSelect}
+          savedMessages={input.savedMessages}
+        />
+      ) : (
+        <>
+          <div className="slei-channel-group-header">
+            <span>{input.messages.chat.channels} {input.data.channels.length}</span>
+            <div><button aria-label={input.messages.chat.sortChannels} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button><button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} type="button"><Plus aria-hidden="true" size={14} /></button></div>
+          </div>
+          {input.data.channels.map((channel) => (
+            <div className="slei-channel-row" key={channel.id}>
+              <button
+                aria-current={input.activeChannelId === channel.id ? "true" : undefined}
+                className="slei-channel"
+                onClick={() => input.onChannelSelect?.(channel.id)}
+                type="button"
+              >
+                <span><Hash aria-hidden="true" size={14} />{stripChannelHash(channel.name)}</span>
+                {channel.unread > 0 ? <b>{channel.unread}</b> : null}
+                <small>{channel.projectName ? input.messages.chat.projectPrefix(channel.projectName) : channel.description}</small>
+              </button>
+              {channel.id !== "all" ? (
+                <button aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))} className="slei-channel-delete" onClick={() => input.onChannelDelete?.(channel.id)} type="button"><Trash2 aria-hidden="true" size={14} /></button>
+              ) : null}
+            </div>
+          ))}
+          <div className="slei-channel-group-header"><span>{input.messages.chat.directMessages} {directMessageConversations.length}</span><div><button aria-label={input.messages.chat.sortDirectMessages} type="button"><ArrowUpDown aria-hidden="true" size={14} /></button></div></div>
+          {directMessageConversations.map((conversation) => {
+            const member = input.data.members.find((candidate) => candidate.id === conversation.agentId && candidate.type === "agent");
+            if (!member) return null;
+            const conversationId = conversation.id;
+            return (
+              <button
+                aria-current={input.activeConversationId === conversationId ? "true" : undefined}
+                className="slei-channel slei-channel--dm"
+                key={conversation.id}
+                onClick={() => input.onConversationSelect?.(conversationId)}
+                type="button"
+              >
+                <MemberAvatar identity={member} />
+                <span className="slei-channel__dm-copy">
+                  <strong>{member.name}</strong>
+                  <small>{member.description}</small>
+                </span>
+              </button>
+            );
+          })}
+        </>
+      )}
       {createOpen ? (
         <div className="slei-modal-backdrop" role="presentation">
           <section aria-modal="true" className="slei-dialog slei-channel-modal" role="dialog">
@@ -485,6 +506,82 @@ function ChannelList(input: {
       ) : null}
     </div>
   );
+}
+
+function SavedMessagesPanel(input: {
+  data: SleiFixtures;
+  messages: DesktopMessages;
+  onClose: () => void;
+  onSelect?: (savedMessage: SavedMessageView) => void;
+  savedMessages: SavedMessageView[];
+}) {
+  const entries = input.savedMessages
+    .map((savedMessage) => {
+      const message = input.data.messages.find((candidate) => candidate.id === savedMessage.messageId);
+      return { savedMessage, message };
+    })
+    .filter((entry): entry is { savedMessage: SavedMessageView; message: SleiMessage } => Boolean(entry.message));
+
+  return (
+    <section aria-label={input.messages.common.saved} className="slei-saved-panel">
+      <div className="slei-saved-panel__header">
+        <span>{input.messages.common.saved} {entries.length}</span>
+        <button onClick={input.onClose} type="button"><Hash aria-hidden="true" size={13} />{input.messages.chat.channels}</button>
+      </div>
+      {entries.length === 0 ? (
+        <p className="slei-empty-note">{input.messages.search.noResultDescription}</p>
+      ) : null}
+      {entries.map(({ savedMessage, message }) => (
+        <button
+          aria-label={input.messages.search.openConversation(message.id)}
+          className="slei-saved-message"
+          key={savedMessage.id}
+          onClick={() => input.onSelect?.(savedMessage)}
+          type="button"
+        >
+          <span>{savedMessageSourceLabel(savedMessage, input.data)}</span>
+          <strong>{message.author}</strong>
+          <p>{message.body}</p>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function savedMessageSourceLabel(savedMessage: SavedMessageView, data: SleiFixtures) {
+  const date = formatSavedDate(savedMessage.savedAt);
+  if (savedMessage.sourceKind === "dm" || savedMessage.sourceId.startsWith("dm:")) {
+    const conversation = data.conversations.find((candidate) => candidate.id === savedMessage.sourceId);
+    const member = data.members.find((candidate) => candidate.id === conversation?.agentId);
+    const session = data.conversationSessions.find((candidate) => candidate.id === savedMessage.sessionId);
+    const title = [member?.name ?? conversation?.agentId ?? savedMessage.sourceId, session?.title].filter(Boolean).join(" / ");
+    return `私聊 · ${title} · ${date}`;
+  }
+
+  const channel = data.channels.find((candidate) => candidate.id === savedMessage.sourceId);
+  return `群聊 · #${stripChannelHash(channel?.name ?? savedMessage.sourceId)} · ${date}`;
+}
+
+function formatSavedDate(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const direct = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (direct) return direct[1];
+  let date: Date;
+  if (/^\d+$/.test(raw)) {
+    const numeric = BigInt(raw);
+    const milliseconds =
+      raw.length >= 16
+        ? numeric / 1_000_000n
+        : raw.length >= 13
+          ? numeric
+          : numeric * 1_000n;
+    date = new Date(Number(milliseconds));
+  } else {
+    date = new Date(raw);
+  }
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toISOString().slice(0, 10);
 }
 
 function ContextPanel({ activeView, data, messages }: { activeView: AppView; data: SleiFixtures; messages: DesktopMessages }) {
@@ -670,6 +767,9 @@ function renderWorkspace(
   onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void,
   sessionDrawerOpen?: boolean,
   sendingConversationIds: string[] = [],
+  savedMessages: SavedMessageView[] = [],
+  focusedMessageId?: string,
+  onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void,
   onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void,
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
 ) {
@@ -707,7 +807,7 @@ function renderWorkspace(
       />
     );
   }
-  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} initialAttachments={initialComposerAttachments} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {

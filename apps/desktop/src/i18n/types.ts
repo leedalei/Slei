@@ -68,6 +68,8 @@ export type DesktopMessages = {
     rejected: string;
     copyMessage: string;
     copySuccess: string;
+    saveMessage: string;
+    unsaveMessage: string;
     history: string;
     newSession: string;
     resetSession: string;

@@ -14,6 +14,8 @@ import {
   type DesktopNodeView,
   type NotificationPreferences,
   type PermissionDecision,
+  type SaveMessageRequest,
+  type SavedMessageView,
   type AgentPathTarget,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
@@ -204,6 +206,8 @@ export function SleiApp() {
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
   const [activeMemberId, setActiveMemberId] = useState<string | undefined>(undefined);
+  const [savedMessages, setSavedMessages] = useState<SavedMessageView[]>([]);
+  const [focusedMessageId, setFocusedMessageId] = useState<string | undefined>(undefined);
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
   const [sendingConversationIds, setSendingConversationIds] = useState<string[]>([]);
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
@@ -238,13 +242,14 @@ export function SleiApp() {
   useEffect(() => {
     let mounted = true;
     async function loadInitialState() {
-      const [next, preferencesReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences()]);
+      const [next, preferencesReceipt, savedReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences(), bridge.listSavedMessages()]);
       if (!mounted) return;
       setRuntimeSetup(next);
       setLocale(preferencesReceipt.preferences.locale);
       setTimeZone(preferencesReceipt.preferences.timeZone);
       setAppearance(preferencesReceipt.preferences.appearance);
       setNotifications(preferencesReceipt.preferences.notifications);
+      setSavedMessages(savedReceipt.savedMessages);
       let activeConversation: string | undefined;
       if (hasReadyClaudeRuntime(next.nodes)) {
         setGuideBootstrapping(true);
@@ -361,7 +366,7 @@ export function SleiApp() {
 
   async function handleRefreshRuntime() {
     setRuntimeSetup((current) => ({ ...current, loading: true, error: undefined }));
-    const [next, preferencesReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences()]);
+    const [next, preferencesReceipt, savedReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences(), bridge.listSavedMessages()]);
     if (hasReadyClaudeRuntime(next.nodes)) {
       setGuideBootstrapping(true);
       await bridge.bootstrapGuideAgent();
@@ -373,6 +378,7 @@ export function SleiApp() {
     setTimeZone(preferencesReceipt.preferences.timeZone);
     setAppearance(preferencesReceipt.preferences.appearance);
     setNotifications(preferencesReceipt.preferences.notifications);
+    setSavedMessages(savedReceipt.savedMessages);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
     const members = await loadGuideSkillsForMembers(
       bridge,
@@ -648,6 +654,47 @@ export function SleiApp() {
   function handleSearchResultSelect(channelId: string) {
     setActiveChannelId(channelId);
     setActiveConversationId(undefined);
+    setActiveSessionId(undefined);
+    navigateToView("chat");
+  }
+
+  async function handleMessageSaveToggle(message: SleiMessage) {
+    const existing = savedMessages.find((saved) => saved.messageId === message.id);
+    if (existing) {
+      await bridge.unsaveMessage(message.id);
+      setSavedMessages((current) => current.filter((saved) => saved.messageId !== message.id));
+      return;
+    }
+
+    const sourceId = message.channelId ?? activeConversationId ?? activeChannelId;
+    const request: SaveMessageRequest = {
+      messageId: message.id,
+      sourceId,
+      sourceKind: sourceId.startsWith("dm:") || activeConversationId ? "dm" : "channel",
+      sessionId: message.sessionId,
+    };
+    const receipt = await bridge.saveMessage(request);
+    setSavedMessages((current) =>
+      current.some((saved) => saved.messageId === receipt.savedMessage.messageId)
+        ? current
+        : [receipt.savedMessage, ...current],
+    );
+  }
+
+  function handleSavedMessageSelect(savedMessage: SavedMessageView) {
+    if (savedMessage.sourceKind === "dm" || savedMessage.sourceId.startsWith("dm:")) {
+      const conversation = data.conversations.find((candidate) => candidate.id === savedMessage.sourceId);
+      setActiveConversationId(savedMessage.sourceId);
+      setActiveSessionId(savedMessage.sessionId ?? conversation?.activeSessionId);
+      setActiveChannelId("all");
+    } else {
+      setActiveChannelId(savedMessage.sourceId);
+      setActiveConversationId(undefined);
+      setActiveSessionId(undefined);
+    }
+    setSessionDrawerOpen(false);
+    setFocusedMessageId(undefined);
+    window.setTimeout(() => setFocusedMessageId(savedMessage.messageId), 0);
     navigateToView("chat");
   }
 
@@ -722,6 +769,7 @@ export function SleiApp() {
       activeConversationId={activeConversationId}
       activeSessionId={activeSessionId}
       activeMemberId={activeMemberId}
+      focusedMessageId={focusedMessageId}
       data={data}
       guideBootstrapping={guideBootstrapping}
       onAgentCreate={handleCreateAgent}
@@ -752,6 +800,8 @@ export function SleiApp() {
       onResizeStart={handleResizeStart}
       onSearchResultSelect={handleSearchResultSelect}
       onSearchToggle={() => navigateToView("search")}
+      onSavedMessageSelect={handleSavedMessageSelect}
+      onMessageSaveToggle={handleMessageSaveToggle}
       onSendMessage={handleSendMessage}
       onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}
@@ -770,6 +820,7 @@ export function SleiApp() {
       onConversationSessionSelect={handleConversationSessionSelect}
       profile={profile}
       runtimeSetup={runtimeSetup}
+      savedMessages={savedMessages}
       sessionDrawerOpen={sessionDrawerOpen}
       sendingConversationIds={sendingConversationIds}
       sidebarWidth={sidebarWidth}

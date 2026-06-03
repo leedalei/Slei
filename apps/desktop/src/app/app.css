@@ -296,6 +296,71 @@ body,
   padding: var(--padding-badge);
 }
 
+.slei-saved-panel {
+  display: grid;
+  gap: var(--gap-sm);
+  padding: 0 var(--gap-md) var(--gap-lg);
+}
+
+.slei-saved-panel__header {
+  align-items: center;
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  justify-content: space-between;
+  text-transform: uppercase;
+}
+
+.slei-saved-panel__header button {
+  align-items: center;
+  background: transparent;
+  border: var(--border-subtle) solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  gap: var(--gap-xs);
+  padding: 4px 6px;
+}
+
+.slei-saved-message {
+  background: transparent;
+  border: var(--border-subtle) solid transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: grid;
+  gap: var(--gap-xs);
+  padding: var(--gap-sm);
+  text-align: left;
+}
+
+.slei-saved-message:hover,
+.slei-saved-message:focus-visible {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.slei-saved-message span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-ui);
+}
+
+.slei-saved-message strong {
+  font-size: var(--text-sm);
+}
+
+.slei-saved-message p {
+  color: var(--color-text-primary);
+  display: -webkit-box;
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 .slei-channel-group-header {
   align-items: center;
   color: var(--color-text-secondary);
@@ -583,6 +648,12 @@ body,
   box-shadow: var(--shadow-sm);
 }
 
+.slei-message--focused {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-md);
+}
+
 .slei-message__meta {
   align-items: start;
   display: flex;
@@ -645,6 +716,16 @@ body,
   background: var(--color-surface-alt);
   border-color: var(--color-border);
   color: var(--color-text-primary);
+}
+
+.slei-message__save[aria-pressed="true"] {
+  background: var(--color-surface-alt);
+  border-color: var(--color-focus-ring);
+  color: var(--color-text-primary);
+}
+
+.slei-message__save[aria-pressed="true"] svg {
+  fill: currentColor;
 }
 
 .slei-message-status-square {

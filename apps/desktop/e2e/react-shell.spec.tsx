@@ -49,12 +49,12 @@ describe("Slei React desktop shell", () => {
 
     expect(html).toContain('<nav class="slei-rail" data-tauri-drag-region="deep"');
     expect(html).toContain('<div class="slei-window-controls" data-tauri-drag-region="deep"');
-    expect(html).toContain('<div class="slei-sidebar__header" data-tauri-drag-region="deep"');
     expect(html).toContain('<header class="slei-workspace-header" data-tauri-drag-region="deep"');
     expect(html).not.toContain('class="slei-rail__button" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-window-control slei-window-control--close" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-window-control slei-window-control--minimize" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-window-control slei-window-control--maximize" data-tauri-drag-region');
+    expect(html).not.toContain("slei-sidebar__header");
     expect(html).not.toContain('class="slei-timeline" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-composer" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-textarea" data-tauri-drag-region');

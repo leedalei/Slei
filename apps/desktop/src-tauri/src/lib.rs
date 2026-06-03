@@ -32,6 +32,9 @@ pub fn run() {
             commands::send_conversation_message_command,
             commands::upload_conversation_attachment_command,
             commands::resolve_permission_command,
+            commands::list_saved_messages_command,
+            commands::save_message_command,
+            commands::unsave_message_command,
             commands::refresh_runtime_status_command,
             commands::rename_local_node_command,
         ])
@@ -46,14 +49,16 @@ mod tests {
         create_agent, create_conversation_session, create_dm_conversation, daemon_status,
         format_frontend_crash_log, list_agent_skills, list_agents, list_conversation_messages,
         list_conversation_sessions, list_conversations, list_nodes, list_preferences,
+        list_saved_messages,
         open_agent_path, reconnect_events, remember_agent_fact, rename_local_node,
-        request_artifact_open, reset_conversation_runtime_session, send_conversation_message,
-        update_agent, update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ConversationAttachmentUploadRequest,
         ConversationMessageRequest, DaemonBroker, NotificationPreferencesView,
-        PreferencesUpdateRequest, RuntimeDescriptor,
+        PreferencesUpdateRequest, RuntimeDescriptor, SaveMessageRequest,
     };
     use std::fs;
     use std::sync::{Mutex, MutexGuard};
@@ -942,6 +947,51 @@ mod tests {
         let serialized = serde_json::to_string(&list_preferences(&broker)).unwrap();
         assert!(serialized.contains("secret-token") == false);
         assert!(serialized.contains("127.0.0.1") == false);
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn saved_messages_persist_across_broker_restarts_and_support_unsave() {
+        let _env_guard = test_env_lock();
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-saved-messages-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        std::env::set_var("SLEI_DATA_ROOT", &root);
+        let descriptor = RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        };
+        let broker = DaemonBroker::for_tests(descriptor.clone());
+
+        let saved = save_message(
+            &broker,
+            SaveMessageRequest {
+                message_id: "msg_1".to_string(),
+                source_id: "dev-team".to_string(),
+                source_kind: "channel".to_string(),
+                session_id: None,
+            },
+        )
+        .unwrap()
+        .saved_message;
+        assert_eq!(saved.id, "saved:channel:dev-team:msg_1");
+        assert_eq!(list_saved_messages(&broker).saved_messages.len(), 1);
+
+        let restarted = DaemonBroker::for_tests(descriptor);
+        let reloaded = list_saved_messages(&restarted);
+        assert_eq!(reloaded.saved_messages.len(), 1);
+        assert_eq!(reloaded.saved_messages[0].message_id, "msg_1");
+        let serialized = serde_json::to_string(&reloaded).unwrap();
+        assert!(!serialized.contains("secret-token"));
+        assert!(!serialized.contains("127.0.0.1"));
+
+        unsave_message(&restarted, "msg_1").unwrap();
+        assert!(list_saved_messages(&restarted).saved_messages.is_empty());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 }
