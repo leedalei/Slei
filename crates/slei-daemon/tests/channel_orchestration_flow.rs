@@ -887,6 +887,26 @@ async fn public_channel_message_api_uses_channel_orchestrator() {
         .is_empty());
 }
 
+#[tokio::test]
+async fn public_channel_message_api_maps_missing_channel_to_not_found() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/missing/messages",
+        Some("public-api-missing-channel"),
+        serde_json::json!({
+            "authorId": "human_lei",
+            "body": "实现一个 API 路由"
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     app_state_with_agent_handles(&[(agent_id, handle)]).await
 }

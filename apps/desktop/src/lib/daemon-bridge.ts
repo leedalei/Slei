@@ -1,4 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  ChannelCreateRequest as ProtocolChannelCreateRequest,
+  ChannelMemberReadiness as ProtocolChannelMemberReadiness,
+  ChannelMemberView as ProtocolChannelMemberView,
+} from "@slei/protocol-client";
 
 export type SanitizedDaemonStatus = {
   connected: boolean;
@@ -189,14 +194,9 @@ export type ChannelView = {
   isDefault?: boolean;
 };
 
-export type ChannelMemberReadiness = "joining" | "memory_syncing" | "ready" | "memory_failed" | "unavailable";
+export type ChannelMemberReadiness = ProtocolChannelMemberReadiness;
 
-export type ChannelMemberView = {
-  channelId: string;
-  agentId: string;
-  joinedAt: string;
-  readiness: ChannelMemberReadiness;
-};
+export type ChannelMemberView = ProtocolChannelMemberView;
 
 export type ChannelListReceipt = {
   channels: ChannelView[];
@@ -206,11 +206,7 @@ export type ChannelReceipt = {
   channel: ChannelView;
 };
 
-export type ChannelCreateRequest = {
-  name: string;
-  description?: string;
-  agentIds?: string[];
-};
+export type ChannelCreateRequest = ProtocolChannelCreateRequest;
 
 export type ChannelMemberListReceipt = {
   members: ChannelMemberView[];
@@ -377,6 +373,8 @@ export function createDaemonBridgeMock(input: {
   connected: boolean;
   nodes?: DesktopNodeView[];
   agents?: DesktopAgentView[];
+  channels?: ChannelView[];
+  channelMembers?: ChannelMemberView[];
 }): DaemonBridgeMock {
   let connected = input.connected;
   let nodes = input.nodes ?? [
@@ -394,8 +392,8 @@ export function createDaemonBridgeMock(input: {
     },
   ];
   let agents = input.agents ?? [];
-  let channels: ChannelView[] = [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
-  let channelMembers: ChannelMemberView[] = [];
+  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
+  let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessageCounter = 0;
   let conversations: ConversationView[] = [];
   let conversationSessions: ConversationSessionView[] = [];
@@ -520,16 +518,34 @@ export function createDaemonBridgeMock(input: {
       return { members: channelMembers.filter((member) => member.channelId === channelId) };
     },
     async sendChannelMessage(channelId, request) {
+      const channel = channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error("channel not found");
+      const body = request.body.trim();
+      if (!body) throw new Error("message body is required");
       channelMessageCounter += 1;
       const messageId = `msg_channel_${channelId}_${channelMessageCounter}`;
-      const member = channelMembers.find((candidate) => candidate.channelId === channelId);
-      const shouldCreateTask = !request.body.trim().startsWith("@");
+      const memberIds = channelMembers.filter((candidate) => candidate.channelId === channelId).map((member) => member.agentId);
+      const explicitMember = agents.find((agent) => memberIds.includes(agent.id) && body.toLowerCase().includes(agent.handle.toLowerCase()));
+      const readyMember = channelMembers.find((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
+      const isTaskCommand = containsAny(body, ["实现", "修复", "检查", "整理", "创建", "改一下", "写一个", "生成", "调查", "验证"]);
+      const isConsultation = containsAny(body, ["?", "？", "怎么看", "为什么"]);
+      const action = explicitMember
+        ? "request_agent_reply"
+        : isTaskCommand
+          ? readyMember
+            ? "create_task_and_assign"
+            : "needs_manual_assignment"
+          : isConsultation && readyMember
+            ? "request_agent_reply"
+            : "archive_only";
+      const assigneeAgentId = explicitMember?.id ?? (action === "create_task_and_assign" || action === "request_agent_reply" ? readyMember?.agentId : undefined);
+      const taskId = action === "create_task_and_assign" || action === "needs_manual_assignment" ? `task_${messageId}` : undefined;
       return {
         outcome: {
           messageId,
-          action: shouldCreateTask ? "create_task_and_assign" : "request_agent_reply",
-          taskId: shouldCreateTask ? `task_${messageId}` : undefined,
-          assigneeAgentId: member?.agentId,
+          action,
+          taskId,
+          assigneeAgentId,
         },
       };
     },
@@ -814,6 +830,10 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
     });
   }
   return skills;
+}
+
+function containsAny(body: string, markers: string[]) {
+  return markers.some((marker) => body.includes(marker));
 }
 
 export function createDaemonBridge(): DaemonBridge {

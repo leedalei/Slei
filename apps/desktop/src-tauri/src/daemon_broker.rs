@@ -1703,25 +1703,25 @@ impl DaemonBroker {
     }
 
     fn fetch_nodes_from_daemon(&self) -> Option<NodeListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/nodes", None)?;
+        let response = self.send_daemon_request("GET", "/v1/nodes", None, &[])?;
         serde_json::from_str::<NodeListReceipt>(&response).ok()
     }
 
     fn rename_local_node_in_daemon(&self, name: &str) -> Option<NodeRenameReceipt> {
         let payload = serde_json::json!({ "name": name }).to_string();
         let response =
-            self.send_daemon_request("PATCH", "/v1/nodes/local-node/name", Some(&payload))?;
+            self.send_daemon_request("PATCH", "/v1/nodes/local-node/name", Some(&payload), &[])?;
         serde_json::from_str::<NodeRenameReceipt>(&response).ok()
     }
 
     fn fetch_preferences_from_daemon(&self) -> Option<PreferencesReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/settings/preferences", None)?;
+        let response = self.send_daemon_request("GET", "/v1/settings/preferences", None, &[])?;
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
     }
 
     fn bootstrap_guide_agent_in_daemon(&self) -> Option<GuideBootstrapReceipt> {
         let response =
-            self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"))?;
+            self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"), &[])?;
         let mut receipt = serde_json::from_str::<GuideBootstrapReceipt>(&response).ok()?;
         if let Some(agent) = receipt.agent.as_mut() {
             if let Some(skills) = self.fetch_agent_skills_from_daemon(&agent.id) {
@@ -1732,13 +1732,13 @@ impl DaemonBroker {
     }
 
     fn fetch_channels_from_daemon(&self) -> Option<ChannelListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/channels", None)?;
+        let response = self.send_daemon_request("GET", "/v1/channels", None, &[])?;
         serde_json::from_str::<ChannelListReceipt>(&response).ok()
     }
 
     fn create_channel_in_daemon(&self, request: &ChannelCreateRequest) -> Option<ChannelReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/channels", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/channels", Some(&payload), &[])?;
         serde_json::from_str::<ChannelReceipt>(&response).ok()
     }
 
@@ -1747,7 +1747,7 @@ impl DaemonBroker {
         channel_id: &str,
     ) -> Option<ChannelMemberListReceipt> {
         let response =
-            self.send_daemon_request("GET", &format!("/v1/channels/{channel_id}/members"), None)?;
+            self.send_daemon_request("GET", &format!("/v1/channels/{channel_id}/members"), None, &[])?;
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
     }
 
@@ -1757,10 +1757,12 @@ impl DaemonBroker {
         request: &SendChannelMessageRequest,
     ) -> Option<SendChannelMessageReceipt> {
         let payload = serde_json::to_string(request).ok()?;
+        let idempotency_key = format!("desktop-channel-message-{}", monotonic_id());
         let response = self.send_daemon_request(
             "POST",
             &format!("/v1/channels/{channel_id}/messages"),
             Some(&payload),
+            &[("Idempotency-Key", idempotency_key.as_str())],
         )?;
         serde_json::from_str::<SendChannelMessageReceipt>(&response).ok()
     }
@@ -1770,6 +1772,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/interactive-cards/{card_id}/complete"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<InteractiveCardReceipt>(&response).ok()
     }
@@ -1780,12 +1783,12 @@ impl DaemonBroker {
     ) -> Option<PreferencesReceipt> {
         let payload = serde_json::to_string(request).ok()?;
         let response =
-            self.send_daemon_request("PATCH", "/v1/settings/preferences", Some(&payload))?;
+            self.send_daemon_request("PATCH", "/v1/settings/preferences", Some(&payload), &[])?;
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
     }
 
     fn fetch_agents_from_daemon(&self) -> Option<AgentListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/agents", None)?;
+        let response = self.send_daemon_request("GET", "/v1/agents", None, &[])?;
         let mut receipt = serde_json::from_str::<AgentListReceipt>(&response).ok()?;
         for agent in &mut receipt.agents {
             if agent.agent_kind.as_deref() == Some("guide") {
@@ -1799,13 +1802,13 @@ impl DaemonBroker {
 
     fn fetch_agent_skills_from_daemon(&self, agent_id: &str) -> Option<SkillListReceipt> {
         let response =
-            self.send_daemon_request("GET", &format!("/v1/agents/{agent_id}/skills"), None)?;
+            self.send_daemon_request("GET", &format!("/v1/agents/{agent_id}/skills"), None, &[])?;
         serde_json::from_str::<SkillListReceipt>(&response).ok()
     }
 
     fn create_agent_in_daemon(&self, request: &AgentCreateRequest) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/agents", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/agents", Some(&payload), &[])?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -1816,7 +1819,7 @@ impl DaemonBroker {
     ) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
         let response =
-            self.send_daemon_request("PATCH", &format!("/v1/agents/{agent_id}"), Some(&payload))?;
+            self.send_daemon_request("PATCH", &format!("/v1/agents/{agent_id}"), Some(&payload), &[])?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -1826,18 +1829,19 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/agents/{agent_id}/memory/remember"),
             Some(&payload),
+            &[],
         )?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
     fn fetch_conversations_from_daemon(&self) -> Option<ConversationListReceipt> {
-        let response = self.send_daemon_request("GET", "/v1/conversations", None)?;
+        let response = self.send_daemon_request("GET", "/v1/conversations", None, &[])?;
         serde_json::from_str::<ConversationListReceipt>(&response).ok()
     }
 
     fn create_dm_conversation_in_daemon(&self, agent_id: &str) -> Option<ConversationReceipt> {
         let payload = serde_json::json!({ "agentId": agent_id }).to_string();
-        let response = self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload), &[])?;
         serde_json::from_str::<ConversationReceipt>(&response).ok()
     }
 
@@ -1849,6 +1853,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/runtime-session/reset"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationReceipt>(&response).ok()
     }
@@ -1861,6 +1866,7 @@ impl DaemonBroker {
             "GET",
             &format!("/v1/conversations/{conversation_id}/messages"),
             None,
+            &[],
         )?;
         serde_json::from_str::<ConversationMessageListReceipt>(&response).ok()
     }
@@ -1873,6 +1879,7 @@ impl DaemonBroker {
             "GET",
             &format!("/v1/conversations/{conversation_id}/sessions"),
             None,
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionListReceipt>(&response).ok()
     }
@@ -1885,6 +1892,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/sessions"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionReceipt>(&response).ok()
     }
@@ -1898,6 +1906,7 @@ impl DaemonBroker {
             "PATCH",
             &format!("/v1/conversations/{conversation_id}/sessions/{session_id}/active"),
             Some("{}"),
+            &[],
         )?;
         serde_json::from_str::<ConversationSessionReceipt>(&response).ok()
     }
@@ -1912,6 +1921,7 @@ impl DaemonBroker {
             "POST",
             &format!("/v1/conversations/{conversation_id}/messages"),
             Some(&payload),
+            &[],
         )?;
         serde_json::from_str::<ConversationMessageReceipt>(&response).ok()
     }
@@ -1921,7 +1931,7 @@ impl DaemonBroker {
         request: &ConversationAttachmentUploadRequest,
     ) -> Option<ConversationAttachmentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/attachments", Some(&payload))?;
+        let response = self.send_daemon_request("POST", "/v1/attachments", Some(&payload), &[])?;
         serde_json::from_str::<ConversationAttachmentReceipt>(&response).ok()
     }
 
@@ -2216,7 +2226,13 @@ impl DaemonBroker {
         *self.preferences.lock().expect("preferences mutex poisoned") = preferences;
     }
 
-    fn send_daemon_request(&self, method: &str, path: &str, body: Option<&str>) -> Option<String> {
+    fn send_daemon_request(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<&str>,
+        extra_headers: &[(&str, &str)],
+    ) -> Option<String> {
         self.last_authorization_header
             .lock()
             .expect("authorization mutex poisoned")
@@ -2242,8 +2258,12 @@ impl DaemonBroker {
                 body.as_bytes().len()
             )
         };
+        let extra_headers = extra_headers
+            .iter()
+            .map(|(name, value)| format!("{name}: {value}\r\n"))
+            .collect::<String>();
         let request = format!(
-            "{method} {path} HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {}\r\n{content_headers}Connection: close\r\n\r\n{body}",
+            "{method} {path} HTTP/1.1\r\nHost: {host_header}\r\nAuthorization: Bearer {}\r\n{content_headers}{extra_headers}Connection: close\r\n\r\n{body}",
             self.descriptor.token
         );
         stream.write_all(request.as_bytes()).ok()?;

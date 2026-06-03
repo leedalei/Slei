@@ -5,7 +5,12 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::services::channel_orchestrator_service::SendChannelMessageInput;
+use crate::services::channel_orchestrator_service::{
+    ChannelOrchestratorError, SendChannelMessageInput,
+};
+use crate::services::channel_service::ChannelError;
+use crate::services::message_service::MessageError;
+use crate::services::task_service::TaskError;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -41,10 +46,27 @@ pub async fn send_channel_message(
         .await
     {
         Ok(outcome) => Json(json!({ "outcome": outcome })).into_response(),
-        Err(error) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": error.to_string() })),
-        )
-            .into_response(),
+        Err(error) => channel_message_error_response(error),
     }
+}
+
+fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
+    let status = match &error {
+        ChannelOrchestratorError::Channel(ChannelError::MissingChannel)
+        | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
+        | ChannelOrchestratorError::Message(MessageError::MessageNotFound)
+        | ChannelOrchestratorError::Task(TaskError::TaskNotFound) => StatusCode::NOT_FOUND,
+        ChannelOrchestratorError::Message(MessageError::InvalidMessage)
+        | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
+        | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
+        | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
+        | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
+        | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
+        ChannelOrchestratorError::Channel(ChannelError::Io(_))
+        | ChannelOrchestratorError::Channel(ChannelError::Json(_))
+        | ChannelOrchestratorError::InvalidDecisionId
+        | ChannelOrchestratorError::Json(_)
+        | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    (status, Json(json!({ "error": error.to_string() }))).into_response()
 }
