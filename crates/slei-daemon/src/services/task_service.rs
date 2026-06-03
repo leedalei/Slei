@@ -35,6 +35,7 @@ pub struct TaskRecord {
 pub struct TaskReply {
     pub id: String,
     pub sender_id: String,
+    pub role: Option<String>,
     pub body: String,
 }
 
@@ -189,6 +190,7 @@ impl TaskService {
         let reply = TaskReply {
             id: format!("reply_{}", Uuid::new_v4().simple()),
             sender_id: sender_id.to_string(),
+            role: role_for_sender(sender_id),
             body: body.to_string(),
         };
         state.reply_idempotency.insert(
@@ -344,6 +346,16 @@ impl TaskService {
             .values()
             .find(|task| task.source_message_id.as_deref() == Some(source_message_id))
             .cloned()
+    }
+}
+
+fn role_for_sender(sender_id: &str) -> Option<String> {
+    if sender_id.starts_with("agent") {
+        Some("agent".to_string())
+    } else if sender_id.starts_with("human") {
+        Some("human".to_string())
+    } else {
+        None
     }
 }
 

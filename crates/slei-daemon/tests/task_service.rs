@@ -14,14 +14,16 @@ async fn task_service_creates_task_root_and_keeps_replies_attached() {
         .unwrap();
     assert_eq!(task.id, retry.id);
 
-    service
+    let agent_reply = service
         .add_reply(&task.id, "agent_coda", "收到", "reply-1")
         .await
         .unwrap();
-    service
+    let human_reply = service
         .add_reply(&task.id, "human_lei", "补充一下", "reply-2")
         .await
         .unwrap();
+    assert_eq!(agent_reply.role.as_deref(), Some("agent"));
+    assert_eq!(human_reply.role.as_deref(), Some("human"));
 
     let thread = service.thread_context(&task.id).await.unwrap();
     assert_eq!(thread.reply_count, 2);

@@ -167,6 +167,84 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
 }
 
 #[tokio::test]
+async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-handoff",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_coda")
+        .await
+        .unwrap();
+    state.run_channel_join_memory_updates("dev").await.unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "agent_alice",
+            "msg_root",
+            "实现频道 Coordinator",
+            Some("agent_alice".to_string()),
+            "initial architecture assignment",
+            "task-handoff-root",
+        )
+        .await
+        .unwrap();
+
+    let reply = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "架构方案完成。@coda-win 请根据方案实现。",
+            "task-handoff-reply",
+        )
+        .await
+        .unwrap();
+    let retry = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "架构方案完成。@coda-win 请根据方案实现。",
+            "task-handoff-reply",
+        )
+        .await
+        .unwrap();
+    assert_eq!(reply.id, retry.id);
+
+    let inbox = state.agent_inbox().events_for_agent("agent_coda").await;
+    let handoffs = inbox
+        .iter()
+        .filter(|event| {
+            event.event_type == "task_handoff"
+                && event.task_id.as_deref() == Some(task.id.as_str())
+                && event.message_id == reply.id
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(handoffs.len(), 1);
+    assert_eq!(handoffs[0].sender_id.as_deref(), Some("agent_alice"));
+    assert!(handoffs[0]
+        .handoff_text
+        .as_deref()
+        .unwrap()
+        .contains("@coda-win"));
+}
+
+#[tokio::test]
 async fn command_message_retry_replays_outcome_without_duplicate_side_effects() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
@@ -640,39 +718,53 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
 }
 
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
+    app_state_with_agent_handles(&[(agent_id, handle)]).await
+}
+
+async fn app_state_with_agent_handles(agents: &[(&str, &str)]) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-channel-flow-{}", Uuid::new_v4()));
     std::fs::create_dir_all(root.join("agents")).unwrap();
-    let workspace_path = root.join("agents").join(agent_id);
-    std::fs::create_dir_all(workspace_path.join("docs")).unwrap();
-    let agent = ProductAgentRecord {
-        id: agent_id.to_string(),
-        name: "Alice".to_string(),
-        handle: handle.to_string(),
-        agent_kind: "agent".to_string(),
-        system_owned: false,
-        runtime_kind: "ClaudeCode".to_string(),
-        model: "Sonnet".to_string(),
-        node_id: "local-node".to_string(),
-        description: "工程协作 Agent".to_string(),
-        workspace_path: workspace_path.to_string_lossy().to_string(),
-        memory_path: workspace_path
-            .join("MEMORY.md")
-            .to_string_lossy()
-            .to_string(),
-        docs_path: workspace_path.join("docs").to_string_lossy().to_string(),
-        avatar_seed: "alice".to_string(),
-        runtime_thread: RuntimeThreadRecord {
-            runtime_kind: "ClaudeCode".to_string(),
-            status: "ready".to_string(),
-            created_at: "0".to_string(),
-        },
-        channel_ids: vec!["all".to_string()],
-        created_at: "0".to_string(),
-        updated_at: "0".to_string(),
-    };
+    let agents = agents
+        .iter()
+        .map(|(agent_id, handle)| {
+            let workspace_path = root.join("agents").join(agent_id);
+            std::fs::create_dir_all(workspace_path.join("docs")).unwrap();
+            std::fs::write(
+                workspace_path.join("MEMORY.md"),
+                format!("# {}\n\n## Active Context\n", agent_id),
+            )
+            .unwrap();
+            ProductAgentRecord {
+                id: (*agent_id).to_string(),
+                name: agent_id.trim_start_matches("agent_").to_string(),
+                handle: (*handle).to_string(),
+                agent_kind: "agent".to_string(),
+                system_owned: false,
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "工程协作 Agent".to_string(),
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                memory_path: workspace_path
+                    .join("MEMORY.md")
+                    .to_string_lossy()
+                    .to_string(),
+                docs_path: workspace_path.join("docs").to_string_lossy().to_string(),
+                avatar_seed: agent_id.trim_start_matches("agent_").to_string(),
+                runtime_thread: RuntimeThreadRecord {
+                    runtime_kind: "ClaudeCode".to_string(),
+                    status: "ready".to_string(),
+                    created_at: "0".to_string(),
+                },
+                channel_ids: vec!["all".to_string()],
+                created_at: "0".to_string(),
+                updated_at: "0".to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
     std::fs::write(
         root.join("agents/index.json"),
-        serde_json::to_string_pretty(&vec![agent]).unwrap(),
+        serde_json::to_string_pretty(&agents).unwrap(),
     )
     .unwrap();
     AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await

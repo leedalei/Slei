@@ -26,6 +26,10 @@ pub struct AgentInboxEvent {
     pub message_id: String,
     pub event_type: String,
     pub delivery_state: DeliveryState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handoff_text: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +82,43 @@ impl AgentInboxService {
         .await
     }
 
+    pub async fn create_task_handoff(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        reply_id: &str,
+        readiness: ChannelMemberReadiness,
+    ) -> AgentInboxEvent {
+        self.create_task_handoff_with_details(
+            agent_id, channel_id, task_id, reply_id, readiness, None, None,
+        )
+        .await
+    }
+
+    pub async fn create_task_handoff_with_details(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        reply_id: &str,
+        readiness: ChannelMemberReadiness,
+        sender_id: Option<&str>,
+        handoff_text: Option<&str>,
+    ) -> AgentInboxEvent {
+        self.push_with_details(
+            agent_id,
+            channel_id,
+            Some(task_id),
+            reply_id,
+            "task_handoff",
+            delivery_state_for_readiness(readiness),
+            sender_id,
+            handoff_text,
+        )
+        .await
+    }
+
     pub async fn events_for_agent(&self, agent_id: &str) -> Vec<AgentInboxEvent> {
         match self.store.agent_inbox_events_for_agent(agent_id).await {
             Ok(records) => records
@@ -97,6 +138,30 @@ impl AgentInboxService {
         event_type: &str,
         delivery_state: DeliveryState,
     ) -> AgentInboxEvent {
+        self.push_with_details(
+            agent_id,
+            channel_id,
+            task_id,
+            message_id,
+            event_type,
+            delivery_state,
+            None,
+            None,
+        )
+        .await
+    }
+
+    async fn push_with_details(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: Option<&str>,
+        message_id: &str,
+        event_type: &str,
+        delivery_state: DeliveryState,
+        sender_id: Option<&str>,
+        handoff_text: Option<&str>,
+    ) -> AgentInboxEvent {
         let id = Uuid::new_v4();
         let event = AgentInboxEvent {
             id: id.to_string(),
@@ -106,6 +171,8 @@ impl AgentInboxService {
             message_id: message_id.to_string(),
             event_type: event_type.to_string(),
             delivery_state,
+            sender_id: sender_id.map(ToString::to_string),
+            handoff_text: handoff_text.map(ToString::to_string),
         };
         let payload = serde_json::to_string(&event).expect("serialize agent inbox event");
         self.store

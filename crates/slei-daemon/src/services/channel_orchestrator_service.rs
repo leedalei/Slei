@@ -14,7 +14,7 @@ use crate::services::coordinator_service::{
 use crate::services::member_service::MemberService;
 use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
-use crate::services::task_service::{TaskError, TaskService};
+use crate::services::task_service::{TaskError, TaskReply, TaskService};
 
 #[derive(Clone, Debug)]
 pub struct SendChannelMessageInput {
@@ -236,6 +236,45 @@ impl ChannelOrchestratorService {
         Ok(outcome)
     }
 
+    pub async fn add_task_reply(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<TaskReply, ChannelOrchestratorError> {
+        let _send_guard = self.send_lock.lock().await;
+        let reply = self
+            .tasks
+            .add_reply(task_id, sender_id, body, idempotency_key)
+            .await?;
+        let task = self.tasks.task(task_id).await?;
+        let channel_members = self.channels.channel_members(&task.channel_id).await?;
+        let readiness_by_agent = channel_members
+            .iter()
+            .map(|member| (member.agent_id.clone(), member.readiness.clone()))
+            .collect::<HashMap<_, _>>();
+        let member_ids = readiness_by_agent.keys().cloned().collect::<HashSet<_>>();
+        let explicit_agent_ids = self.resolve_explicit_mentions(body, &member_ids).await;
+
+        for agent_id in explicit_agent_ids {
+            if let Some(readiness) = readiness_by_agent.get(&agent_id) {
+                self.create_task_handoff_once(
+                    &agent_id,
+                    &task.channel_id,
+                    &task.id,
+                    &reply.id,
+                    sender_id,
+                    body,
+                    readiness.clone(),
+                )
+                .await;
+            }
+        }
+
+        Ok(reply)
+    }
+
     async fn existing_decision_for_message(
         &self,
         message_id: &str,
@@ -331,6 +370,42 @@ impl ChannelOrchestratorService {
         }
     }
 
+    async fn create_task_handoff_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        reply_id: &str,
+        sender_id: &str,
+        handoff_text: &str,
+        readiness: ChannelMemberReadiness,
+    ) {
+        let already_created = self
+            .agent_inbox
+            .events_for_agent(agent_id)
+            .await
+            .into_iter()
+            .any(|event| {
+                event.event_type == "task_handoff"
+                    && event.channel_id == channel_id
+                    && event.task_id.as_deref() == Some(task_id)
+                    && event.message_id == reply_id
+            });
+        if !already_created {
+            self.agent_inbox
+                .create_task_handoff_with_details(
+                    agent_id,
+                    channel_id,
+                    task_id,
+                    reply_id,
+                    readiness,
+                    Some(sender_id),
+                    Some(handoff_text),
+                )
+                .await;
+        }
+    }
+
     async fn persist_routing_context(
         &self,
         decision_id: &str,
@@ -389,17 +464,27 @@ impl From<CoordinatorDecision> for ResolvedCoordinatorDecision {
 }
 
 fn explicit_handles(body: &str) -> Vec<String> {
-    body.split_whitespace()
-        .filter_map(|part| part.strip_prefix('@'))
-        .filter_map(|handle| {
-            let normalized = handle
-                .trim_matches(|character: char| {
-                    !(character.is_ascii_alphanumeric() || character == '-')
-                })
-                .to_lowercase();
-            (!normalized.is_empty()).then(|| format!("@{normalized}"))
-        })
-        .collect()
+    let mut handles = Vec::new();
+    let mut characters = body.char_indices().peekable();
+    while let Some((_, character)) = characters.next() {
+        if character != '@' {
+            continue;
+        }
+
+        let mut handle = String::from("@");
+        while let Some((_, next)) = characters.peek() {
+            if next.is_ascii_alphanumeric() || *next == '-' {
+                handle.push(next.to_ascii_lowercase());
+                characters.next();
+            } else {
+                break;
+            }
+        }
+        if handle.len() > 1 {
+            handles.push(handle);
+        }
+    }
+    handles
 }
 
 fn enum_storage_str<T>(value: &T) -> String
