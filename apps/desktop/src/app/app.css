@@ -71,7 +71,7 @@ body,
 .slei-rail {
   align-items: center;
   background: var(--color-text-primary);
-  border-right: var(--border-panel) solid var(--color-border);
+  box-shadow: var(--border-panel) 0 0 var(--color-border);
   color: var(--color-text-inverse);
   display: flex;
   flex-direction: column;
@@ -88,7 +88,7 @@ body,
   height: 48px;
   justify-content: center;
   overflow: hidden;
-  width: 72px;
+  width: 64px;
 }
 
 .slei-brand__mark {
@@ -116,7 +116,7 @@ body,
   justify-content: center;
   justify-items: center;
   padding: var(--gap-xs) 0;
-  width: 72px;
+  width: 64px;
 }
 
 .slei-rail__button[aria-current="page"] {

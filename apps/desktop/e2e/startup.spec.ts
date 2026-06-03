@@ -43,7 +43,7 @@ describe("desktop startup contract", () => {
     expect(windowConfig?.title).toBe("");
     expect(windowConfig?.decorations).toBe(true);
     expect(windowConfig?.titleBarStyle).toBe("Overlay");
-    expect(windowConfig?.trafficLightPosition).toEqual({ x: 18, y: 18 });
+    expect(windowConfig?.trafficLightPosition).toEqual({ x: 10, y: 18 });
     expect(windowConfig).not.toHaveProperty("transparent");
     expect(windowConfig).not.toHaveProperty("backgroundColor");
     expect(windowConfig).not.toHaveProperty("shadow");

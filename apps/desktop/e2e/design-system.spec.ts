@@ -19,7 +19,7 @@ describe("desktop design-system wiring", () => {
     expect(formControlsTsx).toContain("function SelectControl");
     expect(formControlsTsx.match(/type=\"checkbox\"/g)).toHaveLength(1);
     expect(formControlsTsx).toContain("function CheckboxControl");
-    expect(tokensCss).toContain("--rail-width: 88px;");
+    expect(tokensCss).toContain("--rail-width: 80px;");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
     expect(tokensCss).toContain("--radius-control: var(--radius-none);");
   });
@@ -41,8 +41,10 @@ describe("desktop design-system wiring", () => {
     const railLabelRule = appCss.match(/\.slei-rail__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
 
     expect(railRule).toContain("align-items: center");
+    expect(railRule).toContain("box-shadow: var(--border-panel) 0 0 var(--color-border)");
+    expect(railRule).not.toContain("border-right");
     expect(railRule).toContain("padding: var(--titlebar-height) var(--gap-sm) var(--gap-sm)");
-    expect(railButtonRule).toContain("width: 72px");
+    expect(railButtonRule).toContain("width: 64px");
     expect(railButtonRule).toContain("justify-items: center");
     expect(railLabelRule).toContain("font-size: 12px");
     expect(appCss).not.toContain(".slei-window-control");
@@ -57,7 +59,7 @@ describe("desktop design-system wiring", () => {
     expect(brandRule).toContain("border: 0");
     expect(brandRule).toContain("box-shadow: none");
     expect(brandRule).toContain("justify-content: center");
-    expect(brandRule).toContain("width: 72px");
+    expect(brandRule).toContain("width: 64px");
     expect(appCss).not.toContain(".slei-brand__logo");
     expect(brandMarkRule).toContain("font-weight: var(--weight-black)");
     expect(brandMarkRule).toContain("font-style: italic");

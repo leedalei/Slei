@@ -275,7 +275,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(buttonRule).toContain("justify-content: center");
     expect(buttonRule).toContain("justify-items: center");
     expect(buttonRule).toContain("display: grid");
-    expect(buttonRule).toContain("width: 72px");
+    expect(buttonRule).toContain("width: 64px");
     expect(labelRule).toContain("font-size: 12px");
     expect(buttonRule).not.toContain("flex-direction: column");
   });
