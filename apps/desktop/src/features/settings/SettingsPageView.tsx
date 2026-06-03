@@ -40,7 +40,7 @@ export function SettingsPage(input: {
 
   return (
     <section className="slei-settings-page" data-settings-panel={input.activePanel}>
-      <header className="slei-workspace-header" data-tauri-drag-region="deep">
+      <header className="slei-workspace-header">
         <div>
           <h1>{labels.panelTitle[input.activePanel]}</h1>
           <p>{labels.panelSubtitle[input.activePanel]}</p>

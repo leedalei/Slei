@@ -184,7 +184,7 @@
   --padding-empty: var(--primitive-space-12);
   --indent-message: var(--primitive-space-6);
   --indent-list: var(--primitive-space-5);
-  --rail-width: var(--primitive-space-16);
+  --rail-width: 88px;
   --sidebar-width: 240px;
   --detail-width: 320px;
   --composer-height: 96px;

@@ -4,10 +4,6 @@
   "description": "Slei Webview may only call narrow broker commands; daemon transport and OS actions stay in Rust.",
   "windows": ["main"],
   "permissions": [
-    "core:window:allow-close",
-    "core:window:allow-minimize",
-    "core:window:allow-start-dragging",
-    "core:window:allow-internal-toggle-maximize",
-    "core:window:allow-toggle-maximize"
+    "core:window:allow-start-dragging"
   ]
 }

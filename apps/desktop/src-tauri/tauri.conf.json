@@ -15,10 +15,12 @@
     },
     "windows": [
       {
-        "title": "Slei",
+        "title": "",
         "width": 1280,
         "height": 800,
-        "decorations": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 18, "y": 18 },
         "acceptFirstMouse": true
       }
     ]

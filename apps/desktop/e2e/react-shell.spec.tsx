@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { runWindowAction, SleiAppFrame } from "../src/app/SleiApp";
+import { SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/app/fixtures";
 
 describe("Slei React desktop shell", () => {
@@ -24,6 +24,14 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain("--slei-sidebar-width:240px");
     expect(html).toContain("--slei-font-size:15px");
     expect(html).toContain("slei-rail");
+    expect(html).toContain('<span aria-hidden="true" class="slei-brand__mark">L</span>');
+    expect(html).not.toContain("slei-brand__logo");
+    expect(html).toContain('<span class="slei-rail__label">聊天</span>');
+    expect(html).toContain('<span class="slei-rail__label">任务</span>');
+    expect(html).toContain('<span class="slei-rail__label">成员</span>');
+    expect(html).toContain("lucide-square-check-big");
+    expect(html).toContain("lucide-circle-user-round");
+    expect(html).not.toContain("lucide-list-todo");
     expect(html).toContain("slei-context-sidebar");
     expect(html).toContain("slei-workspace");
     expect(html).toContain("# all");
@@ -48,8 +56,8 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('<nav class="slei-rail" data-tauri-drag-region="deep"');
-    expect(html).toContain('<div class="slei-window-controls" data-tauri-drag-region="deep"');
-    expect(html).toContain('<header class="slei-workspace-header" data-tauri-drag-region="deep"');
+    expect(html).not.toContain("slei-window-controls");
+    expect(html).not.toContain('<header class="slei-workspace-header" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-rail__button" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-window-control slei-window-control--close" data-tauri-drag-region');
     expect(html).not.toContain('class="slei-window-control slei-window-control--minimize" data-tauri-drag-region');
@@ -60,7 +68,7 @@ describe("Slei React desktop shell", () => {
     expect(html).not.toContain('class="slei-textarea" data-tauri-drag-region');
   });
 
-  it("renders sidebar window controls on every shared sidebar page", () => {
+  it("uses native window controls instead of rendering custom sidebar controls", () => {
     const data = createSleiFixtures();
     const views = ["chat", "search", "tasks", "members", "computers", "settings"] as const;
 
@@ -80,14 +88,14 @@ describe("Slei React desktop shell", () => {
       );
 
       expect(html).toContain(`data-active-view="${activeView}"`);
-      expect(html).toContain('class="slei-window-controls" data-tauri-drag-region="deep"');
-      expect(html).toContain('aria-label="关闭窗口"');
-      expect(html).toContain('aria-label="最小化窗口"');
-      expect(html).toContain('aria-label="最大化窗口"');
+      expect(html).not.toContain("slei-window-controls");
+      expect(html).not.toContain('aria-label="关闭窗口"');
+      expect(html).not.toContain('aria-label="最小化窗口"');
+      expect(html).not.toContain('aria-label="最大化窗口"');
     }
   });
 
-  it("localizes sidebar window control labels in English", () => {
+  it("does not duplicate native window controls in English", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -102,12 +110,12 @@ describe("Slei React desktop shell", () => {
       />,
     );
 
-    expect(html).toContain('aria-label="Close window"');
-    expect(html).toContain('aria-label="Minimize window"');
-    expect(html).toContain('aria-label="Maximize window"');
+    expect(html).not.toContain('aria-label="Close window"');
+    expect(html).not.toContain('aria-label="Minimize window"');
+    expect(html).not.toContain('aria-label="Maximize window"');
   });
 
-  it("orders window controls as minimize maximize close and renders the close confirmation dialog", () => {
+  it("does not render the custom close confirmation for native window controls", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -119,32 +127,15 @@ describe("Slei React desktop shell", () => {
           nodes: createSleiFixtures().nodes,
         }}
         data={createSleiFixtures()}
-        initialWindowCloseConfirmOpen
       />,
     );
 
-    expect(html.indexOf('aria-label="最小化窗口"')).toBeLessThan(html.indexOf('aria-label="最大化窗口"'));
-    expect(html.indexOf('aria-label="最大化窗口"')).toBeLessThan(html.indexOf('aria-label="关闭窗口"'));
-    expect(html).toContain('class="slei-dialog slei-window-close-confirm"');
-    expect(html).toContain("确定要关闭窗口吗？");
+    expect(html).not.toContain('class="slei-dialog slei-window-close-confirm"');
+    expect(html).not.toContain("确定要关闭窗口吗？");
   });
 
   it("does not render attention badges inside shell modals", () => {
     const data = createSleiFixtures();
-    const closeHtml = renderToStaticMarkup(
-      <SleiAppFrame
-        activeView="chat"
-        locale="zh-CN"
-        runtimeSetup={{
-          loading: false,
-          error: undefined,
-          hasClaudeRuntimeReady: true,
-          nodes: data.nodes,
-        }}
-        data={data}
-        initialWindowCloseConfirmOpen
-      />,
-    );
     const guideHtml = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -160,32 +151,7 @@ describe("Slei React desktop shell", () => {
       />,
     );
 
-    expect(closeHtml).not.toContain("slei-badge--attention");
     expect(guideHtml).not.toContain("slei-badge--attention");
-  });
-
-  it("runs the selected Tauri window action", () => {
-    const calls: string[] = [];
-    const currentWindow = {
-      close: () => {
-        calls.push("close");
-        return Promise.resolve();
-      },
-      minimize: () => {
-        calls.push("minimize");
-        return Promise.resolve();
-      },
-      toggleMaximize: () => {
-        calls.push("toggleMaximize");
-        return Promise.resolve();
-      },
-    };
-
-    runWindowAction({ action: "minimize", currentWindow });
-    runWindowAction({ action: "toggleMaximize", currentWindow });
-    runWindowAction({ action: "close", currentWindow });
-
-    expect(calls).toEqual(["minimize", "toggleMaximize", "close"]);
   });
 
   it("uses the accent button color for the composer send action", () => {

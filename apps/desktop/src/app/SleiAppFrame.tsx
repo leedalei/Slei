@@ -1,5 +1,4 @@
 import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ArrowDown,
   ArrowUpDown,
@@ -16,7 +15,6 @@ import {
   History,
   Image as ImageIcon,
   Info,
-  ListTodo,
   MessageCircle,
   MessageSquare,
   Monitor,
@@ -68,12 +66,11 @@ import {
   type SettingsPanel,
   type UserProfile,
 } from "./model";
-import sleiSquareLogo from "../../src-tauri/icons/Square44x44Logo.png";
 
 const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [
   { id: "chat", icon: MessageCircle },
-  { id: "tasks", icon: ListTodo },
-  { id: "members", icon: AtSign },
+  { id: "tasks", icon: CheckSquare },
+  { id: "members", icon: CircleUserRound },
   { id: "computers", icon: Monitor },
   { id: "settings", icon: Settings },
 ];
@@ -93,7 +90,6 @@ export function SleiAppFrame(input: {
   initialSavedPanelOpen?: boolean;
   initialAgentCreateModalOpen?: boolean;
   initialCreateChannelModalOpen?: boolean;
-  initialWindowCloseConfirmOpen?: boolean;
   guideBootstrapping?: boolean;
   initialSettingsPanel?: SettingsPanel;
   initialSearchFilters?: ChatSearchFilters;
@@ -169,7 +165,7 @@ export function SleiAppFrame(input: {
     <div className="slei-shell" data-active-view={input.activeView} data-theme={appearance.theme} style={shellStyle}>
       <nav className="slei-rail" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
-          <img alt="Slei" className="slei-brand__logo" src={sleiSquareLogo} />
+          <span aria-hidden="true" className="slei-brand__mark">L</span>
         </div>
         {navItems.map((item) => (
           <button
@@ -183,12 +179,12 @@ export function SleiAppFrame(input: {
             type="button"
           >
             <item.icon aria-hidden="true" size={20} strokeWidth={2.8} />
+            <span className="slei-rail__label">{messages.shell.nav[item.id]}</span>
           </button>
         ))}
       </nav>
 
       <aside className="slei-context-sidebar">
-        <WindowControls initialCloseConfirmOpen={input.initialWindowCloseConfirmOpen} messages={messages} />
         {input.activeView === "chat" || input.activeView === "search" ? (
           <ChannelList
             activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
@@ -294,98 +290,6 @@ export function SleiAppFrame(input: {
           </section>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-export type WindowAction = "close" | "minimize" | "toggleMaximize";
-
-type DesktopWindowControlsHandle = {
-  close: () => Promise<void>;
-  minimize: () => Promise<void>;
-  toggleMaximize: () => Promise<void>;
-};
-
-export function runWindowAction(input: { action: WindowAction; currentWindow?: DesktopWindowControlsHandle }) {
-  if (!input.currentWindow) return;
-
-  const operation =
-    input.action === "close"
-      ? input.currentWindow.close()
-      : input.action === "minimize"
-        ? input.currentWindow.minimize()
-        : input.currentWindow.toggleMaximize();
-  void operation.catch(() => undefined);
-}
-
-function WindowControls({ initialCloseConfirmOpen, messages }: { initialCloseConfirmOpen?: boolean; messages: DesktopMessages }) {
-  const [closeConfirmOpen, setCloseConfirmOpen] = useState(initialCloseConfirmOpen ?? false);
-
-  function runTauriWindowAction(action: WindowAction) {
-    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
-    runWindowAction({
-      action,
-      currentWindow: getCurrentWindow(),
-    });
-  }
-
-  return (
-    <>
-      <div className="slei-window-controls" data-tauri-drag-region="deep">
-        <button
-          aria-label={messages.common.minimizeWindow}
-          className="slei-window-control slei-window-control--minimize"
-          onClick={() => runTauriWindowAction("minimize")}
-          title={messages.common.minimizeWindow}
-          type="button"
-        >
-          <span aria-hidden="true" className="slei-window-control__glyph" />
-        </button>
-        <button
-          aria-label={messages.common.maximizeWindow}
-          className="slei-window-control slei-window-control--maximize"
-          onClick={() => runTauriWindowAction("toggleMaximize")}
-          title={messages.common.maximizeWindow}
-          type="button"
-        >
-          <span aria-hidden="true" className="slei-window-control__glyph" />
-        </button>
-        <button
-          aria-label={messages.common.closeWindow}
-          className="slei-window-control slei-window-control--close"
-          onClick={() => setCloseConfirmOpen(true)}
-          title={messages.common.closeWindow}
-          type="button"
-        >
-          <span aria-hidden="true" className="slei-window-control__glyph" />
-        </button>
-      </div>
-      {closeConfirmOpen ? (
-        <WindowCloseConfirmModal
-          messages={messages}
-          onCancel={() => setCloseConfirmOpen(false)}
-          onConfirm={() => {
-            setCloseConfirmOpen(false);
-            runTauriWindowAction("close");
-          }}
-        />
-      ) : null}
-    </>
-  );
-}
-
-function WindowCloseConfirmModal(input: { messages: DesktopMessages; onCancel: () => void; onConfirm: () => void }) {
-  return (
-    <div className="slei-modal-backdrop" role="presentation">
-      <section aria-modal="true" className="slei-dialog slei-window-close-confirm" role="dialog">
-        <header>
-          <h2>{input.messages.common.confirmCloseWindow}</h2>
-        </header>
-        <div className="slei-modal-actions">
-          <button className="slei-button" onClick={input.onCancel} type="button">{input.messages.common.cancel}</button>
-          <button className="slei-button slei-button--accent" onClick={input.onConfirm} type="button">{input.messages.common.closeWindow}</button>
-        </div>
-      </section>
     </div>
   );
 }

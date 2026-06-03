@@ -844,5 +844,4 @@ function hasReadyClaudeRuntime(nodes: DesktopNodeView[]) {
   );
 }
 
-export { SleiAppFrame, runWindowAction } from "./SleiAppFrame";
-export type { WindowAction } from "./SleiAppFrame";
+export { SleiAppFrame } from "./SleiAppFrame";

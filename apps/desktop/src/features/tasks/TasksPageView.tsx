@@ -20,7 +20,7 @@ export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activ
 
   return (
     <section className="slei-tasks-page">
-      <header className="slei-workspace-header" data-tauri-drag-region="deep">
+      <header className="slei-workspace-header">
         <div>
           <h1>{messages.tasks.title}</h1>
           <p>{messages.tasks.description}</p>

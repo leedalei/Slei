@@ -27,7 +27,7 @@ export function SearchPage({ data, initialFilters, messages, onResultSelect }: {
 
   return (
     <section className="slei-search-page">
-      <header className="slei-workspace-header" data-tauri-drag-region="deep">
+      <header className="slei-workspace-header">
         <div>
           <h1><Search aria-hidden="true" size={22} />{messages.search.title}</h1>
           <p>{messages.search.description}</p>

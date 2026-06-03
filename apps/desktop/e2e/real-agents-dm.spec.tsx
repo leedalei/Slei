@@ -115,6 +115,7 @@ describe("real agent members and direct messages", () => {
         runtimeSetup={readyRuntime}
       />,
     );
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(html).toContain("私聊 1");
     expect(html).toContain("Coda");
@@ -122,6 +123,8 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("<strong>Coda</strong>");
     expect(html).toContain("真实创建的开发 Agent。");
     expect(html).not.toContain("<small>@coda</small>");
+    expect(css).toMatch(/\.slei-channel__dm-copy strong\s*\{[\s\S]*?font-weight: var\(--weight-bold\);/);
+    expect(css).toMatch(/\.slei-channel__dm-copy small\s*\{[\s\S]*?font-weight: var\(--weight-normal\);/);
   });
 
   it("highlights only the selected direct message while a dm is active", () => {

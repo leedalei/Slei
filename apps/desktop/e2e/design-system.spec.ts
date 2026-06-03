@@ -19,7 +19,7 @@ describe("desktop design-system wiring", () => {
     expect(formControlsTsx).toContain("function SelectControl");
     expect(formControlsTsx.match(/type=\"checkbox\"/g)).toHaveLength(1);
     expect(formControlsTsx).toContain("function CheckboxControl");
-    expect(tokensCss).toContain("--rail-width: var(--primitive-space-16);");
+    expect(tokensCss).toContain("--rail-width: 88px;");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
     expect(tokensCss).toContain("--radius-control: var(--radius-none);");
   });
@@ -34,18 +34,32 @@ describe("desktop design-system wiring", () => {
     expect(appCss).toContain("border-radius: var(--scrollbar-radius)");
   });
 
-  it("keeps custom window controls compact and visually quiet", () => {
+  it("reserves overlay titlebar space inside the left rail", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
-    const windowControlRule = appCss.match(/\.slei-window-control\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const railRule = appCss.match(/\.slei-rail\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const railButtonRule = appCss.match(/\.slei-rail__button\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const railLabelRule = appCss.match(/\.slei-rail__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
 
-    expect(appCss).toContain(".slei-window-control__glyph");
-    expect(windowControlRule).toContain("height: 22px");
-    expect(windowControlRule).toContain("width: 22px");
-    expect(windowControlRule).toContain("background: transparent");
-    expect(windowControlRule).toContain("border: 0");
-    expect(windowControlRule).not.toContain("box-shadow");
-    expect(appCss).not.toContain(".slei-window-control--close::before {\n  background: var(--color-danger);");
-    expect(appCss).not.toContain(".slei-window-control--minimize::before {\n  background: var(--color-warning);");
-    expect(appCss).not.toContain(".slei-window-control--maximize::before {\n  background: var(--color-success);");
+    expect(railRule).toContain("align-items: center");
+    expect(railRule).toContain("padding: var(--titlebar-height) var(--gap-sm) var(--gap-sm)");
+    expect(railButtonRule).toContain("width: 72px");
+    expect(railButtonRule).toContain("justify-items: center");
+    expect(railLabelRule).toContain("font-size: 12px");
+    expect(appCss).not.toContain(".slei-window-control");
+  });
+
+  it("renders the rail brand mark as text without an image tile", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const brandRule = appCss.match(/\.slei-brand\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const brandMarkRule = appCss.match(/\.slei-brand__mark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(brandRule).toContain("background: transparent");
+    expect(brandRule).toContain("border: 0");
+    expect(brandRule).toContain("box-shadow: none");
+    expect(brandRule).toContain("justify-content: center");
+    expect(brandRule).toContain("width: 72px");
+    expect(appCss).not.toContain(".slei-brand__logo");
+    expect(brandMarkRule).toContain("font-weight: var(--weight-black)");
+    expect(brandMarkRule).toContain("font-style: italic");
   });
 });

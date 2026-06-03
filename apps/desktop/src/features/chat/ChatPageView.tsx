@@ -262,7 +262,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   return (
     <section className="slei-chat-page">
       <Toast message={toastMessage} />
-      <header className="slei-workspace-header" data-tauri-drag-region="deep">
+      <header className="slei-workspace-header">
         <div>
           <h1 aria-label={detailAriaLabel}>{dmMember ? <MessageCircle aria-hidden="true" size={22} /> : <Hash aria-hidden="true" size={22} />}<span>{detailTitle}</span></h1>
           <p>{detailSubtitle}</p>

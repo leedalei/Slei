@@ -69,33 +69,37 @@ body,
 }
 
 .slei-rail {
-  align-items: stretch;
+  align-items: center;
   background: var(--color-text-primary);
   border-right: var(--border-panel) solid var(--color-border);
   color: var(--color-text-inverse);
   display: flex;
   flex-direction: column;
   gap: var(--gap-sm);
-  padding: var(--gap-sm);
+  padding: var(--titlebar-height) var(--gap-sm) var(--gap-sm);
 }
 
 .slei-brand {
   align-items: center;
-  background: var(--color-surface);
-  border: var(--border-card) solid var(--color-border);
-  box-shadow: var(--shadow-sm);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   display: flex;
   height: 48px;
   justify-content: center;
   overflow: hidden;
-  width: 48px;
+  width: 72px;
 }
 
-.slei-brand__logo {
+.slei-brand__mark {
+  color: var(--color-accent);
   display: block;
-  height: 100%;
-  object-fit: contain;
-  width: 100%;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 40px;
+  font-style: italic;
+  font-weight: var(--weight-black);
+  line-height: 1;
+  text-shadow: 2px 2px 0 var(--color-text-inverse);
 }
 
 .slei-rail__button {
@@ -105,11 +109,14 @@ body,
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-xs);
   color: var(--color-text-primary);
-  display: flex;
-  height: 48px;
+  display: grid;
+  gap: 4px;
+  grid-template-rows: auto auto;
+  height: 58px;
   justify-content: center;
-  padding: 0;
-  width: 48px;
+  justify-items: center;
+  padding: var(--gap-xs) 0;
+  width: 72px;
 }
 
 .slei-rail__button[aria-current="page"] {
@@ -117,9 +124,15 @@ body,
   box-shadow: var(--shadow-lg);
 }
 
-.slei-rail__button span {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-black);
+.slei-rail__label {
+  display: block;
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slei-rail__button svg {
@@ -133,87 +146,6 @@ body,
   flex-direction: column;
   min-width: 0;
   overflow: auto;
-}
-
-.slei-window-controls {
-  align-items: center;
-  border-bottom: var(--border-card) solid var(--color-border);
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--gap-sm);
-  min-height: 44px;
-  padding: 0 var(--padding-panel);
-}
-
-.slei-window-control {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  display: inline-flex;
-  height: 22px;
-  justify-content: center;
-  padding: 0;
-  transition:
-    background var(--duration-interaction) var(--ease-ui),
-    color var(--duration-interaction) var(--ease-ui);
-  width: 22px;
-}
-
-.slei-window-control:hover,
-.slei-window-control:focus-visible {
-  background: var(--color-accent-subtle);
-}
-
-.slei-window-control:focus-visible {
-  outline: var(--border-card) solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
-.slei-window-control__glyph {
-  display: block;
-  height: 12px;
-  position: relative;
-  width: 12px;
-}
-
-.slei-window-control--close .slei-window-control__glyph::before,
-.slei-window-control--close .slei-window-control__glyph::after {
-  background: currentColor;
-  content: "";
-  height: var(--border-card);
-  left: 1px;
-  position: absolute;
-  top: 5px;
-  width: 10px;
-}
-
-.slei-window-control--close .slei-window-control__glyph::before {
-  transform: rotate(45deg);
-}
-
-.slei-window-control--close .slei-window-control__glyph::after {
-  transform: rotate(-45deg);
-}
-
-.slei-window-control--minimize .slei-window-control__glyph::before {
-  background: currentColor;
-  content: "";
-  height: var(--border-card);
-  left: 1px;
-  position: absolute;
-  top: 6px;
-  width: 10px;
-}
-
-.slei-window-control--maximize .slei-window-control__glyph::before {
-  border: var(--border-card) solid currentColor;
-  box-sizing: border-box;
-  content: "";
-  display: block;
-  height: 10px;
-  width: 10px;
 }
 
 .slei-resize-handle {
@@ -457,6 +389,7 @@ body,
   color: var(--color-text-secondary);
   display: -webkit-box;
   font-size: 12px;
+  font-weight: var(--weight-normal);
   line-height: 1.35;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -2346,24 +2279,6 @@ body,
   max-width: 520px;
   padding: var(--gap-xl);
   width: min(100%, 520px);
-}
-
-.slei-window-close-confirm {
-  display: grid;
-  gap: var(--gap-lg);
-  max-width: 360px;
-  padding: var(--gap-xl);
-  width: min(100%, 360px);
-}
-
-.slei-window-close-confirm header {
-  display: grid;
-  gap: var(--gap-md);
-}
-
-.slei-window-close-confirm h2 {
-  font-size: var(--text-xl);
-  margin: 0;
 }
 
 .slei-channel-modal {

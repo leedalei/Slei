@@ -230,14 +230,17 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("[]");
   });
 
-  it("centers far-left rail lucide icons in system-style buttons", () => {
+  it("centers far-left rail menu items with icon labels", () => {
     const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const buttonRule = css.match(/\.slei-rail__button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const labelRule = css.match(/\.slei-rail__label\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
 
     expect(buttonRule).toContain("align-items: center");
     expect(buttonRule).toContain("justify-content: center");
-    expect(buttonRule).toContain("height: 48px");
-    expect(buttonRule).toContain("width: 48px");
+    expect(buttonRule).toContain("justify-items: center");
+    expect(buttonRule).toContain("display: grid");
+    expect(buttonRule).toContain("width: 72px");
+    expect(labelRule).toContain("font-size: 12px");
     expect(buttonRule).not.toContain("flex-direction: column");
   });
 });

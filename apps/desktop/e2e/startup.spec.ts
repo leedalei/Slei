@@ -20,7 +20,7 @@ describe("desktop startup contract", () => {
     expect(indexHtml).toContain("/src/web.ts");
   });
 
-  it("uses a frameless opaque Tauri window without native operation controls", async () => {
+  it("uses native macOS overlay titlebar controls integrated with the app shell", async () => {
     const tauriConfig = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
     ) as {
@@ -31,13 +31,19 @@ describe("desktop startup contract", () => {
           backgroundColor?: string;
           decorations?: boolean;
           shadow?: boolean;
+          title?: string;
+          titleBarStyle?: string;
+          trafficLightPosition?: { x?: number; y?: number };
           transparent?: boolean;
         }>;
       };
     };
     const windowConfig = tauriConfig.app?.windows?.[0];
 
-    expect(windowConfig?.decorations).toBe(false);
+    expect(windowConfig?.title).toBe("");
+    expect(windowConfig?.decorations).toBe(true);
+    expect(windowConfig?.titleBarStyle).toBe("Overlay");
+    expect(windowConfig?.trafficLightPosition).toEqual({ x: 18, y: 18 });
     expect(windowConfig).not.toHaveProperty("transparent");
     expect(windowConfig).not.toHaveProperty("backgroundColor");
     expect(windowConfig).not.toHaveProperty("shadow");
@@ -45,15 +51,11 @@ describe("desktop startup contract", () => {
     expect(tauriConfig.app).not.toHaveProperty("macOSPrivateApi");
   });
 
-  it("allows only the window permissions needed by custom chrome controls", async () => {
+  it("allows only the window permission needed by overlay drag regions", async () => {
     const capability = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/capabilities/default.json"), "utf8"),
     ) as { permissions?: string[] };
 
-    expect(capability.permissions).toContain("core:window:allow-start-dragging");
-    expect(capability.permissions).toContain("core:window:allow-internal-toggle-maximize");
-    expect(capability.permissions).toContain("core:window:allow-close");
-    expect(capability.permissions).toContain("core:window:allow-minimize");
-    expect(capability.permissions).toContain("core:window:allow-toggle-maximize");
+    expect(capability.permissions).toEqual(["core:window:allow-start-dragging"]);
   });
 });
