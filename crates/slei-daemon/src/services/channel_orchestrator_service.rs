@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 use serde::Serialize;
 use serde_json::json;
@@ -49,6 +50,7 @@ pub struct ChannelOrchestratorService {
     orchestration: OrchestrationStore,
     members: MemberService,
     outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
+    send_lock: Arc<AsyncMutex<()>>,
 }
 
 impl ChannelOrchestratorService {
@@ -70,6 +72,7 @@ impl ChannelOrchestratorService {
             orchestration,
             members,
             outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
+            send_lock: Arc::new(AsyncMutex::new(())),
         }
     }
 
@@ -77,6 +80,7 @@ impl ChannelOrchestratorService {
         &self,
         input: SendChannelMessageInput,
     ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
+        let _send_guard = self.send_lock.lock().await;
         if let Some(outcome) = self
             .outcome_idempotency
             .lock()
@@ -87,7 +91,27 @@ impl ChannelOrchestratorService {
             return Ok(outcome);
         }
 
-        let channel_members = self.channels.channel_members(&input.channel_id).await?;
+        let message = match self
+            .messages
+            .channel_message_for_idempotency(&input.idempotency_key)
+            .await
+        {
+            Some(message) => message,
+            None => {
+                self.channels.channel_members(&input.channel_id).await?;
+                self.messages
+                    .create_human_channel_message(
+                        &input.channel_id,
+                        &input.author_id,
+                        &input.body,
+                        &input.idempotency_key,
+                    )
+                    .await?
+            }
+        };
+        let channel_id = message.channel_id.clone();
+        let author_id = message.author_id.clone();
+        let channel_members = self.channels.channel_members(&channel_id).await?;
         let readiness_by_agent = channel_members
             .iter()
             .map(|member| (member.agent_id.clone(), member.readiness.clone()))
@@ -98,16 +122,6 @@ impl ChannelOrchestratorService {
             .filter(|member| member.readiness == ChannelMemberReadiness::Ready)
             .map(|member| member.agent_id.clone())
             .collect::<Vec<_>>();
-
-        let message = self
-            .messages
-            .create_human_channel_message(
-                &input.channel_id,
-                &input.author_id,
-                &input.body,
-                &input.idempotency_key,
-            )
-            .await?;
 
         if message.deleted || message.kind != MessageKind::Human {
             return Err(ChannelOrchestratorError::InactiveIdempotentMessage {
@@ -127,7 +141,7 @@ impl ChannelOrchestratorService {
             None => self
                 .coordinator
                 .decide(CoordinatorInput {
-                    channel_id: input.channel_id.clone(),
+                    channel_id: channel_id.clone(),
                     message_id: message.id.clone(),
                     body: message_body.clone(),
                     explicit_agent_ids: explicit_agent_ids.clone(),
@@ -153,7 +167,7 @@ impl ChannelOrchestratorService {
                     if let Some(readiness) = readiness_by_agent.get(&agent_id) {
                         self.create_human_mention_once(
                             &agent_id,
-                            &input.channel_id,
+                            &channel_id,
                             &message.id,
                             readiness.clone(),
                         )
@@ -172,8 +186,8 @@ impl ChannelOrchestratorService {
                     None => {
                         self.tasks
                             .create_from_coordinator(
-                                &input.channel_id,
-                                &input.author_id,
+                                &channel_id,
+                                &author_id,
                                 &message.id,
                                 &message_body,
                                 assignee.clone(),
@@ -184,24 +198,14 @@ impl ChannelOrchestratorService {
                     }
                 };
                 self.messages
-                    .create_task_card_message(&input.channel_id, &task.id, &message.id)
+                    .create_task_card_message(&channel_id, &task.id, &message.id)
                     .await?;
                 if let Some(agent_id) = assignee.as_deref() {
-                    self.create_task_assignment_once(
-                        agent_id,
-                        &input.channel_id,
-                        &task.id,
-                        &message.id,
-                    )
-                    .await;
+                    self.create_task_assignment_once(agent_id, &channel_id, &task.id, &message.id)
+                        .await;
                 } else if let Some(agent_id) = task.assignee_id.as_deref() {
-                    self.create_task_assignment_once(
-                        agent_id,
-                        &input.channel_id,
-                        &task.id,
-                        &message.id,
-                    )
-                    .await;
+                    self.create_task_assignment_once(agent_id, &channel_id, &task.id, &message.id)
+                        .await;
                 }
                 task_id = Some(task.id);
             }
@@ -211,7 +215,7 @@ impl ChannelOrchestratorService {
 
         self.persist_routing_context(
             &decision.id,
-            &input.channel_id,
+            &channel_id,
             &message.id,
             task_id.as_deref(),
             &decision.reason,

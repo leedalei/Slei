@@ -212,6 +212,18 @@ impl MessageService {
         Ok(message)
     }
 
+    pub async fn channel_message_for_idempotency(
+        &self,
+        idempotency_key: &str,
+    ) -> Option<MessageRecord> {
+        let state = self.inner.lock().expect("message state lock");
+        state
+            .channel_message_idempotency
+            .get(idempotency_key)
+            .and_then(|message_id| state.messages.get(message_id))
+            .cloned()
+    }
+
     pub async fn create_task_card_message(
         &self,
         channel_id: &str,

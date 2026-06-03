@@ -463,6 +463,182 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
         .is_empty());
 }
 
+#[tokio::test]
+async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    for channel in ["dev", "qa"] {
+        state
+            .channels()
+            .create_channel(
+                ChannelDraft {
+                    name: channel.to_string(),
+                    description: None,
+                    permission: PermissionPreset::Controlled,
+                },
+                &format!("create-{channel}"),
+            )
+            .await
+            .unwrap();
+        state
+            .channels()
+            .add_agent_to_channel(channel, "agent_alice")
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness(channel, "agent_alice", ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let idempotency_key = "send-command-mismatched-fields";
+    let original_body = "实现频道创建时选择 Agent 的功能";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", original_body, idempotency_key)
+        .await
+        .unwrap();
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "qa".to_string(),
+            author_id: "human_other".to_string(),
+            body: "实现一个不该被采用的新任务".to_string(),
+            idempotency_key: idempotency_key.to_string(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    let task = state
+        .tasks()
+        .task(outcome.task_id.as_deref().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(task.channel_id, "dev");
+    assert_eq!(task.creator_id, "human_lei");
+    assert_eq!(task.title, original_body);
+    assert_eq!(task.source_message_id.as_deref(), Some(message.id.as_str()));
+
+    let decisions = state
+        .orchestration()
+        .decisions_for_message_for_tests(&message.id)
+        .await;
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].channel_id, "dev");
+
+    let dev_cards = state
+        .channel_messages_for_tests("dev")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>();
+    let qa_cards = state
+        .channel_messages_for_tests("qa")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>();
+    assert_eq!(dev_cards.len(), 1);
+    assert!(qa_cards.is_empty());
+
+    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
+    assert_eq!(inbox.len(), 1);
+    assert_eq!(inbox[0].channel_id, "dev");
+    assert_eq!(inbox[0].message_id, message.id);
+
+    let packages = state
+        .orchestration()
+        .routing_context_packages_for_message_for_tests(&message.id)
+        .await;
+    assert_eq!(packages.len(), 1);
+    let payload: Value = serde_json::from_str(&packages[0].payload).unwrap();
+    assert_eq!(payload["channelSummaryRef"], "channels/dev/summary");
+}
+
+#[tokio::test]
+async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let input = SendChannelMessageInput {
+        channel_id: "dev".to_string(),
+        author_id: "human_lei".to_string(),
+        body: "实现频道创建时选择 Agent 的功能".to_string(),
+        idempotency_key: "send-command-concurrent".to_string(),
+    };
+
+    let (first, second) = tokio::join!(
+        state
+            .channel_orchestrator()
+            .send_channel_message(input.clone()),
+        state.channel_orchestrator().send_channel_message(input),
+    );
+    let first = first.unwrap();
+    let second = second.unwrap();
+
+    assert_eq!(first.message_id, second.message_id);
+    assert_eq!(first.task_id, second.task_id);
+    assert_eq!(first.action, second.action);
+    assert_eq!(first.assignee_agent_id, second.assignee_agent_id);
+
+    let task_id = first.task_id.as_deref().unwrap();
+    let task_cards = state
+        .channel_messages_for_tests("dev")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>();
+    assert_eq!(task_cards.len(), 1);
+
+    let matching_assignments = state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .into_iter()
+        .filter(|event| {
+            event.event_type == "task_assigned"
+                && event.message_id == first.message_id
+                && event.task_id.as_deref() == Some(task_id)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(matching_assignments.len(), 1);
+
+    let decisions = state
+        .orchestration()
+        .decisions_for_message_for_tests(&first.message_id)
+        .await;
+    assert_eq!(decisions.len(), 1);
+
+    let packages = state
+        .orchestration()
+        .routing_context_packages_for_message_for_tests(&first.message_id)
+        .await;
+    assert_eq!(packages.len(), 1);
+}
+
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-channel-flow-{}", Uuid::new_v4()));
     std::fs::create_dir_all(root.join("agents")).unwrap();
