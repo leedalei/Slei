@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -247,53 +247,19 @@ impl MemoryEventService {
     }
 
     async fn materialize_blocked_sections(&self, agent_id: &str) {
-        let cleanup_sources = self.cleanup_requested_sources().await;
-        if cleanup_sources.is_empty() {
-            return;
-        }
-
-        let completed_sections = self.cleanup_completed_sections(agent_id).await;
-        let events = self
-            .store
-            .memory_update_events_for_agent(agent_id)
-            .await
-            .expect("read memory update events for blocked materialization");
-
-        for event in events {
-            if event.event_type != MEMORY_DOCUMENT_SOURCE_RECORDED {
-                continue;
-            }
-
-            let Some(source_message_id) = event.source_message_id else {
-                continue;
-            };
-            if !cleanup_sources.contains(&source_message_id) {
-                continue;
-            }
-
-            let (Some(document_path), Some(document_section)) =
-                (event.document_path, event.document_section)
-            else {
-                continue;
-            };
-            if completed_sections.contains(&(
-                source_message_id.clone(),
-                document_path.clone(),
-                document_section.clone(),
-            )) {
-                continue;
-            }
-
+        for ((document_path, document_section), blocked) in
+            self.computed_section_blocked_states(agent_id).await
+        {
             self.store
                 .record_memory_document_state(
                     agent_id,
                     &document_path,
                     &document_section,
                     None,
-                    true,
+                    blocked,
                 )
                 .await
-                .expect("persist blocked memory document state");
+                .expect("persist materialized memory document state");
         }
     }
 
@@ -305,26 +271,6 @@ impl MemoryEventService {
             .into_iter()
             .filter(|event| event.event_type == MEMORY_CLEANUP_REQUESTED)
             .filter_map(|event| event.source_message_id)
-            .collect()
-    }
-
-    async fn cleanup_completed_sections(
-        &self,
-        agent_id: &str,
-    ) -> HashSet<(String, String, String)> {
-        self.store
-            .memory_update_events_for_agent(agent_id)
-            .await
-            .expect("read memory cleanup completion events")
-            .into_iter()
-            .filter(|event| event.event_type == MEMORY_CLEANUP_COMPLETED)
-            .filter_map(|event| {
-                Some((
-                    event.source_message_id?,
-                    event.document_path?,
-                    event.document_section?,
-                ))
-            })
             .collect()
     }
 
@@ -354,38 +300,63 @@ impl MemoryEventService {
         document_path: &str,
         document_section: &str,
     ) {
-        let blocked = self
-            .section_has_outstanding_requested_cleanup(agent_id, document_path, document_section)
-            .await;
+        let blocked = self.computed_section_blocked_states(agent_id).await;
+        let blocked = blocked
+            .get(&(document_path.to_string(), document_section.to_string()))
+            .copied()
+            .unwrap_or(false);
         self.store
             .record_memory_document_state(agent_id, document_path, document_section, None, blocked)
             .await
             .expect("persist memory document cleanup state");
     }
 
-    async fn section_has_outstanding_requested_cleanup(
+    async fn computed_section_blocked_states(
         &self,
         agent_id: &str,
-        document_path: &str,
-        document_section: &str,
-    ) -> bool {
+    ) -> HashMap<(String, String), bool> {
         let requested_sources = self.cleanup_requested_sources().await;
-        if requested_sources.is_empty() {
-            return false;
+        let events = self
+            .store
+            .memory_update_events_for_agent(agent_id)
+            .await
+            .expect("read memory update events for section state replay");
+        let mut active_sources = HashMap::new();
+        let mut known_sections = HashSet::new();
+
+        for event in events {
+            let (Some(source_message_id), Some(document_path), Some(document_section)) = (
+                event.source_message_id,
+                event.document_path,
+                event.document_section,
+            ) else {
+                continue;
+            };
+
+            if event.event_type != MEMORY_DOCUMENT_SOURCE_RECORDED
+                && event.event_type != MEMORY_CLEANUP_COMPLETED
+            {
+                continue;
+            }
+
+            known_sections.insert((document_path.clone(), document_section.clone()));
+            let key = (source_message_id.clone(), document_path, document_section);
+            let active = event.event_type == MEMORY_DOCUMENT_SOURCE_RECORDED
+                && requested_sources.contains(&source_message_id);
+            active_sources.insert(key, active);
         }
 
-        let completed_sections = self.cleanup_completed_sections(agent_id).await;
-        self.source_message_ids_for_section(agent_id, document_path, document_section)
-            .await
+        let mut section_states = known_sections
             .into_iter()
-            .any(|source_message_id| {
-                requested_sources.contains(&source_message_id)
-                    && !completed_sections.contains(&(
-                        source_message_id,
-                        document_path.to_string(),
-                        document_section.to_string(),
-                    ))
-            })
+            .map(|section| (section, false))
+            .collect::<HashMap<_, _>>();
+        for ((_source_message_id, document_path, document_section), active) in active_sources {
+            if active {
+                section_states.insert((document_path, document_section), true);
+            }
+        }
+
+        section_states
     }
 }
 

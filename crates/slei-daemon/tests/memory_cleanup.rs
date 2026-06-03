@@ -242,6 +242,80 @@ async fn recording_duplicate_or_additional_sources_preserves_blocked_section_sta
     );
 }
 
+#[tokio::test]
+async fn same_source_recorded_after_completion_requires_later_completion() {
+    let store = OrchestrationStore::for_tests().await;
+    let memory_events = MemoryEventService::new(store);
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted")
+        .await;
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+
+    assert!(memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted")
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+
+    assert!(memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn materialization_clears_stale_blocked_state_after_completion() {
+    let store = OrchestrationStore::for_tests().await;
+    let memory_events = MemoryEventService::new(store.clone());
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted")
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    store
+        .record_memory_document_state("agent_coda", "MEMORY.md", "Active Context", None, true)
+        .await
+        .expect("simulate stale blocked row after crash");
+
+    let restarted_memory_events = MemoryEventService::new(store);
+    assert!(restarted_memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+}
+
 fn active_context_ref() -> MemorySectionRef {
     MemorySectionRef {
         agent_id: "agent_coda".to_string(),
