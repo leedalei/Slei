@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -5,6 +6,18 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::services::orchestration_store::OrchestrationStore;
+
+const MEMORY_CLEANUP_COORDINATOR_AGENT_ID: &str = "__memory_cleanup__";
+const MEMORY_DOCUMENT_SOURCE_RECORDED: &str = "memory_document_source_recorded";
+const MEMORY_CLEANUP_REQUESTED: &str = "memory_cleanup_requested";
+const MEMORY_CLEANUP_COMPLETED: &str = "memory_cleanup_completed";
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MemorySectionRef {
+    pub agent_id: String,
+    pub document_path: String,
+    pub document_section: String,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +96,94 @@ impl MemoryEventService {
         .await
     }
 
+    pub async fn record_memory_document_source(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+        source_message_id: &str,
+    ) {
+        let id = Uuid::new_v4();
+        self.store
+            .record_memory_event(
+                id,
+                agent_id,
+                MEMORY_DOCUMENT_SOURCE_RECORDED,
+                Some(source_message_id),
+                Some(document_path),
+                Some(document_section),
+                "ready",
+            )
+            .await
+            .expect("persist memory document source event");
+        self.store
+            .record_memory_document_state(agent_id, document_path, document_section, None, false)
+            .await
+            .expect("persist memory document source state");
+    }
+
+    pub async fn request_cleanup_for_source_message(&self, source_message_id: &str) {
+        let id = Uuid::new_v4();
+        self.store
+            .record_memory_event(
+                id,
+                MEMORY_CLEANUP_COORDINATOR_AGENT_ID,
+                MEMORY_CLEANUP_REQUESTED,
+                Some(source_message_id),
+                None,
+                None,
+                "pending",
+            )
+            .await
+            .expect("persist memory cleanup request event");
+    }
+
+    pub async fn complete_cleanup(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+    ) {
+        let source_message_ids = self
+            .source_message_ids_for_section(agent_id, document_path, document_section)
+            .await;
+
+        for source_message_id in source_message_ids {
+            self.store
+                .record_memory_event(
+                    Uuid::new_v4(),
+                    agent_id,
+                    MEMORY_CLEANUP_COMPLETED,
+                    Some(&source_message_id),
+                    Some(document_path),
+                    Some(document_section),
+                    "ready",
+                )
+                .await
+                .expect("persist memory cleanup completion event");
+        }
+
+        self.store
+            .record_memory_document_state(agent_id, document_path, document_section, None, false)
+            .await
+            .expect("persist memory cleanup completion state");
+    }
+
+    pub async fn blocked_memory_sections(&self, agent_id: &str) -> Vec<MemorySectionRef> {
+        self.materialize_blocked_sections(agent_id).await;
+        self.store
+            .blocked_memory_sections(agent_id)
+            .await
+            .expect("read blocked memory sections")
+            .into_iter()
+            .map(|record| MemorySectionRef {
+                agent_id: record.agent_id,
+                document_path: record.document_path,
+                document_section: record.document_section,
+            })
+            .collect()
+    }
+
     pub async fn events_for_agent(&self, agent_id: &str) -> Vec<MemoryUpdateEvent> {
         match self.store.memory_update_events_for_agent(agent_id).await {
             Ok(events) => events
@@ -144,6 +245,108 @@ impl MemoryEventService {
         };
         self.cache.lock().await.push(event.clone());
         event
+    }
+
+    async fn materialize_blocked_sections(&self, agent_id: &str) {
+        let cleanup_sources = self.cleanup_requested_sources().await;
+        if cleanup_sources.is_empty() {
+            return;
+        }
+
+        let completed_sections = self.cleanup_completed_sections(agent_id).await;
+        let events = self
+            .store
+            .memory_update_events_for_agent(agent_id)
+            .await
+            .expect("read memory update events for blocked materialization");
+
+        for event in events {
+            if event.event_type != MEMORY_DOCUMENT_SOURCE_RECORDED {
+                continue;
+            }
+
+            let Some(source_message_id) = event.source_message_id else {
+                continue;
+            };
+            if !cleanup_sources.contains(&source_message_id) {
+                continue;
+            }
+
+            let (Some(document_path), Some(document_section)) =
+                (event.document_path, event.document_section)
+            else {
+                continue;
+            };
+            if completed_sections.contains(&(
+                source_message_id.clone(),
+                document_path.clone(),
+                document_section.clone(),
+            )) {
+                continue;
+            }
+
+            self.store
+                .record_memory_document_state(
+                    agent_id,
+                    &document_path,
+                    &document_section,
+                    None,
+                    true,
+                )
+                .await
+                .expect("persist blocked memory document state");
+        }
+    }
+
+    async fn cleanup_requested_sources(&self) -> HashSet<String> {
+        self.store
+            .memory_update_events_for_agent(MEMORY_CLEANUP_COORDINATOR_AGENT_ID)
+            .await
+            .expect("read memory cleanup request events")
+            .into_iter()
+            .filter(|event| event.event_type == MEMORY_CLEANUP_REQUESTED)
+            .filter_map(|event| event.source_message_id)
+            .collect()
+    }
+
+    async fn cleanup_completed_sections(
+        &self,
+        agent_id: &str,
+    ) -> HashSet<(String, String, String)> {
+        self.store
+            .memory_update_events_for_agent(agent_id)
+            .await
+            .expect("read memory cleanup completion events")
+            .into_iter()
+            .filter(|event| event.event_type == MEMORY_CLEANUP_COMPLETED)
+            .filter_map(|event| {
+                Some((
+                    event.source_message_id?,
+                    event.document_path?,
+                    event.document_section?,
+                ))
+            })
+            .collect()
+    }
+
+    async fn source_message_ids_for_section(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+    ) -> Vec<String> {
+        self.store
+            .memory_update_events_for_agent(agent_id)
+            .await
+            .expect("read memory document source events")
+            .into_iter()
+            .filter(|event| {
+                event.event_type == MEMORY_DOCUMENT_SOURCE_RECORDED
+                    && event.document_path.as_deref() == Some(document_path)
+                    && event.document_section.as_deref() == Some(document_section)
+            })
+            .filter_map(|event| event.source_message_id)
+            .collect()
     }
 }
 
