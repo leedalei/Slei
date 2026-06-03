@@ -1704,17 +1704,6 @@ body,
   width: 16px;
 }
 
-.slei-empty__pixel--mark {
-  background: var(--color-surface);
-  border: var(--border-subtle) solid var(--color-border);
-  border-radius: var(--radius-none);
-  bottom: -8px;
-  box-shadow: var(--shadow-xs);
-  height: 16px;
-  right: -8px;
-  width: 16px;
-}
-
 .slei-empty--noresult .slei-empty__pixel--mouth {
   bottom: 14px;
   height: 16px;
