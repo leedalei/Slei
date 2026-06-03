@@ -1,4 +1,7 @@
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
 use serde_json::Value;
+use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::agent_inbox_service::DeliveryState;
 use slei_daemon::services::channel_orchestrator_service::SendChannelMessageInput;
@@ -10,6 +13,7 @@ use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRec
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::services::task_service::TaskQuery;
 use slei_daemon::state::AppState;
+use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -831,6 +835,58 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
     assert_eq!(packages.len(), 1);
 }
 
+#[tokio::test]
+async fn public_channel_message_api_uses_channel_orchestrator() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-dev",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("api-dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("api-dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-dev/messages",
+        Some("public-api-send"),
+        serde_json::json!({
+            "authorId": "human_lei",
+            "body": "实现一个 API 路由"
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    assert_eq!(body["outcome"]["action"], "create_task_and_assign");
+    let task_id = body["outcome"]["taskId"].as_str().unwrap();
+    assert!(!task_id.is_empty());
+    assert!(!state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .is_empty());
+}
+
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     app_state_with_agent_handles(&[(agent_id, handle)]).await
 }
@@ -882,4 +938,31 @@ async fn app_state_with_agent_handles(agents: &[(&str, &str)]) -> AppState {
     )
     .unwrap();
     AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await
+}
+
+async fn post_json(
+    app: &axum::Router,
+    token: &AuthToken,
+    uri: &str,
+    idempotency_key: Option<&str>,
+    body: Value,
+) -> axum::response::Response {
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("authorization", token.authorization_header())
+        .header("content-type", "application/json");
+    if let Some(idempotency_key) = idempotency_key {
+        builder = builder.header("idempotency-key", idempotency_key);
+    }
+
+    app.clone()
+        .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn response_json(response: axum::response::Response) -> Value {
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&body).unwrap()
 }

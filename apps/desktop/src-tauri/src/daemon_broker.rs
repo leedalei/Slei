@@ -310,6 +310,7 @@ pub struct ChannelMemberView {
     pub channel_id: String,
     pub agent_id: String,
     pub joined_at: String,
+    pub readiness: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -329,12 +330,38 @@ pub struct ChannelReceipt {
 pub struct ChannelCreateRequest {
     pub name: String,
     pub description: Option<String>,
+    #[serde(default, alias = "agentIds")]
+    pub agent_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMemberListReceipt {
     pub members: Vec<ChannelMemberView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageRequest {
+    pub author_id: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageOutcome {
+    pub message_id: String,
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignee_agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendChannelMessageReceipt {
+    pub outcome: SendChannelMessageOutcome,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -754,6 +781,9 @@ impl DaemonBroker {
             is_default: Some(false),
         };
         self.upsert_local_channel(channel.clone());
+        for agent_id in request.agent_ids {
+            self.ensure_channel_membership(&channel.id, &agent_id);
+        }
         Ok(ChannelReceipt { channel })
     }
 
@@ -769,6 +799,49 @@ impl DaemonBroker {
                     .cloned()
                     .collect(),
             })
+    }
+
+    pub fn send_channel_message(
+        &self,
+        channel_id: &str,
+        request: SendChannelMessageRequest,
+    ) -> Result<SendChannelMessageReceipt, ChannelError> {
+        if let Some(receipt) = self.send_channel_message_to_daemon(channel_id, &request) {
+            return Ok(receipt);
+        }
+
+        if !self
+            .channels
+            .lock()
+            .expect("channels mutex poisoned")
+            .iter()
+            .any(|channel| channel.id == channel_id)
+        {
+            return Err(ChannelError::InvalidChannel);
+        }
+
+        let assignee_agent_id = self
+            .channel_members
+            .lock()
+            .expect("channel members mutex poisoned")
+            .iter()
+            .find(|member| member.channel_id == channel_id)
+            .map(|member| member.agent_id.clone());
+        let message_id = format!("msg_channel_{}_{}", channel_id, monotonic_id());
+        let action = if request.body.trim_start().starts_with('@') {
+            "request_agent_reply"
+        } else {
+            "create_task_and_assign"
+        };
+        Ok(SendChannelMessageReceipt {
+            outcome: SendChannelMessageOutcome {
+                message_id: message_id.clone(),
+                action: action.to_string(),
+                task_id: (action == "create_task_and_assign")
+                    .then(|| format!("task_{message_id}")),
+                assignee_agent_id,
+            },
+        })
     }
 
     pub fn complete_interactive_card(
@@ -1678,6 +1751,20 @@ impl DaemonBroker {
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
     }
 
+    fn send_channel_message_to_daemon(
+        &self,
+        channel_id: &str,
+        request: &SendChannelMessageRequest,
+    ) -> Option<SendChannelMessageReceipt> {
+        let payload = serde_json::to_string(request).ok()?;
+        let response = self.send_daemon_request(
+            "POST",
+            &format!("/v1/channels/{channel_id}/messages"),
+            Some(&payload),
+        )?;
+        serde_json::from_str::<SendChannelMessageReceipt>(&response).ok()
+    }
+
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
         let response = self.send_daemon_request(
             "POST",
@@ -1912,6 +1999,7 @@ impl DaemonBroker {
             channel_id: channel_id.to_string(),
             agent_id: agent_id.to_string(),
             joined_at: monotonic_id(),
+            readiness: "joining".to_string(),
         });
     }
 

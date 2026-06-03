@@ -13,6 +13,7 @@ pub fn run() {
             commands::list_channels_command,
             commands::create_channel_command,
             commands::list_channel_members_command,
+            commands::send_channel_message_command,
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
             commands::list_agents_command,

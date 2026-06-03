@@ -24,7 +24,8 @@ pub struct SendChannelMessageInput {
     pub idempotency_key: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendChannelMessageOutcome {
     pub message_id: String,
     pub action: String,

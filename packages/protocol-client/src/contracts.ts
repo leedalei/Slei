@@ -16,6 +16,26 @@ export interface EventContract {
   description: string;
 }
 
+export type ChannelMemberReadiness =
+  | "joining"
+  | "memory_syncing"
+  | "ready"
+  | "memory_failed"
+  | "unavailable";
+
+export interface ChannelMemberView {
+  channelId: string;
+  agentId: string;
+  joinedAt: string;
+  readiness: ChannelMemberReadiness;
+}
+
+export interface ChannelCreateRequest {
+  name: string;
+  description?: string;
+  agentIds?: string[];
+}
+
 export const protocolVersion = protocolVersionJson as ProtocolVersionContract;
 export const errorCodes = errorCodesJson as ErrorCodeContract[];
 export const events = eventsJson as EventContract[];
