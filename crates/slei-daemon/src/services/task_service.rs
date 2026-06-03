@@ -335,6 +335,16 @@ impl TaskService {
             .cloned()
             .ok_or(TaskError::TaskNotFound)
     }
+
+    pub async fn task_for_source_message(&self, source_message_id: &str) -> Option<TaskRecord> {
+        self.inner
+            .lock()
+            .expect("task state lock")
+            .tasks
+            .values()
+            .find(|task| task.source_message_id.as_deref() == Some(source_message_id))
+            .cloned()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

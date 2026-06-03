@@ -156,27 +156,43 @@ impl OrchestrationStore {
         &self,
         message_id: &str,
     ) -> Vec<CoordinatorDecisionRecord> {
+        self.decisions_for_message(message_id)
+            .await
+            .expect("read coordinator decisions for tests")
+    }
+
+    pub async fn decisions_for_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<CoordinatorDecisionRecord>, sqlx::Error> {
         self.repos
             .coordinator_decisions_for_message(message_id)
             .await
-            .expect("read coordinator decisions for tests")
     }
 
     pub async fn routing_context_packages_for_message_for_tests(
         &self,
         message_id: &str,
     ) -> Vec<RoutingContextPackageRecord> {
-        let decisions = self.decisions_for_message_for_tests(message_id).await;
+        self.routing_context_packages_for_message(message_id)
+            .await
+            .expect("read routing context packages for tests")
+    }
+
+    pub async fn routing_context_packages_for_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<RoutingContextPackageRecord>, sqlx::Error> {
+        let decisions = self.decisions_for_message(message_id).await?;
         let mut packages = Vec::new();
         for decision in decisions {
             packages.extend(
                 self.repos
                     .routing_context_packages_for_decision(decision.id)
-                    .await
-                    .expect("read routing context packages for tests"),
+                    .await?,
             );
         }
-        packages
+        Ok(packages)
     }
 
     pub async fn blocked_memory_sections(

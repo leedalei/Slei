@@ -5,6 +5,7 @@ use slei_daemon::services::channel_orchestrator_service::SendChannelMessageInput
 use slei_daemon::services::channel_service::{
     ChannelDraft, ChannelMemberReadiness, PermissionPreset,
 };
+use slei_daemon::services::coordinator_service::CoordinatorInput;
 use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRecord};
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::services::task_service::TaskQuery;
@@ -245,6 +246,140 @@ async fn command_message_retry_replays_outcome_without_duplicate_side_effects() 
     let packages = state
         .orchestration()
         .routing_context_packages_for_message_for_tests(&first.message_id)
+        .await;
+    assert_eq!(packages.len(), 1);
+}
+
+#[tokio::test]
+async fn command_message_partial_retry_recovers_existing_side_effects_without_duplicates() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "send-command-partial";
+    let body = "实现频道创建时选择 Agent 的功能";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key)
+        .await
+        .unwrap();
+    let decision = state
+        .coordinator()
+        .decide(CoordinatorInput {
+            channel_id: "dev".to_string(),
+            message_id: message.id.clone(),
+            body: body.to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "human_lei",
+            &message.id,
+            body,
+            Some("agent_alice".to_string()),
+            &decision.reason,
+            &format!("{idempotency_key}:coordinator-task"),
+        )
+        .await
+        .unwrap();
+    state
+        .messages()
+        .create_task_card_message("dev", &task.id, &message.id)
+        .await
+        .unwrap();
+    state
+        .agent_inbox()
+        .create_task_assignment("agent_alice", "dev", &task.id, &message.id)
+        .await;
+    state
+        .orchestration()
+        .record_routing_context_package(
+            Uuid::new_v4(),
+            Uuid::parse_str(&decision.id).unwrap(),
+            &message.id,
+            &serde_json::json!({
+                "currentMessageId": message.id,
+                "taskId": task.id,
+                "assignmentReason": decision.reason,
+                "relatedMessageIds": [message.id],
+                "safeMemoryRefs": ["MEMORY.md", "notes/channels.md", "notes/relationships.md"],
+            })
+            .to_string(),
+            false,
+        )
+        .await
+        .unwrap();
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.task_id.as_deref(), Some(task.id.as_str()));
+    assert_eq!(outcome.action, "create_task_and_assign");
+    assert_eq!(outcome.assignee_agent_id.as_deref(), Some("agent_alice"));
+
+    let task_cards = state
+        .channel_messages_for_tests("dev")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>();
+    assert_eq!(task_cards.len(), 1);
+
+    let matching_assignments = state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .into_iter()
+        .filter(|event| {
+            event.event_type == "task_assigned"
+                && event.message_id == outcome.message_id
+                && event.task_id.as_deref() == outcome.task_id.as_deref()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(matching_assignments.len(), 1);
+
+    let decisions = state
+        .orchestration()
+        .decisions_for_message_for_tests(&outcome.message_id)
+        .await;
+    assert_eq!(decisions.len(), 1);
+
+    let packages = state
+        .orchestration()
+        .routing_context_packages_for_message_for_tests(&outcome.message_id)
         .await;
     assert_eq!(packages.len(), 1);
 }

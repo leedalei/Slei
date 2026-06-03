@@ -224,10 +224,22 @@ impl MessageService {
         {
             return Err(MessageError::InvalidMessage);
         }
+        let body = format!("task_card:{task_id}:source:{source_message_id}");
+        {
+            let state = self.inner.lock().expect("message state lock");
+            if let Some(existing) = state.messages.values().find(|message| {
+                message.channel_id == channel_id
+                    && message.kind == MessageKind::TaskCard
+                    && message.body.as_deref() == Some(body.as_str())
+                    && !message.deleted
+            }) {
+                return Ok(existing.clone());
+            }
+        }
         self.insert_channel_message(
             channel_id,
             "channel_coordinator",
-            &format!("task_card:{task_id}:source:{source_message_id}"),
+            &body,
             MessageKind::TaskCard,
         )
         .await
