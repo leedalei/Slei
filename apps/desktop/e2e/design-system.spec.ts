@@ -71,15 +71,20 @@ describe("desktop design-system wiring", () => {
 
   it("keeps danger surfaces legible on pale danger backgrounds", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
+    const darkThemeRule = appCss.match(/\.slei-shell\[data-theme="dark"\]\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
     const dangerButtonRule = appCss.match(/\.slei-button--danger\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
     const inlineErrorRule = appCss.match(/\.slei-inline-error\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
     const runtimeErrorRule = appCss.match(/\.slei-runtime-pill--error\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(appCss).toContain("--color-danger-text:");
+    expect(darkThemeRule).toContain("--color-danger-text:");
 
     for (const rule of [dangerButtonRule, inlineErrorRule, runtimeErrorRule]) {
       const colorDeclarations = rule.match(/^\s*color:\s*[^;]+;/gm) ?? [];
 
       expect(rule).toContain("background: var(--color-danger-bg)");
-      expect(colorDeclarations).toContain("  color: var(--color-text-primary);");
+      expect(colorDeclarations).toContain("  color: var(--color-danger-text);");
+      expect(colorDeclarations).not.toContain("  color: var(--color-text-primary);");
       expect(colorDeclarations).not.toContain("  color: var(--color-danger);");
       expect(colorDeclarations).not.toContain("  color: var(--color-error);");
     }

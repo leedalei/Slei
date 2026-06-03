@@ -6,6 +6,7 @@
   --color-rail-bg: var(--color-text-primary);
   --color-rail-text: var(--color-text-inverse);
   --color-shell-divider: var(--color-border);
+  --color-danger-text: color-mix(in srgb, var(--color-text-primary) 88%, var(--color-error) 12%);
 }
 
 html,
@@ -1243,7 +1244,7 @@ body,
 .slei-button--danger {
   background: var(--color-danger-bg);
   border-color: var(--color-danger);
-  color: var(--color-text-primary);
+  color: var(--color-danger-text);
 }
 
 .slei-permission-actions {
@@ -1846,7 +1847,7 @@ body,
   background: var(--color-danger-bg);
   border: var(--border-subtle) solid var(--color-danger);
   border-radius: var(--radius-card);
-  color: var(--color-text-primary);
+  color: var(--color-danger-text);
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   margin: 0;
@@ -2252,7 +2253,7 @@ body,
 .slei-runtime-pill--error {
   background: var(--color-danger-bg);
   border-color: var(--color-danger);
-  color: var(--color-text-primary);
+  color: var(--color-danger-text);
 }
 
 .slei-computer-agent-list {
@@ -2702,4 +2703,5 @@ body,
   --color-accent: var(--color-theme-dark-accent);
   --color-accent-subtle: var(--color-theme-dark-accent-subtle);
   --color-rail-bg: color-mix(in srgb, var(--color-theme-dark-bg) 72%, black);
+  --color-danger-text: color-mix(in srgb, var(--color-theme-dark-bg) 88%, var(--color-error) 12%);
 }
