@@ -294,7 +294,6 @@ it("uses rounded Animal Island component geometry", () => {
   expect(tokensCss).toContain("--radius-modal: var(--primitive-radius-24);");
   expect(tokensCss).toContain("--radius-badge: 999px;");
   expect(tokensCss).toContain("--radius-avatar: 50%;");
-  expect(globalsCss).toMatch(/\.slei-input\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
 });
 ```
 
