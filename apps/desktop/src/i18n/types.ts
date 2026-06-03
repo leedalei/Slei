@@ -45,6 +45,8 @@ export type DesktopMessages = {
     backToBottom: string;
     channel: string;
     channelName: string;
+    channelFileEmpty: string;
+    channelTaskEmpty: string;
     channelView: string;
     channels: string;
     chooseMentionMember: string;
@@ -64,6 +66,7 @@ export type DesktopMessages = {
     confirmed: string;
     interactivePending: string;
     noFiles: string;
+    openAttachment: (name: string) => string;
     openViaDaemon: string;
     rejected: string;
     copyMessage: string;
@@ -73,7 +76,9 @@ export type DesktopMessages = {
     history: string;
     newSession: string;
     resetSession: string;
+    replyCount: (count: number) => string;
     roleLabels: Record<"human" | "agent" | "system", string>;
+    rootMessage: string;
     run: string;
     hash: string;
     stopFollowingRuns: string;

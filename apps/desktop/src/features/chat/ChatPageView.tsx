@@ -83,6 +83,58 @@ function formatAttachmentSize(size: number) {
   return `${(kilobytes / 1024).toFixed(1)} MB`;
 }
 
+function taskStatusLabel(status: SleiFixtures["tasks"][number]["status"], messages: DesktopMessages) {
+  return messages.tasks.status[status];
+}
+
+function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
+  const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id);
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  if (tasks.length === 0) {
+    return <section className="slei-channel-empty">{messages.chat.channelTaskEmpty}</section>;
+  }
+
+  return (
+    <section aria-label={messages.chat.tasks} className="slei-channel-task-list">
+      <div className="slei-channel-task-list__items">
+        {tasks.map((task) => (
+          <button
+            aria-current={selectedTask?.id === task.id ? "true" : undefined}
+            className="slei-channel-task-row"
+            key={task.id}
+            onClick={() => setSelectedTaskId(task.id)}
+            type="button"
+          >
+            <span className={`slei-task-status-chip slei-task-status-chip--${task.status}`}>{taskStatusLabel(task.status, messages)}</span>
+            <strong>{task.title}</strong>
+            <small>{task.owner} · {messages.chat.replyCount(task.replies?.length ?? 0)}</small>
+            {task.attention ? <b className="slei-badge slei-badge--attention">{task.attention}</b> : null}
+          </button>
+        ))}
+      </div>
+      {selectedTask ? (
+        <aside className="slei-channel-task-detail">
+          <span className={`slei-task-status-chip slei-task-status-chip--${selectedTask.status}`}>{taskStatusLabel(selectedTask.status, messages)}</span>
+          <h2>{selectedTask.title}</h2>
+          <p>{selectedTask.owner} · {messages.chat.replyCount(selectedTask.replies?.length ?? 0)}</p>
+          <div className="slei-channel-task-detail__replies">
+            {(selectedTask.replies ?? []).map((reply, index) => (
+              <article className="slei-channel-task-reply" key={reply.id}>
+                <strong>{index === 0 ? messages.chat.rootMessage : reply.sender}</strong>
+                <p>{reply.body}</p>
+              </article>
+            ))}
+          </div>
+        </aside>
+      ) : null}
+    </section>
+  );
+}
+
+function ChannelFileList({ messages }: { messages: DesktopMessages }) {
+  return <section className="slei-channel-empty">{messages.chat.channelFileEmpty}</section>;
+}
+
 function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): SleiMember | undefined {
   const normalizedHandle = message.handle?.toLowerCase();
   const normalizedAuthor = message.author.toLowerCase();
@@ -198,6 +250,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return false;
     return message.sessionId === currentSessionId;
   });
+  const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id);
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
@@ -317,6 +370,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </div>
         </aside>
       ) : null}
+      {effectiveChannelView === "chat" ? (
       <div className="slei-timeline">
         {visibleMessages.map((message) => {
           const saved = savedMessageIds.includes(message.id);
@@ -368,7 +422,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </article>
         );})}
       </div>
-      {mention && mentionTargets.length > 0 ? (
+      ) : effectiveChannelView === "tasks" ? (
+        <ChannelTaskList messages={messages} tasks={channelTasks} />
+      ) : (
+        <ChannelFileList messages={messages} />
+      )}
+      {effectiveChannelView === "chat" && mention && mentionTargets.length > 0 ? (
         <section aria-label={messages.chat.chooseMentionMember} className="slei-mention-panel">
           {mentionTargets.map((member, index) => (
             <button
@@ -388,6 +447,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           <button className="slei-back-bottom" type="button"><ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}</button>
         </section>
       ) : null}
+      {effectiveChannelView === "chat" ? (
       <form className="slei-composer" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
         {attachments.length > 0 ? (
           <AttachmentList
@@ -446,6 +506,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           <button className="slei-button slei-button--accent slei-send-button" data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</button>
         </div>
       </form>
+      ) : null}
     </section>
   );
 }
