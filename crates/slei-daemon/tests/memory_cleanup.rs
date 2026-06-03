@@ -62,7 +62,7 @@ async fn deleted_source_blocks_affected_memory_snippet_until_cleanup_completes()
     assert!(!serialized.contains("SENTINEL_DELETED_SOURCE_MEMORY"));
 
     memory_events
-        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context")
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
         .await;
 
     assert!(memory_events
@@ -120,6 +120,134 @@ async fn blocked_memory_sections_survive_restart() {
     assert!(!serde_json::to_string(&context)
         .unwrap()
         .contains("SENTINEL_RESTART_BLOCKED_MEMORY"));
+}
+
+#[tokio::test]
+async fn shared_section_stays_blocked_until_all_requested_sources_complete() {
+    let store = OrchestrationStore::for_tests().await;
+    let memory_events = MemoryEventService::new(store);
+
+    for source_message_id in ["msg_deleted_a", "msg_deleted_b"] {
+        memory_events
+            .record_memory_document_source(
+                "agent_coda",
+                "MEMORY.md",
+                "Active Context",
+                source_message_id,
+            )
+            .await;
+        memory_events
+            .request_cleanup_for_source_message(source_message_id)
+            .await;
+    }
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_a")
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_b")
+        .await;
+
+    assert!(memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn later_deleted_source_reblocks_section_after_earlier_cleanup_completed() {
+    let store = OrchestrationStore::for_tests().await;
+    let memory_events = MemoryEventService::new(store);
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_a")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted_a")
+        .await;
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_a")
+        .await;
+
+    assert!(memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_b")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted_b")
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .complete_cleanup("agent_coda", "MEMORY.md", "Active Context", "msg_deleted_b")
+        .await;
+
+    assert!(memory_events
+        .blocked_memory_sections("agent_coda")
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn recording_duplicate_or_additional_sources_preserves_blocked_section_state() {
+    let store = OrchestrationStore::for_tests().await;
+    let memory_events = MemoryEventService::new(store);
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    memory_events
+        .request_cleanup_for_source_message("msg_deleted")
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+
+    memory_events
+        .record_memory_document_source("agent_coda", "MEMORY.md", "Active Context", "msg_deleted")
+        .await;
+    memory_events
+        .record_memory_document_source(
+            "agent_coda",
+            "MEMORY.md",
+            "Active Context",
+            "msg_later_source",
+        )
+        .await;
+
+    assert_eq!(
+        memory_events.blocked_memory_sections("agent_coda").await,
+        vec![active_context_ref()]
+    );
+}
+
+fn active_context_ref() -> MemorySectionRef {
+    MemorySectionRef {
+        agent_id: "agent_coda".to_string(),
+        document_path: "MEMORY.md".to_string(),
+        document_section: "Active Context".to_string(),
+    }
 }
 
 fn temp_data_root() -> PathBuf {

@@ -116,10 +116,8 @@ impl MemoryEventService {
             )
             .await
             .expect("persist memory document source event");
-        self.store
-            .record_memory_document_state(agent_id, document_path, document_section, None, false)
-            .await
-            .expect("persist memory document source state");
+        self.update_section_blocked_state(agent_id, document_path, document_section)
+            .await;
     }
 
     pub async fn request_cleanup_for_source_message(&self, source_message_id: &str) {
@@ -143,12 +141,15 @@ impl MemoryEventService {
         agent_id: &str,
         document_path: &str,
         document_section: &str,
+        source_message_id: &str,
     ) {
-        let source_message_ids = self
+        let requested_sources = self.cleanup_requested_sources().await;
+        let section_sources = self
             .source_message_ids_for_section(agent_id, document_path, document_section)
             .await;
-
-        for source_message_id in source_message_ids {
+        if requested_sources.contains(source_message_id)
+            && section_sources.contains(source_message_id)
+        {
             self.store
                 .record_memory_event(
                     Uuid::new_v4(),
@@ -163,10 +164,8 @@ impl MemoryEventService {
                 .expect("persist memory cleanup completion event");
         }
 
-        self.store
-            .record_memory_document_state(agent_id, document_path, document_section, None, false)
-            .await
-            .expect("persist memory cleanup completion state");
+        self.update_section_blocked_state(agent_id, document_path, document_section)
+            .await;
     }
 
     pub async fn blocked_memory_sections(&self, agent_id: &str) -> Vec<MemorySectionRef> {
@@ -334,7 +333,7 @@ impl MemoryEventService {
         agent_id: &str,
         document_path: &str,
         document_section: &str,
-    ) -> Vec<String> {
+    ) -> HashSet<String> {
         self.store
             .memory_update_events_for_agent(agent_id)
             .await
@@ -347,6 +346,46 @@ impl MemoryEventService {
             })
             .filter_map(|event| event.source_message_id)
             .collect()
+    }
+
+    async fn update_section_blocked_state(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+    ) {
+        let blocked = self
+            .section_has_outstanding_requested_cleanup(agent_id, document_path, document_section)
+            .await;
+        self.store
+            .record_memory_document_state(agent_id, document_path, document_section, None, blocked)
+            .await
+            .expect("persist memory document cleanup state");
+    }
+
+    async fn section_has_outstanding_requested_cleanup(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+    ) -> bool {
+        let requested_sources = self.cleanup_requested_sources().await;
+        if requested_sources.is_empty() {
+            return false;
+        }
+
+        let completed_sections = self.cleanup_completed_sections(agent_id).await;
+        self.source_message_ids_for_section(agent_id, document_path, document_section)
+            .await
+            .into_iter()
+            .any(|source_message_id| {
+                requested_sources.contains(&source_message_id)
+                    && !completed_sections.contains(&(
+                        source_message_id,
+                        document_path.to_string(),
+                        document_section.to_string(),
+                    ))
+            })
     }
 }
 
