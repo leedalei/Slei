@@ -126,12 +126,10 @@ export function SettingsPage(input: {
                 className="slei-input slei-theme-select"
                 onChange={(value) => updateAppearance({ theme: value })}
                 options={[
-                  { label: labels.themeSystem, value: "system" },
                   { label: labels.themeLight, value: "light" },
                   { label: labels.themeDark, value: "dark" },
-                  { label: labels.themeHighContrast, value: "highContrast" },
                 ]}
-                value={appearance.theme}
+                value={appearance.theme === "dark" ? "dark" : "light"}
               />
             </label>
             <div className="slei-field">

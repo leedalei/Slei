@@ -60,6 +60,7 @@ import {
   defaultProfile,
   defaultTimeZone,
   deviceOsLabel,
+  normalizeAppearanceTheme,
   stripChannelHash,
   type AgentDraftInput,
   type AppView,
@@ -152,6 +153,8 @@ export function SleiAppFrame(input: {
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
   const profile = input.profile ?? defaultProfile;
   const appearance = input.appearance ?? defaultAppearance;
+  const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
+  const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
@@ -164,7 +167,7 @@ export function SleiAppFrame(input: {
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
 
   return (
-    <div className="slei-shell" data-active-view={input.activeView} data-theme={appearance.theme} style={shellStyle}>
+    <div className="slei-shell" data-active-view={input.activeView} data-theme={normalizedTheme} style={shellStyle}>
       <nav className="slei-rail" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span aria-hidden="true" className="slei-brand__mark">L</span>
@@ -235,7 +238,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, appearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);

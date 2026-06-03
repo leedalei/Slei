@@ -127,8 +127,28 @@ describe("settings preferences", () => {
     expect(appearanceHtml).toContain("slei-theme-select");
     expect(appearanceHtml).toContain("字体大小");
     expect(appearanceHtml).toContain('data-theme="dark"');
+    expect(appearanceHtml).toContain('option value="light"');
+    expect(appearanceHtml).toContain('option value="dark"');
+    expect(appearanceHtml).not.toContain('option value="system"');
+    expect(appearanceHtml).not.toContain('option value="highContrast"');
     expect(aboutHtml).toContain("桌面端版本");
     expect(aboutHtml).toContain("Daemon 版本");
+  });
+
+  it("normalizes legacy appearance themes to light", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        appearance={{ theme: "highContrast", fontSize: "md" }}
+        data={data}
+        initialSettingsPanel="appearance"
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain('data-theme="light"');
+    expect(html).toContain('option value="light" selected=""');
   });
 
   it("bridge mock persists preferences like the native bridge contract", async () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const tokensCss = readFileSync("src/styles/tokens.css", "utf8");
 const globalsCss = readFileSync("src/styles/globals.css", "utf8");
 
-describe("Slei Neo-Brutalism design tokens", () => {
+describe("Slei Animal Island design tokens", () => {
   it("exposes the semantic token surface required by the desktop design system", () => {
     [
       "--color-bg",
@@ -16,7 +16,10 @@ describe("Slei Neo-Brutalism design tokens", () => {
       "--color-text-muted",
       "--color-text-inverse",
       "--color-accent",
+      "--color-accent-strong",
       "--color-accent-subtle",
+      "--color-surface-pattern",
+      "--color-theme-dark-accent",
       "--color-success",
       "--color-warning",
       "--color-error",
@@ -28,6 +31,7 @@ describe("Slei Neo-Brutalism design tokens", () => {
       "--border-panel",
       "--radius-modal",
       "--radius-full",
+      "--shadow-soft",
       "--shadow-xl",
       "--padding-panel",
       "--padding-card",
@@ -38,6 +42,7 @@ describe("Slei Neo-Brutalism design tokens", () => {
 
   it("keeps component styles on semantic tokens only", () => {
     expect(globalsCss).not.toContain("var(--primitive-");
+    expect(globalsCss).not.toMatch(/#[0-9a-fA-F]{3,8}|rgba?\(|hsla?\(/);
     expect(globalsCss).toContain("--border-panel");
     expect(globalsCss).toContain(".slei-select");
     expect(globalsCss).toContain(".slei-checkbox");
@@ -45,11 +50,20 @@ describe("Slei Neo-Brutalism design tokens", () => {
     expect(globalsCss).toContain("prefers-reduced-motion");
   });
 
-  it("keeps component radii square for the Neo-Brutalism surface", () => {
-    expect(tokensCss).toContain("--radius-control: var(--radius-none);");
-    expect(tokensCss).toContain("--radius-modal: var(--radius-none);");
-    expect(tokensCss).toContain("--radius-badge: var(--radius-none);");
-    expect(tokensCss).toContain("--radius-avatar: var(--radius-none);");
-    expect(globalsCss).toMatch(/\.slei-input\s*\{[^}]*border-radius:\s*var\(--radius-none\);/s);
+  it("uses rounded Animal Island component geometry", () => {
+    expect(tokensCss).toContain("--radius-control: 999px;");
+    expect(tokensCss).toContain("--radius-modal: var(--primitive-radius-24);");
+    expect(tokensCss).toContain("--radius-badge: 999px;");
+    expect(tokensCss).toContain("--radius-avatar: 50%;");
+  });
+
+  it("styles shared controls with Animal Island soft geometry", () => {
+    expect(globalsCss).toMatch(/\.slei-button\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:not\(:disabled\):hover\s*\{[^}]*transform:\s*translateY\(-1px\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:not\(:disabled\):active\s*\{[^}]*transform:\s*translateY\(2px\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:disabled\s*\{[^}]*border-color:\s*var\(--color-disabled-indicator\);/s);
+    expect(globalsCss).toMatch(/\.slei-button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--color-focus-ring\);/s);
+    expect(globalsCss).toMatch(/\.slei-card\s*\{[^}]*border-radius:\s*var\(--radius-card\);/s);
+    expect(globalsCss).toMatch(/\.slei-avatar\s*\{[^}]*border-radius:\s*var\(--radius-avatar\);/s);
   });
 });

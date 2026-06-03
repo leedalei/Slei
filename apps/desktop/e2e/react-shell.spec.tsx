@@ -5,7 +5,7 @@ import { SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/app/fixtures";
 
 describe("Slei React desktop shell", () => {
-  it("defaults to the Chat home page with Neo-Brutalism desktop structure", () => {
+  it("defaults to the Chat home page with Animal Island desktop structure", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"

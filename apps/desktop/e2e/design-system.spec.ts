@@ -2,12 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("desktop design-system wiring", () => {
-  it("loads shared Neo-Brutalism tokens instead of local hard-coded shell colors", () => {
+  it("loads Animal Island styles before Slei semantic overrides", () => {
     const webEntry = readFileSync("src/web.ts", "utf8");
     const appCss = readFileSync("src/app/app.css", "utf8");
     const formControlsTsx = readFileSync("src/components/FormControls.tsx", "utf8");
     const tokensCss = readFileSync("../../packages/ui/src/styles/tokens.css", "utf8");
 
+    expect(webEntry).toContain("animal-island-ui/style");
+    expect(webEntry.indexOf("animal-island-ui/style")).toBeLessThan(webEntry.indexOf("@slei/ui/styles/tokens.css"));
+    expect(webEntry.indexOf("animal-island-ui/style")).toBeLessThan(webEntry.indexOf("@slei/ui/styles/globals.css"));
     expect(webEntry).toContain("@slei/ui/styles/tokens.css");
     expect(webEntry).toContain("@slei/ui/styles/globals.css");
     expect(webEntry).not.toContain("./web.css");
@@ -21,15 +24,15 @@ describe("desktop design-system wiring", () => {
     expect(formControlsTsx).toContain("function CheckboxControl");
     expect(tokensCss).toContain("--rail-width: 80px;");
     expect(tokensCss).toContain("--sidebar-width: 240px;");
-    expect(tokensCss).toContain("--radius-control: var(--radius-none);");
+    expect(tokensCss).toContain("--radius-control: 999px;");
   });
 
   it("keeps global scrollbars compact and neutral", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
 
     expect(appCss).toContain("--scrollbar-size: 8px");
-    expect(appCss).toContain("--scrollbar-radius: 8px");
-    expect(appCss).toContain("--scrollbar-thumb: rgb(128 128 128 / 48%)");
+    expect(appCss).toContain("--scrollbar-radius: 999px");
+    expect(appCss).toContain("--scrollbar-thumb: color-mix(in srgb, var(--color-border) 62%, transparent)");
     expect(appCss).toContain("scrollbar-width: thin");
     expect(appCss).toContain("border-radius: var(--scrollbar-radius)");
   });
@@ -41,9 +44,10 @@ describe("desktop design-system wiring", () => {
     const railLabelRule = appCss.match(/\.slei-rail__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
 
     expect(railRule).toContain("align-items: center");
-    expect(railRule).toContain("box-shadow: var(--border-panel) 0 0 var(--color-border)");
+    expect(railRule).toContain("background: var(--color-rail-bg)");
     expect(railRule).not.toContain("border-right");
     expect(railRule).toContain("padding: var(--titlebar-height) var(--gap-sm) var(--gap-sm)");
+    expect(railButtonRule).toContain("border-radius: var(--radius-control)");
     expect(railButtonRule).toContain("width: 64px");
     expect(railButtonRule).toContain("justify-items: center");
     expect(railLabelRule).toContain("font-size: 12px");
@@ -63,5 +67,37 @@ describe("desktop design-system wiring", () => {
     expect(appCss).not.toContain(".slei-brand__logo");
     expect(brandMarkRule).toContain("font-weight: var(--weight-black)");
     expect(brandMarkRule).toContain("font-style: italic");
+  });
+
+  it("keeps danger surfaces legible on pale danger backgrounds", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const darkThemeRule = appCss.match(/\.slei-shell\[data-theme="dark"\]\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const dangerButtonRule = appCss.match(/\.slei-button--danger\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const inlineErrorRule = appCss.match(/\.slei-inline-error\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const runtimeErrorRule = appCss.match(/\.slei-runtime-pill--error\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(appCss).toContain("--color-danger-text:");
+    expect(darkThemeRule).toContain("--color-danger-text:");
+
+    for (const rule of [dangerButtonRule, inlineErrorRule, runtimeErrorRule]) {
+      const colorDeclarations = rule.match(/^\s*color:\s*[^;]+;/gm) ?? [];
+
+      expect(rule).toContain("background: var(--color-danger-bg)");
+      expect(colorDeclarations).toContain("  color: var(--color-danger-text);");
+      expect(colorDeclarations).not.toContain("  color: var(--color-text-primary);");
+      expect(colorDeclarations).not.toContain("  color: var(--color-danger);");
+      expect(colorDeclarations).not.toContain("  color: var(--color-error);");
+    }
+  });
+
+  it("keeps settings navigation readable in both themes", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const settingsNavItemRule = appCss.match(/\.slei-settings-nav__item\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const settingsNavLabelRule = appCss.match(/\.slei-settings-nav__label\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+    const settingsNavEmptyRule = appCss.match(/\.slei-settings-nav__empty\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body ?? "";
+
+    expect(settingsNavItemRule).toContain("color: var(--color-text-primary)");
+    expect(settingsNavLabelRule).toContain("color: var(--color-text-secondary)");
+    expect(settingsNavEmptyRule).toContain("color: var(--color-text-secondary)");
   });
 });

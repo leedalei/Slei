@@ -82,7 +82,6 @@ it("loads Animal Island styles before Slei semantic overrides", () => {
   expect(formControlsTsx).toContain("function CheckboxControl");
   expect(tokensCss).toContain("--rail-width: 80px;");
   expect(tokensCss).toContain("--sidebar-width: 240px;");
-  expect(tokensCss).toContain("--radius-control: 999px;");
 });
 ```
 
@@ -94,7 +93,7 @@ Run:
 pnpm --filter @slei/desktop test -- e2e/design-system.spec.ts
 ```
 
-Expected: FAIL because `animal-island-ui/style` is not imported and `--radius-control` is not yet `999px`.
+Expected: FAIL because `animal-island-ui/style` is not imported yet.
 
 - [ ] **Step 3: Install the npm dependency**
 
@@ -124,7 +123,7 @@ Run:
 pnpm --filter @slei/desktop test -- e2e/design-system.spec.ts
 ```
 
-Expected: still FAIL until token updates land in Task 3, but import-related assertions should pass.
+Expected: PASS.
 
 - [ ] **Step 6: Commit dependency and import**
 
@@ -295,7 +294,6 @@ it("uses rounded Animal Island component geometry", () => {
   expect(tokensCss).toContain("--radius-modal: var(--primitive-radius-24);");
   expect(tokensCss).toContain("--radius-badge: 999px;");
   expect(tokensCss).toContain("--radius-avatar: 50%;");
-  expect(globalsCss).toMatch(/\.slei-input\s*\{[^}]*border-radius:\s*var\(--radius-control\);/s);
 });
 ```
 

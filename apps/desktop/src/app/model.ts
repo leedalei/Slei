@@ -54,8 +54,21 @@ export const defaultNotifications: NotificationPreferences = {
   approvals: true,
 };
 
+export type SleiTheme = "light" | "dark";
+
+export function normalizeAppearanceTheme(theme: AppearancePreferences["theme"] | undefined): SleiTheme {
+  return theme === "dark" ? "dark" : "light";
+}
+
+export function normalizeAppearance(appearance: AppearancePreferences): AppearancePreferences {
+  return {
+    ...appearance,
+    theme: normalizeAppearanceTheme(appearance.theme),
+  };
+}
+
 export const defaultAppearance: AppearancePreferences = {
-  theme: "system",
+  theme: "light",
   fontSize: "md",
 };
 

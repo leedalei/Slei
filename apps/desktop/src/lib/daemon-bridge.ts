@@ -398,7 +398,7 @@ export function createDaemonBridgeMock(input: {
     locale: "zh-CN",
     timeZone: "Asia/Shanghai",
     appearance: {
-      theme: "system",
+      theme: "light",
       fontSize: "md",
     },
     notifications: {

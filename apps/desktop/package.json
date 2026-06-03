@@ -18,6 +18,7 @@
     "@slei/protocol-client": "workspace:*",
     "@slei/ui": "workspace:*",
     "@tauri-apps/api": "2.11.0",
+    "animal-island-ui": "^0.9.7",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
