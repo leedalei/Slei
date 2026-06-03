@@ -383,6 +383,10 @@ impl Repositories {
             .collect()
     }
 
+    pub async fn coordinator_decision_count(&self) -> Result<u64, sqlx::Error> {
+        self.count_rows("coordinator_decisions").await
+    }
+
     pub async fn insert_agent_inbox_event(
         &self,
         id: Uuid,
@@ -431,6 +435,10 @@ impl Repositories {
                 })
             })
             .collect()
+    }
+
+    pub async fn agent_inbox_event_count(&self) -> Result<u64, sqlx::Error> {
+        self.count_rows("agent_inbox_events").await
     }
 
     pub async fn insert_memory_update_event(
@@ -489,6 +497,10 @@ impl Repositories {
                 })
             })
             .collect()
+    }
+
+    pub async fn memory_update_event_count(&self) -> Result<u64, sqlx::Error> {
+        self.count_rows("memory_update_events").await
     }
 
     pub async fn upsert_memory_document_state(
@@ -618,6 +630,13 @@ impl Repositories {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn count_rows(&self, table: &str) -> Result<u64, sqlx::Error> {
+        let query = format!("SELECT COUNT(*) AS count FROM {table}");
+        let row = sqlx::query(&query).fetch_one(&self.pool).await?;
+        let count: i64 = row.try_get("count")?;
+        Ok(count.max(0) as u64)
     }
 }
 

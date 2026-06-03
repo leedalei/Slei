@@ -8,9 +8,13 @@ pub struct DiagnosticsInput {
     pub protocol_version: String,
     pub schema_version: String,
     pub recent_failure: Option<String>,
+    pub coordinator_decision_count: u64,
+    pub agent_inbox_event_count: u64,
+    pub memory_update_event_count: u64,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct DiagnosticsSnapshot {
     pub node: String,
     pub runtime: String,
@@ -18,6 +22,9 @@ pub struct DiagnosticsSnapshot {
     pub protocol_version: String,
     pub schema_version: String,
     pub failure_summary: Option<String>,
+    pub coordinator_decision_count: u64,
+    pub agent_inbox_event_count: u64,
+    pub memory_update_event_count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,6 +50,9 @@ impl DiagnosticsService {
             protocol_version: input.protocol_version,
             schema_version: input.schema_version,
             failure_summary: input.recent_failure.map(|failure| sanitize(&failure)),
+            coordinator_decision_count: input.coordinator_decision_count,
+            agent_inbox_event_count: input.agent_inbox_event_count,
+            memory_update_event_count: input.memory_update_event_count,
         }
     }
 

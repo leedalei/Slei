@@ -11,6 +11,13 @@ pub struct OrchestrationStore {
     repos: Repositories,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OrchestrationEventCounts {
+    pub coordinator_decision_count: u64,
+    pub agent_inbox_event_count: u64,
+    pub memory_update_event_count: u64,
+}
+
 impl fmt::Debug for OrchestrationStore {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_struct("OrchestrationStore").finish()
@@ -200,6 +207,14 @@ impl OrchestrationStore {
         agent_id: &str,
     ) -> Result<Vec<BlockedMemorySectionRecord>, sqlx::Error> {
         self.repos.blocked_memory_sections(agent_id).await
+    }
+
+    pub async fn event_counts(&self) -> Result<OrchestrationEventCounts, sqlx::Error> {
+        Ok(OrchestrationEventCounts {
+            coordinator_decision_count: self.repos.coordinator_decision_count().await?,
+            agent_inbox_event_count: self.repos.agent_inbox_event_count().await?,
+            memory_update_event_count: self.repos.memory_update_event_count().await?,
+        })
     }
 
     pub async fn for_data_root(root: std::path::PathBuf) -> Self {
