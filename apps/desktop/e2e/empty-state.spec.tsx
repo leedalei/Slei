@@ -25,8 +25,13 @@ describe("empty state component", () => {
     expect(nodata).toContain("slei-empty--nodata");
     expect(nodata).toContain("slei-empty--lg");
     expect(nodata).toContain("slei-empty__pixel-face");
+    expect(nodata).toContain("slei-empty__pixel--eye");
+    expect(nodata).toContain("slei-empty__pixel--mouth");
     expect(noresult).toContain("slei-empty--noresult");
     expect(noresult).toContain("slei-empty--sm");
+    expect(noresult).toContain("slei-empty__pixel-face");
+    expect(noresult).toContain("slei-empty__pixel--eye");
+    expect(noresult).toContain("slei-empty__pixel--mouth");
   });
 
   it("centers the empty component when detail pages have no selected object", () => {
