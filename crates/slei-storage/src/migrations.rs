@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS memory_update_events (
 CREATE INDEX IF NOT EXISTS idx_memory_update_events_source_message_id
     ON memory_update_events(source_message_id);
 
+CREATE INDEX IF NOT EXISTS idx_memory_update_events_agent_id
+    ON memory_update_events(agent_id);
+
 CREATE TABLE IF NOT EXISTS memory_document_states (
     agent_id TEXT NOT NULL,
     document_path TEXT NOT NULL,
