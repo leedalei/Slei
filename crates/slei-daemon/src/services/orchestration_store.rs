@@ -1,7 +1,7 @@
 use std::fmt;
 
 use slei_storage::repositories::{
-    BlockedMemorySectionRecord, MemoryUpdateEventRecord, Repositories,
+    AgentInboxEventRecord, BlockedMemorySectionRecord, MemoryUpdateEventRecord, Repositories,
 };
 use uuid::Uuid;
 
@@ -65,6 +65,13 @@ impl OrchestrationStore {
         self.repos
             .insert_agent_inbox_event(id, agent_id, event_type, delivery_state, payload)
             .await
+    }
+
+    pub async fn agent_inbox_events_for_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<AgentInboxEventRecord>, sqlx::Error> {
+        self.repos.agent_inbox_events(agent_id).await
     }
 
     pub async fn record_memory_event(

@@ -79,13 +79,19 @@ impl AgentInboxService {
     }
 
     pub async fn events_for_agent(&self, agent_id: &str) -> Vec<AgentInboxEvent> {
-        self.cache
-            .lock()
-            .await
-            .iter()
-            .filter(|event| event.agent_id == agent_id)
-            .cloned()
-            .collect()
+        match self.store.agent_inbox_events_for_agent(agent_id).await {
+            Ok(records) => {
+                let events = records
+                    .into_iter()
+                    .map(|record| serde_json::from_str::<AgentInboxEvent>(&record.payload))
+                    .collect::<Result<Vec<_>, _>>();
+                match events {
+                    Ok(events) => events,
+                    Err(_) => self.cached_events_for_agent(agent_id).await,
+                }
+            }
+            Err(_) => self.cached_events_for_agent(agent_id).await,
+        }
     }
 
     async fn push(
@@ -120,6 +126,16 @@ impl AgentInboxService {
             .expect("persist agent inbox event");
         self.cache.lock().await.push(event.clone());
         event
+    }
+
+    async fn cached_events_for_agent(&self, agent_id: &str) -> Vec<AgentInboxEvent> {
+        self.cache
+            .lock()
+            .await
+            .iter()
+            .filter(|event| event.agent_id == agent_id)
+            .cloned()
+            .collect()
     }
 }
 
