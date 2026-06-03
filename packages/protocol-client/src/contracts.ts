@@ -36,6 +36,22 @@ export interface ChannelCreateRequest {
   agentIds?: string[];
 }
 
+export interface SendChannelMessageRequest {
+  authorId: string;
+  body: string;
+}
+
+export interface SendChannelMessageOutcome {
+  messageId: string;
+  action: string;
+  taskId?: string;
+  assigneeAgentId?: string;
+}
+
+export interface SendChannelMessageReceipt {
+  outcome: SendChannelMessageOutcome;
+}
+
 export const protocolVersion = protocolVersionJson as ProtocolVersionContract;
 export const errorCodes = errorCodesJson as ErrorCodeContract[];
 export const events = eventsJson as EventContract[];

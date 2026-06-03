@@ -3,6 +3,9 @@ import type {
   ChannelCreateRequest as ProtocolChannelCreateRequest,
   ChannelMemberReadiness as ProtocolChannelMemberReadiness,
   ChannelMemberView as ProtocolChannelMemberView,
+  SendChannelMessageOutcome as ProtocolSendChannelMessageOutcome,
+  SendChannelMessageReceipt as ProtocolSendChannelMessageReceipt,
+  SendChannelMessageRequest as ProtocolSendChannelMessageRequest,
 } from "@slei/protocol-client";
 
 export type SanitizedDaemonStatus = {
@@ -212,21 +215,11 @@ export type ChannelMemberListReceipt = {
   members: ChannelMemberView[];
 };
 
-export type SendChannelMessageRequest = {
-  authorId: string;
-  body: string;
-};
+export type SendChannelMessageRequest = ProtocolSendChannelMessageRequest;
 
-export type SendChannelMessageOutcome = {
-  messageId: string;
-  action: string;
-  taskId?: string;
-  assigneeAgentId?: string;
-};
+export type SendChannelMessageOutcome = ProtocolSendChannelMessageOutcome;
 
-export type SendChannelMessageReceipt = {
-  outcome: SendChannelMessageOutcome;
-};
+export type SendChannelMessageReceipt = ProtocolSendChannelMessageReceipt;
 
 export type InteractiveCardView = {
   id: string;
