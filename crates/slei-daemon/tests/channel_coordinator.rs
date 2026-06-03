@@ -129,3 +129,38 @@ async fn coordinator_creates_task_for_command_intent_and_needs_assignment_withou
     assert_eq!(task.assignee_agent_id.as_deref(), Some("agent_alice"));
     assert_eq!(unassigned.action, CoordinatorAction::NeedsManualAssignment);
 }
+
+#[tokio::test]
+async fn coordinator_archive_decisions_do_not_carry_ready_assignee() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+    let decision = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "channel_dev".to_string(),
+            message_id: "msg_noise".to_string(),
+            body: "   ".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+
+    assert_eq!(decision.intent, IntentKind::Noise);
+    assert_eq!(decision.action, CoordinatorAction::ArchiveOnly);
+    assert_eq!(decision.assignee_agent_id, None);
+}
+
+#[tokio::test]
+async fn coordinator_explicit_agent_request_reply_preserves_first_explicit_assignee() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+    let decision = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "channel_dev".to_string(),
+            message_id: "msg_explicit".to_string(),
+            body: "帮我看看这个方案".to_string(),
+            explicit_agent_ids: vec!["agent_coda".to_string(), "agent_alice".to_string()],
+            ready_agent_ids: vec!["agent_alice".to_string()],
+        })
+        .await;
+
+    assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
+    assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_coda"));
+}

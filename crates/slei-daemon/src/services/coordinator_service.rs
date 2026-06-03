@@ -64,14 +64,18 @@ impl CoordinatorService {
     pub async fn decide(&self, input: CoordinatorInput) -> CoordinatorDecision {
         let id = Uuid::new_v4();
         let intent = classify_intent(&input.body);
-        let explicit_assignee = input.explicit_agent_ids.first().cloned();
         let ready_assignee = input.ready_agent_ids.first().cloned();
-        let assignee_agent_id = explicit_assignee.or_else(|| ready_assignee.clone());
         let action = if !input.explicit_agent_ids.is_empty() {
             CoordinatorAction::RequestAgentReply
         } else {
             action_for_intent(&intent, ready_assignee.as_deref())
         };
+        let assignee_agent_id = assignee_for_action(
+            &action,
+            &intent,
+            &input.explicit_agent_ids,
+            &input.ready_agent_ids,
+        );
         let reason = reason_for_decision(&intent, &action, assignee_agent_id.as_deref());
 
         let decision = CoordinatorDecision {
@@ -142,6 +146,24 @@ fn action_for_intent(intent: &IntentKind, ready_assignee: Option<&str>) -> Coord
         (IntentKind::TaskCommand, None) => CoordinatorAction::NeedsManualAssignment,
         (IntentKind::Consultation, Some(_)) => CoordinatorAction::RequestAgentReply,
         _ => CoordinatorAction::ArchiveOnly,
+    }
+}
+
+fn assignee_for_action(
+    action: &CoordinatorAction,
+    intent: &IntentKind,
+    explicit_agent_ids: &[String],
+    ready_agent_ids: &[String],
+) -> Option<String> {
+    match (action, intent) {
+        (CoordinatorAction::RequestAgentReply, _) if !explicit_agent_ids.is_empty() => {
+            explicit_agent_ids.first().cloned()
+        }
+        (CoordinatorAction::RequestAgentReply, IntentKind::Consultation)
+        | (CoordinatorAction::CreateTaskAndAssign, IntentKind::TaskCommand) => {
+            ready_agent_ids.first().cloned()
+        }
+        _ => None,
     }
 }
 
