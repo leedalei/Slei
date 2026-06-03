@@ -36,6 +36,7 @@ import {
   detectAgentMemoryRequest,
   formatMessageTime,
   formatMemberCreatedDate,
+  normalizeAppearance,
   renameComputerNode,
   shouldRefreshConversationMessages,
   sendChatComposerMessage,
@@ -265,7 +266,7 @@ export function SleiApp() {
       setRuntimeSetup(next);
       setLocale(preferencesReceipt.preferences.locale);
       setTimeZone(preferencesReceipt.preferences.timeZone);
-      setAppearance(preferencesReceipt.preferences.appearance);
+      setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
       setNotifications(preferencesReceipt.preferences.notifications);
       setSavedMessages(savedReceipt.savedMessages);
       let activeConversation: string | undefined;
@@ -394,7 +395,7 @@ export function SleiApp() {
     setRuntimeSetup(next);
     setLocale(preferencesReceipt.preferences.locale);
     setTimeZone(preferencesReceipt.preferences.timeZone);
-    setAppearance(preferencesReceipt.preferences.appearance);
+    setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
     setNotifications(preferencesReceipt.preferences.notifications);
     setSavedMessages(savedReceipt.savedMessages);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
@@ -737,7 +738,7 @@ export function SleiApp() {
     const receipt = await bridge.updatePreferences({ locale: nextLocale });
     setLocale(receipt.preferences.locale);
     setTimeZone(receipt.preferences.timeZone);
-    setAppearance(receipt.preferences.appearance);
+    setAppearance(normalizeAppearance(receipt.preferences.appearance));
     setNotifications(receipt.preferences.notifications);
   }
 
@@ -746,16 +747,17 @@ export function SleiApp() {
     const receipt = await bridge.updatePreferences({ timeZone: nextTimeZone });
     setLocale(receipt.preferences.locale);
     setTimeZone(receipt.preferences.timeZone);
-    setAppearance(receipt.preferences.appearance);
+    setAppearance(normalizeAppearance(receipt.preferences.appearance));
     setNotifications(receipt.preferences.notifications);
   }
 
   async function handleAppearanceChange(nextAppearance: AppearancePreferences) {
-    setAppearance(nextAppearance);
-    const receipt = await bridge.updatePreferences({ appearance: nextAppearance });
+    const normalizedAppearance = normalizeAppearance(nextAppearance);
+    setAppearance(normalizedAppearance);
+    const receipt = await bridge.updatePreferences({ appearance: normalizedAppearance });
     setLocale(receipt.preferences.locale);
     setTimeZone(receipt.preferences.timeZone);
-    setAppearance(receipt.preferences.appearance);
+    setAppearance(normalizeAppearance(receipt.preferences.appearance));
     setNotifications(receipt.preferences.notifications);
   }
 
@@ -764,7 +766,7 @@ export function SleiApp() {
     const receipt = await bridge.updatePreferences({ notifications: nextNotifications });
     setLocale(receipt.preferences.locale);
     setTimeZone(receipt.preferences.timeZone);
-    setAppearance(receipt.preferences.appearance);
+    setAppearance(normalizeAppearance(receipt.preferences.appearance));
     setNotifications(receipt.preferences.notifications);
   }
 
