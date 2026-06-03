@@ -156,6 +156,24 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("slei-channel-form");
   });
 
+  it("select agents in the create channel modal with readiness copy", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({ members: createDemoMembers() })}
+        initialCreateChannelModalOpen
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("选择 Agent");
+    expect(html).toContain("@Coda");
+    expect(html).toContain("@alice");
+    expect(html).toContain("记忆同步中");
+    expect(html).not.toContain("@lei");
+  });
+
   it("detects, navigates, and inserts composer mention selections", () => {
     expect(activeMentionQuery("帮我问 @co")).toEqual({ query: "co", start: 4, end: 7 });
     expect(activeMentionQuery("email a@b.com")).toBeNull();

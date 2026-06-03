@@ -17,6 +17,7 @@ import {
   type SaveMessageRequest,
   type SavedMessageView,
   type AgentPathTarget,
+  type SendChannelMessageOutcome,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
@@ -37,6 +38,7 @@ import {
   formatMemberCreatedDate,
   renameComputerNode,
   shouldRefreshConversationMessages,
+  sendChatComposerMessage,
   stripChannelHash,
   type AgentDraftInput,
   type SettingsPanel,
@@ -60,6 +62,7 @@ export {
   activeMentionQuery,
   agentsForComputerNode,
   appendTaskReply,
+  channelReadinessLabel,
   composerShortcutAction,
   createDraftComputerNode,
   createLocalChatMessage,
@@ -73,6 +76,7 @@ export {
   moveMentionSelection,
   renameComputerNode,
   shouldRefreshConversationMessages,
+  sendChatComposerMessage,
   submitComposerDraft,
 } from "./model";
 export { EditableDetailField, Empty } from "../components";
@@ -177,6 +181,20 @@ function upsertConversation(conversations: ConversationView[], conversation: Con
   return conversations.some((candidate) => candidate.id === conversation.id)
     ? conversations.map((candidate) => (candidate.id === conversation.id ? conversation : candidate))
     : [...conversations, conversation];
+}
+
+function createChannelTaskPlaceholder(outcome: SendChannelMessageOutcome, message: SleiMessage, members: SleiMember[]): SleiFixtures["tasks"][number] | null {
+  if (!outcome.taskId) return null;
+  const assignee = members.find((member) => member.id === outcome.assigneeAgentId);
+  return {
+    id: outcome.taskId,
+    title: message.body.trim().split(/\n+/)[0]?.slice(0, 80) || "Untitled task",
+    owner: assignee?.name ?? message.author,
+    status: outcome.assigneeAgentId ? "in_progress" : "todo",
+    channelId: message.channelId,
+    sourceMessageId: message.id,
+    replies: [{ id: `root-${message.id}`, sender: message.author, role: message.role, body: message.body }],
+  };
 }
 
 async function loadSleiConversationMessages(
@@ -554,12 +572,17 @@ export function SleiApp() {
       if (!body.trim() && attachmentIds.length === 0) return;
       setSendingConversationIds((current) => [...new Set([...current, activeConversationId])]);
       try {
-        const receipt = await bridge.sendConversationMessage(activeConversationId, {
-          authorId: "human:local",
-          body: body.trim(),
-          sessionId: options?.sessionId ?? activeSessionId,
+        const result = await sendChatComposerMessage({
+          activeChannelId,
+          activeConversationId,
+          activeSessionId: options?.sessionId ?? activeSessionId,
           attachmentIds,
+          body,
+          bridge,
+          profile,
         });
+        if (result.kind !== "conversation") return;
+        const receipt = result.receipt;
         const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile);
         if (memoryRequest) {
           void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
@@ -597,11 +620,19 @@ export function SleiApp() {
     }
     const message = createLocalChatMessage({ body, messages, profile, channelId: targetId });
     if (!message) return;
+    const result = await sendChatComposerMessage({
+      activeChannelId,
+      body,
+      bridge,
+      profile,
+    });
+    if (result.kind !== "channel") return;
+    const channelMessage = { ...message, id: result.receipt.outcome.messageId };
     if (memoryRequest) {
       void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
       const agent = data.members.find((member) => member.id === memoryRequest.agentId);
       const systemMessage: SleiMessage = {
-        id: `memory-${Date.now()}`,
+        id: `memory-${channelMessage.id}`,
         author: messages.common.system,
         role: "system",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -610,13 +641,14 @@ export function SleiApp() {
         status: "done",
         toolCall: "remember_agent_fact",
       };
-      setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, message, systemMessage] }));
+      setData((current) => createSleiFixtures({ ...current, messages: [...current.messages, channelMessage, systemMessage] }));
       return;
     }
 
     setData((current) => {
-      const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(message, targetId)] : current.tasks;
-      return createSleiFixtures({ ...current, messages: [...current.messages, message], tasks: nextTasks });
+      const task = createChannelTaskPlaceholder(result.receipt.outcome, channelMessage, current.members);
+      const nextTasks = task && !current.tasks.some((candidate) => candidate.id === task.id) ? [...current.tasks, task] : current.tasks;
+      return createSleiFixtures({ ...current, messages: [...current.messages, channelMessage], tasks: nextTasks });
     });
   }
 
@@ -624,14 +656,16 @@ export function SleiApp() {
     setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, role: "human", body }) }));
   }
 
-  async function handleCreateChannel(input: { name: string; projectName?: string }) {
+  async function handleCreateChannel(input: { name: string; projectName?: string; agentIds?: string[] }) {
     const name = stripChannelHash(input.name);
     if (!name) return;
+    const projectName = input.projectName?.trim() || undefined;
     const receipt = await bridge.createChannel({
       name,
-      description: input.projectName?.trim() ? messages.chat.projectPrefix(input.projectName.trim()) : messages.chat.channel,
+      description: projectName,
+      agentIds: input.agentIds ?? [],
     });
-    const channel = channelFromView(receipt.channel, messages);
+    const channel = { ...channelFromView(receipt.channel, messages), projectName };
     setData((current) => {
       if (current.channels.some((candidate) => candidate.id === channel.id || candidate.name === channel.name)) return current;
       return createSleiFixtures({ ...current, channels: [...current.channels, channel] });

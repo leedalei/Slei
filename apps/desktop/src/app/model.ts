@@ -1,6 +1,6 @@
-import type { AppearancePreferences, ConversationAttachmentView, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
+import type { AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
-import type { SleiMember, SleiMessage, SleiTask } from "./fixtures";
+import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./fixtures";
 import type { AppView } from "./router";
 
 export type { AppView } from "./router";
@@ -93,6 +93,38 @@ export async function submitComposerDraft(input: {
   return { sent: true, draft: "", attachments: [], asTask: false };
 }
 
+export async function sendChatComposerMessage(input: {
+  activeChannelId: string;
+  activeConversationId?: string;
+  activeSessionId?: string;
+  attachmentIds?: string[];
+  body: string;
+  bridge: Pick<DaemonBridge, "sendChannelMessage" | "sendConversationMessage">;
+  profile: UserProfile;
+}) {
+  const body = input.body.trim();
+  if (input.activeConversationId) {
+    return {
+      kind: "conversation" as const,
+      receipt: await input.bridge.sendConversationMessage(input.activeConversationId, {
+        authorId: "human:local",
+        body,
+        sessionId: input.activeSessionId,
+        attachmentIds: input.attachmentIds,
+      }),
+    };
+  }
+
+  const handle = input.profile.handle.replace(/^@/, "").trim() || "local";
+  return {
+    kind: "channel" as const,
+    receipt: await input.bridge.sendChannelMessage(input.activeChannelId, {
+      authorId: `human:${handle}`,
+      body,
+    }),
+  };
+}
+
 export function createLocalChatMessage(input: {
   body: string;
   messages?: DesktopMessages;
@@ -146,6 +178,22 @@ export function createTaskFromChatMessage(message: SleiMessage, channelId: strin
     sourceMessageId: message.id,
     replies: [{ id: `root-${message.id}`, sender: message.author, role: message.role, body: message.body }],
   };
+}
+
+export function channelReadinessLabel(readiness: SleiChannelMemberReadiness | undefined, messages: DesktopMessages): string {
+  switch (readiness) {
+    case "joining":
+      return messages.chat.memberJoining;
+    case "memory_syncing":
+      return messages.chat.memorySyncing;
+    case "memory_failed":
+      return messages.chat.memoryFailed;
+    case "unavailable":
+      return messages.chat.memberUnavailable;
+    case "ready":
+    default:
+      return messages.chat.memberReady;
+  }
 }
 
 export function appendTaskReply(tasks: SleiTask[], taskId: string, reply: { sender: string; role?: SleiMessage["role"]; body: string }): SleiTask[] {

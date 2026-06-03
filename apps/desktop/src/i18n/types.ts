@@ -81,8 +81,14 @@ export type DesktopMessages = {
     inputToChannel: (name: string) => string;
     inputToMember: (name: string) => string;
     memoryUpdated: (handle: string) => string;
+    memberJoining: string;
+    memorySyncing: string;
+    memoryFailed: string;
+    memberUnavailable: string;
+    memberReady: string;
     project: string;
     projectPrefix: (projectName: string) => string;
+    selectAgents: string;
     sortChannels: string;
     sortDirectMessages: string;
     runtimeDetected: string;
