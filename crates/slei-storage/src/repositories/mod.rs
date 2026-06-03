@@ -24,6 +24,50 @@ pub struct TaskThreadSummary {
     pub reply_count: i64,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct CoordinatorDecisionRecord {
+    pub id: Uuid,
+    pub channel_id: Uuid,
+    pub message_id: Uuid,
+    pub intent: String,
+    pub action: String,
+    pub assignee_agent_id: Option<String>,
+    pub reason: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AgentInboxEventRecord {
+    pub id: Uuid,
+    pub agent_id: String,
+    pub event_type: String,
+    pub delivery_state: String,
+    pub payload: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ChannelCoordinatorRecord {
+    pub channel_id: Uuid,
+    pub strategy: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct RoutingContextPackageRecord {
+    pub id: Uuid,
+    pub decision_id: Uuid,
+    pub source_message_id: Uuid,
+    pub payload: String,
+    pub contains_deleted_body: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct BlockedMemorySectionRecord {
+    pub agent_id: String,
+    pub document_path: String,
+    pub document_section: String,
+    pub version_hash: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct Repositories {
     pool: SqlitePool,
@@ -220,4 +264,317 @@ impl Repositories {
         })
         .transpose()
     }
+
+    pub async fn insert_channel_coordinator(
+        &self,
+        channel_id: Uuid,
+        strategy: &str,
+        enabled: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO channel_coordinators(channel_id, strategy, enabled)
+             VALUES (?, ?, ?)
+             ON CONFLICT(channel_id) DO UPDATE SET
+                strategy = excluded.strategy,
+                enabled = excluded.enabled,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(channel_id.to_string())
+        .bind(strategy)
+        .bind(if enabled { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channel_coordinator(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Option<ChannelCoordinatorRecord>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT channel_id, strategy, enabled
+             FROM channel_coordinators
+             WHERE channel_id = ?",
+        )
+        .bind(channel_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            let channel_id: String = row.try_get("channel_id")?;
+            let enabled: i64 = row.try_get("enabled")?;
+            Ok(ChannelCoordinatorRecord {
+                channel_id: parse_uuid(&channel_id)?,
+                strategy: row.try_get("strategy")?,
+                enabled: enabled != 0,
+            })
+        })
+        .transpose()
+    }
+
+    pub async fn insert_coordinator_decision(
+        &self,
+        id: Uuid,
+        channel_id: Uuid,
+        message_id: Uuid,
+        intent: &str,
+        action: &str,
+        assignee_agent_id: Option<&str>,
+        reason: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO coordinator_decisions(
+                id, channel_id, message_id, intent, action, assignee_agent_id, reason
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(channel_id.to_string())
+        .bind(message_id.to_string())
+        .bind(intent)
+        .bind(action)
+        .bind(assignee_agent_id)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn coordinator_decisions_for_message(
+        &self,
+        message_id: Uuid,
+    ) -> Result<Vec<CoordinatorDecisionRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, channel_id, message_id, intent, action, assignee_agent_id, reason
+             FROM coordinator_decisions
+             WHERE message_id = ?
+             ORDER BY created_at ASC, id ASC",
+        )
+        .bind(message_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                let channel_id: String = row.try_get("channel_id")?;
+                let message_id: String = row.try_get("message_id")?;
+                Ok(CoordinatorDecisionRecord {
+                    id: parse_uuid(&id)?,
+                    channel_id: parse_uuid(&channel_id)?,
+                    message_id: parse_uuid(&message_id)?,
+                    intent: row.try_get("intent")?,
+                    action: row.try_get("action")?,
+                    assignee_agent_id: row.try_get("assignee_agent_id")?,
+                    reason: row.try_get("reason")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn insert_agent_inbox_event(
+        &self,
+        id: Uuid,
+        agent_id: &str,
+        event_type: &str,
+        delivery_state: &str,
+        payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO agent_inbox_events(id, agent_id, event_type, delivery_state, payload)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(agent_id)
+        .bind(event_type)
+        .bind(delivery_state)
+        .bind(payload)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn agent_inbox_events(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<AgentInboxEventRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, agent_id, event_type, delivery_state, payload
+             FROM agent_inbox_events
+             WHERE agent_id = ?
+             ORDER BY created_at ASC, id ASC",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                Ok(AgentInboxEventRecord {
+                    id: parse_uuid(&id)?,
+                    agent_id: row.try_get("agent_id")?,
+                    event_type: row.try_get("event_type")?,
+                    delivery_state: row.try_get("delivery_state")?,
+                    payload: row.try_get("payload")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn insert_memory_update_event(
+        &self,
+        id: Uuid,
+        agent_id: &str,
+        event_type: &str,
+        source_message_id: Option<Uuid>,
+        document_path: Option<&str>,
+        document_section: Option<&str>,
+        status: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO memory_update_events(
+                id, agent_id, event_type, source_message_id, document_path, document_section, status
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(agent_id)
+        .bind(event_type)
+        .bind(source_message_id.map(|id| id.to_string()))
+        .bind(document_path)
+        .bind(document_section)
+        .bind(status)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_memory_document_state(
+        &self,
+        agent_id: &str,
+        document_path: &str,
+        document_section: &str,
+        version_hash: Option<&str>,
+        blocked: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO memory_document_states(
+                agent_id, document_path, document_section, version_hash, blocked
+             )
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(agent_id, document_path, document_section) DO UPDATE SET
+                version_hash = excluded.version_hash,
+                blocked = excluded.blocked,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(agent_id)
+        .bind(document_path)
+        .bind(document_section)
+        .bind(version_hash)
+        .bind(if blocked { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn blocked_memory_sections(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<BlockedMemorySectionRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT agent_id, document_path, document_section, version_hash
+             FROM memory_document_states
+             WHERE agent_id = ? AND blocked = 1
+             ORDER BY document_path ASC, document_section ASC",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(BlockedMemorySectionRecord {
+                    agent_id: row.try_get("agent_id")?,
+                    document_path: row.try_get("document_path")?,
+                    document_section: row.try_get("document_section")?,
+                    version_hash: row.try_get("version_hash")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn insert_routing_context_package(
+        &self,
+        id: Uuid,
+        decision_id: Uuid,
+        source_message_id: Uuid,
+        payload: &str,
+        contains_deleted_body: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO routing_context_packages(
+                id, decision_id, source_message_id, payload, contains_deleted_body
+             )
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(decision_id.to_string())
+        .bind(source_message_id.to_string())
+        .bind(payload)
+        .bind(if contains_deleted_body { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn routing_context_packages_for_decision(
+        &self,
+        decision_id: Uuid,
+    ) -> Result<Vec<RoutingContextPackageRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, decision_id, source_message_id, payload, contains_deleted_body
+             FROM routing_context_packages
+             WHERE decision_id = ?
+             ORDER BY created_at ASC, id ASC",
+        )
+        .bind(decision_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                let decision_id: String = row.try_get("decision_id")?;
+                let source_message_id: String = row.try_get("source_message_id")?;
+                let contains_deleted_body: i64 = row.try_get("contains_deleted_body")?;
+                Ok(RoutingContextPackageRecord {
+                    id: parse_uuid(&id)?,
+                    decision_id: parse_uuid(&decision_id)?,
+                    source_message_id: parse_uuid(&source_message_id)?,
+                    payload: row.try_get("payload")?,
+                    contains_deleted_body: contains_deleted_body != 0,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn mark_context_packages_deleted(
+        &self,
+        source_message_id: Uuid,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE routing_context_packages
+             SET contains_deleted_body = 1
+             WHERE source_message_id = ?",
+        )
+        .bind(source_message_id.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+}
+
+fn parse_uuid(value: &str) -> Result<Uuid, sqlx::Error> {
+    Uuid::parse_str(value).map_err(|err| sqlx::Error::Decode(Box::new(err)))
 }

@@ -8,6 +8,7 @@ use crate::services::conversation_service::ConversationService;
 use crate::services::event_service::EventService;
 use crate::services::member_service::MemberService;
 use crate::services::node_service::NodeService;
+use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::settings_service::SettingsService;
 use crate::services::task_service::TaskService;
 use crate::services::workspace_service::WorkspaceService;
@@ -28,6 +29,7 @@ pub struct AppState {
     event_service: EventService,
     settings_service: SettingsService,
     task_service: TaskService,
+    orchestration_store: OrchestrationStore,
     worker_transport: WorkerTransport,
     agent_dm_runs: AgentDmRunStore,
 }
@@ -38,6 +40,23 @@ impl AppState {
     }
 
     pub fn for_tests_with_agent_root(auth_token: AuthToken, agent_data_root: PathBuf) -> Self {
+        let orchestration_store = orchestration_store_blocking(agent_data_root.clone());
+        Self::for_tests_with_agent_root_and_store(auth_token, agent_data_root, orchestration_store)
+    }
+
+    pub async fn for_tests_with_agent_root_async(
+        auth_token: AuthToken,
+        agent_data_root: PathBuf,
+    ) -> Self {
+        let orchestration_store = OrchestrationStore::for_data_root(agent_data_root.clone()).await;
+        Self::for_tests_with_agent_root_and_store(auth_token, agent_data_root, orchestration_store)
+    }
+
+    fn for_tests_with_agent_root_and_store(
+        auth_token: AuthToken,
+        agent_data_root: PathBuf,
+        orchestration_store: OrchestrationStore,
+    ) -> Self {
         let event_service = EventService::new();
         let data_root = agent_data_root.clone();
         Self {
@@ -53,6 +72,7 @@ impl AppState {
             event_service,
             settings_service: SettingsService::for_tests(),
             task_service: TaskService::for_tests(),
+            orchestration_store,
             worker_transport: WorkerTransport::fake(),
             agent_dm_runs: AgentDmRunStore::default(),
         }
@@ -94,6 +114,10 @@ impl AppState {
         &self.task_service
     }
 
+    pub fn orchestration(&self) -> &OrchestrationStore {
+        &self.orchestration_store
+    }
+
     pub fn agent_dm(&self) -> AgentDmService {
         AgentDmService::new(
             self.conversation_service.clone(),
@@ -121,4 +145,16 @@ fn default_data_root() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|_| std::env::var("HOME").map(|home| PathBuf::from(home).join(".slei")))
         .unwrap_or_else(|_| PathBuf::from(".slei"))
+}
+
+fn orchestration_store_blocking(data_root: PathBuf) -> OrchestrationStore {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create orchestration test runtime");
+        runtime.block_on(OrchestrationStore::for_data_root(data_root))
+    })
+    .join()
+    .expect("initialize orchestration store")
 }

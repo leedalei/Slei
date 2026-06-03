@@ -65,5 +65,77 @@ CREATE TABLE IF NOT EXISTS idempotent_mutations (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS channel_coordinators (
+    channel_id TEXT PRIMARY KEY,
+    strategy TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS coordinator_decisions (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    intent TEXT NOT NULL,
+    action TEXT NOT NULL,
+    assignee_agent_id TEXT,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_coordinator_decisions_message_id
+    ON coordinator_decisions(message_id);
+
+CREATE TABLE IF NOT EXISTS agent_inbox_events (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    delivery_state TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_inbox_events_agent_id
+    ON agent_inbox_events(agent_id);
+
+CREATE TABLE IF NOT EXISTS memory_update_events (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    source_message_id TEXT,
+    document_path TEXT,
+    document_section TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_update_events_source_message_id
+    ON memory_update_events(source_message_id);
+
+CREATE TABLE IF NOT EXISTS memory_document_states (
+    agent_id TEXT NOT NULL,
+    document_path TEXT NOT NULL,
+    document_section TEXT NOT NULL DEFAULT '',
+    version_hash TEXT,
+    blocked INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(agent_id, document_path, document_section)
+);
+
+CREATE TABLE IF NOT EXISTS routing_context_packages (
+    id TEXT PRIMARY KEY,
+    decision_id TEXT NOT NULL REFERENCES coordinator_decisions(id),
+    source_message_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    contains_deleted_body INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_routing_context_packages_decision_id
+    ON routing_context_packages(decision_id);
+
+CREATE INDEX IF NOT EXISTS idx_routing_context_packages_source_message_id
+    ON routing_context_packages(source_message_id);
+
 INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
 "#;
