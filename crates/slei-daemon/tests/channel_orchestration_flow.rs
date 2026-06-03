@@ -384,6 +384,85 @@ async fn command_message_partial_retry_recovers_existing_side_effects_without_du
     assert_eq!(packages.len(), 1);
 }
 
+#[tokio::test]
+async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "send-command-deleted";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", "先发一条", idempotency_key)
+        .await
+        .unwrap();
+    state
+        .messages()
+        .delete_human_message(&message.id)
+        .await
+        .unwrap();
+
+    let err = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "实现一个不该被路由的新任务".to_string(),
+            idempotency_key: idempotency_key.to_string(),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("inactive idempotent message"));
+    assert!(state
+        .tasks()
+        .list_tasks(TaskQuery::default())
+        .await
+        .is_empty());
+    assert!(state
+        .channel_messages_for_tests("dev")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>()
+        .is_empty());
+    assert!(state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .is_empty());
+    assert!(state
+        .orchestration()
+        .decisions_for_message_for_tests(&message.id)
+        .await
+        .is_empty());
+    assert!(state
+        .orchestration()
+        .routing_context_packages_for_message_for_tests(&message.id)
+        .await
+        .is_empty());
+}
+
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-channel-flow-{}", Uuid::new_v4()));
     std::fs::create_dir_all(root.join("agents")).unwrap();

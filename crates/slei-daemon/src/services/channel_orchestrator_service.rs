@@ -11,7 +11,7 @@ use crate::services::coordinator_service::{
     CoordinatorDecision, CoordinatorInput, CoordinatorService,
 };
 use crate::services::member_service::MemberService;
-use crate::services::message_service::{MessageError, MessageService};
+use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::task_service::{TaskError, TaskService};
 
@@ -109,7 +109,16 @@ impl ChannelOrchestratorService {
             )
             .await?;
 
-        let message_body = message.body.clone().unwrap_or_else(|| input.body.clone());
+        if message.deleted || message.kind != MessageKind::Human {
+            return Err(ChannelOrchestratorError::InactiveIdempotentMessage {
+                message_id: message.id,
+            });
+        }
+        let message_body = message.body.clone().ok_or_else(|| {
+            ChannelOrchestratorError::InactiveIdempotentMessage {
+                message_id: message.id.clone(),
+            }
+        })?;
         let explicit_agent_ids = self
             .resolve_explicit_mentions(&message_body, &member_ids)
             .await;
@@ -412,6 +421,8 @@ pub enum ChannelOrchestratorError {
     Json(#[from] serde_json::Error),
     #[error("invalid coordinator decision id")]
     InvalidDecisionId,
+    #[error("inactive idempotent message cannot be routed: {message_id}")]
+    InactiveIdempotentMessage { message_id: String },
     #[error("orchestration persistence error: {0}")]
     Sql(#[from] sqlx::Error),
 }
