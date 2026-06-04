@@ -42,7 +42,7 @@ describe("settings preferences", () => {
     expect(html).not.toContain("诊断");
   });
 
-  it("renders real language and region options", () => {
+  it("renders real language and region selectors with semantic option values", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="settings"
@@ -58,10 +58,9 @@ describe("settings preferences", () => {
     expect(html).toContain('aria-label="语言"');
     expect(html).toContain('aria-label="时区"');
     expect(html).toContain(">中文<");
-    expect(html).toContain(">English<");
-    expect(html).toContain('option value="zh-CN"');
-    expect(html).toContain('option value="en-US"');
-    expect(html).toContain('option value="Asia/Shanghai"');
+    expect(html).toContain('data-settings-option="locale:zh-CN"');
+    expect(html).toContain('data-settings-option="locale:en-US"');
+    expect(html).toContain('data-settings-option="timezone:Asia/Shanghai"');
   });
 
   it("renders real notification controls without diagnostics", () => {
@@ -79,8 +78,9 @@ describe("settings preferences", () => {
     expect(html).toContain("提及通知");
     expect(html).toContain("人工回复通知");
     expect(html).toContain("审批通知");
-    expect(html.match(/type="checkbox"/g)).toHaveLength(3);
-    expect(html).toContain('checked=""');
+    expect(html).toContain('data-settings-notification="mentions"');
+    expect(html).toContain('data-settings-notification="humanReplies"');
+    expect(html).toContain('data-settings-notification="approvals"');
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });
@@ -127,12 +127,12 @@ describe("settings preferences", () => {
     expect(appearanceHtml).toContain("字体大小");
     expect(appearanceHtml).toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
-    expect(appearanceHtml).toContain('option value="light"');
-    expect(appearanceHtml).toContain('option value="dark"');
+    expect(appearanceHtml).toContain('data-settings-theme-option="light"');
+    expect(appearanceHtml).toContain('data-settings-theme-option="dark"');
     expect(appearanceHtml).toContain(">浅色<");
     expect(appearanceHtml).toContain(">深色<");
-    expect(appearanceHtml).not.toContain('option value="system"');
-    expect(appearanceHtml).not.toContain('option value="highContrast"');
+    expect(appearanceHtml).not.toContain('data-settings-theme-option="system"');
+    expect(appearanceHtml).not.toContain('data-settings-theme-option="highContrast"');
     expect(aboutHtml).toContain("桌面端版本");
     expect(aboutHtml).toContain("Daemon 版本");
   });
@@ -150,7 +150,7 @@ describe("settings preferences", () => {
     );
 
     expect(html).toContain('data-theme="light"');
-    expect(html).toContain('option value="light" selected=""');
+    expect(html).toContain('data-settings-theme-selected="light"');
   });
 
   it("bridge mock persists preferences like the native bridge contract", async () => {

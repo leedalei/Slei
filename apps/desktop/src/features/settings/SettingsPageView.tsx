@@ -1,8 +1,19 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
-import { defaultTimeZone, desktopVersion, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { CheckboxControl, MemberAvatar, SelectControl } from "../../components";
-export function SettingsPage(input: {
+import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
+import { MemberAvatar } from "../../components/MemberAvatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+
+type SettingsPageInput = {
   activePanel: SettingsPanel;
   appearance: AppearancePreferences;
   locale: AppLocale;
@@ -16,179 +27,304 @@ export function SettingsPage(input: {
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
   profile: UserProfile;
   timeZone: string;
-}) {
-  const { appearance, locale, notifications, profile } = input;
+};
+
+type SelectOption<TValue extends string> = {
+  label: string;
+  value: TValue;
+};
+
+export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
+  const activeTheme = normalizeAppearanceTheme(input.appearance.theme);
 
   function updateProfile(patch: Partial<UserProfile>) {
-    input.onProfileChange?.({ ...profile, ...patch });
+    input.onProfileChange?.({ ...input.profile, ...patch });
   }
 
   function updateNotification(field: keyof NotificationPreferences, value: boolean) {
     input.onNotificationsChange?.({
-      ...notifications,
+      ...input.notifications,
       [field]: value,
     });
   }
 
   function updateAppearance(patch: Partial<AppearancePreferences>) {
     input.onAppearanceChange?.({
-      ...appearance,
+      ...input.appearance,
       ...patch,
     });
   }
 
   return (
-    <section className="slei-settings-page" data-settings-panel={input.activePanel}>
-      <header className="slei-workspace-header">
-        <div>
-          <h1>{labels.panelTitle[input.activePanel]}</h1>
-          <p>{labels.panelSubtitle[input.activePanel]}</p>
+    <section className="min-h-0 bg-background" data-settings-panel={input.activePanel}>
+      <ScrollArea className="h-full min-h-0">
+        <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
+          <header className="grid gap-1">
+            <Badge className="w-fit" variant="secondary">{labels.title}</Badge>
+            <h1 className="text-2xl font-semibold leading-tight">{labels.panelTitle[input.activePanel]}</h1>
+            <p className="max-w-2xl text-sm text-muted-foreground">{labels.panelSubtitle[input.activePanel]}</p>
+          </header>
+
+          {input.activePanel === "account" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.profile}</CardTitle>
+                <CardDescription>{labels.accountSubtitle}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="settings-display-name">{labels.displayName}</Label>
+                    <Input
+                      id="settings-display-name"
+                      onChange={(event) => updateProfile({ displayName: event.currentTarget.value })}
+                      value={input.profile.displayName}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="settings-handle">{labels.handle}</Label>
+                    <Input
+                      id="settings-handle"
+                      onChange={(event) => updateProfile({ handle: event.currentTarget.value })}
+                      value={input.profile.handle}
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                <section aria-label={labels.avatarPresets} className="grid gap-3">
+                  <div className="grid gap-1">
+                    <h2 className="text-sm font-medium">{labels.avatar}</h2>
+                    <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {profileAvatarPresets.map((preset) => (
+                      <Button
+                        aria-label={preset.name}
+                        aria-pressed={input.profile.avatar === preset.id ? "true" : "false"}
+                        className={cn("h-auto justify-start gap-3 px-3 py-2", input.profile.avatar === preset.id && "ring-2 ring-ring")}
+                        key={preset.id}
+                        onClick={() => updateProfile({ avatar: preset.id })}
+                        type="button"
+                        variant={input.profile.avatar === preset.id ? "secondary" : "outline"}
+                      >
+                        <MemberAvatar
+                          identity={{
+                            id: preset.id,
+                            name: preset.name,
+                            handle: `@${preset.id}`,
+                            avatar: preset.name.slice(0, 2),
+                            avatarSeed: preset.id,
+                          }}
+                        />
+                        <span>{preset.name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </section>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {input.activePanel === "language-region" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.languageRegion}</CardTitle>
+                <CardDescription>{labels.languageRegionSubtitle}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <SettingsSelect
+                  ariaLabel={labels.language}
+                  label={labels.language}
+                  onValueChange={(value) => input.onLocaleChange?.(value)}
+                  optionDataPrefix="locale"
+                  options={[
+                    { label: labels.languageNames["zh-CN"], value: "zh-CN" },
+                    { label: labels.languageNames["en-US"], value: "en-US" },
+                  ]}
+                  value={input.locale}
+                />
+                <SettingsSelect
+                  ariaLabel={labels.timeZone}
+                  label={labels.timeZone}
+                  onValueChange={(value) => input.onTimeZoneChange?.(value)}
+                  optionDataPrefix="timezone"
+                  options={timeZoneOptions}
+                  value={input.timeZone || defaultTimeZone}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {input.activePanel === "appearance" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.appearance}</CardTitle>
+                <CardDescription>{labels.appearanceSubtitle}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-5">
+                <div className="grid gap-2">
+                  <Label>{labels.theme}</Label>
+                  <div aria-label={labels.theme} className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
+                    {themeOptions(labels).map((option) => (
+                      <Button
+                        aria-pressed={activeTheme === option.value ? "true" : "false"}
+                        className={cn("justify-start", activeTheme === option.value && "ring-2 ring-ring")}
+                        data-settings-theme-option={option.value}
+                        key={option.value}
+                        onClick={() => updateAppearance({ theme: option.value })}
+                        type="button"
+                        variant={activeTheme === option.value ? "secondary" : "outline"}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="grid gap-2">
+                  <Label>{labels.fontSize}</Label>
+                  <div className="flex flex-wrap gap-2" role="group" aria-label={labels.fontSize}>
+                    {(["sm", "md", "lg"] as const).map((size) => (
+                      <Button
+                        aria-pressed={input.appearance.fontSize === size ? "true" : "false"}
+                        key={size}
+                        onClick={() => updateAppearance({ fontSize: size })}
+                        type="button"
+                        variant={input.appearance.fontSize === size ? "secondary" : "outline"}
+                      >
+                        {labels.fontSizes[size]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {input.activePanel === "notifications" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.notifications}</CardTitle>
+                <CardDescription>{labels.notificationsSubtitle}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                <NotificationSwitch
+                  checked={input.notifications.mentions}
+                  label={labels.mentionNotifications}
+                  name="mentions"
+                  onCheckedChange={(checked) => updateNotification("mentions", checked)}
+                />
+                <NotificationSwitch
+                  checked={input.notifications.humanReplies}
+                  label={labels.humanReplyNotifications}
+                  name="humanReplies"
+                  onCheckedChange={(checked) => updateNotification("humanReplies", checked)}
+                />
+                <NotificationSwitch
+                  checked={input.notifications.approvals}
+                  label={labels.approvalNotifications}
+                  name="approvals"
+                  onCheckedChange={(checked) => updateNotification("approvals", checked)}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {input.activePanel === "about" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.about}</CardTitle>
+                <CardDescription>{labels.aboutSubtitle}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid gap-3">
+                  <AboutRow label={labels.desktopVersion} value={desktopVersion} />
+                  <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
+                  <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
+                </dl>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
-      </header>
-      <div className="slei-settings-stack">
-        {input.activePanel === "account" ? (
-        <section className="slei-settings-section">
-          <h2>{labels.profile}</h2>
-          <div className="slei-settings-fields">
-            <label className="slei-field"><span>{labels.displayName}</span><input className="slei-input" onChange={(event) => updateProfile({ displayName: event.currentTarget.value })} value={profile.displayName} /></label>
-            <label className="slei-field"><span>@</span><input className="slei-input" onChange={(event) => updateProfile({ handle: event.currentTarget.value })} value={profile.handle} /></label>
-          </div>
-          <section aria-label={labels.avatarPresets} className="slei-profile-avatar-presets">
-            <div>
-              <h3>{labels.avatar}</h3>
-              <p>{labels.avatarHint}</p>
-            </div>
-            <div className="slei-avatar-preset-list">
-              {profileAvatarPresets.map((preset) => (
-                <button
-                  aria-label={preset.name}
-                  aria-pressed={profile.avatar === preset.id ? "true" : "false"}
-                  className="slei-avatar-preset"
-                  key={preset.id}
-                  onClick={() => updateProfile({ avatar: preset.id })}
-                  type="button"
-                >
-                  <MemberAvatar
-                    identity={{
-                      id: preset.id,
-                      name: preset.name,
-                      handle: `@${preset.id}`,
-                      avatar: preset.name.slice(0, 2),
-                      avatarSeed: preset.id,
-                    }}
-                  />
-                  <span>{preset.name}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-        </section>
-        ) : null}
-        {input.activePanel === "language-region" ? (
-        <section className="slei-settings-section">
-          <h2>{labels.languageRegion}</h2>
-          <div className="slei-settings-fields">
-            <label className="slei-field slei-language-field">
-              <span>{labels.language}</span>
-              <SelectControl
-                ariaLabel={labels.language}
-                className="slei-input slei-language-select"
-                onChange={(value) => input.onLocaleChange?.(value)}
-                options={[
-                  { label: labels.languageNames["zh-CN"], value: "zh-CN" },
-                  { label: labels.languageNames["en-US"], value: "en-US" },
-                ]}
-                value={locale}
-              />
-            </label>
-            <label className="slei-field slei-language-field">
-              <span>{labels.timeZone}</span>
-              <SelectControl
-                ariaLabel={labels.timeZone}
-                className="slei-input slei-timezone-select"
-                onChange={(value) => input.onTimeZoneChange?.(value)}
-                options={timeZoneOptions}
-                value={input.timeZone}
-              />
-            </label>
-          </div>
-        </section>
-        ) : null}
-        {input.activePanel === "appearance" ? (
-        <section className="slei-settings-section">
-          <h2>{labels.appearance}</h2>
-          <div className="slei-settings-fields">
-            <label className="slei-field slei-language-field">
-              <span>{labels.theme}</span>
-              <SelectControl
-                ariaLabel={labels.theme}
-                className="slei-input slei-theme-select"
-                onChange={(value) => updateAppearance({ theme: value })}
-                options={[
-                  { label: labels.themeLight, value: "light" },
-                  { label: labels.themeDark, value: "dark" },
-                ]}
-                value={appearance.theme === "dark" ? "dark" : "light"}
-              />
-            </label>
-            <div className="slei-field">
-              <span>{labels.fontSize}</span>
-              <div className="slei-segmented-control" role="group" aria-label={labels.fontSize}>
-                {(["sm", "md", "lg"] as const).map((size) => (
-                  <button
-                    aria-pressed={appearance.fontSize === size ? "true" : "false"}
-                    className="slei-segmented-control__button"
-                    key={size}
-                    onClick={() => updateAppearance({ fontSize: size })}
-                    type="button"
-                  >
-                    {labels.fontSizes[size]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-        ) : null}
-        {input.activePanel === "notifications" ? (
-        <section className="slei-settings-section">
-          <h2>{labels.notifications}</h2>
-          <div className="slei-settings-toggle-list">
-            <CheckboxControl
-              checked={notifications.mentions}
-              className="slei-notification-toggle"
-              label={labels.mentionNotifications}
-              onChange={(checked) => updateNotification("mentions", checked)}
-            />
-            <CheckboxControl
-              checked={notifications.humanReplies}
-              className="slei-notification-toggle"
-              label={labels.humanReplyNotifications}
-              onChange={(checked) => updateNotification("humanReplies", checked)}
-            />
-            <CheckboxControl
-              checked={notifications.approvals}
-              className="slei-notification-toggle"
-              label={labels.approvalNotifications}
-              onChange={(checked) => updateNotification("approvals", checked)}
-            />
-          </div>
-        </section>
-        ) : null}
-        {input.activePanel === "about" ? (
-        <section className="slei-settings-section">
-          <h2>{labels.about}</h2>
-          <div className="slei-about-list">
-            <div><span>{labels.desktopVersion}</span><strong>{desktopVersion}</strong></div>
-            <div><span>{labels.daemonVersion}</span><strong>{input.nodes[0]?.daemonVersion ?? "unknown"}</strong></div>
-            <div><span>{labels.connectedComputers}</span><strong>{input.nodes.length}</strong></div>
-          </div>
-        </section>
-        ) : null}
-      </div>
+      </ScrollArea>
     </section>
   );
+}
+
+function SettingsSelect<TValue extends string>(input: {
+  ariaLabel: string;
+  label: string;
+  onValueChange: (value: TValue) => void;
+  optionDataPrefix: string;
+  options: Array<SelectOption<TValue>>;
+  value: TValue;
+}) {
+  const selectedLabel = input.options.find((option) => option.value === input.value)?.label ?? input.value;
+
+  return (
+    <div className="grid gap-2">
+      <Label>{input.label}</Label>
+      <Select onValueChange={input.onValueChange} value={input.value}>
+        <SelectTrigger aria-label={input.ariaLabel} className="w-full sm:max-w-sm">
+          <SelectValue placeholder={selectedLabel} />
+        </SelectTrigger>
+        <SelectContent>
+          {input.options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div hidden>
+        {input.options.map((option) => (
+          <span data-settings-option={`${input.optionDataPrefix}:${option.value}`} key={option.value}>
+            {option.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NotificationSwitch(input: {
+  checked: boolean;
+  label: string;
+  name: keyof NotificationPreferences;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border p-3" data-settings-notification={input.name}>
+      <Label className="text-sm" htmlFor={`settings-notification-${input.name}`}>{input.label}</Label>
+      <Switch
+        aria-label={input.label}
+        checked={input.checked}
+        id={`settings-notification-${input.name}`}
+        onCheckedChange={input.onCheckedChange}
+      />
+    </div>
+  );
+}
+
+function AboutRow(input: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+      <dt className="text-sm text-muted-foreground">{input.label}</dt>
+      <dd className="font-medium">{input.value}</dd>
+    </div>
+  );
+}
+
+function themeOptions(labels: DesktopMessages["settings"]): Array<SelectOption<"light" | "dark">> {
+  return [
+    { label: labels.themeLight, value: "light" },
+    { label: labels.themeDark, value: "dark" },
+  ];
 }
 
 const timeZoneOptions = [
