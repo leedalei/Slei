@@ -57,10 +57,17 @@ describe("settings preferences", () => {
 
     expect(html).toContain('aria-label="语言"');
     expect(html).toContain('aria-label="时区"');
+    expect(html).toContain('id="settings-select-label-language"');
+    expect(html).toContain('aria-labelledby="settings-select-label-language"');
+    expect(html).toContain('id="settings-select-label-timezone"');
+    expect(html).toContain('aria-labelledby="settings-select-label-timezone"');
+    expect(html).toContain('data-slot="select-item"');
+    expect(html).toContain('data-value="zh-CN"');
+    expect(html).toContain('data-value="en-US"');
+    expect(html).toContain('data-value="Asia/Shanghai"');
     expect(html).toContain(">中文<");
-    expect(html).toContain('data-settings-option="locale:zh-CN"');
-    expect(html).toContain('data-settings-option="locale:en-US"');
-    expect(html).toContain('data-settings-option="timezone:Asia/Shanghai"');
+    expect(html).toContain(">English<");
+    expect(html).not.toContain("data-settings-option=");
   });
 
   it("renders real notification controls without diagnostics", () => {
@@ -78,9 +85,11 @@ describe("settings preferences", () => {
     expect(html).toContain("提及通知");
     expect(html).toContain("人工回复通知");
     expect(html).toContain("审批通知");
-    expect(html).toContain('data-settings-notification="mentions"');
-    expect(html).toContain('data-settings-notification="humanReplies"');
-    expect(html).toContain('data-settings-notification="approvals"');
+    expect(html.match(/role="switch"/g)).toHaveLength(3);
+    expect(html.match(/aria-checked="true"/g)).toHaveLength(2);
+    expect(html.match(/aria-checked="false"/g)).toHaveLength(1);
+    expect(html).toContain('id="settings-notification-mentions"');
+    expect(html).toContain('for="settings-notification-mentions"');
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });
@@ -127,6 +136,7 @@ describe("settings preferences", () => {
     expect(appearanceHtml).toContain("字体大小");
     expect(appearanceHtml).toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
+    expect(appearanceHtml).toContain('text-[var(--slei-font-size)]');
     expect(appearanceHtml).toContain('data-settings-theme-option="light"');
     expect(appearanceHtml).toContain('data-settings-theme-option="dark"');
     expect(appearanceHtml).toContain(">浅色<");

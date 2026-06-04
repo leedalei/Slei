@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { Select as SelectPrimitive } from "radix-ui";
 
 type SettingsPageInput = {
   activePanel: SettingsPanel;
@@ -57,7 +58,7 @@ export function SettingsPage(input: SettingsPageInput) {
   }
 
   return (
-    <section className="min-h-0 bg-background" data-settings-panel={input.activePanel}>
+    <section className="min-h-0 bg-background text-[var(--slei-font-size)]" data-settings-panel={input.activePanel}>
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
           <header className="grid gap-1">
@@ -137,9 +138,9 @@ export function SettingsPage(input: SettingsPageInput) {
               <CardContent className="grid gap-4">
                 <SettingsSelect
                   ariaLabel={labels.language}
+                  id="language"
                   label={labels.language}
                   onValueChange={(value) => input.onLocaleChange?.(value)}
-                  optionDataPrefix="locale"
                   options={[
                     { label: labels.languageNames["zh-CN"], value: "zh-CN" },
                     { label: labels.languageNames["en-US"], value: "en-US" },
@@ -148,9 +149,9 @@ export function SettingsPage(input: SettingsPageInput) {
                 />
                 <SettingsSelect
                   ariaLabel={labels.timeZone}
+                  id="timezone"
                   label={labels.timeZone}
                   onValueChange={(value) => input.onTimeZoneChange?.(value)}
-                  optionDataPrefix="timezone"
                   options={timeZoneOptions}
                   value={input.timeZone || defaultTimeZone}
                 />
@@ -258,36 +259,42 @@ export function SettingsPage(input: SettingsPageInput) {
 
 function SettingsSelect<TValue extends string>(input: {
   ariaLabel: string;
+  id: string;
   label: string;
   onValueChange: (value: TValue) => void;
-  optionDataPrefix: string;
   options: Array<SelectOption<TValue>>;
   value: TValue;
 }) {
   const selectedLabel = input.options.find((option) => option.value === input.value)?.label ?? input.value;
+  const labelId = `settings-select-label-${input.id}`;
+  const renderStaticItems = typeof window === "undefined";
 
   return (
     <div className="grid gap-2">
-      <Label>{input.label}</Label>
-      <Select onValueChange={input.onValueChange} value={input.value}>
-        <SelectTrigger aria-label={input.ariaLabel} className="w-full sm:max-w-sm">
+      <Label id={labelId}>{input.label}</Label>
+      <Select {...(renderStaticItems ? { open: true } : {})} onValueChange={input.onValueChange} value={input.value}>
+        <SelectTrigger aria-label={input.ariaLabel} aria-labelledby={labelId} className="w-full sm:max-w-sm">
           <SelectValue placeholder={selectedLabel} />
         </SelectTrigger>
+        {renderStaticItems ? (
+          <SelectPrimitive.Content aria-hidden="true" className="hidden">
+            <SelectPrimitive.Viewport>
+              {input.options.map((option) => (
+                <SelectItem data-value={option.value} key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectPrimitive.Viewport>
+          </SelectPrimitive.Content>
+        ) : null}
         <SelectContent>
           {input.options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem data-value={option.value} key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
-      <div hidden>
-        {input.options.map((option) => (
-          <span data-settings-option={`${input.optionDataPrefix}:${option.value}`} key={option.value}>
-            {option.label}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
