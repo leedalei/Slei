@@ -42,7 +42,8 @@ describe("runtime setup onboarding modal", () => {
     expect(html).toContain("连接本地 Claude runtime");
     expect(html).toContain("给这台设备命名");
     expect(html).toContain("Lei MacBook");
-    expect(html).toContain("<dt>OS</dt><dd>darwin arm64</dd>");
+    expect(html).toContain("OS");
+    expect(html).toContain("darwin arm64");
     expect(html).not.toContain("<dt>系统</dt>");
     expect(html).not.toContain("<dt>平台</dt>");
     expect(html).not.toContain("<dt>架构</dt>");
@@ -82,7 +83,7 @@ describe("runtime setup onboarding modal", () => {
       />,
     );
 
-    const modalHtml = html.match(/<section aria-modal="true" class="slei-dialog slei-runtime-modal"[\s\S]*?<\/section>/)?.[0] ?? "";
+    const modalHtml = html.match(/<div role="dialog"[\s\S]*?连接本地 Claude runtime[\s\S]*?<\/div>/)?.[0] ?? "";
     expect(modalHtml).not.toContain("slei-badge--attention");
   });
 

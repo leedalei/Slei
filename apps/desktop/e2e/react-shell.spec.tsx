@@ -25,7 +25,9 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('data-active-view="chat"');
+    expect(html).toContain('grid-template-columns:5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
     expect(html).toContain('aria-label="主导航"');
+    expect(html).toContain('data-slot="button"');
     expect(html).toContain(">聊天<");
     expect(html).toContain(">任务<");
     expect(html).toContain(">成员<");
@@ -147,6 +149,7 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(guideHtml).toContain('role="status"');
+    expect(guideHtml).toContain("data-slot");
     expect(guideHtml).not.toContain("等待确认");
   });
 

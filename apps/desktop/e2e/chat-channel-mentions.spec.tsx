@@ -1,6 +1,4 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -150,7 +148,7 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain("slei-channel-modal");
+    expect(html).toContain('data-slot="dialog-content"');
     expect(html).toContain('role="dialog"');
     expect(html).toContain("创建频道");
     expect(html).toContain("频道名称");
@@ -266,17 +264,20 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("[]");
   });
 
-  it("centers far-left rail menu items with icon labels", () => {
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const buttonRule = css.match(/\.slei-rail__button\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const labelRule = css.match(/\.slei-rail__label\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+  it("centers far-left rail menu items with shadcn icon labels", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
 
-    expect(buttonRule).toContain("align-items: center");
-    expect(buttonRule).toContain("justify-content: center");
-    expect(buttonRule).toContain("justify-items: center");
-    expect(buttonRule).toContain("display: grid");
-    expect(buttonRule).toContain("width: 64px");
-    expect(labelRule).toContain("font-size: 12px");
-    expect(buttonRule).not.toContain("flex-direction: column");
+    expect(html).toContain('data-nav-icon="chat"');
+    expect(html).toContain('data-slot="button"');
+    expect(html).toContain("grid h-16 w-16");
+    expect(html).toContain("text-[11px]");
+    expect(html).not.toContain("slei-rail__button");
   });
 });
