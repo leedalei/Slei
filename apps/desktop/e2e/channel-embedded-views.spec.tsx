@@ -98,6 +98,12 @@ describe("channel embedded views", () => {
     );
 
     expect(html).toContain('aria-label="任务"');
+    const taskPanelTag = html.match(/<section\b(?=[^>]*aria-label="任务")[^>]*>/)?.[0] ?? "";
+    expect(taskPanelTag).toContain("h-full");
+    expect(taskPanelTag).toContain("min-h-0");
+    expect(taskPanelTag).toContain("overflow-hidden");
+    const taskPanelHtml = html.slice(html.indexOf('aria-label="任务"'));
+    expect(taskPanelHtml).toContain('data-slot="scroll-area"');
     expect(html).toContain("实现频道任务列表");
     expect(html).toContain("等待确认");
     expect(html).toContain("1 条回复");

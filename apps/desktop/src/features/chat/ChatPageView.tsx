@@ -112,12 +112,12 @@ function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks
   const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
   if (tasks.length === 0) {
-    return <section className="grid min-h-0 place-items-center p-6 text-sm text-muted-foreground">{messages.chat.channelTaskEmpty}</section>;
+    return <section className="grid h-full min-h-0 place-items-center overflow-hidden p-6 text-sm text-muted-foreground">{messages.chat.channelTaskEmpty}</section>;
   }
 
   return (
-    <section aria-label={messages.chat.tasks} className="grid min-h-0 grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)] gap-3 p-4 max-[820px]:grid-cols-1">
-      <ScrollArea className="min-h-0 rounded-lg border bg-card/40">
+    <section aria-label={messages.chat.tasks} className="grid h-full min-h-0 grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)] gap-3 overflow-hidden p-4 max-[820px]:grid-cols-1">
+      <ScrollArea className="h-full min-h-0 rounded-lg border bg-card/40">
         <div className="grid gap-1 p-2">
           {tasks.map((task) => (
             <Button
@@ -141,7 +141,7 @@ function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks
         </div>
       </ScrollArea>
       {selectedTask ? (
-        <Card className="min-h-0">
+        <Card className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{taskStatusLabel(selectedTask.status, messages)}</Badge>
@@ -149,8 +149,8 @@ function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks
             </CardTitle>
             <CardDescription>{selectedTask.owner} · {messages.chat.replyCount(selectedTask.replies?.length ?? 0)}</CardDescription>
           </CardHeader>
-          <CardContent>
-          <ScrollArea className="max-h-[calc(100vh-16rem)]">
+          <CardContent className="min-h-0">
+          <ScrollArea className="h-full min-h-0">
             <div className="grid gap-2 pr-3">
             {(selectedTask.replies ?? []).map((reply, index) => (
               <article className="rounded-lg border bg-muted/20 p-3 text-sm" key={reply.id}>
@@ -558,29 +558,35 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       {effectiveChannelView === "chat" ? (
         <footer className="border-t bg-background/95">
           {mention && mentionTargets.length > 0 ? (
-            <Card aria-label={messages.chat.chooseMentionMember} className="mx-4 mt-3 gap-2 py-2" data-testid="slei-mention-panel" size="sm">
-              <CardContent className="grid gap-1 px-2">
-                {mentionTargets.map((member, index) => (
-                  <Button
-                    aria-current={index === selectedMentionIndex ? "true" : undefined}
-                    className={cn("h-auto justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
-                    key={member.id}
-                    onClick={() => selectMention(index)}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <MemberAvatar identity={member} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <strong className="text-sm">{member.name}</strong>
-                        <StatusDot status={member.runtimeStatus} />
-                      </span>
-                      <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground"><AtSign aria-hidden="true" size={12} />{member.handle}</span>
-                  </Button>
-                ))}
-                <Button className="justify-start" size="sm" type="button" variant="ghost"><ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}</Button>
+            <Card aria-label={messages.chat.chooseMentionMember} className="mx-4 mt-3 max-h-44 gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
+              <CardContent className="grid min-h-0 gap-1 px-2">
+                <ScrollArea className="max-h-32 min-h-0 pr-2">
+                  <div className="grid gap-1">
+                    {mentionTargets.map((member, index) => (
+                      <Button
+                        aria-current={index === selectedMentionIndex ? "true" : undefined}
+                        className={cn("h-auto justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
+                        key={member.id}
+                        onClick={() => selectMention(index)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <MemberAvatar identity={member} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <strong className="text-sm">{member.name}</strong>
+                            <StatusDot status={member.runtimeStatus} />
+                          </span>
+                          <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground"><AtSign aria-hidden="true" size={12} />{member.handle}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <Button className="justify-start" size="sm" type="button" variant="ghost">
+                  <ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}
+                </Button>
               </CardContent>
             </Card>
           ) : null}
