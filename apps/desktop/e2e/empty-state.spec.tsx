@@ -28,7 +28,7 @@ describe("empty state component", () => {
     expect(noresult).toContain("换一个关键词试试。");
   });
 
-  it("centers the empty component when detail pages have no selected object", () => {
+  it("renders empty detail fallbacks for unselected members and computers", () => {
     const data = createSleiFixtures({ members: [], nodes: [] });
     const membersHtml = renderToStaticMarkup(
       <SleiAppFrame activeView="members" data={data} locale="zh-CN" runtimeSetup={emptyRuntime} />,

@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 import { SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/app/fixtures";
 
+function sendButtonMarkup(html: string) {
+  return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";
+}
+
 describe("Slei React desktop shell", () => {
   it("defaults to the Chat home page with semantic desktop navigation", () => {
     const html = renderToStaticMarkup(
@@ -162,9 +166,10 @@ describe("Slei React desktop shell", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="slei-send-button"');
+    const sendButton = sendButtonMarkup(html);
+    expect(sendButton).toContain('data-testid="slei-send-button"');
+    expect(sendButton).not.toContain("disabled");
     expect(html).toContain(">发送</button>");
-    expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
   });
 
   it("renders all primary destinations from the single shell", () => {

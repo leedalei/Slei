@@ -54,6 +54,10 @@ const session = {
   updatedAt: "2026-05-29T10:00:00Z",
 } as const;
 
+function sendButtonMarkup(html: string) {
+  return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";
+}
+
 describe("chat attachments", () => {
   it("renders selected composer attachments and allows attachment-only sends", () => {
     const html = renderToStaticMarkup(
@@ -80,8 +84,9 @@ describe("chat attachments", () => {
     expect(html).toContain("1 KB");
     expect(html).toContain("<img");
     expect(html).toContain('aria-label="Remove screen.png"');
-    expect(html).toContain('data-testid="slei-send-button"');
-    expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
+    const sendButton = sendButtonMarkup(html);
+    expect(sendButton).toContain('data-testid="slei-send-button"');
+    expect(sendButton).not.toContain("disabled");
   });
 
   it("renders sent message attachments in the timeline", () => {
