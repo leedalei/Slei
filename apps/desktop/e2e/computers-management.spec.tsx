@@ -53,19 +53,18 @@ const readyRuntime = {
 };
 
 describe("computers management page", () => {
-  it("renders a screenshot-style device list and selected device detail", () => {
+  it("renders the device list and selected device detail with semantic shadcn cards", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame activeView="computers" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain("slei-computers-page");
-    expect(html).toContain("slei-computers-list");
-    expect(html).toContain("slei-computer-detail");
+    expect(html).toContain('aria-label="设备"');
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('data-slot="badge"');
+    expect(html).toContain('data-slot="scroll-area"');
     expect(html).toContain("slei-context-sidebar");
     expect(html).not.toContain("slei-sidebar__header");
     expect(html).toContain("slei-workspace");
-    expect(html).toContain('<section class="slei-computers-page"><article class="slei-computer-detail"');
-    expect(html).not.toContain('<section class="slei-computers-page"><aside class="slei-computers-list"');
     expect(html).toContain("设备 2");
     expect(html).toContain("MacBookPro M4 MAX");
     expect(html).toContain("公司台式Win");
@@ -101,7 +100,7 @@ describe("computers management page", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame activeView="computers" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
-    const detailHtml = html.match(/<article class="slei-computer-detail"[\s\S]*<\/article>/)?.[0] ?? "";
+    const detailHtml = html.match(/<section[^>]*aria-label="设备"[\s\S]*<\/section>/)?.[0] ?? "";
 
     expect(detailHtml).toContain("此设备上的智能体");
     expect(detailHtml).not.toContain('aria-label="新增设备"');

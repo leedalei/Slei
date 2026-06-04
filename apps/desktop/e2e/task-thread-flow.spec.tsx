@@ -54,7 +54,7 @@ describe("chat to task thread flow", () => {
     ]);
   });
 
-  it("renders a comment button and a 680px task thread drawer with replies", () => {
+  it("renders a comment button and dialog-like task thread drawer with replies", () => {
     const data = createSleiFixtures({
       tasks: [
         {
@@ -82,8 +82,9 @@ describe("chat to task thread flow", () => {
     );
 
     expect(html).toContain('aria-label="打开任务讨论"');
-    expect(html).toContain("slei-task-thread-drawer");
-    expect(html).toContain("--task-thread-width:680px");
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-label="任务讨论"');
+    expect(html).toContain('aria-label="关闭任务讨论"');
     expect(html).toContain("帮我把私聊任务线程做完");
     expect(html).toContain("这是任务上下文");
     expect(html).toContain("我会继续处理");

@@ -126,7 +126,9 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain("slei-search-page");
+    expect(html).toContain('aria-label="搜索会话"');
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('data-slot="input"');
     expect(html).toContain("搜索会话");
     expect(html).toContain("用户");
     expect(html).toContain("频道");
