@@ -25,6 +25,9 @@ describe("shadcn design system wiring", () => {
     expect(appCss).not.toContain("@fontsource-variable/geist");
     expect(appCss).toContain("@theme inline");
     expect(appCss).toContain("@layer base");
+    expect(appCss).toContain("Temporary legacy app compatibility styles");
+    expect(appCss).toContain(".slei-shell");
+    expect(appCss).toContain(".slei-button");
     expect(webEntry).toContain('import "./app/app.css";');
     expect(webEntry).not.toContain("animal-island-ui/style");
     expect(webEntry).not.toContain("@slei/ui/styles/tokens.css");

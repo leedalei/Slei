@@ -46,7 +46,6 @@ import {
   type UserProfile,
 } from "./model";
 import { routeForView, viewForPath, type AppView } from "./router";
-import "./app.css";
 
 export type {
   AgentDraftInput,

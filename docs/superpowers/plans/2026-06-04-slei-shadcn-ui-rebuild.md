@@ -358,9 +358,9 @@ import "./app/app.css";
 
 Keep the rest of the file unchanged.
 
-- [ ] **Step 4: Keep only global app CSS in `app.css`**
+- [ ] **Step 4: Keep shadcn theme CSS plus temporary legacy compatibility CSS in `app.css`**
 
-In `apps/desktop/src/app/app.css`, keep the tweakcn theme block and add only global shell/body helpers:
+In `apps/desktop/src/app/app.css`, keep the tweakcn theme block and global shell/body helpers:
 
 ```css
 @import "tailwindcss";
@@ -386,7 +386,13 @@ body {
 }
 ```
 
-Do not reintroduce old `.slei-button`, `.slei-input`, `.slei-card`, `.slei-dialog`, or Animal Island token rules.
+Because the JSX still renders many `slei-*` classes until later tasks migrate those files, retain the existing local `slei-*` app compatibility rules in `app.css` after the shadcn/tweakcn theme blocks. Do not import external `animal-island-ui` or `@slei/ui` CSS. Mark the retained section with a short comment such as:
+
+```css
+/* Temporary legacy app compatibility styles. Remove as feature surfaces migrate to shadcn/Tailwind. */
+```
+
+Do not reintroduce Animal Island token definitions or external package imports.
 
 - [ ] **Step 5: Run focused shell and design-system tests**
 
@@ -401,7 +407,7 @@ Expected: design-system PASS; react-shell may still fail on old class assertions
 - [ ] **Step 6: Commit entry migration**
 
 ```bash
-git add apps/desktop/src/web.ts apps/desktop/src/app/app.css apps/desktop/e2e/design-system.spec.ts
+git add apps/desktop/src/web.ts apps/desktop/src/app/SleiApp.tsx apps/desktop/src/app/app.css apps/desktop/e2e/design-system.spec.ts docs/superpowers/plans/2026-06-04-slei-shadcn-ui-rebuild.md
 git commit -m "refactor: use desktop shadcn global styles"
 ```
 
