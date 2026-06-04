@@ -459,10 +459,10 @@ select:focus-visible {
 .slei-brand__mark {
   color: var(--color-warning);
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 40px;
+  font-family: "Brush Script MT", "Segoe Script", "Snell Roundhand", "Apple Chancery", cursive;
+  font-size: 28px;
   font-style: italic;
-  font-weight: var(--weight-black);
+  font-weight: var(--weight-bold);
   line-height: 1;
   text-shadow: 0 2px 0 color-mix(in srgb, var(--color-rail-bg) 64%, transparent);
 }

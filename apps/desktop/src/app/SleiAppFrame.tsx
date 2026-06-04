@@ -174,7 +174,7 @@ export function SleiAppFrame(input: {
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
-    gridTemplateColumns: "5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)",
+    gridTemplateColumns: "5.5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)",
   } as CSSProperties;
 
   useEffect(() => {
@@ -189,9 +189,11 @@ export function SleiAppFrame(input: {
       data-theme={normalizedTheme}
       style={shellStyle}
     >
-      <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-14 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
-        <div className="grid size-12 place-items-center rounded-lg bg-primary text-lg font-semibold text-primary-foreground">
-          <span aria-hidden="true">L</span>
+      <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+        <div className="slei-brand">
+          <span className="slei-brand__mark" aria-hidden="true">
+            SLei
+          </span>
         </div>
         {navItems.map((item) => (
           <Button
