@@ -60,5 +60,62 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("Runtime configuration");
     expect(html).toContain("ClaudeCode");
     expect(html).not.toContain(`>${messages.members.message}<`);
+    expect(html).not.toContain(`>${messages.members.deleteAgent}<`);
+  });
+
+  it("shows a delete action for ordinary agents", () => {
+    const messages = createDesktopMessages("en-US");
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="agent_coda"
+        data={createSleiFixtures({
+          members: [
+            {
+              id: "agent_coda",
+              name: "Coda",
+              handle: "@coda",
+              avatar: "CO",
+              avatarSeed: "agent_coda",
+              type: "agent",
+              runtimeStatus: "idle",
+              role: "Developer",
+              runtime: "ClaudeCode",
+              model: "Sonnet",
+              computer: "Local",
+              nodeId: "local-node",
+              created: "2026-06-04",
+              creator: "user",
+              instructions: "Builds features.",
+              description: "Builds features.",
+              permissions: [],
+              environmentVariables: [],
+              activity: "Idle",
+              skills: [],
+              capabilities: ["ClaudeCode"],
+              createdAgents: [],
+              directMessageEnabled: true,
+            },
+          ],
+        })}
+        messages={messages}
+        nodes={[
+          {
+            id: "local-node",
+            name: "Local",
+            status: "connected",
+            daemonVersion: "0.1.0",
+            device: { platform: "darwin", arch: "arm64", hostname: "local" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+          },
+        ]}
+        onAgentDelete={() => undefined}
+        onAgentUpdate={() => undefined}
+        onMessage={() => undefined}
+      />,
+    );
+
+    expect(html).toContain(`>${messages.members.message}<`);
+    expect(html).toContain(`>${messages.members.deleteAgent}<`);
+    expect(html).toContain(messages.members.deleteAgentConfirm("Coda"));
   });
 });

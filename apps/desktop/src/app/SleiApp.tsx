@@ -149,6 +149,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     docsPath: agent.docsPath,
     skills: agent.skills,
     directMessageEnabled: !isCoordinator,
+    systemOwned: agent.systemOwned ?? false,
   };
 }
 
@@ -472,6 +473,37 @@ export function SleiApp() {
         members: current.members.map((candidate) => (candidate.id === member.id ? member : candidate)),
       }),
     );
+  }
+
+  async function handleDeleteAgent(agentId: string) {
+    await bridge.deleteAgent(agentId);
+    setData((current) => {
+      const removedConversationIds = current.conversations
+        .filter((conversation) => conversation.agentId === agentId)
+        .map((conversation) => conversation.id);
+      const removedConversationIdSet = new Set(removedConversationIds);
+      return createSleiFixtures({
+        ...current,
+        members: current.members.filter((member) => member.id !== agentId),
+        conversations: current.conversations.filter((conversation) => conversation.agentId !== agentId),
+        conversationSessions: current.conversationSessions.filter((session) => !removedConversationIdSet.has(session.conversationId)),
+        messages: current.messages.filter((message) => !message.channelId || !removedConversationIdSet.has(message.channelId)),
+      });
+    });
+    setActiveMemberId((current) => {
+      if (current !== agentId) return current;
+      return data.members.find((member) => member.id !== agentId)?.id;
+    });
+    setActiveConversationId((current) => {
+      const removed = data.conversations.find((conversation) => conversation.id === current && conversation.agentId === agentId);
+      return removed ? undefined : current;
+    });
+    setActiveSessionId((current) => {
+      const removed = data.conversationSessions.find((session) => session.id === current);
+      if (!removed) return current;
+      const conversation = data.conversations.find((candidate) => candidate.id === removed.conversationId);
+      return conversation?.agentId === agentId ? undefined : current;
+    });
   }
 
   function handleCreateComputer(name: string, osLabel: string) {
@@ -817,6 +849,7 @@ export function SleiApp() {
       data={data}
       guideBootstrapping={guideBootstrapping}
       onAgentCreate={handleCreateAgent}
+      onAgentDelete={handleDeleteAgent}
       onAgentUpdate={handleUpdateAgent}
       locale={locale}
       timeZone={timeZone}

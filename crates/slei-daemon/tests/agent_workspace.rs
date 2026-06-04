@@ -51,6 +51,7 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     assert!(memory.contains("@coda — 我自己"));
     assert!(memory.contains("## Key Knowledge"));
     assert!(memory.contains("主频道：#all"));
+    assert!(memory.contains("已加入频道：#all"));
     assert!(memory.contains("## Active Context"));
     assert_eq!(agent["agentKind"], "agent");
     assert_eq!(agent["systemOwned"], false);
@@ -63,6 +64,72 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     assert_eq!(all_members.status(), StatusCode::OK);
     let all_members_body = response_json(all_members).await;
     assert_eq!(all_members_body["members"][0]["agentId"], id);
+}
+
+#[tokio::test]
+async fn deleting_agent_removes_registry_membership_and_workspace() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-delete");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let app = build_router(state);
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("delete-coda-create"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda-delete",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "开发工程师"
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_body = response_json(created).await;
+    let agent_id = created_body["agent"]["id"].as_str().unwrap().to_string();
+    let workspace = PathBuf::from(created_body["agent"]["workspacePath"].as_str().unwrap());
+    assert!(workspace.is_dir());
+
+    let deleted = delete_json(&app, &token, &format!("/v1/agents/{agent_id}")).await;
+    assert_eq!(deleted.status(), StatusCode::OK);
+    assert!(!workspace.exists());
+
+    let listed = response_json(get_json(&app, &token, "/v1/agents").await).await;
+    assert!(!listed["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|agent| agent["id"] == agent_id));
+
+    let all_members = response_json(get_json(&app, &token, "/v1/channels/all/members").await).await;
+    assert!(!all_members["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|member| member["agentId"] == agent_id));
+}
+
+#[tokio::test]
+async fn system_agents_cannot_be_deleted() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("system-agent-delete");
+    let app = build_router(AppState::for_tests_with_agent_root(
+        token.clone(),
+        root.clone(),
+    ));
+    assert_eq!(
+        get_json(&app, &token, "/v1/agents").await.status(),
+        StatusCode::OK
+    );
+
+    let response = delete_json(&app, &token, "/v1/agents/agent_coordinator_all").await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(root.join("agents/agent_coordinator_all").is_dir());
 }
 
 #[tokio::test]
@@ -169,8 +236,12 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     let listed = get_json(&app, &token, "/v1/agents").await;
     let listed_body = response_json(listed).await;
     let agents = listed_body["agents"].as_array().unwrap();
-    assert!(agents.iter().any(|agent| agent["id"] == "agent_guide_local_node"));
-    assert!(agents.iter().any(|agent| agent["id"] == "agent_coordinator_all"));
+    assert!(agents
+        .iter()
+        .any(|agent| agent["id"] == "agent_guide_local_node"));
+    assert!(agents
+        .iter()
+        .any(|agent| agent["id"] == "agent_coordinator_all"));
 }
 
 #[tokio::test]
@@ -222,8 +293,10 @@ async fn list_agents_exposes_default_channel_coordinator_as_system_agent() {
     assert_eq!(coordinator["systemOwned"], true);
     assert_eq!(coordinator["runtimeKind"], "ClaudeCode");
     assert_eq!(coordinator["channelIds"], json!(["all"]));
-    assert!(PathBuf::from(coordinator["workspacePath"].as_str().unwrap())
-        .ends_with("agent_coordinator_all"));
+    assert!(
+        PathBuf::from(coordinator["workspacePath"].as_str().unwrap())
+            .ends_with("agent_coordinator_all")
+    );
     assert!(root
         .join("agents/agent_coordinator_all/MEMORY.md")
         .is_file());
@@ -234,7 +307,10 @@ async fn coordinator_agents_cannot_be_used_for_direct_messages() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-no-dm");
     let app = build_router(AppState::for_tests_with_agent_root(token.clone(), root));
-    assert_eq!(get_json(&app, &token, "/v1/agents").await.status(), StatusCode::OK);
+    assert_eq!(
+        get_json(&app, &token, "/v1/agents").await.status(),
+        StatusCode::OK
+    );
 
     let response = post_json(
         &app,
@@ -270,7 +346,10 @@ async fn coordinator_runtime_configuration_updates_runtime_thread() {
         },
     ]);
     let app = build_router(state);
-    assert_eq!(get_json(&app, &token, "/v1/agents").await.status(), StatusCode::OK);
+    assert_eq!(
+        get_json(&app, &token, "/v1/agents").await.status(),
+        StatusCode::OK
+    );
 
     let response = patch_json(
         &app,
@@ -1151,7 +1230,9 @@ async fn agents_persist_to_slei_data_root_and_reload() {
         .iter()
         .find(|agent| agent["handle"] == "@alice")
         .expect("persisted agent should still be listed");
-    assert!(agents.iter().any(|agent| agent["id"] == "agent_coordinator_all"));
+    assert!(agents
+        .iter()
+        .any(|agent| agent["id"] == "agent_coordinator_all"));
     assert!(root.join("agents/index.json").is_file());
     assert!(alice["createdAt"].as_str().unwrap().len() > 4);
 }
@@ -1920,6 +2001,20 @@ async fn patch_json(
 
     app.clone()
         .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn delete_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap()
 }

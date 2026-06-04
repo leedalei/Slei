@@ -26,6 +26,7 @@ pub fn run() {
             commands::create_conversation_session_command,
             commands::activate_conversation_session_command,
             commands::update_agent_command,
+            commands::delete_agent_command,
             commands::update_preferences_command,
             commands::remember_agent_fact_command,
             commands::open_agent_path_command,
@@ -48,7 +49,7 @@ mod tests {
     use super::commands::{
         activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
         create_agent, create_channel, create_conversation_session, create_dm_conversation,
-        daemon_status, format_frontend_crash_log, list_agent_skills, list_agents,
+        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills, list_agents,
         list_conversation_messages, list_conversation_sessions, list_conversations, list_nodes,
         list_preferences, list_saved_messages, open_agent_path, reconnect_events,
         remember_agent_fact, rename_local_node, request_artifact_open,
@@ -674,10 +675,16 @@ mod tests {
         assert!(created.agent.workspace_path.contains("/agents/agent_"));
         assert!(fs::metadata(&created.agent.memory_path).unwrap().is_file());
         assert!(fs::metadata(&created.agent.docs_path).unwrap().is_dir());
+        assert!(fs::read_to_string(&created.agent.memory_path)
+            .unwrap()
+            .contains("已加入频道：#all"));
 
         let agents = list_agents(&broker);
         let serialized = serde_json::to_string(&agents).unwrap();
-        assert!(agents.agents.iter().any(|agent| agent.id == created.agent.id));
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == created.agent.id));
         assert!(agents
             .agents
             .iter()
@@ -711,6 +718,54 @@ mod tests {
     }
 
     #[test]
+    fn delete_agent_removes_local_registry_and_workspace_but_blocks_system_agents() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-delete-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&agent_root);
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let created = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Delete Me".to_string(),
+                handle: "@delete-me".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "temporary agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+        assert!(fs::metadata(&created.workspace_path).unwrap().is_dir());
+
+        delete_agent(&broker, &created.id).unwrap();
+
+        assert!(!std::path::Path::new(&created.workspace_path).exists());
+        assert!(!list_agents(&broker)
+            .agents
+            .iter()
+            .any(|agent| agent.id == created.id));
+        let coordinator_id = "agent_coordinator_all";
+        assert!(delete_agent(&broker, coordinator_id).is_err());
+        assert!(list_agents(&broker)
+            .agents
+            .iter()
+            .any(|agent| agent.id == coordinator_id));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
     fn broker_lists_default_channel_coordinator_and_blocks_direct_message() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
@@ -736,7 +791,10 @@ mod tests {
 
         assert_eq!(coordinator.id, "agent_coordinator_all");
         assert_eq!(coordinator.handle, "@all-coordinator");
-        assert_eq!(coordinator.channel_ids.as_deref(), Some(&["all".to_string()][..]));
+        assert_eq!(
+            coordinator.channel_ids.as_deref(),
+            Some(&["all".to_string()][..])
+        );
         assert_eq!(coordinator.runtime_kind, "ClaudeCode");
         assert!(fs::metadata(&coordinator.memory_path).unwrap().is_file());
         assert!(create_dm_conversation(&broker, &coordinator.id).is_err());
@@ -790,10 +848,7 @@ mod tests {
             .any(|agent| agent.id == "agent_coordinator_all"));
         assert_eq!(bob.name, "Bob");
         assert_eq!(bob.handle, "@bob");
-        assert_eq!(
-            bob.channel_ids.as_deref(),
-            Some(&["all".to_string()][..])
-        );
+        assert_eq!(bob.channel_ids.as_deref(), Some(&["all".to_string()][..]));
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -828,7 +883,11 @@ mod tests {
         let index_path = agent_root.join("agents/index.json");
         let mut indexed_agents = recovered.agents;
         indexed_agents[0].handle = "@lei-lee".to_string();
-        fs::write(&index_path, serde_json::to_string_pretty(&indexed_agents).unwrap()).unwrap();
+        fs::write(
+            &index_path,
+            serde_json::to_string_pretty(&indexed_agents).unwrap(),
+        )
+        .unwrap();
 
         let healed = list_agents(&DaemonBroker::for_tests(descriptor));
         assert_eq!(healed.agents[0].handle, "@bob");

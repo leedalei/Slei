@@ -157,6 +157,26 @@ pub async fn update_agent(
     }
 }
 
+pub async fn delete_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.members().delete_product_agent(&id).await {
+        Ok(agent) => {
+            if let Err(error) = state.channels().remove_agent_from_all_channels(&id).await {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            Json(json!({ "agent": agent })).into_response()
+        }
+        Err(error) => member_error_response(error),
+    }
+}
+
 pub async fn list_skills(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -241,7 +261,8 @@ fn member_error_response(error: MemberError) -> Response {
         | MemberError::InvalidAgent
         | MemberError::InvalidHandle
         | MemberError::InvalidMemory
-        | MemberError::WorkspaceBoundary => {
+        | MemberError::WorkspaceBoundary
+        | MemberError::SystemAgentImmutable => {
             error_response(StatusCode::BAD_REQUEST, &error.to_string())
         }
         MemberError::Io(_) | MemberError::Json(_) => {

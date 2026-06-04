@@ -137,6 +137,10 @@ pub fn update_agent(
     broker.update_agent(agent_id, request)
 }
 
+pub fn delete_agent(broker: &DaemonBroker, agent_id: &str) -> Result<AgentReceipt, AgentError> {
+    broker.delete_agent(agent_id)
+}
+
 pub fn remember_agent_fact(
     broker: &DaemonBroker,
     agent_id: &str,
@@ -358,6 +362,14 @@ pub fn update_agent_command(
     request: AgentUpdateRequest,
 ) -> Result<AgentReceipt, String> {
     update_agent(state.inner(), &agent_id, request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_agent_command(
+    state: tauri::State<'_, DaemonBroker>,
+    agent_id: String,
+) -> Result<AgentReceipt, String> {
+    delete_agent(state.inner(), &agent_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

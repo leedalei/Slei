@@ -236,6 +236,20 @@ impl ChannelService {
         Ok(state.members.get(channel_id).cloned().unwrap_or_default())
     }
 
+    pub async fn remove_agent_from_all_channels(&self, agent_id: &str) -> Result<(), ChannelError> {
+        let mut state = self.inner.lock().await;
+        let mut changed = false;
+        for members in state.members.values_mut() {
+            let before = members.len();
+            members.retain(|member| member.agent_id != agent_id);
+            changed = changed || members.len() != before;
+        }
+        if changed {
+            persist_members(&self.root, &state.members)?;
+        }
+        Ok(())
+    }
+
     pub async fn mount_workspace(
         &self,
         channel_id: &str,

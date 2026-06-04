@@ -334,6 +334,7 @@ export type DaemonBridge = {
   listAgents(): Promise<AgentListReceipt>;
   createAgent(request: AgentCreateRequest): Promise<AgentReceipt>;
   updateAgent(agentId: string, request: AgentUpdateRequest): Promise<AgentReceipt>;
+  deleteAgent(agentId: string): Promise<AgentReceipt>;
   rememberAgentFact(agentId: string, fact: string): Promise<AgentReceipt>;
   listAgentSkills(agentId: string): Promise<SkillListReceipt>;
   openAgentPath(agentId: string, target: AgentPathTarget): Promise<AgentPathOpenReceipt>;
@@ -611,6 +612,15 @@ export function createDaemonBridgeMock(input: {
       agents = agents.map((candidate) => (candidate.id === agentId ? agent : candidate));
       return { agent };
     },
+    async deleteAgent(agentId) {
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      if (!agent) throw new Error("agent not found");
+      if (agent.systemOwned) throw new Error("system agents cannot be deleted");
+      agents = agents.filter((candidate) => candidate.id !== agentId);
+      channelMembers = channelMembers.filter((member) => member.agentId !== agentId);
+      conversations = conversations.filter((conversation) => conversation.agentId !== agentId);
+      return { agent };
+    },
     async rememberAgentFact(agentId) {
       const agent = agents.find((candidate) => candidate.id === agentId);
       if (!agent) throw new Error("agent not found");
@@ -843,6 +853,7 @@ export function createDaemonBridge(): DaemonBridge {
       listAgents: () => invoke<AgentListReceipt>("list_agents_command"),
       createAgent: (request: AgentCreateRequest) => invoke<AgentReceipt>("create_agent_command", { request }),
       updateAgent: (agentId: string, request: AgentUpdateRequest) => invoke<AgentReceipt>("update_agent_command", { agentId, request }),
+      deleteAgent: (agentId: string) => invoke<AgentReceipt>("delete_agent_command", { agentId }),
       rememberAgentFact: (agentId: string, fact: string) => invoke<AgentReceipt>("remember_agent_fact_command", { agentId, fact }),
       listAgentSkills: (agentId: string) => invoke<SkillListReceipt>("list_agent_skills_command", { agentId }),
       openAgentPath: (agentId: string, target: AgentPathTarget) => invoke<AgentPathOpenReceipt>("open_agent_path_command", { agentId, target }),

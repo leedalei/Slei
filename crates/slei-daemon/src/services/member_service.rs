@@ -561,6 +561,44 @@ impl MemberService {
         Ok(record)
     }
 
+    pub async fn delete_product_agent(
+        &self,
+        agent_id: &str,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        let record = {
+            let mut state = self.inner.lock().await;
+            let record = state
+                .product_agents
+                .get(agent_id)
+                .cloned()
+                .ok_or(MemberError::AgentNotFound)?;
+            if record.system_owned {
+                return Err(MemberError::SystemAgentImmutable);
+            }
+            state.product_agents.remove(agent_id);
+            state
+                .product_agent_handles
+                .remove(&record.handle.to_lowercase());
+            state
+                .product_agent_idempotency
+                .retain(|_, existing_id| existing_id != agent_id);
+            persist_product_agents(&self.agent_data_root, &state.product_agents)?;
+            record
+        };
+
+        let workspace_path = PathBuf::from(&record.workspace_path);
+        let expected_root = self.agent_data_root.join("agents");
+        if !workspace_path.starts_with(&expected_root) {
+            return Err(MemberError::WorkspaceBoundary);
+        }
+        match fs::remove_dir_all(&workspace_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(MemberError::Io(error)),
+        }
+        Ok(record)
+    }
+
     pub async fn remember_agent_fact(
         &self,
         agent_id: &str,
@@ -690,12 +728,23 @@ fn default_agent_kind() -> String {
 }
 
 fn initial_memory(agent: &ProductAgentRecord) -> String {
-    let key_knowledge = if agent.agent_kind == "guide" {
+    let base_key_knowledge = if agent.agent_kind == "guide" {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
     } else if agent.agent_kind == "coordinator" {
         "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
+    };
+    let joined_channels = agent
+        .channel_ids
+        .iter()
+        .map(|channel_id| format!("#{channel_id}"))
+        .collect::<Vec<_>>()
+        .join("、");
+    let key_knowledge = if joined_channels.is_empty() {
+        base_key_knowledge.to_string()
+    } else {
+        format!("{base_key_knowledge}\n已加入频道：{joined_channels}")
     };
     format!(
         r#"# {name}
@@ -849,6 +898,8 @@ pub enum MemberError {
     InvalidMemory,
     #[error("agent memory path is outside workspace")]
     WorkspaceBoundary,
+    #[error("system agents cannot be deleted")]
+    SystemAgentImmutable,
     #[error("agent workspace io error: {0}")]
     Io(std::io::Error),
     #[error("agent workspace json error: {0}")]

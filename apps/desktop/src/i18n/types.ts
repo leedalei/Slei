@@ -133,6 +133,9 @@ export type DesktopMessages = {
     created: string;
     creator: string;
     defaultSkill: (handle: string) => string;
+    deleteAgent: string;
+    deleteAgentConfirm: (name: string) => string;
+    deleteAgentFailed: string;
     description: string;
     detail: string;
     displayName: string;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, FileText, FolderOpen, type LucideIcon } from "lucide-react";
+import { ExternalLink, FileText, FolderOpen, Trash2, type LucideIcon } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { AgentPathTarget, DesktopNodeView } from "../../lib/daemon-bridge";
@@ -11,6 +11,7 @@ export function MembersPage(input: {
   data: SleiFixtures;
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
+  onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
@@ -25,6 +26,8 @@ export function MembersPage(input: {
     runtime: selectedMember?.runtime ?? "",
   });
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
+  const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setMemberDetails({
@@ -53,6 +56,24 @@ export function MembersPage(input: {
     }
   }
 
+  async function deleteSelectedAgent() {
+    if (!selectedMember || selectedMember.type !== "agent") return;
+    if (selectedMember.systemOwned || selectedMember.directMessageEnabled === false) return;
+    const confirmed = typeof window === "undefined"
+      ? true
+      : window.confirm(input.messages.members.deleteAgentConfirm(selectedMember.name));
+    if (!confirmed) return;
+    setDeleting(true);
+    setDeleteError(undefined);
+    try {
+      await input.onAgentDelete?.(selectedMember.id);
+    } catch {
+      setDeleteError(input.messages.members.deleteAgentFailed);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (!selectedMember) {
     return (
       <section className="slei-members-page slei-detail-empty-page">
@@ -78,10 +99,22 @@ export function MembersPage(input: {
           </div>
         </div>
         {selectedMember.directMessageEnabled === false ? null : (
-          <div>
+          <div className="slei-member-actions">
             <button className="slei-button" onClick={() => input.onMessage?.(selectedMember.id)} type="button">{input.messages.members.message}</button>
+            {selectedMember.systemOwned ? null : (
+              <button
+                className="slei-button slei-button--danger"
+                disabled={deleting}
+                onClick={() => void deleteSelectedAgent()}
+                title={input.messages.members.deleteAgentConfirm(selectedMember.name)}
+                type="button"
+              >
+                <Trash2 aria-hidden="true" size={14} />{input.messages.members.deleteAgent}
+              </button>
+            )}
           </div>
         )}
+        {deleteError ? <p className="slei-inline-error">{deleteError}</p> : null}
       </header>
       <nav className="slei-member-tabs" aria-label={input.messages.members.memberConfig}>
         {tabs.map((tab, index) => (

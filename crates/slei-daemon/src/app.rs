@@ -29,7 +29,10 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/agents/guide/bootstrap",
             post(api::members::bootstrap_guide),
         )
-        .route("/v1/agents/{id}", patch(api::members::update_agent))
+        .route(
+            "/v1/agents/{id}",
+            patch(api::members::update_agent).delete(api::members::delete_agent),
+        )
         .route("/v1/agents/{id}/skills", get(api::members::list_skills))
         .route(
             "/v1/agents/{id}/memory/remember",

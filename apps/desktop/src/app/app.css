@@ -1562,6 +1562,14 @@ body,
   margin: var(--gap-xs) 0 0;
 }
 
+.slei-member-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+  justify-content: flex-end;
+}
+
 .slei-member-tabs {
   background: var(--color-surface-alt);
   border-bottom: var(--border-panel) solid var(--color-border-subtle);

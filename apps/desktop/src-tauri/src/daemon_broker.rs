@@ -1004,6 +1004,24 @@ impl DaemonBroker {
         Ok(AgentReceipt { agent: updated })
     }
 
+    pub fn delete_agent(&self, agent_id: &str) -> Result<AgentReceipt, AgentError> {
+        if let Some(receipt) = self.delete_agent_in_daemon(agent_id) {
+            self.remove_local_agent_state(agent_id, None)?;
+            return Ok(receipt);
+        }
+
+        let agent = self
+            .agents
+            .lock()
+            .expect("agents mutex poisoned")
+            .iter()
+            .find(|agent| agent.id == agent_id)
+            .cloned()
+            .ok_or(AgentError::AgentNotFound)?;
+        self.remove_local_agent_state(agent_id, Some(&agent))?;
+        Ok(AgentReceipt { agent })
+    }
+
     pub fn remember_agent_fact(
         &self,
         agent_id: &str,
@@ -1589,9 +1607,7 @@ impl DaemonBroker {
         let message_id = request.message_id.trim();
         let source_id = request.source_id.trim();
         let source_kind = request.source_kind.trim();
-        if message_id.is_empty()
-            || source_id.is_empty()
-            || !matches!(source_kind, "channel" | "dm")
+        if message_id.is_empty() || source_id.is_empty() || !matches!(source_kind, "channel" | "dm")
         {
             return Err(ConversationError::InvalidMessage);
         }
@@ -1720,8 +1736,12 @@ impl DaemonBroker {
         &self,
         channel_id: &str,
     ) -> Option<ChannelMemberListReceipt> {
-        let response =
-            self.send_daemon_request("GET", &format!("/v1/channels/{channel_id}/members"), None, &[])?;
+        let response = self.send_daemon_request(
+            "GET",
+            &format!("/v1/channels/{channel_id}/members"),
+            None,
+            &[],
+        )?;
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
     }
 
@@ -1730,8 +1750,8 @@ impl DaemonBroker {
         channel_id: &str,
         request: &SendChannelMessageRequest,
     ) -> Result<SendChannelMessageReceipt, ChannelError> {
-        let payload =
-            serde_json::to_string(request).map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
         let idempotency_key = format!("desktop-channel-message-{}", monotonic_id());
         let response = self
             .send_daemon_request_checked(
@@ -1796,8 +1816,18 @@ impl DaemonBroker {
         request: &AgentUpdateRequest,
     ) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
+        let response = self.send_daemon_request(
+            "PATCH",
+            &format!("/v1/agents/{agent_id}"),
+            Some(&payload),
+            &[],
+        )?;
+        serde_json::from_str::<AgentReceipt>(&response).ok()
+    }
+
+    fn delete_agent_in_daemon(&self, agent_id: &str) -> Option<AgentReceipt> {
         let response =
-            self.send_daemon_request("PATCH", &format!("/v1/agents/{agent_id}"), Some(&payload), &[])?;
+            self.send_daemon_request("DELETE", &format!("/v1/agents/{agent_id}"), None, &[])?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -1819,7 +1849,8 @@ impl DaemonBroker {
 
     fn create_dm_conversation_in_daemon(&self, agent_id: &str) -> Option<ConversationReceipt> {
         let payload = serde_json::json!({ "agentId": agent_id }).to_string();
-        let response = self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload), &[])?;
+        let response =
+            self.send_daemon_request("POST", "/v1/conversations/dm", Some(&payload), &[])?;
         serde_json::from_str::<ConversationReceipt>(&response).ok()
     }
 
@@ -1920,6 +1951,46 @@ impl DaemonBroker {
             None => agents.push(agent),
         }
         let _ = persist_local_agents_at_root(&self.data_root, &agents);
+    }
+
+    fn remove_local_agent_state(
+        &self,
+        agent_id: &str,
+        known_agent: Option<&DesktopAgentView>,
+    ) -> Result<(), AgentError> {
+        let removed = {
+            let mut agents = self.agents.lock().expect("agents mutex poisoned");
+            let Some(index) = agents.iter().position(|agent| agent.id == agent_id) else {
+                if known_agent.is_none() {
+                    return Ok(());
+                }
+                return Err(AgentError::AgentNotFound);
+            };
+            if agents[index].system_owned.unwrap_or(false) {
+                return Err(AgentError::SystemAgentImmutable);
+            }
+            let removed = agents.remove(index);
+            persist_local_agents_at_root(&self.data_root, &agents)?;
+            removed
+        };
+        self.channel_members
+            .lock()
+            .expect("channel members mutex poisoned")
+            .retain(|member| member.agent_id != agent_id);
+        let workspace_path = known_agent
+            .map(|agent| agent.workspace_path.as_str())
+            .unwrap_or(removed.workspace_path.as_str());
+        let workspace_path = Path::new(workspace_path);
+        let agents_root = Path::new(&self.data_root).join("agents");
+        if !workspace_path.starts_with(&agents_root) {
+            return Err(AgentError::WorkspaceBoundary);
+        }
+        match fs::remove_dir_all(workspace_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(AgentError::Io(error)),
+        }
+        Ok(())
     }
 
     fn local_agent_workspace(&self, id: &str) -> String {
@@ -2294,9 +2365,8 @@ impl DaemonBroker {
             .map_err(|error| format!("daemon endpoint resolution failed: {error}"))?
             .next()
             .ok_or_else(|| "daemon endpoint resolution returned no addresses".to_string())?;
-        let mut stream =
-            TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80))
-                .map_err(|error| format!("daemon connection failed: {error}"))?;
+        let mut stream = TcpStream::connect_timeout(&socket_addr, Duration::from_millis(80))
+            .map_err(|error| format!("daemon connection failed: {error}"))?;
         stream
             .set_read_timeout(Some(Duration::from_millis(160)))
             .map_err(|error| format!("daemon read timeout setup failed: {error}"))?;
@@ -2336,7 +2406,10 @@ impl DaemonBroker {
             && !response.starts_with("HTTP/1.1 202")
             && !response.starts_with("HTTP/1.0 202")
         {
-            let status = response.lines().next().unwrap_or("HTTP response missing status");
+            let status = response
+                .lines()
+                .next()
+                .unwrap_or("HTTP response missing status");
             let body = response.split("\r\n\r\n").nth(1).unwrap_or("");
             return Err(format!("{status}: {body}"));
         }
@@ -2707,12 +2780,25 @@ fn append_local_agent_memory(agent: &DesktopAgentView, fact: &str) -> Result<(),
 }
 
 fn initial_memory(agent: &DesktopAgentView) -> String {
-    let key_knowledge = if agent.agent_kind.as_deref() == Some("guide") {
+    let base_key_knowledge = if agent.agent_kind.as_deref() == Some("guide") {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
     } else if agent.agent_kind.as_deref() == Some("coordinator") {
         "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
+    };
+    let joined_channels = agent
+        .channel_ids
+        .as_deref()
+        .unwrap_or(&[])
+        .iter()
+        .map(|channel_id| format!("#{channel_id}"))
+        .collect::<Vec<_>>()
+        .join("、");
+    let key_knowledge = if joined_channels.is_empty() {
+        base_key_knowledge.to_string()
+    } else {
+        format!("{base_key_knowledge}\n已加入频道：{joined_channels}")
     };
     format!(
         r#"# {name}
@@ -3074,7 +3160,12 @@ fn complete_local_message_card(
     };
     for entry in entries {
         let entry = entry.map_err(ConversationError::Io)?;
-        if entry.path().extension().and_then(|extension| extension.to_str()) != Some("json") {
+        if entry
+            .path()
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("json")
+        {
             continue;
         }
         let raw = fs::read_to_string(entry.path()).map_err(ConversationError::Io)?;
@@ -3338,7 +3429,8 @@ fn run_local_claude_agent_impl(
         prompt.chars().count()
     );
     let runner_path = local_claude_agent_runner_path()?;
-    let command_payload = local_claude_agent_runner_payload(agent, run_id, prompt, runtime_session)?;
+    let command_payload =
+        local_claude_agent_runner_payload(agent, run_id, prompt, runtime_session)?;
     let mut command = Command::new("node");
     command.arg(runner_path);
     command.stdin(std::process::Stdio::piped());
@@ -3358,7 +3450,10 @@ fn run_local_claude_agent_impl(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(if stderr.is_empty() {
-            format!("Claude Agent SDK runner exited with status {}", output.status)
+            format!(
+                "Claude Agent SDK runner exited with status {}",
+                output.status
+            )
         } else {
             stderr
         });
@@ -3450,11 +3545,16 @@ fn local_agent_run_output_from_worker_stdout(stdout: &str) -> Result<LocalAgentR
             "output_delta" => output.body.push_str(&event.delta),
             "product_tool_requested" => {
                 if event.tool_name == "slei_propose_interactive_card" {
-                    output.cards.push(local_card_from_product_tool_event(&event)?);
+                    output
+                        .cards
+                        .push(local_card_from_product_tool_event(&event)?);
                 }
             }
             "failed" => return Err(event.message),
-            "completed" | "tool_started" | "tool_completed" | "permission_requested"
+            "completed"
+            | "tool_started"
+            | "tool_completed"
+            | "permission_requested"
             | "human_question_requested" => {}
             _ => {}
         }
@@ -3549,6 +3649,10 @@ pub enum AgentError {
     DuplicateHandle,
     #[error("memory fact is required")]
     InvalidMemory,
+    #[error("agent path is outside workspace")]
+    WorkspaceBoundary,
+    #[error("system agents cannot be deleted")]
+    SystemAgentImmutable,
     #[error("agent workspace io error: {0}")]
     Io(std::io::Error),
     #[error("agent workspace json error: {0}")]
