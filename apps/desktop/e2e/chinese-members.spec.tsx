@@ -68,9 +68,7 @@ describe("Chinese-first desktop MVP", () => {
       <SleiAppFrame activeView="members" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain("slei-members-page");
     expect(html).toContain("slei-members-navigator");
-    expect(html).toContain("slei-member-detail");
     expect(html).toContain("智能体");
     expect(html).toContain("Coda");
     expect(html).toContain("@Coda");
@@ -87,6 +85,10 @@ describe("Chinese-first desktop MVP", () => {
     expect(html).toContain("描述");
     expect(html).toContain("信息");
     expect(html).toContain("运行时配置");
+    expect(html).toContain("私聊");
+    expect(html).toContain("能力");
+    expect(html).toContain("代码实现");
+    expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");
     expect(html).toContain("docs");
     expect(html).toContain("默认技能");

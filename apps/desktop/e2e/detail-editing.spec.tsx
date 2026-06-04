@@ -79,6 +79,10 @@ describe("detail page editing pattern", () => {
 
     expect(membersHtml).toContain('aria-label="编辑显示名称"');
     expect(membersHtml).toContain('aria-label="编辑描述"');
+    expect(membersHtml).toContain('aria-label="编辑运行时"');
+    expect(membersHtml).toContain('aria-label="编辑 Model"');
+    expect(membersHtml).toContain("显示名称");
+    expect(membersHtml).toContain("描述");
     expect(membersHtml).not.toContain('aria-label="显示名称输入"');
     expect(computersHtml).toContain('aria-label="编辑设备名称"');
     expect(computersHtml).not.toContain('aria-label="设备名称输入"');

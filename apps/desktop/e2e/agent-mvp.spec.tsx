@@ -121,7 +121,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(agentsForComputerNode(nodes[1], data.members).map((member) => member.name)).toEqual(["Nancy"]);
   });
 
-  it("renders members with real selection, workspace tab, and no removed feature tabs", () => {
+  it("renders members with real selection, workspace content, and no removed feature tabs", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeMemberId="agent_nancy"
@@ -134,13 +134,14 @@ describe("agent creation, device association, and memory MVP", () => {
 
     expect(html).toContain('aria-current="true"');
     expect(html).toContain("Nancy");
-    expect(html).toContain("~/.slei/agents/agent_nancy/MEMORY.md");
+    expect(html).toContain("私聊");
+    expect(html).toContain("QA");
+    expect(html).toContain("能力");
     expect(html).toContain("工作区");
+    expect(html).toContain("~/.slei/agents/agent_nancy/MEMORY.md");
     expect(html).not.toContain("Agent 私信");
-    expect(html).not.toContain("权限");
     expect(html).not.toContain("提醒");
     expect(html).not.toContain("应用");
-    expect(html).not.toContain("活动");
   });
 
   it("renders member details with YYYYMMDD created date, clickable workspace paths, and skill cards", () => {
@@ -164,10 +165,11 @@ describe("agent creation, device association, and memory MVP", () => {
 
     expect(html).toContain("20260529");
     expect(html).not.toContain("2026-05-29T07:28:51.000Z");
-    expect(html).toContain("slei-workspace-link");
+    expect(html).toContain("工作区");
+    expect(html).toContain("MEMORY.md");
+    expect(html).toContain("docs");
     expect(html).toContain("~/.slei/agents/agent_coda/MEMORY.md");
     expect(html).toContain("技能");
-    expect(html).toContain("slei-skill-card");
     expect(html).toContain("引导创建");
     expect(html).toContain("识别创建智能体、成员、频道的请求");
   });
