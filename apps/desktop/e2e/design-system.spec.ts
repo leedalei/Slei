@@ -27,10 +27,10 @@ describe("shadcn design system wiring", () => {
     expect(appCss).toContain("@layer base");
     expect(appCss).toContain("Temporary legacy app compatibility styles");
     expect(appCss).toContain(".slei-shell");
-    expect(appCss).toContain(".slei-button");
+    expect(appCss).not.toContain([".slei", "button"].join("-"));
     expect(webEntry).toContain('import "./app/app.css";');
-    expect(webEntry).not.toContain("animal-island-ui/style");
-    expect(webEntry).not.toContain("@slei/ui/styles/tokens.css");
-    expect(webEntry).not.toContain("@slei/ui/styles/globals.css");
+    expect(webEntry).not.toContain(["animal", "island-ui/style"].join("-"));
+    expect(webEntry).not.toContain(["@slei", "ui/styles/tokens.css"].join("/"));
+    expect(webEntry).not.toContain(["@slei", "ui/styles/globals.css"].join("/"));
   });
 });
