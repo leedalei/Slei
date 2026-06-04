@@ -901,6 +901,7 @@ impl DaemonBroker {
             }
             receipt
         } else {
+            let _ = self.ensure_local_channel_coordinators();
             AgentListReceipt {
                 agents: self.agents.lock().expect("agents mutex poisoned").clone(),
             }
@@ -985,7 +986,11 @@ impl DaemonBroker {
             agent.description = description.trim().to_string();
         }
         if let Some(runtime_kind) = request.runtime_kind {
-            agent.runtime_kind = runtime_kind.trim().to_string();
+            let runtime_kind = runtime_kind.trim().to_string();
+            agent.runtime_kind = runtime_kind.clone();
+            if let Some(runtime_thread) = agent.runtime_thread.as_mut() {
+                runtime_thread.runtime_kind = runtime_kind;
+            }
         }
         if let Some(model) = request.model {
             agent.model = model.trim().to_string();
@@ -1097,13 +1102,17 @@ impl DaemonBroker {
         if agent_id.is_empty() {
             return Err(ConversationError::InvalidConversation);
         }
-        if !self
+        let agent = self
             .list_agents()
             .agents
             .iter()
-            .any(|agent| agent.id == agent_id)
-        {
+            .find(|agent| agent.id == agent_id)
+            .cloned();
+        let Some(agent) = agent else {
             return Err(ConversationError::AgentNotFound);
+        };
+        if agent.agent_kind.as_deref() == Some("coordinator") {
+            return Err(ConversationError::InvalidConversation);
         }
 
         if let Some(receipt) = self.create_dm_conversation_in_daemon(agent_id) {
@@ -1917,6 +1926,66 @@ impl DaemonBroker {
         format!("{}/agents/{id}", self.data_root)
     }
 
+    fn ensure_local_channel_coordinators(&self) -> Result<(), AgentError> {
+        let channels = self
+            .channels
+            .lock()
+            .expect("channels mutex poisoned")
+            .clone();
+        for channel in channels {
+            let coordinator = self.ensure_local_channel_coordinator(&channel)?;
+            self.ensure_channel_membership(&channel.id, &coordinator.id);
+        }
+        Ok(())
+    }
+
+    fn ensure_local_channel_coordinator(
+        &self,
+        channel: &ChannelView,
+    ) -> Result<DesktopAgentView, AgentError> {
+        let id = coordinator_agent_id(&channel.id);
+        {
+            let agents = self.agents.lock().expect("agents mutex poisoned");
+            if let Some(existing) = agents.iter().find(|agent| agent.id == id).cloned() {
+                return Ok(existing);
+            }
+        }
+
+        let channel_name = channel.name.trim().trim_start_matches('#');
+        let now = monotonic_id();
+        let workspace_path = self.local_agent_workspace(&id);
+        let mut agent = DesktopAgentView {
+            id: id.clone(),
+            name: format!("#{channel_name} Coordinator"),
+            handle: coordinator_handle(&channel.id),
+            agent_kind: Some("coordinator".to_string()),
+            system_owned: Some(true),
+            runtime_kind: "ClaudeCode".to_string(),
+            model: "Sonnet".to_string(),
+            node_id: "local-node".to_string(),
+            description: format!(
+                "内置频道协调员，负责分析 #{channel_name} 的消息意图、路由 Agent 回复并创建任务。"
+            ),
+            workspace_path: workspace_path.clone(),
+            memory_path: format!("{workspace_path}/MEMORY.md"),
+            docs_path: format!("{workspace_path}/docs"),
+            avatar_seed: id,
+            runtime_thread: Some(RuntimeThreadView {
+                runtime_kind: "ClaudeCode".to_string(),
+                status: "ready".to_string(),
+                created_at: now.clone(),
+            }),
+            skills: None,
+            channel_ids: Some(vec![channel.id.clone()]),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        agent.skills = Some(default_skill_records(&agent));
+        create_local_agent_workspace(&agent)?;
+        self.upsert_local_agent(agent.clone());
+        Ok(agent)
+    }
+
     fn upsert_local_channel(&self, channel: ChannelView) {
         let mut channels = self.channels.lock().expect("channels mutex poisoned");
         match channels
@@ -2305,6 +2374,20 @@ fn normalize_handle(handle: &str) -> Result<String, AgentError> {
     }
 }
 
+fn coordinator_agent_id(channel_id: &str) -> String {
+    format!("agent_coordinator_{}", channel_id.trim().to_lowercase())
+}
+
+fn coordinator_handle(channel_id: &str) -> String {
+    let normalized = channel_id.trim().to_lowercase();
+    let handle = format!("{normalized}-coordinator");
+    if handle.len() <= 32 {
+        return format!("@{handle}");
+    }
+    let suffix = normalized.chars().take(25).collect::<String>();
+    format!("@coord-{suffix}")
+}
+
 fn local_data_root() -> String {
     let root = env::var("SLEI_DATA_ROOT")
         .or_else(|_| env::var("HOME").map(|home| format!("{home}/.slei")))
@@ -2626,6 +2709,8 @@ fn append_local_agent_memory(agent: &DesktopAgentView, fact: &str) -> Result<(),
 fn initial_memory(agent: &DesktopAgentView) -> String {
     let key_knowledge = if agent.agent_kind.as_deref() == Some("guide") {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
+    } else if agent.agent_kind.as_deref() == Some("coordinator") {
+        "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
     };

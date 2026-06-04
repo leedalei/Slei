@@ -67,6 +67,21 @@ pub async fn create(
         .await
     {
         Ok(channel) => {
+            let coordinator = match state
+                .members()
+                .ensure_channel_coordinator_agent(&channel.id, &channel.name, "local-node")
+                .await
+            {
+                Ok(coordinator) => coordinator,
+                Err(error) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
+            };
+            if let Err(error) = state
+                .channels()
+                .add_agent_to_channel(&channel.id, &coordinator.id)
+                .await
+            {
+                return channel_error_response(error);
+            }
             for agent_id in agent_ids {
                 let outcome = match state
                     .channels()

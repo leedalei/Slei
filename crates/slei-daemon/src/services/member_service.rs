@@ -354,6 +354,54 @@ impl MemberService {
         Ok((agent, true))
     }
 
+    pub async fn ensure_channel_coordinator_agent(
+        &self,
+        channel_id: &str,
+        channel_name: &str,
+        node_id: &str,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        let trimmed_channel_id = channel_id.trim();
+        if trimmed_channel_id.is_empty() || node_id.trim().is_empty() {
+            return Err(MemberError::InvalidAgent);
+        }
+
+        let id = coordinator_agent_id(trimmed_channel_id);
+        if let Some(agent) = self.inner.lock().await.product_agents.get(&id).cloned() {
+            return Ok(agent);
+        }
+
+        let display_channel = channel_name.trim().trim_start_matches('#');
+        let draft = ProductAgentDraft {
+            name: format!("#{display_channel} Coordinator"),
+            handle: coordinator_handle(trimmed_channel_id),
+            runtime_kind: "ClaudeCode".to_string(),
+            model: "Sonnet".to_string(),
+            node_id: node_id.trim().to_string(),
+            description: format!(
+                "内置频道协调员，负责分析 #{display_channel} 的消息意图、路由 Agent 回复并创建任务。"
+            ),
+        };
+
+        self.create_product_agent_record_with_channels(
+            draft,
+            id,
+            "coordinator",
+            true,
+            &format!("coordinator:{trimmed_channel_id}"),
+            vec![trimmed_channel_id.to_string()],
+        )
+        .await
+    }
+
+    pub async fn is_coordinator_agent(&self, agent_id: &str) -> bool {
+        self.inner
+            .lock()
+            .await
+            .product_agents
+            .get(agent_id)
+            .is_some_and(|agent| agent.agent_kind == "coordinator")
+    }
+
     async fn normalize_existing_guide_agent(
         &self,
         mut agent: ProductAgentRecord,
@@ -395,6 +443,26 @@ impl MemberService {
         system_owned: bool,
         idempotency_key: &str,
     ) -> Result<ProductAgentRecord, MemberError> {
+        self.create_product_agent_record_with_channels(
+            draft,
+            id,
+            agent_kind,
+            system_owned,
+            idempotency_key,
+            vec!["all".to_string()],
+        )
+        .await
+    }
+
+    async fn create_product_agent_record_with_channels(
+        &self,
+        draft: ProductAgentDraft,
+        id: String,
+        agent_kind: &str,
+        system_owned: bool,
+        idempotency_key: &str,
+        channel_ids: Vec<String>,
+    ) -> Result<ProductAgentRecord, MemberError> {
         let normalized_handle = normalize_handle(&draft.handle)?;
         let workspace_path = self.agent_data_root.join("agents").join(&id);
         let docs_path = workspace_path.join("docs");
@@ -405,7 +473,7 @@ impl MemberService {
 
         let now = current_timestamp();
         let record = ProductAgentRecord {
-            id,
+            id: id.clone(),
             name: draft.name.trim().to_string(),
             handle: normalized_handle,
             agent_kind: agent_kind.to_string(),
@@ -417,17 +485,17 @@ impl MemberService {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             memory_path: memory_path.to_string_lossy().to_string(),
             docs_path: docs_path.to_string_lossy().to_string(),
-            avatar_seed: if system_owned {
+            avatar_seed: if agent_kind == "guide" {
                 "yeal".to_string()
             } else {
-                Uuid::new_v4().simple().to_string()
+                id.clone()
             },
             runtime_thread: RuntimeThreadRecord {
                 runtime_kind: draft.runtime_kind.trim().to_string(),
                 status: "ready".to_string(),
                 created_at: now.clone(),
             },
-            channel_ids: vec!["all".to_string()],
+            channel_ids,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -474,7 +542,9 @@ impl MemberService {
             if runtime_kind.trim().is_empty() {
                 return Err(MemberError::InvalidAgent);
             }
-            agent.runtime_kind = runtime_kind.trim().to_string();
+            let runtime_kind = runtime_kind.trim().to_string();
+            agent.runtime_kind = runtime_kind.clone();
+            agent.runtime_thread.runtime_kind = runtime_kind;
         }
         if let Some(model) = update.model {
             agent.model = model.trim().to_string();
@@ -594,6 +664,20 @@ fn normalize_handle(handle: &str) -> Result<String, MemberError> {
     }
 }
 
+fn coordinator_agent_id(channel_id: &str) -> String {
+    format!("agent_coordinator_{}", channel_id.trim().to_lowercase())
+}
+
+fn coordinator_handle(channel_id: &str) -> String {
+    let normalized = channel_id.trim().to_lowercase();
+    let handle = format!("{normalized}-coordinator");
+    if handle.len() <= 32 {
+        return format!("@{handle}");
+    }
+    let suffix = normalized.chars().take(25).collect::<String>();
+    format!("@coord-{suffix}")
+}
+
 fn current_timestamp() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -608,6 +692,8 @@ fn default_agent_kind() -> String {
 fn initial_memory(agent: &ProductAgentRecord) -> String {
     let key_knowledge = if agent.agent_kind == "guide" {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
+    } else if agent.agent_kind == "coordinator" {
+        "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
     };

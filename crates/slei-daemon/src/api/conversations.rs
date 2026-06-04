@@ -57,14 +57,21 @@ pub async fn create_dm(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    if !state
+    let agent = state
         .members()
         .list_product_agents()
         .await
         .iter()
-        .any(|agent| agent.id == payload.agent_id)
-    {
+        .find(|agent| agent.id == payload.agent_id)
+        .cloned();
+    let Some(agent) = agent else {
         return error_response(StatusCode::BAD_REQUEST, "agent not found");
+    };
+    if agent.agent_kind == "coordinator" {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "coordinator agents do not support direct messages",
+        );
     }
 
     match state.conversations().create_dm(&payload.agent_id).await {

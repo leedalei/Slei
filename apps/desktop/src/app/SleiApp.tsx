@@ -117,6 +117,7 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
 
 function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")): SleiMember {
   const node = nodes.find((candidate) => candidate.id === agent.nodeId);
+  const isCoordinator = agent.agentKind === "coordinator";
   return {
     id: agent.id,
     name: agent.name,
@@ -125,7 +126,11 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     avatarSeed: agent.avatarSeed,
     type: "agent",
     runtimeStatus: node?.status === "offline" ? "offline" : "idle",
-    role: agent.agentKind === "guide" ? messages.chat.guide : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent,
+    role: isCoordinator
+      ? messages.members.channelCoordinator
+      : agent.agentKind === "guide"
+        ? messages.chat.guide
+        : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent,
     description: agent.description,
     computer: node?.name ?? agent.nodeId,
     nodeId: agent.nodeId,
@@ -143,6 +148,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     memoryPath: agent.memoryPath,
     docsPath: agent.docsPath,
     skills: agent.skills,
+    directMessageEnabled: !isCoordinator,
   };
 }
 
@@ -506,6 +512,8 @@ export function SleiApp() {
   }
 
   async function handleMessageMember(memberId: string) {
+    const member = data.members.find((candidate) => candidate.id === memberId);
+    if (member?.directMessageEnabled === false) return;
     const receipt = await bridge.createDmConversation(memberId);
     const sessionsReceipt = await bridge.listConversationSessions(receipt.conversation.id);
     const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id);

@@ -677,7 +677,11 @@ mod tests {
 
         let agents = list_agents(&broker);
         let serialized = serde_json::to_string(&agents).unwrap();
-        assert_eq!(agents.agents.len(), 1);
+        assert!(agents.agents.iter().any(|agent| agent.id == created.agent.id));
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == "agent_coordinator_all"));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
@@ -703,6 +707,39 @@ mod tests {
         assert!(fs::read_to_string(&created.agent.memory_path)
             .unwrap()
             .contains("优先检查安全漏洞和测试覆盖率"));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn broker_lists_default_channel_coordinator_and_blocks_direct_message() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-coordinator-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&agent_root);
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let agents = list_agents(&broker);
+        let coordinator = agents
+            .agents
+            .iter()
+            .find(|agent| agent.agent_kind.as_deref() == Some("coordinator"))
+            .expect("default channel coordinator should be listed");
+
+        assert_eq!(coordinator.id, "agent_coordinator_all");
+        assert_eq!(coordinator.handle, "@all-coordinator");
+        assert_eq!(coordinator.channel_ids.as_deref(), Some(&["all".to_string()][..]));
+        assert_eq!(coordinator.runtime_kind, "ClaudeCode");
+        assert!(fs::metadata(&coordinator.memory_path).unwrap().is_file());
+        assert!(create_dm_conversation(&broker, &coordinator.id).is_err());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -742,12 +779,19 @@ mod tests {
 
         let reloaded = DaemonBroker::for_tests(descriptor);
         let agents = list_agents(&reloaded);
-        assert_eq!(agents.agents.len(), 1);
-        assert_eq!(agents.agents[0].id, created.id);
-        assert_eq!(agents.agents[0].name, "Bob");
-        assert_eq!(agents.agents[0].handle, "@bob");
+        let bob = agents
+            .agents
+            .iter()
+            .find(|agent| agent.id == created.id)
+            .expect("created agent should persist across broker restart");
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == "agent_coordinator_all"));
+        assert_eq!(bob.name, "Bob");
+        assert_eq!(bob.handle, "@bob");
         assert_eq!(
-            agents.agents[0].channel_ids.as_deref(),
+            bob.channel_ids.as_deref(),
             Some(&["all".to_string()][..])
         );
         std::env::remove_var("SLEI_DATA_ROOT");

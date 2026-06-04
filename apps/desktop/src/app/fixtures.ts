@@ -71,6 +71,7 @@ export type SleiMember = {
   docsPath?: string;
   skills?: SkillView[];
   channelReadiness?: Record<string, SleiChannelMemberReadiness>;
+  directMessageEnabled?: boolean;
 };
 
 export type SleiFixtures = {

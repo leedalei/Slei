@@ -31,6 +31,7 @@ export const members = {
   memoryFile: "MEMORY.md",
   openWorkspaceFailed: "无法打开该工作区地址",
   channelPermission: "频道权限",
+  channelCoordinator: "频道协调员",
   permissionLabels: {
     ReadOnly: "只读",
     Edit: "编辑",

@@ -349,8 +349,12 @@ function ChannelList(input: {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [activePanel, setActivePanel] = useState<"channels" | "saved">(input.initialSavedPanelOpen ? "saved" : "channels");
-  const directMessageConversations = input.data.conversations.filter((conversation) => conversation.kind === "dm");
-  const agentMembers = input.data.members.filter((member) => member.type === "agent");
+  const directMessageConversations = input.data.conversations.filter((conversation) => {
+    if (conversation.kind !== "dm") return false;
+    const member = input.data.members.find((candidate) => candidate.id === conversation.agentId);
+    return member?.directMessageEnabled !== false;
+  });
+  const agentMembers = input.data.members.filter((member) => member.type === "agent" && member.directMessageEnabled !== false);
 
   async function submitChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

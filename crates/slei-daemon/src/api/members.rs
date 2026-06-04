@@ -13,6 +13,10 @@ pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> R
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    if let Err(error) = ensure_channel_coordinators(&state).await {
+        return member_error_response(error);
+    }
+
     Json(json!({ "agents": state.members().list_product_agents().await })).into_response()
 }
 
@@ -207,6 +211,26 @@ fn has_ready_claude_runtime(state: &AppState, node_id: &str) -> bool {
             .iter()
             .any(|runtime| runtime.kind == "ClaudeCode" && runtime.readiness == "ready")
     })
+}
+
+pub(crate) async fn ensure_channel_coordinators(state: &AppState) -> Result<(), MemberError> {
+    for channel in state.channels().list_channels().await {
+        let coordinator = state
+            .members()
+            .ensure_channel_coordinator_agent(&channel.id, &channel.name, "local-node")
+            .await?;
+        if let Err(error) = state
+            .channels()
+            .add_agent_to_channel(&channel.id, &coordinator.id)
+            .await
+        {
+            return Err(MemberError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                error.to_string(),
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn member_error_response(error: MemberError) -> Response {

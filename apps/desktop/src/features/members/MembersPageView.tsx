@@ -77,9 +77,11 @@ export function MembersPage(input: {
             <p>{memberDetails.description}</p>
           </div>
         </div>
-        <div>
-          <button className="slei-button" onClick={() => input.onMessage?.(selectedMember.id)} type="button">{input.messages.members.message}</button>
-        </div>
+        {selectedMember.directMessageEnabled === false ? null : (
+          <div>
+            <button className="slei-button" onClick={() => input.onMessage?.(selectedMember.id)} type="button">{input.messages.members.message}</button>
+          </div>
+        )}
       </header>
       <nav className="slei-member-tabs" aria-label={input.messages.members.memberConfig}>
         {tabs.map((tab, index) => (
