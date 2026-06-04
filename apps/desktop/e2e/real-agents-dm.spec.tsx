@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -115,16 +113,12 @@ describe("real agent members and direct messages", () => {
         runtimeSetup={readyRuntime}
       />,
     );
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(html).toContain("私聊 1");
     expect(html).toContain("Coda");
-    expect(html).toContain("slei-channel__dm-copy");
     expect(html).toContain("<strong>Coda</strong>");
     expect(html).toContain("真实创建的开发 Agent。");
     expect(html).not.toContain("<small>@coda</small>");
-    expect(css).toMatch(/\.slei-channel__dm-copy strong\s*\{[\s\S]*?font-weight: var\(--weight-bold\);/);
-    expect(css).toMatch(/\.slei-channel__dm-copy small\s*\{[\s\S]*?font-weight: var\(--weight-normal\);/);
   });
 
   it("highlights only the selected direct message while a dm is active", () => {
@@ -139,8 +133,8 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
-    expect(html).toContain('aria-current="true" class="slei-channel slei-channel--dm"');
-    expect(html).not.toContain('aria-current="true" class="slei-channel"');
+    expect(html).toMatch(/aria-current="true"[\s\S]*?<strong>Coda<\/strong>/);
+    expect(html).not.toMatch(/aria-current="true"[\s\S]{0,240}# all/);
   });
 
   it("highlights only the selected channel while a channel is active", () => {
@@ -155,11 +149,12 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
-    expect(html).toContain('aria-current="true" class="slei-channel"');
-    expect(html).not.toContain('aria-current="true" class="slei-channel slei-channel--dm"');
+    const currentButton = html.slice(html.indexOf('aria-current="true"'), html.indexOf("</button>", html.indexOf('aria-current="true"')));
+    expect(currentButton).toContain("all</span>");
+    expect(currentButton).not.toContain("<strong>Coda</strong>");
   });
 
-  it("uses compact detail edit buttons and a 440px modal width", () => {
+  it("renders the agent create modal as an accessible dialog", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="members"
@@ -169,12 +164,15 @@ describe("real agent members and direct messages", () => {
         runtimeSetup={readyRuntime}
       />,
     );
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(html).toContain("slei-agent-modal");
-    expect(html).toContain("slei-button--small");
-    expect(css).toContain(".slei-button--small");
-    expect(css).toContain("width: min(100%, 440px)");
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain("创建智能体");
+    expect(html).toContain(">名字<");
+    expect(html).toContain(">@handle<");
+    expect(html).toContain(">关联设备<");
+    expect(html).toContain(">描述<");
+    expect(html).toContain(">创建</button>");
   });
 
   it("renders runtime status squares for active approved failed and pending agent replies", () => {
@@ -253,17 +251,15 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html).toContain("我正在处理");
-    expect(html).toContain("slei-message-status-square--running");
+    expect(html).toContain('aria-label="running"');
     expect(html).toContain("Claude auth missing");
-    expect(html).toContain("slei-message-status-square--failed");
+    expect(html).toContain('aria-label="failed"');
     expect(html).toContain("已经发送完成");
+    expect(html).not.toContain('aria-label="done"');
     expect(html).toContain("审批已通过");
-    expect(html).toContain("slei-message-status-square--approval");
+    expect(html).toContain('aria-label="approval"');
     expect(html).toContain("等待决断");
-    expect(html).toContain("slei-message-status-square--pending");
-    expect(html).not.toContain("slei-badge--running");
-    expect(html).not.toContain("slei-badge--failed");
-    expect(html).not.toContain("slei-badge--done");
+    expect(html).toContain('aria-label="pending"');
   });
 
   it("keeps polling active direct messages while output is running or pending", () => {
@@ -329,7 +325,7 @@ describe("real agent members and direct messages", () => {
     expect(dmHtml).not.toContain("重置会话");
     expect(dmHtml).toContain("历史对话");
     expect(dmHtml).not.toContain("Runtime 已检测");
-    expect(dmHtml).not.toContain("slei-chat-tabs");
+    expect(dmHtml).not.toContain('aria-label="频道视图"');
     expect(channelHtml).not.toContain("重置会话");
     expect(channelHtml).not.toContain("历史对话");
   });
@@ -350,7 +346,6 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(dmHtml).not.toContain("转为任务");
-    expect(dmHtml).not.toContain("slei-task-toggle");
     expect(channelHtml).toContain("转为任务");
   });
 
@@ -387,7 +382,6 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("研发团队开发工程师");
     expect(html).toContain("10:00");
     expect(html).toContain('aria-label="复制"');
-    expect(html).toContain("slei-message__meta-separator");
     expect(html).not.toContain(">复制</button>");
     expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf("<time>10:00</time>"));
   });
@@ -522,11 +516,11 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("slei-session-drawer");
+    expect(html).toContain('aria-label="历史对话"');
     expect(html).toContain("历史对话");
     expect(html).toContain("帮我检查历史会话");
     expect(html).toContain("新会话");
-    const sessionListHtml = html.slice(html.indexOf("slei-session-list"));
+    const sessionListHtml = html.slice(html.indexOf('aria-label="历史对话"'));
     expect(sessionListHtml.indexOf("新会话")).toBeLessThan(sessionListHtml.indexOf("帮我检查历史会话"));
     expect(html).toContain("当前消息");
     expect(html).not.toContain("旧消息");

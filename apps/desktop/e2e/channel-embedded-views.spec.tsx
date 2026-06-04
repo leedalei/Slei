@@ -60,7 +60,10 @@ describe("channel embedded views", () => {
       <SleiAppFrame activeView="chat" data={createSleiFixtures()} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain("slei-chat-tabs");
+    expect(html).toContain('aria-label="频道视图"');
+    expect(html).toContain(">聊天</button>");
+    expect(html).toContain(">任务</button>");
+    expect(html).toContain(">附件</button>");
     expect(html).not.toContain("Runtime 已检测");
     expect(html).not.toContain("Runtime detected");
   });
@@ -94,12 +97,13 @@ describe("channel embedded views", () => {
       />,
     );
 
-    expect(html).toContain("slei-channel-task-list");
+    expect(html).toContain('aria-label="任务"');
     expect(html).toContain("实现频道任务列表");
     expect(html).toContain("等待确认");
     expect(html).toContain("1 条回复");
     expect(html).not.toContain("不要展示其他频道任务");
-    expect(html).not.toContain("slei-composer");
+    expect(html).not.toContain('aria-label="输入消息到 #dev-team"');
+    expect(html).not.toContain('data-testid="slei-send-button"');
     expect(html).toContain('aria-current="page"');
   });
 
@@ -143,13 +147,15 @@ describe("channel embedded views", () => {
       />,
     );
 
-    expect(html).toContain("slei-channel-file-list");
+    expect(html).toContain('aria-label="附件"');
     expect(html).toContain("screen.png");
     expect(html).toContain("notes.md");
     expect(html).toContain("Lei · 10:10");
-    expect(html).toContain("slei-channel-file-thumbnail");
+    expect(html).toContain('aria-label="打开附件 screen.png"');
+    expect(html).toContain("<img");
     expect(html).not.toContain("ops.log");
-    expect(html).not.toContain("slei-composer");
+    expect(html).not.toContain('aria-label="输入消息到 #dev-team"');
+    expect(html).not.toContain('data-testid="slei-send-button"');
   });
 
   it("keeps direct message session actions instead of channel tabs", () => {
@@ -166,6 +172,6 @@ describe("channel embedded views", () => {
 
     expect(html).toContain("新会话");
     expect(html).toContain("历史对话");
-    expect(html).not.toContain("slei-chat-tabs");
+    expect(html).not.toContain('aria-label="频道视图"');
   });
 });

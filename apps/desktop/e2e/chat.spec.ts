@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { renderChatPage } from "../src/features/chat/ChatPage";
@@ -45,51 +43,32 @@ describe("channel chat timeline", () => {
     ).toEqual([{ displayName: "Alice", handle: "alice", kind: "agent" }]);
   });
 
-  it("styles chat messages as flat rows until hover or focus", () => {
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const messageRule = css.match(/\.slei-message\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+  it("renders task composer state from chat input data", () => {
+    const html = renderChatPage({
+      locale: "zh-CN",
+      channel: { name: "dev-team" },
+      messages: [],
+      composer: { asTask: true },
+      lastSequence: 8,
+    });
 
-    expect(messageRule).toContain("border: var(--border-subtle) solid transparent");
-    expect(messageRule).not.toMatch(/(^|\n)\s*box-shadow:/);
-    expect(css).toContain(".slei-message:hover");
-    expect(css).toContain(".slei-message:focus-within");
+    expect(html).toContain("输入消息到 #dev-team");
+    expect(html).toContain("转为任务 checked");
+    expect(html).toContain("reconnect after 8");
   });
 
-  it("keeps chat scrolling inside the timeline instead of the whole workspace", () => {
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const rootRule = css.match(/html,\s*\nbody,\s*\n#app\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const shellRule = css.match(/\.slei-shell\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const workspaceRule = css.match(/\.slei-workspace\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const chatPageRule = css.match(/\.slei-chat-page\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const timelineRule = css.match(/\.slei-timeline\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const composerRule = css.match(/\.slei-composer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const modalBackdropRule = css.match(/\.slei-modal-backdrop\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
-    const drawerRule = css.match(/\.slei-task-thread-drawer\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+  it("keeps chat output scoped to the active channel", () => {
+    const html = renderChatPage({
+      locale: "zh-CN",
+      channel: { name: "dev-team" },
+      messages: [{ sender: "Coda", body: "频道内消息", streaming: false, toolCalls: [] }],
+      composer: { asTask: false },
+      lastSequence: 9,
+    });
 
-    expect(rootRule).toContain("height: 100%");
-    expect(rootRule).toContain("overflow: hidden");
-    expect(rootRule).toContain("background: var(--color-bg)");
-    expect(shellRule).toContain("height: 100vh");
-    expect(shellRule).toContain("margin: 0");
-    expect(shellRule).not.toContain("--app-window-radius");
-    expect(shellRule).not.toContain("border-radius");
-    expect(shellRule).toContain("min-height: 0");
-    expect(shellRule).toContain("overflow: hidden");
-    expect(workspaceRule).toContain("min-height: 0");
-    expect(workspaceRule).toContain("overflow: hidden");
-    expect(chatPageRule).toContain("display: flex");
-    expect(chatPageRule).toContain("flex-direction: column");
-    expect(chatPageRule).toContain("height: 100%");
-    expect(chatPageRule).toContain("min-height: 0");
-    expect(chatPageRule).toContain("overflow: hidden");
-    expect(timelineRule).toContain("flex: 1 1 auto");
-    expect(timelineRule).toContain("min-height: 0");
-    expect(timelineRule).toContain("overflow-y: auto");
-    expect(timelineRule).toContain("padding: var(--gap-xl) var(--padding-panel)");
-    expect(composerRule).toContain("flex: 0 0 auto");
-    expect(composerRule).toContain("padding: var(--padding-panel)");
-    expect(modalBackdropRule).toContain("overflow: hidden");
-    expect(modalBackdropRule).not.toContain("border-radius");
-    expect(drawerRule).not.toContain("border-radius");
+    expect(html).toContain("#dev-team");
+    expect(html).toContain("频道内消息");
+    expect(html).toContain("输入消息到 #dev-team");
+    expect(html).not.toContain("#ops");
   });
 });

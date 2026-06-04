@@ -46,8 +46,10 @@ describe("member pixel avatars", () => {
       <SleiAppFrame activeView="chat" data={data} initialChatDraft="@" locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(membersHtml).toContain("slei-avatar__image");
-    expect(chatHtml).toContain("slei-avatar__image");
+    expect(membersHtml).toContain('title="Coda"');
+    expect(membersHtml).toContain("<img");
+    expect(chatHtml).toContain('title="Coda"');
+    expect(chatHtml).toContain("<img");
     expect(chatHtml).toContain("pixel avatar check");
     expect(chatHtml).toContain("@Coda");
     expect(chatHtml).not.toContain("Nancy");

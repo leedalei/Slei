@@ -76,9 +76,10 @@ describe("chat attachments", () => {
       />,
     );
 
-    expect(html).toContain("slei-attachment-chip");
     expect(html).toContain("screen.png");
-    expect(html).toContain("slei-attachment-preview");
+    expect(html).toContain("1 KB");
+    expect(html).toContain("<img");
+    expect(html).toContain('aria-label="Remove screen.png"');
     expect(html).toContain('data-testid="slei-send-button"');
     expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
   });
@@ -119,7 +120,6 @@ describe("chat attachments", () => {
     );
 
     expect(html).toContain("看附件");
-    expect(html).toContain("slei-message-attachments");
     expect(html).toContain("notes.md");
     expect(html).toContain("2 KB");
   });

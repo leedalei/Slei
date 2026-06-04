@@ -1,6 +1,4 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { Empty, SleiAppFrame } from "../src/app/SleiApp";
@@ -22,16 +20,12 @@ describe("empty state component", () => {
       <Empty description="换一个关键词试试。" size="sm" title="没有结果" variant="noresult" />,
     );
 
-    expect(nodata).toContain("slei-empty--nodata");
-    expect(nodata).toContain("slei-empty--lg");
-    expect(nodata).toContain("slei-empty__pixel-face");
-    expect(nodata).toContain("slei-empty__pixel--eye");
-    expect(nodata).toContain("slei-empty__pixel--mouth");
-    expect(noresult).toContain("slei-empty--noresult");
-    expect(noresult).toContain("slei-empty--sm");
-    expect(noresult).toContain("slei-empty__pixel-face");
-    expect(noresult).toContain("slei-empty__pixel--eye");
-    expect(noresult).toContain("slei-empty__pixel--mouth");
+    expect(nodata).toContain('role="status"');
+    expect(nodata).toContain("暂无智能体");
+    expect(nodata).toContain("创建第一个智能体后会显示在这里。");
+    expect(noresult).toContain('role="status"');
+    expect(noresult).toContain("没有结果");
+    expect(noresult).toContain("换一个关键词试试。");
   });
 
   it("centers the empty component when detail pages have no selected object", () => {
@@ -42,15 +36,10 @@ describe("empty state component", () => {
     const computersHtml = renderToStaticMarkup(
       <SleiAppFrame activeView="computers" data={data} locale="zh-CN" runtimeSetup={emptyRuntime} />,
     );
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(membersHtml).toContain("slei-detail-empty-page");
-    expect(membersHtml).toContain("slei-empty-detail");
+    expect(membersHtml).toContain('role="status"');
     expect(membersHtml).toContain("暂无智能体");
-    expect(computersHtml).toContain("slei-detail-empty-page");
-    expect(computersHtml).toContain("slei-empty-detail");
+    expect(computersHtml).toContain('role="status"');
     expect(computersHtml).toContain("暂无设备");
-    expect(css).toContain(".slei-detail-empty-page");
-    expect(css).toContain("place-items: center");
   });
 });

@@ -55,10 +55,10 @@ describe("settings preferences", () => {
       />,
     );
 
-    expect(html).toContain("slei-language-select");
-    expect(html).toContain("slei-timezone-select");
-    expect(html).toContain("slei-select__control");
-    expect(html).toContain("slei-select__icon");
+    expect(html).toContain('aria-label="语言"');
+    expect(html).toContain('aria-label="时区"');
+    expect(html).toContain(">中文<");
+    expect(html).toContain(">English<");
     expect(html).toContain('option value="zh-CN"');
     expect(html).toContain('option value="en-US"');
     expect(html).toContain('option value="Asia/Shanghai"');
@@ -79,8 +79,8 @@ describe("settings preferences", () => {
     expect(html).toContain("提及通知");
     expect(html).toContain("人工回复通知");
     expect(html).toContain("审批通知");
-    expect(html).toContain("slei-checkbox");
-    expect(html).toContain("slei-checkbox__box");
+    expect(html.match(/type="checkbox"/g)).toHaveLength(3);
+    expect(html).toContain('checked=""');
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });
@@ -124,11 +124,13 @@ describe("settings preferences", () => {
       />,
     );
 
-    expect(appearanceHtml).toContain("slei-theme-select");
     expect(appearanceHtml).toContain("字体大小");
+    expect(appearanceHtml).toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
     expect(appearanceHtml).toContain('option value="light"');
     expect(appearanceHtml).toContain('option value="dark"');
+    expect(appearanceHtml).toContain(">浅色<");
+    expect(appearanceHtml).toContain(">深色<");
     expect(appearanceHtml).not.toContain('option value="system"');
     expect(appearanceHtml).not.toContain('option value="highContrast"');
     expect(aboutHtml).toContain("桌面端版本");
