@@ -525,6 +525,8 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("帮我检查历史会话");
     expect(html).toContain("新会话");
     const sessionListHtml = html.slice(html.indexOf('aria-label="历史对话"'));
+    expect(sessionListHtml).toContain("overflow-hidden");
+    expect(sessionListHtml).toContain("truncate");
     expect(sessionListHtml.indexOf("新会话")).toBeLessThan(sessionListHtml.indexOf("帮我检查历史会话"));
     expect(html).toContain("当前消息");
     expect(html).not.toContain("旧消息");

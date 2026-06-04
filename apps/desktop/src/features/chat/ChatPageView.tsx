@@ -456,15 +456,15 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 ? sortedActiveSessions.map((session) => (
                     <Button
                       aria-current={session.id === currentSessionId ? "true" : undefined}
-                      className={cn("h-auto justify-start px-3 py-2 text-left", session.id === currentSessionId && "bg-accent text-accent-foreground")}
+                      className={cn("h-auto w-full justify-start overflow-hidden px-3 py-2 text-left", session.id === currentSessionId && "bg-accent text-accent-foreground")}
                       key={session.id}
                       onClick={() => onConversationSessionSelect?.(activeConversation.id, session.id)}
                       type="button"
                       variant="ghost"
                     >
-                      <span className="grid gap-0.5">
-                        <strong>{session.title || messages.chat.newSession}</strong>
-                        <small className="text-xs font-normal text-muted-foreground">{formatConversationDateTime(session.createdAt)}</small>
+                      <span className="grid min-w-0 flex-1 gap-0.5">
+                        <strong className="block truncate">{session.title || messages.chat.newSession}</strong>
+                        <small className="truncate text-xs font-normal text-muted-foreground">{formatConversationDateTime(session.createdAt)}</small>
                       </span>
                     </Button>
                   ))
@@ -479,12 +479,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           {sortedActiveSessions.map((session) => (
             <button
               aria-current={session.id === currentSessionId ? "true" : undefined}
+              className="overflow-hidden text-left"
               key={session.id}
               onClick={() => onConversationSessionSelect?.(activeConversation.id, session.id)}
               type="button"
             >
-              <strong>{session.title || messages.chat.newSession}</strong>
-              <small>{formatConversationDateTime(session.createdAt)}</small>
+              <strong className="block truncate">{session.title || messages.chat.newSession}</strong>
+              <small className="block truncate">{formatConversationDateTime(session.createdAt)}</small>
             </button>
           ))}
         </aside>

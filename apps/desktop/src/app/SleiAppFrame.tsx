@@ -170,6 +170,7 @@ export function SleiAppFrame(input: {
   const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
+  const sidebarTitle = input.activeView === "search" ? messages.common.search : messages.shell.nav[input.activeView];
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
@@ -188,7 +189,7 @@ export function SleiAppFrame(input: {
       data-theme={normalizedTheme}
       style={shellStyle}
     >
-      <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 py-3 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+      <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-14 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="grid size-12 place-items-center rounded-lg bg-primary text-lg font-semibold text-primary-foreground">
           <span aria-hidden="true">L</span>
         </div>
@@ -215,43 +216,45 @@ export function SleiAppFrame(input: {
       </nav>
 
       <aside className="slei-context-sidebar min-h-0 border-r bg-sidebar/70 text-sidebar-foreground max-[760px]:hidden">
-        {input.activeView === "chat" || input.activeView === "search" ? (
-          <ChannelList
-            activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
-            activeConversationId={input.activeConversationId}
-            data={input.data}
-            initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
-            initialSavedPanelOpen={input.initialSavedPanelOpen}
-            onChannelCreate={input.onChannelCreate}
-            onChannelDelete={input.onChannelDelete}
-            onChannelSelect={input.onChannelSelect}
-            onConversationSelect={input.onConversationSelect}
-            onSavedMessageSelect={input.onSavedMessageSelect}
-            onSearchToggle={input.onSearchToggle}
-            savedMessages={input.savedMessages ?? []}
-            searchOpen={input.activeView === "search"}
-            messages={messages}
-          />
-        ) : input.activeView === "members" ? (
-          <MembersNavigator
-            activeMemberId={input.activeMemberId}
-            data={input.data}
-            messages={messages}
-            onCreateAgentRequest={() => setAgentCreateOpen(true)}
-            onSelect={input.onMemberSelect}
-          />
-        ) : input.activeView === "computers" ? (
-          <ComputersNavigator
-            activeNodeId={activeComputerId}
-            messages={messages}
-            nodes={input.runtimeSetup.nodes}
-            onAdd={() => setComputerCreateOpen(true)}
-            onDelete={input.onComputerDelete}
-            onSelect={setActiveComputerId}
-          />
-        ) : input.activeView === "settings" ? (
-          <SettingsNavigator activePanel={activeSettingsPanel} messages={messages} onSelect={setActiveSettingsPanel} />
-        ) : <ContextPanel activeView={input.activeView} data={input.data} messages={messages} />}
+        <SidebarFrame title={sidebarTitle}>
+          {input.activeView === "chat" || input.activeView === "search" ? (
+            <ChannelList
+              activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
+              activeConversationId={input.activeConversationId}
+              data={input.data}
+              initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
+              initialSavedPanelOpen={input.initialSavedPanelOpen}
+              onChannelCreate={input.onChannelCreate}
+              onChannelDelete={input.onChannelDelete}
+              onChannelSelect={input.onChannelSelect}
+              onConversationSelect={input.onConversationSelect}
+              onSavedMessageSelect={input.onSavedMessageSelect}
+              onSearchToggle={input.onSearchToggle}
+              savedMessages={input.savedMessages ?? []}
+              searchOpen={input.activeView === "search"}
+              messages={messages}
+            />
+          ) : input.activeView === "members" ? (
+            <MembersNavigator
+              activeMemberId={input.activeMemberId}
+              data={input.data}
+              messages={messages}
+              onCreateAgentRequest={() => setAgentCreateOpen(true)}
+              onSelect={input.onMemberSelect}
+            />
+          ) : input.activeView === "computers" ? (
+            <ComputersNavigator
+              activeNodeId={activeComputerId}
+              messages={messages}
+              nodes={input.runtimeSetup.nodes}
+              onAdd={() => setComputerCreateOpen(true)}
+              onDelete={input.onComputerDelete}
+              onSelect={setActiveComputerId}
+            />
+          ) : input.activeView === "settings" ? (
+            <SettingsNavigator activePanel={activeSettingsPanel} messages={messages} onSelect={setActiveSettingsPanel} />
+          ) : <ContextPanel activeView={input.activeView} data={input.data} messages={messages} />}
+        </SidebarFrame>
       </aside>
 
       <button
@@ -353,6 +356,17 @@ export function channelDraftCreateInput(draft: ChannelDraftState): { name: strin
     projectName: draft.projectName,
     agentIds: draft.selectedAgentIds,
   };
+}
+
+function SidebarFrame(input: { children: ReactNode; title: string }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b px-3 pb-3 pt-4">
+        <h2 className="text-base font-bold leading-none">{input.title}</h2>
+      </div>
+      <div className="min-h-0 flex-1">{input.children}</div>
+    </div>
+  );
 }
 
 function ChannelList(input: {

@@ -68,7 +68,8 @@ describe("computers management page", () => {
     expect(html).toContain("设备 2");
     expect(html).toContain("MacBookPro M4 MAX");
     expect(html).toContain("公司台式Win");
-    expect(html).toContain("NAME");
+    expect(html).toContain("设备名称");
+    expect(html).not.toContain("NAME");
     expect(html).toContain("信息");
     expect(html).toContain("OS");
     expect(html).toContain("darwin arm64");
@@ -76,6 +77,7 @@ describe("computers management page", () => {
     expect(html).toContain("检测到的运行时");
     expect(html).toContain("创建时间");
     expect(html).toContain("此设备上的智能体");
+    expect(html).not.toContain('data-slot="card-description">3');
     expect(html).toContain('data-slot="avatar"');
     expect(html).toContain('title="Coda"');
     expect(html).toContain("Coda");

@@ -75,17 +75,13 @@ export function ComputersPage(input: {
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
           <Card>
-            <CardHeader>
-              <CardTitle>{input.messages.computers.deviceName}</CardTitle>
-              <CardDescription>{input.messages.computers.editDeviceName}</CardDescription>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               <EditableDetailField
                 ariaLabel={input.messages.computers.editDeviceName}
-                label="NAME"
+                label={input.messages.computers.deviceName}
                 messages={input.messages}
                 onSave={(value) => input.onComputerRename?.(selectedNode.id, value)}
-                sectionClassName="rounded-lg border bg-muted/30 p-3"
+                sectionClassName="grid gap-2"
                 titleTag="h2"
                 value={selectedNode.name}
               />
@@ -133,7 +129,6 @@ export function ComputersPage(input: {
           <Card>
             <CardHeader>
               <CardTitle>{input.messages.computers.agentsOnThisComputer}</CardTitle>
-              <CardDescription>{hostedAgents.length}</CardDescription>
               <CardAction>
                 <Badge variant="outline">
                   <Bot aria-hidden="true" className="size-3" />

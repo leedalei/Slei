@@ -27,6 +27,7 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain('data-active-view="chat"');
     expect(html).toContain('grid-template-columns:5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
     expect(html).toContain('aria-label="主导航"');
+    expect(html).toContain("pt-14");
     expect(html).toContain('data-slot="button"');
     expect(html).toContain(">聊天<");
     expect(html).toContain(">任务<");
@@ -34,6 +35,7 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain(">运行设备<");
     expect(html).toContain(">设置<");
     expect(html).not.toContain("Slei 协作中枢");
+    expect(html).toContain(">聊天</h2>");
     expect(html).toContain("# all");
     expect(html).toContain("所有成员的默认频道");
     expect(html).toContain("输入消息到 #all");
@@ -178,6 +180,13 @@ describe("Slei React desktop shell", () => {
   it("renders all primary destinations from the single shell", () => {
     const data = createSleiFixtures();
     const views = ["chat", "tasks", "members", "computers", "settings"] as const;
+    const sidebarTitles = {
+      chat: "聊天",
+      tasks: "任务",
+      members: "成员",
+      computers: "运行设备",
+      settings: "设置",
+    };
 
     for (const activeView of views) {
       const html = renderToStaticMarkup(
@@ -195,6 +204,7 @@ describe("Slei React desktop shell", () => {
       );
 
       expect(html).toContain(`data-active-view="${activeView}"`);
+      expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
     }
   });
 });
