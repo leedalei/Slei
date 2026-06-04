@@ -47,17 +47,24 @@ export function EditableDetailField(input: {
   }
 
   return (
-    <section className={cn("grid gap-2", input.sectionClassName ?? "slei-detail-section")}>
-      <div className="flex items-center justify-between gap-2">
+    <section className={cn("slei-editable-field grid gap-2", input.sectionClassName ?? "slei-detail-section")}>
+      <div className="slei-editable-field__label flex items-center justify-between gap-2">
         <Heading className="text-base font-semibold">{input.label}</Heading>
         {!editing ? (
-          <Button aria-label={input.ariaLabel} onClick={() => setEditing(true)} size="icon-sm" type="button" variant="ghost">
+          <Button
+            aria-label={input.ariaLabel}
+            className="slei-editable-field__edit"
+            onClick={() => setEditing(true)}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
             <Pencil aria-hidden="true" className="size-3.5" />
           </Button>
         ) : null}
       </div>
       {editing ? (
-        <form className="grid gap-3" onSubmit={save}>
+        <form className="slei-editable-field__editor grid gap-3" onSubmit={save}>
           <Label className="sr-only" htmlFor={fieldId}>
             {input.label}
           </Label>
@@ -76,7 +83,7 @@ export function EditableDetailField(input: {
               value={draft}
             />
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="slei-editable-field__actions flex flex-wrap gap-2">
             <Button size="sm" type="submit">{messages.common.save}</Button>
             <Button onClick={cancel} size="sm" type="button" variant="outline">{messages.common.cancel}</Button>
           </div>

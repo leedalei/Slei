@@ -9,13 +9,32 @@ export function Empty(input: {
   size?: EmptySize;
   centered?: boolean;
 }) {
+  const variant = input.variant ?? "nodata";
   const size = input.size ?? "md";
+  const pixelFaceSize = size === "lg" ? "size-[72px]" : size === "sm" ? "size-10" : "size-14";
 
   return (
-    <Card className={cn("border-dashed bg-muted/35", input.centered && "mx-auto max-w-xl")} role="status">
+    <Card
+      className={cn(
+        "border-dashed",
+        variant === "noresult" ? "bg-amber-500/10" : "bg-muted/35",
+        input.centered && "mx-auto max-w-xl",
+      )}
+      data-empty-size={size}
+      data-empty-variant={variant}
+      role="status"
+    >
       <CardContent className={cn("grid gap-3 text-center", size === "lg" ? "p-10" : "p-5")}>
-        <div className="mx-auto grid size-12 place-items-center rounded-md border bg-background" aria-hidden="true">
-          <span className="slei-empty__pixel-face">
+        <div className="mx-auto grid place-items-center" aria-hidden="true" data-empty-icon="true">
+          <span
+            className={cn(
+              "slei-empty__pixel-face relative block rounded-md border shadow-sm [image-rendering:pixelated]",
+              `slei-empty--${variant}`,
+              `slei-empty--${size}`,
+              pixelFaceSize,
+              variant === "noresult" ? "bg-amber-500/15" : "bg-background",
+            )}
+          >
             <span className="slei-empty__pixel slei-empty__pixel--eye slei-empty__pixel--left" />
             <span className="slei-empty__pixel slei-empty__pixel--eye slei-empty__pixel--right" />
             <span className="slei-empty__pixel slei-empty__pixel--mouth" />

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { createMemberAvatar } from "../src/components";
+import { createMemberAvatar, MemberAvatar } from "../src/components";
 import { SleiAppFrame } from "../src/app/SleiApp";
 import { createDemoMembers, createSleiFixtures } from "../src/app/fixtures";
 
@@ -21,6 +21,15 @@ describe("member pixel avatars", () => {
     expect(createMemberAvatar(coda)).toBe(createMemberAvatar(coda));
     expect(createMemberAvatar(coda)).not.toBe(createMemberAvatar(alice));
     expect(createMemberAvatar(coda)).toMatch(/^data:image\/svg\+xml/);
+  });
+
+  it("renders shadcn avatar identity with compact default size and pixelated image intent", () => {
+    const coda = createDemoMembers().find((member) => member.name === "Coda")!;
+    const html = renderToStaticMarkup(<MemberAvatar identity={coda} />);
+
+    expect(html).toContain('title="Coda"');
+    expect(html).toContain('data-avatar-size="default"');
+    expect(html).toContain('data-avatar-image-rendering="pixelated"');
   });
 
   it("renders generated avatar images in members, chat timeline, and mention picker", () => {

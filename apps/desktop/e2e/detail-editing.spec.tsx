@@ -24,6 +24,8 @@ describe("detail page editing pattern", () => {
     );
 
     expect(html).toContain('aria-label="编辑显示名称"');
+    expect(html).toContain("slei-editable-field");
+    expect(html).toContain("slei-editable-field__label");
     expect(html).toContain("显示名称");
     expect(html).toContain("Coda");
     expect(html).not.toContain('aria-label="显示名称输入"');
@@ -46,6 +48,25 @@ describe("detail page editing pattern", () => {
     expect(html).toContain('aria-label="显示名称输入"');
     expect(html).toContain("保存");
     expect(html).toContain("取消");
+  });
+
+  it("keeps compact editable field compatibility hooks", () => {
+    const html = renderToStaticMarkup(
+      <EditableDetailField
+        ariaLabel="编辑运行时"
+        label="Runtime"
+        onSave={() => undefined}
+        readClassName="slei-badge"
+        sectionClassName="slei-config-editable"
+        value="ClaudeCode"
+      />,
+    );
+
+    expect(html).toContain("slei-config-editable");
+    expect(html).toContain("slei-editable-field");
+    expect(html).toContain("slei-editable-field__label");
+    expect(html).toContain("slei-badge");
+    expect(html).toContain("ClaudeCode");
   });
 
   it("uses the same edit trigger pattern on member and computer details", () => {
