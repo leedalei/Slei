@@ -86,7 +86,7 @@ describe("chat attachments", () => {
     expect(html).toContain('aria-label="Remove screen.png"');
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
-    expect(sendButton).not.toContain("disabled");
+    expect(sendButton).not.toContain(' disabled=""');
   });
 
   it("renders sent message attachments in the timeline", () => {

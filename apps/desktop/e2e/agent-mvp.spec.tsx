@@ -1,7 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import {
   agentsForComputerNode,
@@ -276,17 +274,13 @@ describe("agent creation, device association, and memory MVP", () => {
       />,
     );
 
-    expect(html).toContain("slei-interactive-card--createAgent");
+    expect(html).toContain('data-card-kind="createAgent"');
+    expect(html).toContain('data-slot="card"');
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
-    expect(html).not.toContain("slei-badge--attention");
-    expect(html).toContain("slei-button--small");
+    expect(html).not.toContain('data-variant="destructive"');
+    expect(html).toContain('data-slot="button"');
     expect(html).toContain("disabled=\"\"");
     expect(html).toContain("已完成");
-
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    expect(css).toContain(".slei-interactive-card h2");
-    expect(css).toContain("font-size: 14px");
-    expect(css).toContain("font-weight: var(--weight-bold)");
   });
 
   it("renders multiple persisted guide card messages separately", () => {
@@ -354,7 +348,7 @@ describe("agent creation, device association, and memory MVP", () => {
       />,
     );
 
-    expect(html.match(/slei-interactive-card--createAgent/g)).toHaveLength(2);
+    expect(html.match(/data-card-kind="createAgent"/g)).toHaveLength(2);
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
     expect(html).toContain("Alice · ClaudeCode / Sonnet");
   });

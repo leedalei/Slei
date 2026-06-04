@@ -215,7 +215,7 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain("slei-mention-panel");
+    expect(html).toContain('data-testid="slei-mention-panel"');
     expect(html).toContain("Coda");
     expect(html).toContain("@Coda");
     expect(html).toContain("回到底部");

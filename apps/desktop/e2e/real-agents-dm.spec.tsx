@@ -561,7 +561,7 @@ describe("real agent members and direct messages", () => {
 
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
-    expect(sendButton).toContain("disabled");
+    expect(sendButton).toContain(' disabled=""');
   });
 
   it("does not disable send for stale running messages from another session", () => {
@@ -595,7 +595,7 @@ describe("real agent members and direct messages", () => {
 
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
-    expect(sendButton).not.toContain("disabled");
+    expect(sendButton).not.toContain(' disabled=""');
     expect(html).not.toContain("旧会话仍在处理中");
   });
 

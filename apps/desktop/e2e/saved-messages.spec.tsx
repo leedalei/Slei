@@ -88,7 +88,7 @@ describe("saved chat messages", () => {
     );
 
     expect(html).toContain('data-message-id="channel-msg"');
-    expect(html).toContain("slei-message--focused");
+    expect(html).toContain('data-focused="true"');
     expect(html).toContain('aria-label="取消收藏"');
     expect(html).toContain('aria-pressed="true"');
     expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf('aria-label="取消收藏"'));

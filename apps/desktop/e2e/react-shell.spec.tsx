@@ -171,7 +171,7 @@ describe("Slei React desktop shell", () => {
 
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
-    expect(sendButton).not.toContain("disabled");
+    expect(sendButton).not.toContain(' disabled=""');
     expect(html).toContain(">发送</button>");
   });
 
