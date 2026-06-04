@@ -88,6 +88,7 @@ describe("chat to task thread flow", () => {
     expect(tasksPageSource()).toContain("@/components/ui/sheet");
     expect(tasksPageSource()).toContain("SheetContent");
     expect(tasksPageSource()).not.toContain('role="dialog"');
-    expect(tasksPageSource()).toContain("useEffect");
+    expect(tasksPageSource()).toContain("lastActiveTaskId");
+    expect(tasksPageSource()).toContain("activeTaskId !== lastActiveTaskId.current");
   });
 });

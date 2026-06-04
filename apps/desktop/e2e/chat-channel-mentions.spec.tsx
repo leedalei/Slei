@@ -139,7 +139,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("打开会话 m2");
     expect(html).toContain("# dev-team");
     expect(html).not.toContain("默认频道消息");
-    expect(searchPageSource()).toContain("useEffect");
+    expect(searchPageSource()).toContain("stableSearchFiltersKey");
+    expect(searchPageSource()).toContain("normalizeSearchFilters");
   });
 
   it("renders channel creation as a modal dialog instead of an inline form", () => {

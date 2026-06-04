@@ -34,6 +34,7 @@ describe("settings preferences", () => {
     expect(html).toContain("通知");
     expect(html).toContain("关于");
     expect(html).toContain('data-settings-icon="account"');
+    expect(html).toContain('class="h-full min-h-0 overflow-hidden bg-background text-[var(--slei-font-size)]"');
     expect(html).toContain('data-settings-icon="language-region"');
     expect(html).toContain('data-settings-icon="appearance"');
     expect(html).toContain('data-settings-icon="notifications"');

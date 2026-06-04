@@ -23,6 +23,17 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -771,7 +782,25 @@ function ComputersNavigator(input: {
             <StatusDot status={node.status === "connected" ? "idle" : "offline"} />
           </Button>
           {node.id !== "local-node" ? (
-            <Button aria-label={input.messages.computers.deleteComputer(node.name)} className="mt-1 opacity-80 group-hover:opacity-100" onClick={() => input.onDelete?.(node.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={13} /></Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button aria-label={input.messages.computers.deleteComputer(node.name)} className="mt-1 opacity-80 group-hover:opacity-100" size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={13} /></Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{input.messages.computers.deleteComputer(node.name)}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {input.messages.computers.deleteComputer(node.name)}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => input.onDelete?.(node.id)} variant="destructive">
+                    {input.messages.common.delete}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           ) : null}
         </div>
       ))}
