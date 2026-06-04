@@ -76,7 +76,8 @@ describe("computers management page", () => {
     expect(html).toContain("检测到的运行时");
     expect(html).toContain("创建时间");
     expect(html).toContain("此设备上的智能体");
-    expect(html).toContain("slei-avatar__image");
+    expect(html).toContain('data-slot="avatar"');
+    expect(html).toContain('title="Coda"');
     expect(html).toContain("Coda");
     expect(html).toContain("Cindy");
     expect(html).toContain("Alice");
