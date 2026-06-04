@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("shadcn design system wiring", () => {
   it("uses desktop-local shadcn configuration and tweakcn theme tokens", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
+    const webEntry = readFileSync("src/web.ts", "utf8");
     const componentsConfig = JSON.parse(readFileSync("components.json", "utf8"));
     const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
@@ -24,5 +25,9 @@ describe("shadcn design system wiring", () => {
     expect(appCss).not.toContain("@fontsource-variable/geist");
     expect(appCss).toContain("@theme inline");
     expect(appCss).toContain("@layer base");
+    expect(webEntry).toContain('import "./app/app.css";');
+    expect(webEntry).not.toContain("animal-island-ui/style");
+    expect(webEntry).not.toContain("@slei/ui/styles/tokens.css");
+    expect(webEntry).not.toContain("@slei/ui/styles/globals.css");
   });
 });

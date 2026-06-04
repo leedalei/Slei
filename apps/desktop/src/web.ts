@@ -1,9 +1,7 @@
 import { Component, createElement, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
-import "animal-island-ui/style";
-import "@slei/ui/styles/tokens.css";
-import "@slei/ui/styles/globals.css";
+import "./app/app.css";
 
 import { SleiApp } from "./app/SleiApp";
 import { installFrontendCrashLogging, reportFrontendCrash } from "./lib/frontend-crash-logging";
