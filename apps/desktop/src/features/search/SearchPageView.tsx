@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { Hash, Search } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
@@ -13,7 +13,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function SearchPage({ data, initialFilters, messages, onResultSelect }: { data: SleiFixtures; initialFilters?: ChatSearchFilters; messages: DesktopMessages; onResultSelect?: (channelId: string, messageId: string) => void }) {
   const [filters, setFilters] = useState<ChatSearchFilters>(initialFilters ?? {});
+  const normalizedInitialFilters = normalizeSearchFilters(initialFilters);
+  const initialFiltersKey = stableSearchFiltersKey(normalizedInitialFilters);
   const results = filterConversationMessages(data.messages, filters);
+
+  useEffect(() => {
+    setFilters(normalizedInitialFilters);
+  }, [initialFiltersKey]);
 
   function channelIdForResult(channelId: unknown): string {
     return displaySearchText(channelId) || "all";
@@ -110,6 +116,25 @@ function displaySearchText(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return "";
+}
+
+function normalizeSearchFilters(filters?: ChatSearchFilters): ChatSearchFilters {
+  if (!filters) return {};
+  return {
+    channel: filters.channel ?? "",
+    query: filters.query ?? "",
+    time: filters.time ?? "",
+    user: filters.user ?? "",
+  };
+}
+
+function stableSearchFiltersKey(filters: ChatSearchFilters): string {
+  return JSON.stringify({
+    channel: filters.channel ?? "",
+    query: filters.query ?? "",
+    time: filters.time ?? "",
+    user: filters.user ?? "",
+  });
 }
 
 function SearchField(input: { children: ReactNode; label: string }) {

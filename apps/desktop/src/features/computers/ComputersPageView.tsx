@@ -9,6 +9,17 @@ import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../compo
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Card,
   CardAction,
   CardContent,
@@ -39,10 +50,26 @@ export function ComputersPage(input: {
           variant="nodata"
         />
         {input.onComputerCreateRequest ? (
-          <Button className="mt-4" onClick={input.onComputerCreateRequest} type="button">
-            <Plus aria-hidden="true" className="size-4" />
-            {input.messages.computers.newComputer}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button className="mt-4" type="button">
+                <Plus aria-hidden="true" className="size-4" />
+                {input.messages.computers.newComputer}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{input.messages.computers.newComputer}</AlertDialogTitle>
+                <AlertDialogDescription>{input.messages.computers.emptyDescription}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                <AlertDialogAction onClick={input.onComputerCreateRequest}>
+                  {input.messages.common.create}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         ) : null}
       </section>
     );

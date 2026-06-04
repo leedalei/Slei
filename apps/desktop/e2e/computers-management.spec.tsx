@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -51,6 +52,8 @@ const readyRuntime = {
   hasClaudeRuntimeReady: true,
   nodes,
 };
+const appFrameSource = () => readFileSync(new URL("../src/app/SleiAppFrame.tsx", import.meta.url), "utf8");
+const computersPageSource = () => readFileSync(new URL("../src/features/computers/ComputersPageView.tsx", import.meta.url), "utf8");
 
 describe("computers management page", () => {
   it("renders the device list and selected device detail with semantic shadcn cards", () => {
@@ -62,9 +65,11 @@ describe("computers management page", () => {
     expect(html).toContain('data-slot="card"');
     expect(html).toContain('data-slot="badge"');
     expect(html).toContain('data-slot="scroll-area"');
-    expect(html).toContain("slei-context-sidebar");
     expect(html).not.toContain("slei-sidebar__header");
-    expect(html).toContain("slei-workspace");
+    expect(html).toContain('aria-label="调整侧栏宽度"');
+    expect(html).toContain('data-active-view="computers"');
+    expect(appFrameSource()).not.toContain("[&>section:not(.slei-chat-page)]");
+    expect(computersPageSource()).toContain("@/components/ui/alert-dialog");
     expect(html).toContain("设备 2");
     expect(html).toContain("MacBookPro M4 MAX");
     expect(html).toContain("公司台式Win");
@@ -94,6 +99,21 @@ describe("computers management page", () => {
     expect(html).toContain('aria-label="删除设备 公司台式Win"');
     expect(html).not.toContain('aria-label="编辑系统信息"');
     expect(html).not.toContain("更新 OS");
+  });
+
+  it("uses alert dialog primitives for empty-state computer creation without delete behavior in detail", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="computers"
+        data={createSleiFixtures({ nodes: [], members: [] })}
+        locale="zh-CN"
+        runtimeSetup={{ ...readyRuntime, nodes: [] }}
+      />,
+    );
+
+    expect(html).toContain('data-slot="alert-dialog-trigger"');
+    expect(computersPageSource()).toContain("AlertDialog");
+    expect(html).toContain("新增设备");
   });
 
   it("keeps device detail read-only for associated agents and creation controls", () => {

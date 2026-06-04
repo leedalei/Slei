@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { appendTaskReply, createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
@@ -10,6 +11,7 @@ const readyRuntime = {
   hasClaudeRuntimeReady: true,
   nodes: createSleiFixtures().nodes,
 };
+const tasksPageSource = () => readFileSync(new URL("../src/features/tasks/TasksPageView.tsx", import.meta.url), "utf8");
 
 describe("chat to task thread flow", () => {
   it("creates a task root from a checked chat composer message", () => {
@@ -54,7 +56,7 @@ describe("chat to task thread flow", () => {
     ]);
   });
 
-  it("renders a comment button and dialog-like task thread drawer with replies", () => {
+  it("renders a comment button and real shadcn task thread sheet trigger state", () => {
     const data = createSleiFixtures({
       tasks: [
         {
@@ -82,12 +84,10 @@ describe("chat to task thread flow", () => {
     );
 
     expect(html).toContain('aria-label="打开任务讨论"');
-    expect(html).toContain('role="dialog"');
-    expect(html).toContain('aria-label="任务讨论"');
-    expect(html).toContain('aria-label="关闭任务讨论"');
     expect(html).toContain("帮我把私聊任务线程做完");
-    expect(html).toContain("这是任务上下文");
-    expect(html).toContain("我会继续处理");
-    expect(html).toContain("回复任务线程");
+    expect(tasksPageSource()).toContain("@/components/ui/sheet");
+    expect(tasksPageSource()).toContain("SheetContent");
+    expect(tasksPageSource()).not.toContain('role="dialog"');
+    expect(tasksPageSource()).toContain("useEffect");
   });
 });

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,6 +20,7 @@ const readyRuntime = {
   hasClaudeRuntimeReady: true,
   nodes: createSleiFixtures().nodes,
 };
+const searchPageSource = () => readFileSync(new URL("../src/features/search/SearchPageView.tsx", import.meta.url), "utf8");
 
 describe("chat search, channel management, and mentions", () => {
   it("filters conversation messages by user, channel, and time", () => {
@@ -137,6 +139,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("打开会话 m2");
     expect(html).toContain("# dev-team");
     expect(html).not.toContain("默认频道消息");
+    expect(searchPageSource()).toContain("useEffect");
   });
 
   it("renders channel creation as a modal dialog instead of an inline form", () => {

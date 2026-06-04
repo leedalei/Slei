@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { MessageSquare, Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -16,7 +17,15 @@ export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activ
   const [selectedTaskId, setSelectedTaskId] = useState(activeTaskId);
   const [replyDraft, setReplyDraft] = useState("");
   const [view, setView] = useState<"board" | "list">("board");
+  const lastActiveTaskId = useRef(activeTaskId);
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
+
+  useEffect(() => {
+    if (activeTaskId && activeTaskId !== lastActiveTaskId.current) {
+      setSelectedTaskId(activeTaskId);
+    }
+    lastActiveTaskId.current = activeTaskId;
+  }, [activeTaskId]);
 
   function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,50 +93,52 @@ export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activ
         </ScrollArea>
       </Tabs>
 
-      {selectedTask ? (
-        <aside
-          aria-label={messages.tasks.thread}
-          className="fixed inset-y-0 right-0 z-40 grid w-[min(100vw,680px)] grid-rows-[auto_minmax(0,1fr)_auto] border-l bg-popover text-popover-foreground shadow-lg"
-          role="dialog"
-        >
-          <header className="relative grid gap-1 border-b p-5 pr-14" data-slot="sheet-header">
-            <Badge className="w-fit" variant="secondary">{taskStatusLabel(selectedTask.status, messages)}</Badge>
-            <h2 className="text-base font-medium" data-slot="sheet-title">{selectedTask.title}</h2>
-            <p className="text-sm text-muted-foreground" data-slot="sheet-description">
-              {selectedTask.owner} · {(selectedTask.replies?.length ?? 0)} {messages.tasks.replies}
-            </p>
-            <Button aria-label={messages.tasks.closeThread} className="absolute right-3 top-3" onClick={() => setSelectedTaskId(undefined)} size="icon-sm" type="button" variant="ghost">
-              <X aria-hidden="true" className="size-4" />
-            </Button>
-          </header>
-
-          <ScrollArea className="min-h-0">
-            <div className="grid gap-3 p-5">
-              {(selectedTask.replies ?? []).map((reply) => (
-                <article className="grid gap-2 rounded-lg border bg-muted/30 p-3" data-reply-role={reply.role ?? "human"} key={reply.id}>
-                  <strong className="text-sm">{reply.sender}</strong>
-                  <MarkdownMessage markdown={reply.body} />
-                </article>
-              ))}
-            </div>
-          </ScrollArea>
-
-          <footer className="border-t p-4" data-slot="sheet-footer">
-            <form className="grid gap-3" onSubmit={submitReply}>
-              <Textarea
-                aria-label={messages.tasks.replyPlaceholder}
-                onChange={(event) => setReplyDraft(event.currentTarget.value)}
-                placeholder={messages.tasks.replyPlaceholder}
-                value={replyDraft}
-              />
-              <Button className="justify-self-end" type="submit">
-                <Send aria-hidden="true" className="size-4" />
-                {messages.tasks.sendReply}
+      <Sheet open={Boolean(selectedTask)} onOpenChange={(open) => !open && setSelectedTaskId(undefined)}>
+        {selectedTask ? (
+          <SheetContent
+            aria-label={messages.tasks.thread}
+            className="w-[min(100vw,680px)] gap-0 p-0 sm:max-w-[680px]"
+            showCloseButton={false}
+          >
+            <SheetHeader className="relative border-b p-5 pr-14">
+              <Badge className="w-fit" variant="secondary">{taskStatusLabel(selectedTask.status, messages)}</Badge>
+              <SheetTitle>{selectedTask.title}</SheetTitle>
+              <SheetDescription>
+                {selectedTask.owner} · {(selectedTask.replies?.length ?? 0)} {messages.tasks.replies}
+              </SheetDescription>
+              <Button aria-label={messages.tasks.closeThread} className="absolute right-3 top-3" onClick={() => setSelectedTaskId(undefined)} size="icon-sm" type="button" variant="ghost">
+                <X aria-hidden="true" className="size-4" />
               </Button>
-            </form>
-          </footer>
-        </aside>
-      ) : null}
+            </SheetHeader>
+
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="grid gap-3 p-5">
+                {(selectedTask.replies ?? []).map((reply) => (
+                  <article className="grid gap-2 rounded-lg border bg-muted/30 p-3" data-reply-role={reply.role ?? "human"} key={reply.id}>
+                    <strong className="text-sm">{reply.sender}</strong>
+                    <MarkdownMessage markdown={reply.body} />
+                  </article>
+                ))}
+              </div>
+            </ScrollArea>
+
+            <SheetFooter className="border-t p-4">
+              <form className="grid gap-3" onSubmit={submitReply}>
+                <Textarea
+                  aria-label={messages.tasks.replyPlaceholder}
+                  onChange={(event) => setReplyDraft(event.currentTarget.value)}
+                  placeholder={messages.tasks.replyPlaceholder}
+                  value={replyDraft}
+                />
+                <Button className="justify-self-end" type="submit">
+                  <Send aria-hidden="true" className="size-4" />
+                  {messages.tasks.sendReply}
+                </Button>
+              </form>
+            </SheetFooter>
+          </SheetContent>
+        ) : null}
+      </Sheet>
     </section>
   );
 }
