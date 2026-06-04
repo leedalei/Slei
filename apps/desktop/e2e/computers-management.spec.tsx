@@ -61,9 +61,10 @@ describe("computers management page", () => {
     expect(html).toContain("slei-computers-page");
     expect(html).toContain("slei-computers-list");
     expect(html).toContain("slei-computer-detail");
-    expect(html).toContain('<aside class="slei-context-sidebar">');
+    expect(html).toContain("slei-context-sidebar");
     expect(html).not.toContain("slei-sidebar__header");
-    expect(html).toContain('<main class="slei-workspace"><section class="slei-computers-page"><article class="slei-computer-detail"');
+    expect(html).toContain("slei-workspace");
+    expect(html).toContain('<section class="slei-computers-page"><article class="slei-computer-detail"');
     expect(html).not.toContain('<section class="slei-computers-page"><aside class="slei-computers-list"');
     expect(html).toContain("设备 2");
     expect(html).toContain("MacBookPro M4 MAX");

@@ -203,7 +203,7 @@ export function SleiAppFrame(input: {
         ))}
       </nav>
 
-      <aside className="slei-context-sidebar">
+      <aside className="slei-context-sidebar min-h-0 border-r bg-sidebar/70 text-sidebar-foreground max-[760px]:hidden">
         {input.activeView === "chat" || input.activeView === "search" ? (
           <ChannelList
             activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
@@ -252,7 +252,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background [&>section:not(.slei-chat-page)]:flex [&>section:not(.slei-chat-page)]:min-h-full [&>section:not(.slei-chat-page)]:flex-col [&>section:not(.slei-chat-page)]:overflow-auto">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -452,7 +452,7 @@ function ChannelList(input: {
                 return (
                   <Button
                     aria-current={input.activeConversationId === conversationId ? "true" : undefined}
-                    className={cn("h-auto min-h-14 w-full justify-start whitespace-normal px-2 py-2 text-left", input.activeConversationId === conversationId && "bg-accent text-accent-foreground")}
+                    className={cn("slei-channel slei-channel--dm h-auto min-h-14 w-full justify-start whitespace-normal px-2 py-2 text-left", input.activeConversationId === conversationId && "bg-accent text-accent-foreground")}
                     key={conversation.id}
                     onClick={() => input.onConversationSelect?.(conversationId)}
                     type="button"
