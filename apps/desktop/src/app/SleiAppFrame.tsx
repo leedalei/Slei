@@ -203,7 +203,7 @@ export function SleiAppFrame(input: {
         ))}
       </nav>
 
-      <aside className="min-h-0 border-r bg-sidebar/70 text-sidebar-foreground">
+      <aside className="slei-context-sidebar">
         {input.activeView === "chat" || input.activeView === "search" ? (
           <ChannelList
             activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
@@ -252,7 +252,7 @@ export function SleiAppFrame(input: {
         type="button"
       />
 
-      <main className="min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -459,8 +459,8 @@ function ChannelList(input: {
                     variant="ghost"
                   >
                     <MemberAvatar identity={member} />
-                    <span className="grid min-w-0 flex-1 gap-1">
-                      <strong className="truncate text-sm">{member.name}</strong>
+                    <span className="slei-channel__dm-copy grid min-w-0 flex-1 gap-1">
+                      <strong>{member.name}</strong>
                       <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{member.description}</small>
                     </span>
                   </Button>
@@ -470,7 +470,7 @@ function ChannelList(input: {
           </div>
         </ScrollArea>
       )}
-      <ShellDialog open={createOpen} onOpenChange={(open) => {
+      <ShellDialog closeLabel={input.messages.common.cancel} open={createOpen} onOpenChange={(open) => {
         if (!open) closeCreateChannelModal();
         else setCreateOpen(true);
       }} className="max-h-[min(90vh,42rem)] overflow-hidden sm:max-w-lg">
@@ -551,7 +551,7 @@ function SavedMessagesPanel(input: {
     .filter((entry): entry is { savedMessage: SavedMessageView; message: SleiMessage } => Boolean(entry.message));
 
   return (
-    <section aria-label={input.messages.common.saved} className="flex min-h-0 flex-1 flex-col gap-3">
+    <section aria-label={input.messages.common.saved} className="slei-saved-panel flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span>{input.messages.common.saved} {entries.length}</span>
         <Button onClick={input.onClose} size="sm" type="button" variant="ghost"><Hash aria-hidden="true" size={13} />{input.messages.chat.channels}</Button>
@@ -709,7 +709,7 @@ function MembersNavigator(input: {
   const agents = data.members.filter((member) => member.type === "agent");
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="slei-members-navigator h-full">
       <div className="grid gap-3 p-3">
         <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <span>{input.messages.members.agents}</span>
@@ -748,7 +748,7 @@ function ComputersNavigator(input: {
   onSelect?: (nodeId: string) => void;
 }) {
   return (
-    <ScrollArea className="h-full" aria-label={input.messages.shell.sidebarSubtitle.computers}>
+    <ScrollArea className="slei-computers-list h-full" aria-label={input.messages.shell.sidebarSubtitle.computers}>
       <div className="grid gap-3 p-3">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span>{input.messages.computers.computers} {input.nodes.length}</span>
@@ -880,11 +880,12 @@ function ComputerCreateModal(input: {
   }
 
   return (
-    <ShellDialog open onOpenChange={(open) => {
+    <ShellDialog closeLabel={input.messages.common.cancel} open onOpenChange={(open) => {
       if (!open) input.onClose();
     }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Monitor aria-hidden="true" size={20} />{input.messages.computers.newComputer}</DialogTitle>
+          <DialogDescription>{input.messages.computers.deviceName} / {input.messages.computers.os}</DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submitCreate}>
           <div className="grid gap-2">
@@ -915,6 +916,7 @@ function fontSizeValue(size: AppearancePreferences["fontSize"]) {
 function ShellDialog(input: {
   children: ReactNode;
   className?: string;
+  closeLabel?: string;
   onOpenChange?: (open: boolean) => void;
   open: boolean;
   showCloseButton?: boolean;
@@ -932,6 +934,11 @@ function ShellDialog(input: {
             role="dialog"
           >
             {input.children}
+            {input.showCloseButton !== false ? (
+              <button className="absolute top-2 right-2" data-slot="dialog-close" type="button">
+                <span className="sr-only">{input.closeLabel ?? "Close"}</span>
+              </button>
+            ) : null}
           </div>
         </div>
       </Dialog>
@@ -940,7 +947,7 @@ function ShellDialog(input: {
 
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
-      <DialogContent className={input.className} showCloseButton={input.showCloseButton}>
+      <DialogContent className={input.className} closeLabel={input.closeLabel} showCloseButton={input.showCloseButton}>
         {input.children}
       </DialogContent>
     </Dialog>
@@ -978,12 +985,13 @@ function AgentCreateModal(input: {
   }
 
   return (
-    <ShellDialog open onOpenChange={(open) => {
+    <ShellDialog closeLabel={input.messages.common.cancel} open onOpenChange={(open) => {
       if (!open) input.onClose();
-    }} className="max-h-[min(90vh,44rem)] overflow-hidden sm:max-w-lg">
+    }} className="slei-agent-modal max-h-[min(90vh,44rem)] overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <Badge className="w-fit" variant="secondary">{input.messages.agentCreate.fallbackAgent}</Badge>
           <DialogTitle className="flex items-center gap-2"><AtSign aria-hidden="true" size={20} />{input.messages.agentCreate.title}</DialogTitle>
+          <DialogDescription>{input.messages.agentCreate.associatedDevice} / {input.messages.agentCreate.model} / {input.messages.agentCreate.description}</DialogDescription>
         </DialogHeader>
         <form className="grid min-h-0 gap-4" onSubmit={submitCreate}>
           <div className="grid gap-2">
@@ -1055,7 +1063,7 @@ function RuntimeOnboardingModal(input: {
   const [name, setName] = useState(localNode?.name ?? input.messages.computers.deviceName);
 
   return (
-    <ShellDialog open className="sm:max-w-lg" showCloseButton={false}>
+    <ShellDialog closeLabel={input.messages.common.cancel} open className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{input.messages.onboarding.title}</DialogTitle>
           <DialogDescription>{input.messages.onboarding.description}</DialogDescription>
