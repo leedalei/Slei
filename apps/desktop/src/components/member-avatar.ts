@@ -3,11 +3,13 @@ import { pixelArt } from "@dicebear/collection";
 
 import type { SleiMember, SleiMessage } from "../app/fixtures";
 
-export type AvatarIdentity = Pick<SleiMember, "id" | "name" | "handle" | "avatar"> & {
+export type MemberAvatarIdentity = Pick<SleiMember, "id" | "name" | "handle" | "avatar"> & {
   avatarSeed?: string;
 };
 
-export function createMemberAvatar(identity: AvatarIdentity): string {
+export type AvatarIdentity = MemberAvatarIdentity;
+
+export function createMemberAvatar(identity: MemberAvatarIdentity): string {
   const seed = identity.avatarSeed?.trim() || identity.id || identity.handle || identity.name || identity.avatar || "slei-member";
   return createAvatar(pixelArt, {
     seed,
@@ -16,7 +18,7 @@ export function createMemberAvatar(identity: AvatarIdentity): string {
   }).toDataUri();
 }
 
-export function memberFromMessage(message: SleiMessage, members: SleiMember[]): AvatarIdentity {
+export function memberFromMessage(message: SleiMessage, members: SleiMember[]): MemberAvatarIdentity {
   const normalizedHandle = message.handle?.toLowerCase();
   const normalizedAuthor = message.author.toLowerCase();
   const member = members.find(

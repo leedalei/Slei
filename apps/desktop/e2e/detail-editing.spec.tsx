@@ -23,11 +23,10 @@ describe("detail page editing pattern", () => {
       />,
     );
 
-    expect(html).toContain("slei-editable-field");
+    expect(html).toContain('aria-label="编辑显示名称"');
     expect(html).toContain("显示名称");
     expect(html).toContain("Coda");
-    expect(html).toContain('aria-label="编辑显示名称"');
-    expect(html).not.toContain("slei-editable-field__editor");
+    expect(html).not.toContain('aria-label="显示名称输入"');
     expect(html).not.toContain("保存");
     expect(html).not.toContain("取消");
   });
@@ -43,7 +42,7 @@ describe("detail page editing pattern", () => {
       />,
     );
 
-    expect(html).toContain("slei-editable-field__editor");
+    expect(html).toContain("<form");
     expect(html).toContain('aria-label="显示名称输入"');
     expect(html).toContain("保存");
     expect(html).toContain("取消");
@@ -59,9 +58,9 @@ describe("detail page editing pattern", () => {
 
     expect(membersHtml).toContain('aria-label="编辑显示名称"');
     expect(membersHtml).toContain('aria-label="编辑描述"');
-    expect(membersHtml).not.toContain("slei-editable-field__editor");
+    expect(membersHtml).not.toContain('aria-label="显示名称输入"');
     expect(computersHtml).toContain('aria-label="编辑设备名称"');
-    expect(computersHtml).not.toContain("slei-editable-field__editor");
+    expect(computersHtml).not.toContain('aria-label="设备名称输入"');
     expect(computersHtml).not.toContain('aria-label="编辑系统信息"');
   });
 });

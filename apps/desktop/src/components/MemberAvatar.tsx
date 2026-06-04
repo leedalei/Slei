@@ -1,11 +1,14 @@
-import { createMemberAvatar, type AvatarIdentity } from "./member-avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export function MemberAvatar({ identity, large = false }: { identity: AvatarIdentity; large?: boolean }) {
-  const fallback = identity.avatar || identity.name.slice(0, 2);
+import { createMemberAvatar, type MemberAvatarIdentity } from "./member-avatar";
+
+export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: boolean }) {
+  const { identity, large = false } = input;
+  const fallback = identity.avatar ?? identity.name.slice(0, 2).toUpperCase();
   return (
-    <span className={`slei-avatar${large ? " slei-avatar--large" : ""}`} title={identity.name}>
-      <img alt="" aria-hidden="true" className="slei-avatar__image" src={createMemberAvatar(identity)} />
-      <span className="slei-avatar__fallback">{fallback}</span>
-    </span>
+    <Avatar className={large ? "size-16" : "size-9"} title={identity.name}>
+      <AvatarImage alt="" src={createMemberAvatar(identity)} />
+      <AvatarFallback>{fallback}</AvatarFallback>
+    </Avatar>
   );
 }

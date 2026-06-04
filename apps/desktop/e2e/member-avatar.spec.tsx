@@ -47,9 +47,9 @@ describe("member pixel avatars", () => {
     );
 
     expect(membersHtml).toContain('title="Coda"');
-    expect(membersHtml).toContain("<img");
+    expect(membersHtml).toContain('data-slot="avatar"');
     expect(chatHtml).toContain('title="Coda"');
-    expect(chatHtml).toContain("<img");
+    expect(chatHtml).toContain('data-slot="avatar"');
     expect(chatHtml).toContain("pixel avatar check");
     expect(chatHtml).toContain("@Coda");
     expect(chatHtml).not.toContain("Nancy");
