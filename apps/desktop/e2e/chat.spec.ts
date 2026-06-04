@@ -57,18 +57,19 @@ describe("channel chat timeline", () => {
     expect(html).toContain("reconnect after 8");
   });
 
-  it("keeps chat output scoped to the active channel", () => {
+  it("renders active channel chat semantics from input data", () => {
     const html = renderChatPage({
       locale: "zh-CN",
-      channel: { name: "dev-team" },
-      messages: [{ sender: "Coda", body: "频道内消息", streaming: false, toolCalls: [] }],
+      channel: { name: "ops" },
+      messages: [{ sender: "Coda", body: "值班频道消息", streaming: false, toolCalls: [] }],
       composer: { asTask: false },
       lastSequence: 9,
     });
 
-    expect(html).toContain("#dev-team");
-    expect(html).toContain("频道内消息");
-    expect(html).toContain("输入消息到 #dev-team");
-    expect(html).not.toContain("#ops");
+    expect(html).toContain("#ops");
+    expect(html).toContain("值班频道消息");
+    expect(html).toContain("输入消息到 #ops");
+    expect(html).toContain("转为任务");
+    expect(html).toContain("reconnect after 9");
   });
 });

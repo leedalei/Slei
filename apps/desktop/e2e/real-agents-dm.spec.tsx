@@ -67,6 +67,10 @@ const codaSessions = [
   },
 ];
 
+function sendButtonMarkup(html: string) {
+  return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";
+}
+
 describe("real agent members and direct messages", () => {
   it("does not ship fake default members", () => {
     expect(createSleiFixtures().members).toEqual([]);
@@ -555,8 +559,9 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="slei-send-button"');
-    expect(html).toContain("disabled");
+    const sendButton = sendButtonMarkup(html);
+    expect(sendButton).toContain('data-testid="slei-send-button"');
+    expect(sendButton).toContain("disabled");
   });
 
   it("does not disable send for stale running messages from another session", () => {
@@ -588,8 +593,9 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="slei-send-button"');
-    expect(html).not.toContain('data-testid="slei-send-button" disabled=""');
+    const sendButton = sendButtonMarkup(html);
+    expect(sendButton).toContain('data-testid="slei-send-button"');
+    expect(sendButton).not.toContain("disabled");
     expect(html).not.toContain("旧会话仍在处理中");
   });
 

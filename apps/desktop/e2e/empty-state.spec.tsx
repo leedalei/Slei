@@ -12,7 +12,7 @@ const emptyRuntime = {
 };
 
 describe("empty state component", () => {
-  it("supports no-data and no-result variants with multiple sizes", () => {
+  it("renders semantic no-data and no-result empty states", () => {
     const nodata = renderToStaticMarkup(
       <Empty description="创建第一个智能体后会显示在这里。" size="lg" title="暂无智能体" variant="nodata" />,
     );
