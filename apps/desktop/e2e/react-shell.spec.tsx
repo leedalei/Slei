@@ -25,7 +25,7 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain(">聊天<");
     expect(html).toContain(">任务<");
     expect(html).toContain(">成员<");
-    expect(html).toContain(">电脑<");
+    expect(html).toContain(">运行设备<");
     expect(html).toContain(">设置<");
     expect(html).not.toContain("Slei 协作中枢");
     expect(html).toContain("# all");
