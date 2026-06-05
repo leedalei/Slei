@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { shouldRefreshConversationMessages, SleiAppFrame } from "../src/app/SleiApp";
+import { findActiveAgentActivities, selectAgentActivityForTick, shouldRefreshConversationMessages, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMember } from "../src/app/fixtures";
 
 const nodes = createSleiFixtures().nodes;
@@ -90,7 +90,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("私聊");
     expect(html).not.toContain("图谱");
     expect(html).not.toContain("HUMANS");
-    expect(html).not.toContain("Lei");
+    expect(html).not.toContain(">Lei</strong>");
   });
 
   it("keeps the chat direct message list empty until a conversation exists", () => {
@@ -179,7 +179,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain(">创建</button>");
   });
 
-  it("renders runtime status squares for active approved failed and pending agent replies", () => {
+  it("moves running and pending agent activity to the sidebar while keeping terminal replies in chat", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -254,16 +254,57 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("我正在处理");
-    expect(html).toContain('aria-label="running"');
+    expect(html).not.toContain("我正在处理");
+    expect(html).not.toContain("等待决断");
+    expect(html).toContain('data-slot="agent-activity"');
+    expect(html).toContain("Coda");
+    expect(html).toContain("正在思考");
     expect(html).toContain("Claude auth missing");
     expect(html).toContain('aria-label="failed"');
     expect(html).toContain("已经发送完成");
     expect(html).not.toContain('aria-label="done"');
     expect(html).toContain("审批已通过");
     expect(html).toContain('aria-label="approval"');
-    expect(html).toContain("等待决断");
-    expect(html).toContain('aria-label="pending"');
+    expect(html).not.toContain('aria-label="pending"');
+  });
+
+  it("rotates active agent activity by tick when multiple agents are running", () => {
+    const cindy: SleiMember = { ...agent, id: "agent_cindy", name: "Cindy", handle: "@cindy", avatar: "CI" };
+    const data = createSleiFixtures({
+      conversations: [codaDm],
+      members: [agent, cindy],
+      messages: [
+        {
+          id: "run-coda",
+          author: "Coda",
+          handle: "@coda",
+          role: "agent",
+          time: "10:01",
+          body: "Coda running",
+          channelId: "dm:agent_coda",
+          sessionId: "session-current",
+          status: "running",
+        },
+        {
+          id: "run-cindy",
+          author: "Cindy",
+          handle: "@cindy",
+          role: "agent",
+          time: "10:02",
+          body: "Cindy running",
+          channelId: "dm:agent_coda",
+          sessionId: "session-current",
+          status: "pending",
+        },
+      ],
+    });
+
+    const activities = findActiveAgentActivities(data, { id: "all", name: "all", description: "", unread: 0 }, codaDm, "session-current");
+
+    expect(activities.map((activity) => activity.message.author)).toEqual(["Coda", "Cindy"]);
+    expect(selectAgentActivityForTick(activities, 0)?.message.author).toBe("Coda");
+    expect(selectAgentActivityForTick(activities, 1)?.message.author).toBe("Cindy");
+    expect(selectAgentActivityForTick(activities, 2)?.message.author).toBe("Coda");
   });
 
   it("keeps polling active direct messages while output is running or pending", () => {

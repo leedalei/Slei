@@ -5,8 +5,8 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraft, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast } from "../../components";
+import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -106,6 +106,10 @@ function formatAttachmentSize(size: number) {
 
 function taskStatusLabel(status: SleiFixtures["tasks"][number]["status"], messages: DesktopMessages) {
   return messages.tasks.status[status];
+}
+
+function isTransientAgentActivity(message: SleiMessage) {
+  return message.role === "agent" && (message.status === "running" || message.status === "pending");
 }
 
 function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
@@ -326,6 +330,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return false;
     return message.sessionId === currentSessionId;
   });
+  const timelineMessages = visibleMessages.filter((message) => !isTransientAgentActivity(message));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -369,11 +374,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (sendDisabled) return;
     setSubmitting(true);
     try {
-      const result = await submitComposerDraft({
+      const result = await submitComposerDraftWithFeedback({
         draft,
         asTask: allowAsTask ? asTask : false,
         attachments,
         sessionId: currentSessionId,
+        sendFailedMessage: messages.chat.sendFailed,
+        onSendFailure: showToast,
         onSendMessage,
       });
       if (result.sent) {
@@ -402,9 +409,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   async function copyMessage(message: SleiMessage) {
     const copied = await copyMessageBody(message.body);
     if (!copied) return;
+    showToast(messages.chat.copySuccess);
+  }
+
+  function showToast(message: string) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(messages.chat.copySuccess);
-    toastTimerRef.current = setTimeout(() => setToastMessage(""), 1800);
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), TOAST_VISIBLE_MS);
   }
 
   return (
@@ -493,7 +504,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       {effectiveChannelView === "chat" ? (
         <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
           <div className="grid gap-1 px-4 py-3">
-            {visibleMessages.map((message) => {
+            {timelineMessages.map((message) => {
               const saved = savedMessageIds.includes(message.id);
               const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
               return (

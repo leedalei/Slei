@@ -908,6 +908,105 @@ async fn public_channel_message_api_maps_missing_channel_to_not_found() {
 }
 
 #[tokio::test]
+async fn public_default_all_channel_message_api_accepts_messages() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/all/messages",
+        Some("public-api-all-send"),
+        serde_json::json!({
+            "authorId": "human_lei",
+            "body": "hello，报数"
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    assert_eq!(body["outcome"]["action"], "request_agent_reply");
+    assert_eq!(body["outcome"]["assigneeAgentId"], "agent_alice");
+    let message_id = body["outcome"]["messageId"].as_str().unwrap();
+    assert!(message_id.starts_with("msg_"));
+
+    let decisions = state
+        .orchestration()
+        .decisions_for_message_for_tests(message_id)
+        .await;
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].action, "request_agent_reply");
+    assert_eq!(
+        decisions[0].assignee_agent_id.as_deref(),
+        Some("agent_alice")
+    );
+
+    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
+    assert_eq!(
+        inbox
+            .iter()
+            .filter(|event| event.event_type == "human_mention" && event.message_id == message_id)
+            .count(),
+        1
+    );
+
+    let diagnostics = get_json(&app, &token, "/v1/diagnostics").await;
+    assert_eq!(diagnostics.status(), StatusCode::OK);
+    let diagnostics_body = response_json(diagnostics).await;
+    let recent_events = diagnostics_body["recentEvents"].as_array().unwrap();
+    assert!(recent_events.iter().any(|event| {
+        event["eventType"] == "channel_message.received"
+            && event["payload"].as_str().is_some_and(|payload| {
+                payload.contains("channel_id=all")
+                    && payload.contains("body=[redacted-body]")
+                    && !payload.contains("hello")
+            })
+    }));
+    assert!(recent_events.iter().any(|event| {
+        event["eventType"] == "channel_message.outcome"
+            && event["payload"].as_str().is_some_and(|payload| {
+                payload.contains("action=request_agent_reply")
+                    && payload.contains("assignee_agent_id=agent_alice")
+            })
+    }));
+}
+
+#[tokio::test]
+async fn public_channel_message_api_lists_channel_history() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/channels/all/messages",
+        Some("public-api-list-history"),
+        serde_json::json!({
+            "authorId": "human_lei",
+            "body": "hello history"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent_body = response_json(sent).await;
+    let message_id = sent_body["outcome"]["messageId"].as_str().unwrap();
+
+    let listed = get_json(&app, &token, "/v1/channels/all/messages").await;
+    assert_eq!(listed.status(), StatusCode::OK);
+    let body = response_json(listed).await;
+    let messages = body["messages"].as_array().unwrap();
+    assert!(messages.iter().any(|message| {
+        message["id"] == message_id
+            && message["channelId"] == "all"
+            && message["authorId"] == "human_lei"
+            && message["body"] == "hello history"
+            && message["kind"] == "human"
+    }));
+}
+
+#[tokio::test]
 async fn public_channel_create_api_rejects_missing_idempotency_key() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");
@@ -1068,6 +1167,20 @@ async fn post_json(
 
     app.clone()
         .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap()
 }

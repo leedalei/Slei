@@ -11,6 +11,7 @@ pub struct DiagnosticsInput {
     pub coordinator_decision_count: u64,
     pub agent_inbox_event_count: u64,
     pub memory_update_event_count: u64,
+    pub recent_events: Vec<DiagnosticEvent>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -25,13 +26,17 @@ pub struct DiagnosticsSnapshot {
     pub coordinator_decision_count: u64,
     pub agent_inbox_event_count: u64,
     pub memory_update_event_count: u64,
+    pub recent_events: Vec<DiagnosticEvent>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct DiagnosticEvent {
     pub sequence: u64,
     pub event_type: String,
+    pub entity_id: String,
     pub payload: String,
+    pub created_at: String,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -53,6 +58,17 @@ impl DiagnosticsService {
             coordinator_decision_count: input.coordinator_decision_count,
             agent_inbox_event_count: input.agent_inbox_event_count,
             memory_update_event_count: input.memory_update_event_count,
+            recent_events: input
+                .recent_events
+                .into_iter()
+                .map(|event| DiagnosticEvent {
+                    sequence: event.sequence,
+                    event_type: event.event_type,
+                    entity_id: event.entity_id,
+                    payload: sanitize(&event.payload),
+                    created_at: event.created_at,
+                })
+                .collect(),
         }
     }
 

@@ -73,7 +73,9 @@ pub async fn create(
                 .await
             {
                 Ok(coordinator) => coordinator,
-                Err(error) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
+                Err(error) => {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+                }
             };
             if let Err(error) = state
                 .channels()

@@ -366,8 +366,11 @@ impl MemberService {
         }
 
         let id = coordinator_agent_id(trimmed_channel_id);
-        if let Some(agent) = self.inner.lock().await.product_agents.get(&id).cloned() {
-            return Ok(agent);
+        let existing_agent = { self.inner.lock().await.product_agents.get(&id).cloned() };
+        if let Some(agent) = existing_agent {
+            return self
+                .normalize_existing_channel_coordinator(agent, channel_name)
+                .await;
         }
 
         let display_channel = channel_name.trim().trim_start_matches('#');
@@ -377,9 +380,7 @@ impl MemberService {
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: node_id.trim().to_string(),
-            description: format!(
-                "内置频道协调员，负责分析 #{display_channel} 的消息意图、路由 Agent 回复并创建任务。"
-            ),
+            description: channel_coordinator_description(&format!("#{display_channel}")),
         };
 
         self.create_product_agent_record_with_channels(
@@ -391,6 +392,26 @@ impl MemberService {
             vec![trimmed_channel_id.to_string()],
         )
         .await
+    }
+
+    async fn normalize_existing_channel_coordinator(
+        &self,
+        mut agent: ProductAgentRecord,
+        channel_name: &str,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        let display_channel = channel_name.trim().trim_start_matches('#');
+        let description = channel_coordinator_description(&format!("#{display_channel}"));
+        if agent.description == description {
+            return Ok(agent);
+        }
+
+        agent.description = description;
+        agent.updated_at = current_timestamp();
+        fs::write(&agent.memory_path, initial_memory(&agent)).map_err(MemberError::Io)?;
+        let mut state = self.inner.lock().await;
+        state.product_agents.insert(agent.id.clone(), agent.clone());
+        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
+        Ok(agent)
     }
 
     pub async fn is_coordinator_agent(&self, agent_id: &str) -> bool {
@@ -731,7 +752,7 @@ fn initial_memory(agent: &ProductAgentRecord) -> String {
     let base_key_knowledge = if agent.agent_kind == "guide" {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
     } else if agent.agent_kind == "coordinator" {
-        "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
+        "频道协调员负责分析用户意图并路由 Agent，自己不做任何关于用户问题的回复。\n可以将消息路由给单个 Agent 或多个 Agent；例如“大家好”应路由给多个合适 Agent。\n用户明确 @ 某个 Agent、@all 或 @everyone 时，无需再分析意图，直接转发给对应 Agent。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
     };
@@ -766,6 +787,12 @@ fn initial_memory(agent: &ProductAgentRecord) -> String {
         description = agent.description,
         handle = agent.handle,
         key_knowledge = key_knowledge
+    )
+}
+
+pub(crate) fn channel_coordinator_description(channel_name: &str) -> String {
+    format!(
+        "内置频道协调员，负责分析用户在 {channel_name} 的意图并路由 Agent，自己不回复用户问题；可路由给单个或多个 Agent；用户明确 @ 某个 Agent、@all 或 @everyone 时直接转发。"
     )
 }
 

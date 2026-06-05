@@ -64,8 +64,16 @@ impl CoordinatorService {
     pub async fn decide(&self, input: CoordinatorInput) -> CoordinatorDecision {
         let id = Uuid::new_v4();
         let intent = classify_intent(&input.body);
-        let ready_assignee = input.ready_agent_ids.first().cloned();
+        let ready_reply_agent_ids = input
+            .ready_agent_ids
+            .iter()
+            .filter(|agent_id| !is_channel_coordinator_agent(agent_id))
+            .cloned()
+            .collect::<Vec<_>>();
+        let ready_assignee = ready_reply_agent_ids.first().cloned();
         let action = if !input.explicit_agent_ids.is_empty() {
+            CoordinatorAction::RequestAgentReply
+        } else if is_broadcast_or_greeting(&input.body) && ready_assignee.is_some() {
             CoordinatorAction::RequestAgentReply
         } else {
             action_for_intent(&intent, ready_assignee.as_deref())
@@ -74,7 +82,7 @@ impl CoordinatorService {
             &action,
             &intent,
             &input.explicit_agent_ids,
-            &input.ready_agent_ids,
+            &ready_reply_agent_ids,
         );
         let reason = reason_for_decision(&intent, &action, assignee_agent_id.as_deref());
 
@@ -100,6 +108,17 @@ impl CoordinatorService {
             )
             .await
             .expect("persist coordinator decision");
+        eprintln!(
+            "[slei-coordinator] channel_id={} message_id={} intent={} action={} assignee_agent_id={} ready_agents={} explicit_agents={} reason={}",
+            decision.channel_id,
+            decision.message_id,
+            enum_as_storage_str(&decision.intent),
+            enum_as_storage_str(&decision.action),
+            decision.assignee_agent_id.as_deref().unwrap_or("none"),
+            ready_reply_agent_ids.join(","),
+            input.explicit_agent_ids.join(","),
+            decision.reason
+        );
         self.cache.lock().await.push(decision.clone());
         decision
     }
@@ -133,11 +152,35 @@ fn classify_intent(body: &str) -> IntentKind {
         return IntentKind::TaskCommand;
     }
 
-    if contains_any(trimmed, &["?", "？", "怎么看", "为什么"]) {
+    if contains_any(
+        trimmed,
+        &["?", "？", "怎么看", "为什么", "怎么", "没人说话"],
+    ) {
         return IntentKind::Consultation;
     }
 
     IntentKind::Ambiguous
+}
+
+fn is_channel_coordinator_agent(agent_id: &str) -> bool {
+    agent_id.starts_with("agent_coordinator_")
+}
+
+fn is_broadcast_or_greeting(body: &str) -> bool {
+    contains_any(
+        body,
+        &[
+            "大家",
+            "所有人",
+            "@all",
+            "@everyone",
+            "hello",
+            "hi",
+            "嗨",
+            "你好",
+            "报数",
+        ],
+    )
 }
 
 fn action_for_intent(intent: &IntentKind, ready_assignee: Option<&str>) -> CoordinatorAction {
@@ -159,7 +202,7 @@ fn assignee_for_action(
         (CoordinatorAction::RequestAgentReply, _) if !explicit_agent_ids.is_empty() => {
             explicit_agent_ids.first().cloned()
         }
-        (CoordinatorAction::RequestAgentReply, IntentKind::Consultation)
+        (CoordinatorAction::RequestAgentReply, _)
         | (CoordinatorAction::CreateTaskAndAssign, IntentKind::TaskCommand) => {
             ready_agent_ids.first().cloned()
         }

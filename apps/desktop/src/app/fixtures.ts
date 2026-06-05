@@ -111,35 +111,7 @@ export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiF
     channels: overrides.channels ?? [
       { id: "all", name: "all", description: "所有成员的默认频道", unread: 0 },
     ],
-    messages: overrides.messages ?? [
-      {
-        id: "m1",
-        author: "Lei",
-        role: "human",
-        time: "09:42",
-        body: "把桌面端首页默认落到 Chat，并且 runtime 没配好时直接引导用户。",
-        channelId: "all",
-      },
-      {
-        id: "m2",
-        author: "Slei 智能体",
-        role: "agent",
-        time: "09:44",
-        body: "已创建 Neo-Brutalism shell：三栏布局、频道上下文、timeline 和底部 composer。",
-        channelId: "all",
-        status: "running",
-        toolCall: "refresh_runtime_status",
-      },
-      {
-        id: "m3",
-        author: "System",
-        role: "system",
-        time: "09:45",
-        body: "本机节点已连接，ClaudeCode runtime 状态会通过桌面 broker 检测。",
-        channelId: "all",
-        status: "done",
-      },
-    ],
+    messages: overrides.messages ?? [],
     tasks: overrides.tasks ?? [
       { id: "T-101", title: "接入 React 桌面壳", owner: "Slei 智能体", status: "done" },
       { id: "T-102", title: "连接 runtime 引导弹窗", owner: "运行时智能体", status: "in_progress", attention: "等待节点刷新" },

@@ -9,6 +9,12 @@ function sendButtonMarkup(html: string) {
 }
 
 describe("Slei React desktop shell", () => {
+  it("does not seed real channel timelines with demo messages", () => {
+    const data = createSleiFixtures();
+
+    expect(data.messages).toEqual([]);
+  });
+
   it("defaults to the Chat home page with semantic desktop navigation", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
@@ -40,6 +46,8 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain("所有成员的默认频道");
     expect(html).toContain("输入消息到 #all");
     expect(html).toContain("转为任务");
+    expect(html).not.toContain('data-slot="agent-activity"');
+    expect(html).not.toContain("Slei 智能体</strong>");
   });
 
   it("marks only shell chrome regions as draggable", () => {

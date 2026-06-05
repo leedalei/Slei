@@ -1,6 +1,7 @@
 use slei_daemon::services::message_service::{
     MessageService, SendMessageDraft, SendMessageOutcome,
 };
+use uuid::Uuid;
 
 #[tokio::test]
 async fn channel_chat_routes_messages_to_primary_explicit_agent_or_human_notification() {
@@ -116,4 +117,33 @@ async fn channel_chat_deletes_human_body_and_retries_send_idempotently() {
             ..
         }
     ));
+}
+
+#[tokio::test]
+async fn channel_chat_persists_channel_messages_across_restarts() {
+    let root = std::env::temp_dir().join(format!("slei-channel-messages-{}", Uuid::new_v4()));
+    let service = MessageService::persistent(root.clone());
+    service.set_primary_agent_for_tests("channel_dev", "agent_coda");
+
+    let outcome = service
+        .send_message(
+            SendMessageDraft {
+                channel_id: "channel_dev".to_string(),
+                author_id: "human:local".to_string(),
+                body: "hello persisted history".to_string(),
+                as_task: false,
+                workspace_count: 1,
+            },
+            "persist-send",
+        )
+        .await
+        .unwrap();
+
+    let restarted = MessageService::persistent(root);
+    let messages = restarted.channel_messages("channel_dev").await;
+    assert!(messages.iter().any(|message| {
+        message.id == outcome.message_id()
+            && message.author_id == "human:local"
+            && message.body.as_deref() == Some("hello persisted history")
+    }));
 }

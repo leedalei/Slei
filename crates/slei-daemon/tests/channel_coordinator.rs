@@ -164,3 +164,46 @@ async fn coordinator_explicit_agent_request_reply_preserves_first_explicit_assig
     assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
     assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_coda"));
 }
+
+#[tokio::test]
+async fn coordinator_never_assigns_channel_coordinator_as_reply_agent() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+    let decision = coordinator
+        .decide(CoordinatorInput {
+            channel_id: "all".to_string(),
+            message_id: "msg_all_consult".to_string(),
+            body: "大家好，报数".to_string(),
+            explicit_agent_ids: vec![],
+            ready_agent_ids: vec![
+                "agent_coordinator_all".to_string(),
+                "agent_alice".to_string(),
+            ],
+        })
+        .await;
+
+    assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
+    assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_alice"));
+}
+
+#[tokio::test]
+async fn coordinator_routes_channel_interaction_prompts_to_ready_agent() {
+    let coordinator = CoordinatorService::new(OrchestrationStore::for_tests().await);
+
+    for (index, body) in ["报数!", "怎么没人说话"].iter().enumerate() {
+        let decision = coordinator
+            .decide(CoordinatorInput {
+                channel_id: "all".to_string(),
+                message_id: format!("msg_interaction_{index}"),
+                body: body.to_string(),
+                explicit_agent_ids: vec![],
+                ready_agent_ids: vec![
+                    "agent_coordinator_all".to_string(),
+                    "agent_alice".to_string(),
+                ],
+            })
+            .await;
+
+        assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
+        assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_alice"));
+    }
+}

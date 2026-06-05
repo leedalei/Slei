@@ -19,7 +19,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/channels/{id}/members", get(api::channels::members))
         .route(
             "/v1/channels/{id}/messages",
-            post(api::messages::send_channel_message),
+            get(api::messages::list_channel_messages).post(api::messages::send_channel_message),
         )
         .route(
             "/v1/agents",

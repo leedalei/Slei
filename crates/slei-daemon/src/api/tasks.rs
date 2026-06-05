@@ -7,6 +7,7 @@ use serde_json::json;
 
 use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
 use crate::services::channel_service::ChannelError;
+use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
 use crate::services::task_service::TaskError;
 use crate::state::AppState;
@@ -115,16 +116,26 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         ChannelOrchestratorError::Task(TaskError::TaskNotFound)
         | ChannelOrchestratorError::Channel(ChannelError::MissingChannel)
         | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
+        | ChannelOrchestratorError::Member(MemberError::AgentNotFound)
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Member(MemberError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Member(MemberError::InvalidAgent)
+        | ChannelOrchestratorError::Member(MemberError::InvalidHandle)
+        | ChannelOrchestratorError::Member(MemberError::DuplicateHandle)
+        | ChannelOrchestratorError::Member(MemberError::InvalidMemory)
+        | ChannelOrchestratorError::Member(MemberError::WorkspaceBoundary)
+        | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
         | ChannelOrchestratorError::Message(MessageError::InvalidMessage)
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
+        | ChannelOrchestratorError::Member(MemberError::Io(_))
+        | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

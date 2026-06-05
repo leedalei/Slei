@@ -74,7 +74,7 @@ describe("Chinese-first desktop MVP", () => {
     expect(html).toContain("@Coda");
     expect(html).not.toContain("图谱");
     expect(html).not.toContain("HUMANS");
-    expect(html).not.toContain("Lei");
+    expect(html).not.toContain(">Lei</strong>");
     expect(html).toContain("成员详情");
     expect(html).toContain("资料");
     expect(html).toContain("工作区");

@@ -9,6 +9,7 @@ use crate::services::channel_orchestrator_service::{
     ChannelOrchestratorError, SendChannelMessageInput,
 };
 use crate::services::channel_service::ChannelError;
+use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
 use crate::services::task_service::TaskError;
 use crate::state::AppState;
@@ -18,6 +19,19 @@ use crate::state::AppState;
 pub struct SendChannelMessageRequest {
     author_id: String,
     body: String,
+}
+
+pub async fn list_channel_messages(
+    State(state): State<AppState>,
+    Path(channel_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let messages = state.messages().channel_messages(&channel_id).await;
+    Json(json!({ "messages": messages })).into_response()
 }
 
 pub async fn send_channel_message(
@@ -43,6 +57,17 @@ pub async fn send_channel_message(
             .into_response();
     };
 
+    let _ = state
+        .orchestration()
+        .record_diagnostic_event(
+            "channel_message.received",
+            &format!(
+                "channel_id={} author_id={} idempotency_key={} body=[redacted-body]",
+                channel_id, payload.author_id, idempotency_key
+            ),
+        )
+        .await;
+
     match state
         .channel_orchestrator()
         .send_channel_message(SendChannelMessageInput {
@@ -53,7 +78,22 @@ pub async fn send_channel_message(
         })
         .await
     {
-        Ok(outcome) => Json(json!({ "outcome": outcome })).into_response(),
+        Ok(outcome) => {
+            let _ = state
+                .orchestration()
+                .record_diagnostic_event(
+                    "channel_message.outcome",
+                    &format!(
+                        "message_id={} action={} task_id={} assignee_agent_id={}",
+                        outcome.message_id,
+                        outcome.action,
+                        outcome.task_id.as_deref().unwrap_or("none"),
+                        outcome.assignee_agent_id.as_deref().unwrap_or("none")
+                    ),
+                )
+                .await;
+            Json(json!({ "outcome": outcome })).into_response()
+        }
         Err(error) => channel_message_error_response(error),
     }
 }
@@ -62,6 +102,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
     let status = match &error {
         ChannelOrchestratorError::Channel(ChannelError::MissingChannel)
         | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
+        | ChannelOrchestratorError::Member(MemberError::AgentNotFound)
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound)
         | ChannelOrchestratorError::Task(TaskError::TaskNotFound) => StatusCode::NOT_FOUND,
         ChannelOrchestratorError::Message(MessageError::InvalidMessage)
@@ -69,10 +110,19 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Member(MemberError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Member(MemberError::InvalidAgent)
+        | ChannelOrchestratorError::Member(MemberError::InvalidHandle)
+        | ChannelOrchestratorError::Member(MemberError::DuplicateHandle)
+        | ChannelOrchestratorError::Member(MemberError::InvalidMemory)
+        | ChannelOrchestratorError::Member(MemberError::WorkspaceBoundary)
+        | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
+        | ChannelOrchestratorError::Member(MemberError::Io(_))
+        | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

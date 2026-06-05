@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde_json::json;
 
-use crate::services::diagnostics_service::{DiagnosticsInput, DiagnosticsService};
+use crate::services::diagnostics_service::{DiagnosticEvent, DiagnosticsInput, DiagnosticsService};
 use crate::state::AppState;
 
 const DIAGNOSTICS_SCHEMA_VERSION: &str = "2026-05-27";
@@ -29,6 +29,25 @@ pub async fn get(State(state): State<AppState>, headers: HeaderMap) -> Response 
         .nodes()
         .get_node("local-node")
         .or_else(|| state.nodes().list_nodes().into_iter().next());
+    let recent_events = match state.orchestration().recent_diagnostic_events(50).await {
+        Ok(events) => events
+            .into_iter()
+            .map(|event| DiagnosticEvent {
+                sequence: event.sequence as u64,
+                event_type: event.event_type,
+                entity_id: event.entity_id.to_string(),
+                payload: event.payload,
+                created_at: event.created_at,
+            })
+            .collect(),
+        Err(error) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": error.to_string() })),
+            )
+                .into_response();
+        }
+    };
     let node_name = node
         .as_ref()
         .map(|node| node.name.clone())
@@ -50,6 +69,7 @@ pub async fn get(State(state): State<AppState>, headers: HeaderMap) -> Response 
             coordinator_decision_count: counts.coordinator_decision_count,
             agent_inbox_event_count: counts.agent_inbox_event_count,
             memory_update_event_count: counts.memory_update_event_count,
+            recent_events,
         })
         .await;
 

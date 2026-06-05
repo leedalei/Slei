@@ -147,4 +147,83 @@ mod tests {
         assert_eq!(thread.root_message_id, message_id);
         assert_eq!(thread.reply_count, 1);
     }
+
+    #[tokio::test]
+    async fn migration_repairs_legacy_orchestration_tables_missing_sequence_columns() {
+        let (url, _path) = sqlite_file_url("legacy-sequence");
+        let db = SleiDb::connect(&url).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE coordinator_decisions (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                message_id TEXT NOT NULL,
+                intent TEXT NOT NULL,
+                action TEXT NOT NULL,
+                assignee_agent_id TEXT,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE agent_inbox_events (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                delivery_state TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+        let decision_id = Uuid::new_v4();
+        let inbox_id = Uuid::new_v4();
+
+        repos
+            .insert_coordinator_decision(
+                decision_id,
+                "all",
+                "message-legacy",
+                "conversation",
+                "request_agent_reply",
+                Some("agent_coordinator_all"),
+                "legacy repaired",
+            )
+            .await
+            .unwrap();
+        repos
+            .insert_agent_inbox_event(
+                inbox_id,
+                "agent_coordinator_all",
+                "human_mention",
+                "pending",
+                "{}",
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            repos
+                .coordinator_decisions_for_message("message-legacy")
+                .await
+                .unwrap()[0]
+                .id,
+            decision_id
+        );
+        assert_eq!(
+            repos
+                .agent_inbox_events("agent_coordinator_all")
+                .await
+                .unwrap()[0]
+                .id,
+            inbox_id
+        );
+    }
 }

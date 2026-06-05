@@ -6,6 +6,7 @@ pub fn run() {
         .manage(daemon_broker::DaemonBroker::default_local())
         .invoke_handler(tauri::generate_handler![
             commands::log_frontend_crash_command,
+            commands::log_frontend_event_command,
             commands::daemon_status_command,
             commands::reconnect_events_command,
             commands::list_nodes_command,
@@ -13,6 +14,7 @@ pub fn run() {
             commands::list_channels_command,
             commands::create_channel_command,
             commands::list_channel_members_command,
+            commands::list_channel_messages_command,
             commands::send_channel_message_command,
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
@@ -321,6 +323,43 @@ mod tests {
         assert!(error.contains("daemon connection failed"));
         assert!(!error.contains("msg_channel_remote-dev"));
         assert!(!error.contains("task_msg_channel_remote-dev"));
+    }
+
+    #[test]
+    fn default_all_channel_message_falls_back_locally_when_daemon_connection_fails() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = send_channel_message(
+            &broker,
+            "all",
+            SendChannelMessageRequest {
+                author_id: "human_lei".to_string(),
+                body: "大家先同步一下进度".to_string(),
+            },
+        )
+        .unwrap();
+
+        assert!(receipt.outcome.message_id.starts_with("msg_channel_all_"));
+        assert_eq!(receipt.outcome.action, "local_archive_only");
+        assert_eq!(receipt.outcome.task_id, None);
+        assert_eq!(receipt.outcome.assignee_agent_id, None);
+        let diagnostics = broker.diagnostic_events_for_tests();
+        assert!(diagnostics.iter().any(|event| {
+            event.contains("desktop_channel_message.fallback")
+                && event.contains("channel_id=all")
+                && event.contains("reason=daemon_unavailable")
+                && event.contains("body=[redacted-body]")
+                && !event.contains("大家先同步")
+        }));
     }
 
     #[test]
@@ -1244,6 +1283,89 @@ mod tests {
         let serialized = serde_json::to_string(&reset).unwrap();
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn agent_dm_streams_runtime_chunks_before_completion() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-conversation-streaming-test-{}",
+            std::process::id()
+        ));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        let agent = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "开发 Agent".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+        let dm = create_dm_conversation(&broker, &agent.id)
+            .unwrap()
+            .conversation;
+
+        send_conversation_message(
+            &broker,
+            &dm.id,
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "__slei_streaming_runtime__".to_string(),
+                session_id: None,
+                attachment_ids: Vec::new(),
+            },
+        )
+        .unwrap();
+
+        let mut saw_streaming_chunk = false;
+        for _ in 0..20 {
+            let messages = list_conversation_messages(&broker, &dm.id).messages;
+            if messages.iter().any(|message| {
+                message.author_id == agent.id
+                    && message.status.as_deref() == Some("running")
+                    && message.body.contains("chunk 1")
+            }) {
+                saw_streaming_chunk = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            saw_streaming_chunk,
+            "runtime chunk should be visible while the run is still running"
+        );
+
+        let mut completed = false;
+        for _ in 0..40 {
+            let messages = list_conversation_messages(&broker, &dm.id).messages;
+            if messages.iter().any(|message| {
+                message.author_id == agent.id
+                    && message.status.as_deref() == Some("done")
+                    && message.body.contains("chunk 1")
+                    && message.body.contains("chunk 2")
+            }) {
+                completed = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(
+            completed,
+            "runtime stream should complete after visible chunks"
+        );
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 

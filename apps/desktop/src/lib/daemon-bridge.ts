@@ -215,6 +215,20 @@ export type ChannelMemberListReceipt = {
   members: ChannelMemberView[];
 };
 
+export type ChannelMessageView = {
+  id: string;
+  channelId: string;
+  authorId: string;
+  body?: string;
+  kind: "human" | "agent" | "task_card" | "tombstone" | string;
+  deleted?: boolean;
+  edited?: boolean;
+};
+
+export type ChannelMessageListReceipt = {
+  messages: ChannelMessageView[];
+};
+
 export type SendChannelMessageRequest = ProtocolSendChannelMessageRequest;
 
 export type SendChannelMessageOutcome = ProtocolSendChannelMessageOutcome;
@@ -322,13 +336,21 @@ export type RuntimeSetupState = {
   nodes: DesktopNodeView[];
 };
 
+export type FrontendEventReport = {
+  scope: string;
+  message: string;
+  context?: Record<string, unknown>;
+};
+
 export type DaemonBridge = {
+  logFrontendEvent(report: FrontendEventReport): Promise<void>;
   daemonStatus(): Promise<SanitizedDaemonStatus>;
   listNodes(): Promise<NodeListReceipt>;
   bootstrapGuideAgent(): Promise<GuideBootstrapReceipt>;
   listChannels(): Promise<ChannelListReceipt>;
   createChannel(request: ChannelCreateRequest): Promise<ChannelReceipt>;
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
+  listChannelMessages(channelId: string): Promise<ChannelMessageListReceipt>;
   sendChannelMessage(channelId: string, request: SendChannelMessageRequest): Promise<SendChannelMessageReceipt>;
   completeInteractiveCard(cardId: string): Promise<InteractiveCardReceipt>;
   listAgents(): Promise<AgentListReceipt>;
@@ -369,6 +391,7 @@ export function createDaemonBridgeMock(input: {
   agents?: DesktopAgentView[];
   channels?: ChannelView[];
   channelMembers?: ChannelMemberView[];
+  channelMessages?: ChannelMessageView[];
 }): DaemonBridgeMock {
   let connected = input.connected;
   let nodes = input.nodes ?? [
@@ -388,6 +411,7 @@ export function createDaemonBridgeMock(input: {
   let agents = input.agents ?? [];
   let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
+  let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
   let channelMessageCounter = 0;
   let conversations: ConversationView[] = [];
   let conversationSessions: ConversationSessionView[] = [];
@@ -412,6 +436,9 @@ export function createDaemonBridgeMock(input: {
 
   return {
     eventSubscriptions,
+    async logFrontendEvent() {
+      return undefined;
+    },
     setConnected(next) {
       connected = next;
       nodes = nodes.map((node) => ({ ...node, status: next ? "connected" : "offline" }));
@@ -511,6 +538,9 @@ export function createDaemonBridgeMock(input: {
     async listChannelMembers(channelId) {
       return { members: channelMembers.filter((member) => member.channelId === channelId) };
     },
+    async listChannelMessages(channelId) {
+      return { messages: channelMessages.filter((message) => message.channelId === channelId && !message.deleted) };
+    },
     async sendChannelMessage(channelId, request) {
       const channel = channels.find((candidate) => candidate.id === channelId);
       if (!channel) throw new Error("channel not found");
@@ -518,6 +548,18 @@ export function createDaemonBridgeMock(input: {
       if (!body) throw new Error("message body is required");
       channelMessageCounter += 1;
       const messageId = `msg_channel_${channelId}_${channelMessageCounter}`;
+      channelMessages = [
+        ...channelMessages,
+        {
+          id: messageId,
+          channelId,
+          authorId: request.authorId,
+          body,
+          kind: "human",
+          deleted: false,
+          edited: false,
+        },
+      ];
       const memberIds = channelMembers.filter((candidate) => candidate.channelId === channelId).map((member) => member.agentId);
       const explicitMember = agents.find((agent) => memberIds.includes(agent.id) && body.toLowerCase().includes(agent.handle.toLowerCase()));
       const readyMember = channelMembers.find((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
@@ -842,12 +884,14 @@ function containsAny(body: string, markers: string[]) {
 export function createDaemonBridge(): DaemonBridge {
   if (hasTauriRuntime()) {
     return {
+      logFrontendEvent: (report: FrontendEventReport) => invoke<void>("log_frontend_event_command", { report }),
       daemonStatus: () => invoke<SanitizedDaemonStatus>("daemon_status_command"),
       listNodes: () => invoke<NodeListReceipt>("list_nodes_command"),
       bootstrapGuideAgent: () => invoke<GuideBootstrapReceipt>("bootstrap_guide_agent_command"),
       listChannels: () => invoke<ChannelListReceipt>("list_channels_command"),
       createChannel: (request: ChannelCreateRequest) => invoke<ChannelReceipt>("create_channel_command", { request }),
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
+      listChannelMessages: (channelId: string) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId }),
       sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) => invoke<SendChannelMessageReceipt>("send_channel_message_command", { channelId, request }),
       completeInteractiveCard: (cardId: string) => invoke<InteractiveCardReceipt>("complete_interactive_card_command", { cardId }),
       listAgents: () => invoke<AgentListReceipt>("list_agents_command"),

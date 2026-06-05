@@ -19,6 +19,17 @@ import type { SleiFixtures } from "../../app/fixtures";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,10 +98,6 @@ export function MembersPage(input: {
   async function deleteSelectedAgent() {
     if (!selectedMember || selectedMember.type !== "agent") return;
     if (selectedMember.systemOwned || selectedMember.directMessageEnabled === false) return;
-    const confirmed = typeof window === "undefined"
-      ? true
-      : window.confirm(input.messages.members.deleteAgentConfirm(selectedMember.name));
-    if (!confirmed) return;
     setDeleting(true);
     setDeleteError(undefined);
     try {
@@ -149,16 +156,33 @@ export function MembersPage(input: {
                 {input.messages.members.message}
               </Button>
               {canDelete ? (
-                <Button
-                  disabled={deleting}
-                  onClick={() => void deleteSelectedAgent()}
-                  title={input.messages.members.deleteAgentConfirm(selectedMember.name)}
-                  type="button"
-                  variant="destructive"
-                >
-                  <Trash2 aria-hidden="true" />
-                  {input.messages.members.deleteAgent}
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      disabled={deleting}
+                      title={input.messages.members.deleteAgentConfirm(selectedMember.name)}
+                      type="button"
+                      variant="destructive"
+                    >
+                      <Trash2 aria-hidden="true" />
+                      {input.messages.members.deleteAgent}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{input.messages.members.deleteAgent}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {input.messages.members.deleteAgentConfirm(selectedMember.name)}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => void deleteSelectedAgent()} variant="destructive">
+                        {input.messages.common.delete}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               ) : null}
             </div>
           ) : null}

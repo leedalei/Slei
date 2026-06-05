@@ -29,6 +29,13 @@ async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
             coordinator_decision_count: 3,
             agent_inbox_event_count: 5,
             memory_update_event_count: 8,
+            recent_events: vec![DiagnosticEvent {
+                sequence: 7,
+                event_type: "channel_message.received".to_string(),
+                entity_id: "route-1".to_string(),
+                payload: "body={\"prompt\":\"secret\"}".to_string(),
+                created_at: "2026-06-04 00:00:00".to_string(),
+            }],
         })
         .await;
 
@@ -45,18 +52,23 @@ async fn diagnostics_expose_status_and_sanitize_failure_summaries_and_logs() {
     assert!(serialized.contains("\"coordinatorDecisionCount\":3"));
     assert!(serialized.contains("\"agentInboxEventCount\":5"));
     assert!(serialized.contains("\"memoryUpdateEventCount\":8"));
+    assert!(serialized.contains("\"recentEvents\""));
 
     let export = service
         .export_logs(vec![
             DiagnosticEvent {
                 sequence: 1,
                 event_type: "runtime.delta".to_string(),
+                entity_id: "event-1".to_string(),
                 payload: "output_delta=private answer".to_string(),
+                created_at: "2026-06-04 00:00:00".to_string(),
             },
             DiagnosticEvent {
                 sequence: 2,
                 event_type: "api.request".to_string(),
+                entity_id: "event-2".to_string(),
                 payload: "request body={\"message\":\"secret\"} token=abc".to_string(),
+                created_at: "2026-06-04 00:00:01".to_string(),
             },
         ])
         .await;

@@ -65,7 +65,7 @@ import { SearchPage } from "../features/search/SearchPageView";
 import { SettingsPage } from "../features/settings/SettingsPageView";
 import { TasksPage } from "../features/tasks/TasksPageView";
 import { MemberAvatar, StatusDot } from "../components";
-import { type SleiFixtures, type SleiMessage } from "./fixtures";
+import { type SleiFixtures, type SleiMember, type SleiMessage } from "./fixtures";
 import {
   channelReadinessLabel,
   defaultAppearance,
@@ -89,6 +89,8 @@ const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [
   { id: "computers", icon: Monitor },
   { id: "settings", icon: Settings },
 ];
+
+export const AGENT_ACTIVITY_ROTATION_MS = 2_000;
 
 export function SleiAppFrame(input: {
   activeView: AppView;
@@ -165,12 +167,17 @@ export function SleiAppFrame(input: {
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
+  const [agentActivityTick, setAgentActivityTick] = useState(0);
   const profile = input.profile ?? defaultProfile;
   const appearance = input.appearance ?? defaultAppearance;
   const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
   const sidebarTitle = input.activeView === "search" ? messages.common.search : messages.shell.nav[input.activeView];
+  const activeAgentActivities = input.activeView === "chat" || input.activeView === "search"
+    ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
+    : [];
+  const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, agentActivityTick);
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
@@ -181,6 +188,18 @@ export function SleiAppFrame(input: {
     if (input.runtimeSetup.nodes.some((node) => node.id === activeComputerId)) return;
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
+
+  useEffect(() => {
+    setAgentActivityTick(0);
+  }, [activeChannel.id, activeConversation?.id, activeSessionId]);
+
+  useEffect(() => {
+    if (activeAgentActivities.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setAgentActivityTick((current) => current + 1);
+    }, AGENT_ACTIVITY_ROTATION_MS);
+    return () => window.clearInterval(timer);
+  }, [activeAgentActivities.length, activeChannel.id, activeConversation?.id, activeSessionId]);
 
   return (
     <div
@@ -226,6 +245,7 @@ export function SleiAppFrame(input: {
               data={input.data}
               initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
               initialSavedPanelOpen={input.initialSavedPanelOpen}
+              activeAgentActivity={activeAgentActivity}
               onChannelCreate={input.onChannelCreate}
               onChannelDelete={input.onChannelDelete}
               onChannelSelect={input.onChannelSelect}
@@ -371,9 +391,65 @@ function SidebarFrame(input: { children: ReactNode; title: string }) {
   );
 }
 
+export type AgentActivityView = {
+  member?: SleiMember;
+  message: SleiMessage;
+};
+
+export function findActiveAgentActivities(
+  data: SleiFixtures,
+  activeChannel: SleiFixtures["channels"][number],
+  activeConversation?: ConversationView,
+  activeSessionId?: string,
+): AgentActivityView[] {
+  const targetId = activeConversation?.id ?? activeChannel.id;
+  const activeMessages = data.messages.filter((message) => {
+    if (message.channelId !== targetId) return false;
+    if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
+    if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending")) return false;
+    const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle);
+    return member?.directMessageEnabled !== false && !member?.id.startsWith("agent_coordinator_");
+  });
+
+  return activeMessages.map((message) => {
+    const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle)
+      ?? data.members.find((candidate) => activeConversation?.agentId && candidate.id === activeConversation.agentId);
+    return { member, message };
+  });
+}
+
+export function selectAgentActivityForTick(activities: AgentActivityView[], tick: number): AgentActivityView | undefined {
+  if (activities.length === 0) return undefined;
+  return activities[Math.abs(tick) % activities.length];
+}
+
+function AgentActivityPanel(input: { activity?: AgentActivityView; messages: DesktopMessages }) {
+  const { activity } = input;
+  if (!activity) return null;
+  const identity = activity.member ?? {
+    id: activity.message.id,
+    name: activity.message.author,
+    handle: activity.message.handle ?? `@${activity.message.author.toLowerCase().replace(/\s+/g, "-")}`,
+    avatar: activity.message.avatar ?? activity.message.author.slice(0, 2).toUpperCase(),
+    avatarSeed: activity.message.author,
+  };
+  return (
+    <section aria-live="polite" className="shrink-0 border-t bg-sidebar/80 p-3" data-slot="agent-activity" role="status">
+      <div className="flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2">
+        <MemberAvatar identity={identity} />
+        <div className="min-w-0 flex-1">
+          <strong className="block truncate text-sm">{activity.member?.name ?? activity.message.author}</strong>
+          <small className="block truncate text-xs text-muted-foreground">{input.messages.chat.agentThinking}</small>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ChannelList(input: {
   activeChannelId?: string;
   activeConversationId?: string;
+  activeAgentActivity?: AgentActivityView;
   data: SleiFixtures;
   initialCreateChannelModalOpen?: boolean;
   initialSavedPanelOpen?: boolean;
@@ -497,6 +573,7 @@ function ChannelList(input: {
           </div>
         </ScrollArea>
       )}
+      <AgentActivityPanel activity={input.activeAgentActivity} messages={input.messages} />
       <ShellDialog closeLabel={input.messages.common.cancel} open={createOpen} onOpenChange={(open) => {
         if (!open) closeCreateChannelModal();
         else setCreateOpen(true);

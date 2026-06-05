@@ -35,6 +35,7 @@ impl SleiDb {
                 sqlx::query(statement).execute(&self.pool).await?;
             }
         }
+        self.repair_legacy_sequence_columns().await?;
         Ok(())
     }
 
@@ -47,5 +48,34 @@ impl SleiDb {
         .await?;
         let count: i64 = row.try_get("count")?;
         Ok(count > 0)
+    }
+
+    async fn repair_legacy_sequence_columns(&self) -> Result<(), sqlx::Error> {
+        for table in [
+            "coordinator_decisions",
+            "agent_inbox_events",
+            "memory_update_events",
+            "routing_context_packages",
+        ] {
+            if self.table_exists(table).await? && !self.column_exists(table, "sequence").await? {
+                let add_column = format!("ALTER TABLE {table} ADD COLUMN sequence INTEGER");
+                sqlx::query(&add_column).execute(&self.pool).await?;
+                let backfill = format!("UPDATE {table} SET sequence = rowid WHERE sequence IS NULL");
+                sqlx::query(&backfill).execute(&self.pool).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn column_exists(&self, table: &str, column: &str) -> Result<bool, sqlx::Error> {
+        let pragma = format!("PRAGMA table_info({table})");
+        let rows = sqlx::query(&pragma).fetch_all(&self.pool).await?;
+        for row in rows {
+            let name: String = row.try_get("name")?;
+            if name == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

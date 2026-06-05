@@ -106,6 +106,38 @@ export async function submitComposerDraft(input: {
   return { sent: true, draft: "", attachments: [], asTask: false };
 }
 
+export async function submitComposerDraftWithFeedback(input: {
+  draft: string;
+  asTask: boolean;
+  attachments: ConversationAttachmentView[];
+  sessionId?: string;
+  sendFailedMessage: string;
+  onSendFailure?: (message: string) => void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+}) {
+  try {
+    return await submitComposerDraft(input);
+  } catch (error) {
+    input.onSendFailure?.(formatComposerSendFailure(input.sendFailedMessage, error));
+    return {
+      sent: false,
+      draft: input.draft,
+      attachments: input.attachments,
+      asTask: input.asTask,
+    };
+  }
+}
+
+export function formatComposerSendFailure(prefix: string, error: unknown) {
+  const detail = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+  const trimmedDetail = detail.trim();
+  return trimmedDetail ? `${prefix}：${trimmedDetail}` : prefix;
+}
+
 export async function sendChatComposerMessage(input: {
   activeChannelId: string;
   activeConversationId?: string;

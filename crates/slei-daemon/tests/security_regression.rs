@@ -139,7 +139,9 @@ async fn mvp_security_outputs_strip_sensitive_paths_tokens_and_content() {
         .export_logs(vec![DiagnosticEvent {
             sequence: 1,
             event_type: "runtime.delta".to_string(),
+            entity_id: "event-1".to_string(),
             payload: "Bearer token123 /Users/leelei/project output_delta=secret words".to_string(),
+            created_at: "2026-06-04 00:00:00".to_string(),
         }])
         .await;
     assert!(!export.contains("token123"));

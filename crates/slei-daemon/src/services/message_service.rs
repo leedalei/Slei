@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -12,7 +15,8 @@ pub struct SendMessageDraft {
     pub workspace_count: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MessageRecord {
     pub id: String,
     pub channel_id: String,
@@ -23,7 +27,8 @@ pub struct MessageRecord {
     pub edited: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MessageKind {
     Human,
     Agent,
@@ -56,6 +61,7 @@ impl SendMessageOutcome {
 #[derive(Clone, Debug, Default)]
 pub struct MessageService {
     inner: Arc<Mutex<MessageState>>,
+    data_root: Option<PathBuf>,
 }
 
 #[derive(Debug, Default)]
@@ -71,6 +77,17 @@ struct MessageState {
 impl MessageService {
     pub fn for_tests() -> Self {
         Self::default()
+    }
+
+    pub fn persistent(data_root: PathBuf) -> Self {
+        let messages = load_persisted_messages(&data_root);
+        Self {
+            inner: Arc::new(Mutex::new(MessageState {
+                messages,
+                ..MessageState::default()
+            })),
+            data_root: Some(data_root),
+        }
     }
 
     pub fn set_primary_agent_for_tests(&self, channel_id: &str, agent_id: &str) {
@@ -112,6 +129,7 @@ impl MessageService {
         state
             .event_payloads
             .push(format!("message.created:{}", message.id));
+        self.persist_messages(&state);
 
         let outcome = if let Some(handle) = first_mention(&draft.body) {
             if let Some(agent_id) = state.agent_handles.get(&handle) {
@@ -257,7 +275,7 @@ impl MessageService {
         .await
     }
 
-    pub async fn channel_messages_for_tests(&self, channel_id: &str) -> Vec<MessageRecord> {
+    pub async fn channel_messages(&self, channel_id: &str) -> Vec<MessageRecord> {
         let mut messages = self
             .inner
             .lock()
@@ -270,6 +288,10 @@ impl MessageService {
             .collect::<Vec<_>>();
         messages.sort_by(|left, right| left.id.cmp(&right.id));
         messages
+    }
+
+    pub async fn channel_messages_for_tests(&self, channel_id: &str) -> Vec<MessageRecord> {
+        self.channel_messages(channel_id).await
     }
 
     pub async fn delete_human_message(&self, message_id: &str) -> Result<(), MessageError> {
@@ -287,6 +309,7 @@ impl MessageService {
         state
             .event_payloads
             .push(format!("message.deleted:{message_id}"));
+        self.persist_messages(&state);
         Ok(())
     }
 
@@ -305,6 +328,7 @@ impl MessageService {
         }
         message.body = Some(body.to_string());
         message.edited = true;
+        self.persist_messages(&state);
         Ok(())
     }
 
@@ -376,8 +400,38 @@ impl MessageService {
         state
             .event_payloads
             .push(format!("message.created:{}", message.id));
+        self.persist_messages(&state);
         Ok(message)
     }
+
+    fn persist_messages(&self, state: &MessageState) {
+        let Some(data_root) = &self.data_root else {
+            return;
+        };
+        let path = channel_messages_path(data_root);
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let mut messages = state.messages.values().cloned().collect::<Vec<_>>();
+        messages.sort_by(|left, right| left.id.cmp(&right.id));
+        if let Ok(payload) = serde_json::to_string_pretty(&messages) {
+            let _ = fs::write(path, payload);
+        }
+    }
+}
+
+fn load_persisted_messages(data_root: &Path) -> HashMap<String, MessageRecord> {
+    fs::read_to_string(channel_messages_path(data_root))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Vec<MessageRecord>>(&raw).ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| (message.id.clone(), message))
+        .collect()
+}
+
+fn channel_messages_path(data_root: &Path) -> PathBuf {
+    data_root.join("channels/messages.json")
 }
 
 fn build_message(

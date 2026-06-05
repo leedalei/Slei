@@ -1,7 +1,7 @@
 use std::fmt;
 
 use slei_storage::repositories::{
-    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord,
+    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord, EventRecord,
     MemoryUpdateEventRecord, Repositories, RoutingContextPackageRecord,
 };
 use uuid::Uuid;
@@ -73,6 +73,23 @@ impl OrchestrationStore {
         self.repos
             .insert_agent_inbox_event(id, agent_id, event_type, delivery_state, payload)
             .await
+    }
+
+    pub async fn record_diagnostic_event(
+        &self,
+        event_type: &str,
+        payload: &str,
+    ) -> Result<i64, sqlx::Error> {
+        self.repos
+            .append_event(event_type, Uuid::new_v4(), payload)
+            .await
+    }
+
+    pub async fn recent_diagnostic_events(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<EventRecord>, sqlx::Error> {
+        self.repos.recent_events(limit).await
     }
 
     pub async fn agent_inbox_events_for_agent(

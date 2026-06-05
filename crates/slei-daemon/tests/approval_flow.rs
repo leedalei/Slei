@@ -1,13 +1,13 @@
 use std::fs;
 use std::path::PathBuf;
 
+use serde_json::json;
+use slei_daemon::auth::AuthToken;
 use slei_daemon::services::approval_service::{
     ApprovalDecision, ApprovalService, PermissionPreset, PolicyDecision, ToolRequest,
 };
-use slei_daemon::auth::AuthToken;
 use slei_daemon::services::member_service::ProductAgentDraft;
 use slei_daemon::state::AppState;
-use serde_json::json;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -194,7 +194,11 @@ async fn approval_flow_worker_permission_request_creates_session_card_and_resolv
         .await
         .unwrap();
 
-    let messages = state.conversations().list_messages(&conversation.id).await.unwrap();
+    let messages = state
+        .conversations()
+        .list_messages(&conversation.id)
+        .await
+        .unwrap();
     let approval_message = messages
         .iter()
         .find(|message| message.status.as_deref() == Some("approval"))
@@ -214,7 +218,9 @@ async fn approval_flow_worker_permission_request_creates_session_card_and_resolv
     assert_eq!(resolved.cards[0].state, "done");
 
     let commands = state.worker_commands();
-    let last = commands.last().expect("resolve command should be sent to worker");
+    let last = commands
+        .last()
+        .expect("resolve command should be sent to worker");
     assert_eq!(last["type"], "resolve_permission");
     assert_eq!(last["request_id"], "perm_1");
     assert_eq!(last["decision"], "approve_session");

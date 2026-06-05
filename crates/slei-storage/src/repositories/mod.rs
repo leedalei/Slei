@@ -15,6 +15,7 @@ pub struct EventRecord {
     pub event_type: String,
     pub entity_id: Uuid,
     pub payload: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -222,7 +223,7 @@ impl Repositories {
         sequence: i64,
     ) -> Result<Vec<EventRecord>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT sequence, event_type, entity_id, payload
+            "SELECT sequence, event_type, entity_id, payload, created_at
              FROM event_log
              WHERE sequence > ?
              ORDER BY sequence ASC",
@@ -240,9 +241,39 @@ impl Repositories {
                     entity_id: Uuid::parse_str(&entity_id)
                         .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                     payload: row.try_get("payload")?,
+                    created_at: row.try_get("created_at")?,
                 })
             })
             .collect()
+    }
+
+    pub async fn recent_events(&self, limit: i64) -> Result<Vec<EventRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT sequence, event_type, entity_id, payload, created_at
+             FROM event_log
+             ORDER BY sequence DESC
+             LIMIT ?",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut events = rows
+            .into_iter()
+            .map(|row| {
+                let entity_id: String = row.try_get("entity_id")?;
+                Ok(EventRecord {
+                    sequence: row.try_get("sequence")?,
+                    event_type: row.try_get("event_type")?,
+                    entity_id: Uuid::parse_str(&entity_id)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    payload: row.try_get("payload")?,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, sqlx::Error>>()?;
+        events.sort_by_key(|event| event.sequence);
+        Ok(events)
     }
 
     pub async fn find_task_thread(

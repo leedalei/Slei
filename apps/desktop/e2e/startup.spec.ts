@@ -20,6 +20,17 @@ describe("desktop startup contract", () => {
     expect(indexHtml).toContain("/src/web.ts");
   });
 
+  it("starts the local daemon before launching the Tauri desktop in dev", async () => {
+    const packageJson = JSON.parse(
+      await readFile(join(desktopRoot, "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+    const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
+
+    expect(packageJson.scripts?.desktop).toBe("scripts/desktop-dev.sh");
+    expect(desktopDevScript).toContain("cargo run -p slei-daemon");
+    expect(desktopDevScript).toContain("tauri dev");
+  });
+
   it("uses native macOS overlay titlebar controls integrated with the app shell", async () => {
     const tauriConfig = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),

@@ -360,7 +360,11 @@ impl AgentDmService {
         } else {
             "done"
         };
-        let status = if normalized == "deny" { "failed" } else { "done" };
+        let status = if normalized == "deny" {
+            "failed"
+        } else {
+            "done"
+        };
         let card = permission_approval_card(
             &approval.card_id,
             &approval.request_id,

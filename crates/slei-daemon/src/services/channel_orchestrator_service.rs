@@ -11,7 +11,7 @@ use crate::services::channel_service::{ChannelError, ChannelMemberReadiness, Cha
 use crate::services::coordinator_service::{
     CoordinatorDecision, CoordinatorInput, CoordinatorService,
 };
-use crate::services::member_service::MemberService;
+use crate::services::member_service::{MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::task_service::{TaskError, TaskReply, TaskService};
@@ -91,6 +91,20 @@ impl ChannelOrchestratorService {
         {
             return Ok(outcome);
         }
+        if input.channel_id == "all" {
+            let coordinator = self
+                .members
+                .ensure_channel_coordinator_agent("all", "all", "local-node")
+                .await?;
+            self.channels
+                .add_agent_to_channel("all", &coordinator.id)
+                .await?;
+            self.channels
+                .set_member_readiness("all", &coordinator.id, ChannelMemberReadiness::Ready)
+                .await?;
+        }
+        self.sync_declared_channel_members(&input.channel_id)
+            .await?;
 
         let message = match self
             .messages
@@ -151,6 +165,20 @@ impl ChannelOrchestratorService {
                 .await
                 .into(),
         };
+        let _ = self
+            .orchestration
+            .record_diagnostic_event(
+                "channel_message.decision",
+                &format!(
+                    "channel_id={} message_id={} action={} assignee_agent_id={} reason={}",
+                    channel_id,
+                    message.id,
+                    decision.action,
+                    decision.assignee_agent_id.as_deref().unwrap_or("none"),
+                    decision.reason
+                ),
+            )
+            .await;
 
         let mut task_id = None;
         match decision.action.as_str() {
@@ -343,10 +371,49 @@ impl ChannelOrchestratorService {
                     && event.message_id == message_id
             });
         if !already_created {
-            self.agent_inbox
+            let event = self
+                .agent_inbox
                 .create_human_mention(agent_id, channel_id, message_id, readiness)
                 .await;
+            let _ = self
+                .orchestration
+                .record_diagnostic_event(
+                    "agent_inbox.created",
+                    &format!(
+                        "event_id={} agent_id={} channel_id={} message_id={} event_type={} delivery_state={:?}",
+                        event.id,
+                        event.agent_id,
+                        event.channel_id,
+                        event.message_id,
+                        event.event_type,
+                        event.delivery_state
+                    ),
+                )
+                .await;
         }
+    }
+
+    async fn sync_declared_channel_members(
+        &self,
+        channel_id: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        let agents = self.members.list_product_agents().await;
+        for agent in agents {
+            if agent.agent_kind == "coordinator"
+                || !agent.channel_ids.iter().any(|id| id == channel_id)
+            {
+                continue;
+            }
+            self.channels
+                .add_agent_to_channel(channel_id, &agent.id)
+                .await?;
+            if agent.runtime_thread.status == "ready" {
+                self.channels
+                    .set_member_readiness(channel_id, &agent.id, ChannelMemberReadiness::Ready)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 
     async fn create_task_assignment_once(
@@ -510,6 +577,8 @@ pub enum ChannelOrchestratorError {
     Channel(#[from] ChannelError),
     #[error(transparent)]
     Task(#[from] TaskError),
+    #[error(transparent)]
+    Member(#[from] MemberError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error("invalid coordinator decision id")]

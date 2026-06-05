@@ -2,10 +2,10 @@ use crate::daemon_broker::{
     AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
     AgentReceipt, AgentUpdateRequest, ArtifactOpenError, ArtifactOpenReceipt, CardError,
     ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberListReceipt,
-    ChannelReceipt, ConversationAttachmentReceipt, ConversationAttachmentUploadRequest,
-    ConversationError, ConversationListReceipt, ConversationMessageListReceipt,
-    ConversationMessageReceipt, ConversationMessageRequest, ConversationReceipt,
-    ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
+    ChannelMessageListReceipt, ChannelReceipt, ConversationAttachmentReceipt,
+    ConversationAttachmentUploadRequest, ConversationError, ConversationListReceipt,
+    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
+    ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
     EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
     NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
     PreferencesReceipt, PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest,
@@ -22,6 +22,14 @@ pub struct FrontendCrashReport {
     pub stack: Option<String>,
     pub component_stack: Option<String>,
     pub url: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FrontendEventReport {
+    pub scope: String,
+    pub message: String,
+    pub context: Option<serde_json::Value>,
 }
 
 fn truncate_frontend_log_value(value: &str) -> String {
@@ -41,6 +49,19 @@ pub fn format_frontend_crash_log(report: &FrontendCrashReport) -> String {
 
 pub fn log_frontend_crash(report: FrontendCrashReport) {
     eprintln!("{}", format_frontend_crash_log(&report));
+}
+
+pub fn log_frontend_event(report: FrontendEventReport) {
+    let context = report
+        .context
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "{}".to_string());
+    eprintln!(
+        "[slei-frontend] scope={} message={} context={}",
+        truncate_frontend_log_value(&report.scope),
+        truncate_frontend_log_value(&report.message),
+        truncate_frontend_log_value(&context)
+    );
 }
 
 pub fn daemon_status(broker: &DaemonBroker) -> SanitizedDaemonStatus {
@@ -94,6 +115,10 @@ pub fn create_channel(
 
 pub fn list_channel_members(broker: &DaemonBroker, channel_id: &str) -> ChannelMemberListReceipt {
     broker.list_channel_members(channel_id)
+}
+
+pub fn list_channel_messages(broker: &DaemonBroker, channel_id: &str) -> ChannelMessageListReceipt {
+    broker.list_channel_messages(channel_id)
 }
 
 pub fn send_channel_message(
@@ -254,6 +279,11 @@ pub fn log_frontend_crash_command(report: FrontendCrashReport) {
 }
 
 #[tauri::command]
+pub fn log_frontend_event_command(report: FrontendEventReport) {
+    log_frontend_event(report);
+}
+
+#[tauri::command]
 pub fn daemon_status_command(state: tauri::State<'_, DaemonBroker>) -> SanitizedDaemonStatus {
     daemon_status(state.inner())
 }
@@ -323,6 +353,14 @@ pub fn list_channel_members_command(
     channel_id: String,
 ) -> ChannelMemberListReceipt {
     list_channel_members(state.inner(), &channel_id)
+}
+
+#[tauri::command]
+pub fn list_channel_messages_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+) -> ChannelMessageListReceipt {
+    list_channel_messages(state.inner(), &channel_id)
 }
 
 #[tauri::command]

@@ -47,6 +47,17 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn for_desktop(auth_token: AuthToken) -> Self {
+        let data_root = default_data_root();
+        let orchestration_store = orchestration_store_blocking(data_root.clone());
+        Self::with_agent_root_and_store(
+            auth_token,
+            data_root.clone(),
+            orchestration_store,
+            MessageService::persistent(data_root),
+        )
+    }
+
     pub fn for_tests(auth_token: AuthToken) -> Self {
         Self::for_tests_with_agent_root(auth_token, default_data_root())
     }
@@ -69,6 +80,20 @@ impl AppState {
         agent_data_root: PathBuf,
         orchestration_store: OrchestrationStore,
     ) -> Self {
+        Self::with_agent_root_and_store(
+            auth_token,
+            agent_data_root,
+            orchestration_store,
+            MessageService::for_tests(),
+        )
+    }
+
+    fn with_agent_root_and_store(
+        auth_token: AuthToken,
+        agent_data_root: PathBuf,
+        orchestration_store: OrchestrationStore,
+        message_service: MessageService,
+    ) -> Self {
         let event_service = EventService::new();
         let data_root = agent_data_root.clone();
         let member_service = MemberService::for_tests_with_data_root(agent_data_root);
@@ -82,7 +107,6 @@ impl AppState {
             channel_service.clone(),
             memory_event_service.clone(),
         );
-        let message_service = MessageService::for_tests();
         let channel_orchestrator_service = ChannelOrchestratorService::new(
             message_service.clone(),
             channel_service.clone(),

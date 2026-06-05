@@ -30,6 +30,7 @@ pub struct DaemonBroker {
     agents: Mutex<Vec<DesktopAgentView>>,
     channels: Mutex<Vec<ChannelView>>,
     channel_members: Mutex<Vec<ChannelMemberView>>,
+    channel_messages: Mutex<Vec<ChannelMessageView>>,
     cards: Mutex<Vec<InteractiveCardView>>,
     conversations: Arc<Mutex<Vec<ConversationView>>>,
     conversation_sessions: Mutex<Vec<ConversationSessionView>>,
@@ -37,6 +38,7 @@ pub struct DaemonBroker {
     conversation_attachments: Mutex<Vec<ConversationAttachmentView>>,
     saved_messages: Mutex<Vec<SavedMessageView>>,
     preferences: Mutex<UserPreferencesView>,
+    diagnostic_events: Mutex<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -342,6 +344,27 @@ pub struct ChannelMemberListReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ChannelMessageView {
+    pub id: String,
+    pub channel_id: String,
+    pub author_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<String>,
+    pub kind: String,
+    #[serde(default)]
+    pub deleted: bool,
+    #[serde(default)]
+    pub edited: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessageListReceipt {
+    pub messages: Vec<ChannelMessageView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendChannelMessageRequest {
     pub author_id: String,
     pub body: String,
@@ -518,6 +541,7 @@ impl DaemonBroker {
                 is_default: Some(true),
             }]),
             channel_members: Mutex::new(Vec::new()),
+            channel_messages: Mutex::new(Vec::new()),
             cards: Mutex::new(Vec::new()),
             conversations: Arc::new(Mutex::new(load_local_conversations_at_root(&data_root))),
             conversation_sessions: Mutex::new(load_local_conversation_sessions_at_root(&data_root)),
@@ -527,6 +551,7 @@ impl DaemonBroker {
             conversation_attachments: Mutex::new(load_local_attachments_at_root(&data_root)),
             saved_messages: Mutex::new(load_local_saved_messages_at_root(&data_root)),
             preferences: Mutex::new(load_local_preferences()),
+            diagnostic_events: Mutex::new(Vec::new()),
         }
     }
 
@@ -788,12 +813,54 @@ impl DaemonBroker {
             })
     }
 
+    pub fn list_channel_messages(&self, channel_id: &str) -> ChannelMessageListReceipt {
+        self.fetch_channel_messages_from_daemon(channel_id)
+            .unwrap_or_else(|| ChannelMessageListReceipt {
+                messages: self
+                    .channel_messages
+                    .lock()
+                    .expect("channel messages mutex poisoned")
+                    .iter()
+                    .filter(|message| message.channel_id == channel_id && !message.deleted)
+                    .cloned()
+                    .collect(),
+            })
+    }
+
     pub fn send_channel_message(
         &self,
         channel_id: &str,
         request: SendChannelMessageRequest,
     ) -> Result<SendChannelMessageReceipt, ChannelError> {
-        self.send_channel_message_to_daemon(channel_id, &request)
+        self.record_local_diagnostic(format!(
+            "desktop_channel_message.attempt channel_id={} author_id={} body=[redacted-body]",
+            channel_id, request.author_id
+        ));
+        match self.send_channel_message_to_daemon(channel_id, &request) {
+            Ok(receipt) => {
+                self.record_local_diagnostic(format!(
+                    "desktop_channel_message.outcome channel_id={} message_id={} action={}",
+                    channel_id, receipt.outcome.message_id, receipt.outcome.action
+                ));
+                Ok(receipt)
+            }
+            Err(ChannelError::DaemonRequest(error))
+                if channel_id == "all" && is_daemon_unavailable_error(&error) =>
+            {
+                self.record_local_diagnostic(format!(
+                    "desktop_channel_message.fallback channel_id=all reason=daemon_unavailable body=[redacted-body]"
+                ));
+                self.send_default_all_channel_message_locally(&request)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn diagnostic_events_for_tests(&self) -> Vec<String> {
+        self.diagnostic_events
+            .lock()
+            .expect("diagnostic events mutex poisoned")
+            .clone()
     }
 
     pub fn complete_interactive_card(
@@ -1357,10 +1424,20 @@ impl DaemonBroker {
         &self,
         conversation_id: &str,
     ) -> ConversationMessageListReceipt {
+        if self.has_local_conversation_messages(conversation_id) {
+            return self.list_local_conversation_messages(conversation_id);
+        }
         if let Some(receipt) = self.list_conversation_messages_from_daemon(conversation_id) {
             return receipt;
         }
 
+        self.list_local_conversation_messages(conversation_id)
+    }
+
+    fn list_local_conversation_messages(
+        &self,
+        conversation_id: &str,
+    ) -> ConversationMessageListReceipt {
         ConversationMessageListReceipt {
             messages: {
                 let active_session_id = self
@@ -1394,6 +1471,16 @@ impl DaemonBroker {
         }
     }
 
+    fn has_local_conversation_messages(&self, conversation_id: &str) -> bool {
+        self.conversation_messages
+            .lock()
+            .expect("conversation messages mutex poisoned")
+            .iter()
+            .any(|message| message.conversation_id == conversation_id)
+            || !load_local_conversation_messages_at_root(&self.data_root, conversation_id, None)
+                .is_empty()
+    }
+
     pub fn send_conversation_message(
         &self,
         conversation_id: &str,
@@ -1404,7 +1491,24 @@ impl DaemonBroker {
             return Err(ConversationError::InvalidMessage);
         }
 
-        if let Some(receipt) = self.send_conversation_message_to_daemon(conversation_id, &request) {
+        let should_run_local_runtime = self
+            .conversations
+            .lock()
+            .expect("conversations mutex poisoned")
+            .iter()
+            .find(|conversation| conversation.id == conversation_id)
+            .is_some_and(|conversation| {
+                conversation.kind == "dm" && request.author_id.starts_with("human:")
+            });
+
+        if should_run_local_runtime {
+            eprintln!(
+                "[slei-runtime] local_runtime_selected conversation_id={} author_id={}",
+                conversation_id, request.author_id
+            );
+        } else if let Some(receipt) =
+            self.send_conversation_message_to_daemon(conversation_id, &request)
+        {
             self.upsert_local_conversation_message(receipt.message.clone())?;
             return Ok(receipt);
         }
@@ -1745,6 +1849,19 @@ impl DaemonBroker {
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
     }
 
+    fn fetch_channel_messages_from_daemon(
+        &self,
+        channel_id: &str,
+    ) -> Option<ChannelMessageListReceipt> {
+        let response = self.send_daemon_request(
+            "GET",
+            &format!("/v1/channels/{channel_id}/messages"),
+            None,
+            &[],
+        )?;
+        serde_json::from_str::<ChannelMessageListReceipt>(&response).ok()
+    }
+
     fn send_channel_message_to_daemon(
         &self,
         channel_id: &str,
@@ -2016,9 +2133,18 @@ impl DaemonBroker {
     ) -> Result<DesktopAgentView, AgentError> {
         let id = coordinator_agent_id(&channel.id);
         {
-            let agents = self.agents.lock().expect("agents mutex poisoned");
-            if let Some(existing) = agents.iter().find(|agent| agent.id == id).cloned() {
-                return Ok(existing);
+            let mut agents = self.agents.lock().expect("agents mutex poisoned");
+            if let Some(index) = agents.iter().position(|agent| agent.id == id) {
+                let channel_name = channel.name.trim().trim_start_matches('#');
+                let description = channel_coordinator_description(&format!("#{channel_name}"));
+                if agents[index].description != description {
+                    agents[index].description = description;
+                    agents[index].updated_at = monotonic_id();
+                    fs::write(&agents[index].memory_path, initial_memory(&agents[index]))
+                        .map_err(AgentError::Io)?;
+                    persist_local_agents_at_root(&self.data_root, &agents)?;
+                }
+                return Ok(agents[index].clone());
             }
         }
 
@@ -2034,9 +2160,7 @@ impl DaemonBroker {
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: "local-node".to_string(),
-            description: format!(
-                "内置频道协调员，负责分析 #{channel_name} 的消息意图、路由 Agent 回复并创建任务。"
-            ),
+            description: channel_coordinator_description(&format!("#{channel_name}")),
             workspace_path: workspace_path.clone(),
             memory_path: format!("{workspace_path}/MEMORY.md"),
             docs_path: format!("{workspace_path}/docs"),
@@ -2066,6 +2190,45 @@ impl DaemonBroker {
             Some(existing) => *existing = channel,
             None => channels.push(channel),
         }
+    }
+
+    fn send_default_all_channel_message_locally(
+        &self,
+        request: &SendChannelMessageRequest,
+    ) -> Result<SendChannelMessageReceipt, ChannelError> {
+        if request.author_id.trim().is_empty() || request.body.trim().is_empty() {
+            return Err(ChannelError::InvalidChannel);
+        }
+        let channel_exists = self
+            .channels
+            .lock()
+            .expect("channels mutex poisoned")
+            .iter()
+            .any(|channel| channel.id == "all");
+        if !channel_exists {
+            return Err(ChannelError::InvalidChannel);
+        }
+        let message_id = format!("msg_channel_all_{}", monotonic_id());
+        self.channel_messages
+            .lock()
+            .expect("channel messages mutex poisoned")
+            .push(ChannelMessageView {
+                id: message_id.clone(),
+                channel_id: "all".to_string(),
+                author_id: request.author_id.clone(),
+                body: Some(request.body.trim().to_string()),
+                kind: "human".to_string(),
+                deleted: false,
+                edited: false,
+            });
+        Ok(SendChannelMessageReceipt {
+            outcome: SendChannelMessageOutcome {
+                message_id,
+                action: "local_archive_only".to_string(),
+                task_id: None,
+                assignee_agent_id: None,
+            },
+        })
     }
 
     fn upsert_local_card(&self, card: InteractiveCardView) {
@@ -2333,6 +2496,14 @@ impl DaemonBroker {
 
     fn replace_local_preferences(&self, preferences: UserPreferencesView) {
         *self.preferences.lock().expect("preferences mutex poisoned") = preferences;
+    }
+
+    fn record_local_diagnostic(&self, event: String) {
+        eprintln!("[slei-desktop] {event}");
+        self.diagnostic_events
+            .lock()
+            .expect("diagnostic events mutex poisoned")
+            .push(event);
     }
 
     fn send_daemon_request(
@@ -2783,7 +2954,7 @@ fn initial_memory(agent: &DesktopAgentView) -> String {
     let base_key_knowledge = if agent.agent_kind.as_deref() == Some("guide") {
         "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
     } else if agent.agent_kind.as_deref() == Some("coordinator") {
-        "频道协调员负责判断频道消息意图、选择合适的 Agent 回复或创建任务。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
+        "频道协调员负责分析用户意图并路由 Agent，自己不做任何关于用户问题的回复。\n可以将消息路由给单个 Agent 或多个 Agent；例如“大家好”应路由给多个合适 Agent。\n用户明确 @ 某个 Agent、@all 或 @everyone 时，无需再分析意图，直接转发给对应 Agent。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
     } else {
         "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
     };
@@ -2823,11 +2994,24 @@ fn initial_memory(agent: &DesktopAgentView) -> String {
     )
 }
 
+fn channel_coordinator_description(channel_name: &str) -> String {
+    format!(
+        "内置频道协调员，负责分析用户在 {channel_name} 的意图并路由 Agent，自己不回复用户问题；可路由给单个或多个 Agent；用户明确 @ 某个 Agent、@all 或 @everyone 时直接转发。"
+    )
+}
+
 fn default_memory_skill(agent: &DesktopAgentView) -> String {
     format!(
         "Trigger when a user mentions {} and asks this agent to remember, learn, or 记住 something.\n",
         agent.handle
     )
+}
+
+fn is_daemon_unavailable_error(error: &str) -> bool {
+    error.contains("daemon connection failed")
+        || error.contains("invalid daemon endpoint")
+        || error.contains("daemon endpoint resolution failed")
+        || error.contains("daemon endpoint resolution returned no addresses")
 }
 
 fn monotonic_id() -> String {
@@ -3216,7 +3400,9 @@ fn run_local_agent_dm_background(
                 &conversations,
                 &conversation_id,
                 &run_id,
-                run_local_claude_agent(&agent, &run_id, &prompt, &runtime_session),
+                run_local_claude_agent(&agent, &run_id, &prompt, &runtime_session, |body| {
+                    update_local_agent_run_body(&data_root, &conversation_id, &run_id, body);
+                }),
                 started,
             );
         }
@@ -3306,6 +3492,36 @@ fn complete_local_agent_run(
     }
 }
 
+fn update_local_agent_run_body(data_root: &str, conversation_id: &str, run_id: &str, body: &str) {
+    let mut messages = load_local_conversation_messages_at_root(data_root, conversation_id, None);
+    let Some(reply) = messages
+        .iter_mut()
+        .find(|candidate| candidate.run_id.as_deref() == Some(run_id))
+    else {
+        eprintln!(
+            "[slei-runtime] stream_update_missed run_id={} error=run_message_not_found",
+            run_id
+        );
+        return;
+    };
+    reply.body = body.to_string();
+    reply.status = Some("running".to_string());
+    if let Err(error) =
+        persist_local_conversation_messages_at_root(data_root, conversation_id, &messages)
+    {
+        eprintln!(
+            "[slei-runtime] stream_update_failed run_id={} error={}",
+            run_id, error
+        );
+    } else {
+        eprintln!(
+            "[slei-runtime] stream_update run_id={} body_chars={}",
+            run_id,
+            body.chars().count()
+        );
+    }
+}
+
 fn mark_local_runtime_session_ready(
     data_root: &str,
     conversations: &Arc<Mutex<Vec<ConversationView>>>,
@@ -3332,8 +3548,9 @@ fn run_local_claude_agent(
     run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
+    on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
-    run_local_claude_agent_impl(agent, run_id, prompt, runtime_session)
+    run_local_claude_agent_impl(agent, run_id, prompt, runtime_session, on_output)
 }
 
 fn run_local_claude_clear_session(
@@ -3357,7 +3574,17 @@ fn run_local_claude_agent_impl(
     _run_id: &str,
     _prompt: &str,
     _runtime_session: &RuntimeSessionView,
+    mut on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
+    if _prompt.contains("__slei_streaming_runtime__") {
+        on_output("chunk 1");
+        std::thread::sleep(Duration::from_millis(120));
+        on_output("chunk 1 chunk 2");
+        return Ok(LocalAgentRunOutput {
+            body: "chunk 1 chunk 2".to_string(),
+            cards: Vec::new(),
+        });
+    }
     if _prompt.contains("__slei_delay_runtime__") {
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -3422,7 +3649,10 @@ fn run_local_claude_agent_impl(
     run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
+    mut on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
+    use std::io::BufRead as _;
+
     eprintln!(
         "[slei-runtime] spawn claude-agent-sdk cwd={} prompt_chars={}",
         agent.workspace_path,
@@ -3436,30 +3666,85 @@ fn run_local_claude_agent_impl(
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
-    let output = command
+    let mut child = command
         .current_dir(&agent.workspace_path)
         .spawn()
-        .and_then(|mut child| {
-            if let Some(stdin) = child.stdin.as_mut() {
-                stdin.write_all(command_payload.as_bytes())?;
-            }
-            child.wait_with_output()
-        })
         .map_err(|error| format!("failed to start Claude Agent SDK runner: {error}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(command_payload.as_bytes())
+            .map_err(|error| format!("failed to write Claude Agent SDK runner input: {error}"))?;
+    }
+    drop(child.stdin.take());
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Claude Agent SDK runner stdout was not captured".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Claude Agent SDK runner stderr was not captured".to_string())?;
+    let stderr_handle = thread::spawn(move || {
+        let mut stderr_text = String::new();
+        let _ = std::io::BufReader::new(stderr).read_to_string(&mut stderr_text);
+        stderr_text
+    });
+
+    let mut output = LocalAgentRunOutput::default();
+    let mut failed = None;
+    for line in std::io::BufReader::new(stdout).lines() {
+        let line =
+            line.map_err(|error| format!("failed to read Claude Agent SDK runner event: {error}"))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let event: LocalWorkerEvent = serde_json::from_str(&line)
+            .map_err(|error| format!("invalid Claude Agent SDK runner event: {error}"))?;
+        match event.event_type.as_str() {
+            "output_delta" => {
+                output.body.push_str(&event.delta);
+                on_output(&output.body);
+            }
+            "product_tool_requested" => {
+                if event.tool_name == "slei_propose_interactive_card" {
+                    output
+                        .cards
+                        .push(local_card_from_product_tool_event(&event)?);
+                }
+            }
+            "failed" => {
+                failed = Some(event.message);
+                break;
+            }
+            "completed"
+            | "tool_started"
+            | "tool_completed"
+            | "permission_requested"
+            | "human_question_requested" => {}
+            _ => {}
+        }
+    }
+
+    let status = child
+        .wait()
+        .map_err(|error| format!("failed to wait for Claude Agent SDK runner: {error}"))?;
+    let stderr = stderr_handle.join().unwrap_or_default().trim().to_string();
+
+    if let Some(error) = failed {
+        return Err(error);
+    }
+
+    if !status.success() {
         return Err(if stderr.is_empty() {
-            format!(
-                "Claude Agent SDK runner exited with status {}",
-                output.status
-            )
+            format!("Claude Agent SDK runner exited with status {}", status)
         } else {
             stderr
         });
     }
 
-    local_agent_run_output_from_worker_stdout(&String::from_utf8_lossy(&output.stdout))
+    Ok(output)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -3533,33 +3818,6 @@ fn local_claude_agent_runner_payload(
         }
     }))
     .map_err(|error| format!("failed to serialize Claude Agent SDK runner payload: {error}"))
-}
-
-#[cfg(not(test))]
-fn local_agent_run_output_from_worker_stdout(stdout: &str) -> Result<LocalAgentRunOutput, String> {
-    let mut output = LocalAgentRunOutput::default();
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        let event: LocalWorkerEvent = serde_json::from_str(line)
-            .map_err(|error| format!("invalid Claude Agent SDK runner event: {error}"))?;
-        match event.event_type.as_str() {
-            "output_delta" => output.body.push_str(&event.delta),
-            "product_tool_requested" => {
-                if event.tool_name == "slei_propose_interactive_card" {
-                    output
-                        .cards
-                        .push(local_card_from_product_tool_event(&event)?);
-                }
-            }
-            "failed" => return Err(event.message),
-            "completed"
-            | "tool_started"
-            | "tool_completed"
-            | "permission_requested"
-            | "human_question_requested" => {}
-            _ => {}
-        }
-    }
-    Ok(output)
 }
 
 #[cfg(not(test))]
