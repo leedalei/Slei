@@ -1,4 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 
 import {
   createDaemonBridge,
@@ -22,7 +23,7 @@ import {
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
-import { SleiAppFrame } from "./SleiAppFrame";
+import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
 import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage } from "./fixtures";
 import {
   appendTaskReply,
@@ -46,7 +47,7 @@ import {
   type SettingsPanel,
   type UserProfile,
 } from "./model";
-import { routeForView, viewForPath, type AppView } from "./router";
+import { routePathForView, routeViewFromPath, type AppView } from "./router";
 
 export type {
   AgentDraftInput,
@@ -368,13 +369,10 @@ async function loadSleiConversationSessions(bridge: DaemonBridge, conversations:
   return receipts.flatMap((receipt) => receipt.sessions);
 }
 
-function currentBrowserView(): AppView {
-  if (typeof window === "undefined") return "chat";
-  return viewForPath(window.location.pathname);
-}
-
 export function SleiApp() {
-  const [activeView, setActiveView] = useState<AppView>(() => currentBrowserView());
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [activeView, setActiveView] = useState<AppView>(() => routeViewFromPath(location.pathname));
   const [data, setData] = useState(createSleiFixtures());
   const [activeChannelId, setActiveChannelId] = useState("all");
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
@@ -401,17 +399,13 @@ export function SleiApp() {
   const messages = createDesktopMessages(locale);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const route = routeForView(viewForPath(window.location.pathname));
-    if (window.location.pathname !== route) {
-      window.history.replaceState({}, "", route);
+    const nextView = routeViewFromPath(location.pathname);
+    setActiveView((current) => (current === nextView ? current : nextView));
+    const canonicalPath = routePathForView(nextView);
+    if (location.pathname !== canonicalPath) {
+      navigate(canonicalPath, { replace: true });
     }
-    const handlePopState = () => {
-      setActiveView(viewForPath(window.location.pathname));
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     let mounted = true;
@@ -1121,14 +1115,9 @@ export function SleiApp() {
 
   function navigateToView(view: AppView, options: { replace?: boolean } = {}) {
     setActiveView(view);
-    if (typeof window === "undefined") return;
-    const route = routeForView(view);
-    if (window.location.pathname === route) return;
-    if (options.replace) {
-      window.history.replaceState({}, "", route);
-    } else {
-      window.history.pushState({}, "", route);
-    }
+    const route = routePathForView(view);
+    if (location.pathname === route) return;
+    navigate(route, { replace: options.replace });
   }
 
   return (
@@ -1194,6 +1183,23 @@ export function SleiApp() {
       sessionDrawerOpen={sessionDrawerOpen}
       sendingConversationIds={sendingConversationIds}
       sidebarWidth={sidebarWidth}
+    />
+  );
+}
+
+export function SleiAppFrameRoutes(input: Omit<SleiAppFrameProps, "activeView"> & { activeView?: AppView }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeView = input.activeView ?? routeViewFromPath(location.pathname);
+
+  return (
+    <SleiAppFrame
+      {...input}
+      activeView={activeView}
+      onViewChange={(view) => {
+        input.onViewChange?.(view);
+        navigate(routePathForView(view));
+      }}
     />
   );
 }

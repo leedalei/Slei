@@ -1,28 +1,30 @@
-export type AppView = "chat" | "search" | "tasks" | "members" | "computers" | "settings";
+import type { AppView as AppViewType } from "./model";
 
-export const routes = ["/chat", "/search", "/tasks", "/members", "/computers", "/settings"] as const;
-export type AppRoute = (typeof routes)[number];
+export const routeItems = [
+  { path: "/chat", view: "chat" },
+  { path: "/search", view: "search" },
+  { path: "/tasks", view: "tasks" },
+  { path: "/members", view: "members" },
+  { path: "/computers", view: "computers" },
+  { path: "/settings", view: "settings" },
+] as const satisfies ReadonlyArray<{ path: `/${string}`; view: AppViewType }>;
 
-const routeByView = {
-  chat: "/chat",
-  search: "/search",
-  tasks: "/tasks",
-  members: "/members",
-  computers: "/computers",
-  settings: "/settings",
-} satisfies Record<AppView, AppRoute>;
+export const routes = routeItems.map((item) => item.path);
+export type AppRoute = (typeof routeItems)[number]["path"];
 
-const viewByRoute = Object.fromEntries(
-  Object.entries(routeByView).map(([view, route]) => [route, view]),
-) as Record<AppRoute, AppView>;
+const routeByView = Object.fromEntries(routeItems.map((item) => [item.view, item.path])) as Record<AppViewType, AppRoute>;
+const viewByRoute = Object.fromEntries(routeItems.map((item) => [item.path, item.view])) as Record<AppRoute, AppViewType>;
 
-export function routeForView(view: AppView): AppRoute {
+export function routePathForView(view: AppViewType): AppRoute {
   return routeByView[view];
 }
 
-export function viewForPath(pathname: string): AppView {
+export function routeViewFromPath(pathname: string): AppViewType {
   return viewByRoute[normalizeRoute(pathname)];
 }
+
+export const routeForView = routePathForView;
+export const viewForPath = routeViewFromPath;
 
 export function normalizeRoute(pathname: string): AppRoute {
   const normalized = normalizePathname(pathname);
@@ -37,3 +39,5 @@ function normalizePathname(pathname: string) {
   const withSlash = path.startsWith("/") ? path : `/${path}`;
   return withSlash.replace(/\/+$/, "") || "/chat";
 }
+
+export type AppView = AppViewType;

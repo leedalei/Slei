@@ -1,5 +1,6 @@
 import { Component, createElement, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router";
 
 import "./app/app.css";
 
@@ -35,4 +36,4 @@ if (!root) {
 
 installFrontendCrashLogging();
 
-createRoot(root).render(createElement(FrontendErrorBoundary, null, createElement(SleiApp)));
+createRoot(root).render(createElement(BrowserRouter, null, createElement(FrontendErrorBoundary, null, createElement(SleiApp))));

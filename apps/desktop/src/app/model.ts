@@ -1,9 +1,8 @@
 import type { AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./fixtures";
-import type { AppView } from "./router";
 
-export type { AppView } from "./router";
+export type AppView = "chat" | "search" | "tasks" | "members" | "computers" | "settings";
 
 export type UserProfile = {
   displayName: string;

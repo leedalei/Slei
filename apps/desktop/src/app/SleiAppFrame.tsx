@@ -58,13 +58,14 @@ import {
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
-import { ChatPage, type ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { ComputersPage } from "../features/computers/ComputersPageView";
-import { MembersPage } from "../features/members/MembersPageView";
-import { SearchPage } from "../features/search/SearchPageView";
-import { SettingsPage } from "../features/settings/SettingsPageView";
-import { TasksPage } from "../features/tasks/TasksPageView";
+import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
 import { MemberAvatar, StatusDot } from "../components";
+import { ChatRoute } from "./routes/ChatRoute";
+import { ComputersRoute } from "./routes/ComputersRoute";
+import { MembersRoute } from "./routes/MembersRoute";
+import { SearchRoute } from "./routes/SearchRoute";
+import { SettingsRoute } from "./routes/SettingsRoute";
+import { TasksRoute } from "./routes/TasksRoute";
 import { type SleiFixtures, type SleiMember, type SleiMessage } from "./fixtures";
 import {
   channelReadinessLabel,
@@ -92,7 +93,7 @@ const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [
 
 export const AGENT_ACTIVITY_ROTATION_MS = 2_000;
 
-export function SleiAppFrame(input: {
+export type SleiAppFrameProps = {
   activeView: AppView;
   activeChannelId?: string;
   activeConversationId?: string;
@@ -156,7 +157,9 @@ export function SleiAppFrame(input: {
   onViewChange?: (view: AppView) => void;
   onRenameLocalNode?: (name: string) => Promise<void> | void;
   onRefreshRuntime?: () => Promise<void> | void;
-}) {
+};
+
+export function SleiAppFrame(input: SleiAppFrameProps) {
   const activeChannel = input.data.channels.find((channel) => channel.id === input.activeChannelId) ?? input.data.channels[0];
   const activeConversation = input.data.conversations.find((conversation) => conversation.id === input.activeConversationId);
   const activeSessionId = input.activeSessionId ?? activeConversation?.activeSessionId;
@@ -950,12 +953,12 @@ function renderWorkspace(
   onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void,
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
 ) {
-  if (activeView === "search") return <SearchPage data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
-  if (activeView === "tasks") return <TasksPage activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} />;
-  if (activeView === "members") return <MembersPage activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} />;
+  if (activeView === "search") return <SearchRoute data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
+  if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} />;
+  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} />;
   if (activeView === "computers") {
     return (
-      <ComputersPage
+      <ComputersRoute
         activeNodeId={activeComputerId}
         members={data.members}
         messages={messages}
@@ -967,7 +970,7 @@ function renderWorkspace(
   }
   if (activeView === "settings") {
     return (
-      <SettingsPage
+      <SettingsRoute
         activePanel={activeSettingsPanel}
         appearance={appearance}
         locale={locale}
@@ -984,7 +987,7 @@ function renderWorkspace(
       />
     );
   }
-  return <ChatPage activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {
