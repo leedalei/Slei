@@ -984,16 +984,17 @@ export function SleiApp() {
     setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, role: "human", body }) }));
   }
 
-  async function handleCreateChannel(input: { name: string; projectName?: string; agentIds?: string[] }) {
+  async function handleCreateChannel(input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) {
     const name = stripChannelHash(input.name);
     if (!name) return;
-    const projectName = input.projectName?.trim() || undefined;
+    const projectPaths = [...new Set((input.projectPaths ?? []).map((path) => path.trim()).filter(Boolean))];
+    const projectName = projectPaths.length > 0 ? projectPaths.join(", ") : input.projectName?.trim() || undefined;
     const receipt = await bridge.createChannel({
       name,
       description: projectName,
       agentIds: input.agentIds ?? [],
     });
-    const channel = { ...channelFromView(receipt.channel, messages), projectName };
+    const channel = { ...channelFromView(receipt.channel, messages), projectName, projectPaths };
     setData((current) => {
       if (current.channels.some((candidate) => candidate.id === channel.id || candidate.name === channel.name)) return current;
       return createSleiFixtures({ ...current, channels: [...current.channels, channel] });

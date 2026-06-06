@@ -20,6 +20,8 @@ export const members = {
   emptyDescription: "通过成员列表右上角加号，或在聊天里让引导员帮你创建一个智能体。",
   emptyTitle: "暂无智能体",
   info: "信息",
+  fileList: "文件",
+  filePreview: "文件预览",
   memberConfig: "成员配置",
   message: "私聊",
   model: "Model",
@@ -33,6 +35,7 @@ export const members = {
   docsFolder: "docs",
   memoryFile: "MEMORY.md",
   openWorkspaceFailed: "无法打开该工作区地址",
+  openWorkspace: "打开工作区",
   channelPermission: "频道权限",
   channelCoordinator: "频道协调员",
   permissionLabels: {

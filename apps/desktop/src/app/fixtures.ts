@@ -6,6 +6,7 @@ export type SleiChannel = {
   description: string;
   unread: number;
   projectName?: string;
+  projectPaths?: string[];
 };
 
 export type SleiChannelMemberReadiness = "joining" | "memory_syncing" | "ready" | "memory_failed" | "unavailable";
@@ -69,10 +70,19 @@ export type SleiMember = {
   workspacePath?: string;
   memoryPath?: string;
   docsPath?: string;
+  workspaceFiles?: WorkspaceFileEntry[];
   skills?: SkillView[];
   channelReadiness?: Record<string, SleiChannelMemberReadiness>;
   directMessageEnabled?: boolean;
   systemOwned?: boolean;
+};
+
+export type WorkspaceFileEntry = {
+  content: string;
+  id: string;
+  name: string;
+  path: string;
+  summary?: string;
 };
 
 export type SleiFixtures = {

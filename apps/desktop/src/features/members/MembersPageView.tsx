@@ -15,7 +15,7 @@ import {
 
 import type { DesktopMessages } from "../../i18n";
 import type { AgentPathTarget, DesktopNodeView } from "../../lib/daemon-bridge";
-import type { SleiFixtures } from "../../app/fixtures";
+import type { SleiFixtures, SleiMember, WorkspaceFileEntry } from "../../app/fixtures";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -67,6 +67,19 @@ export function MembersPage(input: {
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
+  const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState("memory");
+  const workspaceBasePath = selectedMember?.workspacePath ?? "~/.slei/agents/" + (selectedMember?.id ?? "unknown");
+  const memoryPath = selectedMember?.memoryPath ?? workspaceBasePath + "/MEMORY.md";
+  const docsPath = selectedMember?.docsPath ?? workspaceBasePath + "/docs";
+  const workspaceFiles = selectedMember
+    ? buildWorkspaceFiles(selectedMember, {
+        docsPath,
+        memoryPath,
+        messages: input.messages,
+        workspaceBasePath,
+      })
+    : [];
+  const activeWorkspaceFile = workspaceFiles.find((file) => file.id === activeWorkspaceFileId) ?? workspaceFiles[0];
 
   useEffect(() => {
     setMemberDetails({
@@ -75,6 +88,10 @@ export function MembersPage(input: {
       name: selectedMember?.name ?? "",
       runtime: selectedMember?.runtime ?? "",
     });
+  }, [selectedMember?.id]);
+
+  useEffect(() => {
+    setActiveWorkspaceFileId(workspaceFiles[0]?.id ?? "memory");
   }, [selectedMember?.id]);
 
   function updateMemberDetail(key: keyof typeof memberDetails, value: string) {
@@ -125,9 +142,6 @@ export function MembersPage(input: {
 
   const canMessage = selectedMember.directMessageEnabled !== false;
   const canDelete = selectedMember.type === "agent" && !selectedMember.systemOwned && selectedMember.directMessageEnabled !== false;
-  const workspaceBasePath = selectedMember.workspacePath ?? "~/.slei/agents/" + selectedMember.id;
-  const memoryPath = selectedMember.memoryPath ?? workspaceBasePath + "/MEMORY.md";
-  const docsPath = selectedMember.docsPath ?? workspaceBasePath + "/docs";
   const nodeStatus = selectedNode?.status ?? "connected";
   const nodeDotStatus = selectedNode?.status === "offline" ? "offline" : "idle";
 
@@ -280,62 +294,62 @@ export function MembersPage(input: {
             </TabsContent>
 
             <TabsContent forceMount value="workspace" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{input.messages.members.workspace}</CardTitle>
-                  <CardDescription>{input.messages.members.defaultSkill(selectedMember.handle.replace(/^@/, ""))}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <dl className="grid gap-3">
-                    <WorkspacePathRow
-                      icon={FolderOpen}
-                      label={input.messages.members.workspacePath}
-                      onOpen={() => openAgentPath("workspace")}
-                      path={workspaceBasePath}
-                    />
-                    <WorkspacePathRow
-                      icon={FileText}
-                      label={input.messages.members.memoryFile}
-                      onOpen={() => openAgentPath("memory")}
-                      path={memoryPath}
-                    />
-                    <WorkspacePathRow
-                      icon={FolderOpen}
-                      label={input.messages.members.docsFolder}
-                      onOpen={() => openAgentPath("docs")}
-                      path={docsPath}
-                    />
-                  </dl>
-                  {workspaceOpenError ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{workspaceOpenError}</AlertDescription>
-                    </Alert>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{input.messages.members.skills}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {selectedMember.skills?.length ? (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {selectedMember.skills.map((skill) => (
-                        <article className="rounded-lg border bg-muted/30 p-3" key={skill.id}>
-                          <strong className="text-sm font-medium">{skill.name}</strong>
-                          <p className="mt-1 text-sm text-muted-foreground">{skill.trigger}</p>
-                        </article>
-                      ))}
+              <section className="grid min-h-[28rem] overflow-hidden rounded-lg border bg-background md:grid-cols-[16rem_minmax(0,1fr)]" aria-label={input.messages.members.workspace}>
+                <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-b bg-muted/20 md:border-b-0 md:border-r">
+                  <div className="flex items-center justify-between gap-2 border-b p-3">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold">{input.messages.members.fileList}</h2>
+                      <p className="truncate text-xs text-muted-foreground">{workspaceBasePath}</p>
                     </div>
-                  ) : (
-                    <InlineEmpty
-                      description={input.messages.members.noSkillsDescription}
-                      title={input.messages.members.noSkills}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+                    <Button aria-label={input.messages.members.openWorkspace} onClick={() => openAgentPath("workspace")} size="icon-sm" type="button" variant="ghost">
+                      <FolderOpen aria-hidden="true" />
+                    </Button>
+                  </div>
+                  <ScrollArea className="min-h-0">
+                    <div className="grid gap-1 p-2">
+                      {workspaceFiles.map((file) => {
+                        const Icon = file.name.endsWith("/") ? FolderOpen : FileText;
+                        return (
+                          <Button
+                            aria-current={activeWorkspaceFile?.id === file.id ? "true" : undefined}
+                            className="h-auto justify-start gap-2 whitespace-normal px-2 py-2 text-left"
+                            key={file.id}
+                            onClick={() => setActiveWorkspaceFileId(file.id)}
+                            type="button"
+                            variant={activeWorkspaceFile?.id === file.id ? "secondary" : "ghost"}
+                          >
+                            <Icon aria-hidden="true" className="size-4 shrink-0" />
+                            <span className="grid min-w-0 flex-1 gap-0.5">
+                              <span className="truncate">{file.name}</span>
+                              {file.summary ? <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{file.summary}</span> : null}
+                            </span>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </aside>
+                <article className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+                  <header className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold">{input.messages.members.filePreview}</h2>
+                      <p className="truncate text-xs text-muted-foreground">{activeWorkspaceFile?.path}</p>
+                    </div>
+                    <Button onClick={() => openAgentPath(pathTargetForWorkspaceFile(activeWorkspaceFile, memoryPath, docsPath))} type="button" variant="outline">
+                      <ExternalLink aria-hidden="true" />
+                      {input.messages.chat.openViaDaemon}
+                    </Button>
+                  </header>
+                  <ScrollArea className="min-h-0">
+                    <pre className="min-h-full whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-foreground">{activeWorkspaceFile?.content}</pre>
+                  </ScrollArea>
+                </article>
+              </section>
+              {workspaceOpenError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{workspaceOpenError}</AlertDescription>
+                </Alert>
+              ) : null}
             </TabsContent>
 
             <TabsContent forceMount value="capabilities" className="grid gap-4 data-[state=inactive]:hidden">
@@ -412,28 +426,65 @@ function InfoItem(input: {
   );
 }
 
-function WorkspacePathRow(input: {
-  icon: LucideIcon;
-  label: string;
-  onOpen: () => void;
-  path: string;
-}) {
-  return (
-    <div className="grid gap-2 rounded-lg border bg-muted/30 p-3">
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{input.label}</dt>
-      <dd>
-        <Button
-          aria-label={`${input.label} ${input.path}`}
-          className="h-auto min-h-9 w-full justify-start whitespace-normal text-left"
-          onClick={input.onOpen}
-          type="button"
-          variant="outline"
-        >
-          <input.icon aria-hidden="true" />
-          <span className="min-w-0 flex-1 break-all">{input.path}</span>
-          <ExternalLink aria-hidden="true" />
-        </Button>
-      </dd>
-    </div>
-  );
+function buildWorkspaceFiles(
+  member: SleiMember,
+  input: { docsPath: string; memoryPath: string; messages: DesktopMessages; workspaceBasePath: string },
+): WorkspaceFileEntry[] {
+  if (member.workspaceFiles?.length) {
+    return member.workspaceFiles;
+  }
+
+  const files: WorkspaceFileEntry[] = [
+    {
+      id: "memory",
+      name: input.messages.members.memoryFile,
+      path: input.memoryPath,
+      content: [
+        "# MEMORY.md",
+        "",
+        input.messages.members.defaultSkill(member.handle.replace(/^@/, "")),
+        "",
+        "## Instructions",
+        member.instructions || member.description,
+      ].join("\n"),
+    },
+    {
+      id: "docs",
+      name: `${input.messages.members.docsFolder}/`,
+      path: input.docsPath,
+      content: [
+        "# docs",
+        "",
+        input.docsPath,
+        "",
+        member.skills?.length ? member.skills.map((skill) => `- ${skill.name}: ${skill.trigger}`).join("\n") : input.messages.members.noSkillsDescription,
+      ].join("\n"),
+    },
+  ];
+
+  for (const skill of member.skills ?? []) {
+    files.push({
+      id: `skill:${skill.id}`,
+      name: skill.name,
+      path: skill.path,
+      summary: skill.trigger,
+      content: [`# ${skill.name}`, "", `Trigger: ${skill.trigger}`, "", `Path: ${skill.path}`].join("\n"),
+    });
+  }
+
+  files.unshift({
+    id: "workspace",
+    name: `${input.messages.members.workspacePath}/`,
+    path: input.workspaceBasePath,
+    content: [`# ${input.messages.members.workspace}`, "", input.workspaceBasePath].join("\n"),
+  });
+
+  return files;
+}
+
+function pathTargetForWorkspaceFile(file: WorkspaceFileEntry | undefined, memoryPath: string, docsPath: string): AgentPathTarget {
+  if (!file) return "workspace";
+  if (file.path === memoryPath) return "memory";
+  if (file.path === docsPath || file.path.startsWith(`${docsPath}/`)) return "docs";
+  return "workspace";
 }

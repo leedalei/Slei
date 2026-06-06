@@ -126,4 +126,73 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("Capabilities");
     expect(html).toContain("ClaudeCode");
   });
+
+  it("renders the agent workspace as a file preview panel", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="agent_coda"
+        data={createSleiFixtures({
+          members: [
+            {
+              id: "agent_coda",
+              name: "Coda",
+              handle: "@coda",
+              avatar: "CO",
+              avatarSeed: "agent_coda",
+              type: "agent",
+              runtimeStatus: "idle",
+              role: "Developer",
+              runtime: "ClaudeCode",
+              model: "Sonnet",
+              computer: "Local",
+              nodeId: "local-node",
+              created: "2026-06-04",
+              creator: "user",
+              instructions: "Builds features.",
+              description: "Builds features.",
+              permissions: [],
+              environmentVariables: [],
+              activity: "Idle",
+              skills: [{ id: "memory", name: "Memory", trigger: "remember facts", path: "~/.slei/agents/agent_coda/skills/memory.skill.md" }],
+              capabilities: ["ClaudeCode"],
+              createdAgents: [],
+              directMessageEnabled: true,
+              workspacePath: "~/.slei/agents/agent_coda",
+              memoryPath: "~/.slei/agents/agent_coda/MEMORY.md",
+              docsPath: "~/.slei/agents/agent_coda/docs",
+              workspaceFiles: [
+                {
+                  id: "memory",
+                  name: "MEMORY.md",
+                  path: "~/.slei/agents/agent_coda/MEMORY.md",
+                  content: "# Memory\nCoda prefers concise implementation notes.",
+                },
+              ],
+            },
+          ],
+        })}
+        messages={messages}
+        nodes={[
+          {
+            id: "local-node",
+            name: "Local",
+            status: "connected",
+            daemonVersion: "0.1.0",
+            device: { platform: "darwin", arch: "arm64", hostname: "local" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+          },
+        ]}
+        onAgentDelete={() => undefined}
+        onAgentUpdate={() => undefined}
+        onMessage={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("文件");
+    expect(html).toContain("文件预览");
+    expect(html).toContain("MEMORY.md");
+    expect(html).toContain("Coda prefers concise implementation notes.");
+    expect(html).toContain("打开工作区");
+  });
 });

@@ -6,6 +6,7 @@ import {
   Bookmark,
   CheckSquare,
   CircleUserRound,
+  FolderPlus,
   Globe2,
   Hash,
   Info,
@@ -17,6 +18,7 @@ import {
   Server,
   Settings,
   Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -126,7 +128,7 @@ export type SleiAppFrameProps = {
   onAgentCreate?: (request: AgentDraftInput) => Promise<void> | void;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
-  onChannelCreate?: (input: { name: string; projectName?: string; agentIds?: string[] }) => Promise<void> | void;
+  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<void> | void;
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationNewSession?: (conversationId: string) => Promise<void> | void;
@@ -296,9 +298,11 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
       }, async (draft, cardId) => {
+        const projectPaths = Array.isArray(draft.projectPaths) ? draft.projectPaths.filter((path): path is string => typeof path === "string") : [];
         await input.onChannelCreate?.({
           name: String(draft.name ?? ""),
           projectName: typeof draft.projectName === "string" ? draft.projectName : undefined,
+          projectPaths,
           agentIds: Array.isArray(draft.agentIds) ? draft.agentIds.filter((id): id is string => typeof id === "string") : [],
         });
         if (cardId) await input.onInteractiveCardComplete?.(cardId);
@@ -359,11 +363,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 export type ChannelDraftState = {
   name: string;
   projectName: string;
+  projectPaths: string[];
   selectedAgentIds: string[];
 };
 
 export function resetChannelDraft(): ChannelDraftState {
-  return { name: "", projectName: "", selectedAgentIds: [] };
+  return { name: "", projectName: "", projectPaths: [], selectedAgentIds: [] };
 }
 
 export function toggleChannelDraftAgent(draft: ChannelDraftState, agentId: string): ChannelDraftState {
@@ -375,12 +380,38 @@ export function toggleChannelDraftAgent(draft: ChannelDraftState, agentId: strin
   };
 }
 
-export function channelDraftCreateInput(draft: ChannelDraftState): { name: string; projectName?: string; agentIds: string[] } {
+export function channelDraftCreateInput(draft: ChannelDraftState): { name: string; projectName?: string; projectPaths?: string[]; agentIds: string[] } {
+  const projectPaths = uniqueProjectPaths(draft.projectPaths);
+  const projectName = projectPaths.length > 0 ? projectPaths.join(", ") : draft.projectName;
   return {
     name: draft.name,
-    projectName: draft.projectName,
+    projectName,
+    projectPaths,
     agentIds: draft.selectedAgentIds,
   };
+}
+
+function uniqueProjectPaths(paths: string[]) {
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
+}
+
+function projectPathFromPickedFile(file: File) {
+  const metadata = file as File & { path?: string; webkitRelativePath?: string };
+  const relativePath = metadata.webkitRelativePath ?? "";
+  const rootFolder = relativePath.split("/").filter(Boolean)[0];
+  if (metadata.path && relativePath && rootFolder) {
+    const separator = metadata.path.includes("\\") ? "\\" : "/";
+    const suffix = relativePath.split("/").join(separator);
+    if (metadata.path.endsWith(suffix)) {
+      return `${metadata.path.slice(0, -suffix.length)}${rootFolder}`;
+    }
+  }
+  return rootFolder ?? metadata.path ?? file.name;
+}
+
+function formatChannelProjectLabel(channel: SleiFixtures["channels"][number], messages: DesktopMessages) {
+  const projects = channel.projectPaths?.length ? channel.projectPaths.join(", ") : channel.projectName;
+  return projects ? messages.chat.projectPrefix(projects) : channel.description;
 }
 
 function SidebarFrame(input: { children: ReactNode; title: string }) {
@@ -459,7 +490,7 @@ function ChannelList(input: {
   messages: DesktopMessages;
   savedMessages: SavedMessageView[];
   searchOpen?: boolean;
-  onChannelCreate?: (input: { name: string; projectName?: string; agentIds?: string[] }) => Promise<void> | void;
+  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<void> | void;
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
@@ -469,6 +500,7 @@ function ChannelList(input: {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [activePanel, setActivePanel] = useState<"channels" | "saved">(input.initialSavedPanelOpen ? "saved" : "channels");
+  const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const directMessageConversations = input.data.conversations.filter((conversation) => {
     if (conversation.kind !== "dm") return false;
     const member = input.data.members.find((candidate) => candidate.id === conversation.agentId);
@@ -489,6 +521,16 @@ function ChannelList(input: {
 
   function toggleSelectedAgent(agentId: string) {
     setChannelDraft((current) => toggleChannelDraftAgent(current, agentId));
+  }
+
+  function addProjectFolders(files: FileList | null) {
+    const paths = Array.from(files ?? []).map(projectPathFromPickedFile).filter(Boolean);
+    if (paths.length === 0) return;
+    setChannelDraft((current) => ({ ...current, projectPaths: uniqueProjectPaths([...current.projectPaths, ...paths]) }));
+  }
+
+  function removeProjectFolder(path: string) {
+    setChannelDraft((current) => ({ ...current, projectPaths: current.projectPaths.filter((candidate) => candidate !== path) }));
   }
 
   return (
@@ -536,7 +578,7 @@ function ChannelList(input: {
                         <span className="truncate">{stripChannelHash(channel.name)}</span>
                         {channel.unread > 0 ? <Badge className="ml-auto" variant="secondary">{channel.unread}</Badge> : null}
                       </span>
-                      <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{channel.projectName ? input.messages.chat.projectPrefix(channel.projectName) : channel.description}</small>
+                      <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{formatChannelProjectLabel(channel, input.messages)}</small>
                     </span>
                   </Button>
                   {channel.id !== "all" ? (
@@ -598,13 +640,46 @@ function ChannelList(input: {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="slei-channel-project">{input.messages.chat.project}</Label>
-              <Input
-                aria-label={input.messages.chat.project}
-                id="slei-channel-project"
-                onChange={(event) => setChannelDraft((current) => ({ ...current, projectName: event.currentTarget.value }))}
-                placeholder="Slei Desktop"
-                value={channelDraft.projectName}
-              />
+              <div className="grid gap-2">
+                <Input
+                  aria-label={input.messages.chat.project}
+                  id="slei-channel-project"
+                  onChange={(event) => setChannelDraft((current) => ({ ...current, projectName: event.currentTarget.value }))}
+                  placeholder="Slei Desktop"
+                  value={channelDraft.projectName}
+                />
+                <input
+                  aria-label={input.messages.chat.projectFolderPicker}
+                  className="sr-only"
+                  multiple
+                  onChange={(event) => {
+                    addProjectFolders(event.currentTarget.files);
+                    event.currentTarget.value = "";
+                  }}
+                  ref={projectFolderInputRef}
+                  type="file"
+                  {...{ directory: "", webkitdirectory: "" }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">
+                    <FolderPlus aria-hidden="true" size={14} />
+                    {input.messages.chat.projectFolderPicker}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{input.messages.chat.projectFolderHint}</span>
+                </div>
+                {channelDraft.projectPaths.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {channelDraft.projectPaths.map((path) => (
+                      <Badge className="max-w-full gap-1" key={path} variant="secondary">
+                        <span className="truncate">{path}</span>
+                        <button aria-label={input.messages.chat.removeProject(path)} className="ml-1 rounded-sm hover:bg-background/70" onClick={() => removeProjectFolder(path)} type="button">
+                          <X aria-hidden="true" className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {agentMembers.length > 0 ? (
               <fieldset className="grid gap-2">

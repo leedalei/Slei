@@ -183,17 +183,35 @@ describe("chat search, channel management, and mentions", () => {
 
   it("resets canceled create channel agent selections before the next submit", () => {
     const canceledDraft = toggleChannelDraftAgent(
-      { name: "old-dev", projectName: "Old Project", selectedAgentIds: [] },
+      { name: "old-dev", projectName: "Old Project", projectPaths: [], selectedAgentIds: [] },
       "a1",
     );
-    const reopenedDraft = { ...resetChannelDraft(), name: "new-dev" };
+    const reopenedDraft = { ...resetChannelDraft(), name: "new-dev", projectPaths: ["/Users/lei/Slei", "/Users/lei/Website"] };
 
     expect(canceledDraft.selectedAgentIds).toEqual(["a1"]);
     expect(channelDraftCreateInput(reopenedDraft)).toEqual({
       name: "new-dev",
-      projectName: "",
+      projectName: "/Users/lei/Slei, /Users/lei/Website",
+      projectPaths: ["/Users/lei/Slei", "/Users/lei/Website"],
       agentIds: [],
     });
+  });
+
+  it("renders channel project selection as a repeatable folder picker", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({ members: createDemoMembers() })}
+        initialCreateChannelModalOpen
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("选择项目文件夹");
+    expect(html).toContain('type="file"');
+    expect(html).toContain("webkitdirectory");
+    expect(html).toContain("可关联多个项目文件夹");
   });
 
   it("detects, navigates, and inserts composer mention selections", () => {

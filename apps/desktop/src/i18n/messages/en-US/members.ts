@@ -20,6 +20,8 @@ export const members = {
   emptyDescription: "Use the plus button in the member list, or ask the guide in chat to create an agent.",
   emptyTitle: "No agents",
   info: "Info",
+  fileList: "Files",
+  filePreview: "File preview",
   memberConfig: "Member configuration",
   message: "Message",
   model: "Model",
@@ -33,6 +35,7 @@ export const members = {
   docsFolder: "docs",
   memoryFile: "MEMORY.md",
   openWorkspaceFailed: "Unable to open this workspace path",
+  openWorkspace: "Open workspace",
   channelPermission: "Channel permission",
   channelCoordinator: "Channel coordinator",
   permissionLabels: {

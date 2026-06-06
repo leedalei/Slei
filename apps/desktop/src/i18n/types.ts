@@ -95,7 +95,10 @@ export type DesktopMessages = {
     memberUnavailable: string;
     memberReady: string;
     project: string;
+    projectFolderPicker: string;
+    projectFolderHint: string;
     projectPrefix: (projectName: string) => string;
+    removeProject: (projectName: string) => string;
     selectAgents: string;
     sortChannels: string;
     sortDirectMessages: string;
@@ -149,6 +152,8 @@ export type DesktopMessages = {
     emptyDescription: string;
     emptyTitle: string;
     info: string;
+    fileList: string;
+    filePreview: string;
     memberConfig: string;
     message: string;
     model: string;
@@ -162,6 +167,7 @@ export type DesktopMessages = {
     docsFolder: string;
     memoryFile: string;
     openWorkspaceFailed: string;
+    openWorkspace: string;
     channelPermission: string;
     channelCoordinator: string;
     permissionLabels: Record<"ReadOnly" | "Edit" | "Controlled", string>;
