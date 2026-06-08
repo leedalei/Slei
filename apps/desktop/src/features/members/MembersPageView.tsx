@@ -209,6 +209,7 @@ export function MembersPage(input: {
 
   const canMessage = selectedMember.directMessageEnabled !== false;
   const canDelete = selectedMember.type === "agent" && !selectedMember.systemOwned && selectedMember.directMessageEnabled !== false;
+  const showHandle = !selectedMember.id.startsWith("agent_coordinator_");
   const nodeStatus = selectedNode?.status ?? "connected";
   const nodeDotStatus = selectedNode?.status === "offline" ? "offline" : "idle";
   const workspaceRows = buildWorkspaceTreeRows({
@@ -231,7 +232,7 @@ export function MembersPage(input: {
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">{selectedMember.role}</p>
-              <p className="truncate text-sm text-muted-foreground">{selectedMember.handle}</p>
+              {showHandle ? <p className="truncate text-sm text-muted-foreground">{selectedMember.handle}</p> : null}
             </div>
           </div>
           {canMessage ? (

@@ -1165,6 +1165,90 @@ mod tests {
     }
 
     #[test]
+    fn broker_startup_updates_existing_guide_create_skill_body() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-guide-skill-update-{}",
+            std::process::id()
+        ));
+        let workspace = agent_root.join("agents/agent_guide_local_node");
+        let guide_skill = workspace.join(".claude/skills/guide-create/SKILL.md");
+        fs::create_dir_all(guide_skill.parent().unwrap()).unwrap();
+        fs::create_dir_all(workspace.join(".claude/skills/memory")).unwrap();
+        fs::create_dir_all(workspace.join("docs")).unwrap();
+        fs::write(
+            workspace.join("MEMORY.md"),
+            "# Yeal\n\n## Role\nGuide\n\n## Team\n@yeal — 我自己，Yeal\n",
+        )
+        .unwrap();
+        fs::write(
+            &guide_skill,
+            "---\nname: guide-create\ndescription: old\n---\n\n# Guide Create\n\nFor each detected member, call the product tool.\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.join(".claude/skills/memory/SKILL.md"),
+            "---\nname: memory\ndescription: old memory\n---\n",
+        )
+        .unwrap();
+        let agent = serde_json::json!([{
+            "id": "agent_guide_local_node",
+            "name": "Yeal",
+            "handle": "@yeal",
+            "agentKind": "guide",
+            "systemOwned": true,
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Guide",
+            "workspacePath": workspace.to_string_lossy(),
+            "memoryPath": workspace.join("MEMORY.md").to_string_lossy(),
+            "docsPath": workspace.join("docs").to_string_lossy(),
+            "avatarSeed": "yeal",
+            "runtimeThread": { "runtimeKind": "ClaudeCode", "status": "ready", "createdAt": "1" },
+            "skills": [
+                {
+                    "id": "guide-create",
+                    "name": "guide-create",
+                    "trigger": "old",
+                    "path": guide_skill.to_string_lossy()
+                }
+            ],
+            "channelIds": ["all"],
+            "createdAt": "1",
+            "updatedAt": "1"
+        }]);
+        fs::create_dir_all(agent_root.join("agents")).unwrap();
+        fs::write(
+            agent_root.join("agents/index.json"),
+            serde_json::to_string_pretty(&agent).unwrap(),
+        )
+        .unwrap();
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let skill = read_agent_workspace_file(
+            &broker,
+            "agent_guide_local_node",
+            ".claude/skills/guide-create/SKILL.md",
+        )
+        .unwrap();
+        assert!(skill.content.contains("slei_propose_interactive_card"));
+        assert!(skill.content.contains("Input schema"));
+        assert!(skill.content.contains("Multiple agents example"));
+        assert!(!skill.content.contains("description: old"));
+
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
     fn conversation_commands_create_dm_and_round_trip_messages() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
@@ -1586,6 +1670,18 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["guide-create", "memory"]
         );
+        let guide_skill = read_agent_workspace_file(
+            &broker,
+            "agent_guide_local_node",
+            ".claude/skills/guide-create/SKILL.md",
+        )
+        .unwrap();
+        assert!(guide_skill.content.contains("slei_propose_interactive_card"));
+        assert!(guide_skill.content.contains("Input schema"));
+        assert!(guide_skill.content.contains("Output contract"));
+        assert!(guide_skill.content.contains("Single agent example"));
+        assert!(guide_skill.content.contains("Multiple agents example"));
+        assert!(guide_skill.content.contains("Call the tool once per agent"));
         let dm = list_conversations(&broker).conversations[0].clone();
         send_conversation_message(
             &broker,

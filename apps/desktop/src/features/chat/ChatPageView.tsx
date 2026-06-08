@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, AtSign, Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
+import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
@@ -591,14 +591,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                           </span>
                           <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
                         </span>
-                        <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground"><AtSign aria-hidden="true" size={12} />{member.handle}</span>
+                        <span className="text-xs font-normal text-muted-foreground">{member.handle}</span>
                       </Button>
                     ))}
                   </div>
                 </ScrollArea>
-                <Button className="justify-start" size="sm" type="button" variant="ghost">
-                  <ArrowDown aria-hidden="true" size={14} />{messages.chat.backToBottom}
-                </Button>
               </CardContent>
             </Card>
           ) : null}

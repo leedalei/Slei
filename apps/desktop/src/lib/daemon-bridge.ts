@@ -910,11 +910,75 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
     skills.unshift({
       id: "guide-create",
       name: "guide-create",
-      trigger: "Use when the user asks Yeal to create an agent, member, or channel in Slei.",
+      trigger: "Use when the user asks Yeal to create one or more Slei agents, members, or channels.",
       path: `${input.workspacePath}/.claude/skills/guide-create/SKILL.md`,
     });
   }
   return skills;
+}
+
+function defaultGuideCreateSkillContent(): string {
+  return `---
+name: guide-create
+description: Use when the user asks Yeal to create one or more Slei agents, members, or channels.
+---
+
+# Guide Create
+
+Use this skill when the user asks Yeal to create, add, set up, or prepare one or more Slei agents or members. It also applies when the user asks for a channel plus agent setup; create the agent cards first and explain any channel work that still needs confirmation.
+
+## Boundaries
+
+- Do not create agents by returning plain JSON, markdown tables, or natural language for the frontend to parse.
+- Do not silently invent missing runtime-critical values. Use defaults only when the user has not specified them.
+- Do not create a card for Yeal or for a channel coordinator.
+
+## Workflow
+
+1. Extract every requested agent from the user message.
+2. Normalize each draft: name, handle, runtimeKind, model, nodeId, and description.
+3. For each valid draft, call the product tool command \`slei_propose_interactive_card\`.
+4. Call the tool once per agent. Multiple requested agents require multiple tool calls, not one combined card.
+5. Reply briefly with what was prepared and what still needs user confirmation.
+
+## Product Tool Command
+
+Call \`slei_propose_interactive_card\` with an object payload.
+
+### Input schema
+
+\`\`\`json
+{
+  "kind": "createAgent",
+  "title": "创建 <name>",
+  "summary": "<name> · <runtimeKind> / <model>",
+  "draft": {
+    "name": "<display name>",
+    "handle": "@<normalized-handle>",
+    "runtimeKind": "ClaudeCode",
+    "model": "Sonnet",
+    "nodeId": "local-node",
+    "description": "<agent role and operating instructions>"
+  },
+  "actionLabel": "创建",
+  "doneLabel": "DONE"
+}
+\`\`\`
+
+### Output contract
+
+The tool returns or emits an interactive card. Yeal should not mark creation complete until the user clicks the card action and Slei reports the card as done.
+
+## Single agent example
+
+User: "帮我创建一个 Bob，做架构评审。"
+
+## Multiple agents example
+
+User: "帮我建三个成员：Coda 写代码，Mira 做 QA，Owen 做文档。"
+
+Call the tool once per agent.
+`;
 }
 
 function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
@@ -946,6 +1010,7 @@ function mockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: st
   }
   const skill = (agent.skills ?? []).find((candidate) => candidate.path.endsWith(relativePath));
   if (skill) {
+    if (skill.id === "guide-create") return defaultGuideCreateSkillContent();
     return ["---", `name: ${skill.name}`, `description: ${skill.trigger}`, "---", "", `# ${skill.name}`].join("\n");
   }
   return "";

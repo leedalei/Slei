@@ -241,7 +241,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(mentionPanelHtml).toContain('data-slot="scroll-area"');
     expect(html).toContain("Coda");
     expect(html).toContain("@Coda");
-    expect(html).toContain("回到底部");
+    expect(html).not.toContain("回到底部");
     expect(html).toContain("转为任务");
   });
 
@@ -265,6 +265,33 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("Jack");
   });
 
+  it("excludes channel coordinators from composer mention suggestions", () => {
+    const data = createSleiFixtures({
+      members: [
+        ...createDemoMembers(),
+        {
+          ...createDemoMembers()[0],
+          id: "agent_coordinator_all",
+          name: "#all Coordinator",
+          handle: "@all-coordinator",
+          role: "频道协调员",
+          directMessageEnabled: false,
+        },
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        initialChatDraft="@all"
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).not.toContain("@all-coordinator");
+  });
+
   it("uses lucide-react icons instead of raw glyph placeholders for controls", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
@@ -284,7 +311,7 @@ describe("chat search, channel management, and mentions", () => {
 
     expect(html).toContain("lucide-search");
     expect(html).toContain("lucide-trash-2");
-    expect(html).toContain("lucide-at-sign");
+    expect(html).toContain("lucide-send");
     expect(html).not.toContain("⌕");
     expect(html).not.toContain("⌘");
     expect(html).not.toContain("⌫");

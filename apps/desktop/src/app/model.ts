@@ -326,6 +326,7 @@ export function insertMention(draft: string, mention: ActiveMention, handle: str
 export function mentionSuggestions(query: string, members: SleiMember[]): SleiMember[] {
   const normalized = normalizeSearch(query.replace(/^@/, ""));
   return members.filter((member) => {
+    if (member.id.startsWith("agent_coordinator_")) return false;
     const handle = normalizeSearch(member.handle.replace(/^@/, ""));
     const name = normalizeSearch(member.name);
     return !normalized || handle.includes(normalized) || name.includes(normalized);
