@@ -14,8 +14,14 @@ import {
 } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { AgentPathTarget, DesktopNodeView } from "../../lib/daemon-bridge";
-import type { SleiFixtures, SleiMember, WorkspaceFileEntry } from "../../app/fixtures";
+import type {
+  AgentPathTarget,
+  AgentWorkspaceEntry,
+  AgentWorkspaceFileReceipt,
+  AgentWorkspaceListReceipt,
+  DesktopNodeView,
+} from "../../lib/daemon-bridge";
+import type { SleiFixtures, SleiMember } from "../../app/fixtures";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -52,8 +58,10 @@ export function MembersPage(input: {
   nodes: DesktopNodeView[];
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
+  onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
   onMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
+  onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
 }) {
   const selectedMember = input.data.members.find((member) => member.id === input.activeMemberId) ?? input.data.members[0];
   const selectedNode = input.nodes.find((node) => node.id === selectedMember?.nodeId);
@@ -67,19 +75,14 @@ export function MembersPage(input: {
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
-  const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState("memory");
+  const [workspaceRelativePath, setWorkspaceRelativePath] = useState("");
+  const [workspaceEntries, setWorkspaceEntries] = useState<AgentWorkspaceEntry[]>(() => selectedMember ? initialWorkspaceEntries(selectedMember) : []);
+  const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<AgentWorkspaceFileReceipt | undefined>(() =>
+    selectedMember ? initialWorkspacePreview(selectedMember, input.messages) : undefined,
+  );
   const workspaceBasePath = selectedMember?.workspacePath ?? "~/.slei/agents/" + (selectedMember?.id ?? "unknown");
   const memoryPath = selectedMember?.memoryPath ?? workspaceBasePath + "/MEMORY.md";
   const docsPath = selectedMember?.docsPath ?? workspaceBasePath + "/docs";
-  const workspaceFiles = selectedMember
-    ? buildWorkspaceFiles(selectedMember, {
-        docsPath,
-        memoryPath,
-        messages: input.messages,
-        workspaceBasePath,
-      })
-    : [];
-  const activeWorkspaceFile = workspaceFiles.find((file) => file.id === activeWorkspaceFileId) ?? workspaceFiles[0];
 
   useEffect(() => {
     setMemberDetails({
@@ -91,7 +94,12 @@ export function MembersPage(input: {
   }, [selectedMember?.id]);
 
   useEffect(() => {
-    setActiveWorkspaceFileId(workspaceFiles[0]?.id ?? "memory");
+    setWorkspaceRelativePath("");
+    setWorkspaceEntries(selectedMember ? initialWorkspaceEntries(selectedMember) : []);
+    setActiveWorkspaceFile(selectedMember ? initialWorkspacePreview(selectedMember, input.messages) : undefined);
+    if (selectedMember?.type === "agent" && input.onListAgentWorkspace) {
+      void loadWorkspaceDirectory("");
+    }
   }, [selectedMember?.id]);
 
   function updateMemberDetail(key: keyof typeof memberDetails, value: string) {
@@ -107,6 +115,40 @@ export function MembersPage(input: {
     setWorkspaceOpenError(undefined);
     try {
       await input.onOpenAgentPath?.(selectedMember.id, target);
+    } catch {
+      setWorkspaceOpenError(input.messages.members.openWorkspaceFailed);
+    }
+  }
+
+  async function loadWorkspaceDirectory(relativePath: string) {
+    if (!selectedMember || selectedMember.type !== "agent" || !input.onListAgentWorkspace) return;
+    setWorkspaceOpenError(undefined);
+    try {
+      const receipt = await input.onListAgentWorkspace(selectedMember.id, relativePath || undefined);
+      setWorkspaceRelativePath(receipt.relativePath);
+      setWorkspaceEntries(receipt.entries);
+    } catch {
+      setWorkspaceOpenError(input.messages.members.openWorkspaceFailed);
+    }
+  }
+
+  async function openWorkspaceEntry(entry: AgentWorkspaceEntry) {
+    if (entry.kind === "directory") {
+      await loadWorkspaceDirectory(entry.relativePath);
+      return;
+    }
+    if (!selectedMember || selectedMember.type !== "agent" || !input.onReadAgentWorkspaceFile) {
+      setActiveWorkspaceFile({
+        agentId: selectedMember?.id ?? "",
+        content: "",
+        name: entry.name,
+        relativePath: entry.relativePath,
+      });
+      return;
+    }
+    setWorkspaceOpenError(undefined);
+    try {
+      setActiveWorkspaceFile(await input.onReadAgentWorkspaceFile(selectedMember.id, entry.relativePath));
     } catch {
       setWorkspaceOpenError(input.messages.members.openWorkspaceFailed);
     }
@@ -295,33 +337,34 @@ export function MembersPage(input: {
 
             <TabsContent forceMount value="workspace" className="grid gap-4 data-[state=inactive]:hidden">
               <section className="grid min-h-[28rem] overflow-hidden rounded-lg border bg-background md:grid-cols-[16rem_minmax(0,1fr)]" aria-label={input.messages.members.workspace}>
-                <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-b bg-muted/20 md:border-b-0 md:border-r">
-                  <div className="flex items-center justify-between gap-2 border-b p-3">
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-semibold">{input.messages.members.fileList}</h2>
-                      <p className="truncate text-xs text-muted-foreground">{workspaceBasePath}</p>
-                    </div>
-                    <Button aria-label={input.messages.members.openWorkspace} onClick={() => openAgentPath("workspace")} size="icon-sm" type="button" variant="ghost">
-                      <FolderOpen aria-hidden="true" />
-                    </Button>
-                  </div>
+                <aside className="grid min-h-0 overflow-hidden border-b bg-muted/20 md:border-b-0 md:border-r">
                   <ScrollArea className="min-h-0">
                     <div className="grid gap-1 p-2">
-                      {workspaceFiles.map((file) => {
-                        const Icon = file.name.endsWith("/") ? FolderOpen : FileText;
+                      {workspaceRelativePath ? (
+                        <Button
+                          className="w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap px-2 py-2 text-left"
+                          onClick={() => loadWorkspaceDirectory(parentWorkspacePath(workspaceRelativePath))}
+                          type="button"
+                          variant="ghost"
+                        >
+                          <FolderOpen aria-hidden="true" className="size-4 shrink-0" />
+                          <span className="block min-w-0 flex-1 truncate">../</span>
+                        </Button>
+                      ) : null}
+                      {workspaceEntries.map((entry) => {
+                        const Icon = entry.kind === "directory" ? FolderOpen : FileText;
                         return (
                           <Button
-                            aria-current={activeWorkspaceFile?.id === file.id ? "true" : undefined}
+                            aria-current={activeWorkspaceFile?.relativePath === entry.relativePath ? "true" : undefined}
                             className="w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap px-2 py-2 text-left"
-                            key={file.id}
-                            onClick={() => setActiveWorkspaceFileId(file.id)}
+                            key={entry.relativePath}
+                            onClick={() => void openWorkspaceEntry(entry)}
                             type="button"
-                            variant={activeWorkspaceFile?.id === file.id ? "secondary" : "ghost"}
+                            variant={activeWorkspaceFile?.relativePath === entry.relativePath ? "secondary" : "ghost"}
                           >
                             <Icon aria-hidden="true" className="size-4 shrink-0" />
-                            <span className="grid min-w-0 flex-1 gap-0.5 overflow-hidden">
-                              <span className="block min-w-0 truncate">{file.name}</span>
-                              {file.summary ? <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{file.summary}</span> : null}
+                            <span className="block min-w-0 flex-1 truncate">
+                              {entry.name}{entry.kind === "directory" ? "/" : ""}
                             </span>
                           </Button>
                         );
@@ -333,7 +376,7 @@ export function MembersPage(input: {
                   <header className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
                     <div className="min-w-0">
                       <h2 className="text-sm font-semibold">{input.messages.members.filePreview}</h2>
-                      <p className="truncate text-xs text-muted-foreground">{activeWorkspaceFile?.path}</p>
+                      <p className="truncate text-xs text-muted-foreground">{activeWorkspaceFile?.relativePath}</p>
                     </div>
                     <Button onClick={() => openAgentPath(pathTargetForWorkspaceFile(activeWorkspaceFile, memoryPath, docsPath))} type="button" variant="outline">
                       <ExternalLink aria-hidden="true" />
@@ -426,65 +469,52 @@ function InfoItem(input: {
   );
 }
 
-function buildWorkspaceFiles(
-  member: SleiMember,
-  input: { docsPath: string; memoryPath: string; messages: DesktopMessages; workspaceBasePath: string },
-): WorkspaceFileEntry[] {
-  if (member.workspaceFiles?.length) {
-    return member.workspaceFiles;
+function initialWorkspaceEntries(member: SleiMember): AgentWorkspaceEntry[] {
+  if (member.workspaceEntries?.length) {
+    return member.workspaceEntries;
   }
-
-  const files: WorkspaceFileEntry[] = [
-    {
-      id: "memory",
-      name: input.messages.members.memoryFile,
-      path: input.memoryPath,
-      content: [
-        "# MEMORY.md",
-        "",
-        input.messages.members.defaultSkill(member.handle.replace(/^@/, "")),
-        "",
-        "## Instructions",
-        member.instructions || member.description,
-      ].join("\n"),
-    },
-    {
-      id: "docs",
-      name: `${input.messages.members.docsFolder}/`,
-      path: input.docsPath,
-      content: [
-        "# docs",
-        "",
-        input.docsPath,
-        "",
-        member.skills?.length ? member.skills.map((skill) => `- ${skill.name}: ${skill.trigger}`).join("\n") : input.messages.members.noSkillsDescription,
-      ].join("\n"),
-    },
+  if (member.type !== "agent") {
+    return [];
+  }
+  return [
+    { kind: "directory", name: "docs", relativePath: "docs" },
+    { kind: "directory", name: "skills", relativePath: "skills" },
+    { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
   ];
-
-  for (const skill of member.skills ?? []) {
-    files.push({
-      id: `skill:${skill.id}`,
-      name: skill.name,
-      path: skill.path,
-      summary: skill.trigger,
-      content: [`# ${skill.name}`, "", `Trigger: ${skill.trigger}`, "", `Path: ${skill.path}`].join("\n"),
-    });
-  }
-
-  files.unshift({
-    id: "workspace",
-    name: `${input.messages.members.workspacePath}/`,
-    path: input.workspaceBasePath,
-    content: [`# ${input.messages.members.workspace}`, "", input.workspaceBasePath].join("\n"),
-  });
-
-  return files;
 }
 
-function pathTargetForWorkspaceFile(file: WorkspaceFileEntry | undefined, memoryPath: string, docsPath: string): AgentPathTarget {
+function initialWorkspacePreview(member: SleiMember, messages: DesktopMessages): AgentWorkspaceFileReceipt | undefined {
+  if (member.workspaceFilePreview) {
+    return {
+      agentId: member.id,
+      ...member.workspaceFilePreview,
+    };
+  }
+  if (member.type !== "agent") {
+    return undefined;
+  }
+  return {
+    agentId: member.id,
+    name: "MEMORY.md",
+    relativePath: "MEMORY.md",
+    content: [
+      "# MEMORY.md",
+      "",
+      messages.members.defaultSkill(member.handle.replace(/^@/, "")),
+      "",
+      "## Instructions",
+      member.instructions || member.description,
+    ].join("\n"),
+  };
+}
+
+function parentWorkspacePath(relativePath: string) {
+  return relativePath.split("/").slice(0, -1).join("/");
+}
+
+function pathTargetForWorkspaceFile(file: AgentWorkspaceFileReceipt | undefined, memoryPath: string, docsPath: string): AgentPathTarget {
   if (!file) return "workspace";
-  if (file.path === memoryPath) return "memory";
-  if (file.path === docsPath || file.path.startsWith(`${docsPath}/`)) return "docs";
+  if (file.relativePath === "MEMORY.md" || file.relativePath === memoryPath) return "memory";
+  if (file.relativePath === "docs" || file.relativePath.startsWith("docs/") || file.relativePath === docsPath) return "docs";
   return "workspace";
 }

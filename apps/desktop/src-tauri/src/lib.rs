@@ -32,6 +32,8 @@ pub fn run() {
             commands::update_preferences_command,
             commands::remember_agent_fact_command,
             commands::open_agent_path_command,
+            commands::list_agent_workspace_command,
+            commands::read_agent_workspace_file_command,
             commands::list_conversation_messages_command,
             commands::send_conversation_message_command,
             commands::upload_conversation_attachment_command,
@@ -51,13 +53,13 @@ mod tests {
     use super::commands::{
         activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
         create_agent, create_channel, create_conversation_session, create_dm_conversation,
-        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills, list_agents,
-        list_conversation_messages, list_conversation_sessions, list_conversations, list_nodes,
-        list_preferences, list_saved_messages, open_agent_path, reconnect_events,
-        remember_agent_fact, rename_local_node, request_artifact_open,
-        reset_conversation_runtime_session, save_message, send_channel_message,
-        send_conversation_message, unsave_message, update_agent, update_preferences,
-        upload_conversation_attachment, FrontendCrashReport,
+        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills,
+        list_agent_workspace, list_agents, list_conversation_messages, list_conversation_sessions,
+        list_conversations, list_nodes, list_preferences, list_saved_messages, open_agent_path,
+        read_agent_workspace_file, reconnect_events, remember_agent_fact, rename_local_node,
+        request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_channel_message, send_conversation_message, unsave_message, update_agent,
+        update_preferences, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
@@ -1011,6 +1013,28 @@ mod tests {
         assert_eq!(receipt.target, "memory");
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
+
+        let root_entries = list_agent_workspace(&broker, &agent.id, None).unwrap();
+        assert!(root_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == "MEMORY.md" && entry.kind == "file"));
+        assert!(root_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == "skills" && entry.kind == "directory"));
+        let skill_entries =
+            list_agent_workspace(&broker, &agent.id, Some("skills".to_string())).unwrap();
+        assert!(skill_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == "memory.skill.md" && entry.kind == "file"));
+        let memory = read_agent_workspace_file(&broker, &agent.id, "MEMORY.md").unwrap();
+        assert_eq!(memory.name, "MEMORY.md");
+        assert!(memory.content.contains("开发 Agent"));
+        assert!(list_agent_workspace(&broker, &agent.id, Some("../".to_string())).is_err());
+        assert!(read_agent_workspace_file(&broker, &agent.id, "../settings.json").is_err());
+
         assert!(open_agent_path(&broker, &agent.id, "secrets").is_err());
         assert!(open_agent_path(&broker, "agent_missing", "memory").is_err());
 

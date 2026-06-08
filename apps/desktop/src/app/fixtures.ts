@@ -1,4 +1,13 @@
-import type { ConversationAttachmentView, ConversationSessionView, ConversationView, DesktopNodeView, InteractiveCardView, SkillView } from "../lib/daemon-bridge";
+import type {
+  AgentWorkspaceEntry,
+  AgentWorkspaceFileReceipt,
+  ConversationAttachmentView,
+  ConversationSessionView,
+  ConversationView,
+  DesktopNodeView,
+  InteractiveCardView,
+  SkillView,
+} from "../lib/daemon-bridge";
 
 export type SleiChannel = {
   id: string;
@@ -70,19 +79,12 @@ export type SleiMember = {
   workspacePath?: string;
   memoryPath?: string;
   docsPath?: string;
-  workspaceFiles?: WorkspaceFileEntry[];
+  workspaceEntries?: AgentWorkspaceEntry[];
+  workspaceFilePreview?: Pick<AgentWorkspaceFileReceipt, "content" | "name" | "relativePath">;
   skills?: SkillView[];
   channelReadiness?: Record<string, SleiChannelMemberReadiness>;
   directMessageEnabled?: boolean;
   systemOwned?: boolean;
-};
-
-export type WorkspaceFileEntry = {
-  content: string;
-  id: string;
-  name: string;
-  path: string;
-  summary?: string;
 };
 
 export type SleiFixtures = {

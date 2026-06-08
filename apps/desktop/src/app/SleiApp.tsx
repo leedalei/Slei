@@ -19,6 +19,8 @@ import {
   type SaveMessageRequest,
   type SavedMessageView,
   type AgentPathTarget,
+  type AgentWorkspaceFileReceipt,
+  type AgentWorkspaceListReceipt,
   type SendChannelMessageOutcome,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
@@ -524,6 +526,14 @@ export function SleiApp() {
 
   async function handleOpenAgentPath(agentId: string, target: AgentPathTarget) {
     await bridge.openAgentPath(agentId, target);
+  }
+
+  async function handleListAgentWorkspace(agentId: string, relativePath?: string): Promise<AgentWorkspaceListReceipt> {
+    return bridge.listAgentWorkspace(agentId, relativePath);
+  }
+
+  async function handleReadAgentWorkspaceFile(agentId: string, relativePath: string): Promise<AgentWorkspaceFileReceipt> {
+    return bridge.readAgentWorkspaceFile(agentId, relativePath);
   }
 
   async function handleRenameLocalNode(name: string) {
@@ -1169,6 +1179,8 @@ export function SleiApp() {
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
       onOpenAgentPath={handleOpenAgentPath}
+      onListAgentWorkspace={handleListAgentWorkspace}
+      onReadAgentWorkspaceFile={handleReadAgentWorkspaceFile}
       onConversationNewSession={handleCreateConversationSession}
       onConversationHistoryToggle={() => setSessionDrawerOpen((current) => !current)}
       onConversationSelect={(conversationId) => {

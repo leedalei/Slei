@@ -2,7 +2,7 @@ use std::{
     env, fs,
     io::{Read, Write},
     net::{TcpStream, ToSocketAddrs},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex},
     thread,
@@ -203,6 +203,31 @@ pub struct SkillListReceipt {
 pub struct AgentPathOpenReceipt {
     pub agent_id: String,
     pub target: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceEntry {
+    pub kind: String,
+    pub name: String,
+    pub relative_path: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceListReceipt {
+    pub agent_id: String,
+    pub relative_path: String,
+    pub entries: Vec<AgentWorkspaceEntry>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceFileReceipt {
+    pub agent_id: String,
+    pub content: String,
+    pub name: String,
+    pub relative_path: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1166,6 +1191,87 @@ impl DaemonBroker {
             agent_id: agent.id,
             target: target.to_string(),
         })
+    }
+
+    pub fn list_agent_workspace(
+        &self,
+        agent_id: &str,
+        relative_path: Option<String>,
+    ) -> Result<AgentWorkspaceListReceipt, AgentPathError> {
+        let agent = self.find_agent_for_path(agent_id)?;
+        let (workspace, path, relative_path) =
+            resolve_workspace_child_path(&agent.workspace_path, relative_path.as_deref())?;
+        if !path.is_dir() {
+            return Err(AgentPathError::InvalidTarget);
+        }
+
+        let mut entries = Vec::new();
+        for entry in fs::read_dir(&path).map_err(AgentPathError::Io)? {
+            let entry = entry.map_err(AgentPathError::Io)?;
+            let entry_path = entry.path().canonicalize().map_err(AgentPathError::Io)?;
+            if !entry_path.starts_with(&workspace) {
+                continue;
+            }
+            let metadata = fs::metadata(&entry_path).map_err(AgentPathError::Io)?;
+            entries.push(AgentWorkspaceEntry {
+                kind: if metadata.is_dir() {
+                    "directory"
+                } else {
+                    "file"
+                }
+                .to_string(),
+                name: entry.file_name().to_string_lossy().to_string(),
+                relative_path: workspace_relative_path(&workspace, &entry_path)?,
+            });
+        }
+        entries.sort_by(|left, right| {
+            let left_rank = if left.kind == "directory" { 0 } else { 1 };
+            let right_rank = if right.kind == "directory" { 0 } else { 1 };
+            left_rank
+                .cmp(&right_rank)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        });
+
+        Ok(AgentWorkspaceListReceipt {
+            agent_id: agent.id,
+            relative_path,
+            entries,
+        })
+    }
+
+    pub fn read_agent_workspace_file(
+        &self,
+        agent_id: &str,
+        relative_path: &str,
+    ) -> Result<AgentWorkspaceFileReceipt, AgentPathError> {
+        let agent = self.find_agent_for_path(agent_id)?;
+        let (workspace, path, relative_path) =
+            resolve_workspace_child_path(&agent.workspace_path, Some(relative_path))?;
+        if !path.is_file() {
+            return Err(AgentPathError::InvalidTarget);
+        }
+        let content = fs::read_to_string(&path).map_err(AgentPathError::Io)?;
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| relative_path.clone());
+
+        Ok(AgentWorkspaceFileReceipt {
+            agent_id: agent.id,
+            content,
+            name,
+            relative_path: workspace_relative_path(&workspace, &path)?,
+        })
+    }
+
+    fn find_agent_for_path(&self, agent_id: &str) -> Result<DesktopAgentView, AgentPathError> {
+        self.agents
+            .lock()
+            .expect("agents mutex poisoned")
+            .iter()
+            .find(|agent| agent.id == agent_id)
+            .cloned()
+            .ok_or(AgentPathError::AgentNotFound)
     }
 
     pub fn list_conversations(&self) -> ConversationListReceipt {
@@ -2897,6 +3003,51 @@ fn default_skill_records(agent: &DesktopAgentView) -> Vec<SkillView> {
 
 fn canonicalize_agent_path(path: &str) -> Result<PathBuf, AgentPathError> {
     Path::new(path).canonicalize().map_err(AgentPathError::Io)
+}
+
+fn resolve_workspace_child_path(
+    workspace_path: &str,
+    relative_path: Option<&str>,
+) -> Result<(PathBuf, PathBuf, String), AgentPathError> {
+    let workspace = canonicalize_agent_path(workspace_path)?;
+    let relative_child = workspace_child_path(relative_path.unwrap_or(""))?;
+    let path = workspace
+        .join(relative_child)
+        .canonicalize()
+        .map_err(AgentPathError::Io)?;
+    if !path.starts_with(&workspace) {
+        return Err(AgentPathError::WorkspaceBoundary);
+    }
+    let normalized_relative_path = workspace_relative_path(&workspace, &path)?;
+    Ok((workspace, path, normalized_relative_path))
+}
+
+fn workspace_child_path(relative_path: &str) -> Result<PathBuf, AgentPathError> {
+    let trimmed = relative_path.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        return Ok(PathBuf::new());
+    }
+    let path = Path::new(trimmed);
+    if path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    }) {
+        return Err(AgentPathError::WorkspaceBoundary);
+    }
+    Ok(path.to_path_buf())
+}
+
+fn workspace_relative_path(workspace: &Path, path: &Path) -> Result<String, AgentPathError> {
+    let relative = path
+        .strip_prefix(workspace)
+        .map_err(|_| AgentPathError::WorkspaceBoundary)?;
+    Ok(relative
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join("/"))
 }
 
 fn open_system_path(path: &Path) -> Result<(), AgentPathError> {

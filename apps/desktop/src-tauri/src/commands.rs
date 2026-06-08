@@ -1,16 +1,16 @@
 use crate::daemon_broker::{
     AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
-    AgentReceipt, AgentUpdateRequest, ArtifactOpenError, ArtifactOpenReceipt, CardError,
-    ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberListReceipt,
-    ChannelMessageListReceipt, ChannelReceipt, ConversationAttachmentReceipt,
-    ConversationAttachmentUploadRequest, ConversationError, ConversationListReceipt,
-    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
-    ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
-    EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt,
-    NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
-    PreferencesReceipt, PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest,
-    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
-    SendChannelMessageRequest, SkillListReceipt,
+    AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt, AgentWorkspaceListReceipt,
+    ArtifactOpenError, ArtifactOpenReceipt, CardError, ChannelCreateRequest, ChannelError,
+    ChannelListReceipt, ChannelMemberListReceipt, ChannelMessageListReceipt, ChannelReceipt,
+    ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
+    ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
+    ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
+    ConversationSessionReceipt, DaemonBroker, EventReconnectReceipt, GuideBootstrapReceipt,
+    InteractiveCardReceipt, NodeListReceipt, NodeNameError, NodeRenameReceipt,
+    PermissionResolveRequest, PreferencesError, PreferencesReceipt, PreferencesUpdateRequest,
+    SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt,
+    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
 };
 use serde::Deserialize;
 
@@ -187,6 +187,22 @@ pub fn open_agent_path(
     target: &str,
 ) -> Result<AgentPathOpenReceipt, AgentPathError> {
     broker.open_agent_path(agent_id, target)
+}
+
+pub fn list_agent_workspace(
+    broker: &DaemonBroker,
+    agent_id: &str,
+    relative_path: Option<String>,
+) -> Result<AgentWorkspaceListReceipt, AgentPathError> {
+    broker.list_agent_workspace(agent_id, relative_path)
+}
+
+pub fn read_agent_workspace_file(
+    broker: &DaemonBroker,
+    agent_id: &str,
+    relative_path: &str,
+) -> Result<AgentWorkspaceFileReceipt, AgentPathError> {
+    broker.read_agent_workspace_file(agent_id, relative_path)
 }
 
 pub fn list_conversations(broker: &DaemonBroker) -> ConversationListReceipt {
@@ -434,6 +450,25 @@ pub fn open_agent_path_command(
     target: String,
 ) -> Result<AgentPathOpenReceipt, String> {
     open_agent_path(state.inner(), &agent_id, &target).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_agent_workspace_command(
+    state: tauri::State<'_, DaemonBroker>,
+    agent_id: String,
+    relative_path: Option<String>,
+) -> Result<AgentWorkspaceListReceipt, String> {
+    list_agent_workspace(state.inner(), &agent_id, relative_path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn read_agent_workspace_file_command(
+    state: tauri::State<'_, DaemonBroker>,
+    agent_id: String,
+    relative_path: String,
+) -> Result<AgentWorkspaceFileReceipt, String> {
+    read_agent_workspace_file(state.inner(), &agent_id, &relative_path)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

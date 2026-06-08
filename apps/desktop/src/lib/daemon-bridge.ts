@@ -140,6 +140,25 @@ export type AgentPathOpenReceipt = {
   target: AgentPathTarget | string;
 };
 
+export type AgentWorkspaceEntry = {
+  kind: "directory" | "file" | string;
+  name: string;
+  relativePath: string;
+};
+
+export type AgentWorkspaceListReceipt = {
+  agentId: string;
+  relativePath: string;
+  entries: AgentWorkspaceEntry[];
+};
+
+export type AgentWorkspaceFileReceipt = {
+  agentId: string;
+  content: string;
+  name: string;
+  relativePath: string;
+};
+
 export type ConversationView = {
   id: string;
   kind: "dm" | string;
@@ -360,6 +379,8 @@ export type DaemonBridge = {
   rememberAgentFact(agentId: string, fact: string): Promise<AgentReceipt>;
   listAgentSkills(agentId: string): Promise<SkillListReceipt>;
   openAgentPath(agentId: string, target: AgentPathTarget): Promise<AgentPathOpenReceipt>;
+  listAgentWorkspace(agentId: string, relativePath?: string): Promise<AgentWorkspaceListReceipt>;
+  readAgentWorkspaceFile(agentId: string, relativePath: string): Promise<AgentWorkspaceFileReceipt>;
   listConversations(): Promise<ConversationListReceipt>;
   createDmConversation(agentId: string): Promise<ConversationReceipt>;
   resetConversationRuntimeSession(conversationId: string): Promise<ConversationReceipt>;
@@ -679,6 +700,25 @@ export function createDaemonBridgeMock(input: {
       if (!["workspace", "memory", "docs"].includes(target)) throw new Error("invalid target");
       return { agentId, target };
     },
+    async listAgentWorkspace(agentId, relativePath = "") {
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      if (!agent) throw new Error("agent not found");
+      if (relativePath.includes("..")) throw new Error("invalid path");
+      const entries = mockAgentWorkspaceEntries(agent, relativePath);
+      return { agentId, relativePath, entries };
+    },
+    async readAgentWorkspaceFile(agentId, relativePath) {
+      const agent = agents.find((candidate) => candidate.id === agentId);
+      if (!agent) throw new Error("agent not found");
+      if (relativePath.includes("..")) throw new Error("invalid path");
+      const name = relativePath.split("/").at(-1) ?? relativePath;
+      return {
+        agentId,
+        content: mockAgentWorkspaceFileContent(agent, relativePath),
+        name,
+        relativePath,
+      };
+    },
     async listConversations() {
       return { conversations };
     },
@@ -877,6 +917,39 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
   return skills;
 }
 
+function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
+  if (!relativePath) {
+    return [
+      { kind: "directory", name: "docs", relativePath: "docs" },
+      { kind: "directory", name: "skills", relativePath: "skills" },
+      { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
+    ];
+  }
+  if (relativePath === "skills") {
+    return (agent.skills ?? defaultSkillViews({ handle: agent.handle, kind: agent.agentKind, workspacePath: agent.workspacePath }))
+      .map((skill) => ({
+        kind: "file",
+        name: skill.path.split("/").at(-1) ?? `${skill.id}.skill.md`,
+        relativePath: `skills/${skill.path.split("/").at(-1) ?? `${skill.id}.skill.md`}`,
+      }));
+  }
+  if (relativePath === "docs") {
+    return [];
+  }
+  throw new Error("workspace path not found");
+}
+
+function mockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: string): string {
+  if (relativePath === "MEMORY.md") {
+    return ["# MEMORY.md", "", "## Instructions", agent.description].join("\n");
+  }
+  const skill = (agent.skills ?? []).find((candidate) => candidate.path.endsWith(relativePath));
+  if (skill) {
+    return [`# ${skill.name}`, "", skill.trigger].join("\n");
+  }
+  return "";
+}
+
 function containsAny(body: string, markers: string[]) {
   return markers.some((marker) => body.includes(marker));
 }
@@ -901,6 +974,8 @@ export function createDaemonBridge(): DaemonBridge {
       rememberAgentFact: (agentId: string, fact: string) => invoke<AgentReceipt>("remember_agent_fact_command", { agentId, fact }),
       listAgentSkills: (agentId: string) => invoke<SkillListReceipt>("list_agent_skills_command", { agentId }),
       openAgentPath: (agentId: string, target: AgentPathTarget) => invoke<AgentPathOpenReceipt>("open_agent_path_command", { agentId, target }),
+      listAgentWorkspace: (agentId: string, relativePath?: string) => invoke<AgentWorkspaceListReceipt>("list_agent_workspace_command", { agentId, relativePath }),
+      readAgentWorkspaceFile: (agentId: string, relativePath: string) => invoke<AgentWorkspaceFileReceipt>("read_agent_workspace_file_command", { agentId, relativePath }),
       listConversations: () => invoke<ConversationListReceipt>("list_conversations_command"),
       createDmConversation: (agentId: string) => invoke<ConversationReceipt>("create_dm_conversation_command", { agentId }),
       resetConversationRuntimeSession: (conversationId: string) => invoke<ConversationReceipt>("reset_conversation_runtime_session_command", { conversationId }),

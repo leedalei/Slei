@@ -127,7 +127,7 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("ClaudeCode");
   });
 
-  it("renders the agent workspace as a file preview panel", () => {
+  it("renders the agent workspace as a file explorer backed by directory entries", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(
       <MembersPage
@@ -161,14 +161,23 @@ describe("MembersPage coordinator agents", () => {
               workspacePath: "~/.slei/agents/agent_coda",
               memoryPath: "~/.slei/agents/agent_coda/MEMORY.md",
               docsPath: "~/.slei/agents/agent_coda/docs",
-              workspaceFiles: [
+              workspaceEntries: [
                 {
-                  id: "memory",
+                  kind: "directory",
+                  name: "skills",
+                  relativePath: "skills",
+                },
+                {
+                  kind: "file",
                   name: "MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md",
-                  path: "~/.slei/agents/agent_coda/MEMORY.md",
-                  content: "# Memory\nCoda prefers concise implementation notes.",
+                  relativePath: "MEMORY.md",
                 },
               ],
+              workspaceFilePreview: {
+                content: "# Memory\nCoda prefers concise implementation notes.",
+                name: "MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md",
+                relativePath: "MEMORY.md",
+              },
             },
           ],
         })}
@@ -189,12 +198,15 @@ describe("MembersPage coordinator agents", () => {
       />,
     );
 
-    expect(html).toContain("文件");
     expect(html).toContain("文件预览");
+    expect(html).not.toContain("<h2 class=\"text-sm font-semibold\">文件</h2>");
+    expect(html).not.toContain("~/.slei/agents/agent_coda</p>");
     expect(html).toContain("MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md");
+    expect(html).toContain("skills");
+    expect(html).not.toContain("Memory</span>");
+    expect(html).not.toContain("remember facts");
     expect(html).toContain("w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap");
     expect(html).toContain("Coda prefers concise implementation notes.");
-    expect(html).toContain("打开工作区");
     expect(html).toContain("通过资源管理器打开");
     expect(html).not.toContain("通过 daemon 打开");
   });

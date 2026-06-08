@@ -136,7 +136,9 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("QA");
     expect(html).toContain("能力");
     expect(html).toContain("工作区");
-    expect(html).toContain("~/.slei/agents/agent_nancy/MEMORY.md");
+    expect(html).toContain("MEMORY.md");
+    expect(html).toContain("skills/");
+    expect(html).not.toContain("~/.slei/agents/agent_nancy/MEMORY.md");
     expect(html).not.toContain("Agent 私信");
     expect(html).not.toContain("提醒");
     expect(html).not.toContain("应用");
@@ -165,11 +167,11 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).not.toContain("2026-05-29T07:28:51.000Z");
     expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");
-    expect(html).toContain("docs");
-    expect(html).toContain("~/.slei/agents/agent_coda/MEMORY.md");
-    expect(html).toContain("技能");
-    expect(html).toContain("引导创建");
-    expect(html).toContain("识别创建智能体、成员、频道的请求");
+    expect(html).toContain("docs/");
+    expect(html).toContain("skills/");
+    expect(html).not.toContain("~/.slei/agents/agent_coda/MEMORY.md");
+    expect(html).not.toContain("引导创建</span>");
+    expect(html).not.toContain("识别创建智能体、成员、频道的请求");
   });
 
   it("opens a complete agent creation modal from the members plus button", () => {
