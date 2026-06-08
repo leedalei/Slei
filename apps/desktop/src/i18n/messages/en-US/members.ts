@@ -36,6 +36,7 @@ export const members = {
   memoryFile: "MEMORY.md",
   openWorkspaceFailed: "Unable to open this workspace path",
   openWorkspace: "Open workspace",
+  openInFileManager: "Open in file manager",
   channelPermission: "Channel permission",
   channelCoordinator: "Channel coordinator",
   permissionLabels: {

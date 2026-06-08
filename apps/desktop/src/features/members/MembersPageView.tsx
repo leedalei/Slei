@@ -312,15 +312,15 @@ export function MembersPage(input: {
                         return (
                           <Button
                             aria-current={activeWorkspaceFile?.id === file.id ? "true" : undefined}
-                            className="h-auto justify-start gap-2 whitespace-normal px-2 py-2 text-left"
+                            className="w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap px-2 py-2 text-left"
                             key={file.id}
                             onClick={() => setActiveWorkspaceFileId(file.id)}
                             type="button"
                             variant={activeWorkspaceFile?.id === file.id ? "secondary" : "ghost"}
                           >
                             <Icon aria-hidden="true" className="size-4 shrink-0" />
-                            <span className="grid min-w-0 flex-1 gap-0.5">
-                              <span className="truncate">{file.name}</span>
+                            <span className="grid min-w-0 flex-1 gap-0.5 overflow-hidden">
+                              <span className="block min-w-0 truncate">{file.name}</span>
                               {file.summary ? <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{file.summary}</span> : null}
                             </span>
                           </Button>
@@ -337,7 +337,7 @@ export function MembersPage(input: {
                     </div>
                     <Button onClick={() => openAgentPath(pathTargetForWorkspaceFile(activeWorkspaceFile, memoryPath, docsPath))} type="button" variant="outline">
                       <ExternalLink aria-hidden="true" />
-                      {input.messages.chat.openViaDaemon}
+                      {input.messages.members.openInFileManager}
                     </Button>
                   </header>
                   <ScrollArea className="min-h-0">

@@ -164,7 +164,7 @@ describe("MembersPage coordinator agents", () => {
               workspaceFiles: [
                 {
                   id: "memory",
-                  name: "MEMORY.md",
+                  name: "MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md",
                   path: "~/.slei/agents/agent_coda/MEMORY.md",
                   content: "# Memory\nCoda prefers concise implementation notes.",
                 },
@@ -191,8 +191,11 @@ describe("MembersPage coordinator agents", () => {
 
     expect(html).toContain("文件");
     expect(html).toContain("文件预览");
-    expect(html).toContain("MEMORY.md");
+    expect(html).toContain("MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md");
+    expect(html).toContain("w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap");
     expect(html).toContain("Coda prefers concise implementation notes.");
     expect(html).toContain("打开工作区");
+    expect(html).toContain("通过资源管理器打开");
+    expect(html).not.toContain("通过 daemon 打开");
   });
 });

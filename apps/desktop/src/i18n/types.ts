@@ -168,6 +168,7 @@ export type DesktopMessages = {
     memoryFile: string;
     openWorkspaceFailed: string;
     openWorkspace: string;
+    openInFileManager: string;
     channelPermission: string;
     channelCoordinator: string;
     permissionLabels: Record<"ReadOnly" | "Edit" | "Controlled", string>;
