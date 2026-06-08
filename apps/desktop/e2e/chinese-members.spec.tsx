@@ -91,6 +91,6 @@ describe("Chinese-first desktop MVP", () => {
     expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");
     expect(html).toContain("docs");
-    expect(html).toContain("默认技能");
+    expect(html).toContain("Key Knowledge");
   });
 });

@@ -1,0 +1,38 @@
+---
+name: memory
+description: Use when the user mentions {{handle}} and asks this agent to remember, learn, or 记住 something, or when this agent needs to update MEMORY.md so future sessions can resume current work.
+---
+
+# Memory
+
+Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat log.
+
+## Memory Model
+
+- `Key Knowledge`: durable facts, role expectations, user preferences, project conventions, and lessons likely to matter across many sessions.
+- `Active Context`: current task state for resuming later: goal, latest meaningful progress, blocker, next action, and relevant channel/project. Replace stale context instead of appending a history.
+- `Maintained Notes`: links to `notes/*.md` for detailed channel/project/team context.
+
+## Workflow
+
+1. Read `MEMORY.md` before editing it.
+2. Classify the update:
+   - durable fact or preference -> update `Key Knowledge`
+   - current task/progress/blocker/next step -> replace or compact `Active Context`
+   - detailed multi-line context -> create or update a focused `notes/*.md` file and link it from `Maintained Notes`
+3. Deduplicate or replace stale entries instead of adding near-duplicates.
+4. Keep entries short, specific, and attributable to real user instructions or observed project facts.
+5. Do not store secrets, one-off chatter, unverified guesses, or facts that can be cheaply rediscovered.
+6. Preserve existing Markdown headings and links.
+
+## Active Context Format
+
+Prefer 2-5 bullets:
+
+- Task:
+- State:
+- Blocker:
+- Next:
+- Context:
+
+If there is no active work, write `- State: idle; waiting for the next user request.`

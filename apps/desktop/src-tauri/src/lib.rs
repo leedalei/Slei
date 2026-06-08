@@ -51,16 +51,15 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        FrontendCrashReport, activate_conversation_session, bootstrap_guide_agent,
-        complete_interactive_card, create_agent, create_channel, create_conversation_session,
-        create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
-        list_agent_skills, list_agent_workspace, list_agents, list_conversation_messages,
-        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
-        list_saved_messages, open_agent_path, read_agent_workspace_file, reconnect_events,
-        remember_agent_fact, rename_local_node, request_artifact_open,
-        reset_conversation_runtime_session, save_message, send_channel_message,
-        send_conversation_message, unsave_message, update_agent, update_preferences,
-        upload_conversation_attachment,
+        activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
+        create_agent, create_channel, create_conversation_session, create_dm_conversation,
+        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills,
+        list_agent_workspace, list_agents, list_conversation_messages, list_conversation_sessions,
+        list_conversations, list_nodes, list_preferences, list_saved_messages, open_agent_path,
+        read_agent_workspace_file, reconnect_events, remember_agent_fact, rename_local_node,
+        request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_channel_message, send_conversation_message, unsave_message, update_agent,
+        update_preferences, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
@@ -722,26 +721,20 @@ mod tests {
         assert!(created.agent.workspace_path.contains("/agents/agent_"));
         assert!(fs::metadata(&created.agent.memory_path).unwrap().is_file());
         assert!(fs::metadata(&created.agent.docs_path).unwrap().is_dir());
-        assert!(
-            fs::read_to_string(&created.agent.memory_path)
-                .unwrap()
-                .contains("已加入频道：#all")
-        );
+        assert!(fs::read_to_string(&created.agent.memory_path)
+            .unwrap()
+            .contains("已加入频道：#all"));
 
         let agents = list_agents(&broker);
         let serialized = serde_json::to_string(&agents).unwrap();
-        assert!(
-            agents
-                .agents
-                .iter()
-                .any(|agent| agent.id == created.agent.id)
-        );
-        assert!(
-            agents
-                .agents
-                .iter()
-                .any(|agent| agent.id == "agent_coordinator_all")
-        );
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == created.agent.id));
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == "agent_coordinator_all"));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
@@ -764,12 +757,47 @@ mod tests {
             remember_agent_fact(&broker, &created.agent.id, "优先检查安全漏洞和测试覆盖率")
                 .unwrap();
         assert_eq!(remembered.agent.id, created.agent.id);
-        assert!(
-            fs::read_to_string(&created.agent.memory_path)
-                .unwrap()
-                .contains("优先检查安全漏洞和测试覆盖率")
-        );
+        assert!(fs::read_to_string(&created.agent.memory_path)
+            .unwrap()
+            .contains("优先检查安全漏洞和测试覆盖率"));
+        let remembered_memory = fs::read_to_string(&created.agent.memory_path).unwrap();
+        let key_knowledge =
+            section_between(&remembered_memory, "## Key Knowledge", "## Active Context");
+        assert!(key_knowledge.contains("优先检查安全漏洞和测试覆盖率"));
+        assert!(!section_after(&remembered_memory, "## Active Context")
+            .contains("优先检查安全漏洞和测试覆盖率"));
+
+        remember_agent_fact(
+            &broker,
+            &created.agent.id,
+            "当前正在处理默认 Agent assets 整理；下次继续替换 desktop mock。",
+        )
+        .unwrap();
+        let active_memory = fs::read_to_string(&created.agent.memory_path).unwrap();
+        let active_context = section_after(&active_memory, "## Active Context");
+        assert!(active_context.contains("默认 Agent assets 整理"));
+        assert!(active_context.contains("下次继续替换 desktop mock"));
+        assert!(!active_context.contains("首次启动，等待用户提出需要引导的任务"));
         std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    fn section_between<'a>(memory: &'a str, start: &str, end: &str) -> &'a str {
+        let Some(start_index) = memory.find(start) else {
+            return "";
+        };
+        let after_start = &memory[start_index + start.len()..];
+        if let Some(end_index) = after_start.find(end) {
+            &after_start[..end_index]
+        } else {
+            after_start
+        }
+    }
+
+    fn section_after<'a>(memory: &'a str, start: &str) -> &'a str {
+        let Some(start_index) = memory.find(start) else {
+            return "";
+        };
+        &memory[start_index + start.len()..]
     }
 
     #[test]
@@ -807,20 +835,16 @@ mod tests {
         delete_agent(&broker, &created.id).unwrap();
 
         assert!(!std::path::Path::new(&created.workspace_path).exists());
-        assert!(
-            !list_agents(&broker)
-                .agents
-                .iter()
-                .any(|agent| agent.id == created.id)
-        );
+        assert!(!list_agents(&broker)
+            .agents
+            .iter()
+            .any(|agent| agent.id == created.id));
         let coordinator_id = "agent_coordinator_all";
         assert!(delete_agent(&broker, coordinator_id).is_err());
-        assert!(
-            list_agents(&broker)
-                .agents
-                .iter()
-                .any(|agent| agent.id == coordinator_id)
-        );
+        assert!(list_agents(&broker)
+            .agents
+            .iter()
+            .any(|agent| agent.id == coordinator_id));
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -901,12 +925,10 @@ mod tests {
             .iter()
             .find(|agent| agent.id == created.id)
             .expect("created agent should persist across broker restart");
-        assert!(
-            agents
-                .agents
-                .iter()
-                .any(|agent| agent.id == "agent_coordinator_all")
-        );
+        assert!(agents
+            .agents
+            .iter()
+            .any(|agent| agent.id == "agent_coordinator_all"));
         assert_eq!(bob.name, "Bob");
         assert_eq!(bob.handle, "@bob");
         assert_eq!(bob.channel_ids.as_deref(), Some(&["all".to_string()][..]));
@@ -1035,30 +1057,24 @@ mod tests {
         assert!(!serialized.contains("127.0.0.1"));
 
         let root_entries = list_agent_workspace(&broker, &agent.id, None).unwrap();
-        assert!(
-            root_entries
-                .entries
-                .iter()
-                .any(|entry| entry.name == "MEMORY.md" && entry.kind == "file")
-        );
-        assert!(
-            root_entries
-                .entries
-                .iter()
-                .any(|entry| entry.name == ".claude" && entry.kind == "directory")
-        );
+        assert!(root_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == "MEMORY.md" && entry.kind == "file"));
+        assert!(root_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == ".claude" && entry.kind == "directory"));
         let skill_entries = list_agent_workspace(
             &broker,
             &agent.id,
             Some(".claude/skills/memory".to_string()),
         )
         .unwrap();
-        assert!(
-            skill_entries
-                .entries
-                .iter()
-                .any(|entry| entry.name == "SKILL.md" && entry.kind == "file")
-        );
+        assert!(skill_entries
+            .entries
+            .iter()
+            .any(|entry| entry.name == "SKILL.md" && entry.kind == "file"));
         let skill = read_agent_workspace_file(&broker, &agent.id, ".claude/skills/memory/SKILL.md")
             .unwrap();
         assert_eq!(skill.name, "SKILL.md");
@@ -1112,16 +1128,12 @@ mod tests {
         .unwrap()
         .agent;
 
-        assert!(
-            agent
-                .workspace_path
-                .starts_with(first_root.to_str().unwrap())
-        );
-        assert!(
-            !agent
-                .workspace_path
-                .starts_with(second_root.to_str().unwrap())
-        );
+        assert!(agent
+            .workspace_path
+            .starts_with(first_root.to_str().unwrap()));
+        assert!(!agent
+            .workspace_path
+            .starts_with(second_root.to_str().unwrap()));
         let skills = list_agent_skills(&broker, &agent.id).unwrap();
         assert!(skills.skills.iter().any(|skill| skill.id == "memory"));
 
@@ -1393,13 +1405,11 @@ mod tests {
         .unwrap()
         .attachment;
         assert_eq!(attachment.name, "notes.md");
-        assert!(
-            attachment
-                .cache_path
-                .as_deref()
-                .unwrap()
-                .contains("/attachments/")
-        );
+        assert!(attachment
+            .cache_path
+            .as_deref()
+            .unwrap()
+            .contains("/attachments/"));
 
         send_conversation_message(
             &broker,
@@ -1727,11 +1737,9 @@ mod tests {
             ".claude/skills/guide-create/SKILL.md",
         )
         .unwrap();
-        assert!(
-            guide_skill
-                .content
-                .contains("slei_propose_interactive_card")
-        );
+        assert!(guide_skill
+            .content
+            .contains("slei_propose_interactive_card"));
         assert!(guide_skill.content.contains("Input schema"));
         assert!(guide_skill.content.contains("Output contract"));
         assert!(guide_skill.content.contains("Single agent example"));

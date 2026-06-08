@@ -6,6 +6,8 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "desktop": "scripts/desktop-dev.sh",
     "build": "tsc -p tsconfig.json && vite build",
+    "generate:default-agent-assets": "node ../../scripts/generate-default-agent-assets.mjs",
+    "check:default-agent-assets": "node ../../scripts/generate-default-agent-assets.mjs --check",
     "test": "vitest run",
     "test:e2e": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
