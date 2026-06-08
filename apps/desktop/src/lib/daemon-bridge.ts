@@ -214,6 +214,7 @@ export type ChannelView = {
   name: string;
   description?: string;
   isDefault?: boolean;
+  projectPaths?: string[];
 };
 
 export type ChannelMemberReadiness = ProtocolChannelMemberReadiness;
@@ -307,11 +308,19 @@ export type ConversationMessageReceipt = {
   message: ConversationMessageView;
 };
 
+export type WorkspaceMountView = {
+  path: string;
+  label?: string;
+};
+
 export type ConversationMessageRequest = {
   authorId: string;
   body: string;
   sessionId?: string;
   attachmentIds?: string[];
+  workspaceMounts?: WorkspaceMountView[];
+  sourceChannelId?: string;
+  sourceChannelName?: string;
 };
 
 export type ConversationAttachmentUploadRequest = {
@@ -430,7 +439,7 @@ export function createDaemonBridgeMock(input: {
     },
   ];
   let agents = input.agents ?? [];
-  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true }];
+  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true, projectPaths: [] }];
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
   let channelMessageCounter = 0;
@@ -539,7 +548,7 @@ export function createDaemonBridgeMock(input: {
     async createChannel(request) {
       const name = request.name.trim().replace(/^#+/, "").toLowerCase();
       const existing = channels.find((channel) => channel.id === name);
-      const channel: ChannelView = existing ?? { id: name, name, description: request.description, isDefault: false };
+      const channel: ChannelView = existing ?? { id: name, name, description: request.description, isDefault: false, projectPaths: request.projectPaths ?? [] };
       if (!existing) {
         channels = [...channels, channel];
       }

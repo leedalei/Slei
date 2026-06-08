@@ -28,6 +28,7 @@ export const chat = {
   localArchiveOnly: "Daemon is not connected. Message saved locally; no agent reply will run yet.",
   sendFailed: "Send failed",
   agentThinking: "Thinking...",
+  agentRunFailed: "Run failed",
   interactivePending: "Waiting for confirmation",
   noFiles: "No files",
   openAttachment: (name: string) => `Open attachment ${name}`,

@@ -63,7 +63,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { MemberAvatar, StatusDot } from "../components";
+import { MemberAvatar, StatusDot, Toast } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -122,6 +122,7 @@ export type SleiAppFrameProps = {
   notifications?: NotificationPreferences;
   profile?: UserProfile;
   runtimeSetup: RuntimeSetupState;
+  runtimeErrorToastMessage?: string;
   searchOpen?: boolean;
   sessionDrawerOpen?: boolean;
   sendingConversationIds?: string[];
@@ -217,6 +218,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       data-theme={normalizedTheme}
       style={shellStyle}
     >
+      <Toast message={input.runtimeErrorToastMessage} />
       <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
@@ -444,7 +446,7 @@ export function findActiveAgentActivities(
   const activeMessages = data.messages.filter((message) => {
     if (message.channelId !== targetId) return false;
     if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
-    if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending")) return false;
+    if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending" && message.status !== "failed")) return false;
     const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle);
     return member?.directMessageEnabled !== false && !member?.id.startsWith("agent_coordinator_");
   });
@@ -464,6 +466,7 @@ export function selectAgentActivityForTick(activities: AgentActivityView[], tick
 function AgentActivityPanel(input: { activity?: AgentActivityView; messages: DesktopMessages }) {
   const { activity } = input;
   if (!activity) return null;
+  const failed = activity.message.status === "failed";
   const identity = activity.member ?? {
     id: activity.message.id,
     name: activity.message.author,
@@ -473,11 +476,13 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
   };
   return (
     <section aria-live="polite" className="shrink-0 border-t bg-sidebar/80 p-3" data-slot="agent-activity" role="status">
-      <div className="flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2">
+      <div className={cn("flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2", failed && "border border-destructive/45 bg-destructive/10")}>
         <MemberAvatar identity={identity} />
         <div className="min-w-0 flex-1">
           <strong className="block truncate text-sm">{activity.member?.name ?? activity.message.author}</strong>
-          <small className="block truncate text-xs text-muted-foreground">{input.messages.chat.agentThinking}</small>
+          <small className={cn("block truncate text-xs text-muted-foreground", failed && "font-medium text-destructive")}>
+            {failed ? input.messages.chat.agentRunFailed : input.messages.chat.agentThinking}
+          </small>
         </div>
       </div>
     </section>

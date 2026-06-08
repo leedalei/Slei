@@ -74,6 +74,7 @@ export type DesktopMessages = {
     localArchiveOnly: string;
     sendFailed: string;
     agentThinking: string;
+    agentRunFailed: string;
     saveMessage: string;
     unsaveMessage: string;
     history: string;

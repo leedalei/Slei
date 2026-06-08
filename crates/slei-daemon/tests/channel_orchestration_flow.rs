@@ -1,4 +1,4 @@
-use axum::body::{to_bytes, Body};
+use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use serde_json::Value;
 use slei_daemon::app::build_router;
@@ -64,11 +64,12 @@ async fn command_message_creates_task_assignment_inbox_decision_and_task_card() 
         Some(outcome.message_id.as_str())
     );
     assert!(!task.needs_assignment);
-    assert!(task
-        .assignment_reason
-        .as_deref()
-        .unwrap()
-        .contains("ready agent"));
+    assert!(
+        task.assignment_reason
+            .as_deref()
+            .unwrap()
+            .contains("ready agent")
+    );
 
     let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
     assert!(inbox.iter().any(|event| {
@@ -106,11 +107,13 @@ async fn command_message_creates_task_assignment_inbox_decision_and_task_card() 
         payload["assignmentReason"].as_str().unwrap(),
         task.assignment_reason.as_deref().unwrap()
     );
-    assert!(payload["relatedMessageIds"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|id| id == &outcome.message_id));
+    assert!(
+        payload["relatedMessageIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|id| id == &outcome.message_id)
+    );
     assert_eq!(
         payload["safeMemoryRefs"].as_array().unwrap(),
         &vec![
@@ -163,11 +166,13 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
             && event.message_id == outcome.message_id
             && event.delivery_state == DeliveryState::PendingMemoryReady
     }));
-    assert!(state
-        .tasks()
-        .list_tasks(TaskQuery::default())
-        .await
-        .is_empty());
+    assert!(
+        state
+            .tasks()
+            .list_tasks(TaskQuery::default())
+            .await
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -241,11 +246,13 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .collect::<Vec<_>>();
     assert_eq!(handoffs.len(), 1);
     assert_eq!(handoffs[0].sender_id.as_deref(), Some("agent_alice"));
-    assert!(handoffs[0]
-        .handoff_text
-        .as_deref()
-        .unwrap()
-        .contains("@coda-win"));
+    assert!(
+        handoffs[0]
+            .handoff_text
+            .as_deref()
+            .unwrap()
+            .contains("@coda-win")
+    );
 }
 
 #[tokio::test]
@@ -630,33 +637,43 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
         .unwrap_err();
 
     assert!(err.to_string().contains("inactive idempotent message"));
-    assert!(state
-        .tasks()
-        .list_tasks(TaskQuery::default())
-        .await
-        .is_empty());
-    assert!(state
-        .channel_messages_for_tests("dev")
-        .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>()
-        .is_empty());
-    assert!(state
-        .agent_inbox()
-        .events_for_agent("agent_alice")
-        .await
-        .is_empty());
-    assert!(state
-        .orchestration()
-        .decisions_for_message_for_tests(&message.id)
-        .await
-        .is_empty());
-    assert!(state
-        .orchestration()
-        .routing_context_packages_for_message_for_tests(&message.id)
-        .await
-        .is_empty());
+    assert!(
+        state
+            .tasks()
+            .list_tasks(TaskQuery::default())
+            .await
+            .is_empty()
+    );
+    assert!(
+        state
+            .channel_messages_for_tests("dev")
+            .await
+            .into_iter()
+            .filter(|message| message.kind == MessageKind::TaskCard)
+            .collect::<Vec<_>>()
+            .is_empty()
+    );
+    assert!(
+        state
+            .agent_inbox()
+            .events_for_agent("agent_alice")
+            .await
+            .is_empty()
+    );
+    assert!(
+        state
+            .orchestration()
+            .decisions_for_message_for_tests(&message.id)
+            .await
+            .is_empty()
+    );
+    assert!(
+        state
+            .orchestration()
+            .routing_context_packages_for_message_for_tests(&message.id)
+            .await
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -880,11 +897,13 @@ async fn public_channel_message_api_uses_channel_orchestrator() {
     assert_eq!(body["outcome"]["action"], "create_task_and_assign");
     let task_id = body["outcome"]["taskId"].as_str().unwrap();
     assert!(!task_id.is_empty());
-    assert!(!state
-        .agent_inbox()
-        .events_for_agent("agent_alice")
-        .await
-        .is_empty());
+    assert!(
+        !state
+            .agent_inbox()
+            .events_for_agent("agent_alice")
+            .await
+            .is_empty()
+    );
 }
 
 #[tokio::test]
@@ -1004,6 +1023,36 @@ async fn public_channel_message_api_lists_channel_history() {
             && message["body"] == "hello history"
             && message["kind"] == "human"
     }));
+}
+
+#[tokio::test]
+async fn public_channel_create_api_mounts_project_paths() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("public-api-create-projects"),
+        serde_json::json!({
+            "name": "api-dev",
+            "description": "API",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api", "/workspace/api", "/workspace/web"]
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = response_json(response).await;
+    assert_eq!(body["channel"]["id"], "api-dev");
+    let workspaces = state.channels().workspaces("api-dev").await.unwrap();
+    assert_eq!(workspaces.len(), 2);
+    assert_eq!(workspaces[0].path, "/workspace/api");
+    assert_eq!(workspaces[0].label, "api");
+    assert_eq!(workspaces[1].path, "/workspace/web");
+    assert_eq!(workspaces[1].label, "web");
 }
 
 #[tokio::test]

@@ -48,9 +48,21 @@ export type RuntimeSession = {
   agent_id: string;
   runtime: RuntimeKind;
   cwd: string;
+  agent_workspace_path?: string;
+  additional_directories?: string[];
+  workspace_mounts?: WorkspaceMount[];
+  primary_project_path?: string;
+  overlay_root?: string;
+  channel_id?: string;
+  channel_name?: string;
   model?: string;
   persist_session: boolean;
   resume_session: boolean;
+};
+
+export type WorkspaceMount = {
+  path: string;
+  label?: string;
 };
 
 export type RunInput = {

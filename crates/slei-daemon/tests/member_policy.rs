@@ -2,6 +2,7 @@ use slei_daemon::services::channel_service::{ChannelDraft, ChannelService, Works
 use slei_daemon::services::member_service::{
     AgentDraft, ChannelMemberDraft, MemberService, PermissionPreset,
 };
+use uuid::Uuid;
 
 #[tokio::test]
 async fn channel_service_rejects_blank_create_idempotency_keys() {
@@ -50,11 +51,13 @@ async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempoten
         .await
         .unwrap();
     assert_eq!(zero_workspace.id, retry.id);
-    assert!(channels
-        .workspaces(&zero_workspace.id)
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(
+        channels
+            .workspaces(&zero_workspace.id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     channels
         .mount_workspace(
@@ -109,6 +112,44 @@ async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempoten
 
     assert_eq!(assigned.effective_permission, PermissionPreset::ReadOnly);
     assert_eq!(assigned.runtime_kind, "ClaudeCode");
+}
+
+#[tokio::test]
+async fn channel_service_persists_workspace_mounts() {
+    let root = std::env::temp_dir().join(format!("slei-channel-workspaces-{}", Uuid::new_v4()));
+    let channels = ChannelService::new(root.clone());
+    let channel = channels
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "channel-dev",
+        )
+        .await
+        .unwrap();
+    channels
+        .mount_workspace(
+            &channel.id,
+            WorkspaceMount {
+                path: "/workspace/api".to_string(),
+                label: "api".to_string(),
+            },
+            "mount-api",
+        )
+        .await
+        .unwrap();
+
+    let reloaded = ChannelService::new(root);
+    let workspaces = reloaded.workspaces(&channel.id).await.unwrap();
+    assert_eq!(
+        workspaces,
+        vec![WorkspaceMount {
+            path: "/workspace/api".to_string(),
+            label: "api".to_string(),
+        }]
+    );
 }
 
 #[tokio::test]

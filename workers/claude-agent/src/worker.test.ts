@@ -239,7 +239,7 @@ describe("ClaudeAgentWorker start_run", () => {
         "mcp__slei__slei_request_human_reply",
       ],
       tools: ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"],
-      settingSources: ["project"],
+      settingSources: ["user", "project", "local"],
       skills: "all",
       mcpServers: { slei: expect.any(Object) },
     });
@@ -493,9 +493,10 @@ describe("ClaudeAgentWorker start_run", () => {
       preset: "claude_code",
       append: expect.stringContaining("Slei guide"),
     });
-    expect(options).toMatchObject({ settingSources: ["project"], skills: "all" });
+    expect(options).toMatchObject({ settingSources: ["user", "project", "local"], skills: "all" });
     expect(JSON.stringify(options.systemPrompt)).not.toContain("guide-create.skill.md");
-    expect(JSON.stringify(options.systemPrompt)).not.toContain("Create Slei agents");
+    expect(JSON.stringify(options.systemPrompt)).toContain("Agent skill metadata");
+    expect(JSON.stringify(options.systemPrompt)).toContain("Create Slei agents");
     expect(JSON.stringify(options.systemPrompt)).toContain("slei_propose_interactive_card");
   });
 

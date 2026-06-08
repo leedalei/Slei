@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { dirname } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
 
 import { createSleiToolAliases, SLEI_PRODUCT_TOOL_NAMES, toSleiMcpToolName } from "./slei-tools.js";
 
@@ -82,6 +84,7 @@ export type RunPermissionControllerInput = {
   runId: string;
   agentId: string;
   cwd: string;
+  allowedDirectories?: readonly string[];
   sessionId: string;
 };
 
@@ -106,7 +109,7 @@ export function buildIsolatedSdkOptions(
     tools: [...BUILTIN_TOOLS],
     allowedTools: [...READ_TOOLS, ...SLEI_PRODUCT_TOOL_NAMES.map(toSleiMcpToolName)],
     disallowedTools: ["Task", "Plugin:*", "Bash:curl", "Bash:wget"],
-    settingSources: ["project"],
+    settingSources: ["user", "project", "local"],
     skills: "all",
     toolAliases: createSleiToolAliases(),
     canUseTool: controller.canUseTool,
@@ -117,6 +120,7 @@ export function buildIsolatedSdkOptions(
 export function createRunPermissionController(input: RunPermissionControllerInput): RunPermissionController {
   const pending = new Map<string, (result: PermissionResult) => void>();
   const queue = createAsyncQueue<PermissionRequestEvent>();
+  const allowedDirectories = uniquePaths([input.cwd, ...(input.allowedDirectories ?? [])]);
 
   function canUseTool(
     toolName: string,
@@ -137,7 +141,7 @@ export function createRunPermissionController(input: RunPermissionControllerInpu
     }
 
     const targetPath = toolTargetPath(toolInput, options);
-    if (targetPath && isInsideWorkspace(targetPath, input.cwd)) {
+    if (targetPath && isInsideAnyWorkspace(targetPath, input.cwd, allowedDirectories)) {
       return Promise.resolve({ behavior: "allow", toolUseID: options.toolUseID });
     }
 
@@ -259,10 +263,20 @@ function toolTargetPath(input: Record<string, unknown>, options: CanUseToolOptio
   return options.blockedPath;
 }
 
-function isInsideWorkspace(targetPath: string, cwd: string): boolean {
+function isInsideAnyWorkspace(targetPath: string, cwd: string, allowedDirectories: readonly string[]): boolean {
+  return allowedDirectories.some((directory) => isInsideWorkspace(targetPath, cwd, directory));
+}
+
+function isInsideWorkspace(targetPath: string, cwd: string, allowedDirectory: string): boolean {
   const normalizedCwd = normalizePath(cwd);
+  const normalizedAllowed = normalizePath(allowedDirectory);
   const normalizedTarget = normalizePath(targetPath.startsWith("/") ? targetPath : `${cwd}/${targetPath}`);
-  return normalizedTarget === normalizedCwd || normalizedTarget.startsWith(`${normalizedCwd}/`);
+  if (normalizedTarget === normalizedAllowed || normalizedTarget.startsWith(`${normalizedAllowed}/`)) {
+    return true;
+  }
+  const realTarget = realpathForPermission(normalizedTarget);
+  const realAllowed = realpathForPermission(normalizedAllowed);
+  return realTarget === realAllowed || realTarget.startsWith(`${realAllowed}/`) || normalizedTarget === normalizedCwd;
 }
 
 function normalizePath(path: string): string {
@@ -281,6 +295,34 @@ function normalizePath(path: string): string {
 
 function sessionGrantKey(sessionId: string, agentId: string, toolName: string, targetPath: string | undefined): string {
   return [sessionId, agentId, toolName, targetPath ? normalizePath(targetPath) : "*"].join("\0");
+}
+
+function uniquePaths(paths: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const path of paths) {
+    const normalized = realpathForPermission(normalizePath(path));
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function realpathForPermission(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    const parent = dirname(path);
+    if (parent !== path && existsSync(parent)) {
+      try {
+        return normalizePath(`${realpathSync(parent)}/${path.split("/").at(-1) ?? ""}`);
+      } catch {
+        return normalizePath(path);
+      }
+    }
+    return normalizePath(path);
+  }
 }
 
 function createAsyncQueue<T>() {

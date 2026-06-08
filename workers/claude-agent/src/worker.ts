@@ -1,10 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { query as claudeAgentQuery } from "@anthropic-ai/claude-agent-sdk";
 
 import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events.js";
+import { prepareWorkspace, type PreparedWorkspace } from "./overlay.js";
 import { buildIsolatedSdkOptions, createRunPermissionController, type RunPermissionController } from "./permissions.js";
 import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol.js";
 import {
@@ -118,13 +117,18 @@ export class ClaudeAgentWorker {
 export async function* runClaudeCode(
   command: StartRunCommand,
   query: ClaudeAgentQuery = claudeAgentQuery as ClaudeAgentQuery,
-  controller: RunPermissionController = createRunPermissionController({
-    runId: command.run_id,
-    agentId: command.session.agent_id,
-    cwd: command.session.cwd,
-    sessionId: command.session.session_id,
-  }),
+  controller?: RunPermissionController,
 ): AsyncIterable<ClaudeSdkEvent> {
+  const workspace = prepareWorkspace(command.session);
+  const permissionController =
+    controller ??
+    createRunPermissionController({
+      runId: command.run_id,
+      agentId: command.session.agent_id,
+      cwd: workspace.cwd,
+      allowedDirectories: workspace.additionalDirectories,
+      sessionId: command.session.session_id,
+    });
   for (const forceFreshSession of [false, true]) {
     if (forceFreshSession && !command.session.resume_session) {
       break;
@@ -135,7 +139,7 @@ export async function* runClaudeCode(
     const sdkMessages = query({
       prompt: promptForRun(command),
       options: {
-        ...buildClaudeSdkOptions(command, forceFreshSession, controller),
+        ...buildClaudeSdkOptions(command, forceFreshSession, permissionController, workspace),
         stderr(data: string) {
           stderr += data;
         },
@@ -143,7 +147,7 @@ export async function* runClaudeCode(
     });
 
     try {
-      for await (const message of streamSdkMessagesWithPermissionRequests(sdkMessages, controller)) {
+      for await (const message of streamSdkMessagesWithPermissionRequests(sdkMessages, permissionController)) {
         for (const event of sdkMessageToClaudeEvents(command, message)) {
           emittedAnyEvent = true;
           if (event.type === "completed" || event.type === "failed") {
@@ -232,16 +236,23 @@ export function buildClearClaudeSessionCliArgs(command: ClearSessionCommand): st
 export function buildClaudeSdkOptions(
   command: StartRunCommand,
   forceFreshSession = false,
-  controller: RunPermissionController = createRunPermissionController({
-    runId: command.run_id,
-    agentId: command.session.agent_id,
-    cwd: command.session.cwd,
-    sessionId: command.session.session_id,
-  }),
+  controller?: RunPermissionController,
+  preparedWorkspace?: PreparedWorkspace,
 ): Record<string, unknown> {
-  const isolatedOptions = buildIsolatedSdkOptions("Controlled", command.session.cwd, controller);
+  const workspace = preparedWorkspace ?? prepareWorkspace(command.session);
+  const permissionController =
+    controller ??
+    createRunPermissionController({
+      runId: command.run_id,
+      agentId: command.session.agent_id,
+      cwd: workspace.cwd,
+      allowedDirectories: workspace.additionalDirectories,
+      sessionId: command.session.session_id,
+    });
+  const isolatedOptions = buildIsolatedSdkOptions("Controlled", workspace.cwd, permissionController);
   const options: Record<string, unknown> = {
-    cwd: command.session.cwd,
+    cwd: workspace.cwd,
+    additionalDirectories: workspace.additionalDirectories,
     persistSession: command.session.persist_session,
     tools: isolatedOptions.tools,
     permissionMode: isolatedOptions.permissionMode,
@@ -251,7 +262,7 @@ export function buildClaudeSdkOptions(
     skills: isolatedOptions.skills,
     toolAliases: isolatedOptions.toolAliases,
     canUseTool: isolatedOptions.canUseTool,
-    systemPrompt: buildSleiSystemPrompt(command.session.cwd),
+    systemPrompt: buildSleiSystemPrompt(workspace.runtimeContext),
     mcpServers: {
       slei: createSleiMcpServer(),
     },
@@ -312,27 +323,18 @@ function claudeModelName(model: string | undefined): string | undefined {
   return normalized;
 }
 
-function buildSleiSystemPrompt(cwd: string): Record<string, string> {
+function buildSleiSystemPrompt(runtimeContext: string): Record<string, string> {
   return {
     type: "preset",
     preset: "claude_code",
     append: [
       "You are running inside Slei as the agent represented by this workspace.",
       "Use the Slei product tools when a skill asks for them. In particular, member creation must call slei_propose_interactive_card instead of explaining that the tool is unavailable.",
-      loadAgentWorkspaceContext(cwd),
+      runtimeContext,
     ]
       .filter(Boolean)
       .join("\n\n"),
   };
-}
-
-function loadAgentWorkspaceContext(cwd: string): string {
-  const sections: string[] = [];
-  const memoryPath = join(cwd, "MEMORY.md");
-  if (existsSync(memoryPath)) {
-    sections.push(`Agent MEMORY.md:\n${readFileSync(memoryPath, "utf8")}`);
-  }
-  return sections.join("\n\n");
 }
 
 async function clearClaudeCodeSession(command: ClearSessionCommand): Promise<void> {

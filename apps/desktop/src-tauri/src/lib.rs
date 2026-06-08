@@ -51,15 +51,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
-        create_agent, create_channel, create_conversation_session, create_dm_conversation,
-        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills,
-        list_agent_workspace, list_agents, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_nodes, list_preferences, list_saved_messages, open_agent_path,
-        read_agent_workspace_file, reconnect_events, remember_agent_fact, rename_local_node,
-        request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        FrontendCrashReport, activate_conversation_session, bootstrap_guide_agent,
+        complete_interactive_card, create_agent, create_channel, create_conversation_session,
+        create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
+        list_agent_skills, list_agent_workspace, list_agents, list_conversation_messages,
+        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
+        list_saved_messages, open_agent_path, read_agent_workspace_file, reconnect_events,
+        remember_agent_fact, rename_local_node, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
@@ -487,6 +488,7 @@ mod tests {
                 name: "remote-dev".to_string(),
                 description: Some("远程频道".to_string()),
                 agent_ids: vec!["agent_alice".to_string()],
+                project_paths: vec!["/workspace/api".to_string()],
             },
         )
         .unwrap();
@@ -496,6 +498,7 @@ mod tests {
         assert!(request.contains("POST /v1/channels HTTP/1.1"));
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-channel-create-"));
+        assert!(request.contains(r#""projectPaths":["/workspace/api"]"#));
     }
 
     #[test]
@@ -549,6 +552,7 @@ mod tests {
                 name: "remote-dev".to_string(),
                 description: None,
                 agent_ids: vec![],
+                project_paths: vec![],
             },
         )
         .unwrap_err()
@@ -580,6 +584,7 @@ mod tests {
                 name: "remote-dev".to_string(),
                 description: None,
                 agent_ids: vec![],
+                project_paths: vec![],
             },
         )
         .unwrap_err()
@@ -641,6 +646,7 @@ mod tests {
                 name: "remote-dev".to_string(),
                 description: None,
                 agent_ids: vec![],
+                project_paths: vec![],
             },
         )
         .unwrap_err()
@@ -716,20 +722,26 @@ mod tests {
         assert!(created.agent.workspace_path.contains("/agents/agent_"));
         assert!(fs::metadata(&created.agent.memory_path).unwrap().is_file());
         assert!(fs::metadata(&created.agent.docs_path).unwrap().is_dir());
-        assert!(fs::read_to_string(&created.agent.memory_path)
-            .unwrap()
-            .contains("已加入频道：#all"));
+        assert!(
+            fs::read_to_string(&created.agent.memory_path)
+                .unwrap()
+                .contains("已加入频道：#all")
+        );
 
         let agents = list_agents(&broker);
         let serialized = serde_json::to_string(&agents).unwrap();
-        assert!(agents
-            .agents
-            .iter()
-            .any(|agent| agent.id == created.agent.id));
-        assert!(agents
-            .agents
-            .iter()
-            .any(|agent| agent.id == "agent_coordinator_all"));
+        assert!(
+            agents
+                .agents
+                .iter()
+                .any(|agent| agent.id == created.agent.id)
+        );
+        assert!(
+            agents
+                .agents
+                .iter()
+                .any(|agent| agent.id == "agent_coordinator_all")
+        );
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
@@ -752,9 +764,11 @@ mod tests {
             remember_agent_fact(&broker, &created.agent.id, "优先检查安全漏洞和测试覆盖率")
                 .unwrap();
         assert_eq!(remembered.agent.id, created.agent.id);
-        assert!(fs::read_to_string(&created.agent.memory_path)
-            .unwrap()
-            .contains("优先检查安全漏洞和测试覆盖率"));
+        assert!(
+            fs::read_to_string(&created.agent.memory_path)
+                .unwrap()
+                .contains("优先检查安全漏洞和测试覆盖率")
+        );
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -793,16 +807,20 @@ mod tests {
         delete_agent(&broker, &created.id).unwrap();
 
         assert!(!std::path::Path::new(&created.workspace_path).exists());
-        assert!(!list_agents(&broker)
-            .agents
-            .iter()
-            .any(|agent| agent.id == created.id));
+        assert!(
+            !list_agents(&broker)
+                .agents
+                .iter()
+                .any(|agent| agent.id == created.id)
+        );
         let coordinator_id = "agent_coordinator_all";
         assert!(delete_agent(&broker, coordinator_id).is_err());
-        assert!(list_agents(&broker)
-            .agents
-            .iter()
-            .any(|agent| agent.id == coordinator_id));
+        assert!(
+            list_agents(&broker)
+                .agents
+                .iter()
+                .any(|agent| agent.id == coordinator_id)
+        );
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -883,10 +901,12 @@ mod tests {
             .iter()
             .find(|agent| agent.id == created.id)
             .expect("created agent should persist across broker restart");
-        assert!(agents
-            .agents
-            .iter()
-            .any(|agent| agent.id == "agent_coordinator_all"));
+        assert!(
+            agents
+                .agents
+                .iter()
+                .any(|agent| agent.id == "agent_coordinator_all")
+        );
         assert_eq!(bob.name, "Bob");
         assert_eq!(bob.handle, "@bob");
         assert_eq!(bob.channel_ids.as_deref(), Some(&["all".to_string()][..]));
@@ -1015,24 +1035,30 @@ mod tests {
         assert!(!serialized.contains("127.0.0.1"));
 
         let root_entries = list_agent_workspace(&broker, &agent.id, None).unwrap();
-        assert!(root_entries
-            .entries
-            .iter()
-            .any(|entry| entry.name == "MEMORY.md" && entry.kind == "file"));
-        assert!(root_entries
-            .entries
-            .iter()
-            .any(|entry| entry.name == ".claude" && entry.kind == "directory"));
+        assert!(
+            root_entries
+                .entries
+                .iter()
+                .any(|entry| entry.name == "MEMORY.md" && entry.kind == "file")
+        );
+        assert!(
+            root_entries
+                .entries
+                .iter()
+                .any(|entry| entry.name == ".claude" && entry.kind == "directory")
+        );
         let skill_entries = list_agent_workspace(
             &broker,
             &agent.id,
             Some(".claude/skills/memory".to_string()),
         )
         .unwrap();
-        assert!(skill_entries
-            .entries
-            .iter()
-            .any(|entry| entry.name == "SKILL.md" && entry.kind == "file"));
+        assert!(
+            skill_entries
+                .entries
+                .iter()
+                .any(|entry| entry.name == "SKILL.md" && entry.kind == "file")
+        );
         let skill = read_agent_workspace_file(&broker, &agent.id, ".claude/skills/memory/SKILL.md")
             .unwrap();
         assert_eq!(skill.name, "SKILL.md");
@@ -1086,12 +1112,16 @@ mod tests {
         .unwrap()
         .agent;
 
-        assert!(agent
-            .workspace_path
-            .starts_with(first_root.to_str().unwrap()));
-        assert!(!agent
-            .workspace_path
-            .starts_with(second_root.to_str().unwrap()));
+        assert!(
+            agent
+                .workspace_path
+                .starts_with(first_root.to_str().unwrap())
+        );
+        assert!(
+            !agent
+                .workspace_path
+                .starts_with(second_root.to_str().unwrap())
+        );
         let skills = list_agent_skills(&broker, &agent.id).unwrap();
         assert!(skills.skills.iter().any(|skill| skill.id == "memory"));
 
@@ -1297,6 +1327,9 @@ mod tests {
                 body: "你好 Coda".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1359,11 +1392,13 @@ mod tests {
         .unwrap()
         .attachment;
         assert_eq!(attachment.name, "notes.md");
-        assert!(attachment
-            .cache_path
-            .as_deref()
-            .unwrap()
-            .contains("/attachments/"));
+        assert!(
+            attachment
+                .cache_path
+                .as_deref()
+                .unwrap()
+                .contains("/attachments/")
+        );
 
         send_conversation_message(
             &broker,
@@ -1373,6 +1408,9 @@ mod tests {
                 body: String::new(),
                 session_id: Some(sessions[0].id.clone()),
                 attachment_ids: vec![attachment.id.clone()],
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1443,6 +1481,9 @@ mod tests {
                 body: "__slei_delay_runtime__".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1509,6 +1550,9 @@ mod tests {
                 body: "__slei_streaming_runtime__".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1592,6 +1636,9 @@ mod tests {
                 body: "第一句".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1610,6 +1657,9 @@ mod tests {
                 body: "第二句".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1676,7 +1726,11 @@ mod tests {
             ".claude/skills/guide-create/SKILL.md",
         )
         .unwrap();
-        assert!(guide_skill.content.contains("slei_propose_interactive_card"));
+        assert!(
+            guide_skill
+                .content
+                .contains("slei_propose_interactive_card")
+        );
         assert!(guide_skill.content.contains("Input schema"));
         assert!(guide_skill.content.contains("Output contract"));
         assert!(guide_skill.content.contains("Single agent example"));
@@ -1691,6 +1745,9 @@ mod tests {
                 body: "__slei_delay_runtime__".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();
@@ -1733,6 +1790,9 @@ mod tests {
                 body: "__slei_product_tool_create_bob__".to_string(),
                 session_id: None,
                 attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
             },
         )
         .unwrap();

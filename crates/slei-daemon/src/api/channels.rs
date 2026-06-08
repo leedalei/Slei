@@ -1,13 +1,16 @@
 use std::collections::HashSet;
+use std::path::Path as FsPath;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::services::channel_service::{ChannelDraft, ChannelError, PermissionPreset};
+use crate::services::channel_service::{
+    ChannelDraft, ChannelError, PermissionPreset, WorkspaceMount,
+};
 use crate::state::AppState;
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -24,6 +27,8 @@ pub struct CreateChannelRequest {
     name: String,
     description: Option<String>,
     agent_ids: Option<Vec<String>>,
+    #[serde(default)]
+    project_paths: Vec<String>,
 }
 
 pub async fn create(
@@ -74,7 +79,7 @@ pub async fn create(
             {
                 Ok(coordinator) => coordinator,
                 Err(error) => {
-                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
                 }
             };
             if let Err(error) = state
@@ -83,6 +88,22 @@ pub async fn create(
                 .await
             {
                 return channel_error_response(error);
+            }
+            for project_path in dedupe_project_paths(payload.project_paths) {
+                if let Err(error) = state
+                    .channels()
+                    .mount_workspace(
+                        &channel.id,
+                        WorkspaceMount {
+                            label: workspace_label(&project_path),
+                            path: project_path.clone(),
+                        },
+                        &format!("channel:{}:workspace:{}", channel.id, project_path),
+                    )
+                    .await
+                {
+                    return channel_error_response(error);
+                }
             }
             for agent_id in agent_ids {
                 let outcome = match state
@@ -134,6 +155,25 @@ fn dedupe_agent_ids(agent_ids: Vec<String>) -> Vec<String> {
             }
         })
         .collect()
+}
+
+fn dedupe_project_paths(paths: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    paths
+        .into_iter()
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn workspace_label(path: &str) -> String {
+    FsPath::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or(path)
+        .to_string()
 }
 
 fn channel_error_response(error: ChannelError) -> Response {

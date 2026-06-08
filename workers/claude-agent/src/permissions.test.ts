@@ -8,7 +8,7 @@ describe("Slei Claude SDK permission profile", () => {
 
     expect(options.persistSession).toBe(false);
     expect(options).not.toHaveProperty("strictMcpConfig");
-    expect(options.settingSources).toEqual(["project"]);
+    expect(options.settingSources).toEqual(["user", "project", "local"]);
     expect(options.skills).toBe("all");
     expect(options.allowedTools).toEqual([
       "Skill",
@@ -82,6 +82,28 @@ describe("Slei Claude SDK permission profile", () => {
     });
   });
 
+  it("allows writes inside configured additional directories", async () => {
+    const controller = createRunPermissionController({
+      runId: "run_1",
+      agentId: "agent_1",
+      cwd: "/overlay/run",
+      allowedDirectories: ["/workspace/api", "/workspace/web"],
+      sessionId: "session_1",
+    });
+
+    await expect(
+      controller.canUseTool("Edit", { file_path: "/workspace/api/src/index.ts" }, toolOptions("tool_allowed")),
+    ).resolves.toMatchObject({ behavior: "allow" });
+
+    const pending = controller.canUseTool("Edit", { file_path: "/workspace/other/src/index.ts" }, toolOptions("tool_blocked"));
+    const request = await controller.nextPermissionRequest();
+    expect(request).toMatchObject({
+      targetPath: "/workspace/other/src/index.ts",
+    });
+    controller.resolvePermission({ requestId: request.requestId, decision: "deny" });
+    await expect(pending).resolves.toMatchObject({ behavior: "deny" });
+  });
+
   it("remembers approve session only for the current session", async () => {
     const first = createRunPermissionController({
       runId: "run_1",
@@ -135,7 +157,7 @@ describe("Slei Claude SDK permission profile", () => {
 
       expect(options.persistSession).toBe(false);
       expect(options).not.toHaveProperty("strictMcpConfig");
-      expect(options.settingSources).toEqual(["project"]);
+      expect(options.settingSources).toEqual(["user", "project", "local"]);
       expect(options.skills).toBe("all");
       expect(options.disallowedTools).toEqual(
         expect.arrayContaining(["Task", "Plugin:*"]),

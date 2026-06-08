@@ -34,6 +34,7 @@ export interface ChannelCreateRequest {
   name: string;
   description?: string;
   agentIds?: string[];
+  projectPaths?: string[];
 }
 
 export interface SendChannelMessageRequest {

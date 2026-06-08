@@ -1,4 +1,4 @@
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 
 import {
@@ -23,6 +23,7 @@ import {
   type AgentWorkspaceListReceipt,
   type SendChannelMessageOutcome,
   type RuntimeSetupState,
+  type WorkspaceMountView,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
@@ -109,6 +110,10 @@ function conversationMessageStatus(status?: string): SleiMessage["status"] | und
   return status === "running" || status === "done" || status === "failed" || status === "approval" || status === "pending" || status === "undecided"
     ? status
     : undefined;
+}
+
+function workspaceLabelFromPath(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path;
 }
 
 function replaceConversationMessages(current: SleiMessage[], conversationMessages: SleiMessage[], conversationIds?: string[]): SleiMessage[] {
@@ -211,6 +216,8 @@ function channelFromView(channel: ChannelView, messages: DesktopMessages): SleiC
     name: stripChannelHash(channel.name),
     description: channel.description ?? messages.chat.channel,
     unread: 0,
+    projectName: channel.projectPaths?.length ? channel.projectPaths.join(", ") : undefined,
+    projectPaths: channel.projectPaths ?? [],
   };
 }
 
@@ -391,14 +398,22 @@ export function SleiApp() {
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [guideBootstrapping, setGuideBootstrapping] = useState(false);
+  const [runtimeErrorToastMessage, setRuntimeErrorToastMessage] = useState("");
   const [runtimeSetup, setRuntimeSetup] = useState<RuntimeSetupState>({
     loading: true,
     error: undefined,
     hasClaudeRuntimeReady: true,
     nodes: data.nodes,
   });
+  const runtimeErrorToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
+
+  function showRuntimeErrorToast(message: string) {
+    if (runtimeErrorToastTimerRef.current) clearTimeout(runtimeErrorToastTimerRef.current);
+    setRuntimeErrorToastMessage(message);
+    runtimeErrorToastTimerRef.current = setTimeout(() => setRuntimeErrorToastMessage(""), 4_000);
+  }
 
   useEffect(() => {
     const nextView = routeViewFromPath(location.pathname);
@@ -408,6 +423,12 @@ export function SleiApp() {
       navigate(canonicalPath, { replace: true });
     }
   }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (runtimeErrorToastTimerRef.current) clearTimeout(runtimeErrorToastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -769,11 +790,17 @@ export function SleiApp() {
 
   async function runChannelAgentReply(outcome: SendChannelMessageOutcome, channelMessage: SleiMessage, channelId: string) {
     const agentId = outcome.assigneeAgentId;
+    const sourceChannel = data.channels.find((candidate) => candidate.id === channelId);
+    const workspaceMounts: WorkspaceMountView[] = (sourceChannel?.projectPaths ?? []).map((path) => ({
+      path,
+      label: workspaceLabelFromPath(path),
+    }));
     logAppEvent(bridge, "channel-agent-reply", "evaluate", {
       channelId,
       messageId: outcome.messageId,
       action: outcome.action,
       assigneeAgentId: agentId,
+      workspaceMountCount: workspaceMounts.length,
     });
     if (!agentId || agentId.startsWith("agent_coordinator_")) {
       logAppEvent(bridge, "channel-agent-reply", "skip-no-runnable-agent", {
@@ -816,6 +843,9 @@ export function SleiApp() {
         authorId: "human:local",
         body: channelAgentReplyPrompt(channelId, channelMessage.body),
         sessionId: conversationReceipt.conversation.activeSessionId,
+        workspaceMounts,
+        sourceChannelId: channelId,
+        sourceChannelName: sourceChannel?.name,
       });
       const reply = await waitForChannelAgentReply(bridge, conversationReceipt.conversation.id, agentId, existingMessageIds, {
         onProgress: (progress) => {
@@ -849,6 +879,9 @@ export function SleiApp() {
             channelId,
             status: "failed" as const,
           };
+      if (!reply || reply.status === "failed") {
+        showRuntimeErrorToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`);
+      }
       setData((current) =>
         createSleiFixtures({
           ...current,
@@ -874,6 +907,7 @@ export function SleiApp() {
         channelId,
         status: "failed",
       };
+      showRuntimeErrorToast(`${messages.chat.agentRunFailed}: ${errorMessage}`);
       setData((current) =>
         createSleiFixtures({
           ...current,
@@ -1002,6 +1036,7 @@ export function SleiApp() {
     const receipt = await bridge.createChannel({
       name,
       description: projectName,
+      projectPaths,
       agentIds: input.agentIds ?? [],
     });
     const channel = { ...channelFromView(receipt.channel, messages), projectName, projectPaths };
@@ -1192,6 +1227,7 @@ export function SleiApp() {
       onConversationSessionSelect={handleConversationSessionSelect}
       profile={profile}
       runtimeSetup={runtimeSetup}
+      runtimeErrorToastMessage={runtimeErrorToastMessage}
       savedMessages={savedMessages}
       sessionDrawerOpen={sessionDrawerOpen}
       sendingConversationIds={sendingConversationIds}

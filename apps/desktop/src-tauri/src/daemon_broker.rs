@@ -329,6 +329,8 @@ pub struct ChannelView {
     pub name: String,
     pub description: Option<String>,
     pub is_default: Option<bool>,
+    #[serde(default, alias = "projectPaths")]
+    pub project_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -359,6 +361,8 @@ pub struct ChannelCreateRequest {
     pub description: Option<String>,
     #[serde(default, alias = "agentIds")]
     pub agent_ids: Vec<String>,
+    #[serde(default, alias = "projectPaths")]
+    pub project_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -478,6 +482,14 @@ pub struct ConversationMessageReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WorkspaceMountView {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PermissionResolveRequest {
     pub request_id: String,
     pub decision: String,
@@ -491,6 +503,12 @@ pub struct ConversationMessageRequest {
     pub session_id: Option<String>,
     #[serde(default)]
     pub attachment_ids: Vec<String>,
+    #[serde(default, alias = "workspaceMounts")]
+    pub workspace_mounts: Vec<WorkspaceMountView>,
+    #[serde(default, alias = "sourceChannelId")]
+    pub source_channel_id: Option<String>,
+    #[serde(default, alias = "sourceChannelName")]
+    pub source_channel_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -564,6 +582,7 @@ impl DaemonBroker {
                 name: "all".to_string(),
                 description: Some("默认团队频道".to_string()),
                 is_default: Some(true),
+                project_paths: Vec::new(),
             }]),
             channel_members: Mutex::new(Vec::new()),
             channel_messages: Mutex::new(Vec::new()),
@@ -1739,6 +1758,9 @@ impl DaemonBroker {
             let conversations = self.conversations.clone();
             let prompt = append_attachment_context(body, &selected_attachments);
             let runtime_session = runtime_session.expect("human dm has runtime session");
+            let workspace_mounts = request.workspace_mounts.clone();
+            let source_channel_id = request.source_channel_id.clone();
+            let source_channel_name = request.source_channel_name.clone();
             thread::spawn(move || {
                 run_local_agent_dm_background(
                     data_root,
@@ -1748,6 +1770,9 @@ impl DaemonBroker {
                     agent,
                     prompt,
                     runtime_session,
+                    workspace_mounts,
+                    source_channel_id,
+                    source_channel_name,
                 );
             });
         }
@@ -3833,6 +3858,9 @@ fn run_local_agent_dm_background(
     agent: Option<DesktopAgentView>,
     prompt: String,
     runtime_session: RuntimeSessionView,
+    workspace_mounts: Vec<WorkspaceMountView>,
+    source_channel_id: Option<String>,
+    source_channel_name: Option<String>,
 ) {
     let started = Instant::now();
     match agent {
@@ -3846,9 +3874,18 @@ fn run_local_agent_dm_background(
                 &conversations,
                 &conversation_id,
                 &run_id,
-                run_local_claude_agent(&agent, &run_id, &prompt, &runtime_session, |body| {
-                    update_local_agent_run_body(&data_root, &conversation_id, &run_id, body);
-                }),
+                run_local_claude_agent(
+                    &agent,
+                    &run_id,
+                    &prompt,
+                    &runtime_session,
+                    &workspace_mounts,
+                    source_channel_id.as_deref(),
+                    source_channel_name.as_deref(),
+                    |body| {
+                        update_local_agent_run_body(&data_root, &conversation_id, &run_id, body);
+                    },
+                ),
                 started,
             );
         }
@@ -3994,9 +4031,21 @@ fn run_local_claude_agent(
     run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
+    workspace_mounts: &[WorkspaceMountView],
+    source_channel_id: Option<&str>,
+    source_channel_name: Option<&str>,
     on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
-    run_local_claude_agent_impl(agent, run_id, prompt, runtime_session, on_output)
+    run_local_claude_agent_impl(
+        agent,
+        run_id,
+        prompt,
+        runtime_session,
+        workspace_mounts,
+        source_channel_id,
+        source_channel_name,
+        on_output,
+    )
 }
 
 fn run_local_claude_clear_session(
@@ -4020,6 +4069,9 @@ fn run_local_claude_agent_impl(
     _run_id: &str,
     _prompt: &str,
     _runtime_session: &RuntimeSessionView,
+    _workspace_mounts: &[WorkspaceMountView],
+    _source_channel_id: Option<&str>,
+    _source_channel_name: Option<&str>,
     mut on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
     if _prompt.contains("__slei_streaming_runtime__") {
@@ -4095,6 +4147,9 @@ fn run_local_claude_agent_impl(
     run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
+    workspace_mounts: &[WorkspaceMountView],
+    source_channel_id: Option<&str>,
+    source_channel_name: Option<&str>,
     mut on_output: impl FnMut(&str),
 ) -> Result<LocalAgentRunOutput, String> {
     use std::io::BufRead as _;
@@ -4105,8 +4160,15 @@ fn run_local_claude_agent_impl(
         prompt.chars().count()
     );
     let runner_path = local_claude_agent_runner_path()?;
-    let command_payload =
-        local_claude_agent_runner_payload(agent, run_id, prompt, runtime_session)?;
+    let command_payload = local_claude_agent_runner_payload(
+        agent,
+        run_id,
+        prompt,
+        runtime_session,
+        workspace_mounts,
+        source_channel_id,
+        source_channel_name,
+    )?;
     let mut command = Command::new("node");
     command.arg(runner_path);
     command.stdin(std::process::Stdio::piped());
@@ -4245,7 +4307,11 @@ fn local_claude_agent_runner_payload(
     run_id: &str,
     prompt: &str,
     runtime_session: &RuntimeSessionView,
+    workspace_mounts: &[WorkspaceMountView],
+    source_channel_id: Option<&str>,
+    source_channel_name: Option<&str>,
 ) -> Result<String, String> {
+    let primary_project_path = workspace_mounts.first().map(|mount| mount.path.clone());
     serde_json::to_string(&serde_json::json!({
         "type": "start_run",
         "run_id": run_id,
@@ -4254,6 +4320,12 @@ fn local_claude_agent_runner_payload(
             "agent_id": agent.id,
             "runtime": "ClaudeCode",
             "cwd": agent.workspace_path,
+            "agent_workspace_path": agent.workspace_path,
+            "additional_directories": [agent.workspace_path],
+            "workspace_mounts": workspace_mounts,
+            "primary_project_path": primary_project_path,
+            "channel_id": source_channel_id,
+            "channel_name": source_channel_name,
             "model": agent.model,
             "persist_session": true,
             "resume_session": runtime_session.status == "ready",

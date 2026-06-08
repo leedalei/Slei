@@ -24,6 +24,8 @@ pub struct ChannelRecord {
     pub description: Option<String>,
     pub is_default: bool,
     pub permission: PermissionPreset,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_paths: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -52,7 +54,8 @@ pub struct AddChannelMemberOutcome {
     pub created: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceMount {
     pub path: String,
     pub label: String,
@@ -90,13 +93,19 @@ impl ChannelService {
     }
 
     pub async fn list_channels(&self) -> Vec<ChannelRecord> {
-        let mut channels = self
-            .inner
-            .lock()
-            .await
+        let state = self.inner.lock().await;
+        let mut channels = state
             .channels
             .values()
             .cloned()
+            .map(|mut channel| {
+                channel.project_paths = state
+                    .workspaces
+                    .get(&channel.id)
+                    .map(|mounts| mounts.iter().map(|mount| mount.path.clone()).collect())
+                    .unwrap_or_default();
+                channel
+            })
             .collect::<Vec<_>>();
         channels.sort_by(|left, right| {
             left.is_default
@@ -137,6 +146,7 @@ impl ChannelService {
             description: draft.description,
             is_default: false,
             permission: draft.permission,
+            project_paths: Vec::new(),
         };
         state
             .channel_idempotency
@@ -274,6 +284,7 @@ impl ChannelService {
             idempotency_key.to_string(),
             (channel_id.to_string(), mount.clone()),
         );
+        persist_workspaces(&self.root, &state.workspaces)?;
         Ok(mount)
     }
 
@@ -294,6 +305,7 @@ impl ChannelState {
         Self {
             channels: load_channels(root),
             members: load_members(root),
+            workspaces: load_workspaces(root),
             ..Self::default()
         }
     }
@@ -307,6 +319,7 @@ impl ChannelState {
                 description: Some("默认团队频道".to_string()),
                 is_default: true,
                 permission: PermissionPreset::Controlled,
+                project_paths: Vec::new(),
             });
     }
 }
@@ -350,6 +363,13 @@ fn load_members(root: &PathBuf) -> HashMap<String, Vec<ChannelMemberRecord>> {
         .unwrap_or_default()
 }
 
+fn load_workspaces(root: &PathBuf) -> HashMap<String, Vec<WorkspaceMount>> {
+    fs::read_to_string(root.join("channels/workspaces.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<HashMap<String, Vec<WorkspaceMount>>>(&raw).ok())
+        .unwrap_or_default()
+}
+
 fn persist_channels(
     root: &PathBuf,
     channels: &HashMap<String, ChannelRecord>,
@@ -381,6 +401,18 @@ fn persist_members(
     fs::write(path, payload).map_err(ChannelError::Io)
 }
 
+fn persist_workspaces(
+    root: &PathBuf,
+    workspaces: &HashMap<String, Vec<WorkspaceMount>>,
+) -> Result<(), ChannelError> {
+    let path = root.join("channels/workspaces.json");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(ChannelError::Io)?;
+    }
+    let payload = serde_json::to_string_pretty(workspaces).map_err(ChannelError::Json)?;
+    fs::write(path, payload).map_err(ChannelError::Io)
+}
+
 fn current_timestamp() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -397,6 +429,7 @@ impl ChannelService {
         if let Ok(state) = self.inner.try_lock() {
             let _ = persist_channels(&self.root, &state.channels);
             let _ = persist_members(&self.root, &state.members);
+            let _ = persist_workspaces(&self.root, &state.workspaces);
         }
     }
 }

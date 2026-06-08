@@ -28,6 +28,7 @@ export const chat = {
   localArchiveOnly: "daemon 未连接，消息已本地保存；当前不会触发智能体回复。",
   sendFailed: "发送失败",
   agentThinking: "正在思考",
+  agentRunFailed: "运行报错",
   interactivePending: "等待确认",
   noFiles: "暂无附件",
   openAttachment: (name: string) => `打开附件 ${name}`,

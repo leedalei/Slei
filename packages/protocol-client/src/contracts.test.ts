@@ -32,6 +32,7 @@ describe("Slei protocol contract fixtures", () => {
     const request = {
       name: "api-dev",
       agentIds: selectedIds,
+      projectPaths: ["/workspace/api"],
     } satisfies ChannelCreateRequest;
     const member = {
       channelId: "api-dev",
@@ -42,6 +43,7 @@ describe("Slei protocol contract fixtures", () => {
 
     expect(request).toHaveProperty("agentIds");
     expect(request.agentIds).toEqual(selectedIds);
+    expect(request.projectPaths).toEqual(["/workspace/api"]);
     expect(member.readiness).toBe("joining");
   });
 
