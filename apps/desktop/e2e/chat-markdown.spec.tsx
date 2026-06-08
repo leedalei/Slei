@@ -75,4 +75,20 @@ describe("chat Markdown rendering", () => {
     expect(html).toContain('href="https://example.com/docs"');
     expect(html).toContain("<hr");
   });
+
+  it("distinguishes chat mentions from ordinary message text", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage
+        markdown={"Please ask @coda and @lei-lee, but keep `@raw` and test@example.com untouched."}
+      />,
+    );
+
+    expect(html).toContain('class="slei-message-mention"');
+    expect(html).toContain(">@coda</span>");
+    expect(html).toContain(">@lei-lee</span>");
+    expect(html).toContain("<code>@raw</code>");
+    expect(html).toContain("test@example.com");
+    expect(html).not.toContain(">@raw</span>");
+    expect(html).not.toContain(">@example</span>");
+  });
 });

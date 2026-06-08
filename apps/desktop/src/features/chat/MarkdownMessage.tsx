@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -19,6 +19,12 @@ function safeMarkdownUrl(url: string): string {
 }
 
 const markdownComponents: Components = {
+  p({ children, node: _node, ...props }) {
+    return <p {...props}>{renderMentions(children)}</p>;
+  },
+  li({ children, node: _node, ...props }) {
+    return <li {...props}>{renderMentions(children)}</li>;
+  },
   a({ children, href, node: _node, ...props }) {
     return (
       <a href={href} rel="noreferrer" target="_blank" {...props}>
@@ -35,6 +41,38 @@ const markdownComponents: Components = {
     );
   },
 };
+
+const mentionPattern = /(^|[^A-Za-z0-9_@.])(@[A-Za-z0-9][A-Za-z0-9_-]*)(?=$|[^A-Za-z0-9_-])/g;
+
+function renderMentions(children: ReactNode): ReactNode[] {
+  return Children.toArray(children).flatMap((child, index) =>
+    typeof child === "string" ? renderMentionText(child, index) : child,
+  );
+}
+
+function renderMentionText(text: string, childIndex: number): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  mentionPattern.lastIndex = 0;
+
+  while ((match = mentionPattern.exec(text))) {
+    const prefix = match[1] ?? "";
+    const mention = match[2];
+    const mentionStart = match.index + prefix.length;
+
+    if (mentionStart > lastIndex) nodes.push(text.slice(lastIndex, mentionStart));
+    nodes.push(
+      <span className="slei-message-mention" key={`${childIndex}-${mentionStart}`}>
+        {mention}
+      </span>,
+    );
+    lastIndex = mentionStart + mention.length;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes.length > 0 ? nodes : [text];
+}
 
 function highlightCode(code: string): ReactNode[] {
   const nodes: ReactNode[] = [];

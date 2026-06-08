@@ -992,6 +992,18 @@ select:focus-visible {
   text-decoration: underline;
 }
 
+.slei-markdown-message .slei-message-mention {
+  background: color-mix(in srgb, var(--color-accent) 78%, var(--color-surface) 22%);
+  border: var(--border-subtle) solid color-mix(in srgb, var(--color-accent-strong) 26%, transparent);
+  border-radius: 999px;
+  color: var(--color-accent-strong);
+  display: inline-block;
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+  padding: 0 0.38em;
+  white-space: nowrap;
+}
+
 .slei-markdown-message .hljs-keyword {
   color: var(--color-error);
 }
