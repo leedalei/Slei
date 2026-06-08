@@ -496,42 +496,20 @@ function InfoItem(input: {
 }
 
 function initialWorkspaceEntries(member: SleiMember): AgentWorkspaceEntry[] {
-  if (member.workspaceEntries?.length) {
+  if (member.workspaceEntries) {
     return member.workspaceEntries;
   }
-  if (member.type !== "agent") {
-    return [];
-  }
-  return [
-    { kind: "directory", name: ".claude", relativePath: ".claude" },
-    { kind: "directory", name: "docs", relativePath: "docs" },
-    { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
-  ];
+  return [];
 }
 
-function initialWorkspacePreview(member: SleiMember, messages: DesktopMessages): AgentWorkspaceFileReceipt | undefined {
+function initialWorkspacePreview(member: SleiMember, _messages: DesktopMessages): AgentWorkspaceFileReceipt | undefined {
   if (member.workspaceFilePreview) {
     return {
       agentId: member.id,
       ...member.workspaceFilePreview,
     };
   }
-  if (member.type !== "agent") {
-    return undefined;
-  }
-  return {
-    agentId: member.id,
-    name: "MEMORY.md",
-    relativePath: "MEMORY.md",
-    content: [
-      "# MEMORY.md",
-      "",
-      messages.members.defaultSkill(member.handle.replace(/^@/, "")),
-      "",
-      "## Instructions",
-      member.instructions || member.description,
-    ].join("\n"),
-  };
+  return undefined;
 }
 
 export function buildWorkspaceTreeRows(input: {

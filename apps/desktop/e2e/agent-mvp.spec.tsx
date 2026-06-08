@@ -62,6 +62,16 @@ const members: SleiMember[] = [
     workspacePath: "~/.slei/agents/agent_coda",
     memoryPath: "~/.slei/agents/agent_coda/MEMORY.md",
     docsPath: "~/.slei/agents/agent_coda/docs",
+    workspaceEntries: [
+      { kind: "directory", name: ".claude", relativePath: ".claude" },
+      { kind: "directory", name: "docs", relativePath: "docs" },
+      { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
+    ],
+    workspaceFilePreview: {
+      name: "MEMORY.md",
+      relativePath: "MEMORY.md",
+      content: "# MEMORY.md\n\n实现编码。",
+    },
     skills: [
       {
         id: "guide-create",
@@ -102,6 +112,15 @@ const members: SleiMember[] = [
     workspacePath: "~/.slei/agents/agent_nancy",
     memoryPath: "~/.slei/agents/agent_nancy/MEMORY.md",
     docsPath: "~/.slei/agents/agent_nancy/docs",
+    workspaceEntries: [
+      { kind: "directory", name: ".claude", relativePath: ".claude" },
+      { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
+    ],
+    workspaceFilePreview: {
+      name: "MEMORY.md",
+      relativePath: "MEMORY.md",
+      content: "# MEMORY.md\n\n审查质量。",
+    },
   },
 ];
 

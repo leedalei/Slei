@@ -63,7 +63,6 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("ClaudeCode");
     expect(html).toContain("Capabilities");
     expect(html).toContain("Workspace");
-    expect(html).toContain("MEMORY.md");
     expect(html).not.toContain(`>${messages.members.message}<`);
     expect(html).not.toContain(`>${messages.members.deleteAgent}<`);
   });
@@ -209,6 +208,63 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("Coda prefers concise implementation notes.");
     expect(html).toContain("通过资源管理器打开");
     expect(html).not.toContain("通过 daemon 打开");
+  });
+
+  it("does not invent default workspace entries when directory entries are unavailable", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="agent_empty"
+        data={createSleiFixtures({
+          members: [
+            {
+              id: "agent_empty",
+              name: "Empty",
+              handle: "@empty",
+              avatar: "EM",
+              avatarSeed: "agent_empty",
+              type: "agent",
+              runtimeStatus: "idle",
+              role: "Developer",
+              runtime: "ClaudeCode",
+              model: "Sonnet",
+              computer: "Local",
+              nodeId: "local-node",
+              created: "2026-06-04",
+              creator: "user",
+              instructions: "Builds features.",
+              description: "Builds features.",
+              permissions: [],
+              environmentVariables: [],
+              activity: "Idle",
+              skills: [],
+              capabilities: ["ClaudeCode"],
+              createdAgents: [],
+              directMessageEnabled: true,
+              workspaceEntries: [],
+            },
+          ],
+        })}
+        messages={messages}
+        nodes={[
+          {
+            id: "local-node",
+            name: "Local",
+            status: "connected",
+            daemonVersion: "0.1.0",
+            device: { platform: "darwin", arch: "arm64", hostname: "local" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+          },
+        ]}
+        onAgentUpdate={() => undefined}
+        onMessage={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("文件预览");
+    expect(html).not.toContain(".claude");
+    expect(html).not.toContain("docs/");
+    expect(html).not.toContain("MEMORY.md");
   });
 
   it("flattens expanded workspace folders inline like a code editor", () => {

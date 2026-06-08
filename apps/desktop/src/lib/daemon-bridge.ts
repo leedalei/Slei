@@ -919,11 +919,7 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
 
 function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
   if (!relativePath) {
-    return [
-      { kind: "directory", name: ".claude", relativePath: ".claude" },
-      { kind: "directory", name: "docs", relativePath: "docs" },
-      { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
-    ];
+    return [];
   }
   if (relativePath === ".claude") {
     return [{ kind: "directory", name: "skills", relativePath: ".claude/skills" }];

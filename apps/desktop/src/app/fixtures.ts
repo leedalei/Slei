@@ -156,6 +156,16 @@ export function createDemoMembers(): SleiMember[] {
         createdAgents: [],
         activity: "正在 #all 中待命",
         capabilities: ["代码实现", "问题修复", "工程协作"],
+        workspaceEntries: [
+          { kind: "directory", name: ".claude", relativePath: ".claude" },
+          { kind: "directory", name: "docs", relativePath: "docs" },
+          { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
+        ],
+        workspaceFilePreview: {
+          name: "MEMORY.md",
+          relativePath: "MEMORY.md",
+          content: "# MEMORY.md\n\n默认技能：当用户 @Coda 并要求记住、remember 或 learn 时，更新 MEMORY.md。",
+        },
       },
       {
         id: "a2",
