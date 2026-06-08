@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   Cpu,
   ExternalLink,
   FileText,
@@ -75,8 +77,10 @@ export function MembersPage(input: {
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
-  const [workspaceRelativePath, setWorkspaceRelativePath] = useState("");
-  const [workspaceEntries, setWorkspaceEntries] = useState<AgentWorkspaceEntry[]>(() => selectedMember ? initialWorkspaceEntries(selectedMember) : []);
+  const [workspaceEntriesByDirectory, setWorkspaceEntriesByDirectory] = useState<Record<string, AgentWorkspaceEntry[]>>(() => ({
+    "": selectedMember ? initialWorkspaceEntries(selectedMember) : [],
+  }));
+  const [expandedWorkspaceDirectories, setExpandedWorkspaceDirectories] = useState<Set<string>>(() => new Set());
   const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<AgentWorkspaceFileReceipt | undefined>(() =>
     selectedMember ? initialWorkspacePreview(selectedMember, input.messages) : undefined,
   );
@@ -94,8 +98,8 @@ export function MembersPage(input: {
   }, [selectedMember?.id]);
 
   useEffect(() => {
-    setWorkspaceRelativePath("");
-    setWorkspaceEntries(selectedMember ? initialWorkspaceEntries(selectedMember) : []);
+    setWorkspaceEntriesByDirectory({ "": selectedMember ? initialWorkspaceEntries(selectedMember) : [] });
+    setExpandedWorkspaceDirectories(new Set());
     setActiveWorkspaceFile(selectedMember ? initialWorkspacePreview(selectedMember, input.messages) : undefined);
     if (selectedMember?.type === "agent" && input.onListAgentWorkspace) {
       void loadWorkspaceDirectory("");
@@ -121,20 +125,41 @@ export function MembersPage(input: {
   }
 
   async function loadWorkspaceDirectory(relativePath: string) {
-    if (!selectedMember || selectedMember.type !== "agent" || !input.onListAgentWorkspace) return;
+    if (!selectedMember || selectedMember.type !== "agent" || !input.onListAgentWorkspace) {
+      return workspaceEntriesByDirectory[relativePath] ?? [];
+    }
     setWorkspaceOpenError(undefined);
     try {
       const receipt = await input.onListAgentWorkspace(selectedMember.id, relativePath || undefined);
-      setWorkspaceRelativePath(receipt.relativePath);
-      setWorkspaceEntries(receipt.entries);
+      setWorkspaceEntriesByDirectory((current) => ({
+        ...current,
+        [receipt.relativePath]: receipt.entries,
+      }));
+      return receipt.entries;
     } catch {
       setWorkspaceOpenError(input.messages.members.openWorkspaceFailed);
+      return workspaceEntriesByDirectory[relativePath] ?? [];
     }
+  }
+
+  async function toggleWorkspaceDirectory(entry: AgentWorkspaceEntry) {
+    if (expandedWorkspaceDirectories.has(entry.relativePath)) {
+      setExpandedWorkspaceDirectories((current) => {
+        const next = new Set(current);
+        next.delete(entry.relativePath);
+        return next;
+      });
+      return;
+    }
+    if (!workspaceEntriesByDirectory[entry.relativePath]) {
+      await loadWorkspaceDirectory(entry.relativePath);
+    }
+    setExpandedWorkspaceDirectories((current) => new Set(current).add(entry.relativePath));
   }
 
   async function openWorkspaceEntry(entry: AgentWorkspaceEntry) {
     if (entry.kind === "directory") {
-      await loadWorkspaceDirectory(entry.relativePath);
+      await toggleWorkspaceDirectory(entry);
       return;
     }
     if (!selectedMember || selectedMember.type !== "agent" || !input.onReadAgentWorkspaceFile) {
@@ -186,6 +211,10 @@ export function MembersPage(input: {
   const canDelete = selectedMember.type === "agent" && !selectedMember.systemOwned && selectedMember.directMessageEnabled !== false;
   const nodeStatus = selectedNode?.status ?? "connected";
   const nodeDotStatus = selectedNode?.status === "offline" ? "offline" : "idle";
+  const workspaceRows = buildWorkspaceTreeRows({
+    entriesByDirectory: workspaceEntriesByDirectory,
+    expandedDirectories: expandedWorkspaceDirectories,
+  });
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
@@ -340,28 +369,25 @@ export function MembersPage(input: {
                 <aside className="grid min-h-0 overflow-hidden border-b bg-muted/20 md:border-b-0 md:border-r">
                   <ScrollArea className="min-h-0">
                     <div className="grid gap-1 p-2">
-                      {workspaceRelativePath ? (
-                        <Button
-                          className="w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap px-2 py-2 text-left"
-                          onClick={() => loadWorkspaceDirectory(parentWorkspacePath(workspaceRelativePath))}
-                          type="button"
-                          variant="ghost"
-                        >
-                          <FolderOpen aria-hidden="true" className="size-4 shrink-0" />
-                          <span className="block min-w-0 flex-1 truncate">../</span>
-                        </Button>
-                      ) : null}
-                      {workspaceEntries.map((entry) => {
+                      {workspaceRows.map(({ depth, entry }) => {
                         const Icon = entry.kind === "directory" ? FolderOpen : FileText;
+                        const expanded = expandedWorkspaceDirectories.has(entry.relativePath);
+                        const DisclosureIcon = expanded ? ChevronDown : ChevronRight;
                         return (
                           <Button
                             aria-current={activeWorkspaceFile?.relativePath === entry.relativePath ? "true" : undefined}
                             className="w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap px-2 py-2 text-left"
                             key={entry.relativePath}
                             onClick={() => void openWorkspaceEntry(entry)}
+                            style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
                             type="button"
                             variant={activeWorkspaceFile?.relativePath === entry.relativePath ? "secondary" : "ghost"}
                           >
+                            {entry.kind === "directory" ? (
+                              <DisclosureIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <span className="size-3 shrink-0" />
+                            )}
                             <Icon aria-hidden="true" className="size-4 shrink-0" />
                             <span className="block min-w-0 flex-1 truncate">
                               {entry.name}{entry.kind === "directory" ? "/" : ""}
@@ -477,8 +503,8 @@ function initialWorkspaceEntries(member: SleiMember): AgentWorkspaceEntry[] {
     return [];
   }
   return [
+    { kind: "directory", name: ".claude", relativePath: ".claude" },
     { kind: "directory", name: "docs", relativePath: "docs" },
-    { kind: "directory", name: "skills", relativePath: "skills" },
     { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
   ];
 }
@@ -508,8 +534,23 @@ function initialWorkspacePreview(member: SleiMember, messages: DesktopMessages):
   };
 }
 
-function parentWorkspacePath(relativePath: string) {
-  return relativePath.split("/").slice(0, -1).join("/");
+export function buildWorkspaceTreeRows(input: {
+  entriesByDirectory: Record<string, AgentWorkspaceEntry[]>;
+  expandedDirectories: Set<string>;
+}): Array<{ depth: number; entry: AgentWorkspaceEntry }> {
+  const rows: Array<{ depth: number; entry: AgentWorkspaceEntry }> = [];
+
+  function append(directory: string, depth: number) {
+    for (const entry of input.entriesByDirectory[directory] ?? []) {
+      rows.push({ depth, entry });
+      if (entry.kind === "directory" && input.expandedDirectories.has(entry.relativePath)) {
+        append(entry.relativePath, depth + 1);
+      }
+    }
+  }
+
+  append("", 0);
+  return rows;
 }
 
 function pathTargetForWorkspaceFile(file: AgentWorkspaceFileReceipt | undefined, memoryPath: string, docsPath: string): AgentPathTarget {

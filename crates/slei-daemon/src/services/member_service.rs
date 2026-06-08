@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -488,9 +488,7 @@ impl MemberService {
         let workspace_path = self.agent_data_root.join("agents").join(&id);
         let docs_path = workspace_path.join("docs");
         let memory_path = workspace_path.join("MEMORY.md");
-        let skills_path = workspace_path.join("skills");
         fs::create_dir_all(&docs_path).map_err(MemberError::Io)?;
-        fs::create_dir_all(&skills_path).map_err(MemberError::Io)?;
 
         let now = current_timestamp();
         let record = ProductAgentRecord {
@@ -665,12 +663,15 @@ impl MemberService {
             .get(agent_id)
             .cloned()
             .ok_or(MemberError::AgentNotFound)?;
-        let skills_path = PathBuf::from(&record.workspace_path).join("skills/index.json");
-        fs::read_to_string(skills_path)
-            .map_err(MemberError::Io)
-            .and_then(|raw| {
-                serde_json::from_str::<Vec<SkillRecord>>(&raw).map_err(MemberError::Json)
-            })
+        read_standard_skills(&record).or_else(|error| {
+            if matches!(error, MemberError::Io(ref io_error) if io_error.kind() == std::io::ErrorKind::NotFound) {
+                let legacy = read_legacy_skill_index(&record)?;
+                write_default_skills(&record)?;
+                read_standard_skills(&record).or(Ok(legacy))
+            } else {
+                Err(error)
+            }
+        })
     }
 }
 
@@ -689,10 +690,14 @@ impl MemberState {
 
 fn load_product_agents(root: &PathBuf) -> Vec<ProductAgentRecord> {
     let path = root.join("agents/index.json");
-    fs::read_to_string(path)
+    let agents = fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str::<Vec<ProductAgentRecord>>(&raw).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    for agent in &agents {
+        let _ = write_default_skills(agent);
+    }
+    agents
 }
 
 fn persist_product_agents(
@@ -798,13 +803,18 @@ pub(crate) fn channel_coordinator_description(channel_name: &str) -> String {
 
 fn default_memory_skill(agent: &ProductAgentRecord) -> String {
     format!(
-        r#"# Memory Skill for {name}
+        r#"---
+name: memory
+description: Use when the user mentions {handle} and asks this agent to remember, learn, or 记住 something.
+---
 
-Trigger this skill when a user mentions {handle} and asks the agent to remember, learn, or 记住 something.
+# Memory
 
-When triggered, append the requested fact to MEMORY.md under Key Knowledge or Active Context.
+Use this skill when a user mentions {handle} and asks the agent to remember, learn, or 记住 something.
+
+When triggered, append the requested fact to `MEMORY.md` under Key Knowledge or Active Context.
+
 "#,
-        name = agent.name,
         handle = agent.handle
     )
 }
@@ -846,41 +856,172 @@ fn is_legacy_guide_memory_line(line: &str) -> bool {
 }
 
 fn guide_create_skill() -> String {
-    "Trigger when the user asks Yeal to create an agent or member. For each detected member, call the product tool `slei_propose_interactive_card` with kind `createAgent`, title, summary, draft{name, handle, runtimeKind, model, nodeId, description}, actionLabel and doneLabel. Do not return executable JSON text and do not rely on the frontend parsing natural language.\n".to_string()
+    [
+        "---",
+        "name: guide-create",
+        "description: Use when the user asks Yeal to create an agent, member, or channel in Slei.",
+        "---",
+        "",
+        "# Guide Create",
+        "",
+        "For each detected member, call the product tool `slei_propose_interactive_card` with kind `createAgent`, title, summary, draft{name, handle, runtimeKind, model, nodeId, description}, actionLabel and doneLabel.",
+        "",
+        "Do not return executable JSON text and do not rely on the frontend parsing natural language.",
+        "",
+    ].join("\n")
 }
 
 fn write_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {
-    let skills_path = PathBuf::from(&agent.workspace_path).join("skills");
-    fs::create_dir_all(&skills_path).map_err(MemberError::Io)?;
+    let mut skills = default_skill_records(agent);
+    for skill in &skills {
+        let body = if skill.id == "guide-create" {
+            guide_create_skill()
+        } else {
+            default_memory_skill(agent)
+        };
+        if let Some(parent) = Path::new(&skill.path).parent() {
+            fs::create_dir_all(parent).map_err(MemberError::Io)?;
+        }
+        fs::write(&skill.path, body).map_err(MemberError::Io)?;
+    }
+    if agent.agent_kind == "guide" {
+        skills.sort_by(|left, right| left.id.cmp(&right.id));
+    }
+    cleanup_legacy_default_skills(agent)
+}
+
+fn read_standard_skills(agent: &ProductAgentRecord) -> Result<Vec<SkillRecord>, MemberError> {
+    let skills_root = standard_skills_root(agent);
+    let mut skills = Vec::new();
+    for entry in fs::read_dir(&skills_root).map_err(MemberError::Io)? {
+        let entry = entry.map_err(MemberError::Io)?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let skill_path = path.join("SKILL.md");
+        if !skill_path.is_file() {
+            continue;
+        }
+        let raw = fs::read_to_string(&skill_path).map_err(MemberError::Io)?;
+        let (name, description) = parse_skill_frontmatter(&raw).unwrap_or_else(|| {
+            let id = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            (id, String::new())
+        });
+        let id = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        skills.push(SkillRecord {
+            id,
+            name,
+            trigger: description,
+            path: skill_path.to_string_lossy().to_string(),
+        });
+    }
+    if skills.is_empty() {
+        return Err(MemberError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no standard skills found",
+        )));
+    }
+    skills.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(skills)
+}
+
+fn read_legacy_skill_index(agent: &ProductAgentRecord) -> Result<Vec<SkillRecord>, MemberError> {
+    let skills_path = PathBuf::from(&agent.workspace_path).join("skills/index.json");
+    fs::read_to_string(skills_path)
+        .map_err(MemberError::Io)
+        .and_then(|raw| serde_json::from_str::<Vec<SkillRecord>>(&raw).map_err(MemberError::Json))
+}
+
+fn default_skill_records(agent: &ProductAgentRecord) -> Vec<SkillRecord> {
     let mut skills = vec![SkillRecord {
         id: "memory".to_string(),
-        name: "记忆".to_string(),
-        trigger: format!("提及 {} 并使用 remember、learn 或 记住", agent.handle),
-        path: format!("{}/skills/memory.skill.md", agent.workspace_path),
+        name: "memory".to_string(),
+        trigger: format!("Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.", agent.handle),
+        path: standard_skill_path(agent, "memory").to_string_lossy().to_string(),
     }];
-    fs::write(
-        skills_path.join("memory.skill.md"),
-        default_memory_skill(agent),
-    )
-    .map_err(MemberError::Io)?;
     if agent.agent_kind == "guide" {
         skills.insert(
             0,
             SkillRecord {
                 id: "guide-create".to_string(),
-                name: "引导创建".to_string(),
-                trigger: "识别创建智能体、成员、频道的请求".to_string(),
-                path: format!("{}/skills/guide-create.skill.md", agent.workspace_path),
+                name: "guide-create".to_string(),
+                trigger:
+                    "Use when the user asks Yeal to create an agent, member, or channel in Slei."
+                        .to_string(),
+                path: standard_skill_path(agent, "guide-create")
+                    .to_string_lossy()
+                    .to_string(),
             },
         );
-        fs::write(
-            skills_path.join("guide-create.skill.md"),
-            guide_create_skill(),
-        )
-        .map_err(MemberError::Io)?;
     }
-    let payload = serde_json::to_string_pretty(&skills).map_err(MemberError::Json)?;
-    fs::write(skills_path.join("index.json"), payload).map_err(MemberError::Io)
+    skills
+}
+
+fn standard_skills_root(agent: &ProductAgentRecord) -> PathBuf {
+    PathBuf::from(&agent.workspace_path).join(".claude/skills")
+}
+
+fn standard_skill_path(agent: &ProductAgentRecord, id: &str) -> PathBuf {
+    standard_skills_root(agent).join(id).join("SKILL.md")
+}
+
+fn parse_skill_frontmatter(raw: &str) -> Option<(String, String)> {
+    let mut lines = raw.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+    let mut name = None;
+    let mut description = None;
+    for line in lines {
+        if line == "---" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("name:") {
+            name = Some(value.trim().trim_matches('"').to_string());
+        }
+        if let Some(value) = line.strip_prefix("description:") {
+            description = Some(value.trim().trim_matches('"').to_string());
+        }
+    }
+    Some((name?, description?))
+}
+
+fn cleanup_legacy_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {
+    let workspace_root = PathBuf::from(&agent.workspace_path);
+    for file_name in ["memory.skill.md", "guide-create.skill.md"] {
+        let path = workspace_root.join(file_name);
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(MemberError::Io(error)),
+        }
+    }
+
+    let legacy_root = PathBuf::from(&agent.workspace_path).join("skills");
+    for file_name in ["index.json", "memory.skill.md", "guide-create.skill.md"] {
+        let path = legacy_root.join(file_name);
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(MemberError::Io(error)),
+        }
+    }
+    match fs::remove_dir(&legacy_root) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {}
+        Err(error) => return Err(MemberError::Io(error)),
+    }
+    Ok(())
 }
 
 fn narrow_permission(

@@ -229,6 +229,7 @@ describe("ClaudeAgentWorker start_run", () => {
       sessionId: "11111111-1111-4111-8111-111111111111",
       permissionMode: "default",
       allowedTools: [
+        "Skill",
         "Read",
         "Grep",
         "Glob",
@@ -237,10 +238,11 @@ describe("ClaudeAgentWorker start_run", () => {
         "mcp__slei__slei_request_visible_delegation",
         "mcp__slei__slei_request_human_reply",
       ],
-      tools: ["Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"],
+      tools: ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"],
+      settingSources: ["project"],
+      skills: "all",
       mcpServers: { slei: expect.any(Object) },
     });
-    expect(seenOptions[0]).not.toHaveProperty("settingSources");
     expect(seenOptions[0]).not.toHaveProperty("strictMcpConfig");
     expect(events).toEqual([
       {
@@ -463,13 +465,13 @@ describe("ClaudeAgentWorker start_run", () => {
     ]);
   });
 
-  it("injects Slei agent identity and skills into the SDK system prompt", () => {
+  it("uses project-discovered Claude skills while keeping Slei context in the SDK system prompt", () => {
     const cwd = mkdtempSync(join(tmpdir(), "slei-agent-context-"));
-    mkdirSync(join(cwd, "skills"));
+    mkdirSync(join(cwd, ".claude", "skills", "guide-create"), { recursive: true });
     writeFileSync(join(cwd, "MEMORY.md"), "# Yeal\n\n## Role\nSlei guide");
     writeFileSync(
-      join(cwd, "skills", "guide-create.skill.md"),
-      "Trigger when the user asks Yeal to create an agent or member.",
+      join(cwd, ".claude", "skills", "guide-create", "SKILL.md"),
+      "---\nname: guide-create\ndescription: Create Slei agents.\n---\n\nCall the product tool.",
     );
 
     const options = buildClaudeSdkOptions({
@@ -491,7 +493,9 @@ describe("ClaudeAgentWorker start_run", () => {
       preset: "claude_code",
       append: expect.stringContaining("Slei guide"),
     });
-    expect(JSON.stringify(options.systemPrompt)).toContain("guide-create.skill.md");
+    expect(options).toMatchObject({ settingSources: ["project"], skills: "all" });
+    expect(JSON.stringify(options.systemPrompt)).not.toContain("guide-create.skill.md");
+    expect(JSON.stringify(options.systemPrompt)).not.toContain("Create Slei agents");
     expect(JSON.stringify(options.systemPrompt)).toContain("slei_propose_interactive_card");
   });
 

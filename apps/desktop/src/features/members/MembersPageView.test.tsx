@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import { createSleiFixtures } from "../../app/fixtures";
-import { MembersPage } from "./MembersPageView";
+import { buildWorkspaceTreeRows, MembersPage } from "./MembersPageView";
 
 describe("MembersPage coordinator agents", () => {
   it("shows channel coordinator runtime configuration without a direct message action", () => {
@@ -154,7 +154,7 @@ describe("MembersPage coordinator agents", () => {
               permissions: [],
               environmentVariables: [],
               activity: "Idle",
-              skills: [{ id: "memory", name: "Memory", trigger: "remember facts", path: "~/.slei/agents/agent_coda/skills/memory.skill.md" }],
+              skills: [{ id: "memory", name: "memory", trigger: "remember facts", path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md" }],
               capabilities: ["ClaudeCode"],
               createdAgents: [],
               directMessageEnabled: true,
@@ -164,8 +164,8 @@ describe("MembersPage coordinator agents", () => {
               workspaceEntries: [
                 {
                   kind: "directory",
-                  name: "skills",
-                  relativePath: "skills",
+                  name: ".claude",
+                  relativePath: ".claude",
                 },
                 {
                   kind: "file",
@@ -202,12 +202,41 @@ describe("MembersPage coordinator agents", () => {
     expect(html).not.toContain("<h2 class=\"text-sm font-semibold\">文件</h2>");
     expect(html).not.toContain("~/.slei/agents/agent_coda</p>");
     expect(html).toContain("MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md");
-    expect(html).toContain("skills");
-    expect(html).not.toContain("Memory</span>");
+    expect(html).toContain(".claude");
+    expect(html).not.toContain("memory</span>");
     expect(html).not.toContain("remember facts");
     expect(html).toContain("w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap");
     expect(html).toContain("Coda prefers concise implementation notes.");
     expect(html).toContain("通过资源管理器打开");
     expect(html).not.toContain("通过 daemon 打开");
+  });
+
+  it("flattens expanded workspace folders inline like a code editor", () => {
+    const rows = buildWorkspaceTreeRows({
+      entriesByDirectory: {
+        "": [
+          { kind: "directory", name: ".claude", relativePath: ".claude" },
+          { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
+        ],
+        ".claude": [
+          { kind: "directory", name: "skills", relativePath: ".claude/skills" },
+        ],
+        ".claude/skills": [
+          { kind: "directory", name: "memory", relativePath: ".claude/skills/memory" },
+        ],
+        ".claude/skills/memory": [
+          { kind: "file", name: "SKILL.md", relativePath: ".claude/skills/memory/SKILL.md" },
+        ],
+      },
+      expandedDirectories: new Set([".claude", ".claude/skills", ".claude/skills/memory"]),
+    });
+
+    expect(rows.map((row) => `${row.depth}:${row.entry.relativePath}`)).toEqual([
+      "0:.claude",
+      "1:.claude/skills",
+      "2:.claude/skills/memory",
+      "3:.claude/skills/memory/SKILL.md",
+      "0:MEMORY.md",
+    ]);
   });
 });

@@ -34,6 +34,8 @@ export type IsolatedSdkOptions = {
   tools: string[];
   allowedTools: string[];
   disallowedTools: string[];
+  settingSources: string[];
+  skills: "all";
   toolAliases: Record<string, string>;
   canUseTool: (
     toolName: string,
@@ -83,7 +85,7 @@ export type RunPermissionControllerInput = {
   sessionId: string;
 };
 
-const READ_TOOLS = ["Read", "Grep", "Glob", "LS"] as const;
+const READ_TOOLS = ["Skill", "Read", "Grep", "Glob", "LS"] as const;
 const WRITE_TOOLS = ["Write", "Edit", "MultiEdit"] as const;
 const BUILTIN_TOOLS = [...READ_TOOLS, ...WRITE_TOOLS];
 const sessionGrants = new Set<string>();
@@ -104,6 +106,8 @@ export function buildIsolatedSdkOptions(
     tools: [...BUILTIN_TOOLS],
     allowedTools: [...READ_TOOLS, ...SLEI_PRODUCT_TOOL_NAMES.map(toSleiMcpToolName)],
     disallowedTools: ["Task", "Plugin:*", "Bash:curl", "Bash:wget"],
+    settingSources: ["project"],
+    skills: "all",
     toolAliases: createSleiToolAliases(),
     canUseTool: controller.canUseTool,
     cwd,

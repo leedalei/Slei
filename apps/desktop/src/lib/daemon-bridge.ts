@@ -901,17 +901,17 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
   const skills: SkillView[] = [
     {
       id: "memory",
-      name: "记忆",
-      trigger: `提及 ${input.handle} 并使用 remember、learn 或 记住`,
-      path: `${input.workspacePath}/skills/memory.skill.md`,
+      name: "memory",
+      trigger: `Use when the user mentions ${input.handle} and asks this agent to remember, learn, or 记住 something.`,
+      path: `${input.workspacePath}/.claude/skills/memory/SKILL.md`,
     },
   ];
   if (input.kind === "guide") {
     skills.unshift({
       id: "guide-create",
-      name: "引导创建",
-      trigger: "识别创建智能体、成员、频道的请求",
-      path: `${input.workspacePath}/skills/guide-create.skill.md`,
+      name: "guide-create",
+      trigger: "Use when the user asks Yeal to create an agent, member, or channel in Slei.",
+      path: `${input.workspacePath}/.claude/skills/guide-create/SKILL.md`,
     });
   }
   return skills;
@@ -920,18 +920,23 @@ function defaultSkillViews(input: { handle: string; kind?: string; workspacePath
 function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
   if (!relativePath) {
     return [
+      { kind: "directory", name: ".claude", relativePath: ".claude" },
       { kind: "directory", name: "docs", relativePath: "docs" },
-      { kind: "directory", name: "skills", relativePath: "skills" },
       { kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" },
     ];
   }
-  if (relativePath === "skills") {
-    return (agent.skills ?? defaultSkillViews({ handle: agent.handle, kind: agent.agentKind, workspacePath: agent.workspacePath }))
-      .map((skill) => ({
-        kind: "file",
-        name: skill.path.split("/").at(-1) ?? `${skill.id}.skill.md`,
-        relativePath: `skills/${skill.path.split("/").at(-1) ?? `${skill.id}.skill.md`}`,
-      }));
+  if (relativePath === ".claude") {
+    return [{ kind: "directory", name: "skills", relativePath: ".claude/skills" }];
+  }
+  if (relativePath === ".claude/skills") {
+    return (agent.skills ?? defaultSkillViews({ handle: agent.handle, kind: agent.agentKind, workspacePath: agent.workspacePath })).map((skill) => ({
+      kind: "directory",
+      name: skill.id,
+      relativePath: `.claude/skills/${skill.id}`,
+    }));
+  }
+  if (relativePath.startsWith(".claude/skills/")) {
+    return [{ kind: "file", name: "SKILL.md", relativePath: `${relativePath}/SKILL.md` }];
   }
   if (relativePath === "docs") {
     return [];
@@ -945,7 +950,7 @@ function mockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: st
   }
   const skill = (agent.skills ?? []).find((candidate) => candidate.path.endsWith(relativePath));
   if (skill) {
-    return [`# ${skill.name}`, "", skill.trigger].join("\n");
+    return ["---", `name: ${skill.name}`, `description: ${skill.trigger}`, "---", "", `# ${skill.name}`].join("\n");
   }
   return "";
 }

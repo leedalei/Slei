@@ -168,9 +168,23 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(workspace.ends_with("agent_guide_local_node"));
     assert!(workspace.join("MEMORY.md").is_file());
     assert!(workspace.join("docs").is_dir());
-    assert!(workspace.join("skills/index.json").is_file());
-    assert!(workspace.join("skills/guide-create.skill.md").is_file());
-    assert!(workspace.join("skills/memory.skill.md").is_file());
+    assert!(!workspace.join("skills/index.json").exists());
+    assert!(!workspace.join("skills/guide-create.skill.md").exists());
+    assert!(!workspace.join("skills/memory.skill.md").exists());
+    assert!(workspace
+        .join(".claude/skills/guide-create/SKILL.md")
+        .is_file());
+    assert!(workspace.join(".claude/skills/memory/SKILL.md").is_file());
+    let memory_skill =
+        fs::read_to_string(workspace.join(".claude/skills/memory/SKILL.md")).unwrap();
+    assert!(memory_skill.starts_with("---\n"));
+    assert!(memory_skill.contains("\nname: memory\n"));
+    assert!(memory_skill.contains("\ndescription: "));
+    let guide_skill =
+        fs::read_to_string(workspace.join(".claude/skills/guide-create/SKILL.md")).unwrap();
+    assert!(guide_skill.starts_with("---\n"));
+    assert!(guide_skill.contains("\nname: guide-create\n"));
+    assert!(guide_skill.contains("slei_propose_interactive_card"));
     let memory = fs::read_to_string(workspace.join("MEMORY.md")).unwrap();
     assert!(!memory.contains("@Alice"));
     assert!(!memory.contains("@Nancy"));
@@ -242,6 +256,61 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(agents
         .iter()
         .any(|agent| agent["id"] == "agent_coordinator_all"));
+}
+
+#[tokio::test]
+async fn member_service_startup_migrates_legacy_default_skill_files() {
+    let root = make_temp_dir("legacy-skill-migration");
+    let workspace = root.join("agents/agent_legacy");
+    fs::create_dir_all(workspace.join("docs")).unwrap();
+    fs::create_dir_all(workspace.join("skills")).unwrap();
+    fs::write(
+        workspace.join("MEMORY.md"),
+        "# Legacy\n\n## Role\nLegacy agent",
+    )
+    .unwrap();
+    fs::write(workspace.join("skills/index.json"), "[]").unwrap();
+    fs::write(workspace.join("skills/memory.skill.md"), "legacy memory").unwrap();
+    fs::write(workspace.join("skills/custom.skill.md"), "keep me").unwrap();
+    fs::write(workspace.join("memory.skill.md"), "legacy root memory").unwrap();
+    let agent = json!([{
+        "id": "agent_legacy",
+        "name": "Legacy",
+        "handle": "@legacy",
+        "agentKind": "agent",
+        "systemOwned": false,
+        "runtimeKind": "ClaudeCode",
+        "model": "Sonnet",
+        "nodeId": "local-node",
+        "description": "Legacy agent",
+        "workspacePath": workspace.to_string_lossy(),
+        "memoryPath": workspace.join("MEMORY.md").to_string_lossy(),
+        "docsPath": workspace.join("docs").to_string_lossy(),
+        "avatarSeed": "agent_legacy",
+        "runtimeThread": { "runtimeKind": "ClaudeCode", "status": "ready", "createdAt": "1" },
+        "channelIds": ["all"],
+        "createdAt": "1",
+        "updatedAt": "1"
+    }]);
+    fs::write(
+        root.join("agents/index.json"),
+        serde_json::to_string_pretty(&agent).unwrap(),
+    )
+    .unwrap();
+
+    let state = AppState::for_tests_with_agent_root(AuthToken::from_static("token"), root.clone());
+    let skills = state
+        .members()
+        .list_agent_skills("agent_legacy")
+        .await
+        .unwrap();
+
+    assert_eq!(skills[0].id, "memory");
+    assert!(workspace.join(".claude/skills/memory/SKILL.md").is_file());
+    assert!(!workspace.join("skills/index.json").exists());
+    assert!(!workspace.join("skills/memory.skill.md").exists());
+    assert!(!workspace.join("memory.skill.md").exists());
+    assert!(workspace.join("skills/custom.skill.md").is_file());
 }
 
 #[tokio::test]

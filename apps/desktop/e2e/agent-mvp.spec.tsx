@@ -67,13 +67,13 @@ const members: SleiMember[] = [
         id: "guide-create",
         name: "引导创建",
         trigger: "识别创建智能体、成员、频道的请求",
-        path: "~/.slei/agents/agent_coda/skills/guide-create.skill.md",
+        path: "~/.slei/agents/agent_coda/.claude/skills/guide-create/SKILL.md",
       },
       {
         id: "memory",
         name: "记忆",
         trigger: "提及 @coda 并使用 remember、learn 或 记住",
-        path: "~/.slei/agents/agent_coda/skills/memory.skill.md",
+        path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md",
       },
     ],
   },
@@ -137,7 +137,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("能力");
     expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");
-    expect(html).toContain("skills/");
+    expect(html).toContain(".claude/");
     expect(html).not.toContain("~/.slei/agents/agent_nancy/MEMORY.md");
     expect(html).not.toContain("Agent 私信");
     expect(html).not.toContain("提醒");
@@ -168,7 +168,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");
     expect(html).toContain("docs/");
-    expect(html).toContain("skills/");
+    expect(html).toContain(".claude/");
     expect(html).not.toContain("~/.slei/agents/agent_coda/MEMORY.md");
     expect(html).not.toContain("引导创建</span>");
     expect(html).not.toContain("识别创建智能体、成员、频道的请求");

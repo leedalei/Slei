@@ -1022,13 +1022,22 @@ mod tests {
         assert!(root_entries
             .entries
             .iter()
-            .any(|entry| entry.name == "skills" && entry.kind == "directory"));
-        let skill_entries =
-            list_agent_workspace(&broker, &agent.id, Some("skills".to_string())).unwrap();
+            .any(|entry| entry.name == ".claude" && entry.kind == "directory"));
+        let skill_entries = list_agent_workspace(
+            &broker,
+            &agent.id,
+            Some(".claude/skills/memory".to_string()),
+        )
+        .unwrap();
         assert!(skill_entries
             .entries
             .iter()
-            .any(|entry| entry.name == "memory.skill.md" && entry.kind == "file"));
+            .any(|entry| entry.name == "SKILL.md" && entry.kind == "file"));
+        let skill = read_agent_workspace_file(&broker, &agent.id, ".claude/skills/memory/SKILL.md")
+            .unwrap();
+        assert_eq!(skill.name, "SKILL.md");
+        assert!(skill.content.contains("\nname: memory\n"));
+        assert!(skill.content.contains("\ndescription: "));
         let memory = read_agent_workspace_file(&broker, &agent.id, "MEMORY.md").unwrap();
         assert_eq!(memory.name, "MEMORY.md");
         assert!(memory.content.contains("开发 Agent"));
@@ -1085,6 +1094,72 @@ mod tests {
             .starts_with(second_root.to_str().unwrap()));
         let skills = list_agent_skills(&broker, &agent.id).unwrap();
         assert!(skills.skills.iter().any(|skill| skill.id == "memory"));
+
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn broker_startup_migrates_legacy_skill_files_to_claude_skill_dirs() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-legacy-skill-migration-{}",
+            std::process::id()
+        ));
+        let workspace = agent_root.join("agents/agent_legacy");
+        fs::create_dir_all(workspace.join("docs")).unwrap();
+        fs::create_dir_all(workspace.join("skills")).unwrap();
+        fs::write(
+            workspace.join("MEMORY.md"),
+            "# Legacy\n\n## Role\nLegacy agent",
+        )
+        .unwrap();
+        fs::write(workspace.join("skills/index.json"), "[]").unwrap();
+        fs::write(workspace.join("skills/memory.skill.md"), "legacy memory").unwrap();
+        fs::write(workspace.join("skills/custom.skill.md"), "keep me").unwrap();
+        fs::write(workspace.join("memory.skill.md"), "legacy root memory").unwrap();
+        let agent = serde_json::json!([{
+            "id": "agent_legacy",
+            "name": "Legacy",
+            "handle": "@legacy",
+            "agentKind": "agent",
+            "systemOwned": false,
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Legacy agent",
+            "workspacePath": workspace.to_string_lossy(),
+            "memoryPath": workspace.join("MEMORY.md").to_string_lossy(),
+            "docsPath": workspace.join("docs").to_string_lossy(),
+            "avatarSeed": "agent_legacy",
+            "runtimeThread": { "runtimeKind": "ClaudeCode", "status": "ready", "createdAt": "1" },
+            "skills": [],
+            "channelIds": ["all"],
+            "createdAt": "1",
+            "updatedAt": "1"
+        }]);
+        fs::create_dir_all(agent_root.join("agents")).unwrap();
+        fs::write(
+            agent_root.join("agents/index.json"),
+            serde_json::to_string_pretty(&agent).unwrap(),
+        )
+        .unwrap();
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let skills = list_agent_skills(&broker, "agent_legacy").unwrap();
+        assert_eq!(skills.skills[0].id, "memory");
+        assert!(workspace.join(".claude/skills/memory/SKILL.md").is_file());
+        assert!(!workspace.join("skills/index.json").exists());
+        assert!(!workspace.join("skills/memory.skill.md").exists());
+        assert!(!workspace.join("memory.skill.md").exists());
+        assert!(workspace.join("skills/custom.skill.md").is_file());
 
         std::env::remove_var("SLEI_DATA_ROOT");
     }

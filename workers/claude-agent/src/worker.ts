@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { query as claudeAgentQuery } from "@anthropic-ai/claude-agent-sdk";
@@ -247,6 +247,8 @@ export function buildClaudeSdkOptions(
     permissionMode: isolatedOptions.permissionMode,
     allowedTools: isolatedOptions.allowedTools,
     disallowedTools: isolatedOptions.disallowedTools,
+    settingSources: isolatedOptions.settingSources,
+    skills: isolatedOptions.skills,
     toolAliases: isolatedOptions.toolAliases,
     canUseTool: isolatedOptions.canUseTool,
     systemPrompt: buildSleiSystemPrompt(command.session.cwd),
@@ -329,17 +331,6 @@ function loadAgentWorkspaceContext(cwd: string): string {
   const memoryPath = join(cwd, "MEMORY.md");
   if (existsSync(memoryPath)) {
     sections.push(`Agent MEMORY.md:\n${readFileSync(memoryPath, "utf8")}`);
-  }
-  const skillsPath = join(cwd, "skills");
-  if (existsSync(skillsPath)) {
-    const skills = readdirSync(skillsPath)
-      .filter((name) => name.endsWith(".skill.md"))
-      .sort()
-      .map((name) => {
-        const path = join(skillsPath, name);
-        return `Skill ${name}:\n${readFileSync(path, "utf8")}`;
-      });
-    sections.push(...skills);
   }
   return sections.join("\n\n");
 }

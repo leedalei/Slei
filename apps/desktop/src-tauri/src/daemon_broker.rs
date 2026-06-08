@@ -171,7 +171,7 @@ pub struct RuntimeThreadView {
     pub created_at: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillView {
     pub id: String,
@@ -2760,6 +2760,9 @@ fn load_local_agents_at_root(root: &str) -> Vec<DesktopAgentView> {
                 should_persist = true;
             }
         }
+        if migrate_local_agent_skills_on_load(agent) {
+            should_persist = true;
+        }
     }
 
     let recovered = recover_local_agent_workspaces(root, &agents);
@@ -2857,6 +2860,18 @@ fn recover_local_agent_workspace(path: &Path, id: String) -> Option<DesktopAgent
     Some(agent)
 }
 
+fn migrate_local_agent_skills_on_load(agent: &mut DesktopAgentView) -> bool {
+    let _ = write_local_agent_skills(agent);
+    let Ok(skills) = read_local_agent_skills(agent) else {
+        return false;
+    };
+    if agent.skills.as_ref() == Some(&skills) {
+        return false;
+    }
+    agent.skills = Some(skills);
+    true
+}
+
 fn recover_local_agent_handle(agent: &DesktopAgentView) -> Option<String> {
     let memory = fs::read_to_string(&agent.memory_path).ok()?;
     recover_self_handle_from_memory(&memory, &agent.name)
@@ -2908,20 +2923,19 @@ fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentErr
 }
 
 fn write_local_agent_skills(agent: &DesktopAgentView) -> Result<(), AgentError> {
-    let skills_path = format!("{}/skills", agent.workspace_path);
-    fs::create_dir_all(&skills_path).map_err(AgentError::Io)?;
     let skills = default_skill_records(agent);
     for skill in &skills {
         let body = if skill.id == "guide-create" {
-            "Trigger when the user asks Yeal to create an agent or member. For each detected member, call the product tool `slei_propose_interactive_card` with kind `createAgent`, title, summary, draft{name, handle, runtimeKind, model, nodeId, description}, actionLabel and doneLabel. Do not return executable JSON text and do not rely on the frontend parsing natural language.\n".to_string()
+            default_guide_create_skill()
         } else {
             default_memory_skill(agent)
         };
+        if let Some(parent) = Path::new(&skill.path).parent() {
+            fs::create_dir_all(parent).map_err(AgentError::Io)?;
+        }
         fs::write(&skill.path, body).map_err(AgentError::Io)?;
     }
-    let payload = serde_json::to_string_pretty(&skills).map_err(AgentError::Json)?;
-    fs::write(format!("{skills_path}/index.json"), payload).map_err(AgentError::Io)?;
-    Ok(())
+    cleanup_legacy_default_skills(agent)
 }
 
 fn normalize_guide_agent_identity(mut agent: DesktopAgentView) -> DesktopAgentView {
@@ -2970,35 +2984,156 @@ fn is_legacy_guide_memory_line(line: &str) -> bool {
 }
 
 fn read_local_agent_skills(agent: &DesktopAgentView) -> Result<Vec<SkillView>, AgentError> {
-    let skills_index = format!("{}/skills/index.json", agent.workspace_path);
-    match fs::read_to_string(&skills_index) {
-        Ok(raw) => serde_json::from_str::<Vec<SkillView>>(&raw).map_err(AgentError::Json),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            Ok(default_skill_records(agent))
+    read_standard_agent_skills(agent).or_else(|error| {
+        if matches!(error, AgentError::Io(ref io_error) if io_error.kind() == std::io::ErrorKind::NotFound)
+        {
+            read_legacy_agent_skills(agent).or_else(|legacy_error| {
+                if matches!(legacy_error, AgentError::Io(ref io_error) if io_error.kind() == std::io::ErrorKind::NotFound)
+                {
+                    Ok(default_skill_records(agent))
+                } else {
+                    Err(legacy_error)
+                }
+            }).and_then(|legacy| {
+                write_local_agent_skills(agent)?;
+                read_standard_agent_skills(agent).or(Ok(legacy))
+            })
+        } else {
+            Err(error)
         }
-        Err(error) => Err(AgentError::Io(error)),
-    }
+    })
 }
 
 fn default_skill_records(agent: &DesktopAgentView) -> Vec<SkillView> {
     let mut skills = vec![SkillView {
         id: "memory".to_string(),
-        name: "记忆".to_string(),
-        trigger: format!("提及 {} 并使用 remember、learn 或 记住", agent.handle),
-        path: format!("{}/skills/memory.skill.md", agent.workspace_path),
+        name: "memory".to_string(),
+        trigger: format!(
+            "Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.",
+            agent.handle
+        ),
+        path: standard_skill_path(agent, "memory")
+            .to_string_lossy()
+            .to_string(),
     }];
     if agent.agent_kind.as_deref() == Some("guide") {
         skills.insert(
             0,
             SkillView {
                 id: "guide-create".to_string(),
-                name: "引导创建".to_string(),
-                trigger: "识别创建智能体、成员、频道的请求".to_string(),
-                path: format!("{}/skills/guide-create.skill.md", agent.workspace_path),
+                name: "guide-create".to_string(),
+                trigger:
+                    "Use when the user asks Yeal to create an agent, member, or channel in Slei."
+                        .to_string(),
+                path: standard_skill_path(agent, "guide-create")
+                    .to_string_lossy()
+                    .to_string(),
             },
         );
     }
     skills
+}
+
+fn read_standard_agent_skills(agent: &DesktopAgentView) -> Result<Vec<SkillView>, AgentError> {
+    let skills_root = standard_skills_root(agent);
+    let mut skills = Vec::new();
+    for entry in fs::read_dir(&skills_root).map_err(AgentError::Io)? {
+        let entry = entry.map_err(AgentError::Io)?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let skill_path = path.join("SKILL.md");
+        if !skill_path.is_file() {
+            continue;
+        }
+        let raw = fs::read_to_string(&skill_path).map_err(AgentError::Io)?;
+        let id = path
+            .file_name()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let (name, trigger) =
+            parse_skill_frontmatter(&raw).unwrap_or_else(|| (id.clone(), String::new()));
+        skills.push(SkillView {
+            id,
+            name,
+            trigger,
+            path: skill_path.to_string_lossy().to_string(),
+        });
+    }
+    if skills.is_empty() {
+        return Err(AgentError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no standard skills found",
+        )));
+    }
+    skills.sort_by(|left, right| left.id.cmp(&right.id));
+    Ok(skills)
+}
+
+fn read_legacy_agent_skills(agent: &DesktopAgentView) -> Result<Vec<SkillView>, AgentError> {
+    let skills_index = format!("{}/skills/index.json", agent.workspace_path);
+    fs::read_to_string(&skills_index)
+        .map_err(AgentError::Io)
+        .and_then(|raw| serde_json::from_str::<Vec<SkillView>>(&raw).map_err(AgentError::Json))
+}
+
+fn standard_skills_root(agent: &DesktopAgentView) -> PathBuf {
+    PathBuf::from(&agent.workspace_path).join(".claude/skills")
+}
+
+fn standard_skill_path(agent: &DesktopAgentView, id: &str) -> PathBuf {
+    standard_skills_root(agent).join(id).join("SKILL.md")
+}
+
+fn parse_skill_frontmatter(raw: &str) -> Option<(String, String)> {
+    let mut lines = raw.lines();
+    if lines.next()? != "---" {
+        return None;
+    }
+    let mut name = None;
+    let mut description = None;
+    for line in lines {
+        if line == "---" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("name:") {
+            name = Some(value.trim().trim_matches('"').to_string());
+        }
+        if let Some(value) = line.strip_prefix("description:") {
+            description = Some(value.trim().trim_matches('"').to_string());
+        }
+    }
+    Some((name?, description?))
+}
+
+fn cleanup_legacy_default_skills(agent: &DesktopAgentView) -> Result<(), AgentError> {
+    let workspace_root = PathBuf::from(&agent.workspace_path);
+    for file_name in ["memory.skill.md", "guide-create.skill.md"] {
+        let path = workspace_root.join(file_name);
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(AgentError::Io(error)),
+        }
+    }
+
+    let legacy_root = PathBuf::from(&agent.workspace_path).join("skills");
+    for file_name in ["index.json", "memory.skill.md", "guide-create.skill.md"] {
+        let path = legacy_root.join(file_name);
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(AgentError::Io(error)),
+        }
+    }
+    match fs::remove_dir(&legacy_root) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == std::io::ErrorKind::DirectoryNotEmpty => {}
+        Err(error) => return Err(AgentError::Io(error)),
+    }
+    Ok(())
 }
 
 fn canonicalize_agent_path(path: &str) -> Result<PathBuf, AgentPathError> {
@@ -3153,9 +3288,36 @@ fn channel_coordinator_description(channel_name: &str) -> String {
 
 fn default_memory_skill(agent: &DesktopAgentView) -> String {
     format!(
-        "Trigger when a user mentions {} and asks this agent to remember, learn, or 记住 something.\n",
-        agent.handle
+        r#"---
+name: memory
+description: Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.
+---
+
+# Memory
+
+Use this skill when a user mentions {} and asks this agent to remember, learn, or 记住 something.
+
+When triggered, append the requested fact to `MEMORY.md` under Key Knowledge or Active Context.
+"#,
+        agent.handle, agent.handle
     )
+}
+
+fn default_guide_create_skill() -> String {
+    [
+        "---",
+        "name: guide-create",
+        "description: Use when the user asks Yeal to create an agent, member, or channel in Slei.",
+        "---",
+        "",
+        "# Guide Create",
+        "",
+        "For each detected member, call the product tool `slei_propose_interactive_card` with kind `createAgent`, title, summary, draft{name, handle, runtimeKind, model, nodeId, description}, actionLabel and doneLabel.",
+        "",
+        "Do not return executable JSON text and do not rely on the frontend parsing natural language.",
+        "",
+    ]
+    .join("\n")
 }
 
 fn is_daemon_unavailable_error(error: &str) -> bool {

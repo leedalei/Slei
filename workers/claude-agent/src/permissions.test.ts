@@ -7,9 +7,11 @@ describe("Slei Claude SDK permission profile", () => {
     const options = buildIsolatedSdkOptions("Controlled", "/workspace/app");
 
     expect(options.persistSession).toBe(false);
-    expect(options).not.toHaveProperty("settingSources");
     expect(options).not.toHaveProperty("strictMcpConfig");
+    expect(options.settingSources).toEqual(["project"]);
+    expect(options.skills).toBe("all");
     expect(options.allowedTools).toEqual([
+      "Skill",
       "Read",
       "Grep",
       "Glob",
@@ -19,6 +21,7 @@ describe("Slei Claude SDK permission profile", () => {
       "mcp__slei__slei_request_human_reply",
     ]);
     expect(options.tools).toEqual([
+      "Skill",
       "Read",
       "Grep",
       "Glob",
@@ -131,13 +134,22 @@ describe("Slei Claude SDK permission profile", () => {
       const options = buildIsolatedSdkOptions(preset, "/workspace/app");
 
       expect(options.persistSession).toBe(false);
-      expect(options).not.toHaveProperty("settingSources");
       expect(options).not.toHaveProperty("strictMcpConfig");
+      expect(options.settingSources).toEqual(["project"]);
+      expect(options.skills).toBe("all");
       expect(options.disallowedTools).toEqual(
         expect.arrayContaining(["Task", "Plugin:*"]),
       );
       expect(options.disallowedTools).not.toContain("mcp__*");
     }
+  });
+
+  it("allows Claude Skill invocation as a read-only project capability", async () => {
+    const options = buildIsolatedSdkOptions("Controlled", "/workspace/app");
+
+    await expect(options.canUseTool("Skill", { name: "memory" }, toolOptions("tool_skill"))).resolves.toMatchObject({
+      behavior: "allow",
+    });
   });
 
   it("forwards canUseTool calls as pending daemon permission requests", () => {
