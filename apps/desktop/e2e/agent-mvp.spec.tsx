@@ -300,6 +300,8 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
     expect(html).not.toContain('data-variant="destructive"');
     expect(html).toContain('data-slot="button"');
+    expect(html).toContain('data-slot="card-action"');
+    expect(html).toContain("self-center");
     expect(html).toContain("disabled=\"\"");
     expect(html).toContain("已完成");
   });

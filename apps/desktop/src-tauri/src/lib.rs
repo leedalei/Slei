@@ -1272,6 +1272,7 @@ mod tests {
         .unwrap();
         assert!(skill.content.contains("slei_propose_interactive_card"));
         assert!(skill.content.contains("Input schema"));
+        assert!(skill.content.contains("simple random unused name"));
         assert!(skill.content.contains("Multiple agents example"));
         assert!(!skill.content.contains("description: old"));
 
@@ -1736,6 +1737,7 @@ mod tests {
         assert!(guide_skill.content.contains("Single agent example"));
         assert!(guide_skill.content.contains("Multiple agents example"));
         assert!(guide_skill.content.contains("Call the tool once per agent"));
+        assert!(guide_skill.content.contains("simple random unused name"));
         let dm = list_conversations(&broker).conversations[0].clone();
         send_conversation_message(
             &broker,

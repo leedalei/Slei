@@ -876,7 +876,7 @@ Use this skill when the user asks Yeal to create, add, set up, or prepare one or
 
 1. Extract every requested agent from the user message.
 2. Normalize each draft:
-   - `name`: short display name, 1-32 characters.
+   - `name`: short display name, 1-32 characters. If a requested role has responsibilities but no explicit name, assign a simple random unused name such as Coda, Mira, Nova, Owen, Luna, Kai, Iris, or Theo.
    - `handle`: lowercase kebab handle with a leading `@`, derived from the name if omitted.
    - `runtimeKind`: default `ClaudeCode`.
    - `model`: default `Sonnet`.
@@ -1079,8 +1079,13 @@ fn default_skill_records(agent: &ProductAgentRecord) -> Vec<SkillRecord> {
     let mut skills = vec![SkillRecord {
         id: "memory".to_string(),
         name: "memory".to_string(),
-        trigger: format!("Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.", agent.handle),
-        path: standard_skill_path(agent, "memory").to_string_lossy().to_string(),
+        trigger: format!(
+            "Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.",
+            agent.handle
+        ),
+        path: standard_skill_path(agent, "memory")
+            .to_string_lossy()
+            .to_string(),
     }];
     if agent.agent_kind == "guide" {
         skills.insert(

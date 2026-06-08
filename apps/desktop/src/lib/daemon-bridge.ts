@@ -946,6 +946,8 @@ Use this skill when the user asks Yeal to create, add, set up, or prepare one or
 
 1. Extract every requested agent from the user message.
 2. Normalize each draft: name, handle, runtimeKind, model, nodeId, and description.
+   - If a requested role has responsibilities but no explicit name, assign a simple random unused name such as Coda, Mira, Nova, Owen, Luna, Kai, Iris, or Theo.
+   - Derive the handle from the final name.
 3. For each valid draft, call the product tool command \`slei_propose_interactive_card\`.
 4. Call the tool once per agent. Multiple requested agents require multiple tool calls, not one combined card.
 5. Reply briefly with what was prepared and what still needs user confirmation.

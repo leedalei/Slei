@@ -254,6 +254,55 @@ function channelAgentReplyPrompt(channelId: string, body: string): string {
 export const CHANNEL_AGENT_REPLY_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 export const CHANNEL_AGENT_REPLY_POLL_INTERVAL_MS = 500;
 
+function completedAgentReplies(messages: ConversationMessageView[]) {
+  const completed = messages.filter((message) => message.status !== "running" && message.status !== "pending");
+  const displayable = completed.filter((message) => message.body.trim() || (message.cards?.length ?? 0) > 0 || message.status === "failed");
+  return displayable.length > 0 ? displayable : completed.slice(-1);
+}
+
+export async function waitForChannelAgentReplies(
+  bridge: Pick<DaemonBridge, "listConversationMessages">,
+  conversationId: string,
+  agentId: string,
+  existingMessageIds: Set<string>,
+  options: {
+    idleTimeoutMs?: number;
+    pollIntervalMs?: number;
+    onProgress?: (message: ConversationMessageView) => void;
+  } = {},
+): Promise<ConversationMessageView[]> {
+  const idleTimeoutMs = options.idleTimeoutMs ?? CHANNEL_AGENT_REPLY_IDLE_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? CHANNEL_AGENT_REPLY_POLL_INTERVAL_MS;
+  let expiresAt = Date.now() + idleTimeoutMs;
+  let lastProgressKey = "";
+
+  while (Date.now() < expiresAt) {
+    const receipt = await bridge.listConversationMessages(conversationId);
+    const replies = receipt.messages
+      .filter((message) => message.authorId === agentId && !existingMessageIds.has(message.id))
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const progress = replies.findLast((message) => message.status === "running" || message.status === "pending") ?? replies.at(-1);
+    if (progress) {
+      const progressKey = [
+        progress.id,
+        progress.status ?? "",
+        progress.body,
+        progress.cards?.map((card) => `${card.id}:${card.state}`).join(",") ?? "",
+      ].join("|");
+      if (progressKey !== lastProgressKey) {
+        lastProgressKey = progressKey;
+        expiresAt = Date.now() + idleTimeoutMs;
+        options.onProgress?.(progress);
+      }
+    }
+    if (replies.length > 0 && replies.every((message) => message.status !== "running" && message.status !== "pending")) {
+      return completedAgentReplies(replies);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+  return [];
+}
+
 export async function waitForChannelAgentReply(
   bridge: Pick<DaemonBridge, "listConversationMessages">,
   conversationId: string,
@@ -265,34 +314,7 @@ export async function waitForChannelAgentReply(
     onProgress?: (message: ConversationMessageView) => void;
   } = {},
 ): Promise<ConversationMessageView | undefined> {
-  const idleTimeoutMs = options.idleTimeoutMs ?? CHANNEL_AGENT_REPLY_IDLE_TIMEOUT_MS;
-  const pollIntervalMs = options.pollIntervalMs ?? CHANNEL_AGENT_REPLY_POLL_INTERVAL_MS;
-  let expiresAt = Date.now() + idleTimeoutMs;
-  let lastProgressKey = "";
-
-  while (Date.now() < expiresAt) {
-    const receipt = await bridge.listConversationMessages(conversationId);
-    const reply = receipt.messages
-      .filter((message) => message.authorId === agentId && !existingMessageIds.has(message.id))
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
-      .at(-1);
-    if (reply) {
-      const progressKey = [
-        reply.id,
-        reply.status ?? "",
-        reply.body,
-        reply.cards?.map((card) => `${card.id}:${card.state}`).join(",") ?? "",
-      ].join("|");
-      if (progressKey !== lastProgressKey) {
-        lastProgressKey = progressKey;
-        expiresAt = Date.now() + idleTimeoutMs;
-        options.onProgress?.(reply);
-      }
-    }
-    if (reply && reply.status !== "running" && reply.status !== "pending") return reply;
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
-  return undefined;
+  return (await waitForChannelAgentReplies(bridge, conversationId, agentId, existingMessageIds, options)).at(-1);
 }
 
 export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOutcome, channelId: string, messages: DesktopMessages): SleiMessage | null {
@@ -345,6 +367,38 @@ export function createChannelAgentReplyMessage(
     cards: reply.cards,
     channelId,
     status: conversationMessageStatus(reply.status),
+  };
+}
+
+export function createChannelAgentReplyMessageFromReplies(
+  replies: ConversationMessageView[],
+  outcome: SendChannelMessageOutcome,
+  channelId: string,
+  member?: SleiMember,
+  messageId = `agent-reply-${outcome.messageId}`,
+): SleiMessage {
+  const latest = replies.at(-1);
+  if (!latest) {
+    return {
+      id: messageId,
+      author: member?.name ?? outcome.assigneeAgentId ?? "agent",
+      handle: member?.handle,
+      avatar: member?.avatar,
+      role: "agent",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      body: "",
+      channelId,
+      status: "failed",
+    };
+  }
+  const body = replies.map((reply) => reply.body.trim()).filter(Boolean).join("\n\n");
+  const cards = replies.flatMap((reply) => reply.cards ?? []);
+  const failed = replies.some((reply) => reply.status === "failed");
+  return {
+    ...createChannelAgentReplyMessage(latest, outcome, channelId, member, messageId),
+    body,
+    cards: cards.length > 0 ? cards : undefined,
+    status: failed ? "failed" : conversationMessageStatus(latest.status),
   };
 }
 
@@ -854,7 +908,7 @@ export function SleiApp() {
         sourceChannelId: channelId,
         sourceChannelName: sourceChannel?.name,
       });
-      const reply = await waitForChannelAgentReply(bridge, conversationReceipt.conversation.id, agentId, existingMessageIds, {
+      const replies = await waitForChannelAgentReplies(bridge, conversationReceipt.conversation.id, agentId, existingMessageIds, {
         onProgress: (progress) => {
           const progressMessage = createChannelAgentReplyMessage(progress, outcome, channelId, member, activityId);
           setData((current) =>
@@ -865,16 +919,18 @@ export function SleiApp() {
           );
         },
       });
-      logAppEvent(bridge, "channel-agent-reply", reply ? "reply-received" : "reply-timeout", {
+      const reply = replies.at(-1);
+      logAppEvent(bridge, "channel-agent-reply", replies.length > 0 ? "reply-received" : "reply-timeout", {
         channelId,
         messageId: outcome.messageId,
         assigneeAgentId: agentId,
         conversationId: conversationReceipt.conversation.id,
+        replyCount: replies.length,
         replyId: reply?.id,
         replyStatus: reply?.status,
       });
-      const replyMessage = reply
-        ? createChannelAgentReplyMessage(reply, outcome, channelId, member, activityId)
+      const replyMessage = replies.length > 0
+        ? createChannelAgentReplyMessageFromReplies(replies, outcome, channelId, member, activityId)
         : {
             id: activityId,
             author: member?.name ?? agentId,
@@ -886,7 +942,7 @@ export function SleiApp() {
             channelId,
             status: "failed" as const,
           };
-      if (!reply || reply.status === "failed") {
+      if (replies.length === 0 || replies.some((message) => message.status === "failed")) {
         showRuntimeErrorToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`);
       }
       setData((current) =>

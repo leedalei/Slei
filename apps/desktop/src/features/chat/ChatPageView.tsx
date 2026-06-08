@@ -64,7 +64,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
       <CardHeader className="gap-1 px-3">
         <CardTitle className="text-sm">{card.title}</CardTitle>
         <CardDescription className="text-xs">{card.summary}</CardDescription>
-        <CardAction>
+        <CardAction className="self-center">
           <Button disabled={done} onClick={onCreate} size="sm" type="button">
             {done ? doneLabel : card.actionLabel || messages.common.create}
           </Button>
