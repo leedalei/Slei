@@ -1,0 +1,16 @@
+[
+  {
+    "id": "memory",
+    "name": "memory",
+    "relativePath": ".claude/skills/memory/SKILL.md",
+    "triggerTemplate": "Use when the user mentions {{handle}} and asks this agent to remember, learn, or 记住 something.",
+    "agentKinds": ["guide", "agent", "coordinator"]
+  },
+  {
+    "id": "guide-create",
+    "name": "guide-create",
+    "relativePath": ".claude/skills/guide-create/SKILL.md",
+    "trigger": "Use when the user asks Yeal to create one or more Slei agents, members, or channels.",
+    "agentKinds": ["guide"]
+  }
+]

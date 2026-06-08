@@ -4,6 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use slei_default_agent_assets::{
+    initial_memory as shared_initial_memory, standard_skill_assets, AgentTemplateInput,
+};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -642,13 +645,12 @@ impl MemberService {
             return Err(MemberError::WorkspaceBoundary);
         }
 
-        let line = format!("\n- {}\n", trimmed.trim_start_matches("记住："));
+        let fact = trimmed.trim_start_matches("记住：").trim();
         let mut memory = fs::read_to_string(&memory_path).map_err(MemberError::Io)?;
-        if let Some(index) = memory.find("## Active Context") {
-            memory.insert_str(index, &line);
+        if is_active_context_fact(fact) {
+            replace_active_context(&mut memory, fact);
         } else {
-            memory.push_str("\n## Key Knowledge\n");
-            memory.push_str(&line);
+            append_key_knowledge(&mut memory, fact);
         }
         fs::write(&memory_path, memory).map_err(MemberError::Io)?;
         Ok(record)
@@ -753,69 +755,23 @@ fn default_agent_kind() -> String {
     "agent".to_string()
 }
 
+fn agent_template_input(agent: &ProductAgentRecord) -> AgentTemplateInput<'_> {
+    AgentTemplateInput {
+        name: &agent.name,
+        handle: &agent.handle,
+        description: &agent.description,
+        agent_kind: Some(&agent.agent_kind),
+        channel_ids: agent.channel_ids.iter().map(String::as_str).collect(),
+    }
+}
+
 fn initial_memory(agent: &ProductAgentRecord) -> String {
-    let base_key_knowledge = if agent.agent_kind == "guide" {
-        "引导员负责回答 Slei App 使用问题，并帮助用户创建真实的 Agent 成员与频道。\n主频道：#all（目前唯一频道）\n创建成员时通过 guide-create Skill 生成产品交互卡，不从自然语言文本直接创建成员。"
-    } else if agent.agent_kind == "coordinator" {
-        "频道协调员负责分析用户意图并路由 Agent，自己不做任何关于用户问题的回复。\n可以将消息路由给单个 Agent 或多个 Agent；例如“大家好”应路由给多个合适 Agent。\n用户明确 @ 某个 Agent、@all 或 @everyone 时，无需再分析意图，直接转发给对应 Agent。\n频道协调员是系统内置成员，只在频道内工作，不提供私聊。"
-    } else {
-        "该 Agent 按 Role 中的职责与用户协作。\n主频道：#all（目前唯一频道）\n只记录真实存在的成员和用户明确要求记住的信息。"
-    };
-    let joined_channels = agent
-        .channel_ids
-        .iter()
-        .map(|channel_id| format!("#{channel_id}"))
-        .collect::<Vec<_>>()
-        .join("、");
-    let key_knowledge = if joined_channels.is_empty() {
-        base_key_knowledge.to_string()
-    } else {
-        format!("{base_key_knowledge}\n已加入频道：{joined_channels}")
-    };
-    format!(
-        r#"# {name}
-
-## Role
-{description}
-
-## Team
-@lei-lee — 人类用户，项目发起人
-{handle} — 我自己，{name}
-
-## Key Knowledge
-{key_knowledge}
-
-## Active Context
-首次启动，等待用户提出需要引导的任务
-"#,
-        name = agent.name,
-        description = agent.description,
-        handle = agent.handle,
-        key_knowledge = key_knowledge
-    )
+    shared_initial_memory(&agent_template_input(agent))
 }
 
 pub(crate) fn channel_coordinator_description(channel_name: &str) -> String {
     format!(
         "内置频道协调员，负责分析用户在 {channel_name} 的意图并路由 Agent，自己不回复用户问题；可路由给单个或多个 Agent；用户明确 @ 某个 Agent、@all 或 @everyone 时直接转发。"
-    )
-}
-
-fn default_memory_skill(agent: &ProductAgentRecord) -> String {
-    format!(
-        r#"---
-name: memory
-description: Use when the user mentions {handle} and asks this agent to remember, learn, or 记住 something.
----
-
-# Memory
-
-Use this skill when a user mentions {handle} and asks the agent to remember, learn, or 记住 something.
-
-When triggered, append the requested fact to `MEMORY.md` under Key Knowledge or Active Context.
-
-"#,
-        handle = agent.handle
     )
 }
 
@@ -855,171 +811,59 @@ fn is_legacy_guide_memory_line(line: &str) -> bool {
         || line.contains("团队协作流程：用户/Alice")
 }
 
-fn guide_create_skill() -> String {
-    r##"---
-name: guide-create
-description: Use when the user asks Yeal to create one or more Slei agents, members, or channels.
----
-
-# Guide Create
-
-Use this skill when the user asks Yeal to create, add, set up, or prepare one or more Slei agents or members. It also applies when the user asks for a channel plus agent setup; create the agent cards first and explain any channel work that still needs confirmation.
-
-## Boundaries
-
-- Do not create agents by returning plain JSON, markdown tables, or natural language for the frontend to parse.
-- Do not silently invent missing runtime-critical values. Use the defaults below only when the user has not specified them.
-- Do not create a card for Yeal or for a channel coordinator.
-- Do not call the tool for a vague request such as "make my team better" until you have enough role/name detail to form a useful agent draft.
-
-## Workflow
-
-1. Extract every requested agent from the user message.
-2. Normalize each draft:
-   - `name`: short display name, 1-32 characters. If a requested role has responsibilities but no explicit name, assign a simple random unused name such as Coda, Mira, Nova, Owen, Luna, Kai, Iris, or Theo.
-   - `handle`: lowercase kebab handle with a leading `@`, derived from the name if omitted.
-   - `runtimeKind`: default `ClaudeCode`.
-   - `model`: default `Sonnet`.
-   - `nodeId`: default `local-node` unless the user names another device.
-   - `description`: one concise role paragraph that includes responsibilities, expected collaboration style, and any constraints the user gave.
-3. For each valid draft, call the product tool command `slei_propose_interactive_card`.
-4. Call the tool once per agent. Multiple requested agents require multiple tool calls, not one combined card.
-5. After tool calls, reply briefly with what was prepared and what still needs user confirmation.
-
-## Product Tool Command
-
-Call `slei_propose_interactive_card` with an object payload.
-
-### Input schema
-
-```json
-{
-  "kind": "createAgent",
-  "title": "创建 <name>",
-  "summary": "<name> · <runtimeKind> / <model>",
-  "draft": {
-    "name": "<display name>",
-    "handle": "@<normalized-handle>",
-    "runtimeKind": "ClaudeCode",
-    "model": "Sonnet",
-    "nodeId": "local-node",
-    "description": "<agent role and operating instructions>"
-  },
-  "actionLabel": "创建",
-  "doneLabel": "DONE"
+fn is_active_context_fact(fact: &str) -> bool {
+    let normalized = fact.to_lowercase();
+    fact.contains("当前")
+        || fact.contains("正在")
+        || fact.contains("下次继续")
+        || normalized.contains("blocked")
+        || normalized.contains("next")
+        || normalized.contains("resume")
 }
-```
 
-### Output contract
-
-The tool returns or emits an interactive card. Yeal should not mark creation complete until the user clicks the card action and Slei reports the card as done. A successful preparation response can say: "已准备创建卡片，请确认。"
-
-## Single agent example
-
-User: "帮我创建一个 Bob，做架构评审。"
-
-Tool call:
-
-```json
-{
-  "kind": "createAgent",
-  "title": "创建 Bob",
-  "summary": "Bob · ClaudeCode / Sonnet",
-  "draft": {
-    "name": "Bob",
-    "handle": "@bob",
-    "runtimeKind": "ClaudeCode",
-    "model": "Sonnet",
-    "nodeId": "local-node",
-    "description": "架构评审 Agent，负责审查技术方案、识别风险、提出可执行的改进建议，并在需要时把问题拆给实现 Agent。"
-  },
-  "actionLabel": "创建",
-  "doneLabel": "DONE"
+fn append_key_knowledge(memory: &mut String, fact: &str) {
+    let line = format!("\n- {}\n", fact.trim());
+    if let Some(index) = memory.find("## Active Context") {
+        memory.insert_str(index, &line);
+    } else {
+        if !memory.ends_with('\n') {
+            memory.push('\n');
+        }
+        memory.push_str("\n## Key Knowledge\n");
+        memory.push_str(&line);
+    }
 }
-```
 
-## Multiple agents example
-
-User: "帮我建三个成员：Coda 写代码，Mira 做 QA，Owen 做文档。"
-
-Call the tool once per agent:
-
-```json
-{
-  "kind": "createAgent",
-  "title": "创建 Coda",
-  "summary": "Coda · ClaudeCode / Sonnet",
-  "draft": {
-    "name": "Coda",
-    "handle": "@coda",
-    "runtimeKind": "ClaudeCode",
-    "model": "Sonnet",
-    "nodeId": "local-node",
-    "description": "开发 Agent，负责按需求实现代码、修复缺陷、运行必要验证，并把风险和阻塞清楚反馈给团队。"
-  },
-  "actionLabel": "创建",
-  "doneLabel": "DONE"
-}
-```
-
-```json
-{
-  "kind": "createAgent",
-  "title": "创建 Mira",
-  "summary": "Mira · ClaudeCode / Sonnet",
-  "draft": {
-    "name": "Mira",
-    "handle": "@mira",
-    "runtimeKind": "ClaudeCode",
-    "model": "Sonnet",
-    "nodeId": "local-node",
-    "description": "QA Agent，负责从验收标准、边界条件和回归风险出发检查交付物，并给出可复现的问题描述。"
-  },
-  "actionLabel": "创建",
-  "doneLabel": "DONE"
-}
-```
-
-```json
-{
-  "kind": "createAgent",
-  "title": "创建 Owen",
-  "summary": "Owen · ClaudeCode / Sonnet",
-  "draft": {
-    "name": "Owen",
-    "handle": "@owen",
-    "runtimeKind": "ClaudeCode",
-    "model": "Sonnet",
-    "nodeId": "local-node",
-    "description": "文档 Agent，负责整理需求、决策、操作说明和发布说明，确保内容准确、结构清晰、便于团队复用。"
-  },
-  "actionLabel": "创建",
-  "doneLabel": "DONE"
-}
-```
-
-## Missing information
-
-If the user omits only model/runtime/device, use defaults. If the user omits the role or expected responsibility, ask one short clarification before calling the tool.
-"##
-    .to_string()
+fn replace_active_context(memory: &mut String, fact: &str) {
+    let active_heading = "## Active Context";
+    let replacement = format!("{active_heading}\n- State: {}\n", fact.trim());
+    if let Some(start) = memory.find(active_heading) {
+        let after_heading = start + active_heading.len();
+        let rest = &memory[after_heading..];
+        let end = rest
+            .find("\n## ")
+            .map(|relative| after_heading + relative)
+            .unwrap_or(memory.len());
+        memory.replace_range(start..end, &replacement.trim_end_matches('\n'));
+        if !memory.ends_with('\n') {
+            memory.push('\n');
+        }
+    } else {
+        if !memory.ends_with('\n') {
+            memory.push('\n');
+        }
+        memory.push('\n');
+        memory.push_str(&replacement);
+    }
 }
 
 fn write_default_skills(agent: &ProductAgentRecord) -> Result<(), MemberError> {
-    let mut skills = default_skill_records(agent);
+    let skills = default_skill_assets(agent);
     for skill in &skills {
-        let body = if skill.id == "guide-create" {
-            guide_create_skill()
-        } else {
-            default_memory_skill(agent)
-        };
         if let Some(parent) = Path::new(&skill.path).parent() {
             fs::create_dir_all(parent).map_err(MemberError::Io)?;
         }
-        fs::write(&skill.path, body).map_err(MemberError::Io)?;
-    }
-    if agent.agent_kind == "guide" {
-        skills.sort_by(|left, right| left.id.cmp(&right.id));
+        fs::write(&skill.path, &skill.body).map_err(MemberError::Io)?;
     }
     cleanup_legacy_default_skills(agent)
 }
@@ -1075,34 +919,21 @@ fn read_legacy_skill_index(agent: &ProductAgentRecord) -> Result<Vec<SkillRecord
         .and_then(|raw| serde_json::from_str::<Vec<SkillRecord>>(&raw).map_err(MemberError::Json))
 }
 
-fn default_skill_records(agent: &ProductAgentRecord) -> Vec<SkillRecord> {
-    let mut skills = vec![SkillRecord {
-        id: "memory".to_string(),
-        name: "memory".to_string(),
-        trigger: format!(
-            "Use when the user mentions {} and asks this agent to remember, learn, or 记住 something.",
-            agent.handle
-        ),
-        path: standard_skill_path(agent, "memory")
-            .to_string_lossy()
-            .to_string(),
-    }];
-    if agent.agent_kind == "guide" {
-        skills.insert(
-            0,
-            SkillRecord {
-                id: "guide-create".to_string(),
-                name: "guide-create".to_string(),
-                trigger:
-                    "Use when the user asks Yeal to create one or more Slei agents, members, or channels."
-                        .to_string(),
-                path: standard_skill_path(agent, "guide-create")
-                    .to_string_lossy()
-                    .to_string(),
-            },
-        );
-    }
-    skills
+struct DefaultSkillFile {
+    path: String,
+    body: String,
+}
+
+fn default_skill_assets(agent: &ProductAgentRecord) -> Vec<DefaultSkillFile> {
+    standard_skill_assets(&agent_template_input(agent))
+        .into_iter()
+        .map(|skill| DefaultSkillFile {
+            path: standard_skill_path(agent, skill.id)
+                .to_string_lossy()
+                .to_string(),
+            body: skill.body,
+        })
+        .collect()
 }
 
 fn standard_skills_root(agent: &ProductAgentRecord) -> PathBuf {

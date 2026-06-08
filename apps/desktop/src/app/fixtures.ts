@@ -8,6 +8,7 @@ import type {
   InteractiveCardView,
   SkillView,
 } from "../lib/daemon-bridge";
+import { renderInitialMemory } from "../lib/default-agent-assets";
 
 export type SleiChannel = {
   id: string;
@@ -164,7 +165,12 @@ export function createDemoMembers(): SleiMember[] {
         workspaceFilePreview: {
           name: "MEMORY.md",
           relativePath: "MEMORY.md",
-          content: "# MEMORY.md\n\n默认技能：当用户 @Coda 并要求记住、remember 或 learn 时，更新 MEMORY.md。",
+          content: renderInitialMemory({
+            name: "Coda",
+            handle: "@Coda",
+            description: "研发团队开发工程师。基于架构师的技术方案和任务分解进行实际编码工作，同时响应 QA 提出的问题和改进意见，确保代码质量与需求一致。",
+            agentKind: "agent",
+          }),
         },
       },
       {

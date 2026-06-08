@@ -8,6 +8,7 @@ license.workspace = true
 axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+slei-default-agent-assets = { path = "../slei-default-agent-assets" }
 slei-protocol = { path = "../slei-protocol" }
 slei-storage = { path = "../slei-storage" }
 sqlx.workspace = true

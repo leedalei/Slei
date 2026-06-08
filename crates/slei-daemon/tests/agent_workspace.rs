@@ -1241,7 +1241,77 @@ async fn remembering_a_fact_appends_to_agent_memory_inside_workspace() {
     assert_eq!(remembered.status(), StatusCode::OK);
     let memory = fs::read_to_string(&memory_path).unwrap();
     assert!(memory.contains("Nancy 优先检查安全漏洞和测试覆盖率"));
+    let key_knowledge = section_between(&memory, "## Key Knowledge", "## Active Context");
+    assert!(key_knowledge.contains("Nancy 优先检查安全漏洞和测试覆盖率"));
+    let active_context = section_after(&memory, "## Active Context");
+    assert!(!active_context.contains("Nancy 优先检查安全漏洞和测试覆盖率"));
     assert!(memory_path.starts_with(root.join("agents")));
+}
+
+#[tokio::test]
+async fn remembering_current_work_replaces_active_context_inside_workspace() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-active-context-memory");
+    let app = build_router(AppState::for_tests_with_agent_root(
+        token.clone(),
+        root.clone(),
+    ));
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-active-context-agent"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "开发工程师，负责实现代码和运行验证。"
+        }),
+    )
+    .await;
+    let created_body = response_json(created).await;
+    let agent_id = created_body["agent"]["id"].as_str().unwrap().to_string();
+    let memory_path = PathBuf::from(created_body["agent"]["memoryPath"].as_str().unwrap());
+
+    let remembered = post_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{agent_id}/memory/remember"),
+        None,
+        json!({ "fact": "当前正在处理默认 Agent assets 整理；下次继续替换 desktop mock。" }),
+    )
+    .await;
+
+    assert_eq!(remembered.status(), StatusCode::OK);
+    let memory = fs::read_to_string(&memory_path).unwrap();
+    let active_context = section_after(&memory, "## Active Context");
+    assert!(active_context.contains("默认 Agent assets 整理"));
+    assert!(active_context.contains("下次继续替换 desktop mock"));
+    assert!(!active_context.contains("首次启动，等待用户提出需要引导的任务"));
+    assert!(memory.contains("## Key Knowledge"));
+    assert!(memory_path.starts_with(root.join("agents")));
+}
+
+fn section_between<'a>(memory: &'a str, start: &str, end: &str) -> &'a str {
+    let Some(start_index) = memory.find(start) else {
+        return "";
+    };
+    let after_start = &memory[start_index + start.len()..];
+    if let Some(end_index) = after_start.find(end) {
+        &after_start[..end_index]
+    } else {
+        after_start
+    }
+}
+
+fn section_after<'a>(memory: &'a str, start: &str) -> &'a str {
+    let Some(start_index) = memory.find(start) else {
+        return "";
+    };
+    &memory[start_index + start.len()..]
 }
 
 #[tokio::test]

@@ -3254,6 +3254,7 @@ dependencies = [
  "axum",
  "serde",
  "serde_json",
+ "slei-default-agent-assets",
  "slei-protocol",
  "slei-storage",
  "sqlx",
@@ -3264,11 +3265,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "slei-default-agent-assets"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "slei-desktop"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "slei-default-agent-assets",
  "tauri",
  "tauri-build",
  "thiserror 2.0.18",
