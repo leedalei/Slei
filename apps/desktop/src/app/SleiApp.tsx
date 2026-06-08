@@ -327,15 +327,22 @@ export function createChannelAgentActivityMessage(outcome: SendChannelMessageOut
   };
 }
 
-function createChannelAgentReplyMessage(reply: ConversationMessageView, outcome: SendChannelMessageOutcome, channelId: string, member?: SleiMember): SleiMessage {
+export function createChannelAgentReplyMessage(
+  reply: ConversationMessageView,
+  outcome: SendChannelMessageOutcome,
+  channelId: string,
+  member?: SleiMember,
+  messageId = `agent-reply-${outcome.messageId}`,
+): SleiMessage {
   return {
-    id: `agent-reply-${outcome.messageId}`,
+    id: messageId,
     author: member?.name ?? reply.authorId,
     handle: member?.handle,
     avatar: member?.avatar,
     role: "agent",
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     body: reply.body,
+    cards: reply.cards,
     channelId,
     status: conversationMessageStatus(reply.status),
   };
@@ -849,7 +856,7 @@ export function SleiApp() {
       });
       const reply = await waitForChannelAgentReply(bridge, conversationReceipt.conversation.id, agentId, existingMessageIds, {
         onProgress: (progress) => {
-          const progressMessage = createChannelAgentReplyMessage(progress, outcome, channelId, member);
+          const progressMessage = createChannelAgentReplyMessage(progress, outcome, channelId, member, activityId);
           setData((current) =>
             createSleiFixtures({
               ...current,
@@ -867,9 +874,9 @@ export function SleiApp() {
         replyStatus: reply?.status,
       });
       const replyMessage = reply
-        ? createChannelAgentReplyMessage(reply, outcome, channelId, member)
+        ? createChannelAgentReplyMessage(reply, outcome, channelId, member, activityId)
         : {
-            id: `agent-reply-${outcome.messageId}`,
+            id: activityId,
             author: member?.name ?? agentId,
             handle: member?.handle,
             avatar: member?.avatar,
