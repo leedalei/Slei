@@ -28,6 +28,18 @@ describe("task branch sessions", () => {
     expect(appSource).toContain("replyToTask");
   });
 
+  it("writes task-scoped agent output to the task thread instead of the outer channel", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const appSource = readFileSync(resolve(root, "src/app/SleiApp.tsx"), "utf8");
+
+    expect(appSource).toContain("runTaskAgentReply");
+    expect(appSource).toContain("replyToTask(input.taskId");
+    expect(appSource).toContain("taskId: result.receipt.outcome.taskId");
+    expect(appSource).toContain("taskAgentReplyPrompt");
+    expect(appSource).toContain("result.receipt.outcome.taskId ? null : createChannelAgentActivityMessage");
+    expect(appSource).not.toContain("agentActivity = createChannelAgentActivityMessage(result.receipt.outcome");
+  });
+
   it("renders a collapsed task root entry and hides the source channel message", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

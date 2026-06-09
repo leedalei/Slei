@@ -256,6 +256,14 @@ function createChannelTaskPlaceholder(outcome: SendChannelMessageOutcome, messag
   };
 }
 
+type TaskAgentReplyInput = {
+  agentId: string;
+  channelId: string;
+  sourceBody: string;
+  taskId: string;
+  triggerBody?: string;
+};
+
 function taskSummaryToSleiTask(task: TaskSummaryView, members: SleiMember[]): SleiTask {
   const assignee = task.assigneeId ? members.find((member) => member.id === task.assigneeId) : undefined;
   const creator = members.find((member) => member.id === task.creatorId);
@@ -324,6 +332,16 @@ function channelAgentReplyPrompt(channelId: string, body: string): string {
     "请直接回答用户，不要解释路由过程。",
     "",
     body.trim(),
+  ].join("\n");
+}
+
+function taskAgentReplyPrompt(input: { channelId: string; taskId: string; sourceBody: string; triggerBody?: string }): string {
+  const channelName = input.channelId.startsWith("#") ? input.channelId : `#${input.channelId}`;
+  return [
+    `你正在处理 ${channelName} 中的任务 ${input.taskId}。`,
+    "请只基于这个任务线程继续处理；不要把回复发回外层频道。",
+    input.triggerBody ? "用户在任务线程中的最新指令：" : "任务根消息：",
+    input.triggerBody ?? input.sourceBody,
   ].join("\n");
 }
 
@@ -1109,6 +1127,128 @@ export function SleiApp() {
     }
   }
 
+  async function refreshTaskAgentWriteback(taskId: string, channelId: string, status: TaskStatusView) {
+    try {
+      await refreshTaskThreadIntoState(taskId);
+    } catch (error) {
+      logAppEvent(bridge, "task-agent-reply", "thread-refresh-failed-after-writeback", { channelId, taskId, error: formatLogError(error) });
+    }
+    try {
+      await bridge.updateTaskStatus(taskId, { status });
+    } catch (error) {
+      logAppEvent(bridge, "task-agent-reply", "status-update-failed-after-writeback", { channelId, taskId, status, error: formatLogError(error) });
+    }
+    try {
+      await refreshTasks(channelId);
+    } catch (error) {
+      logAppEvent(bridge, "task-agent-reply", "summary-refresh-failed-after-writeback", { channelId, taskId, error: formatLogError(error) });
+    }
+  }
+
+  async function writeTaskAgentReply(input: TaskAgentReplyInput, body: string, status: TaskStatusView) {
+    await bridge.replyToTask(input.taskId, {
+      senderId: input.agentId,
+      body,
+    });
+    await refreshTaskAgentWriteback(input.taskId, input.channelId, status);
+  }
+
+  async function runTaskAgentReply(input: TaskAgentReplyInput) {
+    const sourceChannel = data.channels.find((candidate) => candidate.id === input.channelId);
+    const workspaceMounts: WorkspaceMountView[] = (sourceChannel?.projectPaths ?? []).map((path) => ({
+      path,
+      label: workspaceLabelFromPath(path),
+    }));
+    const member = data.members.find((candidate) => candidate.id === input.agentId);
+    logAppEvent(bridge, "task-agent-reply", "evaluate", {
+      channelId: input.channelId,
+      taskId: input.taskId,
+      assigneeAgentId: input.agentId,
+      workspaceMountCount: workspaceMounts.length,
+    });
+    if (!input.agentId || input.agentId.startsWith("agent_coordinator_") || member?.directMessageEnabled === false) {
+      logAppEvent(bridge, "task-agent-reply", "skip-no-runnable-agent", {
+        channelId: input.channelId,
+        taskId: input.taskId,
+        assigneeAgentId: input.agentId,
+        memberName: member?.name,
+      });
+      try {
+        await writeTaskAgentReply(input, "无法启动任务智能体回复。", "in_progress");
+      } catch (writeError) {
+        logAppEvent(bridge, "task-agent-reply", "writeback-failed-after-skip", {
+          channelId: input.channelId,
+          taskId: input.taskId,
+          assigneeAgentId: input.agentId,
+          error: formatLogError(writeError),
+        });
+      }
+      return;
+    }
+
+    try {
+      logAppEvent(bridge, "task-agent-reply", "create-dm-conversation-start", {
+        channelId: input.channelId,
+        taskId: input.taskId,
+        assigneeAgentId: input.agentId,
+      });
+      const conversationReceipt = await bridge.createDmConversation(input.agentId);
+      const beforeReceipt = await bridge.listConversationMessages(conversationReceipt.conversation.id);
+      const existingMessageIds = new Set(beforeReceipt.messages.map((message) => message.id));
+      logAppEvent(bridge, "task-agent-reply", "send-runtime-message-start", {
+        channelId: input.channelId,
+        taskId: input.taskId,
+        assigneeAgentId: input.agentId,
+        conversationId: conversationReceipt.conversation.id,
+        activeSessionId: conversationReceipt.conversation.activeSessionId,
+        existingMessageCount: beforeReceipt.messages.length,
+      });
+      await bridge.sendConversationMessage(conversationReceipt.conversation.id, {
+        authorId: "human:local",
+        body: taskAgentReplyPrompt(input),
+        sessionId: conversationReceipt.conversation.activeSessionId,
+        workspaceMounts,
+        sourceChannelId: input.channelId,
+        sourceChannelName: sourceChannel?.name,
+      });
+      const replies = await waitForChannelAgentReplies(bridge, conversationReceipt.conversation.id, input.agentId, existingMessageIds);
+      const combinedBody = replies.map((message) => message.body).filter(Boolean).join("\n\n").trim();
+      const failed = replies.length === 0 || replies.some((message) => message.status === "failed");
+      const body = replies.length > 0 ? combinedBody || (failed ? "智能体回复失败。" : "智能体回复为空。") : "智能体回复超时。";
+      logAppEvent(bridge, "task-agent-reply", replies.length > 0 ? "reply-received" : "reply-timeout", {
+        channelId: input.channelId,
+        taskId: input.taskId,
+        assigneeAgentId: input.agentId,
+        conversationId: conversationReceipt.conversation.id,
+        replyCount: replies.length,
+        replyStatus: replies.at(-1)?.status,
+      });
+      if (failed) {
+        showAppToast(`${messages.chat.agentRunFailed}: ${body}`);
+      }
+      await writeTaskAgentReply(input, body, failed ? "in_progress" : "in_review");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logAppEvent(bridge, "task-agent-reply", "failed", {
+        channelId: input.channelId,
+        taskId: input.taskId,
+        assigneeAgentId: input.agentId,
+        error: errorMessage,
+      });
+      showAppToast(`${messages.chat.agentRunFailed}: ${errorMessage}`);
+      try {
+        await writeTaskAgentReply(input, `智能体回复失败：${errorMessage}`, "in_progress");
+      } catch (writeError) {
+        logAppEvent(bridge, "task-agent-reply", "writeback-failed-after-run-failure", {
+          channelId: input.channelId,
+          taskId: input.taskId,
+          assigneeAgentId: input.agentId,
+          error: formatLogError(writeError),
+        });
+      }
+    }
+  }
+
   async function handleSendMessage(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) {
     const targetId = activeConversationId ?? activeChannelId;
     const memoryRequest = detectAgentMemoryRequest(body, data.members);
@@ -1211,11 +1351,18 @@ export function SleiApp() {
     setData((current) => {
       const nextTasks = fallbackTask && !current.tasks.some((candidate) => candidate.id === fallbackTask.id) ? [...current.tasks, fallbackTask] : current.tasks;
       const archiveNotice = createChannelArchiveNoticeMessage(result.receipt.outcome, targetId, messages);
-      const agentActivity = createChannelAgentActivityMessage(result.receipt.outcome, targetId, current.members);
+      const agentActivity = result.receipt.outcome.taskId ? null : createChannelAgentActivityMessage(result.receipt.outcome, targetId, current.members);
       const nextMessages = [channelMessage, archiveNotice, agentActivity].filter((message): message is SleiMessage => Boolean(message));
       return createSleiFixtures({ ...current, messages: [...current.messages, ...nextMessages], tasks: nextTasks });
     });
-    if (result.receipt.outcome.action === "request_agent_reply") {
+    if (result.receipt.outcome.taskId && result.receipt.outcome.assigneeAgentId) {
+      void runTaskAgentReply({
+        agentId: result.receipt.outcome.assigneeAgentId,
+        channelId: targetId,
+        sourceBody: channelMessage.body,
+        taskId: result.receipt.outcome.taskId,
+      });
+    } else if (result.receipt.outcome.action === "request_agent_reply") {
       void runChannelAgentReply(result.receipt.outcome, channelMessage, targetId);
     } else {
       logAppEvent(bridge, "channel-agent-reply", "not-started-for-action", {
@@ -1229,13 +1376,19 @@ export function SleiApp() {
   async function handleTaskReply(taskId: string, body: string) {
     const trimmed = body.trim();
     if (!trimmed) return;
-    await bridge.replyToTask(taskId, { senderId: "human:local", body: trimmed });
+    const task = data.tasks.find((candidate) => candidate.id === taskId);
+    const channelId = task?.channelId ?? activeChannelId ?? "all";
+    const sourceBody = task?.title ?? task?.replies?.[0]?.body ?? trimmed;
+    const receipt = await bridge.replyToTask(taskId, { senderId: "human:local", body: trimmed });
     void refreshTaskThreadIntoState(taskId).catch((error: unknown) => {
       logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-reply", { taskId, error: formatLogError(error) });
     });
-    void refreshTasks(activeChannelId).catch((error: unknown) => {
-      logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-reply", { channelId: activeChannelId, taskId, error: formatLogError(error) });
+    void refreshTasks(channelId).catch((error: unknown) => {
+      logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-reply", { channelId, taskId, error: formatLogError(error) });
     });
+    for (const agentId of receipt.route.handoffAgentIds) {
+      void runTaskAgentReply({ agentId, channelId, sourceBody, taskId, triggerBody: trimmed });
+    }
   }
 
   async function handleTaskStatusChange(taskId: string, status: TaskStatusView) {
