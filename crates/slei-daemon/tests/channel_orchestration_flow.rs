@@ -11,7 +11,7 @@ use slei_daemon::services::channel_service::{
 use slei_daemon::services::coordinator_service::CoordinatorInput;
 use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRecord};
 use slei_daemon::services::message_service::MessageKind;
-use slei_daemon::services::task_service::TaskQuery;
+use slei_daemon::services::task_service::{TaskQuery, TaskStatus};
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -321,6 +321,11 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         )
         .await
         .unwrap();
+    state
+        .tasks()
+        .update_status(&task_a.id, TaskStatus::Done)
+        .await
+        .unwrap();
     let retry = state
         .channel_orchestrator()
         .add_task_reply(
@@ -334,6 +339,10 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
     assert_eq!(reply.reply.id, retry.reply.id);
     assert_eq!(retry.reply.sender_id, "agent_alice");
     assert_eq!(retry.reply.body, original_body);
+    assert_eq!(
+        state.tasks().task(&task_a.id).await.unwrap().status,
+        TaskStatus::Done
+    );
 
     let coda_handoffs = state
         .agent_inbox()

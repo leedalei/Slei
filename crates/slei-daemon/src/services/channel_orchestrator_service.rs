@@ -328,28 +328,9 @@ impl ChannelOrchestratorService {
         let mut handoff_agent_ids = Vec::new();
         for agent_id in explicit_agent_ids {
             if let Some(readiness) = readiness_by_agent.get(&agent_id) {
-                self.create_task_handoff_once(
-                    &agent_id,
-                    &task.channel_id,
-                    &task.id,
-                    &reply.id,
-                    &reply.sender_id,
-                    &reply.body,
-                    readiness.clone(),
-                )
-                .await;
-                handoff_agent_ids.push(agent_id.clone());
-                self.tasks
-                    .update_status(&task.id, TaskStatus::InProgress)
-                    .await?;
-            }
-        }
-
-        if handoff_agent_ids.is_empty() && reply_requires_work(&reply.body) {
-            if let Some(agent_id) = task.assignee_id.as_deref() {
-                if let Some(readiness) = readiness_by_agent.get(agent_id) {
-                    self.create_task_handoff_once(
-                        agent_id,
+                let created = self
+                    .create_task_handoff_once(
+                        &agent_id,
                         &task.channel_id,
                         &task.id,
                         &reply.id,
@@ -358,10 +339,33 @@ impl ChannelOrchestratorService {
                         readiness.clone(),
                     )
                     .await;
-                    handoff_agent_ids.push(agent_id.to_string());
-                    self.tasks
-                        .update_status(&task.id, TaskStatus::InProgress)
+                handoff_agent_ids.push(agent_id.clone());
+                if created {
+                    self.update_status_for_created_handoff(&task.id, task.status)
                         .await?;
+                }
+            }
+        }
+
+        if handoff_agent_ids.is_empty() && reply_requires_work(&reply.body) {
+            if let Some(agent_id) = task.assignee_id.as_deref() {
+                if let Some(readiness) = readiness_by_agent.get(agent_id) {
+                    let created = self
+                        .create_task_handoff_once(
+                            agent_id,
+                            &task.channel_id,
+                            &task.id,
+                            &reply.id,
+                            &reply.sender_id,
+                            &reply.body,
+                            readiness.clone(),
+                        )
+                        .await;
+                    handoff_agent_ids.push(agent_id.to_string());
+                    if created {
+                        self.update_status_for_created_handoff(&task.id, task.status)
+                            .await?;
+                    }
                 }
             } else {
                 self.tasks
@@ -527,7 +531,7 @@ impl ChannelOrchestratorService {
         sender_id: &str,
         handoff_text: &str,
         readiness: ChannelMemberReadiness,
-    ) {
+    ) -> bool {
         let already_created = self
             .agent_inbox
             .events_for_agent(agent_id)
@@ -539,18 +543,36 @@ impl ChannelOrchestratorService {
                     && event.task_id.as_deref() == Some(task_id)
                     && event.message_id == reply_id
             });
-        if !already_created {
-            self.agent_inbox
-                .create_task_handoff_with_details(
-                    agent_id,
-                    channel_id,
-                    task_id,
-                    reply_id,
-                    readiness,
-                    Some(sender_id),
-                    Some(handoff_text),
-                )
-                .await;
+        if already_created {
+            return false;
+        }
+
+        self.agent_inbox
+            .create_task_handoff_with_details(
+                agent_id,
+                channel_id,
+                task_id,
+                reply_id,
+                readiness,
+                Some(sender_id),
+                Some(handoff_text),
+            )
+            .await;
+        true
+    }
+
+    async fn update_status_for_created_handoff(
+        &self,
+        task_id: &str,
+        current_status: TaskStatus,
+    ) -> Result<(), TaskError> {
+        match current_status {
+            TaskStatus::PendingAssignment | TaskStatus::InProgress => {
+                self.tasks
+                    .update_status(task_id, TaskStatus::InProgress)
+                    .await
+            }
+            TaskStatus::InReview | TaskStatus::Done => Ok(()),
         }
     }
 
