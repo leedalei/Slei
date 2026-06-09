@@ -153,7 +153,8 @@ describe("chat to task thread flow", () => {
     expect(tasksPageSource()).toContain(".catch(() => undefined)");
     const appSource = sleiAppSource();
     expect(appSource).not.toMatch(/import\s*\{[^}]*appendTaskReply/);
-    expect(appSource).toContain("refreshTaskThreadIntoState(taskId).catch");
+    expect(appSource).toContain("const threadReceipt = await bridge.getTaskThread(taskId)");
+    expect(appSource).toContain("task-agent-handoff-root-fallback");
     expect(appSource).toContain("refreshTasks(activeChannelId).catch");
   });
 });
