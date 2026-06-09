@@ -58,6 +58,7 @@ pub struct TaskReply {
 pub struct AddTaskReplyOutcome {
     pub task_id: String,
     pub reply: TaskReply,
+    pub created: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -258,6 +259,7 @@ impl TaskService {
             return Ok(AddTaskReplyOutcome {
                 task_id: existing_task_id.clone(),
                 reply,
+                created: false,
             });
         }
         if !state.tasks.contains_key(task_id) {
@@ -288,6 +290,7 @@ impl TaskService {
         Ok(AddTaskReplyOutcome {
             task_id: task_id.to_string(),
             reply,
+            created: true,
         })
     }
 

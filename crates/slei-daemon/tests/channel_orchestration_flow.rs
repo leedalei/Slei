@@ -374,6 +374,73 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
 }
 
 #[tokio::test]
+async fn unassigned_task_reply_replay_preserves_completed_state_and_attention() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_task_root(
+            "dev",
+            "human_lei",
+            "收敛一条未分配任务",
+            "unassigned-reply-root",
+        )
+        .await
+        .unwrap();
+    let first = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "继续实现这个任务分支",
+            "unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+    assert!(first.route.needs_assignment);
+
+    state
+        .tasks()
+        .update_status(&task.id, TaskStatus::Done)
+        .await
+        .unwrap();
+    state
+        .tasks()
+        .set_attention_required(&task.id, false)
+        .await
+        .unwrap();
+
+    let replay = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "继续实现这个任务分支",
+            "unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.reply.id, replay.reply.id);
+    assert!(replay.route.needs_assignment);
+
+    let task = state.tasks().task(&task.id).await.unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+    assert!(!task.attention_required);
+}
+
+#[tokio::test]
 async fn command_message_retry_replays_outcome_without_duplicate_side_effects() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
@@ -488,9 +555,10 @@ async fn command_message_partial_retry_recovers_existing_side_effects_without_du
     let body = "实现频道创建时选择 Agent 的功能";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", body, idempotency_key)
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
         .await
         .unwrap();
+    assert!(!message.as_task);
     let decision = state
         .coordinator()
         .decide(CoordinatorInput {
@@ -622,7 +690,7 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
     let idempotency_key = "send-command-deleted";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", "先发一条", idempotency_key)
+        .create_human_channel_message("dev", "human_lei", "先发一条", idempotency_key, false)
         .await
         .unwrap();
     state
@@ -705,7 +773,7 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
     let original_body = "实现频道创建时选择 Agent 的功能";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", original_body, idempotency_key)
+        .create_human_channel_message("dev", "human_lei", original_body, idempotency_key, false)
         .await
         .unwrap();
 
@@ -766,6 +834,115 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
     assert_eq!(packages.len(), 1);
     let payload: Value = serde_json::from_str(&packages[0].payload).unwrap();
     assert_eq!(payload["channelSummaryRef"], "channels/dev/summary");
+}
+
+#[tokio::test]
+async fn channel_message_replay_uses_original_non_task_flag() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-as-task-replay-false",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "as-task-original-false";
+    let body = "这是一条普通讨论";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
+        .await
+        .unwrap();
+    assert!(!message.as_task);
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: true,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "archive_only");
+    assert_eq!(outcome.task_id, None);
+    assert!(state
+        .tasks()
+        .list_tasks(TaskQuery::default())
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn channel_message_replay_uses_original_as_task_flag() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-as-task-replay-true",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "as-task-original-true";
+    let body = "这是一条需要单独收敛的讨论";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, true)
+        .await
+        .unwrap();
+    assert!(message.as_task);
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "needs_manual_assignment");
+    assert!(outcome.task_id.as_deref().is_some());
 }
 
 #[tokio::test]

@@ -137,6 +137,7 @@ impl ChannelOrchestratorService {
                         &input.author_id,
                         &input.body,
                         &input.idempotency_key,
+                        input.as_task,
                     )
                     .await?
             }
@@ -182,7 +183,7 @@ impl ChannelOrchestratorService {
                 .await
                 .into(),
         };
-        let decision = if input.as_task {
+        let decision = if message.as_task {
             let assignee_agent_id = decision
                 .assignee_agent_id
                 .clone()
@@ -367,7 +368,7 @@ impl ChannelOrchestratorService {
                             .await?;
                     }
                 }
-            } else {
+            } else if reply_outcome.created {
                 self.tasks
                     .update_status(&task.id, TaskStatus::PendingAssignment)
                     .await?;
