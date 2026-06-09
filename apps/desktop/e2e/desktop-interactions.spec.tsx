@@ -64,6 +64,8 @@ describe("desktop interaction fixes", () => {
   it("does not submit or choose mentions while an IME composition is active", () => {
     expect(isComposerImeComposing({ nativeEvent: { isComposing: true } })).toBe(true);
     expect(isComposerImeComposing({ composing: true, nativeEvent: { isComposing: false } })).toBe(true);
+    expect(isComposerImeComposing({ nativeEvent: { isComposing: false, keyCode: 229 } })).toBe(true);
+    expect(isComposerImeComposing({ nativeEvent: { isComposing: false, which: 229 } })).toBe(true);
     expect(composerShortcutAction({ key: "Enter", composing: true })).toBe("none");
     expect(composerShortcutAction({ key: "Enter", composing: true, hasMentionTargets: true })).toBe("none");
     expect(composerShortcutAction({ key: "Tab", composing: true, hasMentionTargets: true })).toBe("none");

@@ -194,8 +194,16 @@ export function createLocalChatMessage(input: {
 
 export type ComposerShortcutAction = "none" | "selectMention" | "submit";
 
-export function isComposerImeComposing(input: { composing?: boolean; nativeEvent?: { isComposing?: boolean } }): boolean {
-  return Boolean(input.composing || input.nativeEvent?.isComposing);
+export function isComposerImeComposing(input: {
+  composing?: boolean;
+  nativeEvent?: { isComposing?: boolean; keyCode?: number; which?: number };
+}): boolean {
+  return Boolean(
+    input.composing ||
+      input.nativeEvent?.isComposing ||
+      input.nativeEvent?.keyCode === 229 ||
+      input.nativeEvent?.which === 229,
+  );
 }
 
 export function composerShortcutAction(input: {
