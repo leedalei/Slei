@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/app/fixtures";
+import { createDesktopMessages } from "../src/i18n";
+import { TaskRootEntry } from "../src/features/chat/TaskRootEntry";
 
 const readyRuntime = {
   loading: false,
@@ -79,5 +81,74 @@ describe("task branch sessions", () => {
     expect(html).toContain("实现任务分支");
     expect(html).toContain('data-message-id="msg_root"');
     expect(html).not.toContain("data-task-root-entry");
+  });
+
+  it("keeps the source channel message visible when task-card source metadata is stale", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "实现任务分支", channelId: "all" },
+            {
+              id: "task_card_1",
+              author: "channel_coordinator",
+              role: "system",
+              time: "10:00",
+              body: "task_card:task_1:source:msg_root",
+              channelId: "all",
+            },
+          ],
+          tasks: [
+            {
+              id: "task_1",
+              title: "实现任务分支",
+              owner: "Lei",
+              status: "pending_assignment",
+              channelId: "all",
+              sourceMessageId: "different_msg",
+              replyCount: 0,
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(html).toContain("实现任务分支");
+    expect(html).toContain('data-message-id="msg_root"');
+    expect(html).not.toContain("data-task-root-entry");
+  });
+
+  it("binds the task root body trigger to open the drawer without nesting buttons", () => {
+    let opened = false;
+    const entry = TaskRootEntry({
+      messages: createDesktopMessages("zh-CN"),
+      onOpen: () => {
+        opened = true;
+      },
+      task: {
+        id: "task_1",
+        title: "实现任务分支",
+        owner: "Lei",
+        status: "pending_assignment",
+        channelId: "all",
+        sourceMessageId: "msg_root",
+        replyCount: 0,
+      },
+    });
+
+    const bodyTrigger = entry.props.children[0];
+    expect(bodyTrigger.type).toBe("button");
+    expect(bodyTrigger.props["data-task-root-entry-trigger"]).toBe("body");
+    bodyTrigger.props.onClick();
+    expect(opened).toBe(true);
+
+    const html = renderToStaticMarkup(entry);
+    expect(html).toContain("data-task-root-entry-trigger=\"body\"");
+    const firstButtonOpen = html.indexOf("<button");
+    const firstButtonClose = html.indexOf("</button>");
+    const secondButtonOpen = html.indexOf("<button", firstButtonOpen + 1);
+    expect(secondButtonOpen).toBeGreaterThan(firstButtonClose);
   });
 });

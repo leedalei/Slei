@@ -118,6 +118,19 @@ function taskCardFromMessage(message: SleiMessage) {
   return message.taskCard ?? (message.role === "system" ? parseTaskCardBody(message.body) : null);
 }
 
+function renderableTaskForTaskCard(
+  taskCard: NonNullable<ReturnType<typeof parseTaskCardBody>>,
+  tasks: SleiFixtures["tasks"],
+  activeChannelId: string,
+) {
+  return tasks.find(
+    (task) =>
+      task.id === taskCard.taskId &&
+      task.sourceMessageId === taskCard.sourceMessageId &&
+      task.channelId === activeChannelId,
+  );
+}
+
 function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
   const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
@@ -343,7 +356,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       .map((message) => {
         const taskCard = taskCardFromMessage(message);
         if (!taskCard?.sourceMessageId) return undefined;
-        return data.tasks.some((task) => task.id === taskCard.taskId) ? taskCard.sourceMessageId : undefined;
+        return renderableTaskForTaskCard(taskCard, data.tasks, activeChannel.id) ? taskCard.sourceMessageId : undefined;
       })
       .filter((id): id is string => Boolean(id)),
   );
@@ -532,7 +545,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             {timelineMessages.map((message) => {
               const taskCard = taskCardFromMessage(message);
               if (taskCard) {
-                const task = data.tasks.find((candidate) => candidate.id === taskCard.taskId);
+                const task = renderableTaskForTaskCard(taskCard, data.tasks, activeChannel.id);
                 if (!task) return null;
                 return (
                   <TaskRootEntry
