@@ -54,6 +54,8 @@ describe("chat to task thread flow", () => {
     const withHumanReply = appendTaskReply(tasks, "task-message_1", { sender: "Lei", role: "human", body: "  我补充一个约束  " });
     const withAgentReply = appendTaskReply(withHumanReply, "task-message_1", { sender: "Coda", role: "agent", body: "我会继续处理" });
 
+    expect(withHumanReply[0].replyCount).toBe(2);
+    expect(withAgentReply[0].replyCount).toBe(3);
     expect(withAgentReply[0].replies).toEqual([
       { id: "root-message_1", sender: "Lei", role: "human", body: "帮我把私聊任务线程做完" },
       { id: "reply-task-message_1-2", sender: "Lei", role: "human", body: "我补充一个约束" },

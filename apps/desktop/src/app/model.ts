@@ -256,17 +256,14 @@ export function channelReadinessLabel(readiness: SleiChannelMemberReadiness | un
 export function appendTaskReply(tasks: SleiTask[], taskId: string, reply: { sender: string; role?: SleiMessage["role"]; body: string }): SleiTask[] {
   const body = reply.body.trim();
   if (!body) return tasks;
-  return tasks.map((task) =>
-    task.id === taskId
-      ? {
-          ...task,
-          replies: [
-            ...(task.replies ?? []),
-            { id: `reply-${taskId}-${(task.replies?.length ?? 0) + 1}`, sender: reply.sender, role: reply.role, body },
-          ],
-        }
-      : task,
-  );
+  return tasks.map((task) => {
+    if (task.id !== taskId) return task;
+    const replies = [
+      ...(task.replies ?? []),
+      { id: `reply-${taskId}-${(task.replies?.length ?? 0) + 1}`, sender: reply.sender, role: reply.role, body },
+    ];
+    return { ...task, replies, replyCount: replies.length };
+  });
 }
 
 export function shouldRefreshConversationMessages(messages: SleiMessage[], conversationId?: string): boolean {
