@@ -39,6 +39,7 @@ pub struct TaskRecord {
     pub attention_required: bool,
     pub root_deleted: bool,
     pub root_body: String,
+    pub created_at: String,
     pub updated_at: String,
 }
 
@@ -166,6 +167,7 @@ impl TaskService {
             attention_required: true,
             root_deleted: false,
             root_body: title.to_string(),
+            created_at: now.clone(),
             updated_at: now,
         };
         state
@@ -213,6 +215,7 @@ impl TaskService {
             attention_required: !has_assignee,
             root_deleted: false,
             root_body: title.to_string(),
+            created_at: now.clone(),
             updated_at: now,
         };
         state
@@ -305,7 +308,7 @@ impl TaskService {
                 role: role_for_sender(&task.creator_id).unwrap_or_else(|| "human".to_string()),
                 body: task.root_body.clone(),
                 status: Some("done".to_string()),
-                created_at: task.updated_at.clone(),
+                created_at: task.created_at.clone(),
             },
             replies: replies
                 .into_iter()
@@ -335,13 +338,20 @@ impl TaskService {
             .tasks
             .get_mut(task_id)
             .ok_or(TaskError::TaskNotFound)?;
-        task.needs_assignment = assignee_id.is_none();
-        task.attention_required = assignee_id.is_none();
-        task.status = if assignee_id.is_some() {
-            TaskStatus::InProgress
-        } else {
-            TaskStatus::PendingAssignment
-        };
+        match task.status {
+            TaskStatus::PendingAssignment | TaskStatus::InProgress => {
+                task.needs_assignment = assignee_id.is_none();
+                task.attention_required = assignee_id.is_none();
+                task.status = if assignee_id.is_some() {
+                    TaskStatus::InProgress
+                } else {
+                    TaskStatus::PendingAssignment
+                };
+            }
+            TaskStatus::InReview | TaskStatus::Done => {
+                task.needs_assignment = false;
+            }
+        }
         task.assignee_id = assignee_id;
         task.updated_at = now_string();
         Ok(())
