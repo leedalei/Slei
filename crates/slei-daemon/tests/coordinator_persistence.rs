@@ -26,6 +26,7 @@ async fn coordinator_internal_events_survive_restart() {
                 "task_command",
                 "create_task_and_assign",
                 Some("agent_alice"),
+                &["agent_alice".to_string()],
                 "needs architecture",
             )
             .await
@@ -88,6 +89,10 @@ async fn coordinator_internal_events_survive_restart() {
     assert_eq!(coordinator.strategy, "deterministic_v1");
     assert_eq!(decisions.len(), 1);
     assert_eq!(decisions[0].action, "create_task_and_assign");
+    assert_eq!(
+        decisions[0].assignee_agent_ids,
+        vec!["agent_alice".to_string()]
+    );
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].event_type, "task_assigned");
     assert_eq!(memory.len(), 1);
@@ -120,6 +125,7 @@ async fn routing_context_cleanup_scrubs_deleted_body_bytes() {
             "task_command",
             "create_task_and_assign",
             Some("agent_alice"),
+            &["agent_alice".to_string()],
             "needs architecture",
         )
         .await

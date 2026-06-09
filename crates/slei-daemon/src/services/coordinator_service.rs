@@ -96,6 +96,11 @@ impl CoordinatorService {
             reason,
         };
 
+        let assignee_agent_ids = decision
+            .assignee_agent_id
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
         self.store
             .record_decision(
                 id,
@@ -104,6 +109,7 @@ impl CoordinatorService {
                 &enum_as_storage_str(&decision.intent),
                 &enum_as_storage_str(&decision.action),
                 decision.assignee_agent_id.as_deref(),
+                &assignee_agent_ids,
                 &decision.reason,
             )
             .await

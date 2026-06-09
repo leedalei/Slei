@@ -3308,6 +3308,7 @@ dependencies = [
 name = "slei-storage"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "sqlx",
  "tokio",
  "uuid",

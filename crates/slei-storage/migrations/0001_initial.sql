@@ -79,12 +79,32 @@ CREATE TABLE IF NOT EXISTS coordinator_decisions (
     intent TEXT NOT NULL,
     action TEXT NOT NULL,
     assignee_agent_id TEXT,
+    assignee_agent_ids TEXT NOT NULL DEFAULT '[]',
     reason TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_coordinator_decisions_message_id
     ON coordinator_decisions(message_id);
+
+CREATE TABLE IF NOT EXISTS coordinator_runtime_runs (
+    run_id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    output TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_coordinator_runtime_runs_message
+    ON coordinator_runtime_runs(message_id);
+
+CREATE INDEX IF NOT EXISTS idx_coordinator_runtime_runs_idempotency
+    ON coordinator_runtime_runs(idempotency_key);
 
 CREATE TABLE IF NOT EXISTS agent_inbox_events (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,

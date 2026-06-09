@@ -36,6 +36,7 @@ impl SleiDb {
             }
         }
         self.repair_legacy_sequence_columns().await?;
+        self.repair_legacy_coordinator_columns().await?;
         Ok(())
     }
 
@@ -60,9 +61,26 @@ impl SleiDb {
             if self.table_exists(table).await? && !self.column_exists(table, "sequence").await? {
                 let add_column = format!("ALTER TABLE {table} ADD COLUMN sequence INTEGER");
                 sqlx::query(&add_column).execute(&self.pool).await?;
-                let backfill = format!("UPDATE {table} SET sequence = rowid WHERE sequence IS NULL");
+                let backfill =
+                    format!("UPDATE {table} SET sequence = rowid WHERE sequence IS NULL");
                 sqlx::query(&backfill).execute(&self.pool).await?;
             }
+        }
+        Ok(())
+    }
+
+    async fn repair_legacy_coordinator_columns(&self) -> Result<(), sqlx::Error> {
+        if self.table_exists("coordinator_decisions").await?
+            && !self
+                .column_exists("coordinator_decisions", "assignee_agent_ids")
+                .await?
+        {
+            sqlx::query(
+                "ALTER TABLE coordinator_decisions
+                 ADD COLUMN assignee_agent_ids TEXT NOT NULL DEFAULT '[]'",
+            )
+            .execute(&self.pool)
+            .await?;
         }
         Ok(())
     }
