@@ -42,7 +42,7 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
     let body = to_bytes(created.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
     let task_id = json["task"]["id"].as_str().unwrap();
-    assert_eq!(json["task"]["status"], "in_progress");
+    assert_eq!(json["task"]["status"], "pending_assignment");
     assert_eq!(json["task"]["title"], "把任务 Thread 做完");
 
     let reply = app
@@ -82,12 +82,14 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
     assert_eq!(thread.status(), StatusCode::OK);
     let body = to_bytes(thread.into_body(), usize::MAX).await.unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["thread"]["taskId"], task_id);
-    assert_eq!(json["thread"]["replyCount"], 1);
-    assert!(json["thread"]["context"]
-        .as_str()
-        .unwrap()
-        .contains("任务 session"));
+    assert_eq!(json["thread"]["task"]["id"], task_id);
+    assert_eq!(json["thread"]["task"]["replyCount"], 1);
+    assert_eq!(json["thread"]["root"]["role"], "human");
+    assert_eq!(json["thread"]["root"]["body"], "把任务 Thread 做完");
+    assert_eq!(
+        json["thread"]["replies"][0]["body"],
+        "我会继续在这个任务 session 里处理"
+    );
 }
 
 #[tokio::test]

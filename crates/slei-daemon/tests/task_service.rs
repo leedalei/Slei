@@ -25,10 +25,11 @@ async fn task_service_creates_task_root_and_keeps_replies_attached() {
     assert_eq!(agent_reply.role.as_deref(), Some("agent"));
     assert_eq!(human_reply.role.as_deref(), Some("human"));
 
-    let thread = service.thread_context(&task.id).await.unwrap();
-    assert_eq!(thread.reply_count, 2);
-    assert!(thread.context.contains("收到"));
-    assert!(thread.context.contains("补充一下"));
+    let thread = service.thread_view(&task.id).await.unwrap();
+    assert_eq!(thread.task.reply_count, 2);
+    assert_eq!(thread.root.body, "帮我调研");
+    assert!(thread.replies.iter().any(|reply| reply.body == "收到"));
+    assert!(thread.replies.iter().any(|reply| reply.body == "补充一下"));
 }
 
 #[tokio::test]
@@ -43,7 +44,7 @@ async fn task_service_blocks_root_delete_while_active_and_updates_status() {
     assert!(err.to_string().contains("active task"));
 
     service
-        .update_status(&task.id, TaskStatus::Closed)
+        .update_status(&task.id, TaskStatus::Done)
         .await
         .unwrap();
     service.delete_task_root(&task.id).await.unwrap();

@@ -54,6 +54,11 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
         .await
         .unwrap();
 
+    service
+        .create_task_root("channel_ops", "human_ops", "等待分配的任务", "task-board-4")
+        .await
+        .unwrap();
+
     let channel_dev = service
         .list_tasks(TaskQuery {
             channel_id: Some("channel_dev".to_string()),
@@ -86,12 +91,19 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
             .map(|column| column.status)
             .collect::<Vec<_>>(),
         vec![
-            TaskStatus::Todo,
+            TaskStatus::PendingAssignment,
             TaskStatus::InProgress,
             TaskStatus::InReview,
             TaskStatus::Done,
-            TaskStatus::Closed,
         ]
+    );
+    assert_eq!(
+        board
+            .column(TaskStatus::PendingAssignment)
+            .unwrap()
+            .tasks
+            .len(),
+        1
     );
     assert_eq!(board.column(TaskStatus::InProgress).unwrap().tasks.len(), 1);
     assert_eq!(board.column(TaskStatus::InReview).unwrap().tasks.len(), 1);
@@ -106,6 +118,6 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
         .await
         .unwrap();
     let thread = service.thread_context(&dev_task.id).await.unwrap();
-    assert_eq!(thread.status, TaskStatus::InReview);
+    assert_eq!(thread.task.status, TaskStatus::InReview);
     assert!(service.task(&dev_task.id).await.unwrap().attention_required);
 }
