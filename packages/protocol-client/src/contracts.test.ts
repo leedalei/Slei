@@ -9,6 +9,9 @@ import {
   type SendChannelMessageOutcome,
   type SendChannelMessageReceipt,
   type SendChannelMessageRequest,
+  type TaskReplyReceipt,
+  type TaskSummaryView,
+  type TaskThreadView,
 } from "./contracts";
 
 describe("Slei protocol contract fixtures", () => {
@@ -72,5 +75,50 @@ describe("Slei protocol contract fixtures", () => {
     expect(receipt.outcome.assigneeAgentIds).toEqual(["agent_alice", "agent_coda"]);
     expect(receipt.outcome.coordinatorRunId).toBe("coord_run_1");
     expect(receipt.outcome.decisionStatus).toBe("completed");
+  });
+
+  test("exposes task branch contracts", () => {
+    const channelRequest = {
+      authorId: "human_lei",
+      body: "请转成任务但正文不含动词",
+      asTask: true,
+    } satisfies SendChannelMessageRequest;
+    const task = {
+      id: "task_1",
+      channelId: "all",
+      creatorId: "human:local",
+      title: "实现任务分支",
+      status: "pending_assignment",
+      attentionRequired: true,
+      replyCount: 0,
+      updatedAt: "1",
+    } satisfies TaskSummaryView;
+    const thread = {
+      task,
+      root: {
+        id: "root_task_1",
+        taskId: "task_1",
+        senderId: "human:local",
+        role: "human",
+        body: "实现任务分支",
+        createdAt: "1",
+      },
+      replies: [],
+    } satisfies TaskThreadView;
+    const receipt = {
+      reply: {
+        id: "reply_1",
+        taskId: "task_1",
+        senderId: "human:local",
+        role: "human",
+        body: "@coda 继续",
+        createdAt: "2",
+      },
+      route: { handoffAgentIds: ["agent_coda"], needsAssignment: false },
+    } satisfies TaskReplyReceipt;
+
+    expect(channelRequest.asTask).toBe(true);
+    expect(thread.task.status).toBe("pending_assignment");
+    expect(receipt.route.handoffAgentIds).toEqual(["agent_coda"]);
   });
 });

@@ -47,7 +47,7 @@ describe("Slei MVP acceptance", () => {
     });
     const taskCard = renderTaskRootCard({
       title: "多工作区任务",
-      status: "In Progress",
+      status: "in_progress",
       replyCount: 2,
       unread: true,
       assignee: "Guide",
@@ -55,7 +55,7 @@ describe("Slei MVP acceptance", () => {
     const thread = renderThreadPanel({
       channelName: "dev-team",
       taskTitle: "多工作区任务",
-      status: "In Progress",
+      status: "in_progress",
       replies: [{ sender: "Guide", body: "需要 @Alice 继续" }],
     });
     const delegation = renderDelegationEntry({
@@ -82,7 +82,7 @@ describe("Slei MVP acceptance", () => {
           creator: "lei lee",
           assignee: "Guide",
           title: "多工作区任务",
-          status: "In Progress",
+          status: "in_progress",
           attentionRequired: true,
         },
       ],

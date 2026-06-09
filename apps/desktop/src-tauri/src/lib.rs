@@ -16,6 +16,10 @@ pub fn run() {
             commands::list_channel_members_command,
             commands::list_channel_messages_command,
             commands::send_channel_message_command,
+            commands::list_tasks_command,
+            commands::get_task_thread_command,
+            commands::reply_to_task_command,
+            commands::update_task_status_command,
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
             commands::list_agents_command,
@@ -55,17 +59,18 @@ mod tests {
         create_agent, create_channel, create_conversation_session, create_dm_conversation,
         daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills,
         list_agent_workspace, list_agents, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_nodes, list_preferences, list_saved_messages, open_agent_path,
-        read_agent_workspace_file, reconnect_events, remember_agent_fact, rename_local_node,
-        request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        list_conversations, list_nodes, list_preferences, list_saved_messages, list_tasks,
+        open_agent_path, read_agent_workspace_file, reconnect_events, remember_agent_fact,
+        rename_local_node, reply_to_task, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
         NotificationPreferencesView, PreferencesUpdateRequest, RuntimeDescriptor,
-        SaveMessageRequest, SendChannelMessageRequest,
+        SaveMessageRequest, SendChannelMessageRequest, TaskListQuery, TaskReplyRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -225,6 +230,7 @@ mod tests {
             SendChannelMessageRequest {
                 author_id: "human_lei".to_string(),
                 body: "实现一个 API 路由".to_string(),
+                as_task: true,
             },
         )
         .unwrap();
@@ -234,6 +240,85 @@ mod tests {
         assert!(request.contains("POST /v1/channels/remote-dev/messages HTTP/1.1"));
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-channel-message-"));
+        assert!(request.contains(r#""asTask":true"#));
+    }
+
+    #[test]
+    fn task_reply_command_uses_daemon_route_with_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = String::from_utf8(bytes).unwrap();
+            let response = serde_json::json!({
+                "reply": {
+                    "id": "reply_1",
+                    "taskId": "task_1",
+                    "senderId": "human:local",
+                    "role": "human",
+                    "body": "@coda 继续",
+                    "createdAt": "2"
+                },
+                "route": {
+                    "handoffAgentIds": ["agent_coda"],
+                    "needsAssignment": false
+                }
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = reply_to_task(
+            &broker,
+            "task_1",
+            TaskReplyRequest {
+                sender_id: "human:local".to_string(),
+                body: "@coda 继续".to_string(),
+            },
+        )
+        .unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.reply.id, "reply_1");
+        assert_eq!(receipt.route.handoff_agent_ids, vec!["agent_coda"]);
+        assert!(request.contains("POST /v1/tasks/task_1/replies HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains("Idempotency-Key: desktop-task-reply-"));
     }
 
     #[test]
@@ -287,6 +372,7 @@ mod tests {
             SendChannelMessageRequest {
                 author_id: "human_lei".to_string(),
                 body: "实现一个 API 路由".to_string(),
+                as_task: false,
             },
         )
         .unwrap_err()
@@ -319,6 +405,7 @@ mod tests {
             SendChannelMessageRequest {
                 author_id: "human_lei".to_string(),
                 body: "实现一个 API 路由".to_string(),
+                as_task: false,
             },
         )
         .unwrap_err()
@@ -349,6 +436,7 @@ mod tests {
             SendChannelMessageRequest {
                 author_id: "human_lei".to_string(),
                 body: "大家先同步一下进度".to_string(),
+                as_task: false,
             },
         )
         .unwrap();
@@ -365,6 +453,45 @@ mod tests {
                 && event.contains("body=[redacted-body]")
                 && !event.contains("大家先同步")
         }));
+    }
+
+    #[test]
+    fn default_all_channel_message_as_task_creates_local_task_without_heuristic() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = send_channel_message(
+            &broker,
+            "all",
+            SendChannelMessageRequest {
+                author_id: "human_lei".to_string(),
+                body: "请转成任务但正文不含动词".to_string(),
+                as_task: true,
+            },
+        )
+        .unwrap();
+        let tasks = list_tasks(
+            &broker,
+            TaskListQuery {
+                channel_id: Some("all".to_string()),
+                creator_id: None,
+                assignee_id: None,
+            },
+        );
+
+        assert_eq!(receipt.outcome.action, "local_needs_manual_assignment");
+        assert!(receipt.outcome.task_id.is_some());
+        assert_eq!(tasks.tasks.len(), 1);
+        assert_eq!(tasks.tasks[0].status, "pending_assignment");
+        assert_eq!(tasks.tasks[0].title, "请转成任务但正文不含动词");
     }
 
     #[test]
@@ -418,6 +545,7 @@ mod tests {
             SendChannelMessageRequest {
                 author_id: "human_lei".to_string(),
                 body: "实现一个 API 路由".to_string(),
+                as_task: false,
             },
         )
         .unwrap_err()

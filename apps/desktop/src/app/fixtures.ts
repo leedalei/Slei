@@ -34,17 +34,25 @@ export type SleiMessage = {
   cards?: InteractiveCardView[];
   channelId?: string;
   status?: "running" | "approval" | "done" | "failed" | "pending" | "undecided";
+  taskCard?: { taskId: string; sourceMessageId?: string };
   toolCall?: string;
 };
+
+export type SleiTaskStatus = "pending_assignment" | "in_progress" | "in_review" | "done";
 
 export type SleiTask = {
   id: string;
   title: string;
   owner: string;
-  status: "todo" | "in_progress" | "in_review" | "done";
+  status: SleiTaskStatus;
+  creatorId?: string;
+  assigneeId?: string;
   attention?: string;
+  attentionRequired?: boolean;
   channelId?: string;
   sourceMessageId?: string;
+  replyCount?: number;
+  updatedAt?: string;
   replies?: SleiTaskReply[];
 };
 
@@ -128,7 +136,7 @@ export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiF
     tasks: overrides.tasks ?? [
       { id: "T-101", title: "接入 React 桌面壳", owner: "Slei 智能体", status: "done" },
       { id: "T-102", title: "连接 runtime 引导弹窗", owner: "运行时智能体", status: "in_progress", attention: "等待节点刷新" },
-      { id: "T-103", title: "检查设备诊断入口", owner: "Lei", status: "todo" },
+      { id: "T-103", title: "检查设备诊断入口", owner: "Lei", status: "pending_assignment" },
       { id: "T-104", title: "统一 token 化样式", owner: "UI 智能体", status: "in_review", attention: "视觉检查" },
     ],
     members: overrides.members ?? [],

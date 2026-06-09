@@ -22,6 +22,8 @@ pub struct MessageRecord {
     pub channel_id: String,
     pub author_id: String,
     pub body: Option<String>,
+    #[serde(default)]
+    pub as_task: bool,
     pub kind: MessageKind,
     pub deleted: bool,
     pub edited: bool,
@@ -121,6 +123,7 @@ impl MessageService {
             channel_id: draft.channel_id.clone(),
             author_id: draft.author_id,
             body: Some(draft.body.clone()),
+            as_task: draft.as_task,
             kind: MessageKind::Human,
             deleted: false,
             edited: false,
@@ -202,6 +205,7 @@ impl MessageService {
         author_id: &str,
         body: &str,
         idempotency_key: &str,
+        as_task: bool,
     ) -> Result<MessageRecord, MessageError> {
         if channel_id.trim().is_empty()
             || author_id.trim().is_empty()
@@ -219,7 +223,13 @@ impl MessageService {
                 .ok_or(MessageError::MessageNotFound);
         }
 
-        let message = build_message(channel_id, author_id, Some(body), MessageKind::Human);
+        let message = build_message_with_as_task(
+            channel_id,
+            author_id,
+            Some(body),
+            MessageKind::Human,
+            as_task,
+        );
         state
             .channel_message_idempotency
             .insert(idempotency_key.to_string(), message.id.clone());
@@ -227,6 +237,7 @@ impl MessageService {
         state
             .event_payloads
             .push(format!("message.created:{}", message.id));
+        self.persist_messages(&state);
         Ok(message)
     }
 
@@ -379,6 +390,7 @@ impl MessageService {
                 channel_id: channel_id.to_string(),
                 author_id: author_id.to_string(),
                 body: Some(body.to_string()),
+                as_task: false,
                 kind,
                 deleted: false,
                 edited: false,
@@ -440,11 +452,22 @@ fn build_message(
     body: Option<&str>,
     kind: MessageKind,
 ) -> MessageRecord {
+    build_message_with_as_task(channel_id, author_id, body, kind, false)
+}
+
+fn build_message_with_as_task(
+    channel_id: &str,
+    author_id: &str,
+    body: Option<&str>,
+    kind: MessageKind,
+    as_task: bool,
+) -> MessageRecord {
     MessageRecord {
         id: format!("msg_{}", Uuid::new_v4().simple()),
         channel_id: channel_id.to_string(),
         author_id: author_id.to_string(),
         body: body.map(ToString::to_string),
+        as_task,
         kind,
         deleted: false,
         edited: false,

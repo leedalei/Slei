@@ -19,6 +19,8 @@ use crate::state::AppState;
 pub struct SendChannelMessageRequest {
     author_id: String,
     body: String,
+    #[serde(default)]
+    as_task: bool,
 }
 
 pub async fn list_channel_messages(
@@ -75,6 +77,7 @@ pub async fn send_channel_message(
             author_id: payload.author_id,
             body: payload.body,
             idempotency_key: idempotency_key.to_string(),
+            as_task: payload.as_task,
         })
         .await
     {

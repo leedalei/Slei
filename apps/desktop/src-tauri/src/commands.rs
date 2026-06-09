@@ -10,7 +10,9 @@ use crate::daemon_broker::{
     InteractiveCardReceipt, NodeListReceipt, NodeNameError, NodeRenameReceipt,
     PermissionResolveRequest, PreferencesError, PreferencesReceipt, PreferencesUpdateRequest,
     SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt,
-    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
+    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt, TaskError,
+    TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
+    TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
 
@@ -127,6 +129,33 @@ pub fn send_channel_message(
     request: SendChannelMessageRequest,
 ) -> Result<SendChannelMessageReceipt, ChannelError> {
     broker.send_channel_message(channel_id, request)
+}
+
+pub fn list_tasks(broker: &DaemonBroker, query: TaskListQuery) -> TaskListReceipt {
+    broker.list_tasks(query)
+}
+
+pub fn get_task_thread(
+    broker: &DaemonBroker,
+    task_id: &str,
+) -> Result<TaskThreadReceipt, TaskError> {
+    broker.get_task_thread(task_id)
+}
+
+pub fn reply_to_task(
+    broker: &DaemonBroker,
+    task_id: &str,
+    request: TaskReplyRequest,
+) -> Result<TaskReplyReceipt, TaskError> {
+    broker.reply_to_task(task_id, request)
+}
+
+pub fn update_task_status(
+    broker: &DaemonBroker,
+    task_id: &str,
+    request: TaskStatusUpdateRequest,
+) -> Result<TaskReceipt, TaskError> {
+    broker.update_task_status(task_id, request)
 }
 
 pub fn complete_interactive_card(
@@ -386,6 +415,40 @@ pub fn send_channel_message_command(
     request: SendChannelMessageRequest,
 ) -> Result<SendChannelMessageReceipt, String> {
     send_channel_message(state.inner(), &channel_id, request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_tasks_command(
+    state: tauri::State<'_, DaemonBroker>,
+    query: TaskListQuery,
+) -> TaskListReceipt {
+    list_tasks(state.inner(), query)
+}
+
+#[tauri::command]
+pub fn get_task_thread_command(
+    state: tauri::State<'_, DaemonBroker>,
+    task_id: String,
+) -> Result<TaskThreadReceipt, String> {
+    get_task_thread(state.inner(), &task_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn reply_to_task_command(
+    state: tauri::State<'_, DaemonBroker>,
+    task_id: String,
+    request: TaskReplyRequest,
+) -> Result<TaskReplyReceipt, String> {
+    reply_to_task(state.inner(), &task_id, request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn update_task_status_command(
+    state: tauri::State<'_, DaemonBroker>,
+    task_id: String,
+    request: TaskStatusUpdateRequest,
+) -> Result<TaskReceipt, String> {
+    update_task_status(state.inner(), &task_id, request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

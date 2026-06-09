@@ -260,6 +260,51 @@ export type SendChannelMessageOutcome = ProtocolSendChannelMessageOutcome;
 
 export type SendChannelMessageReceipt = ProtocolSendChannelMessageReceipt;
 
+export type TaskStatusView = "pending_assignment" | "in_progress" | "in_review" | "done";
+
+export type TaskSummaryView = {
+  id: string;
+  channelId: string;
+  creatorId: string;
+  assigneeId?: string;
+  sourceMessageId?: string;
+  title: string;
+  status: TaskStatusView;
+  attentionRequired: boolean;
+  replyCount: number;
+  updatedAt: string;
+};
+
+export type TaskThreadMessageView = {
+  id: string;
+  taskId: string;
+  senderId: string;
+  role: "human" | "agent" | "system" | string;
+  body: string;
+  status?: string;
+  createdAt: string;
+};
+
+export type TaskThreadView = {
+  task: TaskSummaryView;
+  root: TaskThreadMessageView;
+  replies: TaskThreadMessageView[];
+};
+
+export type TaskListReceipt = { tasks: TaskSummaryView[] };
+
+export type TaskThreadReceipt = { thread: TaskThreadView };
+
+export type TaskReplyRequest = { senderId: string; body: string };
+
+export type TaskReplyRoute = { handoffAgentIds: string[]; needsAssignment: boolean };
+
+export type TaskReplyReceipt = { reply: TaskThreadMessageView; route: TaskReplyRoute };
+
+export type TaskStatusUpdateRequest = { status: TaskStatusView };
+
+export type TaskReceipt = { task: TaskSummaryView };
+
 export type InteractiveCardView = {
   id: string;
   kind: "createAgent" | "createChannel" | string;
@@ -385,6 +430,10 @@ export type DaemonBridge = {
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
   listChannelMessages(channelId: string): Promise<ChannelMessageListReceipt>;
   sendChannelMessage(channelId: string, request: SendChannelMessageRequest): Promise<SendChannelMessageReceipt>;
+  listTasks(query?: { channelId?: string; creatorId?: string; assigneeId?: string }): Promise<TaskListReceipt>;
+  getTaskThread(taskId: string): Promise<TaskThreadReceipt>;
+  replyToTask(taskId: string, request: TaskReplyRequest): Promise<TaskReplyReceipt>;
+  updateTaskStatus(taskId: string, request: TaskStatusUpdateRequest): Promise<TaskReceipt>;
   completeInteractiveCard(cardId: string): Promise<InteractiveCardReceipt>;
   listAgents(): Promise<AgentListReceipt>;
   createAgent(request: AgentCreateRequest): Promise<AgentReceipt>;
@@ -447,6 +496,8 @@ export function createDaemonBridgeMock(input: {
   let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true, projectPaths: [] }];
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
+  let tasks: TaskSummaryView[] = [];
+  const taskThreads = new Map<string, TaskThreadView>();
   let channelMessageCounter = 0;
   let conversations: ConversationView[] = [];
   let conversationSessions: ConversationSessionView[] = [];
@@ -603,7 +654,7 @@ export function createDaemonBridgeMock(input: {
       const isConsultation = containsAny(body, ["?", "？", "怎么看", "为什么"]);
       const action = explicitMember
         ? "request_agent_reply"
-        : isTaskCommand
+        : request.asTask || isTaskCommand
           ? readyMember
             ? "create_task_and_assign"
             : "needs_manual_assignment"
@@ -622,6 +673,35 @@ export function createDaemonBridgeMock(input: {
             : [];
       const assigneeAgentId = assigneeAgentIds[0];
       const taskId = action === "create_task_and_assign" || action === "needs_manual_assignment" ? `task_${messageId}` : undefined;
+      if (taskId) {
+        const now = String(Date.now());
+        const task: TaskSummaryView = {
+          id: taskId,
+          channelId,
+          creatorId: request.authorId,
+          assigneeId: assigneeAgentId,
+          sourceMessageId: messageId,
+          title: body.slice(0, 40),
+          status: assigneeAgentId ? "in_progress" : "pending_assignment",
+          attentionRequired: !assigneeAgentId,
+          replyCount: 0,
+          updatedAt: now,
+        };
+        const thread: TaskThreadView = {
+          task,
+          root: {
+            id: `root_${taskId}`,
+            taskId,
+            senderId: request.authorId,
+            role: request.authorId.startsWith("agent") ? "agent" : "human",
+            body,
+            createdAt: now,
+          },
+          replies: [],
+        };
+        tasks = [task, ...tasks.filter((candidate) => candidate.id !== taskId)];
+        taskThreads.set(taskId, thread);
+      }
       return {
         outcome: {
           messageId,
@@ -632,6 +712,48 @@ export function createDaemonBridgeMock(input: {
           decisionStatus: "completed",
         },
       };
+    },
+    async listTasks(query = {}) {
+      return {
+        tasks: tasks.filter((task) => (
+          (!query.channelId || task.channelId === query.channelId)
+          && (!query.creatorId || task.creatorId === query.creatorId)
+          && (!query.assigneeId || task.assigneeId === query.assigneeId)
+        )),
+      };
+    },
+    async getTaskThread(taskId) {
+      const thread = taskThreads.get(taskId);
+      if (!thread) throw new Error("task not found");
+      return { thread };
+    },
+    async replyToTask(taskId, request) {
+      const thread = taskThreads.get(taskId);
+      if (!thread) throw new Error("task not found");
+      const body = request.body.trim();
+      if (!body) throw new Error("reply body is required");
+      const reply = {
+        id: `reply-${taskId}-${thread.replies.length + 1}`,
+        taskId,
+        senderId: request.senderId,
+        role: request.senderId.startsWith("agent") ? "agent" : "human",
+        body,
+        createdAt: String(Date.now()),
+      };
+      thread.replies.push(reply);
+      thread.task.replyCount = thread.replies.length;
+      thread.task.updatedAt = reply.createdAt;
+      tasks = tasks.map((task) => (task.id === taskId ? thread.task : task));
+      return { reply, route: { handoffAgentIds: [], needsAssignment: false } };
+    },
+    async updateTaskStatus(taskId, request) {
+      const thread = taskThreads.get(taskId);
+      if (!thread) throw new Error("task not found");
+      thread.task.status = request.status;
+      thread.task.attentionRequired = request.status === "pending_assignment";
+      thread.task.updatedAt = String(Date.now());
+      tasks = tasks.map((task) => (task.id === taskId ? thread.task : task));
+      return { task: thread.task };
     },
     async completeInteractiveCard(cardId) {
       const card = cards.find((candidate) => candidate.id === cardId);
@@ -983,6 +1105,10 @@ export function createDaemonBridge(): DaemonBridge {
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
       listChannelMessages: (channelId: string) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId }),
       sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) => invoke<SendChannelMessageReceipt>("send_channel_message_command", { channelId, request }),
+      listTasks: (query = {}) => invoke<TaskListReceipt>("list_tasks_command", { query }),
+      getTaskThread: (taskId: string) => invoke<TaskThreadReceipt>("get_task_thread_command", { taskId }),
+      replyToTask: (taskId: string, request: TaskReplyRequest) => invoke<TaskReplyReceipt>("reply_to_task_command", { taskId, request }),
+      updateTaskStatus: (taskId: string, request: TaskStatusUpdateRequest) => invoke<TaskReceipt>("update_task_status_command", { taskId, request }),
       completeInteractiveCard: (cardId: string) => invoke<InteractiveCardReceipt>("complete_interactive_card_command", { cardId }),
       listAgents: () => invoke<AgentListReceipt>("list_agents_command"),
       createAgent: (request: AgentCreateRequest) => invoke<AgentReceipt>("create_agent_command", { request }),

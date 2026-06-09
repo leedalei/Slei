@@ -83,12 +83,12 @@ describe("channel embedded views", () => {
               id: "T-dev",
               title: "实现频道任务列表",
               owner: "Lei",
-              status: "todo",
+              status: "pending_assignment",
               channelId: "dev-team",
               attention: "等待确认",
               replies: [{ id: "r1", sender: "Lei", role: "human", body: "任务根消息" }],
             },
-            { id: "T-ops", title: "不要展示其他频道任务", owner: "Ops", status: "todo", channelId: "ops" },
+            { id: "T-ops", title: "不要展示其他频道任务", owner: "Ops", status: "pending_assignment", channelId: "ops" },
           ],
         })}
         initialChannelView="tasks"

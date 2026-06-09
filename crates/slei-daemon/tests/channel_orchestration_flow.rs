@@ -10,7 +10,7 @@ use slei_daemon::services::channel_service::{
 };
 use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRecord};
 use slei_daemon::services::message_service::MessageKind;
-use slei_daemon::services::task_service::TaskQuery;
+use slei_daemon::services::task_service::{TaskQuery, TaskStatus};
 use slei_daemon::state::AppState;
 use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
@@ -48,6 +48,7 @@ async fn command_message_creates_task_assignment_inbox_decision_and_task_card() 
         author_id: "human_lei".to_string(),
         body: command_body.to_string(),
         idempotency_key: "send-command".to_string(),
+        as_task: false,
     };
     let pending = state
         .channel_orchestrator()
@@ -174,6 +175,7 @@ async fn broadcast_channel_message_creates_inbox_events_for_all_selected_reply_t
         author_id: "human_lei".to_string(),
         body: "大家好，报数".to_string(),
         idempotency_key: "send-broadcast-multi".to_string(),
+        as_task: false,
     };
 
     let pending = state
@@ -316,6 +318,7 @@ async fn malformed_coordinator_json_does_not_fallback_to_first_ready_agent() {
         author_id: "human_lei".to_string(),
         body: "请看看这个问题 @alice-win".to_string(),
         idempotency_key: "send-invalid-coordinator-json".to_string(),
+        as_task: false,
     };
     let pending = state
         .channel_orchestrator()
@@ -392,6 +395,7 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
         author_id: "human_lei".to_string(),
         body: "@alice-win 帮我看下".to_string(),
         idempotency_key: "send-explicit".to_string(),
+        as_task: false,
     };
     let pending = state
         .channel_orchestrator()
@@ -487,7 +491,7 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         )
         .await
         .unwrap();
-    assert_eq!(reply.id, retry.id);
+    assert_eq!(reply.reply.id, retry.reply.id);
 
     let inbox = state.agent_inbox().events_for_agent("agent_coda").await;
     let handoffs = inbox
@@ -495,7 +499,7 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .filter(|event| {
             event.event_type == "task_handoff"
                 && event.task_id.as_deref() == Some(task.id.as_str())
-                && event.message_id == reply.id
+                && event.message_id == reply.reply.id
         })
         .collect::<Vec<_>>();
     assert_eq!(handoffs.len(), 1);
@@ -505,6 +509,68 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .as_deref()
         .unwrap()
         .contains("@coda-win"));
+}
+
+#[tokio::test]
+async fn task_agent_reply_does_not_create_implicit_same_agent_handoff() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-agent-no-implicit-handoff",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "human_lei",
+            "msg_root_agent_no_implicit",
+            "实现任务线程写回",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-agent-no-implicit-root",
+        )
+        .await
+        .unwrap();
+
+    let reply = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "已经完成实现和修复，请继续验证。",
+            "task-agent-no-implicit-reply",
+        )
+        .await
+        .unwrap();
+
+    assert!(reply.route.handoff_agent_ids.is_empty());
+    let handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert!(handoffs.is_empty());
 }
 
 #[tokio::test]
@@ -578,6 +644,11 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         )
         .await
         .unwrap();
+    state
+        .tasks()
+        .update_status(&task_a.id, TaskStatus::Done)
+        .await
+        .unwrap();
     let retry = state
         .channel_orchestrator()
         .add_task_reply(
@@ -588,9 +659,13 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         )
         .await
         .unwrap();
-    assert_eq!(reply.id, retry.id);
-    assert_eq!(retry.sender_id, "agent_alice");
-    assert_eq!(retry.body, original_body);
+    assert_eq!(reply.reply.id, retry.reply.id);
+    assert_eq!(retry.reply.sender_id, "agent_alice");
+    assert_eq!(retry.reply.body, original_body);
+    assert_eq!(
+        state.tasks().task(&task_a.id).await.unwrap().status,
+        TaskStatus::Done
+    );
 
     let coda_handoffs = state
         .agent_inbox()
@@ -604,7 +679,7 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         coda_handoffs[0].task_id.as_deref(),
         Some(task_a.id.as_str())
     );
-    assert_eq!(coda_handoffs[0].message_id, reply.id);
+    assert_eq!(coda_handoffs[0].message_id, reply.reply.id);
     assert_eq!(coda_handoffs[0].sender_id.as_deref(), Some("agent_alice"));
     assert_eq!(
         coda_handoffs[0].handoff_text.as_deref(),
@@ -619,6 +694,73 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         .filter(|event| event.event_type == "task_handoff")
         .collect::<Vec<_>>();
     assert!(bob_handoffs.is_empty());
+}
+
+#[tokio::test]
+async fn unassigned_task_reply_replay_preserves_completed_state_and_attention() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_task_root(
+            "dev",
+            "human_lei",
+            "收敛一条未分配任务",
+            "unassigned-reply-root",
+        )
+        .await
+        .unwrap();
+    let first = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "继续实现这个任务分支",
+            "unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+    assert!(first.route.needs_assignment);
+
+    state
+        .tasks()
+        .update_status(&task.id, TaskStatus::Done)
+        .await
+        .unwrap();
+    state
+        .tasks()
+        .set_attention_required(&task.id, false)
+        .await
+        .unwrap();
+
+    let replay = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "继续实现这个任务分支",
+            "unassigned-reply-replay",
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.reply.id, replay.reply.id);
+    assert!(replay.route.needs_assignment);
+
+    let task = state.tasks().task(&task.id).await.unwrap();
+    assert_eq!(task.status, TaskStatus::Done);
+    assert!(!task.attention_required);
 }
 
 #[tokio::test]
@@ -652,6 +794,7 @@ async fn command_message_retry_replays_outcome_without_duplicate_side_effects() 
         author_id: "human_lei".to_string(),
         body: "实现频道创建时选择 Agent 的功能".to_string(),
         idempotency_key: "send-command-retry".to_string(),
+        as_task: false,
     };
 
     let pending = state
@@ -759,7 +902,7 @@ async fn command_message_partial_retry_recovers_existing_side_effects_without_du
     let body = "实现频道创建时选择 Agent 的功能";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", body, idempotency_key)
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
         .await
         .unwrap();
     let assignment_reason = "task command assigned to ready agent agent_alice";
@@ -827,6 +970,7 @@ async fn command_message_partial_retry_recovers_existing_side_effects_without_du
             author_id: "human_lei".to_string(),
             body: body.to_string(),
             idempotency_key: idempotency_key.to_string(),
+            as_task: false,
         })
         .await
         .unwrap();
@@ -899,7 +1043,7 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
     let idempotency_key = "send-command-deleted";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", "先发一条", idempotency_key)
+        .create_human_channel_message("dev", "human_lei", "先发一条", idempotency_key, false)
         .await
         .unwrap();
     state
@@ -915,6 +1059,7 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
             author_id: "human_lei".to_string(),
             body: "实现一个不该被路由的新任务".to_string(),
             idempotency_key: idempotency_key.to_string(),
+            as_task: false,
         })
         .await
         .unwrap_err();
@@ -981,7 +1126,7 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
     let original_body = "实现频道创建时选择 Agent 的功能";
     let message = state
         .messages()
-        .create_human_channel_message("dev", "human_lei", original_body, idempotency_key)
+        .create_human_channel_message("dev", "human_lei", original_body, idempotency_key, false)
         .await
         .unwrap();
 
@@ -990,6 +1135,7 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
         author_id: "human_other".to_string(),
         body: "实现一个不该被采用的新任务".to_string(),
         idempotency_key: idempotency_key.to_string(),
+        as_task: false,
     };
     let pending = state
         .channel_orchestrator()
@@ -1062,6 +1208,159 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
 }
 
 #[tokio::test]
+async fn channel_message_replay_uses_original_non_task_flag() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-as-task-replay-false",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "as-task-original-false";
+    let body = "这是一条普通讨论";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
+        .await
+        .unwrap();
+    assert!(!message.as_task);
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: true,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "coordinator_pending");
+    let coordinator_run_id = outcome.coordinator_run_id.as_deref().unwrap().to_string();
+    complete_coordinator_run(
+        &state,
+        &coordinator_run_id,
+        archive_decision_json("original non-task message should remain archive only"),
+    )
+    .await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: true,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "archive_only");
+    assert_eq!(outcome.task_id, None);
+    assert!(state
+        .tasks()
+        .list_tasks(TaskQuery::default())
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn channel_message_replay_uses_original_as_task_flag() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-as-task-replay-true",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let idempotency_key = "as-task-original-true";
+    let body = "这是一条需要单独收敛的讨论";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, true)
+        .await
+        .unwrap();
+    assert!(message.as_task);
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "coordinator_pending");
+    let coordinator_run_id = outcome.coordinator_run_id.as_deref().unwrap().to_string();
+    complete_coordinator_run(
+        &state,
+        &coordinator_run_id,
+        manual_reply_decision_json("original asTask message should remain manual task assignment"),
+    )
+    .await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.message_id, message.id);
+    assert_eq!(outcome.action, "needs_manual_assignment");
+    assert!(outcome.task_id.as_deref().is_some());
+}
+
+#[tokio::test]
 async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
@@ -1092,6 +1391,7 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
         author_id: "human_lei".to_string(),
         body: "实现频道创建时选择 Agent 的功能".to_string(),
         idempotency_key: "send-command-concurrent".to_string(),
+        as_task: false,
     };
 
     let (first_pending, second_pending) = tokio::join!(
@@ -1247,6 +1547,145 @@ async fn public_channel_message_api_uses_channel_orchestrator() {
         .events_for_agent("agent_alice")
         .await
         .is_empty());
+}
+
+#[tokio::test]
+async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks() {
+    let state = app_state_with_agent_handle("agent_coda", "@agent_coda").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-explicit-as-task",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_coda")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_coda", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/channels/dev/messages")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "explicit-as-task")
+                .body(Body::from(
+                    serde_json::json!({
+                        "authorId": "human_lei",
+                        "body": "这是一条需要单独收敛的讨论",
+                        "asTask": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = response_json(response).await;
+    assert_eq!(json["outcome"]["action"], "coordinator_pending");
+    complete_coordinator_run(
+        &state,
+        json["outcome"]["coordinatorRunId"].as_str().unwrap(),
+        manual_reply_decision_json("asTask without mention should still become manual assignment"),
+    )
+    .await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/channels/dev/messages")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "explicit-as-task")
+                .body(Body::from(
+                    serde_json::json!({
+                        "authorId": "human_lei",
+                        "body": "这是一条需要单独收敛的讨论",
+                        "asTask": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = response_json(response).await;
+    assert_eq!(json["outcome"]["action"], "needs_manual_assignment");
+    assert!(json["outcome"]["taskId"].as_str().is_some());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/channels/dev/messages")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "explicit-as-task-with-mention")
+                .body(Body::from(
+                    serde_json::json!({
+                        "authorId": "human_lei",
+                        "body": "@agent_coda 这也要收敛成任务",
+                        "asTask": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = response_json(response).await;
+    assert_eq!(json["outcome"]["action"], "coordinator_pending");
+    complete_coordinator_run(
+        &state,
+        json["outcome"]["coordinatorRunId"].as_str().unwrap(),
+        reply_decision_json("agent_coda", "explicit asTask mention should assign coda"),
+    )
+    .await;
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/channels/dev/messages")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "explicit-as-task-with-mention")
+                .body(Body::from(
+                    serde_json::json!({
+                        "authorId": "human_lei",
+                        "body": "@agent_coda 这也要收敛成任务",
+                        "asTask": true
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let json = response_json(response).await;
+    assert_eq!(json["outcome"]["action"], "create_task_and_assign");
+    assert_eq!(json["outcome"]["assigneeAgentId"], "agent_coda");
+    assert!(json["outcome"]["taskId"].as_str().is_some());
 }
 
 #[tokio::test]
@@ -1551,6 +1990,20 @@ fn task_decision_json(agent_id: &str, reason: &str) -> String {
     .to_string()
 }
 
+fn archive_decision_json(reason: &str) -> String {
+    json!({
+        "intent": "ambiguous",
+        "action": "archive_only",
+        "routeMode": "none",
+        "primaryAssigneeAgentId": null,
+        "targetAgentIds": [],
+        "task": null,
+        "reason": reason,
+        "confidence": 0.9
+    })
+    .to_string()
+}
+
 fn reply_decision_json(agent_id: &str, reason: &str) -> String {
     json!({
         "intent": "consultation",
@@ -1561,6 +2014,20 @@ fn reply_decision_json(agent_id: &str, reason: &str) -> String {
         "task": null,
         "reason": reason,
         "confidence": 0.9
+    })
+    .to_string()
+}
+
+fn manual_reply_decision_json(reason: &str) -> String {
+    json!({
+        "intent": "consultation",
+        "action": "request_agent_reply",
+        "routeMode": "none",
+        "primaryAssigneeAgentId": null,
+        "targetAgentIds": [],
+        "task": null,
+        "reason": reason,
+        "confidence": 0.4
     })
     .to_string()
 }

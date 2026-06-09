@@ -1,6 +1,6 @@
 import type { AppView, EmptySize, EmptyVariant, SettingsPanel } from "../app/SleiApp";
 import type { AppearancePreferences } from "../lib/daemon-bridge";
-import type { SleiTask } from "../app/fixtures";
+import type { SleiTaskStatus } from "../app/fixtures";
 
 export type DesktopMessages = {
   common: {
@@ -130,9 +130,13 @@ export type DesktopMessages = {
     description: string;
     list: string;
     replies: string;
+    replyCountButton: (count: number) => string;
     replyPlaceholder: string;
     sendReply: string;
-    status: Record<SleiTask["status"], string>;
+    markInReview: string;
+    markDone: string;
+    pendingAssignment: string;
+    status: Record<SleiTaskStatus, string>;
     thread: string;
     title: string;
   };
