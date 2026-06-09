@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -9,7 +9,7 @@ use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
 use crate::services::channel_service::ChannelError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
-use crate::services::task_service::TaskError;
+use crate::services::task_service::{TaskError, TaskQuery, TaskStatus};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +18,20 @@ pub struct CreateTaskRequest {
     channel_id: String,
     creator_id: String,
     title: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskListQuery {
+    channel_id: Option<String>,
+    creator_id: Option<String>,
+    assignee_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTaskStatusRequest {
+    status: TaskStatus,
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,9 +65,32 @@ pub async fn create(
         )
         .await
     {
-        Ok(task) => (StatusCode::CREATED, Json(json!({ "task": task }))).into_response(),
+        Ok(task) => match state.tasks().task_summary(&task.id).await {
+            Ok(task) => (StatusCode::CREATED, Json(json!({ "task": task }))).into_response(),
+            Err(error) => task_error_response(error),
+        },
         Err(error) => task_error_response(error),
     }
+}
+
+pub async fn list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<TaskListQuery>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let tasks = state
+        .tasks()
+        .list_task_summaries(TaskQuery {
+            channel_id: query.channel_id,
+            creator_id: query.creator_id,
+            assignee_id: query.assignee_id,
+        })
+        .await;
+    Json(json!({ "tasks": tasks })).into_response()
 }
 
 pub async fn reply(
@@ -76,7 +113,14 @@ pub async fn reply(
         .add_task_reply(&id, &payload.sender_id, &payload.body, idempotency_key)
         .await
     {
-        Ok(reply) => (StatusCode::CREATED, Json(json!({ "reply": reply }))).into_response(),
+        Ok(receipt) => (
+            StatusCode::CREATED,
+            Json(json!({
+                "reply": receipt.reply,
+                "route": receipt.route
+            })),
+        )
+            .into_response(),
         Err(error) => task_reply_error_response(error),
     }
 }
@@ -90,8 +134,27 @@ pub async fn thread(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    match state.tasks().thread_context(&id).await {
+    match state.tasks().thread_view(&id).await {
         Ok(thread) => Json(json!({ "thread": thread })).into_response(),
+        Err(error) => task_error_response(error),
+    }
+}
+
+pub async fn update_status(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateTaskStatusRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.tasks().update_status(&id, payload.status).await {
+        Ok(()) => match state.tasks().task_summary(&id).await {
+            Ok(task) => Json(json!({ "task": task })).into_response(),
+            Err(error) => task_error_response(error),
+        },
         Err(error) => task_error_response(error),
     }
 }

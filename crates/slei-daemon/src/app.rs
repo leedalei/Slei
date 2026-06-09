@@ -68,9 +68,10 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/conversations/{id}/runtime-session/reset",
             post(api::conversations::reset_runtime_session),
         )
-        .route("/v1/tasks", post(api::tasks::create))
+        .route("/v1/tasks", get(api::tasks::list).post(api::tasks::create))
         .route("/v1/tasks/{id}/replies", post(api::tasks::reply))
         .route("/v1/tasks/{id}/thread", get(api::tasks::thread))
+        .route("/v1/tasks/{id}/status", patch(api::tasks::update_status))
         .route(
             "/v1/workspaces",
             get(api::workspaces::list).post(api::workspaces::create),

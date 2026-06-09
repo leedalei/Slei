@@ -317,6 +317,12 @@ impl TaskService {
         })
     }
 
+    pub async fn task_summary(&self, task_id: &str) -> Result<TaskSummaryView, TaskError> {
+        let state = self.inner.lock().expect("task state lock");
+        let task = state.tasks.get(task_id).ok_or(TaskError::TaskNotFound)?;
+        Ok(summary_for(&state, task))
+    }
+
     pub async fn update_status(&self, task_id: &str, status: TaskStatus) -> Result<(), TaskError> {
         let mut state = self.inner.lock().expect("task state lock");
         let task = state

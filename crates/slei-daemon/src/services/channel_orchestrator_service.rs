@@ -14,7 +14,9 @@ use crate::services::coordinator_service::{
 use crate::services::member_service::{MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
-use crate::services::task_service::{TaskError, TaskReply, TaskService};
+use crate::services::task_service::{
+    thread_message_for_reply, TaskError, TaskService, TaskStatus, TaskThreadMessage,
+};
 
 #[derive(Clone, Debug)]
 pub struct SendChannelMessageInput {
@@ -22,6 +24,7 @@ pub struct SendChannelMessageInput {
     pub author_id: String,
     pub body: String,
     pub idempotency_key: String,
+    pub as_task: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -31,6 +34,20 @@ pub struct SendChannelMessageOutcome {
     pub action: String,
     pub task_id: Option<String>,
     pub assignee_agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReplyRoute {
+    pub handoff_agent_ids: Vec<String>,
+    pub needs_assignment: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReplyReceipt {
+    pub reply: TaskThreadMessage,
+    pub route: TaskReplyRoute,
 }
 
 #[derive(Clone, Debug)]
@@ -165,6 +182,25 @@ impl ChannelOrchestratorService {
                 .await
                 .into(),
         };
+        let decision = if input.as_task {
+            let assignee_agent_id = decision
+                .assignee_agent_id
+                .clone()
+                .or_else(|| explicit_agent_ids.first().cloned());
+            let action = if assignee_agent_id.is_some() {
+                "create_task_and_assign"
+            } else {
+                "needs_manual_assignment"
+            };
+            ResolvedCoordinatorDecision {
+                id: decision.id,
+                action: action.to_string(),
+                assignee_agent_id,
+                reason: "user explicitly converted message to task".to_string(),
+            }
+        } else {
+            decision
+        };
         let _ = self
             .orchestration
             .record_diagnostic_event(
@@ -271,7 +307,7 @@ impl ChannelOrchestratorService {
         sender_id: &str,
         body: &str,
         idempotency_key: &str,
-    ) -> Result<TaskReply, ChannelOrchestratorError> {
+    ) -> Result<TaskReplyReceipt, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         let reply_outcome = self
             .tasks
@@ -289,6 +325,7 @@ impl ChannelOrchestratorService {
             .resolve_explicit_mentions(&reply.body, &member_ids)
             .await;
 
+        let mut handoff_agent_ids = Vec::new();
         for agent_id in explicit_agent_ids {
             if let Some(readiness) = readiness_by_agent.get(&agent_id) {
                 self.create_task_handoff_once(
@@ -301,10 +338,50 @@ impl ChannelOrchestratorService {
                     readiness.clone(),
                 )
                 .await;
+                handoff_agent_ids.push(agent_id.clone());
+                self.tasks
+                    .update_status(&task.id, TaskStatus::InProgress)
+                    .await?;
             }
         }
 
-        Ok(reply)
+        if handoff_agent_ids.is_empty() && reply_requires_work(&reply.body) {
+            if let Some(agent_id) = task.assignee_id.as_deref() {
+                if let Some(readiness) = readiness_by_agent.get(agent_id) {
+                    self.create_task_handoff_once(
+                        agent_id,
+                        &task.channel_id,
+                        &task.id,
+                        &reply.id,
+                        &reply.sender_id,
+                        &reply.body,
+                        readiness.clone(),
+                    )
+                    .await;
+                    handoff_agent_ids.push(agent_id.to_string());
+                    self.tasks
+                        .update_status(&task.id, TaskStatus::InProgress)
+                        .await?;
+                }
+            } else {
+                self.tasks
+                    .update_status(&task.id, TaskStatus::PendingAssignment)
+                    .await?;
+                self.tasks.set_attention_required(&task.id, true).await?;
+            }
+        }
+
+        let public_reply = thread_message_for_reply(&reply_outcome.task_id, reply);
+        let needs_assignment = handoff_agent_ids.is_empty()
+            && task.assignee_id.is_none()
+            && reply_requires_work(&public_reply.body);
+        Ok(TaskReplyReceipt {
+            reply: public_reply,
+            route: TaskReplyRoute {
+                handoff_agent_ids,
+                needs_assignment,
+            },
+        })
     }
 
     async fn existing_decision_for_message(
@@ -544,7 +621,7 @@ fn explicit_handles(body: &str) -> Vec<String> {
 
         let mut handle = String::from("@");
         while let Some((_, next)) = characters.peek() {
-            if next.is_ascii_alphanumeric() || *next == '-' {
+            if next.is_ascii_alphanumeric() || *next == '-' || *next == '_' {
                 handle.push(next.to_ascii_lowercase());
                 characters.next();
             } else {
@@ -556,6 +633,24 @@ fn explicit_handles(body: &str) -> Vec<String> {
         }
     }
     handles
+}
+
+fn reply_requires_work(body: &str) -> bool {
+    [
+        "实现",
+        "修复",
+        "检查",
+        "整理",
+        "创建",
+        "改一下",
+        "写一个",
+        "生成",
+        "调查",
+        "验证",
+        "继续",
+    ]
+    .iter()
+    .any(|marker| body.contains(marker))
 }
 
 fn enum_storage_str<T>(value: &T) -> String
