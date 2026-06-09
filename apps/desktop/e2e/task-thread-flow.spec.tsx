@@ -146,7 +146,10 @@ describe("chat to task thread flow", () => {
     expect(drawerSource).toContain("[input.open, task?.id]");
     expect(drawerSource).toContain("replySubmitting || statusSubmitting");
     expect(drawerSource).toContain("isDrawerOperationCurrent");
-    expect(chatPageSource()).toContain(".catch(() => undefined)");
+    const chatSource = chatPageSource();
+    expect(chatSource).toContain(".catch(() => undefined)");
+    expect(chatSource).toContain("loadedTaskThreadIdRef");
+    expect(chatSource).toContain("[selectedTask?.id, onTaskThreadOpen]");
     expect(tasksPageSource()).toContain(".catch(() => undefined)");
     const appSource = sleiAppSource();
     expect(appSource).not.toMatch(/import\s*\{[^}]*appendTaskReply/);

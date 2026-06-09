@@ -146,10 +146,18 @@ function isLinkedTaskAgentReply(message: SleiMessage, sourceMessageIds: Set<stri
 
 function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: DesktopMessages; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; tasks: SleiFixtures["tasks"] }) {
   const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id);
+  const loadedTaskThreadIdRef = useRef<string | undefined>(undefined);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+
+  useEffect(() => {
+    const taskId = selectedTask?.id;
+    if (!taskId || loadedTaskThreadIdRef.current === taskId) return;
+    loadedTaskThreadIdRef.current = taskId;
+    void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
+  }, [selectedTask?.id, onTaskThreadOpen]);
+
   function selectTask(taskId: string) {
     setSelectedTaskId(taskId);
-    void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
   }
 
   if (tasks.length === 0) {
