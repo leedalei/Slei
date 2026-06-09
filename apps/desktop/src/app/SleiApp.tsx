@@ -599,6 +599,24 @@ export function SleiApp() {
     });
   }
 
+  function appendTaskReplyReceiptToState(taskId: string, reply: TaskThreadMessageView) {
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        tasks: current.tasks.map((task) => {
+          if (task.id !== taskId) return task;
+          const existingReplies = task.replies ?? [];
+          if (existingReplies.some((candidate) => candidate.id === reply.id)) return task;
+          const replies = [
+            ...existingReplies,
+            taskThreadMessageToReply(reply, current.members, profile, messages),
+          ];
+          return { ...task, replies, replyCount: Math.max(task.replyCount ?? 0, replies.length) };
+        }),
+      }),
+    );
+  }
+
   async function refreshTaskThreadIntoState(taskId: string) {
     const receipt = await bridge.getTaskThread(taskId);
     applyTaskThreadReceiptToState(receipt);
@@ -1397,6 +1415,7 @@ export function SleiApp() {
       sourceBody = threadReceipt.thread.root.body || fallbackSourceBody;
       applyTaskThreadReceiptToState(threadReceipt);
     } catch (error) {
+      appendTaskReplyReceiptToState(taskId, receipt.reply);
       logAppEvent(bridge, "task-refresh", "task-agent-handoff-root-fallback", { channelId, taskId, error: formatLogError(error) });
     }
     void refreshTasks(channelId).catch((error: unknown) => {

@@ -154,6 +154,7 @@ describe("chat to task thread flow", () => {
     const appSource = sleiAppSource();
     expect(appSource).not.toMatch(/import\s*\{[^}]*appendTaskReply/);
     expect(appSource).toContain("const threadReceipt = await bridge.getTaskThread(taskId)");
+    expect(appSource).toContain("appendTaskReplyReceiptToState(taskId, receipt.reply)");
     expect(appSource).toContain("task-agent-handoff-root-fallback");
     expect(appSource).toContain("refreshTasks(activeChannelId).catch");
   });

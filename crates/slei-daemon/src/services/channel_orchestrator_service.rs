@@ -348,7 +348,8 @@ impl ChannelOrchestratorService {
             }
         }
 
-        if handoff_agent_ids.is_empty() && reply_requires_work(&reply.body) {
+        let is_human_reply = reply.role.as_deref() == Some("human");
+        if handoff_agent_ids.is_empty() && is_human_reply && reply_requires_work(&reply.body) {
             if let Some(agent_id) = task.assignee_id.as_deref() {
                 if let Some(readiness) = readiness_by_agent.get(agent_id) {
                     let created = self

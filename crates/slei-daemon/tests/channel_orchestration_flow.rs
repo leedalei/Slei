@@ -251,6 +251,68 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
 }
 
 #[tokio::test]
+async fn task_agent_reply_does_not_create_implicit_same_agent_handoff() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-agent-no-implicit-handoff",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "human_lei",
+            "msg_root_agent_no_implicit",
+            "实现任务线程写回",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-agent-no-implicit-root",
+        )
+        .await
+        .unwrap();
+
+    let reply = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "已经完成实现和修复，请继续验证。",
+            "task-agent-no-implicit-reply",
+        )
+        .await
+        .unwrap();
+
+    assert!(reply.route.handoff_agent_ids.is_empty());
+    let handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert!(handoffs.is_empty());
+}
+
+#[tokio::test]
 async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
     let state = app_state_with_agent_handles(&[
         ("agent_alice", "@alice-win"),
