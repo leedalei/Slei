@@ -25,8 +25,8 @@ export function TaskThreadDrawer(input: {
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = replyDraft.trim();
-    if (!task || !body) return;
-    await input.onReply?.(task.id, body);
+    if (!task || !body || !input.onReply) return;
+    await input.onReply(task.id, body);
     setReplyDraft("");
   }
 
@@ -63,7 +63,7 @@ export function TaskThreadDrawer(input: {
             <div className="flex flex-wrap justify-end gap-2">
               {task.status === "in_progress" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
               {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
-              <Button type="submit">
+              <Button disabled={!input.onReply} type="submit">
                 <Send aria-hidden="true" className="size-4" />
                 {input.messages.tasks.sendReply}
               </Button>

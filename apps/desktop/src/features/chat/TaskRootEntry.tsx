@@ -11,6 +11,7 @@ export function TaskRootEntry(input: {
   task: SleiTask;
 }) {
   const replyCount = input.task.replyCount ?? input.task.replies?.length ?? 0;
+  const replyCountLabel = input.messages.tasks.replyCountButton(replyCount);
   return (
     <article className="group relative grid gap-2 rounded-lg border bg-card px-3 py-3 text-sm" data-task-root-entry={input.task.id}>
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -18,9 +19,9 @@ export function TaskRootEntry(input: {
           <strong className="block break-words">{input.task.title}</strong>
           <small className="text-xs text-muted-foreground">{input.task.owner}</small>
         </div>
-        <Button onClick={input.onOpen} size="sm" type="button" variant="outline">
+        <Button aria-label={`${input.messages.tasks.commentThread}: ${input.task.title}, ${replyCountLabel}`} onClick={input.onOpen} size="sm" type="button" variant="outline">
           <MessageSquare aria-hidden="true" className="size-3.5" />
-          {input.messages.tasks.replyCountButton(replyCount)}
+          {replyCountLabel}
         </Button>
       </div>
       <TaskStatusBadge className="justify-self-end" messages={input.messages} status={input.task.status} />

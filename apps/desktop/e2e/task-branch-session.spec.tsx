@@ -48,8 +48,36 @@ describe("task branch sessions", () => {
     );
     expect(html).toContain("实现任务分支");
     expect(html).toContain("0 条回复");
+    expect(html).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
     expect(html).toContain("待指派");
     expect(html).toContain("data-task-root-entry");
     expect(html).not.toContain('data-message-id="msg_root"');
+  });
+
+  it("keeps the source channel message visible when task-card data is missing", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "实现任务分支", channelId: "all" },
+            {
+              id: "task_card_1",
+              author: "channel_coordinator",
+              role: "system",
+              time: "10:00",
+              body: "task_card:task_1:source:msg_root",
+              channelId: "all",
+            },
+          ],
+          tasks: [],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(html).toContain("实现任务分支");
+    expect(html).toContain('data-message-id="msg_root"');
+    expect(html).not.toContain("data-task-root-entry");
   });
 });

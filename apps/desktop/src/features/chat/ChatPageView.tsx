@@ -338,14 +338,18 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return false;
     return message.sessionId === currentSessionId;
   });
-  const taskCardsBySource = new Set(
+  const renderableTaskCardsBySource = new Set(
     visibleMessages
-      .map((message) => taskCardFromMessage(message)?.sourceMessageId)
+      .map((message) => {
+        const taskCard = taskCardFromMessage(message);
+        if (!taskCard?.sourceMessageId) return undefined;
+        return data.tasks.some((task) => task.id === taskCard.taskId) ? taskCard.sourceMessageId : undefined;
+      })
       .filter((id): id is string => Boolean(id)),
   );
   const timelineMessages = visibleMessages
     .filter((message) => !isTransientAgentActivity(message))
-    .filter((message) => !taskCardsBySource.has(message.id));
+    .filter((message) => message.role !== "human" || !renderableTaskCardsBySource.has(message.id));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
