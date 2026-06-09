@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -17,6 +17,8 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../../
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { cn } from "../../lib/utils";
+import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
+import { TaskRootEntry } from "./TaskRootEntry";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
@@ -110,6 +112,10 @@ function taskStatusLabel(status: SleiFixtures["tasks"][number]["status"], messag
 
 function isTransientAgentActivity(message: SleiMessage) {
   return message.role === "agent" && (message.status === "running" || message.status === "pending");
+}
+
+function taskCardFromMessage(message: SleiMessage) {
+  return message.taskCard ?? (message.role === "system" ? parseTaskCardBody(message.body) : null);
 }
 
 function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
@@ -305,7 +311,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, onTaskReply, onTaskStatusChange, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -315,6 +321,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [toastMessage, setToastMessage] = useState("");
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -331,7 +338,14 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return false;
     return message.sessionId === currentSessionId;
   });
-  const timelineMessages = visibleMessages.filter((message) => !isTransientAgentActivity(message));
+  const taskCardsBySource = new Set(
+    visibleMessages
+      .map((message) => taskCardFromMessage(message)?.sourceMessageId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const timelineMessages = visibleMessages
+    .filter((message) => !isTransientAgentActivity(message))
+    .filter((message) => !taskCardsBySource.has(message.id));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -343,6 +357,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     )
     .reverse();
   const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id);
+  const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
@@ -511,6 +526,19 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
           <div className="grid gap-1 px-4 py-3">
             {timelineMessages.map((message) => {
+              const taskCard = taskCardFromMessage(message);
+              if (taskCard) {
+                const task = data.tasks.find((candidate) => candidate.id === taskCard.taskId);
+                if (!task) return null;
+                return (
+                  <TaskRootEntry
+                    key={message.id}
+                    messages={messages}
+                    onOpen={() => setSelectedTaskId(task.id)}
+                    task={task}
+                  />
+                );
+              }
               const saved = savedMessageIds.includes(message.id);
               const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
               return (
@@ -573,6 +601,14 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       ) : (
         <ChannelFileList files={channelFiles} messages={messages} />
       )}
+      <TaskThreadDrawer
+        messages={messages}
+        onClose={() => setSelectedTaskId(undefined)}
+        onReply={onTaskReply}
+        onStatusChange={onTaskStatusChange}
+        open={Boolean(selectedTask)}
+        task={selectedTask}
+      />
       {effectiveChannelView === "chat" ? (
         <footer className="border-t bg-background/95">
           {mention && mentionTargets.length > 0 ? (

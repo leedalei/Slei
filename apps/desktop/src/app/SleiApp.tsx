@@ -42,6 +42,7 @@ import {
   formatMessageTime,
   formatMemberCreatedDate,
   normalizeAppearance,
+  parseTaskCardBody,
   renameComputerNode,
   shouldRefreshConversationMessages,
   sendChatComposerMessage,
@@ -124,8 +125,19 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
   ];
 }
 
-function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile): SleiMessage | null {
-  if (message.deleted || message.kind === "tombstone" || message.kind === "task_card") return null;
+function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
+  if (message.deleted || message.kind === "tombstone") return null;
+  if (message.kind === "task_card") {
+    return {
+      id: message.id,
+      author: messages.common.system,
+      role: "system",
+      time: "",
+      body: message.body ?? "",
+      channelId: message.channelId,
+      taskCard: parseTaskCardBody(message.body ?? "") ?? undefined,
+    };
+  }
   const member = members.find((candidate) => candidate.id === message.authorId);
   const isHuman = message.authorId.startsWith("human:");
   return {
@@ -423,13 +435,14 @@ async function loadSleiChannelMessages(
   channels: ChannelView[],
   members: SleiMember[],
   profile: UserProfile,
+  messages: DesktopMessages,
 ) {
   const receipts = await Promise.all(
     channels.map((channel) => bridge.listChannelMessages(channel.id).catch(() => ({ messages: [] }))),
   );
   return receipts.flatMap((receipt) =>
     receipt.messages
-      .map((message) => channelMessageToSleiMessage(message, members, profile))
+      .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message)),
   );
 }
@@ -522,7 +535,7 @@ export function SleiApp() {
       );
       const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
-      const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile);
+      const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
       if (!mounted) return;
       setData((current) =>
         createSleiFixtures({
@@ -651,7 +664,7 @@ export function SleiApp() {
     );
     const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
     const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
-    const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile);
+    const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
     setData((current) =>
       createSleiFixtures({
         ...current,
@@ -1091,6 +1104,15 @@ export function SleiApp() {
     setData((current) => createSleiFixtures({ ...current, tasks: appendTaskReply(current.tasks, taskId, { sender: profile.displayName, role: "human", body }) }));
   }
 
+  function handleTaskStatusChange(taskId: string, status: SleiFixtures["tasks"][number]["status"]) {
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, status } : task)),
+      }),
+    );
+  }
+
   async function handleCreateChannel(input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) {
     const name = stripChannelHash(input.name);
     if (!name) return;
@@ -1273,6 +1295,7 @@ export function SleiApp() {
       onSendMessage={handleSendMessage}
       onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}
+      onTaskStatusChange={handleTaskStatusChange}
       onViewChange={navigateToView}
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
