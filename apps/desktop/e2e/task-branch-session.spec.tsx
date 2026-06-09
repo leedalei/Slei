@@ -1,4 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
@@ -14,6 +17,17 @@ const readyRuntime = {
 };
 
 describe("task branch sessions", () => {
+  it("keeps drawer reply persistence wiring connected at the source level", () => {
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const chatPageSource = readFileSync(resolve(root, "src/features/chat/ChatPageView.tsx"), "utf8");
+    const appSource = readFileSync(resolve(root, "src/app/SleiApp.tsx"), "utf8");
+
+    expect(chatPageSource).toContain("onTaskReply");
+    expect(chatPageSource).toContain("TaskThreadDrawer");
+    expect(appSource).toContain("handleTaskReply");
+    expect(appSource).toContain("replyToTask");
+  });
+
   it("renders a collapsed task root entry and hides the source channel message", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

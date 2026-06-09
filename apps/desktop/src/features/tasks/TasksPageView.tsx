@@ -17,25 +17,33 @@ export function TasksPage({
   messages,
   onTaskReply,
   onTaskStatusChange,
+  onTaskThreadOpen,
 }: {
   activeTaskId?: string;
   data: SleiFixtures;
   messages: DesktopMessages;
   onTaskReply?: (taskId: string, body: string) => Promise<void> | void;
   onTaskStatusChange?: (taskId: string, status: SleiTask["status"]) => Promise<void> | void;
+  onTaskThreadOpen?: (taskId: string) => Promise<void> | void;
 }) {
   const columns: SleiTask["status"][] = ["pending_assignment", "in_progress", "in_review", "done"];
   const [selectedTaskId, setSelectedTaskId] = useState(activeTaskId);
   const [view, setView] = useState<"board" | "list">("board");
-  const lastActiveTaskId = useRef(activeTaskId);
+  const lastActiveTaskId = useRef<string | undefined>(undefined);
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
 
   useEffect(() => {
     if (activeTaskId && activeTaskId !== lastActiveTaskId.current) {
       setSelectedTaskId(activeTaskId);
+      void onTaskThreadOpen?.(activeTaskId);
     }
     lastActiveTaskId.current = activeTaskId;
-  }, [activeTaskId]);
+  }, [activeTaskId, onTaskThreadOpen]);
+
+  function openTask(taskId: string) {
+    setSelectedTaskId(taskId);
+    void onTaskThreadOpen?.(taskId);
+  }
 
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
@@ -68,7 +76,7 @@ export function TasksPage({
                       <Badge variant="outline">{columnTasks.length}</Badge>
                     </div>
                     {columnTasks.length ? columnTasks.map((task) => (
-                      <TaskCard key={task.id} messages={messages} onSelect={() => setSelectedTaskId(task.id)} task={task} />
+                      <TaskCard key={task.id} messages={messages} onSelect={() => openTask(task.id)} task={task} />
                     )) : (
                       <p className="rounded-lg border border-dashed bg-background/60 p-3 text-sm text-muted-foreground" role="status">
                         {taskStatusLabel(column, messages)} 0
@@ -83,7 +91,7 @@ export function TasksPage({
           <TabsContent className="m-0 data-[state=inactive]:hidden" value="list">
             <div className="grid gap-3 p-6">
               {data.tasks.map((task) => (
-                <TaskCard layout="row" key={task.id} messages={messages} onSelect={() => setSelectedTaskId(task.id)} task={task} />
+                <TaskCard layout="row" key={task.id} messages={messages} onSelect={() => openTask(task.id)} task={task} />
               ))}
               {data.tasks.length === 0 ? (
                 <p className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground" role="status">

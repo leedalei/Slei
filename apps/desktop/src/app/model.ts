@@ -142,6 +142,7 @@ export async function sendChatComposerMessage(input: {
   activeConversationId?: string;
   activeSessionId?: string;
   attachmentIds?: string[];
+  asTask?: boolean;
   body: string;
   bridge: Pick<DaemonBridge, "sendChannelMessage" | "sendConversationMessage">;
   profile: UserProfile;
@@ -164,6 +165,7 @@ export async function sendChatComposerMessage(input: {
     kind: "channel" as const,
     receipt: await input.bridge.sendChannelMessage(input.activeChannelId, {
       authorId: `human:${handle}`,
+      asTask: Boolean(input.asTask),
       body,
     }),
   };

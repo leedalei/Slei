@@ -144,9 +144,14 @@ function isLinkedTaskAgentReply(message: SleiMessage, sourceMessageIds: Set<stri
   return false;
 }
 
-function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
+function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: DesktopMessages; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; tasks: SleiFixtures["tasks"] }) {
   const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
+  function selectTask(taskId: string) {
+    setSelectedTaskId(taskId);
+    void onTaskThreadOpen?.(taskId);
+  }
+
   if (tasks.length === 0) {
     return <section className="grid h-full min-h-0 place-items-center overflow-hidden p-6 text-sm text-muted-foreground">{messages.chat.channelTaskEmpty}</section>;
   }
@@ -160,7 +165,7 @@ function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks
               aria-current={selectedTask?.id === task.id ? "true" : undefined}
               className={cn("h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left", selectedTask?.id === task.id && "bg-accent text-accent-foreground")}
               key={task.id}
-              onClick={() => setSelectedTaskId(task.id)}
+              onClick={() => selectTask(task.id)}
               type="button"
               variant="ghost"
             >
@@ -337,7 +342,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, onTaskReply, onTaskStatusChange, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -471,6 +476,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     toastTimerRef.current = setTimeout(() => setToastMessage(""), TOAST_VISIBLE_MS);
   }
 
+  function openTaskThread(taskId: string) {
+    setSelectedTaskId(taskId);
+    void onTaskThreadOpen?.(taskId);
+  }
+
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-background" data-slot="chat-page">
       <Toast message={toastMessage} />
@@ -566,7 +576,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                   <TaskRootEntry
                     key={message.id}
                     messages={messages}
-                    onOpen={() => setSelectedTaskId(task.id)}
+                    onOpen={() => openTaskThread(task.id)}
                     task={task}
                   />
                 );
@@ -629,7 +639,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </div>
         </ScrollArea>
       ) : effectiveChannelView === "tasks" ? (
-        <ChannelTaskList messages={messages} tasks={channelTasks} />
+        <ChannelTaskList messages={messages} onTaskThreadOpen={onTaskThreadOpen} tasks={channelTasks} />
       ) : (
         <ChannelFileList files={channelFiles} messages={messages} />
       )}
