@@ -118,17 +118,30 @@ function taskCardFromMessage(message: SleiMessage) {
   return message.taskCard ?? (message.role === "system" ? parseTaskCardBody(message.body) : null);
 }
 
+function isTaskCardControlMessage(message: SleiMessage) {
+  return Boolean(message.taskCard) || (message.role === "system" && message.body.trim().startsWith("task_card:"));
+}
+
 function renderableTaskForTaskCard(
   taskCard: NonNullable<ReturnType<typeof parseTaskCardBody>>,
   tasks: SleiFixtures["tasks"],
   activeChannelId: string,
 ) {
+  if (!taskCard.sourceMessageId) return undefined;
   return tasks.find(
     (task) =>
       task.id === taskCard.taskId &&
       task.sourceMessageId === taskCard.sourceMessageId &&
       task.channelId === activeChannelId,
   );
+}
+
+function isLinkedTaskAgentReply(message: SleiMessage, sourceMessageIds: Set<string>) {
+  if (message.role !== "agent") return false;
+  for (const sourceMessageId of sourceMessageIds) {
+    if (message.id === `agent-activity-${sourceMessageId}` || message.id === `agent-reply-${sourceMessageId}`) return true;
+  }
+  return false;
 }
 
 function ChannelTaskList({ messages, tasks }: { messages: DesktopMessages; tasks: SleiFixtures["tasks"] }) {
@@ -362,6 +375,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   );
   const timelineMessages = visibleMessages
     .filter((message) => !isTransientAgentActivity(message))
+    .filter((message) => !isLinkedTaskAgentReply(message, renderableTaskCardsBySource))
+    .filter((message) => !isTaskCardControlMessage(message) || Boolean(taskCardFromMessage(message)))
     .filter((message) => message.role !== "human" || !renderableTaskCardsBySource.has(message.id));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>

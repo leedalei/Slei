@@ -13,6 +13,9 @@ export function TaskRootEntry(input: {
   const replyCount = input.task.replyCount ?? input.task.replies?.length ?? 0;
   const replyCountLabel = input.messages.tasks.replyCountButton(replyCount);
   const openLabel = `${input.messages.tasks.commentThread}: ${input.task.title}`;
+  const summary = input.task.replies?.find((reply) => reply.id.startsWith("root-") || reply.id.startsWith("root_"))?.body
+    ?? input.task.replies?.[0]?.body
+    ?? input.task.attention;
   return (
     <article className="group grid gap-2 rounded-lg border bg-card p-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto]" data-task-root-entry={input.task.id}>
       <button
@@ -25,6 +28,7 @@ export function TaskRootEntry(input: {
         <span className="min-w-0">
           <strong className="block break-words">{input.task.title}</strong>
           <small className="text-xs text-muted-foreground">{input.task.owner}</small>
+          {summary ? <span className="mt-1 block line-clamp-2 break-words text-xs text-muted-foreground">{summary}</span> : null}
         </span>
         <TaskStatusBadge className="justify-self-start" messages={input.messages} status={input.task.status} />
       </button>

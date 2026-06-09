@@ -128,6 +128,8 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
 function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
   if (message.deleted || message.kind === "tombstone") return null;
   if (message.kind === "task_card") {
+    const taskCard = parseTaskCardBody(message.body ?? "");
+    if (!taskCard) return null;
     return {
       id: message.id,
       author: messages.common.system,
@@ -135,7 +137,7 @@ function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiM
       time: "",
       body: message.body ?? "",
       channelId: message.channelId,
-      taskCard: parseTaskCardBody(message.body ?? "") ?? undefined,
+      taskCard,
     };
   }
   const member = members.find((candidate) => candidate.id === message.authorId);

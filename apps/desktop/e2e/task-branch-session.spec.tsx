@@ -41,6 +41,7 @@ describe("task branch sessions", () => {
               sourceMessageId: "msg_root",
               replyCount: 0,
               attentionRequired: true,
+              replies: [{ id: "root-msg_root", sender: "Lei", role: "human", body: "请实现任务分支，并保持频道简洁。" }],
             },
           ],
         })}
@@ -49,6 +50,7 @@ describe("task branch sessions", () => {
       />,
     );
     expect(html).toContain("实现任务分支");
+    expect(html).toContain("请实现任务分支，并保持频道简洁。");
     expect(html).toContain("0 条回复");
     expect(html).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
     expect(html).toContain("待指派");
@@ -120,6 +122,107 @@ describe("task branch sessions", () => {
     expect(html).not.toContain("data-task-root-entry");
   });
 
+  it("hides completed and failed task-related agent replies from the outer channel", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "实现任务分支", channelId: "all" },
+            {
+              id: "task_card_1",
+              author: "channel_coordinator",
+              role: "system",
+              time: "10:00",
+              body: "task_card:task_1:source:msg_root",
+              channelId: "all",
+            },
+            { id: "agent-activity-msg_root", author: "Coda", role: "agent", time: "10:01", body: "任务已经完成。", channelId: "all", status: "done" },
+            { id: "agent-reply-msg_root", author: "Coda", role: "agent", time: "10:02", body: "任务执行失败。", channelId: "all", status: "failed" },
+            { id: "agent-activity-unrelated", author: "Coda", role: "agent", time: "10:03", body: "普通频道回复。", channelId: "all", status: "done" },
+          ],
+          tasks: [
+            {
+              id: "task_1",
+              title: "实现任务分支",
+              owner: "Lei",
+              status: "in_progress",
+              channelId: "all",
+              sourceMessageId: "msg_root",
+              replyCount: 1,
+              replies: [{ id: "root-msg_root", sender: "Lei", role: "human", body: "实现任务分支" }],
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(html).toContain("data-task-root-entry");
+    expect(html).not.toContain("任务已经完成。");
+    expect(html).not.toContain("任务执行失败。");
+    expect(html).toContain("普通频道回复。");
+  });
+
+  it("does not render a task root when task-card source metadata is absent", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            {
+              id: "task_card_1",
+              author: "channel_coordinator",
+              role: "system",
+              time: "10:00",
+              body: "task_card:task_1",
+              channelId: "all",
+            },
+          ],
+          tasks: [
+            {
+              id: "task_1",
+              title: "实现任务分支",
+              owner: "Lei",
+              status: "pending_assignment",
+              channelId: "all",
+              replyCount: 0,
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(html).not.toContain("data-task-root-entry");
+    expect(html).not.toContain("task_card:task_1");
+  });
+
+  it("does not render invalid task-card control messages as system messages", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            {
+              id: "task_card_invalid",
+              author: "channel_coordinator",
+              role: "system",
+              time: "10:00",
+              body: "task_card:",
+              channelId: "all",
+            },
+          ],
+          tasks: [],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(html).not.toContain('data-message-id="task_card_invalid"');
+    expect(html).not.toContain("task_card:");
+  });
+
   it("binds the task root body trigger to open the drawer without nesting buttons", () => {
     let opened = false;
     const entry = TaskRootEntry({
@@ -135,6 +238,7 @@ describe("task branch sessions", () => {
         channelId: "all",
         sourceMessageId: "msg_root",
         replyCount: 0,
+        replies: [{ id: "root-msg_root", sender: "Lei", role: "human", body: "请实现任务分支，并保持频道简洁。" }],
       },
     });
 
@@ -145,6 +249,7 @@ describe("task branch sessions", () => {
     expect(opened).toBe(true);
 
     const html = renderToStaticMarkup(entry);
+    expect(html).toContain("请实现任务分支，并保持频道简洁。");
     expect(html).toContain("data-task-root-entry-trigger=\"body\"");
     const firstButtonOpen = html.indexOf("<button");
     const firstButtonClose = html.indexOf("</button>");
