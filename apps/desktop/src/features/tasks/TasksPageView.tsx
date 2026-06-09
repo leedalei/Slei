@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activeTaskId?: string; data: SleiFixtures; messages: DesktopMessages; onTaskReply?: (taskId: string, body: string) => void }) {
-  const columns: SleiTask["status"][] = ["todo", "in_progress", "in_review", "done"];
+  const columns: SleiTask["status"][] = ["pending_assignment", "in_progress", "in_review", "done"];
   const [selectedTaskId, setSelectedTaskId] = useState(activeTaskId);
   const [replyDraft, setReplyDraft] = useState("");
   const [view, setView] = useState<"board" | "list">("board");

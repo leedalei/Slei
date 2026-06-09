@@ -234,7 +234,7 @@ function createChannelTaskPlaceholder(outcome: SendChannelMessageOutcome, messag
     id: outcome.taskId,
     title: message.body.trim().split(/\n+/)[0]?.slice(0, 80) || "Untitled task",
     owner: assignee?.name ?? message.author,
-    status: outcome.assigneeAgentId ? "in_progress" : "todo",
+    status: outcome.assigneeAgentId ? "in_progress" : "pending_assignment",
     channelId: message.channelId,
     sourceMessageId: message.id,
     replies: [{ id: `root-${message.id}`, sender: message.author, role: message.role, body: message.body }],

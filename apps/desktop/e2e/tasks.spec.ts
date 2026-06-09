@@ -13,7 +13,7 @@ describe("global task board and list", () => {
       creator: "lei lee",
       assignee: "Alice",
       title: "帮我调研下怎么实现这个功能？",
-      status: "In Progress" as const,
+      status: "in_progress" as const,
       attentionRequired: true,
     },
     {
@@ -23,7 +23,7 @@ describe("global task board and list", () => {
       creator: "lei lee",
       assignee: "Coda",
       title: "关于 harness 工程，最近有什么比较好的实践",
-      status: "In Review" as const,
+      status: "in_review" as const,
       attentionRequired: false,
     },
     {
@@ -33,7 +33,7 @@ describe("global task board and list", () => {
       creator: "Nancy",
       assignee: "Nancy",
       title: "整理一下这周 AI 领域的重要动态",
-      status: "Done" as const,
+      status: "done" as const,
       attentionRequired: false,
     },
   ];
@@ -50,14 +50,13 @@ describe("global task board and list", () => {
     expect(html).toContain("CHANNEL");
     expect(html).toContain("CREATOR");
     expect(html).toContain("ASSIGNEE");
-    expect(html).toContain("TODO 0");
+    expect(html).toContain("PENDING ASSIGNMENT 0");
     expect(html).toContain("IN PROGRESS 1");
     expect(html).toContain("IN REVIEW 1");
     expect(html).toContain("DONE 1");
-    expect(html).toContain("CLOSED 0");
     expect(html).toContain("#dev-team #3");
     expect(html).toContain("需要用户关注");
-    expect(html).toContain("Set status: In Review");
+    expect(html).toContain("Set status: in_review");
 
     const list = renderTasksPage({
       locale: "zh-CN",

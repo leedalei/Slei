@@ -2,11 +2,17 @@ import { renderAttentionBadge } from "./AttentionBadge";
 import type { TaskStatus, TaskView } from "./types";
 
 const NEXT_STATUS: Record<TaskStatus, TaskStatus> = {
-  Todo: "In Progress",
-  "In Progress": "In Review",
-  "In Review": "Done",
-  Done: "Closed",
-  Closed: "Closed",
+  pending_assignment: "in_progress",
+  in_progress: "in_review",
+  in_review: "done",
+  done: "in_progress",
+};
+
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  pending_assignment: "Pending assignment",
+  in_progress: "In progress",
+  in_review: "In review",
+  done: "Done",
 };
 
 export function renderTaskCard(task: TaskView, locale: "zh-CN" | "en-US"): string {
@@ -18,11 +24,10 @@ export function renderTaskCard(task: TaskView, locale: "zh-CN" | "en-US"): strin
     task.title,
     `Creator: ${task.creator}`,
     task.assignee ? `Assignee: ${task.assignee}` : "",
-    task.status,
+    STATUS_LABELS[task.status],
     attention,
     statusAction,
   ]
     .filter(Boolean)
     .join(" ");
 }
-

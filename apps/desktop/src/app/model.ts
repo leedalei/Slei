@@ -217,11 +217,24 @@ export function createTaskFromChatMessage(message: SleiMessage, channelId: strin
     id: `task-${message.id}`,
     title,
     owner: message.author,
-    status: "todo",
+    creatorId: "human:local",
+    status: "pending_assignment",
+    attentionRequired: true,
     channelId,
     sourceMessageId: message.id,
+    replyCount: 0,
     replies: [{ id: `root-${message.id}`, sender: message.author, role: message.role, body: message.body }],
   };
+}
+
+export function parseTaskCardBody(body: string): { taskId: string; sourceMessageId?: string } | null {
+  const match = /^task_card:([^:]+)(?::source:(.+))?$/.exec(body.trim());
+  if (!match) return null;
+  return { taskId: match[1], sourceMessageId: match[2] };
+}
+
+export function taskReplyRequiresWork(body: string): boolean {
+  return ["实现", "修复", "检查", "整理", "创建", "改一下", "写一个", "生成", "调查", "验证", "继续"].some((marker) => body.includes(marker));
 }
 
 export function channelReadinessLabel(readiness: SleiChannelMemberReadiness | undefined, messages: DesktopMessages): string {

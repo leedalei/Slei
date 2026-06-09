@@ -28,8 +28,11 @@ describe("chat to task thread flow", () => {
 
     expect(task.id).toBe("task-message_1");
     expect(task.title).toBe("帮我把私聊任务线程做完");
-    expect(task.status).toBe("todo");
+    expect(task.status).toBe("pending_assignment");
     expect(task.owner).toBe("Lei");
+    expect(task.creatorId).toBe("human:local");
+    expect(task.replyCount).toBe(0);
+    expect(task.attentionRequired).toBe(true);
     expect(task.channelId).toBe("all");
     expect(task.sourceMessageId).toBe("message_1");
     expect(task.replies).toEqual([{ id: "root-message_1", sender: "Lei", role: "human", body: "帮我把私聊任务线程做完" }]);
@@ -41,7 +44,7 @@ describe("chat to task thread flow", () => {
         id: "task-message_1",
         title: "帮我把私聊任务线程做完",
         owner: "Lei",
-        status: "todo" as const,
+        status: "pending_assignment" as const,
         replies: [{ id: "root-message_1", sender: "Lei", role: "human" as const, body: "帮我把私聊任务线程做完" }],
       },
     ];
@@ -63,7 +66,7 @@ describe("chat to task thread flow", () => {
           id: "T-900",
           title: "帮我把私聊任务线程做完",
           owner: "Lei",
-          status: "todo",
+          status: "pending_assignment",
           channelId: "all",
           replies: [
             { id: "r1", sender: "Lei", body: "这是任务上下文" },
