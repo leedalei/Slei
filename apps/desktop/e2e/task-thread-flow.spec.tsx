@@ -13,6 +13,7 @@ const readyRuntime = {
   nodes: createSleiFixtures().nodes,
 };
 const tasksPageSource = () => readFileSync(new URL("../src/features/tasks/TasksPageView.tsx", import.meta.url), "utf8");
+const taskThreadDrawerSource = () => readFileSync(new URL("../src/features/tasks/TaskThreadDrawer.tsx", import.meta.url), "utf8");
 
 describe("chat to task thread flow", () => {
   it("creates a task root from a checked chat composer message", () => {
@@ -96,10 +97,32 @@ describe("chat to task thread flow", () => {
 
     expect(html).toContain('aria-label="打开任务讨论"');
     expect(html).toContain("帮我把私聊任务线程做完");
-    expect(tasksPageSource()).toContain("@/components/ui/sheet");
-    expect(tasksPageSource()).toContain("SheetContent");
+    expect(tasksPageSource()).toContain("TaskThreadDrawer");
+    expect(taskThreadDrawerSource()).toContain("@/components/ui/sheet");
+    expect(taskThreadDrawerSource()).toContain("SheetContent");
     expect(tasksPageSource()).not.toContain('role="dialog"');
     expect(tasksPageSource()).toContain("lastActiveTaskId");
     expect(tasksPageSource()).toContain("activeTaskId !== lastActiveTaskId.current");
+  });
+
+  it("renders four-state task drawer controls", () => {
+    const data = createSleiFixtures({
+      tasks: [{
+        id: "T-900",
+        title: "任务分支",
+        owner: "Lei",
+        status: "in_review",
+        channelId: "all",
+        replyCount: 2,
+        replies: [
+          { id: "root", sender: "Lei", role: "human", body: "根消息" },
+          { id: "reply", sender: "Coda", role: "agent", body: "结果" },
+        ],
+      }],
+    });
+    const html = renderToStaticMarkup(<SleiAppFrame activeTaskId="T-900" activeView="tasks" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />);
+    expect(html).toContain("待评审");
+    expect(html).toContain("标记已完成");
+    expect(html).toContain("2 条回复");
   });
 });

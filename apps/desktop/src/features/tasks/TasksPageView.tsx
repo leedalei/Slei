@@ -1,21 +1,31 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
-import { MessageSquare, Send, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MessageSquare } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures, SleiTask } from "../../app/fixtures";
-import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import { TaskStatusBadge } from "./TaskStatusBadge";
+import { TaskThreadDrawer } from "./TaskThreadDrawer";
 
-export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activeTaskId?: string; data: SleiFixtures; messages: DesktopMessages; onTaskReply?: (taskId: string, body: string) => void }) {
+export function TasksPage({
+  activeTaskId,
+  data,
+  messages,
+  onTaskReply,
+  onTaskStatusChange,
+}: {
+  activeTaskId?: string;
+  data: SleiFixtures;
+  messages: DesktopMessages;
+  onTaskReply?: (taskId: string, body: string) => Promise<void> | void;
+  onTaskStatusChange?: (taskId: string, status: SleiTask["status"]) => Promise<void> | void;
+}) {
   const columns: SleiTask["status"][] = ["pending_assignment", "in_progress", "in_review", "done"];
   const [selectedTaskId, setSelectedTaskId] = useState(activeTaskId);
-  const [replyDraft, setReplyDraft] = useState("");
   const [view, setView] = useState<"board" | "list">("board");
   const lastActiveTaskId = useRef(activeTaskId);
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
@@ -26,14 +36,6 @@ export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activ
     }
     lastActiveTaskId.current = activeTaskId;
   }, [activeTaskId]);
-
-  function submitReply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const body = replyDraft.trim();
-    if (!selectedTask || !body) return;
-    onTaskReply?.(selectedTask.id, body);
-    setReplyDraft("");
-  }
 
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
@@ -93,52 +95,14 @@ export function TasksPage({ activeTaskId, data, messages, onTaskReply }: { activ
         </ScrollArea>
       </Tabs>
 
-      <Sheet open={Boolean(selectedTask)} onOpenChange={(open) => !open && setSelectedTaskId(undefined)}>
-        {selectedTask ? (
-          <SheetContent
-            aria-label={messages.tasks.thread}
-            className="w-[min(100vw,680px)] gap-0 p-0 sm:max-w-[680px]"
-            showCloseButton={false}
-          >
-            <SheetHeader className="relative border-b p-5 pr-14">
-              <Badge className="w-fit" variant="secondary">{taskStatusLabel(selectedTask.status, messages)}</Badge>
-              <SheetTitle>{selectedTask.title}</SheetTitle>
-              <SheetDescription>
-                {selectedTask.owner} · {(selectedTask.replies?.length ?? 0)} {messages.tasks.replies}
-              </SheetDescription>
-              <Button aria-label={messages.tasks.closeThread} className="absolute right-3 top-3" onClick={() => setSelectedTaskId(undefined)} size="icon-sm" type="button" variant="ghost">
-                <X aria-hidden="true" className="size-4" />
-              </Button>
-            </SheetHeader>
-
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="grid gap-3 p-5">
-                {(selectedTask.replies ?? []).map((reply) => (
-                  <article className="grid gap-2 rounded-lg border bg-muted/30 p-3" data-reply-role={reply.role ?? "human"} key={reply.id}>
-                    <strong className="text-sm">{reply.sender}</strong>
-                    <MarkdownMessage markdown={reply.body} />
-                  </article>
-                ))}
-              </div>
-            </ScrollArea>
-
-            <SheetFooter className="border-t p-4">
-              <form className="grid gap-3" onSubmit={submitReply}>
-                <Textarea
-                  aria-label={messages.tasks.replyPlaceholder}
-                  onChange={(event) => setReplyDraft(event.currentTarget.value)}
-                  placeholder={messages.tasks.replyPlaceholder}
-                  value={replyDraft}
-                />
-                <Button className="justify-self-end" type="submit">
-                  <Send aria-hidden="true" className="size-4" />
-                  {messages.tasks.sendReply}
-                </Button>
-              </form>
-            </SheetFooter>
-          </SheetContent>
-        ) : null}
-      </Sheet>
+      <TaskThreadDrawer
+        messages={messages}
+        onClose={() => setSelectedTaskId(undefined)}
+        onReply={onTaskReply}
+        onStatusChange={onTaskStatusChange}
+        open={Boolean(selectedTask)}
+        task={selectedTask}
+      />
     </section>
   );
 }
@@ -153,7 +117,7 @@ function TaskCard(input: {
   onSelect: () => void;
   task: SleiTask;
 }) {
-  const replyCount = input.task.replies?.length ?? 0;
+  const replyCount = input.task.replyCount ?? input.task.replies?.length ?? 0;
   const row = input.layout === "row";
 
   return (
@@ -170,7 +134,7 @@ function TaskCard(input: {
       </CardHeader>
       <CardContent className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">{input.task.id}</Badge>
-        <Badge variant="secondary">{taskStatusLabel(input.task.status, input.messages)}</Badge>
+        <TaskStatusBadge messages={input.messages} status={input.task.status} />
         {input.task.attention ? <Badge variant="destructive">{input.task.attention}</Badge> : null}
       </CardContent>
     </Card>
