@@ -195,7 +195,10 @@ mod tests {
                     "messageId": "daemon_msg_1",
                     "action": "create_task_and_assign",
                     "taskId": "daemon_task_1",
-                    "assigneeAgentId": "agent_alice"
+                    "assigneeAgentId": "agent_alice",
+                    "assigneeAgentIds": ["agent_alice"],
+                    "coordinatorRunId": "coord_run_1",
+                    "decisionStatus": "completed"
                 }
             })
             .to_string();

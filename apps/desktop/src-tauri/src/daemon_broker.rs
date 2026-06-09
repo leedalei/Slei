@@ -411,6 +411,12 @@ pub struct SendChannelMessageOutcome {
     pub task_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignee_agent_id: Option<String>,
+    #[serde(default)]
+    pub assignee_agent_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinator_run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decision_status: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2361,6 +2367,9 @@ impl DaemonBroker {
                 action: "local_archive_only".to_string(),
                 task_id: None,
                 assignee_agent_id: None,
+                assignee_agent_ids: Vec::new(),
+                coordinator_run_id: None,
+                decision_status: None,
             },
         })
     }

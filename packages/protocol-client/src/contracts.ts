@@ -47,6 +47,9 @@ export interface SendChannelMessageOutcome {
   action: string;
   taskId?: string;
   assigneeAgentId?: string;
+  assigneeAgentIds?: string[];
+  coordinatorRunId?: string;
+  decisionStatus?: "pending" | "completed" | "failed";
 }
 
 export interface SendChannelMessageReceipt {

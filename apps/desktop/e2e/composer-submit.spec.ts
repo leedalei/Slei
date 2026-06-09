@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createChannelAgentActivityMessage, createChannelArchiveNoticeMessage, sendChatComposerMessage, submitComposerDraft, submitComposerDraftWithFeedback, waitForChannelAgentReply } from "../src/app/SleiApp";
+import { createChannelAgentActivityMessage, createChannelAgentActivityMessages, createChannelArchiveNoticeMessage, sendChatComposerMessage, submitComposerDraft, submitComposerDraftWithFeedback, waitForChannelAgentReply } from "../src/app/SleiApp";
 import { createDesktopMessages } from "../src/i18n";
 import { defaultProfile } from "../src/app/model";
 
@@ -144,7 +144,7 @@ describe("chat composer submit behavior", () => {
 
   it("builds pending agent activity when the daemon requests a channel reply", () => {
     const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_2", action: "request_agent_reply", assigneeAgentId: "agent_alice" },
+      { messageId: "msg_channel_all_2", action: "request_agent_reply", assigneeAgentId: "agent_alice", assigneeAgentIds: ["agent_alice"] },
       "all",
       [
         {
@@ -172,7 +172,7 @@ describe("chat composer submit behavior", () => {
     );
 
     expect(activity).toMatchObject({
-      id: "agent-activity-msg_channel_all_2",
+      id: "agent-activity-msg_channel_all_2-agent_alice",
       author: "Alice",
       handle: "@alice",
       role: "agent",
@@ -181,9 +181,49 @@ describe("chat composer submit behavior", () => {
     });
   });
 
+  it("builds one pending activity per routed channel reply target", () => {
+    const baseMember = {
+      avatar: "AG",
+      type: "agent" as const,
+      runtimeStatus: "idle" as const,
+      role: "工程师",
+      description: "",
+      computer: "本机设备",
+      created: "2026-06-04",
+      creator: "system",
+      runtime: "ClaudeCode",
+      model: "Sonnet",
+      instructions: "",
+      permissions: [],
+      environmentVariables: [],
+      createdAgents: [],
+      activity: "",
+      capabilities: [],
+    };
+
+    const activities = createChannelAgentActivityMessages(
+      {
+        messageId: "msg_channel_all_multi",
+        action: "request_agent_reply",
+        assigneeAgentId: "agent_alice",
+        assigneeAgentIds: ["agent_alice", "agent_coda"],
+      },
+      "all",
+      [
+        { ...baseMember, id: "agent_alice", name: "Alice", handle: "@alice" },
+        { ...baseMember, id: "agent_coda", name: "Coda", handle: "@coda" },
+      ],
+    );
+
+    expect(activities.map((activity) => activity.id)).toEqual([
+      "agent-activity-msg_channel_all_multi-agent_alice",
+      "agent-activity-msg_channel_all_multi-agent_coda",
+    ]);
+  });
+
   it("does not show pending activity for channel coordinators", () => {
     const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_3", action: "request_agent_reply", assigneeAgentId: "agent_coordinator_all" },
+      { messageId: "msg_channel_all_3", action: "request_agent_reply", assigneeAgentId: "agent_coordinator_all", assigneeAgentIds: ["agent_coordinator_all"] },
       "all",
       [],
     );
@@ -193,7 +233,7 @@ describe("chat composer submit behavior", () => {
 
   it("shows pending activity for the system guide because it can reply", () => {
     const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_4", action: "request_agent_reply", assigneeAgentId: "agent_guide_local_node" },
+      { messageId: "msg_channel_all_4", action: "request_agent_reply", assigneeAgentId: "agent_guide_local_node", assigneeAgentIds: ["agent_guide_local_node"] },
       "all",
       [
         {
@@ -223,7 +263,7 @@ describe("chat composer submit behavior", () => {
     );
 
     expect(activity).toMatchObject({
-      id: "agent-activity-msg_channel_all_4",
+      id: "agent-activity-msg_channel_all_4-agent_guide_local_node",
       author: "Yeal",
       handle: "@yeal",
       status: "pending",
