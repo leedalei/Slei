@@ -484,6 +484,10 @@ function logAppEvent(bridge: DaemonBridge, scope: string, message: string, conte
   });
 }
 
+function formatLogError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function loadSleiConversationMessages(
   bridge: DaemonBridge,
   conversations: ConversationView[],
@@ -1226,8 +1230,12 @@ export function SleiApp() {
     const trimmed = body.trim();
     if (!trimmed) return;
     await bridge.replyToTask(taskId, { senderId: "human:local", body: trimmed });
-    await refreshTaskThreadIntoState(taskId);
-    await refreshTasks(activeChannelId);
+    void refreshTaskThreadIntoState(taskId).catch((error: unknown) => {
+      logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-reply", { taskId, error: formatLogError(error) });
+    });
+    void refreshTasks(activeChannelId).catch((error: unknown) => {
+      logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-reply", { channelId: activeChannelId, taskId, error: formatLogError(error) });
+    });
   }
 
   async function handleTaskStatusChange(taskId: string, status: TaskStatusView) {
@@ -1245,7 +1253,9 @@ export function SleiApp() {
         ),
       }),
     );
-    await refreshTasks(activeChannelId);
+    void refreshTasks(activeChannelId).catch((error: unknown) => {
+      logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-status", { channelId: activeChannelId, taskId, error: formatLogError(error) });
+    });
   }
 
   async function handleCreateChannel(input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) {

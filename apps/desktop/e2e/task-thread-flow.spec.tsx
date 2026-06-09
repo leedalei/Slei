@@ -142,8 +142,15 @@ describe("chat to task thread flow", () => {
     expect(drawerSource).toContain("setReplyDraft(\"\")");
     expect(drawerSource).toContain("disabled={replySubmitting");
     expect(drawerSource).toContain("disabled={statusActionDisabled}");
+    expect(drawerSource).toContain("useEffect");
+    expect(drawerSource).toContain("[input.open, task?.id]");
+    expect(drawerSource).toContain("replySubmitting || statusSubmitting");
+    expect(drawerSource).toContain("isDrawerOperationCurrent");
     expect(chatPageSource()).toContain(".catch(() => undefined)");
     expect(tasksPageSource()).toContain(".catch(() => undefined)");
-    expect(sleiAppSource()).not.toMatch(/import\s*\{[^}]*appendTaskReply/);
+    const appSource = sleiAppSource();
+    expect(appSource).not.toMatch(/import\s*\{[^}]*appendTaskReply/);
+    expect(appSource).toContain("refreshTaskThreadIntoState(taskId).catch");
+    expect(appSource).toContain("refreshTasks(activeChannelId).catch");
   });
 });

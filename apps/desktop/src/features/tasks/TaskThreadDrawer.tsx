@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
@@ -24,35 +24,67 @@ export function TaskThreadDrawer(input: {
   const [replyError, setReplyError] = useState("");
   const [statusError, setStatusError] = useState("");
   const task = input.task;
-  const statusActionDisabled = statusSubmitting || !input.onStatusChange;
+  const taskId = task?.id;
+  const openRef = useRef(input.open);
+  const activeTaskIdRef = useRef(taskId);
+  const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply;
+  const statusActionDisabled = replySubmitting || statusSubmitting || !input.onStatusChange;
+  openRef.current = input.open;
+  activeTaskIdRef.current = taskId;
+
+  useEffect(() => {
+    openRef.current = input.open;
+    activeTaskIdRef.current = task?.id;
+    setReplyDraft("");
+    setReplySubmitting(false);
+    setStatusSubmitting(false);
+    setReplyError("");
+    setStatusError("");
+  }, [input.open, task?.id]);
 
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = replyDraft.trim();
-    if (!task || !body || !input.onReply || replySubmitting) return;
+    const onReply = input.onReply;
+    if (!task || !body || !onReply || replySubmitting || statusSubmitting) return;
     setReplyError("");
     setReplySubmitting(true);
     try {
-      await input.onReply(task.id, body);
-      setReplyDraft("");
+      await onReply(task.id, body);
+      if (isDrawerOperationCurrent(task.id)) {
+        setReplyDraft("");
+      }
     } catch (error) {
-      setReplyError(formatTaskActionError("回复失败", error));
+      if (isDrawerOperationCurrent(task.id)) {
+        setReplyError(formatTaskActionError("回复失败", error));
+      }
     } finally {
-      setReplySubmitting(false);
+      if (isDrawerOperationCurrent(task.id)) {
+        setReplySubmitting(false);
+      }
     }
   }
 
   async function handleStatusChange(status: SleiTaskStatus) {
-    if (!task || !input.onStatusChange || statusSubmitting) return;
+    const onStatusChange = input.onStatusChange;
+    if (!task || !onStatusChange || replySubmitting || statusSubmitting) return;
     setStatusError("");
     setStatusSubmitting(true);
     try {
-      await input.onStatusChange(task.id, status);
+      await onStatusChange(task.id, status);
     } catch (error) {
-      setStatusError(formatTaskActionError("状态更新失败", error));
+      if (isDrawerOperationCurrent(task.id)) {
+        setStatusError(formatTaskActionError("状态更新失败", error));
+      }
     } finally {
-      setStatusSubmitting(false);
+      if (isDrawerOperationCurrent(task.id)) {
+        setStatusSubmitting(false);
+      }
     }
+  }
+
+  function isDrawerOperationCurrent(operationTaskId: string) {
+    return openRef.current && activeTaskIdRef.current === operationTaskId;
   }
 
   function renderContent() {
@@ -81,7 +113,7 @@ export function TaskThreadDrawer(input: {
           <form className="grid gap-3" onSubmit={submitReply}>
             <Textarea
               aria-label={input.messages.tasks.replyPlaceholder}
-              disabled={replySubmitting}
+              disabled={replySubmitting || statusSubmitting}
               onChange={(event) => setReplyDraft(event.currentTarget.value)}
               placeholder={input.messages.tasks.replyPlaceholder}
               value={replyDraft}
@@ -91,7 +123,7 @@ export function TaskThreadDrawer(input: {
             <div className="flex flex-wrap justify-end gap-2">
               {task.status === "in_progress" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
               {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
-              <Button disabled={replySubmitting || !input.onReply} type="submit">
+              <Button disabled={replyActionDisabled} type="submit">
                 <Send aria-hidden="true" className="size-4" />
                 {input.messages.tasks.sendReply}
               </Button>
