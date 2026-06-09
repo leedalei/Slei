@@ -25,6 +25,7 @@ import {
   type RuntimeSetupState,
   type TaskStatusView,
   type TaskSummaryView,
+  type TaskThreadReceipt,
   type TaskThreadMessageView,
   type WorkspaceMountView,
 } from "../lib/daemon-bridge";
@@ -583,10 +584,10 @@ export function SleiApp() {
     );
   }
 
-  async function refreshTaskThreadIntoState(taskId: string) {
-    const receipt = await bridge.getTaskThread(taskId);
+  function applyTaskThreadReceiptToState(receipt: TaskThreadReceipt) {
     setData((current) => {
       const task = taskSummaryToSleiTask(receipt.thread.task, current.members);
+      const taskId = receipt.thread.task.id;
       const replies = [receipt.thread.root, ...receipt.thread.replies].map((message) =>
         taskThreadMessageToReply(message, current.members, profile, messages),
       );
@@ -596,6 +597,11 @@ export function SleiApp() {
         : [nextTask, ...current.tasks];
       return createSleiFixtures({ ...current, tasks });
     });
+  }
+
+  async function refreshTaskThreadIntoState(taskId: string) {
+    const receipt = await bridge.getTaskThread(taskId);
+    applyTaskThreadReceiptToState(receipt);
   }
 
   function showAppToast(message: string) {
@@ -1383,11 +1389,16 @@ export function SleiApp() {
     if (!trimmed) return;
     const task = data.tasks.find((candidate) => candidate.id === taskId);
     const channelId = task?.channelId ?? activeChannelId ?? "all";
-    const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed;
+    const fallbackSourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed;
     const receipt = await bridge.replyToTask(taskId, { senderId: "human:local", body: trimmed });
-    void refreshTaskThreadIntoState(taskId).catch((error: unknown) => {
-      logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-reply", { taskId, error: formatLogError(error) });
-    });
+    let sourceBody = fallbackSourceBody;
+    try {
+      const threadReceipt = await bridge.getTaskThread(taskId);
+      sourceBody = threadReceipt.thread.root.body || fallbackSourceBody;
+      applyTaskThreadReceiptToState(threadReceipt);
+    } catch (error) {
+      logAppEvent(bridge, "task-refresh", "task-agent-handoff-root-fallback", { channelId, taskId, error: formatLogError(error) });
+    }
     void refreshTasks(channelId).catch((error: unknown) => {
       logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-reply", { channelId, taskId, error: formatLogError(error) });
     });

@@ -42,7 +42,13 @@ describe("task branch sessions", () => {
     expect(appSource).toContain("input.triggerBody");
     expect(appSource).not.toContain('input.triggerBody ? "用户在任务线程中的最新指令：" : "任务根消息："');
     expect(appSource).not.toContain("input.triggerBody ?? input.sourceBody");
-    expect(appSource).toContain("const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
+    expect(appSource).toContain("let sourceBody = fallbackSourceBody");
+    expect(appSource).toContain("const fallbackSourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
+    expect(appSource).toContain("const threadReceipt = await bridge.getTaskThread(taskId)");
+    expect(appSource).toContain("sourceBody = threadReceipt.thread.root.body || fallbackSourceBody");
+    expect(appSource).toContain("applyTaskThreadReceiptToState(threadReceipt)");
+    expect(appSource).toContain("task-agent-handoff-root-fallback");
+    expect(appSource).not.toContain("const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
     expect(appSource).toContain("result.receipt.outcome.taskId ? null : createChannelAgentActivityMessage");
     expect(appSource).not.toContain("agentActivity = createChannelAgentActivityMessage(result.receipt.outcome");
     expect(appSource).toContain("const empty = replies.length > 0 && !combinedBody");
