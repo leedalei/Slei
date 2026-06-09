@@ -576,38 +576,40 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       {effectiveChannelView === "chat" ? (
         <footer className="border-t bg-background/95">
           {mention && mentionTargets.length > 0 ? (
-            <Card aria-label={messages.chat.chooseMentionMember} className="mx-4 mt-3 max-h-[12.5rem] gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
-              <CardContent className="grid min-h-0 gap-1 px-2">
-                <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
-                  <div className="grid gap-1">
-                    {mentionTargets.map((member, index) => (
-                      <Button
-                        aria-current={index === selectedMentionIndex ? "true" : undefined}
-                        className={cn("h-auto min-h-12 justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
-                        data-mention-option-index={index}
-                        key={member.id}
-                        onClick={() => selectMention(index)}
-                        ref={(node) => {
-                          mentionOptionRefs.current[index] = node;
-                        }}
-                        type="button"
-                        variant="ghost"
-                      >
-                        <MemberAvatar identity={member} />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <strong className="text-sm">{member.name}</strong>
-                            <StatusDot status={member.runtimeStatus} />
+            <div className="px-4 pt-3">
+              <Card aria-label={messages.chat.chooseMentionMember} className="max-h-[12.5rem] w-full max-w-full gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
+                <CardContent className="grid min-h-0 gap-1 px-2">
+                  <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
+                    <div className="grid min-w-0 gap-1">
+                      {mentionTargets.map((member, index) => (
+                        <Button
+                          aria-current={index === selectedMentionIndex ? "true" : undefined}
+                          className={cn("h-auto min-h-12 w-full min-w-0 max-w-full overflow-hidden justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
+                          data-mention-option-index={index}
+                          key={member.id}
+                          onClick={() => selectMention(index)}
+                          ref={(node) => {
+                            mentionOptionRefs.current[index] = node;
+                          }}
+                          type="button"
+                          variant="ghost"
+                        >
+                          <MemberAvatar identity={member} />
+                          <span className="grid min-w-0 flex-1 gap-0.5">
+                            <span className="flex min-w-0 items-center gap-2">
+                              <strong className="truncate text-sm">{member.name}</strong>
+                              <StatusDot status={member.runtimeStatus} />
+                            </span>
+                            <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
                           </span>
-                          <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
-                        </span>
-                        <span className="text-xs font-normal text-muted-foreground">{member.handle}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                          <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground" title={member.handle}>{member.handle}</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
           ) : null}
           <form className="grid gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
             {attachments.length > 0 ? (
