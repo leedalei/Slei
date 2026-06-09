@@ -136,6 +136,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
+        | ChannelOrchestratorError::Coordinator(_)
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

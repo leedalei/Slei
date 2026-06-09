@@ -96,9 +96,13 @@ impl AppState {
     ) -> Self {
         let event_service = EventService::new();
         let data_root = agent_data_root.clone();
+        let worker_transport = WorkerTransport::fake();
         let member_service = MemberService::for_tests_with_data_root(agent_data_root);
         let channel_service = ChannelService::new(data_root.clone());
-        let coordinator_service = CoordinatorService::new(orchestration_store.clone());
+        let coordinator_service = CoordinatorService::new_with_worker(
+            orchestration_store.clone(),
+            ClaudeWorkerAdapter::new(worker_transport.clone()),
+        );
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let task_service = TaskService::for_tests();
@@ -136,7 +140,7 @@ impl AppState {
             memory_maintainer_service,
             message_service,
             channel_orchestrator_service,
-            worker_transport: WorkerTransport::fake(),
+            worker_transport,
             agent_dm_runs: AgentDmRunStore::default(),
         }
     }
@@ -258,11 +262,19 @@ impl AppState {
         self.worker_transport.commands()
     }
 
-    pub async fn handle_worker_event(
-        &self,
-        event: Value,
-    ) -> Result<(), crate::services::agent_dm_service::AgentDmError> {
-        self.agent_dm().handle_worker_event(event).await
+    pub async fn handle_worker_event(&self, event: Value) -> Result<(), String> {
+        let handled_by_coordinator = self
+            .channel_orchestrator()
+            .handle_coordinator_worker_event(event.clone())
+            .await
+            .map_err(|error| error.to_string())?;
+        if !handled_by_coordinator {
+            self.agent_dm()
+                .handle_worker_event(event)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
     }
 }
 
