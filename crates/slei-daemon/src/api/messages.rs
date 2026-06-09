@@ -84,11 +84,14 @@ pub async fn send_channel_message(
                 .record_diagnostic_event(
                     "channel_message.outcome",
                     &format!(
-                        "message_id={} action={} task_id={} assignee_agent_id={}",
+                        "message_id={} action={} decision_status={} coordinator_run_id={} task_id={} assignee_agent_id={} assignee_agent_ids={}",
                         outcome.message_id,
                         outcome.action,
+                        outcome.decision_status.as_deref().unwrap_or("none"),
+                        outcome.coordinator_run_id.as_deref().unwrap_or("none"),
                         outcome.task_id.as_deref().unwrap_or("none"),
-                        outcome.assignee_agent_id.as_deref().unwrap_or("none")
+                        outcome.assignee_agent_id.as_deref().unwrap_or("none"),
+                        outcome.assignee_agent_ids.join(",")
                     ),
                 )
                 .await;
@@ -123,6 +126,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
+        | ChannelOrchestratorError::Coordinator(_)
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

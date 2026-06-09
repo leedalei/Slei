@@ -33,6 +33,7 @@ mod tests {
             "idempotent_mutations",
             "channel_coordinators",
             "coordinator_decisions",
+            "coordinator_runtime_runs",
             "agent_inbox_events",
             "memory_update_events",
             "memory_document_states",
@@ -149,6 +150,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn coordinator_decisions_persist_full_assignee_target_list() {
+        let (url, _path) = sqlite_file_url("decision-targets");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+        let decision_id = Uuid::new_v4();
+
+        repos
+            .insert_coordinator_decision(
+                decision_id,
+                "all",
+                "msg_broadcast",
+                "consultation",
+                "request_agent_reply",
+                Some("agent_alice"),
+                &["agent_alice".to_string(), "agent_coda".to_string()],
+                "broadcast routed to all selected agents",
+            )
+            .await
+            .unwrap();
+
+        let decisions = repos
+            .coordinator_decisions_for_message("msg_broadcast")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            decisions[0].assignee_agent_id.as_deref(),
+            Some("agent_alice")
+        );
+        assert_eq!(
+            decisions[0].assignee_agent_ids,
+            vec!["agent_alice".to_string(), "agent_coda".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn coordinator_runtime_runs_persist_pending_output_and_status() {
+        let (url, _path) = sqlite_file_url("coordinator-runs");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .insert_coordinator_runtime_run("coord_run_1", "dev", "msg_1", "idem-1", "prompt body")
+            .await
+            .unwrap();
+        repos
+            .append_coordinator_runtime_output("coord_run_1", "{\"intent\"")
+            .await
+            .unwrap();
+        repos
+            .append_coordinator_runtime_output("coord_run_1", ":\"consultation\"}")
+            .await
+            .unwrap();
+        repos
+            .finish_coordinator_runtime_run("coord_run_1", "completed", None)
+            .await
+            .unwrap();
+
+        let run = repos
+            .coordinator_runtime_run("coord_run_1")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(run.status, "completed");
+        assert_eq!(run.output, "{\"intent\":\"consultation\"}");
+        assert_eq!(run.message_id, "msg_1");
+        assert_eq!(run.idempotency_key, "idem-1");
+    }
+
+    #[tokio::test]
     async fn migration_repairs_legacy_orchestration_tables_missing_sequence_columns() {
         let (url, _path) = sqlite_file_url("legacy-sequence");
         let db = SleiDb::connect(&url).await.unwrap();
@@ -194,6 +268,7 @@ mod tests {
                 "conversation",
                 "request_agent_reply",
                 Some("agent_coordinator_all"),
+                &["agent_coordinator_all".to_string()],
                 "legacy repaired",
             )
             .await

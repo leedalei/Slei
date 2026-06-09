@@ -597,7 +597,8 @@ export function createDaemonBridgeMock(input: {
       ];
       const memberIds = channelMembers.filter((candidate) => candidate.channelId === channelId).map((member) => member.agentId);
       const explicitMember = agents.find((agent) => memberIds.includes(agent.id) && body.toLowerCase().includes(agent.handle.toLowerCase()));
-      const readyMember = channelMembers.find((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
+      const readyMembers = channelMembers.filter((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
+      const readyMember = readyMembers[0];
       const isTaskCommand = containsAny(body, ["实现", "修复", "检查", "整理", "创建", "改一下", "写一个", "生成", "调查", "验证"]);
       const isConsultation = containsAny(body, ["?", "？", "怎么看", "为什么"]);
       const action = explicitMember
@@ -609,7 +610,17 @@ export function createDaemonBridgeMock(input: {
           : isConsultation && readyMember
             ? "request_agent_reply"
             : "archive_only";
-      const assigneeAgentId = explicitMember?.id ?? (action === "create_task_and_assign" || action === "request_agent_reply" ? readyMember?.agentId : undefined);
+      const broadcastRequest = containsAny(body, ["大家", "所有", "一起", "都"]);
+      const assigneeAgentIds = explicitMember
+        ? [explicitMember.id]
+        : action === "request_agent_reply" && broadcastRequest
+          ? readyMembers.map((member) => member.agentId)
+          : action === "create_task_and_assign" || action === "request_agent_reply"
+            ? readyMember
+              ? [readyMember.agentId]
+              : []
+            : [];
+      const assigneeAgentId = assigneeAgentIds[0];
       const taskId = action === "create_task_and_assign" || action === "needs_manual_assignment" ? `task_${messageId}` : undefined;
       return {
         outcome: {
@@ -617,6 +628,8 @@ export function createDaemonBridgeMock(input: {
           action,
           taskId,
           assigneeAgentId,
+          assigneeAgentIds,
+          decisionStatus: "completed",
         },
       };
     },

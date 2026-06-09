@@ -1,8 +1,9 @@
 use std::fmt;
 
 use slei_storage::repositories::{
-    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord, EventRecord,
-    MemoryUpdateEventRecord, Repositories, RoutingContextPackageRecord,
+    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord,
+    CoordinatorRuntimeRunRecord, EventRecord, MemoryUpdateEventRecord, Repositories,
+    RoutingContextPackageRecord,
 };
 use uuid::Uuid;
 
@@ -47,6 +48,7 @@ impl OrchestrationStore {
         intent: &str,
         action: &str,
         assignee_agent_id: Option<&str>,
+        assignee_agent_ids: &[String],
         reason: &str,
     ) -> Result<(), sqlx::Error> {
         self.repos
@@ -57,8 +59,59 @@ impl OrchestrationStore {
                 intent,
                 action,
                 assignee_agent_id,
+                assignee_agent_ids,
                 reason,
             )
+            .await
+    }
+
+    pub async fn create_coordinator_runtime_run(
+        &self,
+        run_id: &str,
+        channel_id: &str,
+        message_id: &str,
+        idempotency_key: &str,
+        prompt: &str,
+    ) -> Result<(), sqlx::Error> {
+        self.repos
+            .insert_coordinator_runtime_run(run_id, channel_id, message_id, idempotency_key, prompt)
+            .await
+    }
+
+    pub async fn append_coordinator_runtime_output(
+        &self,
+        run_id: &str,
+        delta: &str,
+    ) -> Result<(), sqlx::Error> {
+        self.repos
+            .append_coordinator_runtime_output(run_id, delta)
+            .await
+    }
+
+    pub async fn finish_coordinator_runtime_run(
+        &self,
+        run_id: &str,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        self.repos
+            .finish_coordinator_runtime_run(run_id, status, error)
+            .await
+    }
+
+    pub async fn coordinator_runtime_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
+        self.repos.coordinator_runtime_run(run_id).await
+    }
+
+    pub async fn coordinator_runtime_run_for_idempotency(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
+        self.repos
+            .coordinator_runtime_run_for_idempotency(idempotency_key)
             .await
     }
 

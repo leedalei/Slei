@@ -241,10 +241,29 @@ function createChannelTaskPlaceholder(outcome: SendChannelMessageOutcome, messag
   };
 }
 
-function channelAgentReplyPrompt(channelId: string, body: string): string {
+export function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
+  const ids = outcome.assigneeAgentIds && outcome.assigneeAgentIds.length > 0
+    ? outcome.assigneeAgentIds
+    : outcome.assigneeAgentId
+      ? [outcome.assigneeAgentId]
+      : [];
+  return ids.filter((agentId, index) => agentId && ids.indexOf(agentId) === index);
+}
+
+function channelAgentActivityId(outcome: SendChannelMessageOutcome, agentId: string): string {
+  return `agent-activity-${outcome.messageId}-${agentId}`;
+}
+
+function channelAgentReplyPrompt(channelId: string, body: string, target?: SleiMember, coTargets: SleiMember[] = []): string {
   const channelName = channelId.startsWith("#") ? channelId : `#${channelId}`;
+  const targetLabel = target ? `${target.name} (${target.handle})` : "未知 Agent";
+  const coTargetLabels = coTargets.length > 0
+    ? coTargets.map((member) => `${member.name} (${member.handle})`).join(", ")
+    : targetLabel;
   return [
     `你被频道协调员路由来回复 ${channelName} 里的用户消息。`,
+    `目标 Agent: ${targetLabel}`,
+    `同批路由目标: ${coTargetLabels}`,
     "请直接回答用户，不要解释路由过程。",
     "",
     body.trim(),
@@ -331,22 +350,28 @@ export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOut
 }
 
 export function createChannelAgentActivityMessage(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage | null {
-  if (outcome.action !== "request_agent_reply" || !outcome.assigneeAgentId) return null;
-  if (outcome.assigneeAgentId.startsWith("agent_coordinator_")) return null;
-  const member = members.find((candidate) => candidate.id === outcome.assigneeAgentId);
-  if (member?.directMessageEnabled === false) return null;
-  const author = member?.name ?? outcome.assigneeAgentId;
-  return {
-    id: `agent-activity-${outcome.messageId}`,
-    author,
-    handle: member?.handle,
-    avatar: member?.avatar,
-    role: "agent",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    body: "",
-    channelId,
-    status: "pending",
-  };
+  return createChannelAgentActivityMessages(outcome, channelId, members)[0] ?? null;
+}
+
+export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
+  if (outcome.action !== "request_agent_reply") return [];
+  return channelReplyTargetIds(outcome).flatMap((agentId) => {
+    if (agentId.startsWith("agent_coordinator_")) return [];
+    const member = members.find((candidate) => candidate.id === agentId);
+    if (member?.directMessageEnabled === false) return [];
+    const author = member?.name ?? agentId;
+    return [{
+      id: channelAgentActivityId(outcome, agentId),
+      author,
+      handle: member?.handle,
+      avatar: member?.avatar,
+      role: "agent" as const,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      body: "",
+      channelId,
+      status: "pending" as const,
+    }];
+  });
 }
 
 export function createChannelAgentReplyMessage(
@@ -849,18 +874,21 @@ export function SleiApp() {
     return bridge.uploadConversationAttachment(request);
   }
 
-  async function runChannelAgentReply(outcome: SendChannelMessageOutcome, channelMessage: SleiMessage, channelId: string) {
-    const agentId = outcome.assigneeAgentId;
+  async function runChannelAgentReply(outcome: SendChannelMessageOutcome, channelMessage: SleiMessage, channelId: string, agentId: string) {
     const sourceChannel = data.channels.find((candidate) => candidate.id === channelId);
     const workspaceMounts: WorkspaceMountView[] = (sourceChannel?.projectPaths ?? []).map((path) => ({
       path,
       label: workspaceLabelFromPath(path),
     }));
+    const coTargets = channelReplyTargetIds(outcome)
+      .map((targetId) => data.members.find((candidate) => candidate.id === targetId))
+      .filter((member): member is SleiMember => Boolean(member));
     logAppEvent(bridge, "channel-agent-reply", "evaluate", {
       channelId,
       messageId: outcome.messageId,
       action: outcome.action,
       assigneeAgentId: agentId,
+      assigneeAgentIds: channelReplyTargetIds(outcome),
       workspaceMountCount: workspaceMounts.length,
     });
     if (!agentId || agentId.startsWith("agent_coordinator_")) {
@@ -882,7 +910,7 @@ export function SleiApp() {
       return;
     }
 
-    const activityId = `agent-activity-${outcome.messageId}`;
+    const activityId = channelAgentActivityId(outcome, agentId);
     try {
       logAppEvent(bridge, "channel-agent-reply", "create-dm-conversation-start", {
         channelId,
@@ -902,7 +930,7 @@ export function SleiApp() {
       });
       await bridge.sendConversationMessage(conversationReceipt.conversation.id, {
         authorId: "human:local",
-        body: channelAgentReplyPrompt(channelId, channelMessage.body),
+        body: channelAgentReplyPrompt(channelId, channelMessage.body, member, coTargets),
         sessionId: conversationReceipt.conversation.activeSessionId,
         workspaceMounts,
         sourceChannelId: channelId,
@@ -960,7 +988,7 @@ export function SleiApp() {
         error: errorMessage,
       });
       const replyMessage: SleiMessage = {
-        id: `agent-reply-${outcome.messageId}`,
+        id: activityId,
         author: member?.name ?? agentId,
         handle: member?.handle,
         avatar: member?.avatar,
@@ -1050,6 +1078,9 @@ export function SleiApp() {
       action: result.receipt.outcome.action,
       taskId: result.receipt.outcome.taskId,
       assigneeAgentId: result.receipt.outcome.assigneeAgentId,
+      assigneeAgentIds: result.receipt.outcome.assigneeAgentIds,
+      coordinatorRunId: result.receipt.outcome.coordinatorRunId,
+      decisionStatus: result.receipt.outcome.decisionStatus,
     });
     if (memoryRequest) {
       void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
@@ -1072,12 +1103,14 @@ export function SleiApp() {
       const task = createChannelTaskPlaceholder(result.receipt.outcome, channelMessage, current.members);
       const nextTasks = task && !current.tasks.some((candidate) => candidate.id === task.id) ? [...current.tasks, task] : current.tasks;
       const archiveNotice = createChannelArchiveNoticeMessage(result.receipt.outcome, targetId, messages);
-      const agentActivity = createChannelAgentActivityMessage(result.receipt.outcome, targetId, current.members);
-      const nextMessages = [channelMessage, archiveNotice, agentActivity].filter((message): message is SleiMessage => Boolean(message));
+      const agentActivities = createChannelAgentActivityMessages(result.receipt.outcome, targetId, current.members);
+      const nextMessages = [channelMessage, archiveNotice, ...agentActivities].filter((message): message is SleiMessage => Boolean(message));
       return createSleiFixtures({ ...current, messages: [...current.messages, ...nextMessages], tasks: nextTasks });
     });
     if (result.receipt.outcome.action === "request_agent_reply") {
-      void runChannelAgentReply(result.receipt.outcome, channelMessage, targetId);
+      for (const agentId of channelReplyTargetIds(result.receipt.outcome)) {
+        void runChannelAgentReply(result.receipt.outcome, channelMessage, targetId, agentId);
+      }
     } else {
       logAppEvent(bridge, "channel-agent-reply", "not-started-for-action", {
         channelId: targetId,

@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  channelReplyTargetIds,
+  createChannelAgentActivityMessages,
   createChannelAgentReplyMessage,
   createChannelAgentReplyMessageFromReplies,
   waitForChannelAgentReplies,
@@ -9,6 +11,63 @@ import {
 import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
 
 describe("createChannelAgentReplyMessage", () => {
+  it("builds stable activity messages for every routed channel target", () => {
+    const outcome: SendChannelMessageOutcome = {
+      messageId: "msg_123",
+      action: "request_agent_reply",
+      assigneeAgentId: "agent_alice",
+      assigneeAgentIds: ["agent_alice", "agent_coda"],
+    };
+
+    expect(channelReplyTargetIds(outcome)).toEqual(["agent_alice", "agent_coda"]);
+    expect(
+      createChannelAgentActivityMessages(outcome, "all", [
+        {
+          id: "agent_alice",
+          name: "Alice",
+          handle: "@alice",
+          avatar: "AL",
+          type: "agent",
+          runtimeStatus: "idle",
+          role: "工程师",
+          description: "",
+          computer: "本机设备",
+          created: "2026-06-04",
+          creator: "system",
+          runtime: "ClaudeCode",
+          model: "Sonnet",
+          instructions: "",
+          permissions: [],
+          environmentVariables: [],
+          createdAgents: [],
+          activity: "",
+          capabilities: [],
+        },
+        {
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          avatar: "CO",
+          type: "agent",
+          runtimeStatus: "idle",
+          role: "工程师",
+          description: "",
+          computer: "本机设备",
+          created: "2026-06-04",
+          creator: "system",
+          runtime: "ClaudeCode",
+          model: "Sonnet",
+          instructions: "",
+          permissions: [],
+          environmentVariables: [],
+          createdAgents: [],
+          activity: "",
+          capabilities: [],
+        },
+      ]).map((message) => message.id),
+    ).toEqual(["agent-activity-msg_123-agent_alice", "agent-activity-msg_123-agent_coda"]);
+  });
+
   it("keeps the current chat view after a member is created from an interactive card", () => {
     const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
 
