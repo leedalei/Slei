@@ -289,6 +289,7 @@ export type DesktopMessages = {
   agentCreate: {
     addAgent: string;
     associatedDevice: string;
+    createdSuccess: string;
     defaultDescription: (name: string) => string;
     description: string;
     draftDescription: Record<"qa" | "architect" | "developer", string>;

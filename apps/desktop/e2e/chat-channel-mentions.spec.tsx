@@ -235,10 +235,12 @@ describe("chat search, channel management, and mentions", () => {
 
     expect(html).toContain('data-testid="slei-mention-panel"');
     const mentionPanelTag = html.match(/<div\b(?=[^>]*data-testid="slei-mention-panel")[^>]*>/)?.[0] ?? "";
-    expect(mentionPanelTag).toContain("max-h-44");
+    expect(mentionPanelTag).toContain("max-h-[12.5rem]");
     expect(mentionPanelTag).toContain("overflow-hidden");
     const mentionPanelHtml = html.slice(html.indexOf('data-testid="slei-mention-panel"'));
     expect(mentionPanelHtml).toContain('data-slot="scroll-area"');
+    expect(mentionPanelHtml).toContain("max-h-[10.5rem]");
+    expect(mentionPanelHtml).toContain('data-mention-option-index="0"');
     expect(html).toContain("Coda");
     expect(html).toContain("@Coda");
     expect(html).not.toContain("回到底部");

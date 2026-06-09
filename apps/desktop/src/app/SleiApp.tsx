@@ -459,21 +459,21 @@ export function SleiApp() {
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [guideBootstrapping, setGuideBootstrapping] = useState(false);
-  const [runtimeErrorToastMessage, setRuntimeErrorToastMessage] = useState("");
+  const [appToastMessage, setAppToastMessage] = useState("");
   const [runtimeSetup, setRuntimeSetup] = useState<RuntimeSetupState>({
     loading: true,
     error: undefined,
     hasClaudeRuntimeReady: true,
     nodes: data.nodes,
   });
-  const runtimeErrorToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
 
-  function showRuntimeErrorToast(message: string) {
-    if (runtimeErrorToastTimerRef.current) clearTimeout(runtimeErrorToastTimerRef.current);
-    setRuntimeErrorToastMessage(message);
-    runtimeErrorToastTimerRef.current = setTimeout(() => setRuntimeErrorToastMessage(""), 4_000);
+  function showAppToast(message: string) {
+    if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
+    setAppToastMessage(message);
+    appToastTimerRef.current = setTimeout(() => setAppToastMessage(""), 4_000);
   }
 
   useEffect(() => {
@@ -487,7 +487,7 @@ export function SleiApp() {
 
   useEffect(() => {
     return () => {
-      if (runtimeErrorToastTimerRef.current) clearTimeout(runtimeErrorToastTimerRef.current);
+      if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
     };
   }, []);
 
@@ -679,7 +679,7 @@ export function SleiApp() {
     );
     setData((current) => createSleiFixtures({ ...current, members }));
     setActiveMemberId(receipt.agent.id);
-    navigateToView("members");
+    showAppToast(messages.agentCreate.createdSuccess);
   }
 
   async function handleInteractiveCardComplete(cardId: string) {
@@ -943,7 +943,7 @@ export function SleiApp() {
             status: "failed" as const,
           };
       if (replies.length === 0 || replies.some((message) => message.status === "failed")) {
-        showRuntimeErrorToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`);
+        showAppToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`);
       }
       setData((current) =>
         createSleiFixtures({
@@ -970,7 +970,7 @@ export function SleiApp() {
         channelId,
         status: "failed",
       };
-      showRuntimeErrorToast(`${messages.chat.agentRunFailed}: ${errorMessage}`);
+      showAppToast(`${messages.chat.agentRunFailed}: ${errorMessage}`);
       setData((current) =>
         createSleiFixtures({
           ...current,
@@ -1290,7 +1290,7 @@ export function SleiApp() {
       onConversationSessionSelect={handleConversationSessionSelect}
       profile={profile}
       runtimeSetup={runtimeSetup}
-      runtimeErrorToastMessage={runtimeErrorToastMessage}
+      runtimeErrorToastMessage={appToastMessage}
       savedMessages={savedMessages}
       sessionDrawerOpen={sessionDrawerOpen}
       sendingConversationIds={sendingConversationIds}

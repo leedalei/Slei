@@ -318,6 +318,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -369,6 +370,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     const timer = window.setTimeout(() => setHighlightedMessageId(undefined), 2200);
     return () => window.clearTimeout(timer);
   }, [focusedMessageId, visibleMessages.length]);
+
+  useEffect(() => {
+    if (!mention || mentionTargets.length === 0) return;
+    mentionOptionRefs.current[selectedMentionIndex]?.scrollIntoView({ block: "nearest" });
+  }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   async function submitMessage() {
     if (sendDisabled) return;
@@ -570,16 +576,20 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       {effectiveChannelView === "chat" ? (
         <footer className="border-t bg-background/95">
           {mention && mentionTargets.length > 0 ? (
-            <Card aria-label={messages.chat.chooseMentionMember} className="mx-4 mt-3 max-h-44 gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
+            <Card aria-label={messages.chat.chooseMentionMember} className="mx-4 mt-3 max-h-[12.5rem] gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
               <CardContent className="grid min-h-0 gap-1 px-2">
-                <ScrollArea className="max-h-32 min-h-0 pr-2">
+                <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
                   <div className="grid gap-1">
                     {mentionTargets.map((member, index) => (
                       <Button
                         aria-current={index === selectedMentionIndex ? "true" : undefined}
-                        className={cn("h-auto justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
+                        className={cn("h-auto min-h-12 justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
+                        data-mention-option-index={index}
                         key={member.id}
                         onClick={() => selectMention(index)}
+                        ref={(node) => {
+                          mentionOptionRefs.current[index] = node;
+                        }}
                         type="button"
                         variant="ghost"
                       >

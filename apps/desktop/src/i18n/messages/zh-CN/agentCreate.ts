@@ -1,6 +1,7 @@
 export const agentCreate = {
   addAgent: "添加智能体 运行时 模型",
   associatedDevice: "关联设备",
+  createdSuccess: "成员创建成功",
   defaultDescription: (name: string) => `${name} 的智能体记忆和工作区。`,
   description: "描述",
   draftDescription: {

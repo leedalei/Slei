@@ -1,6 +1,7 @@
 export const agentCreate = {
   addAgent: "Add agent Runtime Model",
   associatedDevice: "Associated device",
+  createdSuccess: "Member created",
   defaultDescription: (name: string) => `${name}'s agent memory and workspace.`,
   description: "Description",
   draftDescription: {

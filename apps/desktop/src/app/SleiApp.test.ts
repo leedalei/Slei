@@ -1,9 +1,21 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { createChannelAgentReplyMessage, createChannelAgentReplyMessageFromReplies, waitForChannelAgentReplies } from "./SleiApp";
+import {
+  createChannelAgentReplyMessage,
+  createChannelAgentReplyMessageFromReplies,
+  waitForChannelAgentReplies,
+} from "./SleiApp";
 import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
 
 describe("createChannelAgentReplyMessage", () => {
+  it("keeps the current chat view after a member is created from an interactive card", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("messages.agentCreate.createdSuccess");
+    expect(source).not.toContain('navigateToView("members");');
+  });
+
   it("keeps the channel activity id stable across progress and completion", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
