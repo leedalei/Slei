@@ -52,6 +52,11 @@ export type DesktopMessages = {
     chooseMentionMember: string;
     createChannel: string;
     createChannelDescription: string;
+    createChannelFailed: string;
+    createChannelCreating: string;
+    createChannelCreated: string;
+    createChannelPartialFailure: string;
+    channelNameRequired: string;
     deleteChannel: (name: string) => string;
     directMessage: string;
     directMessages: string;

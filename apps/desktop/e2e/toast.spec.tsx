@@ -26,6 +26,21 @@ describe("shared toast feedback", () => {
     expect(html).toContain("复制成功");
   });
 
+  it("renders typed toast variants above dialogs", () => {
+    const errorHtml = renderToStaticMarkup(<Toast text="频道名称不能为空" type="error" />);
+    const successHtml = renderToStaticMarkup(<Toast text="频道已创建" type="success" />);
+    const infoHtml = renderToStaticMarkup(<Toast text="成员正在加入" type="info" />);
+    const warnHtml = renderToStaticMarkup(<Toast text="后续设置失败" type="warn" />);
+
+    expect(errorHtml).toContain('role="alert"');
+    expect(errorHtml).toContain('aria-live="assertive"');
+    expect(errorHtml).toContain("z-[80]");
+    expect(errorHtml).toContain("border-destructive");
+    expect(successHtml).toContain("border-emerald-500");
+    expect(infoHtml).toContain("border-sky-500");
+    expect(warnHtml).toContain("border-amber-500");
+  });
+
   it("copies toast content when requested", async () => {
     const writes: string[] = [];
 

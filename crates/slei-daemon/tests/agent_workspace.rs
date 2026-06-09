@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::state::AppState;
+use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -524,18 +525,10 @@ async fn create_channel_with_agents_is_immediately_usable_and_requests_memory_up
     let created_channel_body = response_json(created_channel).await;
     assert_eq!(created_channel_body["channel"]["id"], "ready-channel");
 
-    let members = get_json(&app, &token, "/v1/channels/ready-channel/members").await;
-    assert_eq!(members.status(), StatusCode::OK);
-    let members_body = response_json(members).await;
-    let selected = members_body["members"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|member| member["agentId"] == alice_id)
-        .expect("selected agent should be a channel member");
+    let selected = wait_for_channel_member(&app, &token, "ready-channel", &alice_id).await;
     assert_eq!(selected["readiness"], "joining");
 
-    let events = state.memory_events().events_for_agent(&alice_id).await;
+    let events = wait_for_memory_update_requests(&state, &alice_id, "ready-channel", 1).await;
     assert!(events
         .iter()
         .any(|event| event.event_type == "memory_update_requested"
@@ -674,6 +667,39 @@ async fn create_channel_rejects_invalid_selected_agent_without_side_effects() {
 }
 
 #[tokio::test]
+async fn create_channel_lists_channel_even_when_later_workspace_setup_fails() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("channel-partial-workspace-failure");
+    fs::create_dir_all(root.join("channels/workspaces.json")).unwrap();
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
+    let app = build_router(state);
+
+    let created_channel = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-partial-workspace-channel"),
+        json!({
+            "name": "#Partial Workspace Channel",
+            "description": "Workspace setup should fail after channel creation",
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+
+    assert_eq!(created_channel.status(), StatusCode::CREATED);
+    let created_channel_body = response_json(created_channel).await;
+    assert_eq!(created_channel_body["channel"]["id"], "partial-workspace-channel");
+
+    let listed = response_json(get_json(&app, &token, "/v1/channels").await).await;
+    assert!(listed["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|channel| channel["id"] == "partial-workspace-channel"));
+}
+
+#[tokio::test]
 async fn create_channel_with_duplicate_agents_and_retries_requests_memory_once() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-dedup-agent");
@@ -717,6 +743,7 @@ async fn create_channel_with_duplicate_agents_and_retries_requests_memory_once()
         assert_eq!(created_channel.status(), StatusCode::CREATED);
     }
 
+    let _ = wait_for_channel_member(&app, &token, "dedup-channel", &alice_id).await;
     let members =
         response_json(get_json(&app, &token, "/v1/channels/dedup-channel/members").await).await;
     let alice_members = members["members"]
@@ -727,9 +754,7 @@ async fn create_channel_with_duplicate_agents_and_retries_requests_memory_once()
         .count();
     assert_eq!(alice_members, 1);
 
-    let requested_events = state
-        .memory_events()
-        .events_for_agent(&alice_id)
+    let requested_events = wait_for_memory_update_requests(&state, &alice_id, "dedup-channel", 1)
         .await
         .into_iter()
         .filter(|event| {
@@ -2165,6 +2190,52 @@ async fn delete_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+async fn wait_for_channel_member(
+    app: &axum::Router,
+    token: &AuthToken,
+    channel_id: &str,
+    agent_id: &str,
+) -> Value {
+    for _ in 0..50 {
+        let members = get_json(app, token, &format!("/v1/channels/{channel_id}/members")).await;
+        assert_eq!(members.status(), StatusCode::OK);
+        let members_body = response_json(members).await;
+        if let Some(member) = members_body["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|member| member["agentId"] == agent_id)
+        {
+            return member.clone();
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("selected agent should become a channel member");
+}
+
+async fn wait_for_memory_update_requests(
+    state: &AppState,
+    agent_id: &str,
+    channel_id: &str,
+    minimum_count: usize,
+) -> Vec<slei_daemon::services::memory_event_service::MemoryUpdateEvent> {
+    for _ in 0..50 {
+        let events = state.memory_events().events_for_agent(agent_id).await;
+        let count = events
+            .iter()
+            .filter(|event| {
+                event.event_type == "memory_update_requested"
+                    && event.channel_id.as_deref() == Some(channel_id)
+            })
+            .count();
+        if count >= minimum_count {
+            return events;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("memory update request should be recorded");
 }
 
 fn make_temp_dir(label: &str) -> PathBuf {

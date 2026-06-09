@@ -26,6 +26,7 @@ import {
   type WorkspaceMountView,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
+import type { ToastType } from "../components";
 import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
 import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage } from "./fixtures";
 import {
@@ -484,7 +485,7 @@ export function SleiApp() {
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [guideBootstrapping, setGuideBootstrapping] = useState(false);
-  const [appToastMessage, setAppToastMessage] = useState("");
+  const [appToast, setAppToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [runtimeSetup, setRuntimeSetup] = useState<RuntimeSetupState>({
     loading: true,
     error: undefined,
@@ -495,10 +496,10 @@ export function SleiApp() {
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
 
-  function showAppToast(message: string) {
+  function showAppToast(message: string, type: ToastType = "info") {
     if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
-    setAppToastMessage(message);
-    appToastTimerRef.current = setTimeout(() => setAppToastMessage(""), 4_000);
+    setAppToast({ message, type });
+    appToastTimerRef.current = setTimeout(() => setAppToast((current) => ({ ...current, message: "" })), 4_000);
   }
 
   useEffect(() => {
@@ -704,7 +705,19 @@ export function SleiApp() {
     );
     setData((current) => createSleiFixtures({ ...current, members }));
     setActiveMemberId(receipt.agent.id);
-    showAppToast(messages.agentCreate.createdSuccess);
+    showAppToast(messages.agentCreate.createdSuccess, "success");
+  }
+
+  async function refreshChannelsAfterCreate(channelId: string) {
+    const receipt = await bridge.listChannels();
+    const channels = receipt.channels.map((channel) => channelFromView(channel, messages));
+    setData((current) => createSleiFixtures({ ...current, channels }));
+    if (channels.some((channel) => channel.id === channelId)) {
+      setActiveChannelId(channelId);
+      setActiveConversationId(undefined);
+      setActiveSessionId(undefined);
+    }
+    return channels;
   }
 
   async function handleInteractiveCardComplete(cardId: string) {
@@ -971,7 +984,7 @@ export function SleiApp() {
             status: "failed" as const,
           };
       if (replies.length === 0 || replies.some((message) => message.status === "failed")) {
-        showAppToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`);
+        showAppToast(`${messages.chat.agentRunFailed}: ${reply?.body || "智能体回复超时。"}`, "error");
       }
       setData((current) =>
         createSleiFixtures({
@@ -998,7 +1011,7 @@ export function SleiApp() {
         channelId,
         status: "failed",
       };
-      showAppToast(`${messages.chat.agentRunFailed}: ${errorMessage}`);
+      showAppToast(`${messages.chat.agentRunFailed}: ${errorMessage}`, "error");
       setData((current) =>
         createSleiFixtures({
           ...current,
@@ -1126,7 +1139,6 @@ export function SleiApp() {
 
   async function handleCreateChannel(input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) {
     const name = stripChannelHash(input.name);
-    if (!name) return;
     const projectPaths = [...new Set((input.projectPaths ?? []).map((path) => path.trim()).filter(Boolean))];
     const projectName = projectPaths.length > 0 ? projectPaths.join(", ") : input.projectName?.trim() || undefined;
     const receipt = await bridge.createChannel({
@@ -1141,6 +1153,9 @@ export function SleiApp() {
       return createSleiFixtures({ ...current, channels: [...current.channels, channel] });
     });
     setActiveChannelId(channel.id);
+    setActiveConversationId(undefined);
+    setActiveSessionId(undefined);
+    return receipt;
   }
 
   function handleDeleteChannel(channelId: string) {
@@ -1280,6 +1295,9 @@ export function SleiApp() {
       appearance={appearance}
       notifications={notifications}
       onChannelCreate={handleCreateChannel}
+      onChannelCreateFailure={showAppToast}
+      onChannelCreateLog={(message, context) => logAppEvent(bridge, "channel-create", message, context)}
+      onChannelCreateRefresh={refreshChannelsAfterCreate}
       onChannelDelete={handleDeleteChannel}
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
@@ -1323,7 +1341,8 @@ export function SleiApp() {
       onConversationSessionSelect={handleConversationSessionSelect}
       profile={profile}
       runtimeSetup={runtimeSetup}
-      runtimeErrorToastMessage={appToastMessage}
+      runtimeErrorToastMessage={appToast.message}
+      runtimeToastType={appToast.type}
       savedMessages={savedMessages}
       sessionDrawerOpen={sessionDrawerOpen}
       sendingConversationIds={sendingConversationIds}
@@ -1372,5 +1391,6 @@ export {
   resetChannelDraft,
   selectAgentActivityForTick,
   SleiAppFrame,
+  submitChannelDraftWithFeedback,
   toggleChannelDraftAgent,
 } from "./SleiAppFrame";

@@ -6,7 +6,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS } from "../../components";
+import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -313,7 +313,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const [toastMessage, setToastMessage] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -415,18 +415,18 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   async function copyMessage(message: SleiMessage) {
     const copied = await copyMessageBody(message.body);
     if (!copied) return;
-    showToast(messages.chat.copySuccess);
+    showToast(messages.chat.copySuccess, "success");
   }
 
-  function showToast(message: string) {
+  function showToast(message: string, type: ToastType = "info") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(message);
-    toastTimerRef.current = setTimeout(() => setToastMessage(""), TOAST_VISIBLE_MS);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
   }
 
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-background" data-slot="chat-page">
-      <Toast message={toastMessage} />
+      <Toast message={toast.message} type={toast.type} />
       <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
         <div className="min-w-0">
           <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-base font-semibold">

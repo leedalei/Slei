@@ -1964,16 +1964,47 @@ impl DaemonBroker {
         let payload = serde_json::to_string(request)
             .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
         let idempotency_key = format!("desktop-channel-create-{}", monotonic_id());
-        let response = self
-            .send_daemon_request_checked(
-                "POST",
-                "/v1/channels",
-                Some(&payload),
-                &[("Idempotency-Key", idempotency_key.as_str())],
-            )
-            .map_err(ChannelError::DaemonRequest)?;
-        serde_json::from_str::<ChannelReceipt>(&response)
-            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+        let started = Instant::now();
+        eprintln!(
+            "[slei-desktop][channel-create] idempotency_key={} stage=request-start name={} agent_count={} project_path_count={}",
+            idempotency_key,
+            request.name.trim(),
+            request.agent_ids.len(),
+            request.project_paths.len()
+        );
+        let response = match self.send_daemon_request_checked(
+            "POST",
+            "/v1/channels",
+            Some(&payload),
+            &[("Idempotency-Key", idempotency_key.as_str())],
+        ) {
+            Ok(response) => {
+                eprintln!(
+                    "[slei-desktop][channel-create] idempotency_key={} stage=request-success http_status=2xx elapsed_ms={}",
+                    idempotency_key,
+                    started.elapsed().as_millis()
+                );
+                response
+            }
+            Err(error) => {
+                eprintln!(
+                    "[slei-desktop][channel-create] idempotency_key={} stage=request-failed elapsed_ms={} error={}",
+                    idempotency_key,
+                    started.elapsed().as_millis(),
+                    error
+                );
+                return Err(ChannelError::DaemonRequest(error));
+            }
+        };
+        serde_json::from_str::<ChannelReceipt>(&response).map_err(|error| {
+            eprintln!(
+                "[slei-desktop][channel-create] idempotency_key={} stage=response-invalid elapsed_ms={} error={}",
+                idempotency_key,
+                started.elapsed().as_millis(),
+                error
+            );
+            ChannelError::DaemonResponse(error.to_string())
+        })
     }
 
     fn fetch_channel_members_from_daemon(

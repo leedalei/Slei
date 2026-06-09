@@ -10,6 +10,7 @@ import {
   Globe2,
   Hash,
   Info,
+  LoaderCircle,
   MessageCircle,
   Monitor,
   Palette,
@@ -52,6 +53,7 @@ import {
   type ConversationAttachmentView,
   type ConversationView,
   type DesktopNodeView,
+  type ChannelReceipt,
   type InteractiveCardView,
   type NotificationPreferences,
   type PermissionDecision,
@@ -63,7 +65,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { MemberAvatar, StatusDot, Toast } from "../components";
+import { MemberAvatar, StatusDot, Toast, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -123,6 +125,7 @@ export type SleiAppFrameProps = {
   profile?: UserProfile;
   runtimeSetup: RuntimeSetupState;
   runtimeErrorToastMessage?: string;
+  runtimeToastType?: ToastType;
   searchOpen?: boolean;
   sessionDrawerOpen?: boolean;
   sendingConversationIds?: string[];
@@ -131,7 +134,10 @@ export type SleiAppFrameProps = {
   onAgentCreate?: (request: AgentDraftInput) => Promise<void> | void;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
-  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<void> | void;
+  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
+  onChannelCreateFailure?: (message: string, type?: ToastType) => void;
+  onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
+  onChannelCreateRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationNewSession?: (conversationId: string) => Promise<void> | void;
@@ -218,7 +224,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       data-theme={normalizedTheme}
       style={shellStyle}
     >
-      <Toast message={input.runtimeErrorToastMessage} />
+      <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
       <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
@@ -258,6 +264,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
               initialSavedPanelOpen={input.initialSavedPanelOpen}
               activeAgentActivity={activeAgentActivity}
               onChannelCreate={input.onChannelCreate}
+              onChannelCreateFailure={input.onChannelCreateFailure}
+              onChannelCreateLog={input.onChannelCreateLog}
+              onChannelCreateRefresh={input.onChannelCreateRefresh}
               onChannelDelete={input.onChannelDelete}
               onChannelSelect={input.onChannelSelect}
               onConversationSelect={input.onConversationSelect}
@@ -305,12 +314,24 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         setAgentCreateOpen(true);
       }, async (draft, cardId) => {
         const projectPaths = Array.isArray(draft.projectPaths) ? draft.projectPaths.filter((path): path is string => typeof path === "string") : [];
-        await input.onChannelCreate?.({
-          name: String(draft.name ?? ""),
-          projectName: typeof draft.projectName === "string" ? draft.projectName : undefined,
-          projectPaths,
-          agentIds: Array.isArray(draft.agentIds) ? draft.agentIds.filter((id): id is string => typeof id === "string") : [],
+        const result = await submitChannelDraftWithFeedback({
+          draft: {
+            name: String(draft.name ?? ""),
+            projectName: typeof draft.projectName === "string" ? draft.projectName : "",
+            projectPaths,
+            selectedAgentIds: Array.isArray(draft.agentIds) ? draft.agentIds.filter((id): id is string => typeof id === "string") : [],
+          },
+          createFailedMessage: messages.chat.createChannelFailed,
+          createPartialFailureMessage: messages.chat.createChannelPartialFailure,
+          channelNameRequiredMessage: messages.chat.channelNameRequired,
+          createdMessage: messages.chat.createChannelCreated,
+          onCreateFailure: input.onChannelCreateFailure,
+          onCreateSuccess: input.onChannelCreateFailure,
+          onChannelCreate: input.onChannelCreate,
+          onChannelRefresh: input.onChannelCreateRefresh,
+          onLog: input.onChannelCreateLog,
         });
+        if (!result.created) return;
         if (cardId) await input.onInteractiveCardComplete?.(cardId);
       })}</main>
 
@@ -395,6 +416,97 @@ export function channelDraftCreateInput(draft: ChannelDraftState): { name: strin
     projectPaths,
     agentIds: draft.selectedAgentIds,
   };
+}
+
+export async function submitChannelDraftWithFeedback(input: {
+  draft: ChannelDraftState;
+  createFailedMessage: string;
+  createPartialFailureMessage: string;
+  channelNameRequiredMessage: string;
+  createdMessage?: string;
+  onCreateFailure?: (message: string, type?: ToastType) => void;
+  onCreateSuccess?: (message: string, type?: ToastType) => void;
+  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
+  onChannelRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
+  onLog?: (message: string, context?: Record<string, unknown>) => void;
+}) {
+  const channelName = stripChannelHash(input.draft.name);
+  input.onLog?.("submit", {
+    name: channelName,
+    agentCount: input.draft.selectedAgentIds.length,
+    projectPathCount: input.draft.projectPaths.length,
+  });
+  if (!channelName) {
+    input.onCreateFailure?.(input.channelNameRequiredMessage, "error");
+    return { created: false, draft: input.draft };
+  }
+
+  try {
+    input.onLog?.("request-start", { name: channelName });
+    const receipt = await input.onChannelCreate?.(channelDraftCreateInput(input.draft));
+    const channelId = receipt?.channel.id ?? channelName;
+    input.onLog?.("request-success", { channelId });
+    const channels = await refreshCreatedChannels(input, channelId);
+    input.onCreateSuccess?.(input.createdMessage ?? "", "success");
+    return { created: true, draft: resetChannelDraft(), channelId, channels };
+  } catch (error) {
+    const detail = channelCreateErrorDetail(error);
+    input.onLog?.("request-failed", { name: channelName, error: detail });
+    const fallback = await tryRefreshCreatedChannel(input, channelName, detail);
+    if (fallback) return fallback;
+    input.onCreateFailure?.(formatChannelCreateFailure(input.createFailedMessage, error), "error");
+    return { created: false, draft: input.draft };
+  }
+}
+
+async function refreshCreatedChannels(input: {
+  onChannelRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
+  onLog?: (message: string, context?: Record<string, unknown>) => void;
+}, channelId: string) {
+  if (!input.onChannelRefresh) return undefined;
+  input.onLog?.("refresh-start", { channelId });
+  try {
+    const channels = await input.onChannelRefresh(channelId);
+    input.onLog?.("refresh-success", { channelId, channelCount: channels.length });
+    return channels;
+  } catch (error) {
+    input.onLog?.("refresh-failed", { channelId, error: channelCreateErrorDetail(error) });
+    return undefined;
+  }
+}
+
+async function tryRefreshCreatedChannel(input: {
+  draft: ChannelDraftState;
+  createPartialFailureMessage: string;
+  onCreateFailure?: (message: string, type?: ToastType) => void;
+  onChannelRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
+  onLog?: (message: string, context?: Record<string, unknown>) => void;
+}, channelName: string, detail: string) {
+  const channels = await refreshCreatedChannels(input, channelName);
+  const createdChannel = channels?.find((channel) => channel.id === channelName || stripChannelHash(channel.name) === channelName);
+  if (!createdChannel) return undefined;
+  input.onCreateFailure?.(formatChannelCreateFailure(input.createPartialFailureMessage, detail), "warn");
+  return {
+    created: true,
+    draft: resetChannelDraft(),
+    channelId: createdChannel.id,
+    channels,
+    partialFailure: detail,
+  };
+}
+
+function formatChannelCreateFailure(prefix: string, error: unknown) {
+  const detail = channelCreateErrorDetail(error);
+  const trimmedDetail = detail.trim();
+  return trimmedDetail ? `${prefix}：${trimmedDetail}` : prefix;
+}
+
+function channelCreateErrorDetail(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
 }
 
 function uniqueProjectPaths(paths: string[]) {
@@ -499,7 +611,10 @@ function ChannelList(input: {
   messages: DesktopMessages;
   savedMessages: SavedMessageView[];
   searchOpen?: boolean;
-  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<void> | void;
+  onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
+  onChannelCreateFailure?: (message: string) => void;
+  onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
+  onChannelCreateRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
   onChannelDelete?: (channelId: string) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
@@ -508,6 +623,7 @@ function ChannelList(input: {
 }) {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
+  const [creatingChannel, setCreatingChannel] = useState(false);
   const [activePanel, setActivePanel] = useState<"channels" | "saved">(input.initialSavedPanelOpen ? "saved" : "channels");
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const directMessageConversations = input.data.conversations.filter((conversation) => {
@@ -519,13 +635,31 @@ function ChannelList(input: {
 
   async function submitChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await input.onChannelCreate?.(channelDraftCreateInput(channelDraft));
-    closeCreateChannelModal();
+    if (creatingChannel) return;
+    setCreatingChannel(true);
+    try {
+      const result = await submitChannelDraftWithFeedback({
+        draft: channelDraft,
+        createFailedMessage: input.messages.chat.createChannelFailed,
+        createPartialFailureMessage: input.messages.chat.createChannelPartialFailure,
+        channelNameRequiredMessage: input.messages.chat.channelNameRequired,
+        createdMessage: input.messages.chat.createChannelCreated,
+        onCreateFailure: input.onChannelCreateFailure,
+        onCreateSuccess: input.onChannelCreateFailure,
+        onChannelCreate: input.onChannelCreate,
+        onChannelRefresh: input.onChannelCreateRefresh,
+        onLog: input.onChannelCreateLog,
+      });
+      if (result.created) closeCreateChannelModal();
+    } finally {
+      setCreatingChannel(false);
+    }
   }
 
   function closeCreateChannelModal() {
     setChannelDraft(resetChannelDraft());
     setCreateOpen(false);
+    setCreatingChannel(false);
   }
 
   function toggleSelectedAgent(agentId: string) {
@@ -638,12 +772,15 @@ function ChannelList(input: {
           </DialogHeader>
           <form className="grid min-h-0 gap-4" onSubmit={submitChannel}>
             <div className="grid gap-2">
-              <Label htmlFor="slei-channel-name">{input.messages.chat.channelName}</Label>
+              <Label className="gap-1" htmlFor="slei-channel-name">
+                {input.messages.chat.channelName}
+                <span aria-hidden="true" className="text-destructive">*</span>
+              </Label>
               <Input
                 aria-label={input.messages.chat.channelName}
                 id="slei-channel-name"
                 onChange={(event) => setChannelDraft((current) => ({ ...current, name: event.currentTarget.value }))}
-                placeholder="dev-team"
+                placeholder="请输入"
                 value={channelDraft.name}
               />
             </div>
@@ -718,8 +855,10 @@ function ChannelList(input: {
               </fieldset>
             ) : null}
             <DialogFooter>
-              <Button onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button type="submit"><Plus aria-hidden="true" size={14} />{input.messages.common.create}</Button>
+              <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
+              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
+                {creatingChannel ? <LoaderCircle aria-hidden="true" className="animate-spin" size={14} /> : <><Plus aria-hidden="true" size={14} />{input.messages.common.create}</>}
+              </Button>
             </DialogFooter>
           </form>
       </ShellDialog>

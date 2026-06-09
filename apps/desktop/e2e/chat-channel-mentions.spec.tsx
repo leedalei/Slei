@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   activeMentionQuery,
   channelDraftCreateInput,
   resetChannelDraft,
+  submitChannelDraftWithFeedback,
   toggleChannelDraftAgent,
   filterConversationMessages,
   insertMention,
@@ -21,6 +22,7 @@ const readyRuntime = {
   nodes: createSleiFixtures().nodes,
 };
 const searchPageSource = () => readFileSync(new URL("../src/features/search/SearchPageView.tsx", import.meta.url), "utf8");
+const appFrameSource = () => readFileSync(new URL("../src/app/SleiAppFrame.tsx", import.meta.url), "utf8");
 
 describe("chat search, channel management, and mentions", () => {
   it("filters conversation messages by user, channel, and time", () => {
@@ -158,6 +160,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain("创建频道");
     expect(html).toContain("频道名称");
+    expect(html).toContain('aria-hidden="true" class="text-destructive">*</span>');
+    expect(html).toContain('placeholder="请输入"');
     expect(html).toContain("关联项目");
     expect(html).toContain("取消");
     expect(html).not.toContain("slei-channel-form");
@@ -195,6 +199,90 @@ describe("chat search, channel management, and mentions", () => {
       projectPaths: ["/Users/lei/Slei", "/Users/lei/Website"],
       agentIds: [],
     });
+  });
+
+  it("keeps the channel draft and surfaces toast feedback when channel creation fails", async () => {
+    const toasts: string[] = [];
+    const draft = { name: "new-dev", projectName: "Slei Desktop", projectPaths: [], selectedAgentIds: ["agent_coda"] };
+
+    const result = await submitChannelDraftWithFeedback({
+      draft,
+      createFailedMessage: "创建频道失败",
+      createPartialFailureMessage: "频道已创建，但后续设置失败",
+      channelNameRequiredMessage: "频道名称不能为空",
+      onCreateFailure: (message) => toasts.push(message),
+      onChannelCreate: async () => {
+        throw new Error("daemon request failed: 400 Bad Request: invalid selected agent");
+      },
+    });
+
+    expect(result).toEqual({ created: false, draft });
+    expect(toasts).toEqual(["创建频道失败：daemon request failed: 400 Bad Request: invalid selected agent"]);
+  });
+
+  it("surfaces channel name validation feedback before calling create", async () => {
+    const toasts: string[] = [];
+    const create = vi.fn();
+
+    const result = await submitChannelDraftWithFeedback({
+      draft: { ...resetChannelDraft(), name: " # " },
+      createFailedMessage: "创建频道失败",
+      createPartialFailureMessage: "频道已创建，但后续设置失败",
+      channelNameRequiredMessage: "频道名称不能为空",
+      onCreateFailure: (message, type) => toasts.push(`${type}:${message}`),
+      onChannelCreate: create,
+    });
+
+    expect(result.created).toBe(false);
+    expect(create).not.toHaveBeenCalled();
+    expect(toasts).toEqual(["error:频道名称不能为空"]);
+  });
+
+  it("refreshes channels and reports success after channel creation", async () => {
+    const toasts: string[] = [];
+    const logs: string[] = [];
+
+    const result = await submitChannelDraftWithFeedback({
+      draft: { ...resetChannelDraft(), name: "new-dev" },
+      createFailedMessage: "创建频道失败",
+      createPartialFailureMessage: "频道已创建，但后续设置失败",
+      channelNameRequiredMessage: "频道名称不能为空",
+      onCreateSuccess: (message) => toasts.push(message),
+      createdMessage: "频道已创建，成员正在加入",
+      onChannelCreate: async () => ({ channel: { id: "new-dev", name: "new-dev", description: "Slei", projectPaths: [] } }),
+      onChannelRefresh: async () => [{ id: "all", name: "all", description: "默认频道", unread: 0 }, { id: "new-dev", name: "new-dev", description: "Slei", unread: 0 }],
+      onLog: (message) => logs.push(message),
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.channelId).toBe("new-dev");
+    expect(result.channels?.map((channel) => channel.id)).toEqual(["all", "new-dev"]);
+    expect(toasts).toEqual(["频道已创建，成员正在加入"]);
+    expect(logs).toEqual(["submit", "request-start", "request-success", "refresh-start", "refresh-success"]);
+  });
+
+  it("uses refreshed channels as partial success when create throws after daemon persisted the channel", async () => {
+    const toasts: string[] = [];
+    const logs: string[] = [];
+
+    const result = await submitChannelDraftWithFeedback({
+      draft: { ...resetChannelDraft(), name: "new-dev" },
+      createFailedMessage: "创建频道失败",
+      createPartialFailureMessage: "频道已创建，但后续设置失败",
+      channelNameRequiredMessage: "频道名称不能为空",
+      onCreateFailure: (message) => toasts.push(message),
+      onChannelCreate: async () => {
+        throw new Error("daemon request failed: 500 Internal Server Error: coordinator failed");
+      },
+      onChannelRefresh: async () => [{ id: "all", name: "all", description: "默认频道", unread: 0 }, { id: "new-dev", name: "new-dev", description: "Slei", unread: 0 }],
+      onLog: (message) => logs.push(message),
+    });
+
+    expect(result.created).toBe(true);
+    expect("partialFailure" in result ? result.partialFailure : undefined).toBe("daemon request failed: 500 Internal Server Error: coordinator failed");
+    expect(result.channelId).toBe("new-dev");
+    expect(toasts).toEqual(["频道已创建，但后续设置失败：daemon request failed: 500 Internal Server Error: coordinator failed"]);
+    expect(logs).toEqual(["submit", "request-start", "request-failed", "refresh-start", "refresh-success"]);
   });
 
   it("renders channel project selection as a repeatable folder picker", () => {
@@ -320,6 +408,14 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("↕");
     expect(html).not.toContain("▱");
     expect(html).not.toContain("[]");
+  });
+
+  it("uses a loading icon instead of creating copy while submitting a channel", () => {
+    const source = appFrameSource();
+
+    expect(source).toContain("LoaderCircle");
+    expect(source).toContain("creatingChannel ? <LoaderCircle");
+    expect(source).not.toContain("createChannelCreating : input.messages.common.create");
   });
 
   it("centers far-left rail menu items with shadcn icon labels", () => {

@@ -12,6 +12,7 @@ use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRec
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::services::task_service::TaskQuery;
 use slei_daemon::state::AppState;
+use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -1411,7 +1412,7 @@ async fn public_channel_create_api_mounts_project_paths() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let body = response_json(response).await;
     assert_eq!(body["channel"]["id"], "api-dev");
-    let workspaces = state.channels().workspaces("api-dev").await.unwrap();
+    let workspaces = wait_for_channel_workspaces(&state, "api-dev", 2).await;
     assert_eq!(workspaces.len(), 2);
     assert_eq!(workspaces[0].path, "/workspace/api");
     assert_eq!(workspaces[0].label, "api");
@@ -1633,6 +1634,21 @@ async fn post_json(
         .oneshot(builder.body(Body::from(body.to_string())).unwrap())
         .await
         .unwrap()
+}
+
+async fn wait_for_channel_workspaces(
+    state: &AppState,
+    channel_id: &str,
+    minimum_count: usize,
+) -> Vec<slei_daemon::services::channel_service::WorkspaceMount> {
+    for _ in 0..50 {
+        let workspaces = state.channels().workspaces(channel_id).await.unwrap();
+        if workspaces.len() >= minimum_count {
+            return workspaces;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("channel workspaces should be mounted");
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
