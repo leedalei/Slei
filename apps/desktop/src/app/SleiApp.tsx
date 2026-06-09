@@ -1217,8 +1217,9 @@ export function SleiApp() {
       });
       const replies = await waitForChannelAgentReplies(bridge, conversationReceipt.conversation.id, input.agentId, existingMessageIds);
       const combinedBody = replies.map((message) => message.body).filter(Boolean).join("\n\n").trim();
-      const failed = replies.length === 0 || replies.some((message) => message.status === "failed");
-      const body = replies.length > 0 ? combinedBody || (failed ? "智能体回复失败。" : "智能体回复为空。") : "智能体回复超时。";
+      const empty = replies.length > 0 && !combinedBody;
+      const failed = replies.length === 0 || empty || replies.some((message) => message.status === "failed");
+      const body = replies.length > 0 ? combinedBody || "智能体回复为空。" : "智能体回复超时。";
       logAppEvent(bridge, "task-agent-reply", replies.length > 0 ? "reply-received" : "reply-timeout", {
         channelId: input.channelId,
         taskId: input.taskId,

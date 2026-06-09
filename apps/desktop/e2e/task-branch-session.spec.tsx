@@ -45,6 +45,11 @@ describe("task branch sessions", () => {
     expect(appSource).toContain("const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
     expect(appSource).toContain("result.receipt.outcome.taskId ? null : createChannelAgentActivityMessage");
     expect(appSource).not.toContain("agentActivity = createChannelAgentActivityMessage(result.receipt.outcome");
+    expect(appSource).toContain("const empty = replies.length > 0 && !combinedBody");
+    expect(appSource).toContain("const failed = replies.length === 0 || empty || replies.some");
+    expect(appSource).toContain('combinedBody || "智能体回复为空。"');
+    expect(appSource).toContain('failed ? "in_progress" : "in_review"');
+    expect(appSource).not.toContain("const failed = replies.length === 0 || replies.some");
   });
 
   it("renders a collapsed task root entry and hides the source channel message", () => {
