@@ -337,12 +337,16 @@ function channelAgentReplyPrompt(channelId: string, body: string): string {
 
 function taskAgentReplyPrompt(input: { channelId: string; taskId: string; sourceBody: string; triggerBody?: string }): string {
   const channelName = input.channelId.startsWith("#") ? input.channelId : `#${input.channelId}`;
-  return [
+  const lines = [
     `你正在处理 ${channelName} 中的任务 ${input.taskId}。`,
     "请只基于这个任务线程继续处理；不要把回复发回外层频道。",
-    input.triggerBody ? "用户在任务线程中的最新指令：" : "任务根消息：",
-    input.triggerBody ?? input.sourceBody,
-  ].join("\n");
+    "任务根消息：",
+    input.sourceBody,
+  ];
+  if (input.triggerBody) {
+    lines.push("", "用户在任务线程中的最新指令：", input.triggerBody);
+  }
+  return lines.join("\n");
 }
 
 export const CHANNEL_AGENT_REPLY_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -1378,7 +1382,7 @@ export function SleiApp() {
     if (!trimmed) return;
     const task = data.tasks.find((candidate) => candidate.id === taskId);
     const channelId = task?.channelId ?? activeChannelId ?? "all";
-    const sourceBody = task?.title ?? task?.replies?.[0]?.body ?? trimmed;
+    const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed;
     const receipt = await bridge.replyToTask(taskId, { senderId: "human:local", body: trimmed });
     void refreshTaskThreadIntoState(taskId).catch((error: unknown) => {
       logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-reply", { taskId, error: formatLogError(error) });

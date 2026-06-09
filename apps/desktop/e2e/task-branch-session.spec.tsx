@@ -36,6 +36,13 @@ describe("task branch sessions", () => {
     expect(appSource).toContain("replyToTask(input.taskId");
     expect(appSource).toContain("taskId: result.receipt.outcome.taskId");
     expect(appSource).toContain("taskAgentReplyPrompt");
+    expect(appSource).toContain('"任务根消息："');
+    expect(appSource).toContain('"用户在任务线程中的最新指令："');
+    expect(appSource).toContain("input.sourceBody");
+    expect(appSource).toContain("input.triggerBody");
+    expect(appSource).not.toContain('input.triggerBody ? "用户在任务线程中的最新指令：" : "任务根消息："');
+    expect(appSource).not.toContain("input.triggerBody ?? input.sourceBody");
+    expect(appSource).toContain("const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
     expect(appSource).toContain("result.receipt.outcome.taskId ? null : createChannelAgentActivityMessage");
     expect(appSource).not.toContain("agentActivity = createChannelAgentActivityMessage(result.receipt.outcome");
   });
