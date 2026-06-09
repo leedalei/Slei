@@ -32,7 +32,6 @@ import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
 import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage, type SleiTask, type SleiTaskReply } from "./fixtures";
 import {
-  appendTaskReply,
   createDraftComputerNode,
   createLocalChatMessage,
   createTaskFromChatMessage,
@@ -70,7 +69,6 @@ export type {
 export {
   activeMentionQuery,
   agentsForComputerNode,
-  appendTaskReply,
   channelReadinessLabel,
   composerShortcutAction,
   createDraftComputerNode,
@@ -1233,12 +1231,6 @@ export function SleiApp() {
   }
 
   async function handleTaskStatusChange(taskId: string, status: TaskStatusView) {
-    setData((current) =>
-      createSleiFixtures({
-        ...current,
-        tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, status } : task)),
-      }),
-    );
     const receipt = await bridge.updateTaskStatus(taskId, { status });
     setData((current) =>
       createSleiFixtures({

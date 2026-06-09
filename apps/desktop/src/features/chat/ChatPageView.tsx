@@ -149,7 +149,7 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? tasks[0];
   function selectTask(taskId: string) {
     setSelectedTaskId(taskId);
-    void onTaskThreadOpen?.(taskId);
+    void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
   }
 
   if (tasks.length === 0) {
@@ -478,7 +478,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
 
   function openTaskThread(taskId: string) {
     setSelectedTaskId(taskId);
-    void onTaskThreadOpen?.(taskId);
+    void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
   }
 
   return (

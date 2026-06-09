@@ -2,9 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { appendTaskReply, createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
+import { createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMessage } from "../src/app/fixtures";
-import { parseTaskCardBody, taskReplyRequiresWork } from "../src/app/model";
+import { appendTaskReply, parseTaskCardBody, taskReplyRequiresWork } from "../src/app/model";
 
 const readyRuntime = {
   loading: false,
@@ -14,6 +14,8 @@ const readyRuntime = {
 };
 const tasksPageSource = () => readFileSync(new URL("../src/features/tasks/TasksPageView.tsx", import.meta.url), "utf8");
 const taskThreadDrawerSource = () => readFileSync(new URL("../src/features/tasks/TaskThreadDrawer.tsx", import.meta.url), "utf8");
+const chatPageSource = () => readFileSync(new URL("../src/features/chat/ChatPageView.tsx", import.meta.url), "utf8");
+const sleiAppSource = () => readFileSync(new URL("../src/app/SleiApp.tsx", import.meta.url), "utf8");
 
 describe("chat to task thread flow", () => {
   it("creates a task root from a checked chat composer message", () => {
@@ -127,5 +129,21 @@ describe("chat to task thread flow", () => {
     expect(html).toContain("标记已完成");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>标记已完成/);
     expect(html).toContain("2 条回复");
+  });
+
+  it("keeps task drawer async errors and thread-open rejections handled in source", () => {
+    const drawerSource = taskThreadDrawerSource();
+
+    expect(drawerSource).toContain("replySubmitting");
+    expect(drawerSource).toContain("statusSubmitting");
+    expect(drawerSource).toContain("replyError");
+    expect(drawerSource).toContain("statusError");
+    expect(drawerSource).toContain("catch (error)");
+    expect(drawerSource).toContain("setReplyDraft(\"\")");
+    expect(drawerSource).toContain("disabled={replySubmitting");
+    expect(drawerSource).toContain("disabled={statusActionDisabled}");
+    expect(chatPageSource()).toContain(".catch(() => undefined)");
+    expect(tasksPageSource()).toContain(".catch(() => undefined)");
+    expect(sleiAppSource()).not.toMatch(/import\s*\{[^}]*appendTaskReply/);
   });
 });

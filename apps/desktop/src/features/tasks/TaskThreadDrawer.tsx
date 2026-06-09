@@ -19,15 +19,40 @@ export function TaskThreadDrawer(input: {
   onStatusChange?: (taskId: string, status: SleiTaskStatus) => Promise<void> | void;
 }) {
   const [replyDraft, setReplyDraft] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [statusSubmitting, setStatusSubmitting] = useState(false);
+  const [replyError, setReplyError] = useState("");
+  const [statusError, setStatusError] = useState("");
   const task = input.task;
-  const statusActionDisabled = !input.onStatusChange;
+  const statusActionDisabled = statusSubmitting || !input.onStatusChange;
 
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = replyDraft.trim();
-    if (!task || !body || !input.onReply) return;
-    await input.onReply(task.id, body);
-    setReplyDraft("");
+    if (!task || !body || !input.onReply || replySubmitting) return;
+    setReplyError("");
+    setReplySubmitting(true);
+    try {
+      await input.onReply(task.id, body);
+      setReplyDraft("");
+    } catch (error) {
+      setReplyError(formatTaskActionError("回复失败", error));
+    } finally {
+      setReplySubmitting(false);
+    }
+  }
+
+  async function handleStatusChange(status: SleiTaskStatus) {
+    if (!task || !input.onStatusChange || statusSubmitting) return;
+    setStatusError("");
+    setStatusSubmitting(true);
+    try {
+      await input.onStatusChange(task.id, status);
+    } catch (error) {
+      setStatusError(formatTaskActionError("状态更新失败", error));
+    } finally {
+      setStatusSubmitting(false);
+    }
   }
 
   function renderContent() {
@@ -56,14 +81,17 @@ export function TaskThreadDrawer(input: {
           <form className="grid gap-3" onSubmit={submitReply}>
             <Textarea
               aria-label={input.messages.tasks.replyPlaceholder}
+              disabled={replySubmitting}
               onChange={(event) => setReplyDraft(event.currentTarget.value)}
               placeholder={input.messages.tasks.replyPlaceholder}
               value={replyDraft}
             />
+            {replyError ? <p className="text-sm text-destructive" role="alert">{replyError}</p> : null}
+            {statusError ? <p className="text-sm text-destructive" role="alert">{statusError}</p> : null}
             <div className="flex flex-wrap justify-end gap-2">
-              {task.status === "in_progress" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
-              {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
-              <Button disabled={!input.onReply} type="submit">
+              {task.status === "in_progress" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
+              {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
+              <Button disabled={replySubmitting || !input.onReply} type="submit">
                 <Send aria-hidden="true" className="size-4" />
                 {input.messages.tasks.sendReply}
               </Button>
@@ -83,4 +111,13 @@ export function TaskThreadDrawer(input: {
       </SheetContent>
     </Sheet>
   );
+}
+
+function formatTaskActionError(prefix: string, error: unknown) {
+  const detail = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "";
+  return detail.trim() ? `${prefix}：${detail}` : prefix;
 }

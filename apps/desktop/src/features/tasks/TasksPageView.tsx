@@ -35,14 +35,14 @@ export function TasksPage({
   useEffect(() => {
     if (activeTaskId && activeTaskId !== lastActiveTaskId.current) {
       setSelectedTaskId(activeTaskId);
-      void onTaskThreadOpen?.(activeTaskId);
+      void Promise.resolve(onTaskThreadOpen?.(activeTaskId)).catch(() => undefined);
     }
     lastActiveTaskId.current = activeTaskId;
   }, [activeTaskId, onTaskThreadOpen]);
 
   function openTask(taskId: string) {
     setSelectedTaskId(taskId);
-    void onTaskThreadOpen?.(taskId);
+    void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
   }
 
   return (
