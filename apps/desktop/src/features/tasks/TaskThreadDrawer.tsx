@@ -20,6 +20,7 @@ export function TaskThreadDrawer(input: {
 }) {
   const [replyDraft, setReplyDraft] = useState("");
   const task = input.task;
+  const statusActionDisabled = !input.onStatusChange;
 
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,8 +61,8 @@ export function TaskThreadDrawer(input: {
               value={replyDraft}
             />
             <div className="flex flex-wrap justify-end gap-2">
-              {task.status === "in_progress" ? <Button onClick={() => input.onStatusChange?.(task.id, "in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
-              {task.status === "in_review" ? <Button onClick={() => input.onStatusChange?.(task.id, "done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
+              {task.status === "in_progress" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "in_review")} type="button" variant="outline">{input.messages.tasks.markInReview}</Button> : null}
+              {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => input.onStatusChange?.(task.id, "done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
               <Button type="submit">
                 <Send aria-hidden="true" className="size-4" />
                 {input.messages.tasks.sendReply}
@@ -76,7 +77,7 @@ export function TaskThreadDrawer(input: {
   return (
     <Sheet open={input.open} onOpenChange={(open) => !open && input.onClose()}>
       {/* Radix portal content is omitted from renderToStaticMarkup; keep static tests observing the drawer body. */}
-      {typeof document === "undefined" && task ? <div hidden>{renderContent()}</div> : null}
+      {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
       <SheetContent aria-label={input.messages.tasks.thread} className="w-[min(100vw,680px)] gap-0 p-0 sm:max-w-[680px]" showCloseButton={false}>
         {renderContent()}
       </SheetContent>
