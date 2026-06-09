@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 
 export function renderTaskCard(task: TaskView, locale: "zh-CN" | "en-US"): string {
   const attention = renderAttentionBadge(task.attentionRequired, locale);
-  const statusAction = `Set status: ${NEXT_STATUS[task.status]}`;
+  const statusAction = `Set status: ${STATUS_LABELS[NEXT_STATUS[task.status]]}`;
 
   return [
     `#${task.channelName} #${task.sequence}`,

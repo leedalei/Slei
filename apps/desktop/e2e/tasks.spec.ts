@@ -56,7 +56,7 @@ describe("global task board and list", () => {
     expect(html).toContain("DONE 1");
     expect(html).toContain("#dev-team #3");
     expect(html).toContain("需要用户关注");
-    expect(html).toContain("Set status: in_review");
+    expect(html).toContain("Set status: In review");
 
     const list = renderTasksPage({
       locale: "zh-CN",

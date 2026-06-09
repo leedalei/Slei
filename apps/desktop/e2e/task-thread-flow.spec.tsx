@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { appendTaskReply, createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMessage } from "../src/app/fixtures";
+import { parseTaskCardBody, taskReplyRequiresWork } from "../src/app/model";
 
 const readyRuntime = {
   loading: false,
@@ -57,6 +58,13 @@ describe("chat to task thread flow", () => {
       { id: "reply-task-message_1-2", sender: "Lei", role: "human", body: "我补充一个约束" },
       { id: "reply-task-message_1-3", sender: "Coda", role: "agent", body: "我会继续处理" },
     ]);
+  });
+
+  it("parses task card messages and detects work-request replies", () => {
+    expect(parseTaskCardBody("task_card:task_1:source:msg_1")).toEqual({ taskId: "task_1", sourceMessageId: "msg_1" });
+    expect(parseTaskCardBody("plain comment")).toBeNull();
+    expect(taskReplyRequiresWork("请继续验证")).toBe(true);
+    expect(taskReplyRequiresWork("收到，先看看")).toBe(false);
   });
 
   it("renders a comment button and real shadcn task thread sheet trigger state", () => {
