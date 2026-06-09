@@ -34,6 +34,8 @@ pub struct DaemonBroker {
     channels: Mutex<Vec<ChannelView>>,
     channel_members: Mutex<Vec<ChannelMemberView>>,
     channel_messages: Mutex<Vec<ChannelMessageView>>,
+    tasks: Mutex<Vec<TaskSummaryView>>,
+    task_threads: Mutex<Vec<TaskThreadView>>,
     cards: Mutex<Vec<InteractiveCardView>>,
     conversations: Arc<Mutex<Vec<ConversationView>>>,
     conversation_sessions: Mutex<Vec<ConversationSessionView>>,
@@ -400,6 +402,8 @@ pub struct ChannelMessageListReceipt {
 pub struct SendChannelMessageRequest {
     pub author_id: String,
     pub body: String,
+    #[serde(default)]
+    pub as_task: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -417,6 +421,94 @@ pub struct SendChannelMessageOutcome {
 #[serde(rename_all = "camelCase")]
 pub struct SendChannelMessageReceipt {
     pub outcome: SendChannelMessageOutcome,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSummaryView {
+    pub id: String,
+    pub channel_id: String,
+    pub creator_id: String,
+    pub assignee_id: Option<String>,
+    pub source_message_id: Option<String>,
+    pub title: String,
+    pub status: String,
+    pub attention_required: bool,
+    pub reply_count: usize,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskThreadMessageView {
+    pub id: String,
+    pub task_id: String,
+    pub sender_id: String,
+    pub role: String,
+    pub body: String,
+    pub status: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskThreadView {
+    pub task: TaskSummaryView,
+    pub root: TaskThreadMessageView,
+    pub replies: Vec<TaskThreadMessageView>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskListQuery {
+    pub channel_id: Option<String>,
+    pub creator_id: Option<String>,
+    pub assignee_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskListReceipt {
+    pub tasks: Vec<TaskSummaryView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskThreadReceipt {
+    pub thread: TaskThreadView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReplyRequest {
+    pub sender_id: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReplyRoute {
+    pub handoff_agent_ids: Vec<String>,
+    pub needs_assignment: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReplyReceipt {
+    pub reply: TaskThreadMessageView,
+    pub route: TaskReplyRoute,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskStatusUpdateRequest {
+    pub status: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskReceipt {
+    pub task: TaskSummaryView,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -589,6 +681,8 @@ impl DaemonBroker {
             }]),
             channel_members: Mutex::new(Vec::new()),
             channel_messages: Mutex::new(Vec::new()),
+            tasks: Mutex::new(Vec::new()),
+            task_threads: Mutex::new(Vec::new()),
             cards: Mutex::new(Vec::new()),
             conversations: Arc::new(Mutex::new(load_local_conversations_at_root(&data_root))),
             conversation_sessions: Mutex::new(load_local_conversation_sessions_at_root(&data_root)),
@@ -898,6 +992,58 @@ impl DaemonBroker {
                     "desktop_channel_message.fallback channel_id=all reason=daemon_unavailable body=[redacted-body]"
                 ));
                 self.send_default_all_channel_message_locally(&request)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn list_tasks(&self, query: TaskListQuery) -> TaskListReceipt {
+        self.fetch_tasks_from_daemon(&query)
+            .unwrap_or_else(|| self.list_tasks_locally(&query))
+    }
+
+    pub fn get_task_thread(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
+        match self.fetch_task_thread_from_daemon(task_id) {
+            Ok(receipt) => {
+                self.upsert_local_task_thread(receipt.thread.clone());
+                Ok(receipt)
+            }
+            Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
+                self.get_task_thread_locally(task_id)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn reply_to_task(
+        &self,
+        task_id: &str,
+        request: TaskReplyRequest,
+    ) -> Result<TaskReplyReceipt, TaskError> {
+        match self.reply_to_task_in_daemon(task_id, &request) {
+            Ok(receipt) => {
+                self.apply_local_task_reply(task_id, receipt.reply.clone());
+                Ok(receipt)
+            }
+            Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
+                self.reply_to_task_locally(task_id, request)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn update_task_status(
+        &self,
+        task_id: &str,
+        request: TaskStatusUpdateRequest,
+    ) -> Result<TaskReceipt, TaskError> {
+        match self.update_task_status_in_daemon(task_id, &request) {
+            Ok(receipt) => {
+                self.upsert_local_task(receipt.task.clone());
+                Ok(receipt)
+            }
+            Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
+                self.update_task_status_locally(task_id, request)
             }
             Err(error) => Err(error),
         }
@@ -2001,8 +2147,12 @@ impl DaemonBroker {
         channel_id: &str,
         request: &SendChannelMessageRequest,
     ) -> Result<SendChannelMessageReceipt, ChannelError> {
-        let payload = serde_json::to_string(request)
-            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let payload = serde_json::json!({
+            "authorId": request.author_id,
+            "body": request.body,
+            "asTask": request.as_task,
+        })
+        .to_string();
         let idempotency_key = format!("desktop-channel-message-{}", monotonic_id());
         let response = self
             .send_daemon_request_checked(
@@ -2014,6 +2164,58 @@ impl DaemonBroker {
             .map_err(ChannelError::DaemonRequest)?;
         serde_json::from_str::<SendChannelMessageReceipt>(&response)
             .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
+    fn fetch_tasks_from_daemon(&self, query: &TaskListQuery) -> Option<TaskListReceipt> {
+        let response = self.send_daemon_request("GET", &task_list_path(query), None, &[])?;
+        serde_json::from_str::<TaskListReceipt>(&response).ok()
+    }
+
+    fn fetch_task_thread_from_daemon(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
+        let response = self
+            .send_daemon_request_checked("GET", &format!("/v1/tasks/{task_id}/thread"), None, &[])
+            .map_err(TaskError::DaemonRequest)?;
+        serde_json::from_str::<TaskThreadReceipt>(&response)
+            .map_err(|error| TaskError::DaemonResponse(error.to_string()))
+    }
+
+    fn reply_to_task_in_daemon(
+        &self,
+        task_id: &str,
+        request: &TaskReplyRequest,
+    ) -> Result<TaskReplyReceipt, TaskError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| TaskError::DaemonResponse(error.to_string()))?;
+        let idempotency_key = format!("desktop-task-reply-{}", monotonic_id());
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                &format!("/v1/tasks/{task_id}/replies"),
+                Some(&payload),
+                &[("Idempotency-Key", idempotency_key.as_str())],
+            )
+            .map_err(TaskError::DaemonRequest)?;
+        serde_json::from_str::<TaskReplyReceipt>(&response)
+            .map_err(|error| TaskError::DaemonResponse(error.to_string()))
+    }
+
+    fn update_task_status_in_daemon(
+        &self,
+        task_id: &str,
+        request: &TaskStatusUpdateRequest,
+    ) -> Result<TaskReceipt, TaskError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| TaskError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "PATCH",
+                &format!("/v1/tasks/{task_id}/status"),
+                Some(&payload),
+                &[],
+            )
+            .map_err(TaskError::DaemonRequest)?;
+        serde_json::from_str::<TaskReceipt>(&response)
+            .map_err(|error| TaskError::DaemonResponse(error.to_string()))
     }
 
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
@@ -2355,6 +2557,46 @@ impl DaemonBroker {
                 deleted: false,
                 edited: false,
             });
+        let should_create_task = request.as_task || is_task_command(&request.body);
+        if should_create_task {
+            let task_id = format!("task_{message_id}");
+            let now = monotonic_id();
+            let body = request.body.trim().to_string();
+            let task = TaskSummaryView {
+                id: task_id.clone(),
+                channel_id: "all".to_string(),
+                creator_id: request.author_id.clone(),
+                assignee_id: None,
+                source_message_id: Some(message_id.clone()),
+                title: body.chars().take(40).collect(),
+                status: "pending_assignment".to_string(),
+                attention_required: true,
+                reply_count: 0,
+                updated_at: now.clone(),
+            };
+            let thread = TaskThreadView {
+                task: task.clone(),
+                root: TaskThreadMessageView {
+                    id: format!("root_{task_id}"),
+                    task_id: task_id.clone(),
+                    sender_id: request.author_id.clone(),
+                    role: role_for_sender(&request.author_id),
+                    body,
+                    status: None,
+                    created_at: now,
+                },
+                replies: Vec::new(),
+            };
+            self.upsert_local_task_thread(thread);
+            return Ok(SendChannelMessageReceipt {
+                outcome: SendChannelMessageOutcome {
+                    message_id,
+                    action: "local_needs_manual_assignment".to_string(),
+                    task_id: Some(task.id),
+                    assignee_agent_id: None,
+                },
+            });
+        }
         Ok(SendChannelMessageReceipt {
             outcome: SendChannelMessageOutcome {
                 message_id,
@@ -2363,6 +2605,157 @@ impl DaemonBroker {
                 assignee_agent_id: None,
             },
         })
+    }
+
+    fn list_tasks_locally(&self, query: &TaskListQuery) -> TaskListReceipt {
+        let mut tasks = self
+            .tasks
+            .lock()
+            .expect("tasks mutex poisoned")
+            .iter()
+            .filter(|task| {
+                query
+                    .channel_id
+                    .as_ref()
+                    .map_or(true, |channel_id| task.channel_id == *channel_id)
+                    && query
+                        .creator_id
+                        .as_ref()
+                        .map_or(true, |creator_id| task.creator_id == *creator_id)
+                    && query.assignee_id.as_ref().map_or(true, |assignee_id| {
+                        task.assignee_id.as_deref() == Some(assignee_id.as_str())
+                    })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        tasks.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+        TaskListReceipt { tasks }
+    }
+
+    fn get_task_thread_locally(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
+        self.task_threads
+            .lock()
+            .expect("task threads mutex poisoned")
+            .iter()
+            .find(|thread| thread.task.id == task_id)
+            .cloned()
+            .map(|thread| TaskThreadReceipt { thread })
+            .ok_or(TaskError::TaskNotFound)
+    }
+
+    fn reply_to_task_locally(
+        &self,
+        task_id: &str,
+        request: TaskReplyRequest,
+    ) -> Result<TaskReplyReceipt, TaskError> {
+        let body = request.body.trim();
+        if request.sender_id.trim().is_empty() || body.is_empty() {
+            return Err(TaskError::InvalidTask);
+        }
+        let mut task_threads = self
+            .task_threads
+            .lock()
+            .expect("task threads mutex poisoned");
+        let thread = task_threads
+            .iter_mut()
+            .find(|thread| thread.task.id == task_id)
+            .ok_or(TaskError::TaskNotFound)?;
+        let role = role_for_sender(&request.sender_id);
+        let reply = TaskThreadMessageView {
+            id: format!("reply-{task_id}-{}", thread.replies.len() + 1),
+            task_id: task_id.to_string(),
+            sender_id: request.sender_id,
+            role,
+            body: body.to_string(),
+            status: None,
+            created_at: monotonic_id(),
+        };
+        thread.replies.push(reply.clone());
+        thread.task.reply_count = thread.replies.len();
+        thread.task.updated_at = reply.created_at.clone();
+        let task = thread.task.clone();
+        drop(task_threads);
+        self.upsert_local_task(task);
+        Ok(TaskReplyReceipt {
+            reply,
+            route: TaskReplyRoute {
+                handoff_agent_ids: Vec::new(),
+                needs_assignment: false,
+            },
+        })
+    }
+
+    fn update_task_status_locally(
+        &self,
+        task_id: &str,
+        request: TaskStatusUpdateRequest,
+    ) -> Result<TaskReceipt, TaskError> {
+        if !matches!(
+            request.status.as_str(),
+            "pending_assignment" | "in_progress" | "in_review" | "done"
+        ) {
+            return Err(TaskError::InvalidTask);
+        }
+        let mut task_threads = self
+            .task_threads
+            .lock()
+            .expect("task threads mutex poisoned");
+        let thread = task_threads
+            .iter_mut()
+            .find(|thread| thread.task.id == task_id)
+            .ok_or(TaskError::TaskNotFound)?;
+        thread.task.status = request.status;
+        thread.task.attention_required = thread.task.status == "pending_assignment";
+        thread.task.updated_at = monotonic_id();
+        let task = thread.task.clone();
+        drop(task_threads);
+        self.upsert_local_task(task.clone());
+        Ok(TaskReceipt { task })
+    }
+
+    fn upsert_local_task_thread(&self, thread: TaskThreadView) {
+        self.upsert_local_task(thread.task.clone());
+        let mut task_threads = self
+            .task_threads
+            .lock()
+            .expect("task threads mutex poisoned");
+        match task_threads
+            .iter_mut()
+            .find(|candidate| candidate.task.id == thread.task.id)
+        {
+            Some(existing) => *existing = thread,
+            None => task_threads.push(thread),
+        }
+    }
+
+    fn upsert_local_task(&self, task: TaskSummaryView) {
+        let mut tasks = self.tasks.lock().expect("tasks mutex poisoned");
+        match tasks.iter_mut().find(|candidate| candidate.id == task.id) {
+            Some(existing) => *existing = task,
+            None => tasks.push(task),
+        }
+    }
+
+    fn apply_local_task_reply(&self, task_id: &str, reply: TaskThreadMessageView) {
+        let mut updated_task = None;
+        {
+            let mut task_threads = self
+                .task_threads
+                .lock()
+                .expect("task threads mutex poisoned");
+            if let Some(thread) = task_threads
+                .iter_mut()
+                .find(|thread| thread.task.id == task_id)
+            {
+                thread.replies.push(reply.clone());
+                thread.task.reply_count = thread.replies.len();
+                thread.task.updated_at = reply.created_at.clone();
+                updated_task = Some(thread.task.clone());
+            }
+        }
+        if let Some(task) = updated_task {
+            self.upsert_local_task(task);
+        }
     }
 
     fn upsert_local_card(&self, card: InteractiveCardView) {
@@ -3342,6 +3735,75 @@ fn is_daemon_unavailable_error(error: &str) -> bool {
         || error.contains("daemon endpoint resolution returned no addresses")
 }
 
+fn task_list_path(query: &TaskListQuery) -> String {
+    let mut pairs = Vec::new();
+    if let Some(channel_id) = query
+        .channel_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        pairs.push(format!("channelId={}", query_component(channel_id)));
+    }
+    if let Some(creator_id) = query
+        .creator_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        pairs.push(format!("creatorId={}", query_component(creator_id)));
+    }
+    if let Some(assignee_id) = query
+        .assignee_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        pairs.push(format!("assigneeId={}", query_component(assignee_id)));
+    }
+    if pairs.is_empty() {
+        "/v1/tasks".to_string()
+    } else {
+        format!("/v1/tasks?{}", pairs.join("&"))
+    }
+}
+
+fn query_component(value: &str) -> String {
+    value
+        .bytes()
+        .flat_map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                vec![byte as char]
+            }
+            _ => format!("%{byte:02X}").chars().collect(),
+        })
+        .collect()
+}
+
+fn is_task_command(body: &str) -> bool {
+    [
+        "实现",
+        "修复",
+        "检查",
+        "整理",
+        "创建",
+        "改一下",
+        "写一个",
+        "生成",
+        "调查",
+        "验证",
+    ]
+    .iter()
+    .any(|marker| body.contains(marker))
+}
+
+fn role_for_sender(sender_id: &str) -> String {
+    if sender_id.starts_with("agent") {
+        "agent".to_string()
+    } else if sender_id.starts_with("system") {
+        "system".to_string()
+    } else {
+        "human".to_string()
+    }
+}
+
 fn monotonic_id() -> String {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -4310,6 +4772,18 @@ pub enum AgentPathError {
 pub enum ChannelError {
     #[error("invalid channel")]
     InvalidChannel,
+    #[error("daemon request failed: {0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum TaskError {
+    #[error("task not found")]
+    TaskNotFound,
+    #[error("invalid task")]
+    InvalidTask,
     #[error("daemon request failed: {0}")]
     DaemonRequest(String),
     #[error("daemon response invalid: {0}")]

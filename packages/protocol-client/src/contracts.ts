@@ -40,6 +40,7 @@ export interface ChannelCreateRequest {
 export interface SendChannelMessageRequest {
   authorId: string;
   body: string;
+  asTask?: boolean;
 }
 
 export interface SendChannelMessageOutcome {
@@ -51,6 +52,52 @@ export interface SendChannelMessageOutcome {
 
 export interface SendChannelMessageReceipt {
   outcome: SendChannelMessageOutcome;
+}
+
+export type TaskStatus = "pending_assignment" | "in_progress" | "in_review" | "done";
+
+export interface TaskSummaryView {
+  id: string;
+  channelId: string;
+  creatorId: string;
+  assigneeId?: string;
+  sourceMessageId?: string;
+  title: string;
+  status: TaskStatus;
+  attentionRequired: boolean;
+  replyCount: number;
+  updatedAt: string;
+}
+
+export interface TaskThreadMessageView {
+  id: string;
+  taskId: string;
+  senderId: string;
+  role: "human" | "agent" | "system" | string;
+  body: string;
+  status?: string;
+  createdAt: string;
+}
+
+export interface TaskThreadView {
+  task: TaskSummaryView;
+  root: TaskThreadMessageView;
+  replies: TaskThreadMessageView[];
+}
+
+export interface TaskReplyRequest {
+  senderId: string;
+  body: string;
+}
+
+export interface TaskReplyRoute {
+  handoffAgentIds: string[];
+  needsAssignment: boolean;
+}
+
+export interface TaskReplyReceipt {
+  reply: TaskThreadMessageView;
+  route: TaskReplyRoute;
 }
 
 export const protocolVersion = protocolVersionJson as ProtocolVersionContract;
