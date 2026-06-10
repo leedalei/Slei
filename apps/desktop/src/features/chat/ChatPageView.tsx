@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
+import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, Trash2, UserPlus, Users, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -350,11 +350,101 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+function ChannelMemberPanel(input: {
+  availableMembers: SleiMember[];
+  channelId: string;
+  members: SleiMember[];
+  messages: DesktopMessages;
+  onAdd?: (agentId: string) => Promise<void> | void;
+  onClose: () => void;
+  onRemove?: (agentId: string) => Promise<void> | void;
+}) {
+  const [mutatingMemberId, setMutatingMemberId] = useState<string | undefined>(undefined);
+  const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
+
+  async function mutate(memberId: string, action: "add" | "remove") {
+    setMutatingMemberId(memberId);
+    try {
+      if (action === "add") {
+        await input.onAdd?.(memberId);
+      } else {
+        await input.onRemove?.(memberId);
+        setConfirmingRemoveId(undefined);
+      }
+    } finally {
+      setMutatingMemberId(undefined);
+    }
+  }
+
+  return (
+    <aside aria-label={input.messages.chat.channelMembers} className="absolute right-4 top-20 z-20 grid w-80 max-w-[calc(100%-2rem)] gap-3 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg" data-testid="slei-channel-member-panel">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <Users aria-hidden="true" size={16} />
+          <span className="truncate">{input.messages.chat.channelMembers}</span>
+          <Badge variant="secondary">{input.members.length}</Badge>
+        </h2>
+        <Button aria-label={input.messages.common.cancel} onClick={input.onClose} size="icon-xs" type="button" variant="ghost">
+          <X aria-hidden="true" size={14} />
+        </Button>
+      </div>
+      <ScrollArea className="max-h-80 min-h-0 pr-2">
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            {input.members.length > 0 ? input.members.map((member) => {
+              const readiness = member.channelReadiness?.[input.channelId];
+              const confirming = confirmingRemoveId === member.id;
+              return (
+                <div className="grid gap-1 rounded-md border bg-background px-2 py-2" key={member.id}>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <MemberAvatar identity={member} />
+                    <span className="grid min-w-0 flex-1">
+                      <strong className="truncate text-sm">{member.name}</strong>
+                      <small className="truncate text-xs text-muted-foreground">{member.handle}</small>
+                    </span>
+                    <Badge variant={readiness === "ready" ? "secondary" : "outline"}>{channelReadinessLabel(readiness, input.messages)}</Badge>
+                    <Button aria-label={input.messages.chat.removeChannelMember(member.name)} disabled={mutatingMemberId === member.id} onClick={() => setConfirmingRemoveId(member.id)} size="icon-xs" type="button" variant="ghost">
+                      <Trash2 aria-hidden="true" size={14} />
+                    </Button>
+                  </div>
+                  {confirming ? (
+                    <div className="flex justify-end gap-2">
+                      <Button onClick={() => setConfirmingRemoveId(undefined)} size="sm" type="button" variant="ghost">{input.messages.common.cancel}</Button>
+                      <Button disabled={mutatingMemberId === member.id} onClick={() => void mutate(member.id, "remove")} size="sm" type="button" variant="destructive">{input.messages.common.delete}</Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }) : (
+              <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">{input.messages.chat.noChannelMembers}</p>
+            )}
+          </div>
+          <div className="grid gap-1.5">
+            <div className="text-xs font-medium uppercase text-muted-foreground">{input.messages.chat.addChannelMember}</div>
+            {input.availableMembers.length > 0 ? input.availableMembers.map((member) => (
+              <Button className="h-auto justify-start gap-2 px-2 py-2" disabled={mutatingMemberId === member.id} key={member.id} onClick={() => void mutate(member.id, "add")} type="button" variant="outline">
+                <UserPlus aria-hidden="true" size={14} />
+                <span className="grid min-w-0 text-left">
+                  <strong className="truncate text-sm">{member.name}</strong>
+                  <small className="truncate text-xs font-normal text-muted-foreground">{member.handle}</small>
+                </span>
+              </Button>
+            )) : (
+              <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">{input.messages.chat.noAvailableChannelMembers}</p>
+            )}
+          </div>
+        </div>
+      </ScrollArea>
+    </aside>
+  );
+}
+
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
   const [channelView, setChannelView] = useState<ChannelEmbeddedView>(initialChannelView ?? "chat");
+  const [channelMembersOpen, setChannelMembersOpen] = useState(initialChannelMembersOpen ?? false);
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
@@ -402,6 +492,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     )
     .reverse();
   const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id);
+  const channelMembers = data.members.filter((member) => member.type === "agent" && Boolean(member.channelReadiness?.[activeChannel.id]));
+  const availableChannelMembers = data.members.filter((member) =>
+    member.type === "agent" &&
+    member.directMessageEnabled !== false &&
+    !member.channelReadiness?.[activeChannel.id],
+  );
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
   const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
@@ -490,7 +586,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   }
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-background" data-slot="chat-page">
+    <section className="relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-background" data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
       <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
         <div className="min-w-0">
@@ -510,15 +606,31 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             </Button>
           </div>
         ) : (
-          <Tabs className="shrink-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
-            <TabsList aria-label={messages.chat.channelView}>
-              <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</TabsTrigger>
-              <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</TabsTrigger>
-              <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><FileText aria-hidden="true" size={14} />{messages.chat.files}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex shrink-0 items-center gap-2">
+            <Tabs className="shrink-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
+              <TabsList aria-label={messages.chat.channelView}>
+                <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</TabsTrigger>
+                <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</TabsTrigger>
+                <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><FileText aria-hidden="true" size={14} />{messages.chat.files}</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button aria-label={messages.chat.channelMembers} aria-pressed={channelMembersOpen ? "true" : "false"} onClick={() => setChannelMembersOpen((current) => !current)} size="icon-sm" title={messages.chat.channelMembers} type="button" variant={channelMembersOpen ? "secondary" : "outline"}>
+              <Users aria-hidden="true" size={15} />
+            </Button>
+          </div>
         )}
       </header>
+      {!dmMember && channelMembersOpen ? (
+        <ChannelMemberPanel
+          availableMembers={availableChannelMembers}
+          channelId={activeChannel.id}
+          members={channelMembers}
+          messages={messages}
+          onAdd={onChannelMemberAdd}
+          onClose={() => setChannelMembersOpen(false)}
+          onRemove={onChannelMemberRemove}
+        />
+      ) : null}
       <Sheet
         onOpenChange={(open) => {
           if (!open && sessionDrawerOpen) onConversationHistoryToggle?.();

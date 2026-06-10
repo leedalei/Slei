@@ -80,6 +80,7 @@ import {
   defaultProfile,
   defaultTimeZone,
   deviceOsLabel,
+  isInternalCoordinatorMember,
   normalizeAppearanceTheme,
   stripChannelHash,
   type AgentDraftInput,
@@ -139,6 +140,8 @@ export type SleiAppFrameProps = {
   onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
   onChannelCreateRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
   onChannelDelete?: (channelId: string) => void;
+  onChannelMemberAdd?: (agentId: string) => Promise<void> | void;
+  onChannelMemberRemove?: (agentId: string) => Promise<void> | void;
   onChannelSelect?: (channelId: string) => void;
   onConversationNewSession?: (conversationId: string) => Promise<void> | void;
   onConversationHistoryToggle?: () => void;
@@ -310,7 +313,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         type="button"
       />
 
-      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -562,7 +565,7 @@ export function findActiveAgentActivities(
     if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
     if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending" && message.status !== "failed")) return false;
     const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle);
-    return member?.directMessageEnabled !== false && !member?.id.startsWith("agent_coordinator_");
+    return member?.directMessageEnabled !== false && (!member || !isInternalCoordinatorMember(member));
   });
 
   return activeMessages.map((message) => {
@@ -727,7 +730,21 @@ function ChannelList(input: {
                     </span>
                   </Button>
                   {channel.id !== "all" ? (
-                    <Button aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))} className="mt-1 opacity-80 group-hover:opacity-100" onClick={() => input.onChannelDelete?.(channel.id)} size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={14} /></Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))} className="mt-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100" size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={14} /></Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{input.messages.chat.deleteChannel(stripChannelHash(channel.name))}</AlertDialogTitle>
+                          <AlertDialogDescription>{input.messages.chat.deleteChannelConfirm(stripChannelHash(channel.name))}</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                          <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => input.onChannelDelete?.(channel.id)}>{input.messages.common.delete}</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   ) : null}
                 </div>
               ))}
@@ -1174,6 +1191,8 @@ function renderWorkspace(
   onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void,
   onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
   onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void,
+  onChannelMemberAdd?: (agentId: string) => Promise<void> | void,
+  onChannelMemberRemove?: (agentId: string) => Promise<void> | void,
   sessionDrawerOpen?: boolean,
   sendingConversationIds: string[] = [],
   savedMessages: SavedMessageView[] = [],
@@ -1216,7 +1235,7 @@ function renderWorkspace(
       />
     );
   }
-  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {
