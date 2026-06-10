@@ -60,6 +60,10 @@ pub async fn update_preferences(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     if let Some(locale) = payload.locale {
         let Ok(locale) = parse_locale(&locale) else {

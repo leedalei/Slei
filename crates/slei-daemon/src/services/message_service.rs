@@ -108,6 +108,10 @@ impl MessageService {
             .insert(handle.to_string(), agent_id.to_string());
     }
 
+    pub fn clear_for_development_reset(&self) {
+        *self.inner.lock().expect("message state lock") = MessageState::default();
+    }
+
     pub async fn send_message(
         &self,
         draft: SendMessageDraft,

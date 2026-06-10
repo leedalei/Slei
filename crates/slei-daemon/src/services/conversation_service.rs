@@ -116,6 +116,10 @@ impl ConversationService {
         conversations
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        *self.inner.lock().await = ConversationState::default();
+    }
+
     pub async fn create_dm(
         &self,
         agent_id: &str,

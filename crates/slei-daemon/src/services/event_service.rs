@@ -33,6 +33,10 @@ impl EventService {
         Self::default()
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        *self.inner.lock().await = EventStore::default();
+    }
+
     pub async fn append(&self, event_type: &str, payload: Value) -> DaemonEvent {
         self.append_with_time(event_type, payload, SystemTime::now())
             .await

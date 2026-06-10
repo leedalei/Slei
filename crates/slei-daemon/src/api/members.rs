@@ -13,6 +13,11 @@ pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> R
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     if let Err(error) = ensure_channel_coordinators(&state).await {
         return member_error_response(error);
     }
@@ -28,6 +33,10 @@ pub async fn create_agent(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     let Some(idempotency_key) = headers
         .get("idempotency-key")
@@ -66,6 +75,10 @@ pub async fn bootstrap_guide(State(state): State<AppState>, headers: HeaderMap) 
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     if !has_ready_claude_runtime(&state, "local-node") {
         return (
@@ -138,6 +151,10 @@ pub async fn update_agent(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     if let Some(node_id) = payload.node_id.as_deref() {
         if state.nodes().get_node(node_id).is_none() {
@@ -165,6 +182,10 @@ pub async fn delete_agent(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state.members().delete_product_agent(&id).await {
         Ok(agent) => {
@@ -206,6 +227,10 @@ pub async fn remember_agent_fact(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state
         .members()

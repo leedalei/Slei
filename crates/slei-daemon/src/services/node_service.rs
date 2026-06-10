@@ -39,17 +39,14 @@ pub struct NodeService {
 impl NodeService {
     pub fn for_tests() -> Self {
         Self {
-            local_node: Arc::new(Mutex::new(NodeDto {
-                id: "local-node".to_string(),
-                name: "本机设备".to_string(),
-                status: "connected".to_string(),
-                daemon_version: env!("CARGO_PKG_VERSION"),
-                device: detect_device_meta(),
-                runtimes: vec![detect_claude_runtime()],
-            })),
+            local_node: Arc::new(Mutex::new(default_local_node())),
             guide_agent_created: false,
             default_channel_created: false,
         }
+    }
+
+    pub fn clear_for_development_reset(&self) {
+        *self.local_node.lock().expect("local node mutex poisoned") = default_local_node();
     }
 
     pub fn list_nodes(&self) -> Vec<NodeDto> {
@@ -127,6 +124,17 @@ impl NodeService {
 
     pub fn default_channel_count(&self) -> usize {
         usize::from(self.default_channel_created)
+    }
+}
+
+fn default_local_node() -> NodeDto {
+    NodeDto {
+        id: "local-node".to_string(),
+        name: "本机设备".to_string(),
+        status: "connected".to_string(),
+        daemon_version: env!("CARGO_PKG_VERSION"),
+        device: detect_device_meta(),
+        runtimes: vec![detect_claude_runtime()],
     }
 }
 

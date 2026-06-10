@@ -8,6 +8,7 @@ use crate::adapters::claude_worker::{ClaudeWorkerAdapter, CreateSessionRequest};
 use crate::adapters::worker_rpc::WorkerTransport;
 use crate::services::member_service::{is_internal_coordinator_id, GLOBAL_COORDINATOR_AGENT_ID};
 use crate::services::orchestration_store::OrchestrationStore;
+use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeState};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -150,6 +151,7 @@ pub enum CoordinatorDecisionError {
 pub struct CoordinatorService {
     store: OrchestrationStore,
     worker: ClaudeWorkerAdapter,
+    reset_runtime: ResetRuntimeState,
     cache: Arc<Mutex<Vec<CoordinatorDecision>>>,
 }
 
@@ -159,9 +161,18 @@ impl CoordinatorService {
     }
 
     pub fn new_with_worker(store: OrchestrationStore, worker: ClaudeWorkerAdapter) -> Self {
+        Self::new_with_worker_and_reset(store, worker, ResetRuntimeState::default())
+    }
+
+    pub fn new_with_worker_and_reset(
+        store: OrchestrationStore,
+        worker: ClaudeWorkerAdapter,
+        reset_runtime: ResetRuntimeState,
+    ) -> Self {
         Self {
             store,
             worker,
+            reset_runtime,
             cache: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -169,6 +180,20 @@ impl CoordinatorService {
     pub async fn start_runtime_run(
         &self,
         input: CoordinatorRuntimeInput,
+    ) -> Result<CoordinatorRuntimeRun, CoordinatorDecisionError> {
+        let launch_guard = self
+            .reset_runtime
+            .begin_launch()
+            .await
+            .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
+        self.start_runtime_run_with_launch_guard(input, &launch_guard)
+            .await
+    }
+
+    pub(crate) async fn start_runtime_run_with_launch_guard(
+        &self,
+        input: CoordinatorRuntimeInput,
+        _launch_guard: &ResetLaunchGuard,
     ) -> Result<CoordinatorRuntimeRun, CoordinatorDecisionError> {
         let prompt = build_coordinator_prompt(CoordinatorPromptInput {
             channel_id: input.channel_id.clone(),

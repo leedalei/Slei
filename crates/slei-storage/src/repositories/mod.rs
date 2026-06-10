@@ -790,6 +790,43 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn pending_coordinator_runtime_run_ids(&self) -> Result<Vec<String>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT run_id
+             FROM coordinator_runtime_runs
+             WHERE status IN ('pending', 'running')
+             ORDER BY updated_at ASC, run_id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(|row| row.try_get("run_id")).collect()
+    }
+
+    pub async fn cancel_coordinator_runtime_runs(
+        &self,
+        run_ids: &[String],
+        error: &str,
+    ) -> Result<(), sqlx::Error> {
+        if run_ids.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await?;
+        for run_id in run_ids {
+            sqlx::query(
+                "UPDATE coordinator_runtime_runs
+                 SET status = 'cancelled', error = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE run_id = ? AND status IN ('pending', 'running')",
+            )
+            .bind(error)
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn coordinator_runtime_run(
         &self,
         run_id: &str,

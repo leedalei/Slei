@@ -81,6 +81,10 @@ impl CardService {
         Self::new(std::env::temp_dir().join(format!("slei-cards-{}", Uuid::new_v4())))
     }
 
+    pub fn clear_for_development_reset(&self) {
+        *self.inner.lock().expect("card state lock") = CardStateStore::default();
+    }
+
     pub async fn propose_card(
         &self,
         proposal: CardProposal,

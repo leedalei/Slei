@@ -116,6 +116,12 @@ impl ChannelService {
         channels
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        let mut state = ChannelState::default();
+        state.ensure_default_channel();
+        *self.inner.lock().await = state;
+    }
+
     pub async fn create_channel(
         &self,
         draft: ChannelDraft,

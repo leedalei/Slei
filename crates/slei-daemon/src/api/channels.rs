@@ -46,6 +46,11 @@ pub async fn create(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -149,6 +154,11 @@ async fn run_channel_setup(
     project_paths: Vec<String>,
     idempotency_key: String,
 ) {
+    let _activity_guard = match state.reset().runtime().begin_launch().await {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
     channel_create_log(
         &idempotency_key,
         "setup-start",
@@ -279,6 +289,10 @@ pub async fn add_member(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     let agent = match state.members().get_product_agent(&payload.agent_id).await {
         Ok(agent) => agent,
@@ -332,6 +346,10 @@ pub async fn remove_member(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     let agent = match state.members().get_product_agent(&agent_id).await {
         Ok(agent) => agent,

@@ -7,6 +7,8 @@ use slei_storage::repositories::{
 };
 use uuid::Uuid;
 
+use crate::services::reset_service::ResetRuntimeState;
+
 #[derive(Clone)]
 pub struct OrchestrationStore {
     repos: Repositories,
@@ -28,6 +30,10 @@ impl fmt::Debug for OrchestrationStore {
 impl OrchestrationStore {
     pub fn new(repos: Repositories) -> Self {
         Self { repos }
+    }
+
+    pub fn repos(&self) -> Repositories {
+        self.repos.clone()
     }
 
     pub async fn record_channel_coordinator(
@@ -113,6 +119,22 @@ impl OrchestrationStore {
         self.repos
             .coordinator_runtime_run_for_idempotency(idempotency_key)
             .await
+    }
+
+    pub async fn pending_coordinator_runtime_run_ids(&self) -> Result<Vec<String>, sqlx::Error> {
+        self.repos.pending_coordinator_runtime_run_ids().await
+    }
+
+    pub async fn cancel_pending_coordinator_runs_for_reset(
+        &self,
+        reset_runtime: &ResetRuntimeState,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let run_ids = self.pending_coordinator_runtime_run_ids().await?;
+        reset_runtime.mark_cancelled_runs(run_ids.clone()).await;
+        self.repos
+            .cancel_coordinator_runtime_runs(&run_ids, "development reset")
+            .await?;
+        Ok(run_ids)
     }
 
     pub async fn record_inbox_event(

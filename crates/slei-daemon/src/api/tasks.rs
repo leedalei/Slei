@@ -50,6 +50,11 @@ pub async fn create(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     let idempotency_key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -103,6 +108,11 @@ pub async fn reply(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     let idempotency_key = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
@@ -110,7 +120,13 @@ pub async fn reply(
 
     match state
         .channel_orchestrator()
-        .add_task_reply(&id, &payload.sender_id, &payload.body, idempotency_key)
+        .add_task_reply_with_launch_guard(
+            &id,
+            &payload.sender_id,
+            &payload.body,
+            idempotency_key,
+            &activity_guard,
+        )
         .await
     {
         Ok(receipt) => (
@@ -149,6 +165,11 @@ pub async fn update_status(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state.tasks().update_status(&id, payload.status).await {
         Ok(()) => match state.tasks().task_summary(&id).await {
@@ -200,6 +221,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath) => {
             StatusCode::CONFLICT
         }
+        ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))

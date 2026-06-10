@@ -138,6 +138,10 @@ impl TaskService {
         Self::default()
     }
 
+    pub fn clear_for_development_reset(&self) {
+        *self.inner.lock().expect("task state lock") = TaskState::default();
+    }
+
     pub async fn create_task_root(
         &self,
         channel_id: &str,

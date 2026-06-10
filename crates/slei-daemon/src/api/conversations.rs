@@ -7,6 +7,7 @@ use serde_json::json;
 
 use crate::services::agent_dm_service::AgentDmError;
 use crate::services::conversation_service::ConversationError;
+use crate::services::reset_service::ResetRuntimeError;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +57,10 @@ pub async fn create_dm(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     let agent = state
         .members()
@@ -141,6 +146,10 @@ pub async fn create_session(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state.conversations().create_session(&id).await {
         Ok((conversation, session)) => (
@@ -160,6 +169,10 @@ pub async fn activate_session(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state
         .conversations()
@@ -181,6 +194,10 @@ pub async fn upload_attachment(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state
         .conversations()
@@ -210,6 +227,11 @@ pub async fn send_message(
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok());
 
+    let launch_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     match state
         .conversations()
         .append_message_with_session(
@@ -226,10 +248,10 @@ pub async fn send_message(
             if payload.author_id.starts_with("human:") {
                 if let Err(error) = state
                     .agent_dm()
-                    .start_for_human_message(&id, &message)
+                    .start_for_human_message_with_launch_guard(&id, &message, &launch_guard)
                     .await
                 {
-                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                    return agent_dm_error_response(error);
                 }
             }
             (StatusCode::CREATED, Json(json!({ "message": message }))).into_response()
@@ -246,6 +268,10 @@ pub async fn reset_runtime_session(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state.agent_dm().reset_runtime_session(&id).await {
         Ok(conversation) => Json(json!({ "conversation": conversation })).into_response(),
@@ -256,7 +282,16 @@ pub async fn reset_runtime_session(
 fn agent_dm_error_response(error: AgentDmError) -> Response {
     match error {
         AgentDmError::Conversation(error) => conversation_error_response(error),
+        AgentDmError::Reset(error) => reset_runtime_error_response(error),
         other => error_response(StatusCode::INTERNAL_SERVER_ERROR, &other.to_string()),
+    }
+}
+
+fn reset_runtime_error_response(error: ResetRuntimeError) -> Response {
+    match error {
+        ResetRuntimeError::ResetInProgress => {
+            error_response(StatusCode::CONFLICT, &error.to_string())
+        }
     }
 }
 

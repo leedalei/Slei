@@ -187,6 +187,10 @@ impl MemberService {
         Ok(agent)
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        *self.inner.lock().await = MemberState::default();
+    }
+
     pub async fn assign_agent(
         &self,
         channel_id: &str,

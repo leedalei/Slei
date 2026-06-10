@@ -59,6 +59,11 @@ pub async fn send_channel_message(
             .into_response();
     };
 
+    let activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     let _ = state
         .orchestration()
         .record_diagnostic_event(
@@ -72,13 +77,16 @@ pub async fn send_channel_message(
 
     match state
         .channel_orchestrator()
-        .send_channel_message(SendChannelMessageInput {
-            channel_id,
-            author_id: payload.author_id,
-            body: payload.body,
-            idempotency_key: idempotency_key.to_string(),
-            as_task: payload.as_task,
-        })
+        .send_channel_message_with_launch_guard(
+            SendChannelMessageInput {
+                channel_id,
+                author_id: payload.author_id,
+                body: payload.body,
+                idempotency_key: idempotency_key.to_string(),
+                as_task: payload.as_task,
+            },
+            &activity_guard,
+        )
         .await
     {
         Ok(outcome) => {
@@ -130,6 +138,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath) => {
             StatusCode::CONFLICT
         }
+        ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))

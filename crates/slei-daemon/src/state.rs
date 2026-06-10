@@ -16,6 +16,7 @@ use crate::services::memory_maintainer_service::{MemoryMaintainerError, MemoryMa
 use crate::services::message_service::MessageService;
 use crate::services::node_service::NodeService;
 use crate::services::orchestration_store::OrchestrationStore;
+use crate::services::reset_service::{ResetRuntimeState, ResetService};
 use crate::services::settings_service::SettingsService;
 use crate::services::task_service::TaskService;
 use crate::services::workspace_service::WorkspaceService;
@@ -44,6 +45,9 @@ pub struct AppState {
     channel_join_report_service: ChannelJoinReportService,
     message_service: MessageService,
     channel_orchestrator_service: ChannelOrchestratorService,
+    reset_service: ResetService,
+    reset_runtime: ResetRuntimeState,
+    worker: ClaudeWorkerAdapter,
     worker_transport: WorkerTransport,
     agent_dm_runs: AgentDmRunStore,
 }
@@ -99,11 +103,20 @@ impl AppState {
         let event_service = EventService::new();
         let data_root = agent_data_root.clone();
         let worker_transport = WorkerTransport::fake();
+        let worker = ClaudeWorkerAdapter::new(worker_transport.clone());
+        let reset_runtime = ResetRuntimeState::default();
+        let agent_dm_runs = AgentDmRunStore::default();
+        let node_service = NodeService::for_tests();
         let member_service = MemberService::for_tests_with_data_root(agent_data_root);
         let channel_service = ChannelService::new(data_root.clone());
-        let coordinator_service = CoordinatorService::new_with_worker(
+        let card_service = CardService::new(data_root.clone());
+        let conversation_service = ConversationService::new(data_root.clone());
+        let workspace_service = WorkspaceService::new(event_service.clone());
+        let settings_service = SettingsService::for_tests();
+        let coordinator_service = CoordinatorService::new_with_worker_and_reset(
             orchestration_store.clone(),
-            ClaudeWorkerAdapter::new(worker_transport.clone()),
+            worker.clone(),
+            reset_runtime.clone(),
         );
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
@@ -123,19 +136,40 @@ impl AppState {
             agent_inbox_service.clone(),
             orchestration_store.clone(),
             member_service.clone(),
+            reset_runtime.clone(),
+        );
+        let reset_service = ResetService::new(
+            data_root.clone(),
+            orchestration_store.clone(),
+            agent_dm_runs.clone(),
+            channel_orchestrator_service.clone(),
+            channel_service.clone(),
+            message_service.clone(),
+            conversation_service.clone(),
+            task_service.clone(),
+            member_service.clone(),
+            card_service.clone(),
+            settings_service.clone(),
+            workspace_service.clone(),
+            event_service.clone(),
+            agent_inbox_service.clone(),
+            memory_event_service.clone(),
+            node_service.clone(),
+            worker.clone(),
+            reset_runtime.clone(),
         );
         Self {
             auth_token,
             daemon_version: env!("CARGO_PKG_VERSION"),
             protocol_version: slei_protocol::PROTOCOL_VERSION,
-            node_service: NodeService::for_tests(),
+            node_service,
             member_service,
             channel_service,
-            card_service: CardService::new(data_root.clone()),
-            conversation_service: ConversationService::new(data_root),
-            workspace_service: WorkspaceService::new(event_service.clone()),
+            card_service,
+            conversation_service,
+            workspace_service,
             event_service,
-            settings_service: SettingsService::for_tests(),
+            settings_service,
             task_service,
             orchestration_store,
             coordinator_service,
@@ -145,8 +179,11 @@ impl AppState {
             channel_join_report_service,
             message_service,
             channel_orchestrator_service,
+            reset_service,
+            reset_runtime,
+            worker,
             worker_transport,
-            agent_dm_runs: AgentDmRunStore::default(),
+            agent_dm_runs,
         }
     }
 
@@ -218,6 +255,10 @@ impl AppState {
         &self.channel_orchestrator_service
     }
 
+    pub fn reset(&self) -> &ResetService {
+        &self.reset_service
+    }
+
     pub async fn channel_messages_for_tests(
         &self,
         channel_id: &str,
@@ -262,8 +303,9 @@ impl AppState {
             self.conversation_service.clone(),
             self.card_service.clone(),
             self.member_service.clone(),
-            ClaudeWorkerAdapter::new(self.worker_transport.clone()),
+            self.worker.clone(),
             self.agent_dm_runs.clone(),
+            self.reset_runtime.clone(),
         )
     }
 
@@ -272,14 +314,23 @@ impl AppState {
     }
 
     pub async fn handle_worker_event(&self, event: Value) -> Result<(), String> {
+        let activity_guard = match self.reset_runtime.begin_launch().await {
+            Ok(guard) => guard,
+            Err(_) => return Ok(()),
+        };
+        if let Some(run_id) = event.get("run_id").and_then(Value::as_str) {
+            if self.reset_runtime.should_ignore_worker_event(run_id).await {
+                return Ok(());
+            }
+        }
         let handled_by_coordinator = self
             .channel_orchestrator()
-            .handle_coordinator_worker_event(event.clone())
+            .handle_coordinator_worker_event_with_launch_guard(event.clone(), &activity_guard)
             .await
             .map_err(|error| error.to_string())?;
         if !handled_by_coordinator {
             self.agent_dm()
-                .handle_worker_event(event)
+                .handle_worker_event_with_launch_guard(event, &activity_guard)
                 .await
                 .map_err(|error| error.to_string())?;
         }

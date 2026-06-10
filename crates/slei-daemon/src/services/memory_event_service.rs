@@ -43,6 +43,10 @@ impl MemoryEventService {
         }
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        self.cache.lock().await.clear();
+    }
+
     pub async fn request_channel_join_update(
         &self,
         agent_id: &str,

@@ -55,6 +55,10 @@ impl WorkspaceService {
         Self::new(EventService::new())
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        *self.inner.lock().await = WorkspaceStore::default();
+    }
+
     pub async fn register_workspace(
         &self,
         path: &str,

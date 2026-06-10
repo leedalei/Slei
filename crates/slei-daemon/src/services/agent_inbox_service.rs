@@ -46,6 +46,10 @@ impl AgentInboxService {
         }
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        self.cache.lock().await.clear();
+    }
+
     pub async fn create_human_mention(
         &self,
         agent_id: &str,

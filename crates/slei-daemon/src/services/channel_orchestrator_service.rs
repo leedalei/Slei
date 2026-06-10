@@ -18,6 +18,7 @@ use crate::services::coordinator_service::{
 use crate::services::member_service::{MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
+use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
 use crate::services::task_service::{
     thread_message_for_reply, TaskError, TaskService, TaskStatus, TaskThreadMessage,
 };
@@ -75,6 +76,7 @@ pub struct ChannelOrchestratorService {
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
     members: MemberService,
+    reset_runtime: ResetRuntimeState,
     outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
     send_lock: Arc<AsyncMutex<()>>,
 }
@@ -88,6 +90,7 @@ impl ChannelOrchestratorService {
         agent_inbox: AgentInboxService,
         orchestration: OrchestrationStore,
         members: MemberService,
+        reset_runtime: ResetRuntimeState,
     ) -> Self {
         Self {
             messages,
@@ -97,6 +100,7 @@ impl ChannelOrchestratorService {
             agent_inbox,
             orchestration,
             members,
+            reset_runtime,
             outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
             send_lock: Arc::new(AsyncMutex::new(())),
         }
@@ -105,6 +109,16 @@ impl ChannelOrchestratorService {
     pub async fn send_channel_message(
         &self,
         input: SendChannelMessageInput,
+    ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
+        let launch_guard = self.begin_runtime_launch().await?;
+        self.send_channel_message_with_launch_guard(input, &launch_guard)
+            .await
+    }
+
+    pub async fn send_channel_message_with_launch_guard(
+        &self,
+        input: SendChannelMessageInput,
+        launch_guard: &ResetLaunchGuard,
     ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         if let Some(outcome) = self
@@ -231,7 +245,7 @@ impl ChannelOrchestratorService {
             .await?;
         let run = self
             .coordinator
-            .start_runtime_run(coordinator_input)
+            .start_runtime_run_with_launch_guard(coordinator_input, launch_guard)
             .await?;
         let outcome = pending_outcome(message.id, run.run_id);
         self.outcome_idempotency
@@ -247,6 +261,25 @@ impl ChannelOrchestratorService {
         sender_id: &str,
         body: &str,
         idempotency_key: &str,
+    ) -> Result<TaskReplyReceipt, ChannelOrchestratorError> {
+        let activity_guard = self.begin_runtime_launch().await?;
+        self.add_task_reply_with_launch_guard(
+            task_id,
+            sender_id,
+            body,
+            idempotency_key,
+            &activity_guard,
+        )
+        .await
+    }
+
+    pub async fn add_task_reply_with_launch_guard(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        body: &str,
+        idempotency_key: &str,
+        _activity_guard: &ResetLaunchGuard,
     ) -> Result<TaskReplyReceipt, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         let reply_outcome = self
@@ -333,10 +366,28 @@ impl ChannelOrchestratorService {
         &self,
         event: Value,
     ) -> Result<bool, ChannelOrchestratorError> {
+        let activity_guard = match self.reset_runtime.begin_launch().await {
+            Ok(guard) => guard,
+            Err(ResetRuntimeError::ResetInProgress) => {
+                return Ok(event.get("run_id").and_then(Value::as_str).is_some());
+            }
+        };
+        self.handle_coordinator_worker_event_with_launch_guard(event, &activity_guard)
+            .await
+    }
+
+    pub(crate) async fn handle_coordinator_worker_event_with_launch_guard(
+        &self,
+        event: Value,
+        _activity_guard: &ResetLaunchGuard,
+    ) -> Result<bool, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         let Some(run_id) = event.get("run_id").and_then(Value::as_str) else {
             return Ok(false);
         };
+        if self.reset_runtime.should_ignore_worker_event(run_id).await {
+            return Ok(true);
+        }
         let Some(run) = self.orchestration.coordinator_runtime_run(run_id).await? else {
             return Ok(false);
         };
@@ -411,6 +462,17 @@ impl ChannelOrchestratorService {
             .finish_coordinator_runtime_run(run_id, "completed", None)
             .await?;
         Ok(())
+    }
+
+    async fn begin_runtime_launch(&self) -> Result<ResetLaunchGuard, ChannelOrchestratorError> {
+        Ok(self.reset_runtime.begin_launch().await?)
+    }
+
+    pub fn clear_reset_caches(&self) {
+        self.outcome_idempotency
+            .lock()
+            .expect("channel orchestrator idempotency lock")
+            .clear();
     }
 
     async fn fail_coordinator_runtime_run(
@@ -526,10 +588,7 @@ impl ChannelOrchestratorService {
         match action.as_str() {
             "request_agent_reply" => {
                 let targets = if assignee_agent_ids.is_empty() {
-                    assignee_agent_id
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>()
+                    assignee_agent_id.iter().cloned().collect::<Vec<_>>()
                 } else {
                     assignee_agent_ids.clone()
                 };
@@ -1092,6 +1151,8 @@ pub enum ChannelOrchestratorError {
     Member(#[from] MemberError),
     #[error(transparent)]
     Coordinator(#[from] CoordinatorDecisionError),
+    #[error(transparent)]
+    Reset(#[from] ResetRuntimeError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error("invalid coordinator decision id")]

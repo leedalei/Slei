@@ -82,6 +82,10 @@ impl SettingsService {
         Self::default()
     }
 
+    pub async fn clear_for_development_reset(&self) {
+        *self.inner.lock().await = SettingsState::default();
+    }
+
     pub async fn create_profile(&self, draft: ProfileDraft) -> Result<UserProfile, SettingsError> {
         validate_handle(&draft.handle)?;
         let mut state = self.inner.lock().await;

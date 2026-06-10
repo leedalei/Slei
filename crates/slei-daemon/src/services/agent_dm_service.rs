@@ -14,6 +14,7 @@ use crate::services::conversation_service::{
     ConversationError, ConversationMessageRecord, ConversationService,
 };
 use crate::services::member_service::{MemberError, MemberService};
+use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
 
 #[derive(Clone, Debug)]
 pub struct AgentDmService {
@@ -22,6 +23,7 @@ pub struct AgentDmService {
     members: MemberService,
     worker: ClaudeWorkerAdapter,
     runs: AgentDmRunStore,
+    reset_runtime: ResetRuntimeState,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -33,6 +35,7 @@ pub struct AgentDmRunStore {
 struct AgentDmRunRecord {
     conversation_id: String,
     agent_id: String,
+    generation: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +65,7 @@ impl AgentDmService {
         members: MemberService,
         worker: ClaudeWorkerAdapter,
         runs: AgentDmRunStore,
+        reset_runtime: ResetRuntimeState,
     ) -> Self {
         Self {
             conversations,
@@ -69,6 +73,7 @@ impl AgentDmService {
             members,
             worker,
             runs,
+            reset_runtime,
         }
     }
 
@@ -77,9 +82,21 @@ impl AgentDmService {
         conversation_id: &str,
         message: &ConversationMessageRecord,
     ) -> Result<Option<String>, AgentDmError> {
+        let launch_guard = self.reset_runtime.begin_launch().await?;
+        self.start_for_human_message_with_launch_guard(conversation_id, message, &launch_guard)
+            .await
+    }
+
+    pub(crate) async fn start_for_human_message_with_launch_guard(
+        &self,
+        conversation_id: &str,
+        message: &ConversationMessageRecord,
+        launch_guard: &ResetLaunchGuard,
+    ) -> Result<Option<String>, AgentDmError> {
         if !message.author_id.starts_with("human:") {
             return Ok(None);
         }
+        let generation = launch_guard.generation();
         let conversation = self.conversations.get_conversation(conversation_id).await?;
         if conversation.kind != "dm" {
             return Ok(None);
@@ -114,6 +131,7 @@ impl AgentDmService {
             AgentDmRunRecord {
                 conversation_id: conversation_id.to_string(),
                 agent_id: agent.id,
+                generation,
             },
         );
         self.conversations
@@ -158,14 +176,37 @@ impl AgentDmService {
     }
 
     pub async fn handle_worker_event(&self, value: Value) -> Result<(), AgentDmError> {
+        let activity_guard = match self.reset_runtime.begin_launch().await {
+            Ok(guard) => guard,
+            Err(ResetRuntimeError::ResetInProgress) => return Ok(()),
+        };
+        self.handle_worker_event_with_launch_guard(value, &activity_guard)
+            .await
+    }
+
+    pub(crate) async fn handle_worker_event_with_launch_guard(
+        &self,
+        value: Value,
+        _activity_guard: &ResetLaunchGuard,
+    ) -> Result<(), AgentDmError> {
         let event = WorkerEvent::from_json(value)?;
         let event = event.to_run_event()?;
         let Some(run_id) = event.get("run_id").and_then(Value::as_str) else {
             return Ok(());
         };
+        if self.reset_runtime.should_ignore_worker_event(run_id).await {
+            return Ok(());
+        }
         let Some(record) = self.runs.inner.lock().await.runs.get(run_id).cloned() else {
             return Ok(());
         };
+        if self
+            .reset_runtime
+            .is_stale_generation(record.generation)
+            .await
+        {
+            return Ok(());
+        }
 
         match event.get("type").and_then(Value::as_str) {
             Some("output_delta") => {
@@ -389,6 +430,33 @@ impl AgentDmService {
     }
 }
 
+impl AgentDmRunStore {
+    pub async fn active_run_ids(&self) -> Vec<String> {
+        self.inner.lock().await.runs.keys().cloned().collect()
+    }
+
+    pub async fn cancel_all_for_reset(
+        &self,
+        worker: &ClaudeWorkerAdapter,
+        reset_runtime: &ResetRuntimeState,
+    ) -> Result<(), ClaudeWorkerError> {
+        let run_ids = {
+            let mut state = self.inner.lock().await;
+            state.permission_approvals.clear();
+            state
+                .runs
+                .drain()
+                .map(|(run_id, _)| run_id)
+                .collect::<Vec<_>>()
+        };
+        reset_runtime.mark_cancelled_runs(run_ids.clone()).await;
+        for run_id in run_ids {
+            worker.cancel_run(&run_id)?;
+        }
+        Ok(())
+    }
+}
+
 fn permission_approval_card(
     card_id: &str,
     request_id: &str,
@@ -439,4 +507,6 @@ pub enum AgentDmError {
     Worker(#[from] ClaudeWorkerError),
     #[error(transparent)]
     WorkerRpc(#[from] WorkerRpcError),
+    #[error(transparent)]
+    Reset(#[from] ResetRuntimeError),
 }
