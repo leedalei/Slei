@@ -4,6 +4,7 @@ pub mod approval_service;
 pub mod artifact_service;
 pub mod capability_service;
 pub mod card_service;
+pub mod channel_join_report_service;
 pub mod channel_orchestrator_service;
 pub mod channel_service;
 pub mod conversation_service;

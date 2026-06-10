@@ -7,7 +7,8 @@ use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
 use slei_daemon::services::coordinator_service::{
     parse_and_validate_coordinator_json, CoordinatorPromptMember,
 };
-use slei_daemon::services::member_service::ProductAgentDraft;
+use slei_daemon::services::member_service::{ProductAgentDraft, ProductAgentRecord};
+use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -97,7 +98,7 @@ async fn channel_member_api_adds_and_retries_existing_ordinary_agent() {
     let token = AuthToken::from_static("test-token");
     let state = test_state(token.clone()).await;
     create_channel(&state, "dev").await;
-    let coda_id = create_agent(&state, "Coda", "@coda").await;
+    let coda_id = create_agent(&state, "Coda", "@coda").await.id;
     let app = build_router(state.clone());
 
     let response = post_json(
@@ -135,7 +136,7 @@ async fn channel_member_api_rejects_coordinator_and_removes_from_one_channel_onl
     let state = test_state(token.clone()).await;
     create_channel(&state, "dev").await;
     create_channel(&state, "design").await;
-    let coda_id = create_agent(&state, "Coda", "@coda").await;
+    let coda_id = create_agent(&state, "Coda", "@coda").await.id;
     state
         .members()
         .ensure_global_coordinator_agent("local-node")
@@ -186,6 +187,92 @@ async fn channel_member_api_rejects_coordinator_and_removes_from_one_channel_onl
     assert!(state.members().get_product_agent(&coda_id).await.is_ok());
 }
 
+#[tokio::test]
+async fn membership_memory_add_member_marks_ready_and_posts_agent_join_report() {
+    let token = AuthToken::from_static("test-token");
+    let state = test_state(token.clone()).await;
+    create_channel(&state, "dev").await;
+    let coda = create_agent(&state, "Coda", "@coda").await;
+    let app = build_router(state.clone());
+
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/dev/members",
+        None,
+        json!({ "agentId": coda.id }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let member = state
+        .channels()
+        .channel_members("dev")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|member| member.agent_id == coda.id)
+        .unwrap();
+    assert_eq!(format!("{:?}", member.readiness), "Ready");
+    assert!(state
+        .memory_events()
+        .events_for_agent(&coda.id)
+        .await
+        .iter()
+        .any(|event| event.event_type == "memory_updated"));
+
+    let messages = state.channel_messages_for_tests("dev").await;
+    assert!(messages.iter().any(|message| {
+        message.kind == MessageKind::Agent
+            && message.author_id == coda.id
+            && message
+                .body
+                .as_deref()
+                .is_some_and(|body| body.contains("Coda") && body.contains("handles channel work"))
+    }));
+}
+
+#[tokio::test]
+async fn membership_memory_remove_refreshes_roster_without_visible_report() {
+    let token = AuthToken::from_static("test-token");
+    let state = test_state(token.clone()).await;
+    create_channel(&state, "dev").await;
+    let coda = create_agent(&state, "Coda", "@coda").await;
+    let mira = create_agent(&state, "Mira", "@mira").await;
+    state
+        .channels()
+        .add_agent_to_channel("dev", &coda.id)
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", &mira.id)
+        .await
+        .unwrap();
+    state.run_channel_join_memory_updates("dev").await.unwrap();
+    let message_count_before = state.channel_messages_for_tests("dev").await.len();
+    let app = build_router(state.clone());
+
+    let removed = delete_json(
+        &app,
+        &token,
+        &format!("/v1/channels/dev/members/{}", coda.id),
+    )
+    .await;
+    assert_eq!(removed.status(), StatusCode::OK);
+
+    let remaining_memory = std::fs::read_to_string(
+        std::path::Path::new(&mira.workspace_path).join("notes/channels.md"),
+    )
+    .unwrap();
+    assert!(remaining_memory.contains("@mira"));
+    assert!(!remaining_memory.contains("@coda"));
+    assert_eq!(
+        state.channel_messages_for_tests("dev").await.len(),
+        message_count_before
+    );
+}
+
 async fn test_state(token: AuthToken) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-channel-members-{}", Uuid::new_v4()));
     AppState::for_tests_with_agent_root_async(token, root).await
@@ -206,7 +293,7 @@ async fn create_channel(state: &AppState, channel_id: &str) {
         .unwrap();
 }
 
-async fn create_agent(state: &AppState, name: &str, handle: &str) -> String {
+async fn create_agent(state: &AppState, name: &str, handle: &str) -> ProductAgentRecord {
     state
         .members()
         .create_product_agent(
@@ -222,7 +309,6 @@ async fn create_agent(state: &AppState, name: &str, handle: &str) -> String {
         )
         .await
         .unwrap()
-        .id
 }
 
 async fn post_json(

@@ -261,6 +261,22 @@ pub async fn add_member(
         .await
     {
         Ok(outcome) => {
+            if outcome.created {
+                if let Err(error) = state
+                    .memory_maintainer()
+                    .sync_added_channel_member(&id, &agent.id)
+                    .await
+                {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                }
+                if let Err(error) = state
+                    .channel_join_reports()
+                    .create_join_report(&id, &agent.id)
+                    .await
+                {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                }
+            }
             let status = if outcome.created {
                 StatusCode::CREATED
             } else {
@@ -297,7 +313,16 @@ pub async fn remove_member(
         .remove_agent_from_channel(&id, &agent.id)
         .await
     {
-        Ok(Some(member)) => Json(json!({ "removedMember": member })).into_response(),
+        Ok(Some(member)) => {
+            if let Err(error) = state
+                .memory_maintainer()
+                .sync_removed_channel_member(&id, &agent.id)
+                .await
+            {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            Json(json!({ "removedMember": member })).into_response()
+        }
         Ok(None) => Json(json!({ "removedMember": null })).into_response(),
         Err(error) => channel_error_response(error),
     }

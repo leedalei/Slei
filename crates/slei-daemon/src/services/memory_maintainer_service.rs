@@ -81,6 +81,70 @@ impl MemoryMaintainerService {
         Ok(completed)
     }
 
+    pub async fn sync_added_channel_member(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<(), MemoryMaintainerError> {
+        self.memory_events
+            .request_channel_join_update(agent_id, channel_id)
+            .await;
+        self.memory_events.start_update(agent_id, channel_id).await;
+        self.channels
+            .set_member_readiness(channel_id, agent_id, ChannelMemberReadiness::MemorySyncing)
+            .await?;
+        match self.update_agent_channel_notes(agent_id, channel_id).await {
+            Ok(()) => {
+                self.memory_events
+                    .complete_update(agent_id, channel_id)
+                    .await;
+                self.channels
+                    .set_member_readiness(channel_id, agent_id, ChannelMemberReadiness::Ready)
+                    .await?;
+                Ok(())
+            }
+            Err(error) => {
+                self.memory_events.fail_update(agent_id, channel_id).await;
+                self.channels
+                    .set_member_readiness(
+                        channel_id,
+                        agent_id,
+                        ChannelMemberReadiness::MemoryFailed,
+                    )
+                    .await?;
+                Err(error)
+            }
+        }
+    }
+
+    pub async fn sync_removed_channel_member(
+        &self,
+        channel_id: &str,
+        removed_agent_id: &str,
+    ) -> Result<(), MemoryMaintainerError> {
+        self.memory_events
+            .start_update(removed_agent_id, channel_id)
+            .await;
+        self.update_agent_channel_notes(removed_agent_id, channel_id)
+            .await?;
+        self.memory_events
+            .complete_update(removed_agent_id, channel_id)
+            .await;
+
+        let remaining_members = self.channels.channel_members(channel_id).await?;
+        for member in remaining_members {
+            self.memory_events
+                .start_update(&member.agent_id, channel_id)
+                .await;
+            self.update_agent_channel_notes(&member.agent_id, channel_id)
+                .await?;
+            self.memory_events
+                .complete_update(&member.agent_id, channel_id)
+                .await;
+        }
+        Ok(())
+    }
+
     async fn update_agent_channel_notes(
         &self,
         agent_id: &str,
