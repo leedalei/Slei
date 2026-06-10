@@ -1,6 +1,8 @@
 use std::time::Duration;
 
+use slei_daemon::auth::AuthToken;
 use slei_daemon::services::task_service::{TaskService, TaskStatus};
+use slei_daemon::state::AppState;
 
 #[tokio::test]
 async fn task_service_creates_task_root_and_keeps_replies_attached() {
@@ -79,6 +81,33 @@ async fn task_created_from_coordinator_keeps_source_and_assignment_reason() {
             .unwrap()
             .contains("command intent")
     );
+}
+
+#[tokio::test]
+async fn tasks_survive_service_reload() {
+    let root = std::env::temp_dir().join(format!("slei-task-reload-{}", uuid::Uuid::new_v4()));
+    let first = AppState::for_tests_with_agent_root_async(
+        AuthToken::from_static("test-token"),
+        root.clone(),
+    )
+    .await;
+    let task = first
+        .tasks()
+        .create_task_root("all", "human:local", "持久化任务", "task-reload-key")
+        .await
+        .unwrap();
+    first
+        .tasks()
+        .add_reply(&task.id, "human:local", "reply", "reply-reload-key")
+        .await
+        .unwrap();
+
+    let second =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
+    let thread = second.tasks().thread_view(&task.id).await.unwrap();
+
+    assert_eq!(thread.task.title, "持久化任务");
+    assert_eq!(thread.replies.len(), 1);
 }
 
 #[tokio::test]

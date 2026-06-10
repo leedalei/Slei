@@ -1,7 +1,11 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{Repositories, TaskQueryRow, TaskReplyRow, TaskRootRow};
+use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,26 +124,36 @@ impl TaskBoard {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TaskService {
-    inner: Arc<Mutex<TaskState>>,
+    repos: Repositories,
+    idempotency: Arc<Mutex<TaskIdempotencyState>>,
+    idempotency_gate: Arc<AsyncMutex<()>>,
 }
 
 #[derive(Debug, Default)]
-struct TaskState {
-    tasks: HashMap<String, TaskRecord>,
+struct TaskIdempotencyState {
     task_idempotency: HashMap<String, String>,
-    replies: HashMap<String, Vec<TaskReply>>,
     reply_idempotency: HashMap<String, (String, String)>,
 }
 
 impl TaskService {
     pub fn for_tests() -> Self {
-        Self::default()
+        Self::new(repositories_blocking(
+            std::env::temp_dir().join(format!("slei-tasks-{}", Uuid::new_v4())),
+        ))
+    }
+
+    pub fn new(repos: Repositories) -> Self {
+        Self {
+            repos,
+            idempotency: Arc::new(Mutex::new(TaskIdempotencyState::default())),
+            idempotency_gate: Arc::new(AsyncMutex::new(())),
+        }
     }
 
     pub fn clear_for_development_reset(&self) {
-        *self.inner.lock().expect("task state lock") = TaskState::default();
+        *self.idempotency.lock().expect("task idempotency lock") = TaskIdempotencyState::default();
     }
 
     pub async fn create_task_root(
@@ -149,13 +163,17 @@ impl TaskService {
         title: &str,
         idempotency_key: &str,
     ) -> Result<TaskRecord, TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        if let Some(task_id) = state.task_idempotency.get(idempotency_key) {
-            return state
-                .tasks
-                .get(task_id)
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        let existing_task_id = {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .get(idempotency_key)
                 .cloned()
-                .ok_or(TaskError::TaskNotFound);
+        };
+        if let Some(task_id) = existing_task_id {
+            return self.task(&task_id).await;
         }
 
         let now = now_string();
@@ -175,10 +193,15 @@ impl TaskService {
             created_at: now.clone(),
             updated_at: now,
         };
-        state
+        self.repos
+            .upsert_task_root(task_record_to_row(&task))
+            .await
+            .map_err(storage_error)?;
+        self.idempotency
+            .lock()
+            .expect("task idempotency lock")
             .task_idempotency
             .insert(idempotency_key.to_string(), task.id.clone());
-        state.tasks.insert(task.id.clone(), task.clone());
         Ok(task)
     }
 
@@ -192,13 +215,17 @@ impl TaskService {
         assignment_reason: &str,
         idempotency_key: &str,
     ) -> Result<TaskRecord, TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        if let Some(task_id) = state.task_idempotency.get(idempotency_key) {
-            return state
-                .tasks
-                .get(task_id)
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        let existing_task_id = {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .get(idempotency_key)
                 .cloned()
-                .ok_or(TaskError::TaskNotFound);
+        };
+        if let Some(task_id) = existing_task_id {
+            return self.task(&task_id).await;
         }
 
         let has_assignee = assignee_id.is_some();
@@ -223,10 +250,15 @@ impl TaskService {
             created_at: now.clone(),
             updated_at: now,
         };
-        state
+        self.repos
+            .upsert_task_root(task_record_to_row(&task))
+            .await
+            .map_err(storage_error)?;
+        self.idempotency
+            .lock()
+            .expect("task idempotency lock")
             .task_idempotency
             .insert(idempotency_key.to_string(), task.id.clone());
-        state.tasks.insert(task.id.clone(), task.clone());
         Ok(task)
     }
 
@@ -250,25 +282,32 @@ impl TaskService {
         body: &str,
         idempotency_key: &str,
     ) -> Result<AddTaskReplyOutcome, TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        if let Some((existing_task_id, existing_reply_id)) =
-            state.reply_idempotency.get(idempotency_key)
-        {
-            let reply = state
-                .replies
-                .get(existing_task_id)
-                .and_then(|replies| replies.iter().find(|reply| reply.id == *existing_reply_id))
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        let existing_reply = {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .reply_idempotency
+                .get(idempotency_key)
                 .cloned()
+        };
+        if let Some((existing_task_id, existing_reply_id)) = existing_reply {
+            let reply = self
+                .repos
+                .task_replies(&existing_task_id)
+                .await
+                .map_err(storage_error)?
+                .into_iter()
+                .map(task_reply_from_row)
+                .find(|reply| reply.id == existing_reply_id)
                 .ok_or(TaskError::TaskNotFound)?;
             return Ok(AddTaskReplyOutcome {
-                task_id: existing_task_id.clone(),
+                task_id: existing_task_id,
                 reply,
                 created: false,
             });
         }
-        if !state.tasks.contains_key(task_id) {
-            return Err(TaskError::TaskNotFound);
-        }
+        self.task(task_id).await?;
 
         let now = now_string();
         let reply = TaskReply {
@@ -279,18 +318,18 @@ impl TaskService {
             status: Some("done".to_string()),
             created_at: now.clone(),
         };
-        state.reply_idempotency.insert(
-            idempotency_key.to_string(),
-            (task_id.to_string(), reply.id.clone()),
-        );
-        state
-            .replies
-            .entry(task_id.to_string())
-            .or_default()
-            .push(reply.clone());
-        if let Some(task) = state.tasks.get_mut(task_id) {
-            task.updated_at = now;
-        }
+        self.repos
+            .insert_task_reply(task_reply_to_row(task_id, &reply))
+            .await
+            .map_err(storage_error)?;
+        self.idempotency
+            .lock()
+            .expect("task idempotency lock")
+            .reply_idempotency
+            .insert(
+                idempotency_key.to_string(),
+                (task_id.to_string(), reply.id.clone()),
+            );
         Ok(AddTaskReplyOutcome {
             task_id: task_id.to_string(),
             reply,
@@ -303,11 +342,18 @@ impl TaskService {
     }
 
     pub async fn thread_view(&self, task_id: &str) -> Result<TaskThreadView, TaskError> {
-        let state = self.inner.lock().expect("task state lock");
-        let task = state.tasks.get(task_id).ok_or(TaskError::TaskNotFound)?;
-        let replies = state.replies.get(task_id).cloned().unwrap_or_default();
+        let task = self.task(task_id).await?;
+        let replies = self
+            .repos
+            .task_replies(task_id)
+            .await
+            .map_err(storage_error)?
+            .into_iter()
+            .map(task_reply_from_row)
+            .collect::<Vec<_>>();
+        let reply_count = replies.len();
         Ok(TaskThreadView {
-            task: summary_for(&state, task),
+            task: summary_for(&task, reply_count),
             root: TaskThreadMessage {
                 id: format!("root_{}", task.id),
                 task_id: task.id.clone(),
@@ -319,25 +365,28 @@ impl TaskService {
             },
             replies: replies
                 .into_iter()
-                .map(|reply| thread_message_for_reply(&task.id, reply))
+                .map(|reply| thread_message_for_reply(task_id, reply))
                 .collect(),
         })
     }
 
     pub async fn task_summary(&self, task_id: &str) -> Result<TaskSummaryView, TaskError> {
-        let state = self.inner.lock().expect("task state lock");
-        let task = state.tasks.get(task_id).ok_or(TaskError::TaskNotFound)?;
-        Ok(summary_for(&state, task))
+        let task = self.task(task_id).await?;
+        let reply_count = self
+            .repos
+            .task_replies(task_id)
+            .await
+            .map_err(storage_error)?
+            .len();
+        Ok(summary_for(&task, reply_count))
     }
 
     pub async fn update_status(&self, task_id: &str, status: TaskStatus) -> Result<(), TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        let task = state
-            .tasks
-            .get_mut(task_id)
-            .ok_or(TaskError::TaskNotFound)?;
-        task.status = status;
-        task.updated_at = now_string();
+        self.task(task_id).await?;
+        self.repos
+            .update_task_status(task_id, status_to_storage(status))
+            .await
+            .map_err(storage_error)?;
         Ok(())
     }
 
@@ -346,27 +395,31 @@ impl TaskService {
         task_id: &str,
         assignee_id: Option<String>,
     ) -> Result<(), TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        let task = state
-            .tasks
-            .get_mut(task_id)
-            .ok_or(TaskError::TaskNotFound)?;
-        match task.status {
-            TaskStatus::PendingAssignment | TaskStatus::InProgress => {
-                task.needs_assignment = assignee_id.is_none();
-                task.attention_required = assignee_id.is_none();
-                task.status = if assignee_id.is_some() {
+        let task = self.task(task_id).await?;
+        let (needs_assignment, attention_required, status) = match task.status {
+            TaskStatus::PendingAssignment | TaskStatus::InProgress => (
+                assignee_id.is_none(),
+                assignee_id.is_none(),
+                if assignee_id.is_some() {
                     TaskStatus::InProgress
                 } else {
                     TaskStatus::PendingAssignment
-                };
-            }
+                },
+            ),
             TaskStatus::InReview | TaskStatus::Done => {
-                task.needs_assignment = false;
+                (false, task.attention_required, task.status)
             }
-        }
-        task.assignee_id = assignee_id;
-        task.updated_at = now_string();
+        };
+        self.repos
+            .update_task_assignment(
+                task_id,
+                assignee_id.as_deref(),
+                needs_assignment,
+                attention_required,
+                status_to_storage(status),
+            )
+            .await
+            .map_err(storage_error)?;
         Ok(())
     }
 
@@ -375,74 +428,46 @@ impl TaskService {
         task_id: &str,
         required: bool,
     ) -> Result<(), TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        let task = state
-            .tasks
-            .get_mut(task_id)
-            .ok_or(TaskError::TaskNotFound)?;
-        task.attention_required = required;
-        task.updated_at = now_string();
+        self.task(task_id).await?;
+        self.repos
+            .update_task_attention(task_id, required)
+            .await
+            .map_err(storage_error)?;
         Ok(())
     }
 
     pub async fn list_tasks(&self, query: TaskQuery) -> Vec<TaskRecord> {
         let mut tasks = self
-            .inner
-            .lock()
-            .expect("task state lock")
-            .tasks
-            .values()
-            .filter(|task| !task.root_deleted)
-            .filter(|task| {
-                query
-                    .channel_id
-                    .as_ref()
-                    .is_none_or(|channel_id| task.channel_id == *channel_id)
-            })
-            .filter(|task| {
-                query
-                    .creator_id
-                    .as_ref()
-                    .is_none_or(|creator_id| task.creator_id == *creator_id)
-            })
-            .filter(|task| {
-                query
-                    .assignee_id
-                    .as_ref()
-                    .is_none_or(|assignee_id| task.assignee_id.as_ref() == Some(assignee_id))
-            })
-            .cloned()
+            .repos
+            .list_tasks(task_query_to_row(query))
+            .await
+            .expect("load tasks")
+            .into_iter()
+            .map(task_record_from_row)
             .collect::<Vec<_>>();
         tasks.sort_by(|left, right| left.title.cmp(&right.title).then(left.id.cmp(&right.id)));
         tasks
     }
 
     pub async fn list_task_summaries(&self, query: TaskQuery) -> Vec<TaskSummaryView> {
-        let state = self.inner.lock().expect("task state lock");
-        let mut summaries = state
-            .tasks
-            .values()
-            .filter(|task| !task.root_deleted)
-            .filter(|task| {
-                query
-                    .channel_id
-                    .as_ref()
-                    .is_none_or(|id| task.channel_id == *id)
-            })
-            .filter(|task| {
-                query
-                    .creator_id
-                    .as_ref()
-                    .is_none_or(|id| task.creator_id == *id)
-            })
-            .filter(|task| {
-                query
-                    .assignee_id
-                    .as_ref()
-                    .is_none_or(|id| task.assignee_id.as_ref() == Some(id))
-            })
-            .map(|task| summary_for(&state, task))
+        let tasks = self
+            .repos
+            .list_tasks(task_query_to_row(query))
+            .await
+            .expect("load task summaries")
+            .into_iter()
+            .map(task_record_from_row)
             .collect::<Vec<_>>();
+        let mut summaries = Vec::with_capacity(tasks.len());
+        for task in tasks {
+            let reply_count = self
+                .repos
+                .task_replies(&task.id)
+                .await
+                .expect("load task replies")
+                .len();
+            summaries.push(summary_for(&task, reply_count));
+        }
         summaries.sort_by(|left, right| {
             right
                 .updated_at
@@ -470,41 +495,37 @@ impl TaskService {
     }
 
     pub async fn delete_task_root(&self, task_id: &str) -> Result<(), TaskError> {
-        let mut state = self.inner.lock().expect("task state lock");
-        let task = state
-            .tasks
-            .get_mut(task_id)
-            .ok_or(TaskError::TaskNotFound)?;
+        let task = self.task(task_id).await?;
         if task.status != TaskStatus::Done {
             return Err(TaskError::ActiveTaskRootDeletionBlocked);
         }
-        task.root_deleted = true;
-        task.updated_at = now_string();
+        self.repos
+            .mark_task_root_deleted(task_id)
+            .await
+            .map_err(storage_error)?;
         Ok(())
     }
 
     pub async fn task(&self, task_id: &str) -> Result<TaskRecord, TaskError> {
-        self.inner
-            .lock()
-            .expect("task state lock")
-            .tasks
-            .get(task_id)
-            .cloned()
+        self.repos
+            .task_by_id(task_id)
+            .await
+            .map_err(storage_error)?
+            .map(task_record_from_row)
             .ok_or(TaskError::TaskNotFound)
     }
 
     pub async fn task_for_source_message(&self, source_message_id: &str) -> Option<TaskRecord> {
-        self.inner
-            .lock()
-            .expect("task state lock")
-            .tasks
-            .values()
-            .find(|task| task.source_message_id.as_deref() == Some(source_message_id))
-            .cloned()
+        self.repos
+            .task_by_source_message(source_message_id)
+            .await
+            .ok()
+            .flatten()
+            .map(task_record_from_row)
     }
 }
 
-fn summary_for(state: &TaskState, task: &TaskRecord) -> TaskSummaryView {
+fn summary_for(task: &TaskRecord, reply_count: usize) -> TaskSummaryView {
     TaskSummaryView {
         id: task.id.clone(),
         channel_id: task.channel_id.clone(),
@@ -514,11 +535,7 @@ fn summary_for(state: &TaskState, task: &TaskRecord) -> TaskSummaryView {
         title: task.title.clone(),
         status: task.status,
         attention_required: task.attention_required,
-        reply_count: state
-            .replies
-            .get(&task.id)
-            .map(|replies| replies.len())
-            .unwrap_or_default(),
+        reply_count,
         updated_at: task.updated_at.clone(),
     }
 }
@@ -535,6 +552,93 @@ pub(crate) fn thread_message_for_reply(task_id: &str, reply: TaskReply) -> TaskT
     }
 }
 
+fn task_record_to_row(task: &TaskRecord) -> TaskRootRow {
+    TaskRootRow {
+        id: task.id.clone(),
+        channel_id: task.channel_id.clone(),
+        creator_id: task.creator_id.clone(),
+        assignee_id: task.assignee_id.clone(),
+        source_message_id: task.source_message_id.clone(),
+        assignment_reason: task.assignment_reason.clone(),
+        needs_assignment: task.needs_assignment,
+        title: task.title.clone(),
+        status: status_to_storage(task.status).to_string(),
+        attention_required: task.attention_required,
+        root_deleted: task.root_deleted,
+        root_body: task.root_body.clone(),
+        created_at: task.created_at.clone(),
+        updated_at: task.updated_at.clone(),
+    }
+}
+
+fn task_record_from_row(row: TaskRootRow) -> TaskRecord {
+    TaskRecord {
+        id: row.id,
+        channel_id: row.channel_id,
+        creator_id: row.creator_id,
+        assignee_id: row.assignee_id,
+        source_message_id: row.source_message_id,
+        assignment_reason: row.assignment_reason,
+        needs_assignment: row.needs_assignment,
+        title: row.title,
+        status: status_from_storage(&row.status),
+        attention_required: row.attention_required,
+        root_deleted: row.root_deleted,
+        root_body: row.root_body,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
+fn task_reply_to_row(task_id: &str, reply: &TaskReply) -> TaskReplyRow {
+    TaskReplyRow {
+        id: reply.id.clone(),
+        task_id: task_id.to_string(),
+        sender_id: reply.sender_id.clone(),
+        role: reply.role.clone(),
+        body: reply.body.clone(),
+        status: reply.status.clone(),
+        created_at: reply.created_at.clone(),
+    }
+}
+
+fn task_reply_from_row(row: TaskReplyRow) -> TaskReply {
+    TaskReply {
+        id: row.id,
+        sender_id: row.sender_id,
+        role: row.role,
+        body: row.body,
+        status: row.status,
+        created_at: row.created_at,
+    }
+}
+
+fn task_query_to_row(query: TaskQuery) -> TaskQueryRow {
+    TaskQueryRow {
+        channel_id: query.channel_id,
+        creator_id: query.creator_id,
+        assignee_id: query.assignee_id,
+    }
+}
+
+fn status_to_storage(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::PendingAssignment => "pending_assignment",
+        TaskStatus::InProgress => "in_progress",
+        TaskStatus::InReview => "in_review",
+        TaskStatus::Done => "done",
+    }
+}
+
+fn status_from_storage(status: &str) -> TaskStatus {
+    match status {
+        "in_progress" => TaskStatus::InProgress,
+        "in_review" => TaskStatus::InReview,
+        "done" => TaskStatus::Done,
+        _ => TaskStatus::PendingAssignment,
+    }
+}
+
 fn now_string() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -548,9 +652,31 @@ fn role_for_sender(sender_id: &str) -> Option<String> {
         Some("agent".to_string())
     } else if sender_id.starts_with("human") {
         Some("human".to_string())
+    } else if sender_id.starts_with("system") {
+        Some("system".to_string())
     } else {
         None
     }
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create task repository runtime");
+        runtime.block_on(async move {
+            std::fs::create_dir_all(&data_root).expect("create task data root");
+            let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+            let db = SleiDb::connect(&database_url)
+                .await
+                .expect("connect task db");
+            db.migrate().await.expect("migrate task db");
+            Repositories::new(db.pool().clone())
+        })
+    })
+    .join()
+    .expect("initialize task repositories")
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -559,4 +685,9 @@ pub enum TaskError {
     TaskNotFound,
     #[error("active task root cannot be deleted")]
     ActiveTaskRootDeletionBlocked,
+}
+
+fn storage_error(error: sqlx::Error) -> TaskError {
+    let _ = error;
+    TaskError::TaskNotFound
 }

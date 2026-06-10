@@ -1,4 +1,4 @@
-use sqlx::{Row, SqlitePool};
+use sqlx::{Row, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 pub const RESET_MUTABLE_TABLES: &[&str] = &[
@@ -102,6 +102,42 @@ pub struct ChannelMessageRow {
     pub kind: String,
     pub deleted: bool,
     pub edited: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskRootRow {
+    pub id: String,
+    pub channel_id: String,
+    pub creator_id: String,
+    pub assignee_id: Option<String>,
+    pub source_message_id: Option<String>,
+    pub assignment_reason: Option<String>,
+    pub needs_assignment: bool,
+    pub title: String,
+    pub status: String,
+    pub attention_required: bool,
+    pub root_deleted: bool,
+    pub root_body: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TaskQueryRow {
+    pub channel_id: Option<String>,
+    pub creator_id: Option<String>,
+    pub assignee_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskReplyRow {
+    pub id: String,
+    pub task_id: String,
+    pub sender_id: String,
+    pub role: Option<String>,
+    pub body: String,
+    pub status: Option<String>,
     pub created_at: String,
 }
 
@@ -589,7 +625,7 @@ impl Repositories {
         let rows = sqlx::query(
             "SELECT id, channel_id, author_id, content, as_task, kind, deleted, edited, created_at
              FROM messages
-             WHERE channel_id = ?
+             WHERE channel_id = ? AND kind NOT IN ('task_root', 'task_reply')
              ORDER BY rowid ASC",
         )
         .bind(channel_id)
@@ -751,6 +787,274 @@ impl Repositories {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn upsert_task_root(&self, row: TaskRootRow) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let root_message_id = if let Some(source_message_id) = row.source_message_id.as_deref() {
+            let source_exists =
+                sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM messages WHERE id = ? LIMIT 1")
+                    .bind(source_message_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            if source_exists > 0 {
+                source_message_id.to_string()
+            } else {
+                insert_synthetic_task_message(
+                    &mut tx,
+                    &row.id,
+                    &row.channel_id,
+                    &row.creator_id,
+                    "task_root",
+                    &row.root_body,
+                )
+                .await?
+            }
+        } else {
+            insert_synthetic_task_message(
+                &mut tx,
+                &row.id,
+                &row.channel_id,
+                &row.creator_id,
+                "task_root",
+                &row.root_body,
+            )
+            .await?
+        };
+
+        sqlx::query(
+            "INSERT INTO tasks(
+                id, channel_id, root_message_id, title, status, created_at, creator_id,
+                assignee_id, source_message_id, assignment_reason, needs_assignment,
+                attention_required, root_deleted, root_body, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                channel_id = excluded.channel_id,
+                root_message_id = excluded.root_message_id,
+                title = excluded.title,
+                status = excluded.status,
+                creator_id = excluded.creator_id,
+                assignee_id = excluded.assignee_id,
+                source_message_id = excluded.source_message_id,
+                assignment_reason = excluded.assignment_reason,
+                needs_assignment = excluded.needs_assignment,
+                attention_required = excluded.attention_required,
+                root_deleted = excluded.root_deleted,
+                root_body = excluded.root_body,
+                updated_at = excluded.updated_at",
+        )
+        .bind(row.id)
+        .bind(row.channel_id)
+        .bind(root_message_id)
+        .bind(row.title)
+        .bind(row.status)
+        .bind(row.created_at)
+        .bind(row.creator_id)
+        .bind(row.assignee_id)
+        .bind(row.source_message_id)
+        .bind(row.assignment_reason)
+        .bind(if row.needs_assignment { 1 } else { 0 })
+        .bind(if row.attention_required { 1 } else { 0 })
+        .bind(if row.root_deleted { 1 } else { 0 })
+        .bind(row.root_body)
+        .bind(row.updated_at)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn task_by_id(&self, task_id: &str) -> Result<Option<TaskRootRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+                    assignment_reason, needs_assignment, title, status, attention_required,
+                    root_deleted, root_body, created_at, updated_at
+             FROM tasks
+             WHERE id = ?",
+        )
+        .bind(task_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(task_root_row_from_sql).transpose()
+    }
+
+    pub async fn task_by_source_message(
+        &self,
+        source_message_id: &str,
+    ) -> Result<Option<TaskRootRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+                    assignment_reason, needs_assignment, title, status, attention_required,
+                    root_deleted, root_body, created_at, updated_at
+             FROM tasks
+             WHERE source_message_id = ?
+             ORDER BY created_at ASC, id ASC
+             LIMIT 1",
+        )
+        .bind(source_message_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(task_root_row_from_sql).transpose()
+    }
+
+    pub async fn list_tasks(&self, query: TaskQueryRow) -> Result<Vec<TaskRootRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+                    assignment_reason, needs_assignment, title, status, attention_required,
+                    root_deleted, root_body, created_at, updated_at
+             FROM tasks
+             WHERE root_deleted = 0
+               AND (? IS NULL OR channel_id = ?)
+               AND (? IS NULL OR creator_id = ?)
+               AND (? IS NULL OR assignee_id = ?)
+             ORDER BY title ASC, id ASC",
+        )
+        .bind(query.channel_id.as_deref())
+        .bind(query.channel_id.as_deref())
+        .bind(query.creator_id.as_deref())
+        .bind(query.creator_id.as_deref())
+        .bind(query.assignee_id.as_deref())
+        .bind(query.assignee_id.as_deref())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(task_root_row_from_sql).collect()
+    }
+
+    pub async fn update_task_status(&self, task_id: &str, status: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE tasks
+             SET status = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(status)
+        .bind(now_string())
+        .bind(task_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_task_assignment(
+        &self,
+        task_id: &str,
+        assignee_id: Option<&str>,
+        needs_assignment: bool,
+        attention_required: bool,
+        status: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE tasks
+             SET assignee_id = ?, needs_assignment = ?, attention_required = ?,
+                 status = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(assignee_id)
+        .bind(if needs_assignment { 1 } else { 0 })
+        .bind(if attention_required { 1 } else { 0 })
+        .bind(status)
+        .bind(now_string())
+        .bind(task_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_task_attention(
+        &self,
+        task_id: &str,
+        required: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE tasks
+             SET attention_required = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(if required { 1 } else { 0 })
+        .bind(now_string())
+        .bind(task_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn mark_task_root_deleted(&self, task_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE tasks
+             SET root_deleted = 1, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(now_string())
+        .bind(task_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn insert_task_reply(&self, row: TaskReplyRow) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let task = sqlx::query("SELECT channel_id FROM tasks WHERE id = ?")
+            .bind(&row.task_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+        let Some(task) = task else {
+            return Err(sqlx::Error::RowNotFound);
+        };
+        let channel_id: String = task.try_get("channel_id")?;
+        let author_message_id = insert_synthetic_task_message(
+            &mut tx,
+            &row.id,
+            &channel_id,
+            &row.sender_id,
+            "task_reply",
+            &row.body,
+        )
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO thread_replies(
+                id, task_id, author_message_id, content, created_at, sender_id, role, status
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(&row.id)
+        .bind(&row.task_id)
+        .bind(author_message_id)
+        .bind(&row.body)
+        .bind(&row.created_at)
+        .bind(&row.sender_id)
+        .bind(&row.role)
+        .bind(&row.status)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query("UPDATE tasks SET updated_at = ? WHERE id = ?")
+            .bind(now_string())
+            .bind(&row.task_id)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn task_replies(&self, task_id: &str) -> Result<Vec<TaskReplyRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, task_id, COALESCE(sender_id, '') AS sender_id, role, content, status, created_at
+             FROM thread_replies
+             WHERE task_id = ?
+             ORDER BY rowid ASC",
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(task_reply_row_from_sql).collect()
     }
 
     pub async fn insert_task(
@@ -1400,6 +1704,94 @@ impl Repositories {
         let count: i64 = row.try_get("count")?;
         Ok(count.max(0) as u64)
     }
+}
+
+async fn insert_synthetic_task_message(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    entity_id: &str,
+    channel_id: &str,
+    author_id: &str,
+    kind: &str,
+    body: &str,
+) -> Result<String, sqlx::Error> {
+    let message_id = match kind {
+        "task_reply" => format!("task_reply_msg_{entity_id}"),
+        _ => format!("task_root_msg_{entity_id}"),
+    };
+    sqlx::query(
+        "INSERT INTO messages(id, channel_id, author_kind, kind, content, deleted, author_id, as_task, edited)
+         VALUES (?, ?, ?, ?, ?, 0, ?, 0, 0)
+         ON CONFLICT(id) DO UPDATE SET
+            channel_id = excluded.channel_id,
+            author_kind = excluded.author_kind,
+            kind = excluded.kind,
+            content = excluded.content,
+            deleted = 0,
+            author_id = excluded.author_id,
+            as_task = 0,
+            edited = 0",
+    )
+    .bind(&message_id)
+    .bind(channel_id)
+    .bind(author_kind_for(author_id))
+    .bind(kind)
+    .bind(body)
+    .bind(author_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(message_id)
+}
+
+fn author_kind_for(author_id: &str) -> &'static str {
+    if author_id.starts_with("agent") {
+        "agent"
+    } else if author_id.starts_with("system") {
+        "system"
+    } else {
+        "human"
+    }
+}
+
+fn task_root_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskRootRow, sqlx::Error> {
+    let needs_assignment: i64 = row.try_get("needs_assignment")?;
+    let attention_required: i64 = row.try_get("attention_required")?;
+    let root_deleted: i64 = row.try_get("root_deleted")?;
+    Ok(TaskRootRow {
+        id: row.try_get("id")?,
+        channel_id: row.try_get("channel_id")?,
+        creator_id: row.try_get("creator_id")?,
+        assignee_id: row.try_get("assignee_id")?,
+        source_message_id: row.try_get("source_message_id")?,
+        assignment_reason: row.try_get("assignment_reason")?,
+        needs_assignment: needs_assignment != 0,
+        title: row.try_get("title")?,
+        status: row.try_get("status")?,
+        attention_required: attention_required != 0,
+        root_deleted: root_deleted != 0,
+        root_body: row.try_get("root_body")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn task_reply_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskReplyRow, sqlx::Error> {
+    Ok(TaskReplyRow {
+        id: row.try_get("id")?,
+        task_id: row.try_get("task_id")?,
+        sender_id: row.try_get("sender_id")?,
+        role: row.try_get("role")?,
+        body: row.try_get("content")?,
+        status: row.try_get("status")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn now_string() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .to_string()
 }
 
 fn parse_uuid(value: &str) -> Result<Uuid, sqlx::Error> {

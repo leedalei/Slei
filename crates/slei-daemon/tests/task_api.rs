@@ -1,6 +1,6 @@
-use axum::body::{to_bytes, Body};
+use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::channel_service::{
@@ -77,7 +77,9 @@ async fn task_api_lists_tasks_and_updates_status() {
 #[tokio::test]
 async fn task_api_creates_roots_and_appends_thread_replies() {
     let token = AuthToken::from_static("test-token");
-    let app = build_router(AppState::for_tests(token.clone()));
+    let state = AppState::for_tests(token.clone());
+    state.channels().list_channels().await;
+    let app = build_router(state);
 
     let created = app
         .clone()

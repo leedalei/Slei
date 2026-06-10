@@ -69,7 +69,10 @@ impl AppState {
     }
 
     pub fn for_tests(auth_token: AuthToken) -> Self {
-        Self::for_tests_with_agent_root(auth_token, default_data_root())
+        Self::for_tests_with_agent_root(
+            auth_token,
+            std::env::temp_dir().join(format!("slei-app-tests-{}", uuid::Uuid::new_v4())),
+        )
     }
 
     pub fn for_tests_with_agent_root(auth_token: AuthToken, agent_data_root: PathBuf) -> Self {
@@ -139,7 +142,7 @@ impl AppState {
         );
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
-        let task_service = TaskService::for_tests();
+        let task_service = TaskService::new(repos.clone());
         let memory_maintainer_service = MemoryMaintainerService::new(
             member_service.clone(),
             channel_service.clone(),
