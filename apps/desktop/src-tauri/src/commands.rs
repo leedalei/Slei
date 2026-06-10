@@ -2,7 +2,8 @@ use crate::daemon_broker::{
     AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
     AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt, AgentWorkspaceListReceipt,
     ArtifactOpenError, ArtifactOpenReceipt, CardError, ChannelCreateRequest, ChannelError,
-    ChannelListReceipt, ChannelMemberListReceipt, ChannelMessageListReceipt, ChannelReceipt,
+    ChannelListReceipt, ChannelMemberAddRequest, ChannelMemberListReceipt, ChannelMemberReceipt,
+    ChannelMemberRemoveReceipt, ChannelMessageListReceipt, ChannelReceipt,
     ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
     ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
     ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
@@ -117,6 +118,22 @@ pub fn create_channel(
 
 pub fn list_channel_members(broker: &DaemonBroker, channel_id: &str) -> ChannelMemberListReceipt {
     broker.list_channel_members(channel_id)
+}
+
+pub fn add_channel_member(
+    broker: &DaemonBroker,
+    channel_id: &str,
+    request: ChannelMemberAddRequest,
+) -> Result<ChannelMemberReceipt, ChannelError> {
+    broker.add_channel_member(channel_id, request)
+}
+
+pub fn remove_channel_member(
+    broker: &DaemonBroker,
+    channel_id: &str,
+    agent_id: &str,
+) -> Result<ChannelMemberRemoveReceipt, ChannelError> {
+    broker.remove_channel_member(channel_id, agent_id)
 }
 
 pub fn list_channel_messages(broker: &DaemonBroker, channel_id: &str) -> ChannelMessageListReceipt {
@@ -398,6 +415,24 @@ pub fn list_channel_members_command(
     channel_id: String,
 ) -> ChannelMemberListReceipt {
     list_channel_members(state.inner(), &channel_id)
+}
+
+#[tauri::command]
+pub fn add_channel_member_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+    request: ChannelMemberAddRequest,
+) -> Result<ChannelMemberReceipt, String> {
+    add_channel_member(state.inner(), &channel_id, request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn remove_channel_member_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+    agent_id: String,
+) -> Result<ChannelMemberRemoveReceipt, String> {
+    remove_channel_member(state.inner(), &channel_id, &agent_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

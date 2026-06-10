@@ -14,6 +14,8 @@ pub fn run() {
             commands::list_channels_command,
             commands::create_channel_command,
             commands::list_channel_members_command,
+            commands::add_channel_member_command,
+            commands::remove_channel_member_command,
             commands::list_channel_messages_command,
             commands::send_channel_message_command,
             commands::list_tasks_command,
@@ -55,19 +57,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_conversation_session, bootstrap_guide_agent, complete_interactive_card,
-        create_agent, create_channel, create_conversation_session, create_dm_conversation,
-        daemon_status, delete_agent, format_frontend_crash_log, list_agent_skills,
-        list_agent_workspace, list_agents, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_nodes, list_preferences, list_saved_messages, list_tasks,
-        open_agent_path, read_agent_workspace_file, reconnect_events, remember_agent_fact,
-        rename_local_node, reply_to_task, request_artifact_open,
-        reset_conversation_runtime_session, save_message, send_channel_message,
-        send_conversation_message, unsave_message, update_agent, update_preferences,
-        upload_conversation_attachment, FrontendCrashReport,
+        activate_conversation_session, add_channel_member, bootstrap_guide_agent,
+        complete_interactive_card, create_agent, create_channel, create_conversation_session,
+        create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
+        list_agent_skills, list_agent_workspace, list_agents, list_conversation_messages,
+        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
+        list_saved_messages, list_tasks, open_agent_path, read_agent_workspace_file,
+        reconnect_events, remember_agent_fact, remove_channel_member, rename_local_node,
+        reply_to_task, request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_channel_message, send_conversation_message, unsave_message, update_agent,
+        update_preferences, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
-        AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest,
+        AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
         NotificationPreferencesView, PreferencesUpdateRequest, RuntimeDescriptor,
         SaveMessageRequest, SendChannelMessageRequest, TaskListQuery, TaskReplyRequest,
@@ -693,6 +695,97 @@ mod tests {
         assert!(error.contains("daemon request failed"));
         assert!(error.contains("400"));
         assert!(!error.contains("invalid channel"));
+    }
+
+    #[test]
+    fn channel_member_commands_use_daemon_routes() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let mut requests = Vec::new();
+            for response in [
+                serde_json::json!({
+                    "member": {
+                        "channelId": "remote-dev",
+                        "agentId": "agent_coda",
+                        "joinedAt": "1",
+                        "readiness": "ready"
+                    }
+                })
+                .to_string(),
+                serde_json::json!({
+                    "removedMember": {
+                        "channelId": "remote-dev",
+                        "agentId": "agent_coda",
+                        "joinedAt": "1",
+                        "readiness": "ready"
+                    }
+                })
+                .to_string(),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0_u8; 512];
+                loop {
+                    let count = stream.read(&mut buffer).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    bytes.extend_from_slice(&buffer[..count]);
+                    let request = String::from_utf8_lossy(&bytes);
+                    let Some(header_end) = request.find("\r\n\r\n") else {
+                        continue;
+                    };
+                    let content_length = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                requests.push(String::from_utf8(bytes).unwrap());
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response.len(),
+                    response
+                )
+                .unwrap();
+            }
+            requests
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let added = add_channel_member(
+            &broker,
+            "remote-dev",
+            ChannelMemberAddRequest {
+                agent_id: "agent_coda".to_string(),
+            },
+        )
+        .unwrap();
+        let removed = remove_channel_member(&broker, "remote-dev", "agent_coda").unwrap();
+        let requests = handle.join().unwrap();
+
+        assert_eq!(added.member.readiness, "ready");
+        assert_eq!(
+            removed
+                .removed_member
+                .as_ref()
+                .map(|member| member.agent_id.as_str()),
+            Some("agent_coda")
+        );
+        assert!(requests[0].contains("POST /v1/channels/remote-dev/members HTTP/1.1"));
+        assert!(requests[0].contains(r#""agentId":"agent_coda""#));
+        assert!(requests[1].contains("DELETE /v1/channels/remote-dev/members/agent_coda HTTP/1.1"));
     }
 
     #[test]

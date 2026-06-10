@@ -1,7 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ChannelCreateRequest as ProtocolChannelCreateRequest,
+  ChannelMemberAddRequest as ProtocolChannelMemberAddRequest,
   ChannelMemberReadiness as ProtocolChannelMemberReadiness,
+  ChannelMemberReceipt as ProtocolChannelMemberReceipt,
+  ChannelMemberRemoveReceipt as ProtocolChannelMemberRemoveReceipt,
   ChannelMemberView as ProtocolChannelMemberView,
   SendChannelMessageOutcome as ProtocolSendChannelMessageOutcome,
   SendChannelMessageReceipt as ProtocolSendChannelMessageReceipt,
@@ -236,9 +239,15 @@ export type ChannelReceipt = {
 
 export type ChannelCreateRequest = ProtocolChannelCreateRequest;
 
+export type ChannelMemberAddRequest = ProtocolChannelMemberAddRequest;
+
 export type ChannelMemberListReceipt = {
   members: ChannelMemberView[];
 };
+
+export type ChannelMemberReceipt = ProtocolChannelMemberReceipt;
+
+export type ChannelMemberRemoveReceipt = ProtocolChannelMemberRemoveReceipt;
 
 export type ChannelMessageView = {
   id: string;
@@ -428,6 +437,8 @@ export type DaemonBridge = {
   listChannels(): Promise<ChannelListReceipt>;
   createChannel(request: ChannelCreateRequest): Promise<ChannelReceipt>;
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
+  addChannelMember(channelId: string, request: ChannelMemberAddRequest): Promise<ChannelMemberReceipt>;
+  removeChannelMember(channelId: string, agentId: string): Promise<ChannelMemberRemoveReceipt>;
   listChannelMessages(channelId: string): Promise<ChannelMessageListReceipt>;
   sendChannelMessage(channelId: string, request: SendChannelMessageRequest): Promise<SendChannelMessageReceipt>;
   listTasks(query?: { channelId?: string; creatorId?: string; assigneeId?: string }): Promise<TaskListReceipt>;
@@ -623,6 +634,32 @@ export function createDaemonBridgeMock(input: {
     },
     async listChannelMembers(channelId) {
       return { members: channelMembers.filter((member) => member.channelId === channelId) };
+    },
+    async addChannelMember(channelId, request) {
+      const channel = channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error("channel not found");
+      const agent = agents.find((candidate) => candidate.id === request.agentId);
+      if (!agent) throw new Error("agent not found");
+      if (agent.agentKind === "coordinator" || agent.id === "agent_global_coordinator" || agent.id.startsWith("agent_coordinator_")) {
+        throw new Error("coordinator agents cannot join channels");
+      }
+      const existing = channelMembers.find((member) => member.channelId === channelId && member.agentId === request.agentId);
+      const member = existing ?? {
+        channelId,
+        agentId: request.agentId,
+        joinedAt: new Date().toISOString(),
+        readiness: "ready" as const,
+      };
+      channelMembers = [
+        ...channelMembers.filter((candidate) => candidate.channelId !== channelId || candidate.agentId !== request.agentId),
+        member,
+      ];
+      return { member };
+    },
+    async removeChannelMember(channelId, agentId) {
+      const removedMember = channelMembers.find((member) => member.channelId === channelId && member.agentId === agentId) ?? null;
+      channelMembers = channelMembers.filter((member) => member.channelId !== channelId || member.agentId !== agentId);
+      return { removedMember };
     },
     async listChannelMessages(channelId) {
       return { messages: channelMessages.filter((message) => message.channelId === channelId && !message.deleted) };
@@ -1103,6 +1140,8 @@ export function createDaemonBridge(): DaemonBridge {
       listChannels: () => invoke<ChannelListReceipt>("list_channels_command"),
       createChannel: (request: ChannelCreateRequest) => invoke<ChannelReceipt>("create_channel_command", { request }),
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
+      addChannelMember: (channelId: string, request: ChannelMemberAddRequest) => invoke<ChannelMemberReceipt>("add_channel_member_command", { channelId, request }),
+      removeChannelMember: (channelId: string, agentId: string) => invoke<ChannelMemberRemoveReceipt>("remove_channel_member_command", { channelId, agentId }),
       listChannelMessages: (channelId: string) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId }),
       sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) => invoke<SendChannelMessageReceipt>("send_channel_message_command", { channelId, request }),
       listTasks: (query = {}) => invoke<TaskListReceipt>("list_tasks_command", { query }),
