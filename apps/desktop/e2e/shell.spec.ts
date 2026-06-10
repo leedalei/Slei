@@ -41,7 +41,7 @@ describe("desktop shell daemon connectivity", () => {
     const bridge = createDaemonBridgeMock({ connected: true });
     await bridge.createChannel({ name: "dev", agentIds: ["agent_alice"] });
     await expect(bridge.listChannelMembers("dev")).resolves.toMatchObject({
-      members: [{ agentId: "agent_alice", readiness: "joining" }],
+      members: [{ agentId: "agent_alice", readiness: "ready" }],
     });
 
     await expect(bridge.sendChannelMessage("missing", { authorId: "human:local", body: "实现 API" })).rejects.toThrow(
@@ -53,13 +53,13 @@ describe("desktop shell daemon connectivity", () => {
 
     await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "实现 API" })).resolves.toMatchObject({
       outcome: {
-        action: "needs_manual_assignment",
+        action: "create_task_and_assign",
         taskId: expect.any(String),
       },
     });
     await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "这个方案怎么看？" })).resolves.toMatchObject({
       outcome: {
-        action: "archive_only",
+        action: "request_agent_reply",
       },
     });
 

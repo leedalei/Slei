@@ -2929,7 +2929,7 @@ impl DaemonBroker {
             channel_id: channel_id.to_string(),
             agent_id: agent_id.to_string(),
             joined_at: monotonic_id(),
-            readiness: "joining".to_string(),
+            readiness: "ready".to_string(),
         });
     }
 

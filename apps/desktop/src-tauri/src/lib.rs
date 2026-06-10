@@ -60,13 +60,14 @@ mod tests {
         activate_conversation_session, add_channel_member, bootstrap_guide_agent,
         complete_interactive_card, create_agent, create_channel, create_conversation_session,
         create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
-        list_agent_skills, list_agent_workspace, list_agents, list_conversation_messages,
-        list_conversation_sessions, list_conversations, list_nodes, list_preferences,
-        list_saved_messages, list_tasks, open_agent_path, read_agent_workspace_file,
-        reconnect_events, remember_agent_fact, remove_channel_member, rename_local_node,
-        reply_to_task, request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
+        list_conversation_messages, list_conversation_sessions, list_conversations, list_nodes,
+        list_preferences, list_saved_messages, list_tasks, open_agent_path,
+        read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
+        rename_local_node, reply_to_task, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
@@ -1105,6 +1106,47 @@ mod tests {
         assert_eq!(coordinator.runtime_kind, "ClaudeCode");
         assert!(fs::metadata(&coordinator.memory_path).unwrap().is_file());
         assert!(create_dm_conversation(&broker, &coordinator.id).is_err());
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn local_created_agent_channel_membership_is_ready() {
+        let _env_guard = test_env_lock();
+        let agent_root = std::env::temp_dir().join(format!(
+            "slei-desktop-agent-channel-readiness-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&agent_root);
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:4319".to_string(),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let created = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Ready Member".to_string(),
+                handle: "@ready-member".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "频道成员状态测试".to_string(),
+            },
+        )
+        .unwrap()
+        .agent;
+
+        let channel_members = list_channel_members(&broker, "all");
+        let created_membership = channel_members
+            .members
+            .iter()
+            .find(|member| member.agent_id == created.id)
+            .expect("created agent should be a member of #all");
+        assert_eq!(created_membership.readiness, "ready");
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 

@@ -6,9 +6,11 @@ import {
   createChannelAgentActivityMessages,
   createChannelAgentReplyMessage,
   createChannelAgentReplyMessageFromReplies,
+  hasUnsettledChannelMemberReadiness,
   waitForChannelAgentReplies,
 } from "./SleiApp";
 import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
+import type { SleiMember } from "./fixtures";
 
 describe("createChannelAgentReplyMessage", () => {
   it("builds stable activity messages for every routed channel target", () => {
@@ -66,6 +68,18 @@ describe("createChannelAgentReplyMessage", () => {
         },
       ]).map((message) => message.id),
     ).toEqual(["agent-activity-msg_123-agent_alice", "agent-activity-msg_123-agent_coda"]);
+  });
+
+  it("detects channel members that still need readiness refresh", () => {
+    const members = [
+      { id: "agent_joining", channelReadiness: { dev: "joining" } },
+      { id: "agent_ready", channelReadiness: { dev: "ready" } },
+      { id: "agent_failed", channelReadiness: { dev: "memory_failed" } },
+    ] as unknown as SleiMember[];
+
+    expect(hasUnsettledChannelMemberReadiness(members, "dev")).toBe(true);
+    expect(hasUnsettledChannelMemberReadiness(members.slice(1), "dev")).toBe(false);
+    expect(hasUnsettledChannelMemberReadiness(members, "ops")).toBe(false);
   });
 
   it("keeps the current chat view after a member is created from an interactive card", () => {

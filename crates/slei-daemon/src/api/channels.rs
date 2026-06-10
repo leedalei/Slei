@@ -212,6 +212,18 @@ async fn run_channel_setup(
             ),
         }
     }
+    match state.run_channel_join_memory_updates(&channel.id).await {
+        Ok(()) => channel_create_log(
+            &idempotency_key,
+            "memory-updates-complete",
+            &format!("channel_id={}", channel.id),
+        ),
+        Err(error) => channel_create_log(
+            &idempotency_key,
+            "memory-updates-failed",
+            &format!("channel_id={} error={error}", channel.id),
+        ),
+    }
     channel_create_log(
         &idempotency_key,
         "setup-complete",

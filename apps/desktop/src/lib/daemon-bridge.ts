@@ -594,7 +594,7 @@ export function createDaemonBridgeMock(input: {
         updatedAt: now,
       };
       agents = [...agents, agent];
-      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now, readiness: "joining" }];
+      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: now, readiness: "ready" }];
       const session: ConversationSessionView = {
         id: `session:${agent.id}:default`,
         conversationId: `dm:${agent.id}`,
@@ -624,7 +624,7 @@ export function createDaemonBridgeMock(input: {
         channelId: channel.id,
         agentId,
         joinedAt,
-        readiness: "joining" as const,
+        readiness: "ready" as const,
       }));
       channelMembers = [
         ...channelMembers.filter((member) => member.channelId !== channel.id || !selectedMembers.some((selected) => selected.agentId === member.agentId)),
@@ -851,7 +851,7 @@ export function createDaemonBridgeMock(input: {
         updatedAt: new Date().toISOString(),
       };
       agents = [...agents, agent];
-      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: agent.createdAt, readiness: "joining" }];
+      channelMembers = [...channelMembers, { channelId: "all", agentId: agent.id, joinedAt: agent.createdAt, readiness: "ready" }];
       return { agent };
     },
     async updateAgent(agentId, request) {

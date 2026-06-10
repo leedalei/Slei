@@ -33,7 +33,16 @@ import {
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ToastType } from "../components";
 import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
-import { createSleiFixtures, type SleiChannel, type SleiFixtures, type SleiMember, type SleiMessage, type SleiTask, type SleiTaskReply } from "./fixtures";
+import {
+  createSleiFixtures,
+  type SleiChannel,
+  type SleiChannelMemberReadiness,
+  type SleiFixtures,
+  type SleiMember,
+  type SleiMessage,
+  type SleiTask,
+  type SleiTaskReply,
+} from "./fixtures";
 import {
   createDraftComputerNode,
   createLocalChatMessage,
@@ -234,6 +243,17 @@ function applyChannelMemberReadiness(members: SleiMember[], channelId: string, c
       ...member,
       channelReadiness: Object.keys(nextReadiness).length > 0 ? nextReadiness : undefined,
     };
+  });
+}
+
+const CHANNEL_MEMBER_READINESS_POLL_INTERVAL_MS = 1_000;
+const CHANNEL_MEMBER_READINESS_POLL_ATTEMPTS = 8;
+const UNSETTLED_CHANNEL_MEMBER_READINESS = new Set<SleiChannelMemberReadiness>(["joining", "memory_syncing"]);
+
+export function hasUnsettledChannelMemberReadiness(members: SleiMember[], channelId: string): boolean {
+  return members.some((member) => {
+    const readiness = member.channelReadiness?.[channelId];
+    return readiness ? UNSETTLED_CHANNEL_MEMBER_READINESS.has(readiness) : false;
   });
 }
 
@@ -669,6 +689,24 @@ export function SleiApp() {
       return createSleiFixtures({ ...current, members: nextMembers });
     });
     return nextMembers;
+  }
+
+  async function refreshChannelMembersUntilSettled(channelId: string, initialMembers?: SleiMember[]): Promise<SleiMember[]> {
+    let nextMembers = initialMembers ?? await refreshChannelMembersIntoState(channelId);
+    for (let attempt = 0; attempt < CHANNEL_MEMBER_READINESS_POLL_ATTEMPTS && hasUnsettledChannelMemberReadiness(nextMembers, channelId); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, CHANNEL_MEMBER_READINESS_POLL_INTERVAL_MS));
+      nextMembers = await refreshChannelMembersIntoState(channelId);
+    }
+    return nextMembers;
+  }
+
+  function refreshChannelMembersInBackground(channelId: string, initialMembers: SleiMember[]) {
+    if (!hasUnsettledChannelMemberReadiness(initialMembers, channelId)) return;
+    void refreshChannelMembersUntilSettled(channelId, initialMembers)
+      .then((members) => refreshChannelMessagesIntoState(channelId, members))
+      .catch((error: unknown) => {
+        logAppEvent(bridge, "channel-members", "readiness-refresh-failed", { channelId, error: formatLogError(error) });
+      });
   }
 
   function applyTaskThreadReceiptToState(receipt: TaskThreadReceipt) {
@@ -1576,6 +1614,7 @@ export function SleiApp() {
     setActiveSessionId(undefined);
     const members = await refreshChannelMembersIntoState(channel.id);
     await refreshChannelMessagesIntoState(channel.id, members);
+    refreshChannelMembersInBackground(channel.id, members);
     return receipt;
   }
 
@@ -1583,6 +1622,7 @@ export function SleiApp() {
     await bridge.addChannelMember(activeChannelId, { agentId });
     const members = await refreshChannelMembersIntoState(activeChannelId);
     await refreshChannelMessagesIntoState(activeChannelId, members);
+    refreshChannelMembersInBackground(activeChannelId, members);
   }
 
   async function handleRemoveChannelMember(agentId: string) {

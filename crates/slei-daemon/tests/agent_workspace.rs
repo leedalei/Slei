@@ -6,6 +6,7 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
 use slei_daemon::state::AppState;
 use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
@@ -526,7 +527,7 @@ async fn create_channel_with_agents_is_immediately_usable_and_requests_memory_up
     assert_eq!(created_channel_body["channel"]["id"], "ready-channel");
 
     let selected = wait_for_channel_member(&app, &token, "ready-channel", &alice_id).await;
-    assert_eq!(selected["readiness"], "joining");
+    assert_eq!(selected["readiness"], "ready");
 
     let events = wait_for_memory_update_requests(&state, &alice_id, "ready-channel", 1).await;
     assert!(events
@@ -570,19 +571,27 @@ async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
             .unwrap(),
     );
 
-    let created_channel = post_json(
-        &app,
-        &token,
-        "/v1/channels",
-        Some("create-ready-channel-complete"),
-        json!({
-            "name": "#Ready Channel",
-            "description": "Project readiness",
-            "agentIds": [alice_id]
-        }),
-    )
-    .await;
-    assert_eq!(created_channel.status(), StatusCode::CREATED);
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "#Ready Channel".to_string(),
+                description: Some("Project readiness".to_string()),
+                permission: PermissionPreset::Controlled,
+            },
+            "create-ready-channel-complete",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel_with_outcome("ready-channel", &alice_id)
+        .await
+        .unwrap();
+    state
+        .memory_events()
+        .request_channel_join_update(&alice_id, "ready-channel")
+        .await;
 
     assert!(state
         .messages()
@@ -633,6 +642,67 @@ async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
     assert!(memory.contains("notes/channels.md"));
     assert!(memory.contains("notes/relationships.md"));
     assert!(channels.contains("ready-channel"));
+}
+
+#[tokio::test]
+async fn channel_create_setup_completes_join_memory_updates() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("channel-create-join-memory-auto");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
+    let app = build_router(state.clone());
+
+    let created_agent = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-auto-ready-alice"),
+        json!({
+            "name": "Alice",
+            "handle": "@alice",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "架构师，负责拆解需求和协调方案。"
+        }),
+    )
+    .await;
+    assert_eq!(created_agent.status(), StatusCode::CREATED);
+    let alice_id = response_json(created_agent).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let created_channel = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-auto-ready-channel"),
+        json!({
+            "name": "#Auto Ready Channel",
+            "description": "Project readiness",
+            "agentIds": [alice_id]
+        }),
+    )
+    .await;
+    assert_eq!(created_channel.status(), StatusCode::CREATED);
+
+    let selected =
+        wait_for_channel_member_readiness(&app, &token, "auto-ready-channel", &alice_id, "ready")
+            .await;
+    assert_eq!(selected["readiness"], "ready");
+    assert!(state
+        .memory_events()
+        .events_for_agent(&alice_id)
+        .await
+        .iter()
+        .any(|event| event.event_type == "memory_updated"
+            && event.status == "ready"
+            && event.channel_id.as_deref() == Some("auto-ready-channel")));
+    let messages = state
+        .messages()
+        .reconstructed_context("auto-ready-channel")
+        .await;
+    assert!(messages.contains("已就位"));
 }
 
 #[tokio::test]
@@ -689,7 +759,10 @@ async fn create_channel_lists_channel_even_when_later_workspace_setup_fails() {
 
     assert_eq!(created_channel.status(), StatusCode::CREATED);
     let created_channel_body = response_json(created_channel).await;
-    assert_eq!(created_channel_body["channel"]["id"], "partial-workspace-channel");
+    assert_eq!(
+        created_channel_body["channel"]["id"],
+        "partial-workspace-channel"
+    );
 
     let listed = response_json(get_json(&app, &token, "/v1/channels").await).await;
     assert!(listed["channels"]
@@ -2213,6 +2286,23 @@ async fn wait_for_channel_member(
         sleep(Duration::from_millis(20)).await;
     }
     panic!("selected agent should become a channel member");
+}
+
+async fn wait_for_channel_member_readiness(
+    app: &axum::Router,
+    token: &AuthToken,
+    channel_id: &str,
+    agent_id: &str,
+    readiness: &str,
+) -> Value {
+    for _ in 0..50 {
+        let member = wait_for_channel_member(app, token, channel_id, agent_id).await;
+        if member["readiness"] == readiness {
+            return member;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("selected agent should reach readiness {readiness}");
 }
 
 async fn wait_for_memory_update_requests(
