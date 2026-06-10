@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{InteractiveCardRow, Repositories};
+use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -54,8 +56,9 @@ pub struct InteractiveCard {
 
 #[derive(Clone, Debug, Default)]
 pub struct CardService {
-    root: Arc<PathBuf>,
+    repos: Option<Repositories>,
     inner: Arc<Mutex<CardStateStore>>,
+    mutation_gate: Arc<AsyncMutex<()>>,
 }
 
 #[derive(Debug, Default)]
@@ -67,18 +70,20 @@ struct CardStateStore {
 }
 
 impl CardService {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(repos: Repositories) -> Self {
         Self {
             inner: Arc::new(Mutex::new(CardStateStore {
-                cards: load_cards(&root),
                 ..CardStateStore::default()
             })),
-            root: Arc::new(root),
+            mutation_gate: Arc::new(AsyncMutex::new(())),
+            repos: Some(repos),
         }
     }
 
     pub fn for_tests() -> Self {
-        Self::new(std::env::temp_dir().join(format!("slei-cards-{}", Uuid::new_v4())))
+        Self::new(repositories_blocking(
+            std::env::temp_dir().join(format!("slei-cards-{}", Uuid::new_v4())),
+        ))
     }
 
     pub fn clear_for_development_reset(&self) {
@@ -90,14 +95,17 @@ impl CardService {
         proposal: CardProposal,
         idempotency_key: &str,
     ) -> Result<InteractiveCard, CardError> {
+        let _gate = self.mutation_gate.lock().await;
         validate_action(&proposal)?;
-        let mut state = self.inner.lock().expect("card state lock");
-        if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
-            return state
-                .cards
-                .get(card_id)
-                .cloned()
-                .ok_or(CardError::CardNotFound);
+        {
+            let state = self.inner.lock().expect("card state lock");
+            if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
+                return state
+                    .cards
+                    .get(card_id)
+                    .cloned()
+                    .ok_or(CardError::CardNotFound);
+            }
         }
 
         let card = InteractiveCard {
@@ -110,11 +118,12 @@ impl CardService {
             view: None,
             state: CardState::Pending,
         };
+        self.persist_card(&card).await?;
+        let mut state = self.inner.lock().expect("card state lock");
         state
             .proposal_idempotency
             .insert(idempotency_key.to_string(), card.id.clone());
         state.cards.insert(card.id.clone(), card.clone());
-        persist_cards(&self.root, &state.cards)?;
         Ok(card)
     }
 
@@ -130,6 +139,7 @@ impl CardService {
         payload: &Value,
         idempotency_key: &str,
     ) -> Result<InteractiveCardView, CardError> {
+        let _gate = self.mutation_gate.lock().await;
         let template = product_tool_template(payload)?;
         let name = required_string(&template.draft, "name")?.to_string();
         let action = CardAction::CreateAgent {
@@ -143,14 +153,16 @@ impl CardService {
         };
         validate_action(&proposal)?;
 
-        let mut state = self.inner.lock().expect("card state lock");
-        if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
-            let card = state
-                .cards
-                .get(card_id)
-                .cloned()
-                .ok_or(CardError::CardNotFound)?;
-            return Ok(card.to_view());
+        {
+            let state = self.inner.lock().expect("card state lock");
+            if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
+                let card = state
+                    .cards
+                    .get(card_id)
+                    .cloned()
+                    .ok_or(CardError::CardNotFound)?;
+                return Ok(card.to_view());
+            }
         }
 
         let card = InteractiveCard {
@@ -163,11 +175,12 @@ impl CardService {
             view: Some(template),
             state: CardState::Pending,
         };
+        self.persist_card(&card).await?;
+        let mut state = self.inner.lock().expect("card state lock");
         state
             .proposal_idempotency
             .insert(idempotency_key.to_string(), card.id.clone());
         state.cards.insert(card.id.clone(), card.clone());
-        persist_cards(&self.root, &state.cards)?;
         Ok(card.to_view())
     }
 
@@ -176,37 +189,37 @@ impl CardService {
         decision: CardDecision,
         idempotency_key: &str,
     ) -> Result<(), CardError> {
-        let mut state = self.inner.lock().expect("card state lock");
-        if state.decision_idempotency.contains_key(idempotency_key) {
-            return Ok(());
-        }
+        let _gate = self.mutation_gate.lock().await;
+        self.ensure_card_cached(&decision.card_id).await?;
+        let (card, executed, next_state) = {
+            let state = self.inner.lock().expect("card state lock");
+            if state.decision_idempotency.contains_key(idempotency_key) {
+                return Ok(());
+            }
 
-        let (next_state, executed) = {
-            let card = state
+            let mut card = state
                 .cards
-                .get_mut(&decision.card_id)
+                .get(&decision.card_id)
+                .cloned()
                 .ok_or(CardError::CardNotFound)?;
             if decision.confirm {
                 card.state = CardState::Confirmed;
-                (
-                    card.state.clone(),
-                    Some(execute_action(
-                        &card.action,
-                        decision.edited_name.as_deref(),
-                    )),
-                )
+                let executed = execute_action(&card.action, decision.edited_name.as_deref());
+                (card, Some(executed), CardState::Confirmed)
             } else {
                 card.state = CardState::Dismissed;
-                (card.state.clone(), None)
+                (card, None, CardState::Dismissed)
             }
         };
+        self.persist_card(&card).await?;
+        let mut state = self.inner.lock().expect("card state lock");
+        state.cards.insert(card.id.clone(), card);
         if let Some(executed) = executed {
             state.executed_actions.push(executed);
         }
         state
             .decision_idempotency
             .insert(idempotency_key.to_string(), next_state);
-        persist_cards(&self.root, &state.cards)?;
         Ok(())
     }
 
@@ -215,38 +228,90 @@ impl CardService {
         card_id: &str,
         idempotency_key: &str,
     ) -> Result<InteractiveCardView, CardError> {
-        let mut state = self.inner.lock().expect("card state lock");
-        if let Some(existing_state) = state.decision_idempotency.get(idempotency_key) {
-            let card = state
+        let _gate = self.mutation_gate.lock().await;
+        self.ensure_card_cached(card_id).await?;
+        let card = {
+            let state = self.inner.lock().expect("card state lock");
+            if let Some(existing_state) = state.decision_idempotency.get(idempotency_key) {
+                let card = state
+                    .cards
+                    .get(card_id)
+                    .cloned()
+                    .ok_or(CardError::CardNotFound)?;
+                if *existing_state == card.state || card.state == CardState::Done {
+                    return Ok(card.to_view());
+                }
+            }
+            let mut card = state
                 .cards
                 .get(card_id)
                 .cloned()
                 .ok_or(CardError::CardNotFound)?;
-            if *existing_state == card.state || card.state == CardState::Done {
-                return Ok(card.to_view());
-            }
-        }
-        let card = state
-            .cards
-            .get_mut(card_id)
-            .ok_or(CardError::CardNotFound)?;
-        card.state = CardState::Done;
+            card.state = CardState::Done;
+            card
+        };
+        self.persist_card(&card).await?;
         let view = card.to_view();
+        let mut state = self.inner.lock().expect("card state lock");
+        state.cards.insert(card.id.clone(), card);
         state
             .decision_idempotency
             .insert(idempotency_key.to_string(), CardState::Done);
-        persist_cards(&self.root, &state.cards)?;
         Ok(view)
     }
 
     pub async fn card(&self, card_id: &str) -> Result<InteractiveCard, CardError> {
-        self.inner
+        if let Some(card) = self
+            .inner
             .lock()
             .expect("card state lock")
             .cards
             .get(card_id)
             .cloned()
-            .ok_or(CardError::CardNotFound)
+        {
+            return Ok(card);
+        }
+        let Some(repos) = &self.repos else {
+            return Err(CardError::CardNotFound);
+        };
+        let row = repos
+            .interactive_card(card_id)
+            .await
+            .map_err(card_storage_error)?
+            .ok_or(CardError::CardNotFound)?;
+        let card = card_from_row(row)?;
+        self.inner
+            .lock()
+            .expect("card state lock")
+            .cards
+            .insert(card.id.clone(), card.clone());
+        Ok(card)
+    }
+
+    pub async fn attach_message_id(
+        &self,
+        card_id: &str,
+        message_id: &str,
+    ) -> Result<InteractiveCard, CardError> {
+        let _gate = self.mutation_gate.lock().await;
+        self.ensure_card_cached(card_id).await?;
+        let card = {
+            let state = self.inner.lock().expect("card state lock");
+            let mut card = state
+                .cards
+                .get(card_id)
+                .cloned()
+                .ok_or(CardError::CardNotFound)?;
+            card.message_id = Some(message_id.to_string());
+            card
+        };
+        self.persist_card(&card).await?;
+        self.inner
+            .lock()
+            .expect("card state lock")
+            .cards
+            .insert(card.id.clone(), card.clone());
+        Ok(card)
     }
 
     pub async fn executed_actions(&self) -> Vec<String> {
@@ -255,6 +320,30 @@ impl CardService {
             .expect("card state lock")
             .executed_actions
             .clone()
+    }
+
+    async fn persist_card(&self, card: &InteractiveCard) -> Result<(), CardError> {
+        let Some(repos) = &self.repos else {
+            return Ok(());
+        };
+        repos
+            .upsert_interactive_card(card_to_row(card)?)
+            .await
+            .map_err(card_storage_error)
+    }
+
+    async fn ensure_card_cached(&self, card_id: &str) -> Result<(), CardError> {
+        if self
+            .inner
+            .lock()
+            .expect("card state lock")
+            .cards
+            .contains_key(card_id)
+        {
+            return Ok(());
+        }
+        let _ = self.card(card_id).await?;
+        Ok(())
     }
 }
 
@@ -417,28 +506,67 @@ fn agent_description(name: &str) -> String {
     }
 }
 
-fn load_cards(root: &PathBuf) -> HashMap<String, InteractiveCard> {
-    fs::read_to_string(root.join("cards/index.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<InteractiveCard>>(&raw).ok())
-        .unwrap_or_default()
-        .into_iter()
-        .map(|card| (card.id.clone(), card))
-        .collect()
+fn card_to_row(card: &InteractiveCard) -> Result<InteractiveCardRow, CardError> {
+    Ok(InteractiveCardRow {
+        id: card.id.clone(),
+        run_id: card.run_id.clone(),
+        agent_id: card.agent_id.clone(),
+        conversation_id: card.conversation_id.clone(),
+        message_id: card.message_id.clone(),
+        action_payload: serde_json::to_string(&card.action).map_err(CardError::Json)?,
+        template_payload: card
+            .view
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(CardError::Json)?,
+        state: serde_json::to_string(&card.state).map_err(CardError::Json)?,
+    })
 }
 
-fn persist_cards(
-    root: &PathBuf,
-    cards: &HashMap<String, InteractiveCard>,
-) -> Result<(), CardError> {
-    let path = root.join("cards/index.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(CardError::Io)?;
-    }
-    let mut ordered = cards.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by(|left, right| left.id.cmp(&right.id));
-    let payload = serde_json::to_string_pretty(&ordered).map_err(CardError::Json)?;
-    fs::write(path, payload).map_err(CardError::Io)
+fn card_from_row(row: InteractiveCardRow) -> Result<InteractiveCard, CardError> {
+    Ok(InteractiveCard {
+        id: row.id,
+        run_id: row.run_id,
+        agent_id: row.agent_id,
+        conversation_id: row.conversation_id,
+        message_id: row.message_id,
+        action: serde_json::from_str(&row.action_payload).map_err(CardError::Json)?,
+        view: row
+            .template_payload
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(CardError::Json)?,
+        state: serde_json::from_str(&row.state).map_err(CardError::Json)?,
+    })
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create card storage runtime");
+        runtime.block_on(async move {
+            std::fs::create_dir_all(&data_root).expect("create card data root");
+            let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+            let db = SleiDb::connect(&database_url)
+                .await
+                .expect("connect card db");
+            db.migrate().await.expect("migrate card db");
+            Repositories::new(db.pool().clone())
+        })
+    })
+    .join()
+    .expect("initialize card repositories")
+}
+
+fn card_storage_error(error: sqlx::Error) -> CardError {
+    CardError::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        error.to_string(),
+    ))
 }
 
 fn validate_action(proposal: &CardProposal) -> Result<(), CardError> {

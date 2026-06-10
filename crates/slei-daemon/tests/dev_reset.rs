@@ -248,7 +248,11 @@ async fn dev_reset_restores_live_local_node_state() {
 
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests_with_agent_root_async(token.clone(), temp_data_root()).await;
-    state.nodes().rename_local_node("Studio Node").unwrap();
+    state
+        .nodes()
+        .rename_local_node("Studio Node")
+        .await
+        .unwrap();
 
     let response = post_dev_reset(state.clone(), token).await;
     assert_eq!(response.status(), StatusCode::OK);

@@ -59,6 +59,58 @@ pub struct AgentRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentUpdateRow {
+    pub id: String,
+    pub name: String,
+    pub handle: String,
+    pub agent_kind: String,
+    pub system_owned: bool,
+    pub runtime_kind: String,
+    pub model: String,
+    pub node_id: String,
+    pub description: String,
+    pub workspace_path: String,
+    pub memory_path: String,
+    pub docs_path: String,
+    pub avatar_seed: String,
+    pub runtime_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InteractiveCardRow {
+    pub id: String,
+    pub run_id: String,
+    pub agent_id: String,
+    pub conversation_id: Option<String>,
+    pub message_id: Option<String>,
+    pub action_payload: String,
+    pub template_payload: Option<String>,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserPreferencesRow {
+    pub locale: String,
+    pub time_zone: String,
+    pub theme: String,
+    pub font_size: String,
+    pub notify_mentions: bool,
+    pub notify_human_replies: bool,
+    pub notify_approvals: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeRow {
+    pub id: String,
+    pub name: String,
+    pub platform: Option<String>,
+    pub arch: Option<String>,
+    pub hostname: Option<String>,
+    pub status: String,
+    pub daemon_version: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelRow {
     pub id: String,
     pub name: String,
@@ -338,28 +390,90 @@ impl Repositories {
         .await?;
 
         rows.into_iter()
-            .map(|row| {
-                let system_owned: i64 = row.try_get("system_owned")?;
-                Ok(AgentRow {
-                    id: row.try_get("id")?,
-                    name: row.try_get("name")?,
-                    handle: row.try_get("handle")?,
-                    agent_kind: row.try_get("agent_kind")?,
-                    system_owned: system_owned != 0,
-                    runtime_kind: row.try_get("runtime_kind")?,
-                    model: row.try_get("model")?,
-                    node_id: row.try_get("node_id")?,
-                    description: row.try_get("description")?,
-                    workspace_path: row.try_get("workspace_path")?,
-                    memory_path: row.try_get("memory_path")?,
-                    docs_path: row.try_get("docs_path")?,
-                    avatar_seed: row.try_get("avatar_seed")?,
-                    runtime_status: row.try_get("runtime_status")?,
-                    created_at: row.try_get("created_at")?,
-                    updated_at: row.try_get("updated_at")?,
-                })
-            })
+            .map(|row| agent_row_from_sql(row))
             .collect()
+    }
+
+    pub async fn agent_by_id(&self, id: &str) -> Result<Option<AgentRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
+                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    runtime_status, created_at, updated_at
+             FROM agents
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(agent_row_from_sql).transpose()
+    }
+
+    pub async fn agent_by_handle(&self, handle: &str) -> Result<Option<AgentRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
+                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    runtime_status, created_at, updated_at
+             FROM agents
+             WHERE lower(handle) = lower(?)",
+        )
+        .bind(handle)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(agent_row_from_sql).transpose()
+    }
+
+    pub async fn delete_agent(&self, id: &str) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM channel_members WHERE agent_id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM agents WHERE id = ?")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn update_agent(&self, row: AgentUpdateRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE agents
+             SET name = ?,
+                 handle = ?,
+                 agent_kind = ?,
+                 system_owned = ?,
+                 runtime_kind = ?,
+                 model = ?,
+                 node_id = ?,
+                 description = ?,
+                 workspace_path = ?,
+                 memory_path = ?,
+                 docs_path = ?,
+                 avatar_seed = ?,
+                 runtime_status = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+        )
+        .bind(row.name)
+        .bind(row.handle)
+        .bind(row.agent_kind)
+        .bind(if row.system_owned { 1 } else { 0 })
+        .bind(row.runtime_kind)
+        .bind(row.model)
+        .bind(row.node_id)
+        .bind(row.description)
+        .bind(row.workspace_path)
+        .bind(row.memory_path)
+        .bind(row.docs_path)
+        .bind(row.avatar_seed)
+        .bind(row.runtime_status)
+        .bind(row.id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     pub async fn upsert_channel(
@@ -1698,6 +1812,163 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn upsert_interactive_card(
+        &self,
+        row: InteractiveCardRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO interactive_cards(
+                id, run_id, agent_id, conversation_id, message_id, action_payload, template_payload, state
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                run_id = excluded.run_id,
+                agent_id = excluded.agent_id,
+                conversation_id = excluded.conversation_id,
+                message_id = excluded.message_id,
+                action_payload = excluded.action_payload,
+                template_payload = excluded.template_payload,
+                state = excluded.state,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(row.id)
+        .bind(row.run_id)
+        .bind(row.agent_id)
+        .bind(row.conversation_id)
+        .bind(row.message_id)
+        .bind(row.action_payload)
+        .bind(row.template_payload)
+        .bind(row.state)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn interactive_card(
+        &self,
+        id: &str,
+    ) -> Result<Option<InteractiveCardRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, run_id, agent_id, conversation_id, message_id, action_payload, template_payload, state
+             FROM interactive_cards
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(interactive_card_row_from_sql).transpose()
+    }
+
+    pub async fn interactive_cards(&self) -> Result<Vec<InteractiveCardRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, run_id, agent_id, conversation_id, message_id, action_payload, template_payload, state
+             FROM interactive_cards
+             ORDER BY created_at ASC, id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(interactive_card_row_from_sql)
+            .collect()
+    }
+
+    pub async fn upsert_user_preferences(
+        &self,
+        row: UserPreferencesRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO user_preferences(
+                profile_id, locale, time_zone, theme, font_size,
+                notify_mentions, notify_human_replies, notify_approvals
+             )
+             VALUES ('local', ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(profile_id) DO UPDATE SET
+                locale = excluded.locale,
+                time_zone = excluded.time_zone,
+                theme = excluded.theme,
+                font_size = excluded.font_size,
+                notify_mentions = excluded.notify_mentions,
+                notify_human_replies = excluded.notify_human_replies,
+                notify_approvals = excluded.notify_approvals,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(row.locale)
+        .bind(row.time_zone)
+        .bind(row.theme)
+        .bind(row.font_size)
+        .bind(if row.notify_mentions { 1 } else { 0 })
+        .bind(if row.notify_human_replies { 1 } else { 0 })
+        .bind(if row.notify_approvals { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn user_preferences(&self) -> Result<Option<UserPreferencesRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT locale, time_zone, theme, font_size,
+                    notify_mentions, notify_human_replies, notify_approvals
+             FROM user_preferences
+             WHERE profile_id = 'local'",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(user_preferences_row_from_sql).transpose()
+    }
+
+    pub async fn upsert_node(&self, row: NodeRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO nodes(id, name, platform, arch, hostname, status, daemon_version)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                platform = excluded.platform,
+                arch = excluded.arch,
+                hostname = excluded.hostname,
+                status = excluded.status,
+                daemon_version = excluded.daemon_version,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(row.id)
+        .bind(row.name)
+        .bind(row.platform)
+        .bind(row.arch)
+        .bind(row.hostname)
+        .bind(row.status)
+        .bind(row.daemon_version)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn node(&self, id: &str) -> Result<Option<NodeRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, platform, arch, hostname, status, daemon_version
+             FROM nodes
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(node_row_from_sql).transpose()
+    }
+
+    pub async fn nodes(&self) -> Result<Vec<NodeRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, name, platform, arch, hostname, status, daemon_version
+             FROM nodes
+             ORDER BY id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(node_row_from_sql).collect()
+    }
+
     async fn count_rows(&self, table: &str) -> Result<u64, sqlx::Error> {
         let query = format!("SELECT COUNT(*) AS count FROM {table}");
         let row = sqlx::query(&query).fetch_one(&self.pool).await?;
@@ -1752,6 +2023,28 @@ fn author_kind_for(author_id: &str) -> &'static str {
     }
 }
 
+fn agent_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentRow, sqlx::Error> {
+    let system_owned: i64 = row.try_get("system_owned")?;
+    Ok(AgentRow {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        handle: row.try_get("handle")?,
+        agent_kind: row.try_get("agent_kind")?,
+        system_owned: system_owned != 0,
+        runtime_kind: row.try_get("runtime_kind")?,
+        model: row.try_get("model")?,
+        node_id: row.try_get("node_id")?,
+        description: row.try_get("description")?,
+        workspace_path: row.try_get("workspace_path")?,
+        memory_path: row.try_get("memory_path")?,
+        docs_path: row.try_get("docs_path")?,
+        avatar_seed: row.try_get("avatar_seed")?,
+        runtime_status: row.try_get("runtime_status")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
 fn task_root_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskRootRow, sqlx::Error> {
     let needs_assignment: i64 = row.try_get("needs_assignment")?;
     let attention_required: i64 = row.try_get("attention_required")?;
@@ -1783,6 +2076,50 @@ fn task_reply_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskReplyRow,
         body: row.try_get("content")?,
         status: row.try_get("status")?,
         created_at: row.try_get("created_at")?,
+    })
+}
+
+fn interactive_card_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<InteractiveCardRow, sqlx::Error> {
+    Ok(InteractiveCardRow {
+        id: row.try_get("id")?,
+        run_id: row.try_get("run_id")?,
+        agent_id: row.try_get("agent_id")?,
+        conversation_id: row.try_get("conversation_id")?,
+        message_id: row.try_get("message_id")?,
+        action_payload: row.try_get("action_payload")?,
+        template_payload: row.try_get("template_payload")?,
+        state: row.try_get("state")?,
+    })
+}
+
+fn user_preferences_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<UserPreferencesRow, sqlx::Error> {
+    let notify_mentions: i64 = row.try_get("notify_mentions")?;
+    let notify_human_replies: i64 = row.try_get("notify_human_replies")?;
+    let notify_approvals: i64 = row.try_get("notify_approvals")?;
+    Ok(UserPreferencesRow {
+        locale: row.try_get("locale")?,
+        time_zone: row.try_get("time_zone")?,
+        theme: row.try_get("theme")?,
+        font_size: row.try_get("font_size")?,
+        notify_mentions: notify_mentions != 0,
+        notify_human_replies: notify_human_replies != 0,
+        notify_approvals: notify_approvals != 0,
+    })
+}
+
+fn node_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<NodeRow, sqlx::Error> {
+    Ok(NodeRow {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        platform: row.try_get("platform")?,
+        arch: row.try_get("arch")?,
+        hostname: row.try_get("hostname")?,
+        status: row.try_get("status")?,
+        daemon_version: row.try_get("daemon_version")?,
     })
 }
 

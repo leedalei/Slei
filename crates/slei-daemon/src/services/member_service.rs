@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use slei_default_agent_assets::{
     initial_memory as shared_initial_memory, standard_skill_assets, AgentTemplateInput,
 };
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{AgentRow, AgentUpdateRow, Repositories};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -124,10 +126,11 @@ pub struct ChannelMemberRecord {
     pub effective_permission: PermissionPreset,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MemberService {
     inner: Arc<Mutex<MemberState>>,
     agent_data_root: Arc<PathBuf>,
+    repos: Repositories,
 }
 
 #[derive(Debug, Default)]
@@ -143,20 +146,29 @@ struct MemberState {
 }
 
 impl MemberService {
-    pub fn new(agent_data_root: PathBuf) -> Self {
-        let state = MemberState::with_product_agents(load_product_agents(&agent_data_root));
+    pub fn new(agent_data_root: PathBuf, repos: Repositories) -> Self {
+        import_legacy_product_agents(&agent_data_root);
+        let state = MemberState::default();
         Self {
             inner: Arc::new(Mutex::new(state)),
             agent_data_root: Arc::new(agent_data_root),
+            repos,
         }
     }
 
     pub fn for_tests() -> Self {
-        Self::new(std::env::temp_dir().join(format!("slei-agents-{}", Uuid::new_v4())))
+        let root = std::env::temp_dir().join(format!("slei-agents-{}", Uuid::new_v4()));
+        let repos = repositories_blocking(root.clone());
+        Self::new(root, repos)
     }
 
     pub fn for_tests_with_data_root(data_root: PathBuf) -> Self {
-        Self::new(data_root)
+        let repos = repositories_blocking(data_root.clone());
+        Self::new(data_root, repos)
+    }
+
+    pub fn for_tests_with_data_root_and_repos(data_root: PathBuf, repos: Repositories) -> Self {
+        Self::new(data_root, repos)
     }
 
     pub async fn create_agent(
@@ -255,14 +267,7 @@ impl MemberService {
     }
 
     pub async fn list_product_agents(&self) -> Vec<ProductAgentRecord> {
-        let mut agents = self
-            .inner
-            .lock()
-            .await
-            .product_agents
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut agents = self.load_product_agents_from_repo().await;
         agents.sort_by(|left, right| left.created_at.cmp(&right.created_at));
         agents
     }
@@ -271,13 +276,13 @@ impl MemberService {
         &self,
         agent_id: &str,
     ) -> Result<ProductAgentRecord, MemberError> {
-        self.inner
-            .lock()
+        let row = self
+            .repos
+            .agent_by_id(agent_id)
             .await
-            .product_agents
-            .get(agent_id)
-            .cloned()
-            .ok_or(MemberError::AgentNotFound)
+            .map_err(member_storage_error)?
+            .ok_or(MemberError::AgentNotFound)?;
+        self.product_agent_from_row(row).await
     }
 
     pub async fn create_product_agent(
@@ -298,15 +303,23 @@ impl MemberService {
         }
 
         {
-            let state = self.inner.lock().await;
-            if let Some(id) = state.product_agent_idempotency.get(idempotency_key) {
-                return state
-                    .product_agents
-                    .get(id)
+            let idempotent_id = {
+                let state = self.inner.lock().await;
+                state
+                    .product_agent_idempotency
+                    .get(idempotency_key)
                     .cloned()
-                    .ok_or(MemberError::AgentNotFound);
+            };
+            if let Some(id) = idempotent_id {
+                return self.get_product_agent(&id).await;
             }
-            if state.product_agent_handles.contains_key(&normalized_handle) {
+            if self
+                .repos
+                .agent_by_handle(&normalized_handle)
+                .await
+                .map_err(member_storage_error)?
+                .is_some()
+            {
                 return Err(MemberError::DuplicateHandle);
             }
         }
@@ -321,25 +334,28 @@ impl MemberService {
         node_id: &str,
         idempotency_key: &str,
     ) -> Result<(ProductAgentRecord, bool), MemberError> {
-        let existing_guide = {
-            let state = self.inner.lock().await;
-            state
-                .product_agents
-                .values()
-                .find(|agent| agent.id == "agent_guide_local_node" && agent.agent_kind == "guide")
-                .cloned()
-        };
-        if let Some(agent) = existing_guide {
-            return self
-                .normalize_existing_guide_agent(agent)
-                .await
-                .map(|agent| (agent, false));
-        }
+        if let Some(row) = self
+            .repos
+            .agent_by_id("agent_guide_local_node")
+            .await
+            .map_err(member_storage_error)?
         {
-            let state = self.inner.lock().await;
-            if state.product_agent_handles.contains_key("@yeal") {
-                return Err(MemberError::DuplicateHandle);
+            let agent = self.product_agent_from_row(row).await?;
+            if agent.agent_kind == "guide" {
+                return self
+                    .normalize_existing_guide_agent(agent)
+                    .await
+                    .map(|agent| (agent, false));
             }
+        }
+        if self
+            .repos
+            .agent_by_handle("@yeal")
+            .await
+            .map_err(member_storage_error)?
+            .is_some()
+        {
+            return Err(MemberError::DuplicateHandle);
         }
 
         let draft = ProductAgentDraft {
@@ -371,15 +387,13 @@ impl MemberService {
             return Err(MemberError::InvalidAgent);
         }
 
-        let existing_agent = {
-            self.inner
-                .lock()
-                .await
-                .product_agents
-                .get(GLOBAL_COORDINATOR_AGENT_ID)
-                .cloned()
-        };
-        if let Some(agent) = existing_agent {
+        if let Some(row) = self
+            .repos
+            .agent_by_id(GLOBAL_COORDINATOR_AGENT_ID)
+            .await
+            .map_err(member_storage_error)?
+        {
+            let agent = self.product_agent_from_row(row).await?;
             return self.normalize_existing_global_coordinator(agent).await;
         }
 
@@ -415,8 +429,13 @@ impl MemberService {
         }
 
         let id = coordinator_agent_id(trimmed_channel_id);
-        let existing_agent = { self.inner.lock().await.product_agents.get(&id).cloned() };
-        if let Some(agent) = existing_agent {
+        if let Some(row) = self
+            .repos
+            .agent_by_id(&id)
+            .await
+            .map_err(member_storage_error)?
+        {
+            let agent = self.product_agent_from_row(row).await?;
             return self
                 .normalize_existing_channel_coordinator(agent, channel_name)
                 .await;
@@ -457,9 +476,12 @@ impl MemberService {
         agent.description = description;
         agent.updated_at = current_timestamp();
         fs::write(&agent.memory_path, initial_memory(&agent)).map_err(MemberError::Io)?;
+        self.repos
+            .update_agent(product_agent_to_update_row(&agent))
+            .await
+            .map_err(member_storage_error)?;
         let mut state = self.inner.lock().await;
         state.product_agents.insert(agent.id.clone(), agent.clone());
-        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
         Ok(agent)
     }
 
@@ -487,27 +509,35 @@ impl MemberService {
         agent.channel_ids.clear();
         agent.updated_at = current_timestamp();
         fs::write(&agent.memory_path, initial_memory(&agent)).map_err(MemberError::Io)?;
-        let mut state = self.inner.lock().await;
-        if let Some(owner) = state.product_agent_handles.get("@global-coordinator") {
-            if owner != &agent.id {
+        if let Some(owner) = self
+            .repos
+            .agent_by_handle("@global-coordinator")
+            .await
+            .map_err(member_storage_error)?
+        {
+            if owner.id != agent.id {
                 return Err(MemberError::DuplicateHandle);
             }
         }
+        self.repos
+            .update_agent(product_agent_to_update_row(&agent))
+            .await
+            .map_err(member_storage_error)?;
+        let mut state = self.inner.lock().await;
         state.product_agent_handles.remove(&previous_handle);
         state
             .product_agent_handles
             .insert(agent.handle.to_lowercase(), agent.id.clone());
         state.product_agents.insert(agent.id.clone(), agent.clone());
-        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
         Ok(agent)
     }
 
     pub async fn is_coordinator_agent(&self, agent_id: &str) -> bool {
-        self.inner
-            .lock()
+        self.repos
+            .agent_by_id(agent_id)
             .await
-            .product_agents
-            .get(agent_id)
+            .ok()
+            .flatten()
             .is_some_and(|agent| agent.agent_kind == "coordinator")
     }
 
@@ -529,18 +559,26 @@ impl MemberService {
         write_default_skills(&agent)?;
         sanitize_legacy_guide_memory(&agent)?;
 
-        let mut state = self.inner.lock().await;
-        if let Some(owner) = state.product_agent_handles.get("@yeal") {
-            if owner != &agent.id {
+        if let Some(owner) = self
+            .repos
+            .agent_by_handle("@yeal")
+            .await
+            .map_err(member_storage_error)?
+        {
+            if owner.id != agent.id {
                 return Err(MemberError::DuplicateHandle);
             }
         }
+        self.repos
+            .update_agent(product_agent_to_update_row(&agent))
+            .await
+            .map_err(member_storage_error)?;
+        let mut state = self.inner.lock().await;
         state.product_agent_handles.remove(&previous_handle);
         state
             .product_agent_handles
             .insert(agent.handle.to_lowercase(), agent.id.clone());
         state.product_agents.insert(agent.id.clone(), agent.clone());
-        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
         Ok(agent)
     }
 
@@ -610,6 +648,27 @@ impl MemberService {
         fs::write(&memory_path, initial_memory(&record)).map_err(MemberError::Io)?;
         write_default_skills(&record)?;
 
+        self.repos
+            .upsert_agent(
+                &record.id,
+                &record.name,
+                &record.handle,
+                &record.agent_kind,
+                record.system_owned,
+                &record.runtime_kind,
+                &record.model,
+                &record.node_id,
+                &record.description,
+                &record.avatar_seed,
+            )
+            .await
+            .map_err(member_storage_error)?;
+        self.repos
+            .update_agent(product_agent_to_update_row(&record))
+            .await
+            .map_err(member_storage_error)?;
+        self.persist_agent_channel_memberships(&record).await?;
+
         let mut state = self.inner.lock().await;
         state
             .product_agent_idempotency
@@ -620,9 +679,32 @@ impl MemberService {
         state
             .product_agents
             .insert(record.id.clone(), record.clone());
-        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
 
         Ok(record)
+    }
+
+    async fn persist_agent_channel_memberships(
+        &self,
+        record: &ProductAgentRecord,
+    ) -> Result<(), MemberError> {
+        if record
+            .channel_ids
+            .iter()
+            .any(|channel_id| channel_id == "all")
+        {
+            self.repos
+                .upsert_channel("all", "all", Some("默认团队频道"), true, "controlled")
+                .await
+                .map_err(member_storage_error)?;
+        }
+
+        for channel_id in &record.channel_ids {
+            self.repos
+                .upsert_channel_member(channel_id, &record.id, "joining")
+                .await
+                .map_err(member_storage_error)?;
+        }
+        Ok(())
     }
 
     pub async fn update_product_agent(
@@ -630,11 +712,7 @@ impl MemberService {
         agent_id: &str,
         update: ProductAgentUpdate,
     ) -> Result<ProductAgentRecord, MemberError> {
-        let mut state = self.inner.lock().await;
-        let agent = state
-            .product_agents
-            .get_mut(agent_id)
-            .ok_or(MemberError::AgentNotFound)?;
+        let mut agent = self.get_product_agent(agent_id).await?;
 
         if let Some(name) = update.name {
             if name.trim().is_empty() {
@@ -663,9 +741,16 @@ impl MemberService {
             agent.node_id = node_id.trim().to_string();
         }
         agent.updated_at = current_timestamp();
-        let record = agent.clone();
-        persist_product_agents(&self.agent_data_root, &state.product_agents)?;
-        Ok(record)
+        self.repos
+            .update_agent(product_agent_to_update_row(&agent))
+            .await
+            .map_err(member_storage_error)?;
+        self.inner
+            .lock()
+            .await
+            .product_agents
+            .insert(agent.id.clone(), agent.clone());
+        Ok(agent)
     }
 
     pub async fn delete_product_agent(
@@ -673,15 +758,15 @@ impl MemberService {
         agent_id: &str,
     ) -> Result<ProductAgentRecord, MemberError> {
         let record = {
-            let mut state = self.inner.lock().await;
-            let record = state
-                .product_agents
-                .get(agent_id)
-                .cloned()
-                .ok_or(MemberError::AgentNotFound)?;
+            let record = self.get_product_agent(agent_id).await?;
             if record.system_owned {
                 return Err(MemberError::SystemAgentImmutable);
             }
+            self.repos
+                .delete_agent(agent_id)
+                .await
+                .map_err(member_storage_error)?;
+            let mut state = self.inner.lock().await;
             state.product_agents.remove(agent_id);
             state
                 .product_agent_handles
@@ -689,7 +774,6 @@ impl MemberService {
             state
                 .product_agent_idempotency
                 .retain(|_, existing_id| existing_id != agent_id);
-            persist_product_agents(&self.agent_data_root, &state.product_agents)?;
             record
         };
 
@@ -715,14 +799,7 @@ impl MemberService {
         if trimmed.is_empty() {
             return Err(MemberError::InvalidMemory);
         }
-        let record = self
-            .inner
-            .lock()
-            .await
-            .product_agents
-            .get(agent_id)
-            .cloned()
-            .ok_or(MemberError::AgentNotFound)?;
+        let record = self.get_product_agent(agent_id).await?;
 
         let workspace_path = PathBuf::from(&record.workspace_path);
         let memory_path = PathBuf::from(&record.memory_path);
@@ -742,14 +819,7 @@ impl MemberService {
     }
 
     pub async fn list_agent_skills(&self, agent_id: &str) -> Result<Vec<SkillRecord>, MemberError> {
-        let record = self
-            .inner
-            .lock()
-            .await
-            .product_agents
-            .get(agent_id)
-            .cloned()
-            .ok_or(MemberError::AgentNotFound)?;
+        let record = self.get_product_agent(agent_id).await?;
         read_standard_skills(&record).or_else(|error| {
             if matches!(error, MemberError::Io(ref io_error) if io_error.kind() == std::io::ErrorKind::NotFound) {
                 let legacy = read_legacy_skill_index(&record)?;
@@ -760,45 +830,131 @@ impl MemberService {
             }
         })
     }
-}
 
-impl MemberState {
-    fn with_product_agents(agents: Vec<ProductAgentRecord>) -> Self {
-        let mut state = Self::default();
-        for agent in agents {
-            state
-                .product_agent_handles
-                .insert(agent.handle.to_lowercase(), agent.id.clone());
-            state.product_agents.insert(agent.id.clone(), agent);
+    async fn load_product_agents_from_repo(&self) -> Vec<ProductAgentRecord> {
+        let rows = self.repos.agents().await.expect("load product agents");
+        let mut agents = Vec::new();
+        for row in rows {
+            agents.push(
+                self.product_agent_from_row(row)
+                    .await
+                    .expect("map product agent row"),
+            );
         }
-        state
+        agents
+    }
+
+    async fn product_agent_from_row(
+        &self,
+        row: AgentRow,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        let include_joining_memberships = row.agent_kind == "coordinator";
+        let channel_ids =
+            channel_ids_for_agent(&self.repos, &row.id, include_joining_memberships).await?;
+        let record = product_agent_from_row(row, channel_ids);
+        let _ = write_default_skills(&record);
+        Ok(record)
     }
 }
 
-fn load_product_agents(root: &PathBuf) -> Vec<ProductAgentRecord> {
-    let path = root.join("agents/index.json");
-    let agents = fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<ProductAgentRecord>>(&raw).ok())
-        .unwrap_or_default();
-    for agent in &agents {
-        let _ = write_default_skills(agent);
+async fn channel_ids_for_agent(
+    repos: &Repositories,
+    agent_id: &str,
+    include_joining_memberships: bool,
+) -> Result<Vec<String>, MemberError> {
+    let mut channel_ids = Vec::new();
+    for channel in repos.channels().await.map_err(member_storage_error)? {
+        if repos
+            .channel_members(&channel.id)
+            .await
+            .map_err(member_storage_error)?
+            .iter()
+            .any(|member| {
+                member.agent_id == agent_id
+                    && (channel.id == "all"
+                        || include_joining_memberships
+                        || member.readiness == "ready")
+            })
+        {
+            channel_ids.push(channel.id);
+        }
     }
-    agents
+    channel_ids.sort();
+    Ok(channel_ids)
 }
 
-fn persist_product_agents(
-    root: &PathBuf,
-    agents: &HashMap<String, ProductAgentRecord>,
-) -> Result<(), MemberError> {
-    let path = root.join("agents/index.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MemberError::Io)?;
+fn product_agent_from_row(row: AgentRow, channel_ids: Vec<String>) -> ProductAgentRecord {
+    ProductAgentRecord {
+        id: row.id,
+        name: row.name,
+        handle: row.handle,
+        agent_kind: row.agent_kind,
+        system_owned: row.system_owned,
+        runtime_kind: row.runtime_kind.clone(),
+        model: row.model,
+        node_id: row.node_id,
+        description: row.description,
+        workspace_path: row.workspace_path,
+        memory_path: row.memory_path,
+        docs_path: row.docs_path,
+        avatar_seed: row.avatar_seed,
+        runtime_thread: RuntimeThreadRecord {
+            runtime_kind: row.runtime_kind,
+            status: row.runtime_status,
+            created_at: row.created_at.clone(),
+        },
+        channel_ids,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
     }
-    let mut ordered = agents.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-    let payload = serde_json::to_string_pretty(&ordered).map_err(MemberError::Json)?;
-    fs::write(path, payload).map_err(MemberError::Io)
+}
+
+fn product_agent_to_update_row(agent: &ProductAgentRecord) -> AgentUpdateRow {
+    AgentUpdateRow {
+        id: agent.id.clone(),
+        name: agent.name.clone(),
+        handle: agent.handle.clone(),
+        agent_kind: agent.agent_kind.clone(),
+        system_owned: agent.system_owned,
+        runtime_kind: agent.runtime_kind.clone(),
+        model: agent.model.clone(),
+        node_id: agent.node_id.clone(),
+        description: agent.description.clone(),
+        workspace_path: agent.workspace_path.clone(),
+        memory_path: agent.memory_path.clone(),
+        docs_path: agent.docs_path.clone(),
+        avatar_seed: agent.avatar_seed.clone(),
+        runtime_status: agent.runtime_thread.status.clone(),
+    }
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create member storage runtime");
+        runtime.block_on(repositories_for_data_root(data_root))
+    })
+    .join()
+    .expect("initialize member repositories")
+}
+
+async fn repositories_for_data_root(data_root: PathBuf) -> Repositories {
+    std::fs::create_dir_all(&data_root).expect("create member data root");
+    let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&database_url)
+        .await
+        .expect("connect member db");
+    db.migrate().await.expect("migrate member db");
+    Repositories::new(db.pool().clone())
+}
+
+fn member_storage_error(error: sqlx::Error) -> MemberError {
+    MemberError::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        error.to_string(),
+    ))
 }
 
 fn normalize_handle(handle: &str) -> Result<String, MemberError> {
@@ -813,6 +969,82 @@ fn normalize_handle(handle: &str) -> Result<String, MemberError> {
     } else {
         Err(MemberError::InvalidHandle)
     }
+}
+
+fn load_legacy_product_agents(root: &PathBuf) -> Vec<ProductAgentRecord> {
+    fs::read_to_string(root.join("agents/index.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Vec<ProductAgentRecord>>(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn import_legacy_product_agents(root: &PathBuf) {
+    let agents = load_legacy_product_agents(root);
+    if agents.is_empty() {
+        return;
+    }
+    let root = root.clone();
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create legacy member import runtime");
+        runtime.block_on(async move {
+            let repos = repositories_for_data_root(root).await;
+            match repos.agents().await {
+                Ok(existing) if existing.is_empty() => {}
+                _ => return,
+            }
+            let mut existing_channel_ids = match repos.channels().await {
+                Ok(channels) => channels
+                    .into_iter()
+                    .map(|channel| channel.id)
+                    .collect::<HashSet<_>>(),
+                Err(_) => return,
+            };
+            for agent in agents {
+                let _ = repos
+                    .upsert_agent(
+                        &agent.id,
+                        &agent.name,
+                        &agent.handle,
+                        &agent.agent_kind,
+                        agent.system_owned,
+                        &agent.runtime_kind,
+                        &agent.model,
+                        &agent.node_id,
+                        &agent.description,
+                        &agent.avatar_seed,
+                    )
+                    .await;
+                let _ = repos
+                    .update_agent(product_agent_to_update_row(&agent))
+                    .await;
+                for channel_id in &agent.channel_ids {
+                    if !existing_channel_ids.contains(channel_id)
+                        && repos
+                            .upsert_channel(
+                                channel_id,
+                                channel_id,
+                                None,
+                                channel_id == "all",
+                                "Controlled",
+                            )
+                            .await
+                            .is_ok()
+                    {
+                        existing_channel_ids.insert(channel_id.clone());
+                    }
+                    let _ = repos
+                        .upsert_channel_member(channel_id, &agent.id, "ready")
+                        .await;
+                }
+                let _ = write_default_skills(&agent);
+            }
+        });
+    })
+    .join()
+    .expect("import legacy product agents");
 }
 
 fn coordinator_agent_id(channel_id: &str) -> String {

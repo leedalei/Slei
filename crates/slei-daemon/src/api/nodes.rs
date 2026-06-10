@@ -5,6 +5,7 @@ use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
+use crate::services::node_service::NodeRenameError;
 use crate::state::AppState;
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -48,8 +49,9 @@ pub async fn rename_local(
         Err(response) => return response,
     };
 
-    match state.nodes().rename_local_node(&payload.name) {
+    match state.nodes().rename_local_node(&payload.name).await {
         Ok(node) => Json(json!({ "node": node })).into_response(),
+        Err(NodeRenameError::Storage(_)) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         Err(_) => StatusCode::BAD_REQUEST.into_response(),
     }
 }

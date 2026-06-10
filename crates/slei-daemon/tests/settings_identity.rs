@@ -5,10 +5,11 @@ use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::notification_service::NotificationService;
 use slei_daemon::services::settings_service::{
-    LocalePreference, NotificationPreferences, ProfileDraft, SettingsService,
+    AppearancePreferences, LocalePreference, NotificationPreferences, ProfileDraft, SettingsService,
 };
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn settings_identity_creates_single_profile_and_rejects_handle_mutation() {
@@ -161,4 +162,101 @@ async fn notification_preferences_gate_notification_service_categories() {
     let entries = notifications.list_for_user("human_lei").await;
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].task_id, "task_reply");
+}
+
+#[tokio::test]
+async fn settings_preferences_survive_app_state_reload_without_legacy_json_file() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    state
+        .settings()
+        .set_locale(LocalePreference::EnUs)
+        .await
+        .expect("locale saves");
+    state
+        .settings()
+        .set_time_zone("America/Los_Angeles".to_string())
+        .await
+        .expect("time zone saves");
+    state
+        .settings()
+        .set_appearance(AppearancePreferences {
+            theme: "dark".to_string(),
+            font_size: "lg".to_string(),
+        })
+        .await
+        .expect("appearance saves");
+    state
+        .settings()
+        .set_notifications(NotificationPreferences {
+            mentions: false,
+            human_replies: true,
+            approvals: false,
+        })
+        .await
+        .expect("notifications save");
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root.clone()).await;
+    let preferences = reloaded.settings().preferences().await;
+
+    assert_eq!(preferences.locale, LocalePreference::EnUs);
+    assert_eq!(preferences.time_zone, "America/Los_Angeles");
+    assert_eq!(preferences.appearance.theme, "dark");
+    assert_eq!(preferences.appearance.font_size, "lg");
+    assert!(!preferences.notifications.mentions);
+    assert!(preferences.notifications.human_replies);
+    assert!(!preferences.notifications.approvals);
+    assert!(!root.join("settings/preferences.json").exists());
+}
+
+#[tokio::test]
+async fn settings_partial_update_after_reload_preserves_persisted_preferences() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-partial-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    state
+        .settings()
+        .set_locale(LocalePreference::EnUs)
+        .await
+        .expect("locale saves");
+    state
+        .settings()
+        .set_appearance(AppearancePreferences {
+            theme: "highContrast".to_string(),
+            font_size: "lg".to_string(),
+        })
+        .await
+        .expect("appearance saves");
+    state
+        .settings()
+        .set_notifications(NotificationPreferences {
+            mentions: false,
+            human_replies: false,
+            approvals: false,
+        })
+        .await
+        .expect("notifications save");
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    reloaded
+        .settings()
+        .set_time_zone("Europe/Berlin".to_string())
+        .await
+        .expect("time zone saves without loading preferences first");
+    let preferences = reloaded.settings().preferences().await;
+
+    assert_eq!(preferences.locale, LocalePreference::EnUs);
+    assert_eq!(preferences.time_zone, "Europe/Berlin");
+    assert_eq!(preferences.appearance.theme, "highContrast");
+    assert_eq!(preferences.appearance.font_size, "lg");
+    assert!(!preferences.notifications.mentions);
+    assert!(!preferences.notifications.human_replies);
+    assert!(!preferences.notifications.approvals);
+}
+
+fn temp_data_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("slei-settings-{}", Uuid::new_v4()))
 }

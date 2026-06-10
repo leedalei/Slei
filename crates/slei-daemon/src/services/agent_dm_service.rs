@@ -286,12 +286,13 @@ impl AgentDmService {
                     )
                     .await?;
                 let message_id = format!("card_message_{}", card.id);
+                let card = self.cards.attach_message_id(&card.id, &message_id).await?;
                 self.conversations
                     .upsert_card_message(
                         &record.conversation_id,
                         agent_id,
                         &message_id,
-                        vec![card],
+                        vec![card.to_view()],
                         Some("done"),
                     )
                     .await?;

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use slei_storage::repositories::{NodeRow, Repositories};
 use std::{
     env,
     process::Command,
@@ -32,14 +33,30 @@ pub struct DeviceMetaDto {
 #[derive(Clone, Debug)]
 pub struct NodeService {
     local_node: Arc<Mutex<NodeDto>>,
+    repos: Option<Repositories>,
     guide_agent_created: bool,
     default_channel_created: bool,
 }
 
 impl NodeService {
+    pub fn new(repos: Repositories, stored_node: Option<NodeRow>) -> Self {
+        let mut local_node = default_local_node();
+        if let Some(stored) = stored_node {
+            local_node.name = stored.name;
+            local_node.status = stored.status;
+        }
+        Self {
+            local_node: Arc::new(Mutex::new(local_node)),
+            repos: Some(repos),
+            guide_agent_created: false,
+            default_channel_created: false,
+        }
+    }
+
     pub fn for_tests() -> Self {
         Self {
             local_node: Arc::new(Mutex::new(default_local_node())),
+            repos: None,
             guide_agent_created: false,
             default_channel_created: false,
         }
@@ -62,7 +79,7 @@ impl NodeService {
         (local_node.id == id).then(|| local_node.clone())
     }
 
-    pub fn rename_local_node(&self, name: &str) -> Result<NodeDto, NodeRenameError> {
+    pub async fn rename_local_node(&self, name: &str) -> Result<NodeDto, NodeRenameError> {
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err(NodeRenameError::NameRequired);
@@ -71,9 +88,15 @@ impl NodeService {
             return Err(NodeRenameError::NameTooLong);
         }
 
-        let mut local_node = self.local_node.lock().expect("local node mutex poisoned");
-        local_node.name = trimmed.to_string();
-        Ok(local_node.clone())
+        let mut node = self
+            .local_node
+            .lock()
+            .expect("local node mutex poisoned")
+            .clone();
+        node.name = trimmed.to_string();
+        self.persist_node(&node).await?;
+        *self.local_node.lock().expect("local node mutex poisoned") = node.clone();
+        Ok(node)
     }
 
     pub fn set_runtimes_for_tests(&self, runtimes: Vec<RuntimeReadinessDto>) {
@@ -124,6 +147,16 @@ impl NodeService {
 
     pub fn default_channel_count(&self) -> usize {
         usize::from(self.default_channel_created)
+    }
+
+    async fn persist_node(&self, node: &NodeDto) -> Result<(), NodeRenameError> {
+        if let Some(repos) = &self.repos {
+            repos
+                .upsert_node(node_to_row(node))
+                .await
+                .map_err(|error| NodeRenameError::Storage(error.to_string()))?;
+        }
+        Ok(())
     }
 }
 
@@ -183,6 +216,18 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
     (!stdout.is_empty()).then_some(stdout)
 }
 
+fn node_to_row(node: &NodeDto) -> NodeRow {
+    NodeRow {
+        id: node.id.clone(),
+        name: node.name.clone(),
+        platform: Some(node.device.platform.clone()),
+        arch: Some(node.device.arch.clone()),
+        hostname: Some(node.device.hostname.clone()),
+        status: node.status.clone(),
+        daemon_version: Some(node.daemon_version.to_string()),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GuideBootstrap {
     RuntimeUnavailable,
@@ -200,4 +245,5 @@ pub enum GuideBootstrap {
 pub enum NodeRenameError {
     NameRequired,
     NameTooLong,
+    Storage(String),
 }

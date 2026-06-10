@@ -1009,6 +1009,21 @@ async fn guide_product_tool_appends_card_message_and_completion_is_idempotent() 
         card_message["id"],
         format!("card_message_{}", card["id"].as_str().unwrap())
     );
+    let stored_card = state
+        .cards()
+        .card(card["id"].as_str().unwrap())
+        .await
+        .expect("product tool card is stored");
+    assert_eq!(stored_card.run_id, run_id);
+    assert_eq!(stored_card.agent_id, "agent_guide_local_node");
+    assert_eq!(
+        stored_card.conversation_id.as_deref(),
+        Some(conversation_id)
+    );
+    assert_eq!(
+        stored_card.message_id.as_deref(),
+        card_message["id"].as_str()
+    );
 
     state
         .handle_worker_event(json!({
@@ -1465,7 +1480,7 @@ async fn agents_persist_to_slei_data_root_and_reload() {
     assert!(agents
         .iter()
         .any(|agent| agent["id"] == "agent_coordinator_all"));
-    assert!(root.join("agents/index.json").is_file());
+    assert!(!root.join("agents/index.json").exists());
     assert!(alice["createdAt"].as_str().unwrap().len() > 4);
 }
 

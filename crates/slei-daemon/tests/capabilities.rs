@@ -1,6 +1,9 @@
+use slei_daemon::auth::AuthToken;
 use slei_daemon::services::capability_service::{
     CapabilityApiPolicy, CapabilityRecord, CapabilityService, CapabilitySource,
 };
+use slei_daemon::state::AppState;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn capabilities_are_read_only_and_scan_failures_are_non_blocking() {
@@ -45,4 +48,31 @@ async fn capabilities_are_read_only_and_scan_failures_are_non_blocking() {
     assert_eq!(policy.supported_actions(), vec!["list"]);
     assert!(!policy.supported_actions().contains(&"install"));
     assert!(!policy.supported_actions().contains(&"mutate-permissions"));
+}
+
+#[tokio::test]
+async fn node_name_survives_app_state_reload_without_json_sidecar() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("node-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    let renamed = state
+        .nodes()
+        .rename_local_node("Studio Node")
+        .await
+        .expect("node rename saves");
+    assert_eq!(renamed.name, "Studio Node");
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root.clone()).await;
+    let restored = reloaded
+        .nodes()
+        .get_node("local-node")
+        .expect("local node reloads");
+
+    assert_eq!(restored.name, "Studio Node");
+    assert!(!root.join("nodes/index.json").exists());
+}
+
+fn temp_data_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("slei-capabilities-{}", Uuid::new_v4()))
 }
