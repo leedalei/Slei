@@ -2,6 +2,7 @@
   "name": "slei",
   "private": true,
   "scripts": {
+    "dev:reset": "node scripts/dev-reset.mjs",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
