@@ -54,4 +54,35 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("block truncate");
     expect(html).toContain("max-w-[35%] truncate");
   });
+
+  it("renders channel members and addable agents in the member panel", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      members: [
+        memberWithLongMentionText(),
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelMembersOpen
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-channel-member-panel"');
+    expect(html).toContain("Coda");
+    expect(html).toContain("已就位");
+    expect(html).toContain("添加成员");
+  });
 });

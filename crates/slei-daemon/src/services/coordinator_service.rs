@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::adapters::claude_worker::{ClaudeWorkerAdapter, CreateSessionRequest};
 use crate::adapters::worker_rpc::WorkerTransport;
+use crate::services::member_service::{is_internal_coordinator_id, GLOBAL_COORDINATOR_AGENT_ID};
 use crate::services::orchestration_store::OrchestrationStore;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -187,7 +188,7 @@ impl CoordinatorService {
         let session = self
             .worker
             .create_session(CreateSessionRequest {
-                agent_id: format!("agent_coordinator_{}", input.channel_id),
+                agent_id: GLOBAL_COORDINATOR_AGENT_ID.to_string(),
                 cwd,
                 session_id: format!("session_{}", input.run_id),
                 resume_session: false,
@@ -208,7 +209,7 @@ impl CoordinatorService {
         let ready_reply_agent_ids = input
             .ready_agent_ids
             .iter()
-            .filter(|agent_id| !is_channel_coordinator_agent(agent_id))
+            .filter(|agent_id| !is_internal_coordinator_id(agent_id))
             .cloned()
             .collect::<Vec<_>>();
         let ready_assignee = ready_reply_agent_ids.first().cloned();
@@ -415,7 +416,7 @@ fn validate_member_target(
             agent_id.to_string(),
         ));
     };
-    if member.agent_kind == "coordinator" || is_channel_coordinator_agent(&member.agent_id) {
+    if member.agent_kind == "coordinator" || is_internal_coordinator_id(&member.agent_id) {
         return Err(CoordinatorDecisionError::InvalidTarget(
             agent_id.to_string(),
         ));
@@ -455,10 +456,6 @@ fn classify_intent(body: &str) -> IntentKind {
     }
 
     IntentKind::Ambiguous
-}
-
-fn is_channel_coordinator_agent(agent_id: &str) -> bool {
-    agent_id.starts_with("agent_coordinator_")
 }
 
 fn is_broadcast_or_greeting(body: &str) -> bool {

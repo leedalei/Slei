@@ -30,6 +30,18 @@ export interface ChannelMemberView {
   readiness: ChannelMemberReadiness;
 }
 
+export interface ChannelMemberAddRequest {
+  agentId: string;
+}
+
+export interface ChannelMemberReceipt {
+  member: ChannelMemberView;
+}
+
+export interface ChannelMemberRemoveReceipt {
+  removedMember: ChannelMemberView | null;
+}
+
 export interface ChannelCreateRequest {
   name: string;
   description?: string;

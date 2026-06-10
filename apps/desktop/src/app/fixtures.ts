@@ -69,6 +69,7 @@ export type SleiMember = {
   handle: string;
   avatar: string;
   avatarSeed?: string;
+  agentKind?: string;
   type: "agent" | "human";
   runtimeStatus: "idle" | "busy" | "offline";
   role: string;

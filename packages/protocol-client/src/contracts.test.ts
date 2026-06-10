@@ -5,6 +5,9 @@ import {
   events,
   protocolVersion,
   type ChannelCreateRequest,
+  type ChannelMemberAddRequest,
+  type ChannelMemberReceipt,
+  type ChannelMemberRemoveReceipt,
   type ChannelMemberView,
   type SendChannelMessageOutcome,
   type SendChannelMessageReceipt,
@@ -48,6 +51,22 @@ describe("Slei protocol contract fixtures", () => {
     expect(request.agentIds).toEqual(selectedIds);
     expect(request.projectPaths).toEqual(["/workspace/api"]);
     expect(member.readiness).toBe("joining");
+  });
+
+  test("exposes channel member mutation contracts", () => {
+    const request = { agentId: "agent_coda" } satisfies ChannelMemberAddRequest;
+    const member = {
+      channelId: "api-dev",
+      agentId: "agent_coda",
+      joinedAt: "2026-06-10T00:00:00Z",
+      readiness: "ready",
+    } satisfies ChannelMemberView;
+    const addReceipt = { member } satisfies ChannelMemberReceipt;
+    const removeReceipt = { removedMember: member } satisfies ChannelMemberRemoveReceipt;
+
+    expect(request.agentId).toBe("agent_coda");
+    expect(addReceipt.member.readiness).toBe("ready");
+    expect(removeReceipt.removedMember?.agentId).toBe("agent_coda");
   });
 
   test("exposes channel message send contracts", () => {

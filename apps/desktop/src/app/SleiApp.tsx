@@ -5,6 +5,7 @@ import {
   createDaemonBridge,
   type AppearancePreferences,
   type AppLocale,
+  type ChannelMemberView,
   type ChannelMessageView,
   type ChannelView,
   type ConversationAttachmentUploadRequest,
@@ -45,6 +46,7 @@ import {
   detectAgentMemoryRequest,
   formatMessageTime,
   formatMemberCreatedDate,
+  isInternalCoordinatorMember,
   normalizeAppearance,
   parseTaskCardBody,
   renameComputerNode,
@@ -175,6 +177,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     handle: agent.handle,
     avatar: agent.name.slice(0, 2).toUpperCase(),
     avatarSeed: agent.avatarSeed,
+    agentKind: agent.agentKind,
     type: "agent",
     runtimeStatus: node?.status === "offline" ? "offline" : "idle",
     role: isCoordinator
@@ -205,8 +208,43 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
 }
 
 function mergeAgentViewsIntoMembers(current: SleiMember[], agents: DesktopAgentView[], nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")) {
-  void current;
-  return agents.map((agent) => memberFromAgentView(agent, nodes, messages));
+  const currentById = new Map(current.map((member) => [member.id, member]));
+  return agents
+    .map((agent) => {
+      const member = memberFromAgentView(agent, nodes, messages);
+      const existing = currentById.get(member.id);
+      return {
+        ...member,
+        channelReadiness: existing?.channelReadiness,
+      };
+    })
+    .filter((member) => !isInternalCoordinatorMember(member));
+}
+
+function applyChannelMemberReadiness(members: SleiMember[], channelId: string, channelMembers: ChannelMemberView[]): SleiMember[] {
+  const readinessByAgentId = new Map(channelMembers.map((member) => [member.agentId, member.readiness]));
+  return members.map((member) => {
+    const nextReadiness = { ...(member.channelReadiness ?? {}) };
+    delete nextReadiness[channelId];
+    const readiness = readinessByAgentId.get(member.id);
+    if (readiness) {
+      nextReadiness[channelId] = readiness;
+    }
+    return {
+      ...member,
+      channelReadiness: Object.keys(nextReadiness).length > 0 ? nextReadiness : undefined,
+    };
+  });
+}
+
+async function loadSleiChannelMemberReadiness(bridge: DaemonBridge, channels: ChannelView[], members: SleiMember[]): Promise<SleiMember[]> {
+  const receipts = await Promise.all(
+    channels.map((channel) => bridge.listChannelMembers(channel.id).catch(() => ({ members: [] }))),
+  );
+  return receipts.reduce(
+    (nextMembers, receipt, index) => applyChannelMemberReadiness(nextMembers, channels[index].id, receipt.members),
+    members,
+  );
 }
 
 async function loadGuideSkillsForMembers(bridge: DaemonBridge, members: SleiMember[]): Promise<SleiMember[]> {
@@ -456,8 +494,8 @@ export function createChannelAgentActivityMessage(outcome: SendChannelMessageOut
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
   if (outcome.action !== "request_agent_reply") return [];
   return channelReplyTargetIds(outcome).flatMap((agentId) => {
-    if (agentId.startsWith("agent_coordinator_")) return [];
     const member = members.find((candidate) => candidate.id === agentId);
+    if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];
     if (member?.directMessageEnabled === false) return [];
     const author = member?.name ?? agentId;
     return [{
@@ -610,6 +648,29 @@ export function SleiApp() {
     );
   }
 
+  async function refreshChannelMessagesIntoState(channelId: string, members: SleiMember[] = data.members) {
+    const receipt = await bridge.listChannelMessages(channelId);
+    const channelMessages = receipt.messages
+      .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
+      .filter((message): message is SleiMessage => Boolean(message));
+    setData((current) =>
+      createSleiFixtures({
+        ...current,
+        messages: replaceChannelMessages(current.messages, channelMessages, [channelId]),
+      }),
+    );
+  }
+
+  async function refreshChannelMembersIntoState(channelId: string): Promise<SleiMember[]> {
+    const receipt = await bridge.listChannelMembers(channelId);
+    let nextMembers: SleiMember[] = data.members;
+    setData((current) => {
+      nextMembers = applyChannelMemberReadiness(current.members, channelId, receipt.members);
+      return createSleiFixtures({ ...current, members: nextMembers });
+    });
+    return nextMembers;
+  }
+
   function applyTaskThreadReceiptToState(receipt: TaskThreadReceipt) {
     setData((current) => {
       const task = taskSummaryToSleiTask(receipt.thread.task, current.members);
@@ -713,10 +774,11 @@ export function SleiApp() {
       if (!mounted) return;
       setGuideBootstrapping(false);
       const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
-      const members = await loadGuideSkillsForMembers(
+      let members = await loadGuideSkillsForMembers(
         bridge,
         mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale),
       );
+      members = await loadSleiChannelMemberReadiness(bridge, channelReceipt.channels, members);
       const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
       const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
@@ -844,10 +906,11 @@ export function SleiApp() {
     setNotifications(preferencesReceipt.preferences.notifications);
     setSavedMessages(savedReceipt.savedMessages);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
-    const members = await loadGuideSkillsForMembers(
+    let members = await loadGuideSkillsForMembers(
       bridge,
       mergeAgentViewsIntoMembers([], agentReceipt.agents, next.nodes, messagesForLocale),
     );
+    members = await loadSleiChannelMemberReadiness(bridge, channelReceipt.channels, members);
     const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
     const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
     const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
@@ -874,10 +937,11 @@ export function SleiApp() {
   async function handleCreateAgent(request: AgentDraftInput) {
     const receipt = await bridge.createAgent(request);
     const agentReceipt = await bridge.listAgents();
-    const members = await loadGuideSkillsForMembers(
+    let members = await loadGuideSkillsForMembers(
       bridge,
-      mergeAgentViewsIntoMembers([], agentReceipt.agents, runtimeSetup.nodes, messages),
+      mergeAgentViewsIntoMembers(data.members, agentReceipt.agents, runtimeSetup.nodes, messages),
     );
+    members = await loadSleiChannelMemberReadiness(bridge, data.channels, members);
     setData((current) => createSleiFixtures({ ...current, members }));
     setActiveMemberId(receipt.agent.id);
     showAppToast(messages.agentCreate.createdSuccess, "success");
@@ -927,7 +991,7 @@ export function SleiApp() {
     setData((current) =>
       createSleiFixtures({
         ...current,
-        members: current.members.map((candidate) => (candidate.id === member.id ? member : candidate)),
+        members: current.members.map((candidate) => (candidate.id === member.id ? { ...member, channelReadiness: candidate.channelReadiness } : candidate)),
       }),
     );
   }
@@ -1079,7 +1143,8 @@ export function SleiApp() {
       assigneeAgentIds: channelReplyTargetIds(outcome),
       workspaceMountCount: workspaceMounts.length,
     });
-    if (!agentId || agentId.startsWith("agent_coordinator_")) {
+    const member = data.members.find((candidate) => candidate.id === agentId);
+    if (!agentId || isInternalCoordinatorMember(member ?? { id: agentId })) {
       logAppEvent(bridge, "channel-agent-reply", "skip-no-runnable-agent", {
         channelId,
         messageId: outcome.messageId,
@@ -1087,7 +1152,6 @@ export function SleiApp() {
       });
       return;
     }
-    const member = data.members.find((candidate) => candidate.id === agentId);
     if (member?.directMessageEnabled === false) {
       logAppEvent(bridge, "channel-agent-reply", "skip-direct-message-disabled", {
         channelId,
@@ -1235,7 +1299,7 @@ export function SleiApp() {
       assigneeAgentId: input.agentId,
       workspaceMountCount: workspaceMounts.length,
     });
-    if (!input.agentId || input.agentId.startsWith("agent_coordinator_") || member?.directMessageEnabled === false) {
+    if (!input.agentId || isInternalCoordinatorMember(member ?? { id: input.agentId }) || member?.directMessageEnabled === false) {
       logAppEvent(bridge, "task-agent-reply", "skip-no-runnable-agent", {
         channelId: input.channelId,
         taskId: input.taskId,
@@ -1510,7 +1574,21 @@ export function SleiApp() {
     setActiveChannelId(channel.id);
     setActiveConversationId(undefined);
     setActiveSessionId(undefined);
+    const members = await refreshChannelMembersIntoState(channel.id);
+    await refreshChannelMessagesIntoState(channel.id, members);
     return receipt;
+  }
+
+  async function handleAddChannelMember(agentId: string) {
+    await bridge.addChannelMember(activeChannelId, { agentId });
+    const members = await refreshChannelMembersIntoState(activeChannelId);
+    await refreshChannelMessagesIntoState(activeChannelId, members);
+  }
+
+  async function handleRemoveChannelMember(agentId: string) {
+    await bridge.removeChannelMember(activeChannelId, agentId);
+    const members = await refreshChannelMembersIntoState(activeChannelId);
+    await refreshChannelMessagesIntoState(activeChannelId, members);
   }
 
   function handleDeleteChannel(channelId: string) {
@@ -1520,6 +1598,11 @@ export function SleiApp() {
         ...current,
         channels: current.channels.filter((channel) => channel.id !== channelId),
         messages: current.messages.filter((message) => (message.channelId ?? "all") !== channelId),
+        members: current.members.map((member) => {
+          const nextReadiness = { ...(member.channelReadiness ?? {}) };
+          delete nextReadiness[channelId];
+          return { ...member, channelReadiness: Object.keys(nextReadiness).length > 0 ? nextReadiness : undefined };
+        }),
       }),
     );
     setActiveChannelId((current) => (current === channelId ? "all" : current));
@@ -1654,6 +1737,8 @@ export function SleiApp() {
       onChannelCreateLog={(message, context) => logAppEvent(bridge, "channel-create", message, context)}
       onChannelCreateRefresh={refreshChannelsAfterCreate}
       onChannelDelete={handleDeleteChannel}
+      onChannelMemberAdd={handleAddChannelMember}
+      onChannelMemberRemove={handleRemoveChannelMember}
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
       onChannelSelect={(channelId) => {

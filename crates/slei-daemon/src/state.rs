@@ -4,6 +4,7 @@ use crate::auth::AuthToken;
 use crate::services::agent_dm_service::{AgentDmRunStore, AgentDmService};
 use crate::services::agent_inbox_service::AgentInboxService;
 use crate::services::card_service::CardService;
+use crate::services::channel_join_report_service::ChannelJoinReportService;
 use crate::services::channel_orchestrator_service::ChannelOrchestratorService;
 use crate::services::channel_service::ChannelService;
 use crate::services::conversation_service::ConversationService;
@@ -40,6 +41,7 @@ pub struct AppState {
     agent_inbox_service: AgentInboxService,
     memory_event_service: MemoryEventService,
     memory_maintainer_service: MemoryMaintainerService,
+    channel_join_report_service: ChannelJoinReportService,
     message_service: MessageService,
     channel_orchestrator_service: ChannelOrchestratorService,
     worker_transport: WorkerTransport,
@@ -111,6 +113,8 @@ impl AppState {
             channel_service.clone(),
             memory_event_service.clone(),
         );
+        let channel_join_report_service =
+            ChannelJoinReportService::new(member_service.clone(), message_service.clone());
         let channel_orchestrator_service = ChannelOrchestratorService::new(
             message_service.clone(),
             channel_service.clone(),
@@ -138,6 +142,7 @@ impl AppState {
             agent_inbox_service,
             memory_event_service,
             memory_maintainer_service,
+            channel_join_report_service,
             message_service,
             channel_orchestrator_service,
             worker_transport,
@@ -199,6 +204,10 @@ impl AppState {
 
     pub fn memory_maintainer(&self) -> &MemoryMaintainerService {
         &self.memory_maintainer_service
+    }
+
+    pub fn channel_join_reports(&self) -> &ChannelJoinReportService {
+        &self.channel_join_report_service
     }
 
     pub fn messages(&self) -> &MessageService {

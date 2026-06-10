@@ -15,6 +15,8 @@ use slei_default_agent_assets::{
 };
 use uuid::Uuid;
 
+const GLOBAL_COORDINATOR_AGENT_ID: &str = "agent_global_coordinator";
+
 #[derive(Clone, Debug)]
 pub struct RuntimeDescriptor {
     pub endpoint: String,
@@ -372,8 +374,26 @@ pub struct ChannelCreateRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ChannelMemberAddRequest {
+    pub agent_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChannelMemberListReceipt {
     pub members: Vec<ChannelMemberView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMemberReceipt {
+    pub member: ChannelMemberView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMemberRemoveReceipt {
+    pub removed_member: Option<ChannelMemberView>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -960,6 +980,34 @@ impl DaemonBroker {
             })
     }
 
+    pub fn add_channel_member(
+        &self,
+        channel_id: &str,
+        request: ChannelMemberAddRequest,
+    ) -> Result<ChannelMemberReceipt, ChannelError> {
+        let receipt = self.add_channel_member_in_daemon(channel_id, &request)?;
+        self.upsert_channel_member(receipt.member.clone());
+        Ok(receipt)
+    }
+
+    pub fn remove_channel_member(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<ChannelMemberRemoveReceipt, ChannelError> {
+        let receipt = self.remove_channel_member_in_daemon(channel_id, agent_id)?;
+        if let Some(member) = receipt.removed_member.as_ref() {
+            self.channel_members
+                .lock()
+                .expect("channel members mutex poisoned")
+                .retain(|candidate| {
+                    candidate.channel_id != member.channel_id
+                        || candidate.agent_id != member.agent_id
+                });
+        }
+        Ok(receipt)
+    }
+
     pub fn list_channel_messages(&self, channel_id: &str) -> ChannelMessageListReceipt {
         self.fetch_channel_messages_from_daemon(channel_id)
             .unwrap_or_else(|| ChannelMessageListReceipt {
@@ -1167,7 +1215,7 @@ impl DaemonBroker {
             }
             receipt
         } else {
-            let _ = self.ensure_local_channel_coordinators();
+            let _ = self.ensure_local_global_coordinator();
             AgentListReceipt {
                 agents: self.agents.lock().expect("agents mutex poisoned").clone(),
             }
@@ -2166,6 +2214,42 @@ impl DaemonBroker {
         serde_json::from_str::<ChannelMemberListReceipt>(&response).ok()
     }
 
+    fn add_channel_member_in_daemon(
+        &self,
+        channel_id: &str,
+        request: &ChannelMemberAddRequest,
+    ) -> Result<ChannelMemberReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                &format!("/v1/channels/{channel_id}/members"),
+                Some(&payload),
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelMemberReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
+    fn remove_channel_member_in_daemon(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<ChannelMemberRemoveReceipt, ChannelError> {
+        let response = self
+            .send_daemon_request_checked(
+                "DELETE",
+                &format!("/v1/channels/{channel_id}/members/{agent_id}"),
+                None,
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelMemberRemoveReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
     fn fetch_channel_messages_from_daemon(
         &self,
         channel_id: &str,
@@ -2487,31 +2571,26 @@ impl DaemonBroker {
         format!("{}/agents/{id}", self.data_root)
     }
 
-    fn ensure_local_channel_coordinators(&self) -> Result<(), AgentError> {
-        let channels = self
-            .channels
-            .lock()
-            .expect("channels mutex poisoned")
-            .clone();
-        for channel in channels {
-            let coordinator = self.ensure_local_channel_coordinator(&channel)?;
-            self.ensure_channel_membership(&channel.id, &coordinator.id);
-        }
-        Ok(())
-    }
-
-    fn ensure_local_channel_coordinator(
-        &self,
-        channel: &ChannelView,
-    ) -> Result<DesktopAgentView, AgentError> {
-        let id = coordinator_agent_id(&channel.id);
+    fn ensure_local_global_coordinator(&self) -> Result<DesktopAgentView, AgentError> {
+        let id = GLOBAL_COORDINATOR_AGENT_ID.to_string();
         {
             let mut agents = self.agents.lock().expect("agents mutex poisoned");
             if let Some(index) = agents.iter().position(|agent| agent.id == id) {
-                let channel_name = channel.name.trim().trim_start_matches('#');
-                let description = channel_coordinator_description(&format!("#{channel_name}"));
-                if agents[index].description != description {
+                let description = global_coordinator_description();
+                if agents[index].name != "Global Coordinator"
+                    || agents[index].handle != "@global-coordinator"
+                    || agents[index].description != description
+                    || agents[index]
+                        .channel_ids
+                        .as_ref()
+                        .is_none_or(|channel_ids| !channel_ids.is_empty())
+                {
+                    agents[index].name = "Global Coordinator".to_string();
+                    agents[index].handle = "@global-coordinator".to_string();
+                    agents[index].agent_kind = Some("coordinator".to_string());
+                    agents[index].system_owned = Some(true);
                     agents[index].description = description;
+                    agents[index].channel_ids = Some(Vec::new());
                     agents[index].updated_at = monotonic_id();
                     fs::write(&agents[index].memory_path, initial_memory(&agents[index]))
                         .map_err(AgentError::Io)?;
@@ -2521,19 +2600,18 @@ impl DaemonBroker {
             }
         }
 
-        let channel_name = channel.name.trim().trim_start_matches('#');
         let now = monotonic_id();
         let workspace_path = self.local_agent_workspace(&id);
         let mut agent = DesktopAgentView {
             id: id.clone(),
-            name: format!("#{channel_name} Coordinator"),
-            handle: coordinator_handle(&channel.id),
+            name: "Global Coordinator".to_string(),
+            handle: "@global-coordinator".to_string(),
             agent_kind: Some("coordinator".to_string()),
             system_owned: Some(true),
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: "local-node".to_string(),
-            description: channel_coordinator_description(&format!("#{channel_name}")),
+            description: global_coordinator_description(),
             workspace_path: workspace_path.clone(),
             memory_path: format!("{workspace_path}/MEMORY.md"),
             docs_path: format!("{workspace_path}/docs"),
@@ -2544,7 +2622,7 @@ impl DaemonBroker {
                 created_at: now.clone(),
             }),
             skills: None,
-            channel_ids: Some(vec![channel.id.clone()]),
+            channel_ids: Some(Vec::new()),
             created_at: now.clone(),
             updated_at: now,
         };
@@ -2853,6 +2931,19 @@ impl DaemonBroker {
             joined_at: monotonic_id(),
             readiness: "joining".to_string(),
         });
+    }
+
+    fn upsert_channel_member(&self, member: ChannelMemberView) {
+        let mut members = self
+            .channel_members
+            .lock()
+            .expect("channel members mutex poisoned");
+        match members.iter_mut().find(|candidate| {
+            candidate.channel_id == member.channel_id && candidate.agent_id == member.agent_id
+        }) {
+            Some(existing) => *existing = member,
+            None => members.push(member),
+        }
     }
 
     fn upsert_local_conversation(
@@ -3186,20 +3277,6 @@ fn normalize_handle(handle: &str) -> Result<String, AgentError> {
     } else {
         Err(AgentError::InvalidHandle)
     }
-}
-
-fn coordinator_agent_id(channel_id: &str) -> String {
-    format!("agent_coordinator_{}", channel_id.trim().to_lowercase())
-}
-
-fn coordinator_handle(channel_id: &str) -> String {
-    let normalized = channel_id.trim().to_lowercase();
-    let handle = format!("{normalized}-coordinator");
-    if handle.len() <= 32 {
-        return format!("@{handle}");
-    }
-    let suffix = normalized.chars().take(25).collect::<String>();
-    format!("@coord-{suffix}")
 }
 
 fn local_data_root() -> String {
@@ -3765,10 +3842,9 @@ fn initial_memory(agent: &DesktopAgentView) -> String {
     shared_initial_memory(&agent_template_input(agent))
 }
 
-fn channel_coordinator_description(channel_name: &str) -> String {
-    format!(
-        "内置频道协调员，负责分析用户在 {channel_name} 的意图并路由 Agent，自己不回复用户问题；可路由给单个或多个 Agent；用户明确 @ 某个 Agent、@all 或 @everyone 时直接转发。"
-    )
+fn global_coordinator_description() -> String {
+    "内置全局频道协调员，负责根据当前频道成员和上下文分析用户意图并路由 Agent，自己不回复用户问题。"
+        .to_string()
 }
 
 fn is_daemon_unavailable_error(error: &str) -> bool {

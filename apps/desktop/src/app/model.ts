@@ -346,11 +346,15 @@ export function insertMention(draft: string, mention: ActiveMention, handle: str
 export function mentionSuggestions(query: string, members: SleiMember[]): SleiMember[] {
   const normalized = normalizeSearch(query.replace(/^@/, ""));
   return members.filter((member) => {
-    if (member.id.startsWith("agent_coordinator_")) return false;
+    if (isInternalCoordinatorMember(member)) return false;
     const handle = normalizeSearch(member.handle.replace(/^@/, ""));
     const name = normalizeSearch(member.name);
     return !normalized || handle.includes(normalized) || name.includes(normalized);
   });
+}
+
+export function isInternalCoordinatorMember(member: Pick<SleiMember, "id"> & { agentKind?: string }): boolean {
+  return member.agentKind === "coordinator" || member.id === "agent_global_coordinator" || member.id.startsWith("agent_coordinator_");
 }
 
 export function detectAgentMemoryRequest(message: string, members: SleiMember[]): AgentMemoryRequest | null {

@@ -1,16 +1,17 @@
 use std::collections::HashSet;
 use std::path::Path as FsPath;
 
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
 use crate::services::channel_service::{
     ChannelDraft, ChannelError, PermissionPreset, WorkspaceMount,
 };
+use crate::services::member_service::is_internal_coordinator_id;
 use crate::state::AppState;
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -29,6 +30,12 @@ pub struct CreateChannelRequest {
     agent_ids: Option<Vec<String>>,
     #[serde(default)]
     project_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddChannelMemberRequest {
+    agent_id: String,
 }
 
 pub async fn create(
@@ -58,7 +65,11 @@ pub async fn create(
     channel_create_log(
         &idempotency_key,
         "validate-agents",
-        &format!("agent_count={} project_path_count={}", agent_ids.len(), project_paths.len()),
+        &format!(
+            "agent_count={} project_path_count={}",
+            agent_ids.len(),
+            project_paths.len()
+        ),
     );
     for agent_id in &agent_ids {
         if let Err(error) = state.members().get_product_agent(agent_id).await {
@@ -84,11 +95,22 @@ pub async fn create(
         .await
     {
         Ok(channel) => {
-            channel_create_log(&idempotency_key, "channel-created", &format!("channel_id={}", channel.id));
+            channel_create_log(
+                &idempotency_key,
+                "channel-created",
+                &format!("channel_id={}", channel.id),
+            );
             let setup_state = state.clone();
             let setup_channel = channel.clone();
             tokio::spawn(async move {
-                run_channel_setup(setup_state, setup_channel, agent_ids, project_paths, idempotency_key).await;
+                run_channel_setup(
+                    setup_state,
+                    setup_channel,
+                    agent_ids,
+                    project_paths,
+                    idempotency_key,
+                )
+                .await;
             });
             (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response()
         }
@@ -103,30 +125,22 @@ async fn run_channel_setup(
     project_paths: Vec<String>,
     idempotency_key: String,
 ) {
-    channel_create_log(&idempotency_key, "setup-start", &format!("channel_id={}", channel.id));
+    channel_create_log(
+        &idempotency_key,
+        "setup-start",
+        &format!("channel_id={}", channel.id),
+    );
     match state
         .members()
-        .ensure_channel_coordinator_agent(&channel.id, &channel.name, "local-node")
+        .ensure_global_coordinator_agent("local-node")
         .await
     {
         Ok(coordinator) => {
             channel_create_log(
                 &idempotency_key,
                 "coordinator-ready",
-                &format!("channel_id={} coordinator_id={}", channel.id, coordinator.id),
+                &format!("coordinator_id={}", coordinator.id),
             );
-            match state.channels().add_agent_to_channel(&channel.id, &coordinator.id).await {
-                Ok(_) => channel_create_log(
-                    &idempotency_key,
-                    "agent-joined",
-                    &format!("channel_id={} agent_id={}", channel.id, coordinator.id),
-                ),
-                Err(error) => channel_create_log(
-                    &idempotency_key,
-                    "agent-joined-failed",
-                    &format!("channel_id={} agent_id={} error={error}", channel.id, coordinator.id),
-                ),
-            }
         }
         Err(error) => channel_create_log(
             &idempotency_key,
@@ -156,7 +170,10 @@ async fn run_channel_setup(
             Err(error) => channel_create_log(
                 &idempotency_key,
                 "workspace-mounted-failed",
-                &format!("channel_id={} path={project_path} error={error}", channel.id),
+                &format!(
+                    "channel_id={} path={project_path} error={error}",
+                    channel.id
+                ),
             ),
         }
     }
@@ -188,11 +205,18 @@ async fn run_channel_setup(
             Err(error) => channel_create_log(
                 &idempotency_key,
                 "agent-joined-failed",
-                &format!("channel_id={} agent_id={agent_id} error={error}", channel.id),
+                &format!(
+                    "channel_id={} agent_id={agent_id} error={error}",
+                    channel.id
+                ),
             ),
         }
     }
-    channel_create_log(&idempotency_key, "setup-complete", &format!("channel_id={}", channel.id));
+    channel_create_log(
+        &idempotency_key,
+        "setup-complete",
+        &format!("channel_id={}", channel.id),
+    );
 }
 
 pub async fn members(
@@ -206,6 +230,100 @@ pub async fn members(
 
     match state.channels().channel_members(&id).await {
         Ok(members) => Json(json!({ "members": members })).into_response(),
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn add_member(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<AddChannelMemberRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let agent = match state.members().get_product_agent(&payload.agent_id).await {
+        Ok(agent) => agent,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    if agent.agent_kind == "coordinator" || is_internal_coordinator_id(&agent.id) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "coordinator agents cannot join channels",
+        );
+    }
+
+    match state
+        .channels()
+        .add_agent_to_channel_with_outcome(&id, &agent.id)
+        .await
+    {
+        Ok(outcome) => {
+            if outcome.created {
+                if let Err(error) = state
+                    .memory_maintainer()
+                    .sync_added_channel_member(&id, &agent.id)
+                    .await
+                {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                }
+                if let Err(error) = state
+                    .channel_join_reports()
+                    .create_join_report(&id, &agent.id)
+                    .await
+                {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                }
+            }
+            let status = if outcome.created {
+                StatusCode::CREATED
+            } else {
+                StatusCode::OK
+            };
+            (status, Json(json!({ "member": outcome.member }))).into_response()
+        }
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn remove_member(
+    State(state): State<AppState>,
+    Path((id, agent_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let agent = match state.members().get_product_agent(&agent_id).await {
+        Ok(agent) => agent,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    if agent.agent_kind == "coordinator" || is_internal_coordinator_id(&agent.id) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "coordinator agents cannot be removed from channels",
+        );
+    }
+
+    match state
+        .channels()
+        .remove_agent_from_channel(&id, &agent.id)
+        .await
+    {
+        Ok(Some(member)) => {
+            if let Err(error) = state
+                .memory_maintainer()
+                .sync_removed_channel_member(&id, &agent.id)
+                .await
+            {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            Json(json!({ "removedMember": member })).into_response()
+        }
+        Ok(None) => Json(json!({ "removedMember": null })).into_response(),
         Err(error) => channel_error_response(error),
     }
 }
@@ -245,7 +363,9 @@ fn workspace_label(path: &str) -> String {
 }
 
 fn channel_create_log(idempotency_key: &str, stage: &str, detail: &str) {
-    eprintln!("[slei-daemon][channel-create] idempotency_key={idempotency_key} stage={stage} {detail}");
+    eprintln!(
+        "[slei-daemon][channel-create] idempotency_key={idempotency_key} stage={stage} {detail}"
+    );
 }
 
 fn channel_error_response(error: ChannelError) -> Response {
