@@ -1860,6 +1860,134 @@ async fn public_channel_create_api_mounts_project_paths() {
 }
 
 #[tokio::test]
+async fn public_channel_create_api_rejects_duplicate_channel_names() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-duplicate-name-first"),
+        json!({
+            "name": "Same Project",
+            "description": "first",
+            "agentIds": []
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+
+    let duplicate = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-duplicate-name-second"),
+        json!({
+            "name": "#same project",
+            "description": "second",
+            "agentIds": []
+        }),
+    )
+    .await;
+
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let body = response_json(duplicate).await;
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("channel name already exists"));
+}
+
+#[tokio::test]
+async fn public_channel_create_api_rejects_duplicate_project_paths() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-project-path-first"),
+        json!({
+            "name": "api-dev",
+            "description": "API",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let _ = wait_for_channel_workspaces(&state, "api-dev", 1).await;
+
+    let duplicate = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-project-path-second"),
+        json!({
+            "name": "web-dev",
+            "description": "Web",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api/"]
+        }),
+    )
+    .await;
+
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let body = response_json(duplicate).await;
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("workspace path already mounted"));
+}
+
+#[tokio::test]
+async fn public_channel_create_api_allows_idempotent_project_path_retries() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-project-path-idempotent"),
+        json!({
+            "name": "api-dev",
+            "description": "API",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let workspaces = wait_for_channel_workspaces(&state, "api-dev", 1).await;
+    assert_eq!(workspaces.len(), 1);
+
+    let retry = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-project-path-idempotent"),
+        json!({
+            "name": "api-dev",
+            "description": "API",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+    assert_eq!(retry.status(), StatusCode::CREATED);
+
+    let workspaces = state.channels().workspaces("api-dev").await.unwrap();
+    assert_eq!(workspaces.len(), 1);
+    assert_eq!(workspaces[0].path, "/workspace/api");
+}
+
+#[tokio::test]
 async fn public_channel_create_api_rejects_missing_idempotency_key() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");

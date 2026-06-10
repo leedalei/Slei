@@ -1604,7 +1604,12 @@ export function SleiApp() {
       projectPaths,
       agentIds: input.agentIds ?? [],
     });
-    const channel = { ...channelFromView(receipt.channel, messages), projectName, projectPaths };
+    const createdProjectPaths = receipt.channel.projectPaths ?? projectPaths;
+    const channel = {
+      ...channelFromView(receipt.channel, messages),
+      projectName: createdProjectPaths.length > 0 ? createdProjectPaths.join(", ") : projectName,
+      projectPaths: createdProjectPaths,
+    };
     setData((current) => {
       if (current.channels.some((candidate) => candidate.id === channel.id || candidate.name === channel.name)) return current;
       return createSleiFixtures({ ...current, channels: [...current.channels, channel] });

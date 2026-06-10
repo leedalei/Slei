@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -136,8 +136,8 @@ impl ChannelService {
         }
 
         let name = normalize_channel_name(&draft.name)?;
-        if let Some(existing) = state.channels.get(&name) {
-            return Ok(existing.clone());
+        if state.channels.contains_key(&name) {
+            return Err(ChannelError::DuplicateChannelName);
         }
 
         let channel = ChannelRecord {
@@ -154,6 +154,22 @@ impl ChannelService {
         state.channels.insert(channel.id.clone(), channel.clone());
         persist_channels(&self.root, &state.channels)?;
         Ok(channel)
+    }
+
+    pub async fn channel_for_idempotency_key(
+        &self,
+        idempotency_key: &str,
+    ) -> Option<ChannelRecord> {
+        let idempotency_key = idempotency_key.trim();
+        if idempotency_key.is_empty() {
+            return None;
+        }
+        let state = self.inner.lock().await;
+        state
+            .channel_idempotency
+            .get(idempotency_key)
+            .and_then(|id| state.channels.get(id))
+            .cloned()
     }
 
     pub async fn ensure_default_agent_membership(
@@ -298,6 +314,19 @@ impl ChannelService {
             }
         }
 
+        if !state.channels.contains_key(channel_id) {
+            return Err(ChannelError::MissingChannel);
+        }
+
+        let normalized_path = normalize_workspace_path(&mount.path)?;
+        if workspace_path_exists(&state.workspaces, &normalized_path) {
+            return Err(ChannelError::DuplicateWorkspacePath);
+        }
+
+        let mount = WorkspaceMount {
+            path: normalized_path,
+            label: mount.label,
+        };
         state
             .workspaces
             .entry(channel_id.to_string())
@@ -309,6 +338,27 @@ impl ChannelService {
         );
         persist_workspaces(&self.root, &state.workspaces)?;
         Ok(mount)
+    }
+
+    pub async fn ensure_workspace_paths_available(
+        &self,
+        paths: &[String],
+    ) -> Result<(), ChannelError> {
+        let state = self.inner.lock().await;
+        let mut requested_paths = HashMap::<String, ()>::new();
+        for path in paths {
+            let normalized_path = normalize_workspace_path(path)?;
+            if requested_paths
+                .insert(normalized_path.clone(), ())
+                .is_some()
+            {
+                return Err(ChannelError::DuplicateWorkspacePath);
+            }
+            if workspace_path_exists(&state.workspaces, &normalized_path) {
+                return Err(ChannelError::DuplicateWorkspacePath);
+            }
+        }
+        Ok(())
     }
 
     pub async fn workspaces(&self, channel_id: &str) -> Result<Vec<WorkspaceMount>, ChannelError> {
@@ -365,6 +415,43 @@ fn normalize_channel_name(name: &str) -> Result<String, ChannelError> {
     } else {
         Err(ChannelError::InvalidChannel)
     }
+}
+
+pub fn normalize_workspace_path(path: &str) -> Result<String, ChannelError> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err(ChannelError::InvalidWorkspacePath);
+    }
+
+    let mut normalized = PathBuf::new();
+    for component in Path::new(trimmed).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+            Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
+        }
+    }
+
+    let normalized = normalized.to_string_lossy().to_string();
+    if normalized.is_empty() {
+        Err(ChannelError::InvalidWorkspacePath)
+    } else {
+        Ok(normalized)
+    }
+}
+
+fn workspace_path_exists(
+    workspaces: &HashMap<String, Vec<WorkspaceMount>>,
+    normalized_path: &str,
+) -> bool {
+    workspaces.values().flatten().any(|mount| {
+        normalize_workspace_path(&mount.path)
+            .map(|path| path == normalized_path)
+            .unwrap_or(false)
+    })
 }
 
 fn load_channels(root: &PathBuf) -> HashMap<String, ChannelRecord> {
@@ -467,6 +554,12 @@ pub enum ChannelError {
     MissingIdempotencyKey,
     #[error("invalid channel")]
     InvalidChannel,
+    #[error("invalid workspace path")]
+    InvalidWorkspacePath,
+    #[error("channel name already exists")]
+    DuplicateChannelName,
+    #[error("workspace path already mounted")]
+    DuplicateWorkspacePath,
     #[error("channel io error: {0}")]
     Io(std::io::Error),
     #[error("channel json error: {0}")]

@@ -480,6 +480,27 @@ export type DaemonBridgeMock = DaemonBridge & {
   setConnected(connected: boolean): void;
 };
 
+function normalizeChannelName(name: string) {
+  return name.trim().replace(/^#+/, "").trim().toLowerCase().split(/\s+/).filter(Boolean).join("-");
+}
+
+function normalizeProjectPath(path: string) {
+  const trimmed = path.trim();
+  return trimmed.length > 1 ? trimmed.replace(/[\\/]+$/, "") : trimmed;
+}
+
+function uniqueProjectPaths(paths: string[] = []) {
+  const seen = new Set<string>();
+  return paths
+    .map(normalizeProjectPath)
+    .filter(Boolean)
+    .filter((path) => {
+      if (seen.has(path)) return false;
+      seen.add(path);
+      return true;
+    });
+}
+
 export function createDaemonBridgeMock(input: {
   connected: boolean;
   nodes?: DesktopNodeView[];
@@ -613,12 +634,14 @@ export function createDaemonBridgeMock(input: {
       return { channels };
     },
     async createChannel(request) {
-      const name = request.name.trim().replace(/^#+/, "").toLowerCase();
+      const name = normalizeChannelName(request.name);
       const existing = channels.find((channel) => channel.id === name);
-      const channel: ChannelView = existing ?? { id: name, name, description: request.description, isDefault: false, projectPaths: request.projectPaths ?? [] };
-      if (!existing) {
-        channels = [...channels, channel];
-      }
+      if (existing) throw new Error("channel name already exists");
+      const projectPaths = uniqueProjectPaths(request.projectPaths);
+      const mountedProjectPaths = new Set(channels.flatMap((channel) => uniqueProjectPaths(channel.projectPaths ?? [])));
+      if (projectPaths.some((path) => mountedProjectPaths.has(path))) throw new Error("workspace path already mounted");
+      const channel: ChannelView = { id: name, name, description: request.description, isDefault: false, projectPaths };
+      channels = [...channels, channel];
       const joinedAt = new Date().toISOString();
       const selectedMembers = (request.agentIds ?? []).map((agentId) => ({
         channelId: channel.id,

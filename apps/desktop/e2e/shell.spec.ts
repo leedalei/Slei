@@ -108,6 +108,17 @@ describe("desktop shell daemon connectivity", () => {
     });
   });
 
+  it("rejects duplicate channel names and project paths in the mock bridge", async () => {
+    const bridge = createDaemonBridgeMock({ connected: true });
+
+    await bridge.createChannel({ name: "Dev Team", projectPaths: ["/workspace/api"] });
+
+    await expect(bridge.createChannel({ name: "#dev team" })).rejects.toThrow("channel name already exists");
+    await expect(bridge.createChannel({ name: "Web Team", projectPaths: ["/workspace/api/"] })).rejects.toThrow(
+      "workspace path already mounted",
+    );
+  });
+
   it("loads guide creation and memory skills for the mock Yeal agent", async () => {
     const bridge = createDaemonBridgeMock({
       connected: true,

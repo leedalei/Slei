@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::services::channel_service::{
-    ChannelDraft, ChannelError, PermissionPreset, WorkspaceMount,
+    normalize_workspace_path, ChannelDraft, ChannelError, PermissionPreset, WorkspaceMount,
 };
 use crate::services::member_service::is_internal_coordinator_id;
 use crate::state::AppState;
@@ -62,6 +62,18 @@ pub async fn create(
     let idempotency_key = idempotency_key.to_string();
     let agent_ids = dedupe_agent_ids(payload.agent_ids.unwrap_or_default());
     let project_paths = dedupe_project_paths(payload.project_paths);
+    if let Some(channel) = state
+        .channels()
+        .channel_for_idempotency_key(&idempotency_key)
+        .await
+    {
+        channel_create_log(
+            &idempotency_key,
+            "idempotent-replay",
+            &format!("channel_id={}", channel.id),
+        );
+        return (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response();
+    }
     channel_create_log(
         &idempotency_key,
         "validate-agents",
@@ -80,6 +92,18 @@ pub async fn create(
             );
             return error_response(StatusCode::BAD_REQUEST, &error.to_string());
         }
+    }
+    if let Err(error) = state
+        .channels()
+        .ensure_workspace_paths_available(&project_paths)
+        .await
+    {
+        channel_create_log(
+            &idempotency_key,
+            "validate-workspaces-failed",
+            &format!("error={error}"),
+        );
+        return channel_error_response(error);
     }
 
     match state
@@ -359,8 +383,7 @@ fn dedupe_project_paths(paths: Vec<String>) -> Vec<String> {
     let mut seen = HashSet::new();
     paths
         .into_iter()
-        .map(|path| path.trim().to_string())
-        .filter(|path| !path.is_empty())
+        .filter_map(|path| normalize_workspace_path(&path).ok())
         .filter(|path| seen.insert(path.clone()))
         .collect()
 }
@@ -389,6 +412,16 @@ fn channel_error_response(error: ChannelError) -> Response {
             .into_response(),
         ChannelError::InvalidChannel => (
             StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::InvalidWorkspacePath => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::DuplicateChannelName | ChannelError::DuplicateWorkspacePath => (
+            StatusCode::CONFLICT,
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),

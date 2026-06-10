@@ -183,6 +183,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
+        | ChannelOrchestratorError::Channel(ChannelError::InvalidWorkspacePath)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Member(MemberError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Member(MemberError::InvalidAgent)
@@ -195,6 +196,10 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
+        ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
+        | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath) => {
+            StatusCode::CONFLICT
+        }
         ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Channel(ChannelError::Json(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))

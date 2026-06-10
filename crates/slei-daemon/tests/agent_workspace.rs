@@ -800,12 +800,12 @@ async fn create_channel_with_duplicate_agents_and_retries_requests_memory_once()
         .unwrap()
         .to_string();
 
-    for key in ["create-dedup-channel", "create-dedup-channel-retry"] {
+    for _ in 0..2 {
         let created_channel = post_json(
             &app,
             &token,
             "/v1/channels",
-            Some(key),
+            Some("create-dedup-channel"),
             json!({
                 "name": "#Dedup Channel",
                 "description": "Project readiness",

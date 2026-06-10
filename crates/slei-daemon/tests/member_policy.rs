@@ -24,6 +24,91 @@ async fn channel_service_rejects_blank_create_idempotency_keys() {
 }
 
 #[tokio::test]
+async fn channel_service_rejects_duplicate_channel_names() {
+    let channels = ChannelService::for_tests();
+
+    channels
+        .create_channel(
+            ChannelDraft {
+                name: "AI咨询".to_string(),
+                description: None,
+                permission: PermissionPreset::ReadOnly,
+            },
+            "channel-key-1",
+        )
+        .await
+        .unwrap();
+
+    let error = channels
+        .create_channel(
+            ChannelDraft {
+                name: "#ai咨询".to_string(),
+                description: None,
+                permission: PermissionPreset::ReadOnly,
+            },
+            "channel-key-2",
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("channel name already exists"));
+}
+
+#[tokio::test]
+async fn channel_service_rejects_duplicate_workspace_paths() {
+    let channels = ChannelService::for_tests();
+    let first = channels
+        .create_channel(
+            ChannelDraft {
+                name: "first".to_string(),
+                description: None,
+                permission: PermissionPreset::ReadOnly,
+            },
+            "channel-first",
+        )
+        .await
+        .unwrap();
+    let second = channels
+        .create_channel(
+            ChannelDraft {
+                name: "second".to_string(),
+                description: None,
+                permission: PermissionPreset::ReadOnly,
+            },
+            "channel-second",
+        )
+        .await
+        .unwrap();
+
+    channels
+        .mount_workspace(
+            &first.id,
+            WorkspaceMount {
+                path: "/workspace/app".to_string(),
+                label: "app".to_string(),
+            },
+            "mount-first-app",
+        )
+        .await
+        .unwrap();
+
+    let error = channels
+        .mount_workspace(
+            &second.id,
+            WorkspaceMount {
+                path: "/workspace/app/".to_string(),
+                label: "app".to_string(),
+            },
+            "mount-second-app",
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("workspace path already mounted"));
+    assert!(channels.workspaces(&second.id).await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempotent() {
     let channels = ChannelService::for_tests();
     let members = MemberService::for_tests();
