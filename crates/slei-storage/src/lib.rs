@@ -11,7 +11,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::db::SleiDb;
-    use super::repositories::Repositories;
+    use super::repositories::{
+        Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+    };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("slei-{name}-{}.sqlite", Uuid::new_v4()));
@@ -83,6 +85,344 @@ mod tests {
         ] {
             assert!(db.table_exists(table).await.unwrap(), "missing {table}");
         }
+    }
+
+    #[tokio::test]
+    async fn reset_mutable_state_preserves_schema_migrations() {
+        let (url, _path) = sqlite_file_url("reset");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+        let channel_uuid = Uuid::new_v4();
+        let agent_uuid = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let thread_reply_id = Uuid::new_v4();
+        let runtime_session_id = Uuid::new_v4();
+        let event_entity_id = Uuid::new_v4();
+        let decision_id = Uuid::new_v4();
+        let inbox_event_id = Uuid::new_v4();
+        let memory_event_id = Uuid::new_v4();
+        let routing_package_id = Uuid::new_v4();
+        let conversation_id = Uuid::new_v4();
+        let conversation_session_id = Uuid::new_v4();
+        let attachment_id = Uuid::new_v4();
+        let conversation_message_id = Uuid::new_v4();
+        let interactive_card_id = Uuid::new_v4();
+        let event_message_id = Uuid::new_v4().to_string();
+
+        sqlx::query("INSERT INTO app_metadata(key, value) VALUES ('boot.mode', 'reset-test')")
+            .execute(db.pool())
+            .await
+            .unwrap();
+        repos
+            .upsert_agent(
+                "agent_reset",
+                "Reset Agent",
+                "@reset",
+                "agent",
+                false,
+                "Codex",
+                "GPT-5",
+                "node-reset",
+                "reset test agent",
+                "reset-avatar",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_channel(
+                &channel_uuid.to_string(),
+                "reset-channel",
+                Some("reset scope"),
+                true,
+                "Controlled",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_channel_member(&channel_uuid.to_string(), "agent_reset", "ready")
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO channel_workspace_mounts(channel_id, path, label) VALUES (?, ?, ?)",
+        )
+        .bind(channel_uuid.to_string())
+        .bind("/tmp/reset-workspace")
+        .bind("Reset Workspace")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        repos
+            .insert_human_message(message_id, channel_uuid, "reset body")
+            .await
+            .unwrap();
+        repos
+            .insert_task(task_id, channel_uuid, message_id, "reset task")
+            .await
+            .unwrap();
+        repos
+            .insert_thread_reply(thread_reply_id, task_id, message_id, "reset reply")
+            .await
+            .unwrap();
+        repos
+            .upsert_runtime_session(
+                runtime_session_id,
+                agent_uuid,
+                "Codex",
+                Some(channel_uuid),
+                "ciphertext",
+            )
+            .await
+            .unwrap();
+        repos
+            .append_event("test.event", event_entity_id, "{}")
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO idempotent_mutations(idempotency_key, entity_id, response_payload)
+             VALUES (?, ?, ?)",
+        )
+        .bind("reset-key")
+        .bind(Uuid::new_v4().to_string())
+        .bind("{\"ok\":true}")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        repos
+            .insert_channel_coordinator(&channel_uuid.to_string(), "round-robin", true)
+            .await
+            .unwrap();
+        repos
+            .insert_coordinator_decision(
+                decision_id,
+                &channel_uuid.to_string(),
+                &event_message_id,
+                "route",
+                "assign",
+                Some("agent_reset"),
+                &["agent_reset".to_string()],
+                "reset reason",
+            )
+            .await
+            .unwrap();
+        repos
+            .insert_coordinator_runtime_run(
+                "run-reset",
+                &channel_uuid.to_string(),
+                &event_message_id,
+                "idem-reset",
+                "prompt",
+            )
+            .await
+            .unwrap();
+        repos
+            .insert_agent_inbox_event(
+                inbox_event_id,
+                "agent_reset",
+                "task.assigned",
+                "pending",
+                "{}",
+            )
+            .await
+            .unwrap();
+        repos
+            .insert_memory_update_event(
+                memory_event_id,
+                "agent_reset",
+                "memory.refresh",
+                Some(&message_id.to_string()),
+                Some("MEMORY.md"),
+                Some("summary"),
+                "pending",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_memory_document_state(
+                "agent_reset",
+                "MEMORY.md",
+                "summary",
+                Some("hash-1"),
+                true,
+            )
+            .await
+            .unwrap();
+        repos
+            .insert_routing_context_package(
+                routing_package_id,
+                decision_id,
+                &message_id.to_string(),
+                "{}",
+                false,
+            )
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO conversations(id, kind, agent_id, active_session_id, runtime_status)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(conversation_id.to_string())
+        .bind("agent")
+        .bind("agent_reset")
+        .bind(conversation_session_id.to_string())
+        .bind("ready")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO conversation_sessions(
+                id, conversation_id, title, status, runtime_session_payload
+             )
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(conversation_session_id.to_string())
+        .bind(conversation_id.to_string())
+        .bind("Reset Session")
+        .bind("ready")
+        .bind("{\"runtime\":\"ok\"}")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO conversation_attachments(
+                id, name, mime_type, size, url, cache_path, bytes_base64
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(attachment_id.to_string())
+        .bind("reset.txt")
+        .bind("text/plain")
+        .bind(10_i64)
+        .bind("file:///reset.txt")
+        .bind("/tmp/reset.txt")
+        .bind("cmVzZXQ=")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO conversation_messages(
+                id, conversation_id, session_id, author_id, body, status, run_id, attachment_ids, cards_payload
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(conversation_message_id.to_string())
+        .bind(conversation_id.to_string())
+        .bind(conversation_session_id.to_string())
+        .bind("agent_reset")
+        .bind("Reset conversation body")
+        .bind("done")
+        .bind("run-reset")
+        .bind(format!(r#"["{}"]"#, attachment_id))
+        .bind("[]")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO saved_messages(id, message_id, source_id, source_kind, session_id)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(conversation_message_id.to_string())
+        .bind(conversation_id.to_string())
+        .bind("conversation")
+        .bind(conversation_session_id.to_string())
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO interactive_cards(
+                id, run_id, agent_id, conversation_id, message_id, action_payload, template_payload, state
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(interactive_card_id.to_string())
+        .bind("run-reset")
+        .bind("agent_reset")
+        .bind(conversation_id.to_string())
+        .bind(conversation_message_id.to_string())
+        .bind("{\"action\":\"open\"}")
+        .bind("{\"template\":\"default\"}")
+        .bind("active")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO user_preferences(
+                profile_id, locale, time_zone, theme, font_size,
+                notify_mentions, notify_human_replies, notify_approvals
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("local")
+        .bind("zh-CN")
+        .bind("Asia/Shanghai")
+        .bind("dark")
+        .bind("medium")
+        .bind(1_i64)
+        .bind(1_i64)
+        .bind(1_i64)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO nodes(id, name, platform, arch, hostname, status, daemon_version)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("node-reset")
+        .bind("Reset Node")
+        .bind("macOS")
+        .bind("arm64")
+        .bind("reset-host")
+        .bind("connected")
+        .bind("0.1.0")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+        for table in RESET_MUTABLE_TABLES {
+            let query = format!("SELECT COUNT(*) FROM {table}");
+            let count: i64 = sqlx::query_scalar(&query).fetch_one(db.pool()).await.unwrap();
+            assert!(count > 0, "expected seeded rows in {table}");
+        }
+
+        let seeded_sequence_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_sequence
+             WHERE name IN ('event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(seeded_sequence_count, RESET_MUTABLE_SEQUENCE_TABLES.len() as i64);
+
+        repos.reset_mutable_state().await.unwrap();
+
+        for table in RESET_MUTABLE_TABLES {
+            let query = format!("SELECT COUNT(*) FROM {table}");
+            let count: i64 = sqlx::query_scalar(&query).fetch_one(db.pool()).await.unwrap();
+            assert_eq!(count, 0, "expected reset to empty {table}");
+        }
+
+        let retained_sequence_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_sequence
+             WHERE name IN ('event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(retained_sequence_count, 0);
+
+        let migration_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM schema_migrations")
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+        assert_eq!(migration_count, 2);
+
+        let next_sequence = repos
+            .append_event("test.event.after_reset", Uuid::new_v4(), "{}")
+            .await
+            .unwrap();
+        assert_eq!(next_sequence, 1);
     }
 
     #[tokio::test]

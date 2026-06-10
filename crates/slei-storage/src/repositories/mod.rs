@@ -1,6 +1,43 @@
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
+pub const RESET_MUTABLE_TABLES: &[&str] = &[
+    "routing_context_packages",
+    "memory_document_states",
+    "memory_update_events",
+    "agent_inbox_events",
+    "coordinator_runtime_runs",
+    "coordinator_decisions",
+    "channel_coordinators",
+    "idempotent_mutations",
+    "event_log",
+    "runtime_sessions",
+    "thread_replies",
+    "tasks",
+    "messages",
+    "saved_messages",
+    "conversation_messages",
+    "conversation_attachments",
+    "conversation_sessions",
+    "conversations",
+    "interactive_cards",
+    "channel_workspace_mounts",
+    "channel_members",
+    "channels",
+    "agents",
+    "user_preferences",
+    "nodes",
+    "app_metadata",
+];
+
+pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
+    "event_log",
+    "coordinator_decisions",
+    "agent_inbox_events",
+    "memory_update_events",
+    "routing_context_packages",
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentRow {
     pub id: String,
@@ -144,6 +181,27 @@ impl std::fmt::Debug for Repositories {
 impl Repositories {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
+    }
+
+    pub async fn reset_mutable_state(&self) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("PRAGMA defer_foreign_keys = ON")
+            .execute(&mut *tx)
+            .await?;
+
+        for table in RESET_MUTABLE_TABLES {
+            let sql = format!("DELETE FROM {table}");
+            sqlx::query(&sql).execute(&mut *tx).await?;
+        }
+        for table in RESET_MUTABLE_SEQUENCE_TABLES {
+            sqlx::query("DELETE FROM sqlite_sequence WHERE name = ?")
+                .bind(table)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn upsert_agent(
