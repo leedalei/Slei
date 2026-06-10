@@ -1,6 +1,43 @@
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentRow {
+    pub id: String,
+    pub name: String,
+    pub handle: String,
+    pub agent_kind: String,
+    pub system_owned: bool,
+    pub runtime_kind: String,
+    pub model: String,
+    pub node_id: String,
+    pub description: String,
+    pub workspace_path: String,
+    pub memory_path: String,
+    pub docs_path: String,
+    pub avatar_seed: String,
+    pub runtime_status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelRow {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_default: bool,
+    pub permission: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelMemberRow {
+    pub channel_id: String,
+    pub agent_id: String,
+    pub joined_at: String,
+    pub readiness: String,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct MessageRecord {
     pub id: Uuid,
@@ -98,9 +135,204 @@ pub struct Repositories {
     pool: SqlitePool,
 }
 
+impl std::fmt::Debug for Repositories {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("Repositories").finish()
+    }
+}
+
 impl Repositories {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
+    }
+
+    pub async fn upsert_agent(
+        &self,
+        id: &str,
+        name: &str,
+        handle: &str,
+        agent_kind: &str,
+        system_owned: bool,
+        runtime_kind: &str,
+        model: &str,
+        node_id: &str,
+        description: &str,
+        avatar_seed: &str,
+    ) -> Result<(), sqlx::Error> {
+        let workspace_path = format!("agents/{id}");
+        let memory_path = format!("{workspace_path}/MEMORY.md");
+        let docs_path = format!("{workspace_path}/docs");
+        sqlx::query(
+            "INSERT INTO agents(
+                id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
+                description, workspace_path, memory_path, docs_path, avatar_seed, runtime_status
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready')
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                handle = excluded.handle,
+                agent_kind = excluded.agent_kind,
+                system_owned = excluded.system_owned,
+                runtime_kind = excluded.runtime_kind,
+                model = excluded.model,
+                node_id = excluded.node_id,
+                description = excluded.description,
+                workspace_path = excluded.workspace_path,
+                memory_path = excluded.memory_path,
+                docs_path = excluded.docs_path,
+                avatar_seed = excluded.avatar_seed,
+                runtime_status = excluded.runtime_status,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(handle)
+        .bind(agent_kind)
+        .bind(if system_owned { 1 } else { 0 })
+        .bind(runtime_kind)
+        .bind(model)
+        .bind(node_id)
+        .bind(description)
+        .bind(workspace_path)
+        .bind(memory_path)
+        .bind(docs_path)
+        .bind(avatar_seed)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn agents(&self) -> Result<Vec<AgentRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
+                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    runtime_status, created_at, updated_at
+             FROM agents
+             ORDER BY created_at ASC, id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let system_owned: i64 = row.try_get("system_owned")?;
+                Ok(AgentRow {
+                    id: row.try_get("id")?,
+                    name: row.try_get("name")?,
+                    handle: row.try_get("handle")?,
+                    agent_kind: row.try_get("agent_kind")?,
+                    system_owned: system_owned != 0,
+                    runtime_kind: row.try_get("runtime_kind")?,
+                    model: row.try_get("model")?,
+                    node_id: row.try_get("node_id")?,
+                    description: row.try_get("description")?,
+                    workspace_path: row.try_get("workspace_path")?,
+                    memory_path: row.try_get("memory_path")?,
+                    docs_path: row.try_get("docs_path")?,
+                    avatar_seed: row.try_get("avatar_seed")?,
+                    runtime_status: row.try_get("runtime_status")?,
+                    created_at: row.try_get("created_at")?,
+                    updated_at: row.try_get("updated_at")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn upsert_channel(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        is_default: bool,
+        permission: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO channels(id, name, description, is_default, permission)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                is_default = excluded.is_default,
+                permission = excluded.permission,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(description)
+        .bind(if is_default { 1 } else { 0 })
+        .bind(permission)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channels(&self) -> Result<Vec<ChannelRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, is_default, permission
+             FROM channels
+             ORDER BY created_at ASC, id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let is_default: i64 = row.try_get("is_default")?;
+                Ok(ChannelRow {
+                    id: row.try_get("id")?,
+                    name: row.try_get("name")?,
+                    description: row.try_get("description")?,
+                    is_default: is_default != 0,
+                    permission: row.try_get("permission")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn upsert_channel_member(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+        readiness: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO channel_members(channel_id, agent_id, readiness)
+             VALUES (?, ?, ?)
+             ON CONFLICT(channel_id, agent_id) DO UPDATE SET
+                readiness = excluded.readiness",
+        )
+        .bind(channel_id)
+        .bind(agent_id)
+        .bind(readiness)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channel_members(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<ChannelMemberRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT channel_id, agent_id, joined_at, readiness
+             FROM channel_members
+             WHERE channel_id = ?
+             ORDER BY joined_at ASC, agent_id ASC",
+        )
+        .bind(channel_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(ChannelMemberRow {
+                    channel_id: row.try_get("channel_id")?,
+                    agent_id: row.try_get("agent_id")?,
+                    joined_at: row.try_get("joined_at")?,
+                    readiness: row.try_get("readiness")?,
+                })
+            })
+            .collect()
     }
 
     pub async fn insert_human_message(

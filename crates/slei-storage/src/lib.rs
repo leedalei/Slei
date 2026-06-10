@@ -62,6 +62,193 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migration_creates_app_state_tables() {
+        let (url, _path) = sqlite_file_url("app-state");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+
+        for table in [
+            "agents",
+            "channels",
+            "channel_members",
+            "channel_workspace_mounts",
+            "conversations",
+            "conversation_sessions",
+            "conversation_messages",
+            "conversation_attachments",
+            "saved_messages",
+            "interactive_cards",
+            "user_preferences",
+            "nodes",
+        ] {
+            assert!(db.table_exists(table).await.unwrap(), "missing {table}");
+        }
+    }
+
+    #[tokio::test]
+    async fn repositories_persist_agents_channels_and_memberships() {
+        let (url, _path) = sqlite_file_url("agents-channels");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_agent(
+                "agent_coda",
+                "Coda",
+                "@coda",
+                "agent",
+                false,
+                "ClaudeCode",
+                "Sonnet",
+                "local-node",
+                "开发",
+                "agent_coda",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_agent(
+                "agent_coda",
+                "Coda Prime",
+                "@coda-prime",
+                "coordinator",
+                true,
+                "Codex",
+                "GPT-5",
+                "remote-node",
+                "协调",
+                "coda-prime",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_channel("all", "all", Some("默认团队频道"), true, "Controlled")
+            .await
+            .unwrap();
+        repos
+            .upsert_channel("all", "all-hands", None, false, "Open")
+            .await
+            .unwrap();
+        repos
+            .upsert_channel_member("all", "missing_agent", "ready")
+            .await
+            .unwrap_err();
+        repos
+            .upsert_channel_member("all", "agent_coda", "joining")
+            .await
+            .unwrap();
+        repos
+            .upsert_channel_member("all", "agent_coda", "ready")
+            .await
+            .unwrap();
+
+        let agents = repos.agents().await.unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].id, "agent_coda");
+        assert_eq!(agents[0].name, "Coda Prime");
+        assert_eq!(agents[0].handle, "@coda-prime");
+        assert_eq!(agents[0].agent_kind, "coordinator");
+        assert!(agents[0].system_owned);
+        assert_eq!(agents[0].runtime_kind, "Codex");
+        assert_eq!(agents[0].model, "GPT-5");
+        assert_eq!(agents[0].node_id, "remote-node");
+        assert_eq!(agents[0].description, "协调");
+        assert_eq!(agents[0].workspace_path, "agents/agent_coda");
+        assert_eq!(agents[0].memory_path, "agents/agent_coda/MEMORY.md");
+        assert_eq!(agents[0].docs_path, "agents/agent_coda/docs");
+        assert_eq!(agents[0].avatar_seed, "coda-prime");
+        assert_eq!(agents[0].runtime_status, "ready");
+
+        let channels = repos.channels().await.unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].id, "all");
+        assert_eq!(channels[0].name, "all-hands");
+        assert_eq!(channels[0].description, None);
+        assert!(!channels[0].is_default);
+        assert_eq!(channels[0].permission, "Open");
+
+        let members = repos.channel_members("all").await.unwrap();
+        assert_eq!(members.len(), 1);
+        assert_eq!(members[0].channel_id, "all");
+        assert_eq!(members[0].agent_id, "agent_coda");
+        assert_eq!(members[0].readiness, "ready");
+
+        sqlx::query("DELETE FROM agents WHERE id = ?")
+            .bind("agent_coda")
+            .execute(db.pool())
+            .await
+            .unwrap();
+        assert!(repos.channel_members("all").await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn migration_repairs_app_state_columns_before_later_migrations() {
+        let (url, _path) = sqlite_file_url("migration-order-repair");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate_for_test(&[
+            (
+                1,
+                r#"
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL,
+                    author_kind TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    content TEXT,
+                    deleted INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL,
+                    root_message_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'todo',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS thread_replies (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    author_message_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
+                "#,
+            ),
+            (
+                2,
+                r#"
+                CREATE TABLE later_migration_probe AS
+                SELECT
+                    messages.author_id AS message_author_id,
+                    messages.as_task AS message_as_task,
+                    messages.edited AS message_edited,
+                    tasks.creator_id AS task_creator_id,
+                    tasks.assignee_id AS task_assignee_id,
+                    tasks.updated_at AS task_updated_at,
+                    thread_replies.sender_id AS reply_sender_id,
+                    thread_replies.role AS reply_role,
+                    thread_replies.status AS reply_status
+                FROM messages, tasks, thread_replies
+                LIMIT 0;
+                INSERT OR IGNORE INTO schema_migrations(version) VALUES (2);
+                "#,
+            ),
+        ])
+        .await
+        .unwrap();
+
+        assert!(db.table_exists("later_migration_probe").await.unwrap());
+    }
+
+    #[tokio::test]
     async fn deleting_human_message_clears_content_and_raw_storage() {
         let (url, path) = sqlite_file_url("delete");
         let db = SleiDb::connect(&url).await.unwrap();
