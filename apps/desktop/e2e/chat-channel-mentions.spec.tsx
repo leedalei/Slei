@@ -106,6 +106,14 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("Slei Desktop");
     expect(html).toContain("删除频道 dev-team");
     expect(html).not.toContain("删除频道 all");
+
+    const deleteButtonMarkup = html.match(/<button\b(?=[^>]*aria-label="删除频道 dev-team")[^>]*>/)?.[0] ?? "";
+    expect(deleteButtonMarkup).toContain("text-destructive");
+    expect(deleteButtonMarkup).toContain("self-center");
+    expect(deleteButtonMarkup).toContain("group-hover/channel:opacity-100");
+    expect(deleteButtonMarkup).not.toContain("mt-1");
+    expect(deleteButtonMarkup).not.toContain("mt-2");
+    expect(appFrameSource()).toContain("group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto]");
   });
 
   it("renders a dedicated search page with filters and result links back to conversations", () => {

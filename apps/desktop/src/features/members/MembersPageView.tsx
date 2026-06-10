@@ -220,23 +220,21 @@ export function MembersPage(input: {
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <header className="border-b bg-background px-6 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <MemberAvatar identity={selectedMember} large />
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-2xl font-semibold">{memberDetails.name}</h1>
-                <Badge variant="outline" className="gap-1">
-                  <StatusDot status={selectedMember.runtimeStatus} />
-                  {input.messages.members.online}
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">{selectedMember.role}</p>
-              {showHandle ? <p className="truncate text-sm text-muted-foreground">{selectedMember.handle}</p> : null}
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
+          <MemberAvatar identity={selectedMember} large />
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-2xl font-semibold">{memberDetails.name}</h1>
+              <Badge variant="outline" className="gap-1">
+                <StatusDot status={selectedMember.runtimeStatus} />
+                {input.messages.members.online}
+              </Badge>
             </div>
+            <p className="text-sm text-muted-foreground">{selectedMember.role}</p>
+            {showHandle ? <p className="truncate text-sm text-muted-foreground">{selectedMember.handle}</p> : null}
           </div>
           {canMessage ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 self-start">
               <Button onClick={() => input.onMessage?.(selectedMember.id)} type="button">
                 <MessageCircle aria-hidden="true" />
                 {input.messages.members.message}

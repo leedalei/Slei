@@ -122,6 +122,8 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
     expect(html).toContain('data-slot="alert-dialog-trigger"');
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
+    expect(html).toContain("col-start-3 row-start-1");
     expect(html).toContain(messages.members.deleteAgentConfirm("Coda"));
     expect(html).toContain("Capabilities");
     expect(html).toContain("ClaudeCode");

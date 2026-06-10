@@ -712,10 +712,20 @@ function ChannelList(input: {
             </div>
             <div className="space-y-1">
               {input.data.channels.map((channel) => (
-                <div className="group flex items-start gap-1" key={channel.id}>
+                <div
+                  className={cn(
+                    "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start rounded-lg",
+                    input.activeChannelId !== channel.id && "hover:bg-muted/60",
+                    input.activeChannelId === channel.id && "bg-accent text-accent-foreground",
+                  )}
+                  key={channel.id}
+                >
                   <Button
                     aria-current={input.activeChannelId === channel.id ? "true" : undefined}
-                    className={cn("h-auto min-h-12 flex-1 justify-start whitespace-normal px-2 py-2 text-left", input.activeChannelId === channel.id && "bg-accent text-accent-foreground")}
+                    className={cn(
+                      "h-auto min-h-12 justify-start whitespace-normal px-2 py-2 text-left hover:bg-transparent hover:text-inherit",
+                      input.activeChannelId === channel.id && "bg-transparent text-inherit",
+                    )}
                     onClick={() => input.onChannelSelect?.(channel.id)}
                     type="button"
                     variant="ghost"
@@ -732,7 +742,15 @@ function ChannelList(input: {
                   {channel.id !== "all" ? (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))} className="mt-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100" size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={14} /></Button>
+                        <Button
+                          aria-label={input.messages.chat.deleteChannel(stripChannelHash(channel.name))}
+                          className="mr-1 self-center text-destructive opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100"
+                          size="icon-xs"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 aria-hidden="true" size={14} />
+                        </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
