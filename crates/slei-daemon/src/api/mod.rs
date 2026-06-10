@@ -34,6 +34,15 @@ pub(crate) async fn begin_resettable_write(state: &AppState) -> Result<ResetLaun
         .map_err(reset_runtime_error_response)
 }
 
+pub(crate) async fn begin_resettable_read(state: &AppState) -> Result<ResetLaunchGuard, Response> {
+    state
+        .reset()
+        .runtime()
+        .begin_launch()
+        .await
+        .map_err(reset_runtime_error_response)
+}
+
 pub(crate) fn reset_runtime_error_response(error: ResetRuntimeError) -> Response {
     match error {
         ResetRuntimeError::ResetInProgress => (

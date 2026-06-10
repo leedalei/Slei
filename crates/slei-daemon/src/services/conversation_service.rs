@@ -5,6 +5,10 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use slei_storage::repositories::{
+    ConversationAttachmentRow, ConversationMessageRow, ConversationRow, ConversationSessionRow,
+    Repositories,
+};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -80,14 +84,16 @@ pub struct ConversationMessageRecord {
     pub created_at: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ConversationService {
+    repos: Repositories,
     root: Arc<PathBuf>,
     inner: Arc<Mutex<ConversationState>>,
 }
 
 #[derive(Debug, Default)]
 struct ConversationState {
+    loaded: bool,
     conversations: HashMap<String, ConversationRecord>,
     dm_by_agent: HashMap<String, String>,
     sessions: HashMap<String, ConversationSessionRecord>,
@@ -96,14 +102,19 @@ struct ConversationState {
 }
 
 impl ConversationService {
-    pub fn new(root: PathBuf) -> Self {
+    pub fn new(repos: Repositories, root: PathBuf) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(ConversationState::load(&root))),
+            repos,
+            inner: Arc::new(Mutex::new(ConversationState::default())),
             root: Arc::new(root),
         }
     }
 
     pub async fn list_conversations(&self) -> Vec<ConversationRecord> {
+        if let Err(error) = self.ensure_loaded().await {
+            eprintln!("failed to load conversations from sqlite: {error}");
+            return Vec::new();
+        }
         let mut conversations = self
             .inner
             .lock()
@@ -117,13 +128,14 @@ impl ConversationService {
     }
 
     pub async fn clear_for_development_reset(&self) {
-        *self.inner.lock().await = ConversationState::default();
+        *self.inner.lock().await = ConversationState::loaded_empty();
     }
 
     pub async fn create_dm(
         &self,
         agent_id: &str,
     ) -> Result<(ConversationRecord, bool), ConversationError> {
+        self.ensure_loaded().await?;
         let trimmed = agent_id.trim();
         if trimmed.is_empty() {
             return Err(ConversationError::InvalidConversation);
@@ -166,8 +178,19 @@ impl ConversationService {
             .conversations
             .insert(conversation.id.clone(), conversation.clone());
         state.sessions.insert(session.id.clone(), session);
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
+        self.persist_conversation(&conversation).await?;
+        self.persist_session(
+            state
+                .sessions
+                .get(
+                    conversation
+                        .active_session_id
+                        .as_deref()
+                        .ok_or(ConversationError::ConversationNotFound)?,
+                )
+                .ok_or(ConversationError::ConversationNotFound)?,
+        )
+        .await?;
         Ok((conversation, true))
     }
 
@@ -175,6 +198,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<Vec<ConversationMessageRecord>, ConversationError> {
+        self.ensure_loaded().await?;
         let state = self.inner.lock().await;
         if !state.conversations.contains_key(conversation_id) {
             return Err(ConversationError::ConversationNotFound);
@@ -190,6 +214,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<ConversationRecord, ConversationError> {
+        self.ensure_loaded().await?;
         self.inner
             .lock()
             .await
@@ -204,6 +229,7 @@ impl ConversationService {
         conversation_id: &str,
         runtime_kind: &str,
     ) -> Result<(RuntimeSessionRecord, bool), ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         let conversation = state
             .conversations
@@ -224,14 +250,19 @@ impl ConversationService {
         conversation.runtime_session = Some(session.clone());
         let active_session_id = conversation.active_session_id.clone();
         conversation.updated_at = now;
+        let updated = conversation.clone();
+        let mut updated_session = None;
         if let Some(active_session_id) = active_session_id {
             if let Some(record) = state.sessions.get_mut(&active_session_id) {
                 record.runtime_session = Some(session.clone());
                 record.updated_at = current_timestamp();
+                updated_session = Some(record.clone());
             }
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
+        self.persist_conversation(&updated).await?;
+        if let Some(record) = updated_session {
+            self.persist_session(&record).await?;
+        }
         Ok((session, true))
     }
 
@@ -239,6 +270,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<ConversationRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         let conversation = state
             .conversations
@@ -256,8 +288,12 @@ impl ConversationService {
                 record.updated_at = current_timestamp();
             }
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
+        self.persist_conversation(&updated).await?;
+        if let Some(active_session_id) = updated.active_session_id.as_deref() {
+            if let Some(record) = state.sessions.get(active_session_id) {
+                self.persist_session(record).await?;
+            }
+        }
         Ok(updated)
     }
 
@@ -265,6 +301,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<ConversationRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         ensure_legacy_session(&mut state, conversation_id);
         let conversation = state
@@ -282,16 +319,25 @@ impl ConversationService {
                 record.status = "ready".to_string();
                 record.updated_at = current_timestamp();
             }
-            clear_session_messages(&mut state, conversation_id, &active_session_id);
+            let removed_attachments =
+                clear_session_messages(&mut state, conversation_id, &active_session_id);
+            self.repos
+                .delete_conversation_messages_for_session(conversation_id, &active_session_id)
+                .await
+                .map_err(storage_error)?;
+            for attachment in removed_attachments {
+                self.repos
+                    .delete_conversation_attachment(&attachment.id)
+                    .await
+                    .map_err(storage_error)?;
+            }
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
-        persist_messages(
-            &self.root,
-            conversation_id,
-            state.messages.get(conversation_id),
-        )?;
-        persist_attachments(&self.root, &state.attachments)?;
+        self.persist_conversation(&updated).await?;
+        if let Some(active_session_id) = updated.active_session_id.as_deref() {
+            if let Some(record) = state.sessions.get(active_session_id) {
+                self.persist_session(record).await?;
+            }
+        }
         Ok(updated)
     }
 
@@ -299,6 +345,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<Vec<ConversationSessionRecord>, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         if !state.conversations.contains_key(conversation_id) {
             return Err(ConversationError::ConversationNotFound);
@@ -318,6 +365,7 @@ impl ConversationService {
         &self,
         conversation_id: &str,
     ) -> Result<(ConversationRecord, ConversationSessionRecord), ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         let now = current_timestamp();
         let conversation = state
@@ -342,8 +390,8 @@ impl ConversationService {
         conversation.updated_at = now;
         let updated = conversation.clone();
         state.sessions.insert(session.id.clone(), session.clone());
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
+        self.persist_conversation(&updated).await?;
+        self.persist_session(&session).await?;
         Ok((updated, session))
     }
 
@@ -352,6 +400,7 @@ impl ConversationService {
         conversation_id: &str,
         session_id: &str,
     ) -> Result<(ConversationRecord, ConversationSessionRecord), ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         ensure_legacy_session(&mut state, conversation_id);
         let session = state
@@ -368,7 +417,7 @@ impl ConversationService {
         conversation.runtime_session = session.runtime_session.clone();
         conversation.updated_at = current_timestamp();
         let updated = conversation.clone();
-        persist_index(&self.root, &state.conversations)?;
+        self.persist_conversation(&updated).await?;
         Ok((updated, session))
     }
 
@@ -425,6 +474,7 @@ impl ConversationService {
         run_id: Option<&str>,
         status: Option<&str>,
     ) -> Result<ConversationMessageRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let trimmed = body.trim();
         if trimmed.is_empty() && attachment_ids.is_empty() {
             return Err(ConversationError::InvalidMessage);
@@ -435,12 +485,19 @@ impl ConversationService {
             return Err(ConversationError::ConversationNotFound);
         }
         ensure_legacy_session(&mut state, conversation_id);
-        let resolved_session_id = session_id.map(str::to_string).or_else(|| {
+        let resolved_session_id = if let Some(session_id) = session_id {
+            let session = state
+                .sessions
+                .get(session_id)
+                .filter(|session| session.conversation_id == conversation_id)
+                .ok_or(ConversationError::ConversationNotFound)?;
+            Some(session.id.clone())
+        } else {
             state
                 .conversations
                 .get(conversation_id)
                 .and_then(|conversation| conversation.active_session_id.clone())
-        });
+        };
         let attachments = attachment_ids
             .iter()
             .filter_map(|id| state.attachments.get(id).cloned())
@@ -448,11 +505,16 @@ impl ConversationService {
         if attachments.len() != attachment_ids.len() {
             return Err(ConversationError::InvalidMessage);
         }
+        let idempotency_key = idempotency_key.map(str::trim).filter(|key| !key.is_empty());
         if let Some(key) = idempotency_key {
             if let Some(existing) = state
                 .messages
                 .get(conversation_id)
-                .and_then(|messages| messages.iter().find(|message| message.id == key))
+                .and_then(|messages| {
+                    messages
+                        .iter()
+                        .find(|message| idempotent_message_matches_key(message, key))
+                })
                 .cloned()
             {
                 return Ok(existing);
@@ -461,8 +523,7 @@ impl ConversationService {
 
         let message = ConversationMessageRecord {
             id: idempotency_key
-                .filter(|key| !key.trim().is_empty())
-                .map(str::to_string)
+                .map(|key| message_id_for_idempotency_key(&state, conversation_id, key))
                 .unwrap_or_else(|| format!("msg_{}", Uuid::new_v4().simple())),
             conversation_id: conversation_id.to_string(),
             session_id: resolved_session_id.clone(),
@@ -493,13 +554,19 @@ impl ConversationService {
                 session.updated_at = message.created_at.clone();
             }
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
-        persist_messages(
-            &self.root,
-            conversation_id,
-            state.messages.get(conversation_id),
-        )?;
+        self.persist_conversation(
+            state
+                .conversations
+                .get(conversation_id)
+                .ok_or(ConversationError::ConversationNotFound)?,
+        )
+        .await?;
+        if let Some(session_id) = message.session_id.as_deref() {
+            if let Some(session) = state.sessions.get(session_id) {
+                self.persist_session(session).await?;
+            }
+        }
+        self.persist_message(&message).await?;
         Ok(message)
     }
 
@@ -511,6 +578,7 @@ impl ConversationService {
         body_delta: Option<&str>,
         status: Option<&str>,
     ) -> Result<ConversationMessageRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         if !state.conversations.contains_key(conversation_id) {
             return Err(ConversationError::ConversationNotFound);
@@ -559,13 +627,19 @@ impl ConversationService {
                 session.updated_at = updated.created_at.clone();
             }
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
-        persist_messages(
-            &self.root,
-            conversation_id,
-            state.messages.get(conversation_id),
-        )?;
+        self.persist_conversation(
+            state
+                .conversations
+                .get(conversation_id)
+                .ok_or(ConversationError::ConversationNotFound)?,
+        )
+        .await?;
+        if let Some(session_id) = updated.session_id.as_deref() {
+            if let Some(session) = state.sessions.get(session_id) {
+                self.persist_session(session).await?;
+            }
+        }
+        self.persist_message(&updated).await?;
         Ok(updated)
     }
 
@@ -577,9 +651,13 @@ impl ConversationService {
         cards: Vec<InteractiveCardView>,
         status: Option<&str>,
     ) -> Result<ConversationMessageRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         if !state.conversations.contains_key(conversation_id) {
             return Err(ConversationError::ConversationNotFound);
+        }
+        if message_id_belongs_to_another_conversation(&state, conversation_id, message_id) {
+            return Err(ConversationError::InvalidMessage);
         }
         ensure_legacy_session(&mut state, conversation_id);
         let active_session_id = state
@@ -616,13 +694,14 @@ impl ConversationService {
         if let Some(conversation) = state.conversations.get_mut(conversation_id) {
             conversation.updated_at = updated.created_at.clone();
         }
-        persist_index(&self.root, &state.conversations)?;
-        persist_sessions(&self.root, &state.sessions)?;
-        persist_messages(
-            &self.root,
-            conversation_id,
-            state.messages.get(conversation_id),
-        )?;
+        self.persist_conversation(
+            state
+                .conversations
+                .get(conversation_id)
+                .ok_or(ConversationError::ConversationNotFound)?,
+        )
+        .await?;
+        self.persist_message(&updated).await?;
         Ok(updated)
     }
 
@@ -632,6 +711,7 @@ impl ConversationService {
         mime_type: &str,
         bytes_base64: &str,
     ) -> Result<ConversationAttachmentRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let file_name = sanitize_attachment_name(name)?;
         let bytes = decode_base64(bytes_base64).map_err(|_| ConversationError::InvalidMessage)?;
         let mime_type = if mime_type.trim().is_empty() {
@@ -661,7 +741,8 @@ impl ConversationService {
         state
             .attachments
             .insert(attachment.id.clone(), attachment.clone());
-        persist_attachments(&self.root, &state.attachments)?;
+        self.persist_attachment(&attachment, Some(bytes_base64))
+            .await?;
         Ok(attachment)
     }
 
@@ -727,6 +808,7 @@ impl ConversationService {
         message_id: &str,
         cards: Vec<InteractiveCardView>,
     ) -> Result<ConversationMessageRecord, ConversationError> {
+        self.ensure_loaded().await?;
         let mut state = self.inner.lock().await;
         let messages = state
             .messages
@@ -738,19 +820,136 @@ impl ConversationService {
             .ok_or(ConversationError::ConversationNotFound)?;
         message.cards = cards;
         let updated = message.clone();
-        persist_messages(
-            &self.root,
-            conversation_id,
-            state.messages.get(conversation_id),
-        )?;
+        self.persist_message(&updated).await?;
         Ok(updated)
+    }
+
+    async fn persist_conversation(
+        &self,
+        conversation: &ConversationRecord,
+    ) -> Result<(), ConversationError> {
+        self.repos
+            .upsert_conversation(conversation_to_row(conversation))
+            .await
+            .map_err(storage_error)
+    }
+
+    async fn persist_session(
+        &self,
+        session: &ConversationSessionRecord,
+    ) -> Result<(), ConversationError> {
+        self.repos
+            .upsert_conversation_session(session_to_row(session)?)
+            .await
+            .map_err(storage_error)
+    }
+
+    async fn persist_message(
+        &self,
+        message: &ConversationMessageRecord,
+    ) -> Result<(), ConversationError> {
+        self.repos
+            .insert_conversation_message(message_to_row(message)?)
+            .await
+            .map_err(storage_error)
+    }
+
+    async fn persist_attachment(
+        &self,
+        attachment: &ConversationAttachmentRecord,
+        bytes_base64: Option<&str>,
+    ) -> Result<(), ConversationError> {
+        self.repos
+            .upsert_conversation_attachment(attachment_to_row(attachment, bytes_base64))
+            .await
+            .map_err(storage_error)
+    }
+
+    async fn ensure_loaded(&self) -> Result<(), ConversationError> {
+        let mut state = self.inner.lock().await;
+        if state.loaded {
+            return Ok(());
+        }
+        *state = ConversationState::load(&self.repos, &self.root).await?;
+        Ok(())
     }
 }
 
 impl ConversationState {
-    fn load(root: &PathBuf) -> Self {
+    fn loaded_empty() -> Self {
+        Self {
+            loaded: true,
+            ..Self::default()
+        }
+    }
+
+    async fn load(repos: &Repositories, root: &PathBuf) -> Result<Self, ConversationError> {
+        let rows = repos.conversations().await.map_err(storage_error)?;
+        let mut state = Self::loaded_empty();
+        for row in rows {
+            let sessions = repos
+                .conversation_sessions(&row.id)
+                .await
+                .map_err(storage_error)?
+                .into_iter()
+                .map(session_from_row)
+                .collect::<Result<Vec<_>, _>>()?;
+            for session in sessions {
+                state.sessions.insert(session.id.clone(), session);
+            }
+
+            let messages = repos
+                .conversation_messages(&row.id)
+                .await
+                .map_err(storage_error)?
+                .into_iter()
+                .map(|message| message_from_row(repos, message))
+                .collect::<Vec<_>>();
+            let mut records = Vec::new();
+            for message in messages {
+                records.push(message.await?);
+            }
+
+            let runtime_session = row
+                .active_session_id
+                .as_deref()
+                .and_then(|session_id| state.sessions.get(session_id))
+                .and_then(|session| session.runtime_session.clone());
+            let conversation = conversation_from_row(row, runtime_session);
+            if conversation.kind == "dm" {
+                state
+                    .dm_by_agent
+                    .insert(conversation.agent_id.clone(), conversation.id.clone());
+            }
+            for message in &records {
+                for attachment in &message.attachments {
+                    state
+                        .attachments
+                        .insert(attachment.id.clone(), attachment.clone());
+                }
+            }
+            state.messages.insert(conversation.id.clone(), records);
+            state
+                .conversations
+                .insert(conversation.id.clone(), conversation);
+        }
+        for attachment in repos
+            .conversation_attachments()
+            .await
+            .map_err(storage_error)?
+            .into_iter()
+            .map(attachment_from_row)
+        {
+            state.attachments.insert(attachment.id.clone(), attachment);
+        }
+        let legacy_state = Self::load_legacy_json(root);
+        merge_legacy_state(repos, &mut state, legacy_state).await?;
+        Ok(state)
+    }
+
+    fn load_legacy_json(root: &PathBuf) -> Self {
         let mut conversations = load_index(root);
-        let mut state = Self::default();
+        let mut state = Self::loaded_empty();
         state.sessions = load_sessions(root);
         state.attachments = load_attachments(root);
         for conversation in &mut conversations {
@@ -833,59 +1032,256 @@ fn load_attachments(root: &PathBuf) -> HashMap<String, ConversationAttachmentRec
         .collect()
 }
 
-fn persist_index(
-    root: &PathBuf,
-    conversations: &HashMap<String, ConversationRecord>,
+async fn merge_legacy_state(
+    repos: &Repositories,
+    state: &mut ConversationState,
+    legacy_state: ConversationState,
 ) -> Result<(), ConversationError> {
-    let path = root.join("conversations/index.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
+    let existing_message_ids = state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter().map(|message| message.id.clone()))
+        .collect::<HashSet<_>>();
+    let mut existing_message_ids = existing_message_ids;
+
+    for conversation in legacy_state.conversations.into_values() {
+        if let Some(existing) = state.conversations.get_mut(&conversation.id) {
+            let mut changed = false;
+            if existing.active_session_id.is_none() && conversation.active_session_id.is_some() {
+                existing.active_session_id = conversation.active_session_id.clone();
+                changed = true;
+            }
+            if existing.runtime_session.is_none() && conversation.runtime_session.is_some() {
+                existing.runtime_session = conversation.runtime_session.clone();
+                changed = true;
+            }
+            if changed {
+                repos
+                    .upsert_conversation(conversation_to_row(existing))
+                    .await
+                    .map_err(storage_error)?;
+            }
+            continue;
+        }
+        repos
+            .upsert_conversation(conversation_to_row(&conversation))
+            .await
+            .map_err(storage_error)?;
+        if conversation.kind == "dm" {
+            state
+                .dm_by_agent
+                .insert(conversation.agent_id.clone(), conversation.id.clone());
+        }
+        state.messages.entry(conversation.id.clone()).or_default();
+        state
+            .conversations
+            .insert(conversation.id.clone(), conversation);
     }
-    let mut ordered = conversations.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-    let payload = serde_json::to_string_pretty(&ordered).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
+
+    for session in legacy_state.sessions.into_values() {
+        if state.sessions.contains_key(&session.id) {
+            continue;
+        }
+        repos
+            .upsert_conversation_session(session_to_row(&session)?)
+            .await
+            .map_err(storage_error)?;
+        let updated_conversation = backfill_conversation_runtime_from_session(state, &session);
+        state.sessions.insert(session.id.clone(), session);
+        if let Some(conversation) = updated_conversation {
+            repos
+                .upsert_conversation(conversation_to_row(&conversation))
+                .await
+                .map_err(storage_error)?;
+        }
+    }
+
+    for attachment in legacy_state.attachments.into_values() {
+        if state.attachments.contains_key(&attachment.id) {
+            continue;
+        }
+        repos
+            .upsert_conversation_attachment(attachment_to_row(&attachment, None))
+            .await
+            .map_err(storage_error)?;
+        state.attachments.insert(attachment.id.clone(), attachment);
+    }
+
+    for messages in legacy_state.messages.into_values() {
+        for message in messages {
+            for attachment in &message.attachments {
+                if state.attachments.contains_key(&attachment.id) {
+                    continue;
+                }
+                repos
+                    .upsert_conversation_attachment(attachment_to_row(attachment, None))
+                    .await
+                    .map_err(storage_error)?;
+                state
+                    .attachments
+                    .insert(attachment.id.clone(), attachment.clone());
+            }
+            if !existing_message_ids.insert(message.id.clone()) {
+                continue;
+            }
+            repos
+                .insert_conversation_message(message_to_row(&message)?)
+                .await
+                .map_err(storage_error)?;
+            state
+                .messages
+                .entry(message.conversation_id.clone())
+                .or_default()
+                .push(message);
+        }
+    }
+    Ok(())
 }
 
-fn persist_messages(
-    root: &PathBuf,
-    conversation_id: &str,
-    messages: Option<&Vec<ConversationMessageRecord>>,
-) -> Result<(), ConversationError> {
-    let path = messages_path(root, conversation_id);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
+fn conversation_to_row(conversation: &ConversationRecord) -> ConversationRow {
+    ConversationRow {
+        id: conversation.id.clone(),
+        kind: conversation.kind.clone(),
+        agent_id: conversation.agent_id.clone(),
+        active_session_id: conversation.active_session_id.clone(),
+        runtime_status: conversation
+            .runtime_session
+            .as_ref()
+            .map(|session| session.status.clone()),
+        created_at: conversation.created_at.clone(),
+        updated_at: conversation.updated_at.clone(),
     }
-    let payload = serde_json::to_string_pretty(messages.unwrap_or(&Vec::new()))
+}
+
+fn conversation_from_row(
+    row: ConversationRow,
+    runtime_session: Option<RuntimeSessionRecord>,
+) -> ConversationRecord {
+    ConversationRecord {
+        id: row.id,
+        kind: row.kind,
+        agent_id: row.agent_id,
+        active_session_id: row.active_session_id,
+        runtime_session,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
+fn session_to_row(
+    session: &ConversationSessionRecord,
+) -> Result<ConversationSessionRow, ConversationError> {
+    Ok(ConversationSessionRow {
+        id: session.id.clone(),
+        conversation_id: session.conversation_id.clone(),
+        title: session.title.clone(),
+        status: session.status.clone(),
+        runtime_session_payload: session
+            .runtime_session
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(ConversationError::Json)?,
+        created_at: session.created_at.clone(),
+        updated_at: session.updated_at.clone(),
+    })
+}
+
+fn session_from_row(
+    row: ConversationSessionRow,
+) -> Result<ConversationSessionRecord, ConversationError> {
+    Ok(ConversationSessionRecord {
+        id: row.id,
+        conversation_id: row.conversation_id,
+        title: row.title,
+        status: row.status,
+        runtime_session: row
+            .runtime_session_payload
+            .as_deref()
+            .map(serde_json::from_str)
+            .transpose()
+            .map_err(ConversationError::Json)?,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
+}
+
+fn message_to_row(
+    message: &ConversationMessageRecord,
+) -> Result<ConversationMessageRow, ConversationError> {
+    let attachment_ids = message
+        .attachments
+        .iter()
+        .map(|attachment| attachment.id.clone())
+        .collect::<Vec<_>>();
+    Ok(ConversationMessageRow {
+        id: message.id.clone(),
+        conversation_id: message.conversation_id.clone(),
+        session_id: message.session_id.clone(),
+        author_id: message.author_id.clone(),
+        body: message.body.clone(),
+        status: message.status.clone(),
+        run_id: message.run_id.clone(),
+        attachment_ids: serde_json::to_string(&attachment_ids).map_err(ConversationError::Json)?,
+        cards_payload: serde_json::to_string(&message.cards).map_err(ConversationError::Json)?,
+        created_at: message.created_at.clone(),
+    })
+}
+
+async fn message_from_row(
+    repos: &Repositories,
+    row: ConversationMessageRow,
+) -> Result<ConversationMessageRecord, ConversationError> {
+    let attachment_ids = serde_json::from_str::<Vec<String>>(&row.attachment_ids)
         .map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
+    let mut attachments = Vec::new();
+    for attachment_id in attachment_ids {
+        if let Some(attachment) = repos
+            .conversation_attachment(&attachment_id)
+            .await
+            .map_err(storage_error)?
+        {
+            attachments.push(attachment_from_row(attachment));
+        }
+    }
+    Ok(ConversationMessageRecord {
+        id: row.id,
+        conversation_id: row.conversation_id,
+        session_id: row.session_id,
+        author_id: row.author_id,
+        body: row.body,
+        attachments,
+        cards: serde_json::from_str(&row.cards_payload).map_err(ConversationError::Json)?,
+        run_id: row.run_id,
+        status: row.status,
+        created_at: row.created_at,
+    })
 }
 
-fn persist_sessions(
-    root: &PathBuf,
-    sessions: &HashMap<String, ConversationSessionRecord>,
-) -> Result<(), ConversationError> {
-    let path = root.join("conversations/sessions.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
+fn attachment_to_row(
+    attachment: &ConversationAttachmentRecord,
+    bytes_base64: Option<&str>,
+) -> ConversationAttachmentRow {
+    ConversationAttachmentRow {
+        id: attachment.id.clone(),
+        name: attachment.name.clone(),
+        mime_type: attachment.mime_type.clone(),
+        size: attachment.size,
+        url: attachment.url.clone(),
+        cache_path: attachment.cache_path.clone(),
+        bytes_base64: bytes_base64.map(str::to_string),
     }
-    let mut ordered = sessions.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-    let payload = serde_json::to_string_pretty(&ordered).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
 }
 
-fn persist_attachments(
-    root: &PathBuf,
-    attachments: &HashMap<String, ConversationAttachmentRecord>,
-) -> Result<(), ConversationError> {
-    let path = root.join("attachments/index.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
+fn attachment_from_row(row: ConversationAttachmentRow) -> ConversationAttachmentRecord {
+    ConversationAttachmentRecord {
+        id: row.id,
+        name: row.name,
+        mime_type: row.mime_type,
+        size: row.size,
+        url: row.url,
+        cache_path: row.cache_path,
     }
-    let payload = serde_json::to_string_pretty(&attachments.values().cloned().collect::<Vec<_>>())
-        .map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
 }
 
 fn messages_path(root: &PathBuf, conversation_id: &str) -> PathBuf {
@@ -896,6 +1292,92 @@ fn messages_path(root: &PathBuf, conversation_id: &str) -> PathBuf {
 
 fn safe_conversation_id(conversation_id: &str) -> String {
     conversation_id.replace(':', "_").replace('/', "_")
+}
+
+fn idempotent_message_matches_key(message: &ConversationMessageRecord, key: &str) -> bool {
+    message.id == key || message.id == scoped_idempotent_message_id(&message.conversation_id, key)
+}
+
+fn message_id_for_idempotency_key(
+    state: &ConversationState,
+    conversation_id: &str,
+    key: &str,
+) -> String {
+    let key_is_used_by_another_conversation = state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter())
+        .any(|message| message.id == key && message.conversation_id != conversation_id);
+    if !key_is_used_by_another_conversation {
+        return key.to_string();
+    }
+
+    let scoped_id = scoped_idempotent_message_id(conversation_id, key);
+    unique_message_id(state, scoped_id)
+}
+
+fn scoped_idempotent_message_id(conversation_id: &str, key: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in conversation_id
+        .bytes()
+        .chain(std::iter::once(0))
+        .chain(key.bytes())
+    {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("msg_idem_{hash:016x}")
+}
+
+fn unique_message_id(state: &ConversationState, candidate: String) -> String {
+    if !message_id_exists(state, &candidate) {
+        return candidate;
+    }
+    for suffix in 2.. {
+        let next = format!("{candidate}_{suffix}");
+        if !message_id_exists(state, &next) {
+            return next;
+        }
+    }
+    unreachable!("unbounded message id suffix search should always find a free id")
+}
+
+fn message_id_exists(state: &ConversationState, id: &str) -> bool {
+    state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter())
+        .any(|message| message.id == id)
+}
+
+fn message_id_belongs_to_another_conversation(
+    state: &ConversationState,
+    conversation_id: &str,
+    message_id: &str,
+) -> bool {
+    state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter())
+        .any(|message| message.id == message_id && message.conversation_id != conversation_id)
+}
+
+fn backfill_conversation_runtime_from_session(
+    state: &mut ConversationState,
+    session: &ConversationSessionRecord,
+) -> Option<ConversationRecord> {
+    if session.runtime_session.is_none() {
+        return None;
+    }
+    let conversation = state.conversations.get_mut(&session.conversation_id)?;
+    if conversation.active_session_id.as_deref() != Some(session.id.as_str()) {
+        return None;
+    }
+    if conversation.runtime_session == session.runtime_session {
+        return None;
+    }
+    conversation.runtime_session = session.runtime_session.clone();
+    Some(conversation.clone())
 }
 
 fn legacy_session_for_conversation(conversation: &ConversationRecord) -> ConversationSessionRecord {
@@ -935,9 +1417,9 @@ fn clear_session_messages(
     state: &mut ConversationState,
     conversation_id: &str,
     active_session_id: &str,
-) {
+) -> Vec<ConversationAttachmentRecord> {
     let Some(messages) = state.messages.get_mut(conversation_id) else {
-        return;
+        return Vec::new();
     };
     let removed_attachment_ids = messages
         .iter()
@@ -951,7 +1433,7 @@ fn clear_session_messages(
         .collect::<HashSet<_>>();
     messages.retain(|message| message.session_id.as_deref() != Some(active_session_id));
     if removed_attachment_ids.is_empty() {
-        return;
+        return Vec::new();
     }
     let referenced_attachment_ids = state
         .messages
@@ -964,16 +1446,19 @@ fn clear_session_messages(
                 .map(|attachment| attachment.id.clone())
         })
         .collect::<HashSet<_>>();
+    let mut removed = Vec::new();
     for attachment_id in removed_attachment_ids.difference(&referenced_attachment_ids) {
         if let Some(attachment) = state.attachments.remove(attachment_id) {
-            if let Some(path) = attachment.cache_path {
+            if let Some(path) = attachment.cache_path.as_deref() {
                 let _ = fs::remove_file(&path);
                 if let Some(parent) = std::path::Path::new(&path).parent() {
                     let _ = fs::remove_dir(parent);
                 }
             }
+            removed.push(attachment);
         }
     }
+    removed
 }
 
 fn sanitize_attachment_name(name: &str) -> Result<String, ConversationError> {
@@ -1035,4 +1520,11 @@ pub enum ConversationError {
     Io(std::io::Error),
     #[error("conversation json error: {0}")]
     Json(serde_json::Error),
+}
+
+fn storage_error(error: sqlx::Error) -> ConversationError {
+    ConversationError::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        error.to_string(),
+    ))
 }

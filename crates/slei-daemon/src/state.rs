@@ -139,7 +139,7 @@ impl AppState {
             MemberService::for_tests_with_data_root_and_repos(agent_data_root, repos.clone());
         let channel_service = ChannelService::new(repos.clone());
         let card_service = CardService::new(repos.clone());
-        let conversation_service = ConversationService::new(data_root.clone());
+        let conversation_service = ConversationService::new(repos.clone(), data_root.clone());
         let workspace_service = WorkspaceService::new(event_service.clone());
         let settings_service = SettingsService::new(repos.clone());
         let coordinator_service = CoordinatorService::new_with_worker_and_reset(

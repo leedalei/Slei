@@ -6,8 +6,12 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::card_service::InteractiveCardView;
 use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
+use slei_daemon::services::conversation_service::ConversationService;
 use slei_daemon::state::AppState;
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{ConversationRow, Repositories, SavedMessageRow};
 use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -1488,10 +1492,8 @@ async fn agents_persist_to_slei_data_root_and_reload() {
 async fn dm_conversation_and_messages_persist_through_daemon_reload() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("conversation-reload");
-    let app = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let app = build_router(state.clone());
 
     let created = post_json(
         &app,
@@ -1538,20 +1540,63 @@ async fn dm_conversation_and_messages_persist_through_daemon_reload() {
         conversation_id
     );
 
+    let attachment = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/attachments",
+            Some("reload-attachment"),
+            json!({ "name": "reload-notes.txt", "mimeType": "text/plain", "bytesBase64": "cmVsb2FkIG5vdGVz" }),
+        )
+        .await,
+    )
+    .await;
+    let attachment_id = attachment["attachment"]["id"].as_str().unwrap();
+    let cache_path = attachment["attachment"]["cachePath"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
     let sent = post_json(
         &app,
         &token,
         &format!("/v1/conversations/{conversation_id}/messages"),
         Some("message-1"),
-        json!({ "body": "帮我看一下初始化流程", "authorId": "human:local" }),
+        json!({
+            "body": "帮我看一下初始化流程",
+            "authorId": "human:local",
+            "attachmentIds": [attachment_id],
+        }),
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
+    let sent_body = response_json(sent).await;
+    let message_id = sent_body["message"]["id"].as_str().unwrap().to_string();
+    let saved_session_id = sent_body["message"]["sessionId"]
+        .as_str()
+        .map(str::to_string);
+    state
+        .orchestration()
+        .repos()
+        .upsert_saved_message(SavedMessageRow {
+            id: "saved-reload-message".to_string(),
+            message_id: message_id.clone(),
+            source_id: conversation_id.to_string(),
+            source_kind: "conversation".to_string(),
+            session_id: saved_session_id.clone(),
+            saved_at: "42".to_string(),
+        })
+        .await
+        .unwrap();
 
-    let reloaded = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
+    let reloaded_state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let reloaded = build_router(reloaded_state.clone());
+    let conversations = response_json(get_json(&reloaded, &token, "/v1/conversations").await).await;
+    assert_eq!(conversations["conversations"][0]["id"], conversation_id);
+    assert_eq!(
+        conversations["conversations"][0]["runtimeSession"]["status"],
+        "pending"
+    );
     let messages = get_json(
         &reloaded,
         &token,
@@ -1562,13 +1607,222 @@ async fn dm_conversation_and_messages_persist_through_daemon_reload() {
     let messages_body = response_json(messages).await;
     assert_eq!(messages_body["messages"].as_array().unwrap().len(), 2);
     assert_eq!(messages_body["messages"][0]["body"], "帮我看一下初始化流程");
+    assert_eq!(
+        messages_body["messages"][0]["attachments"][0]["name"],
+        "reload-notes.txt"
+    );
+    assert_eq!(
+        messages_body["messages"][0]["attachments"][0]["cachePath"],
+        cache_path
+    );
     assert_eq!(messages_body["messages"][1]["authorId"], agent_id);
     assert_eq!(messages_body["messages"][1]["status"], "running");
     assert!(messages_body["messages"][1]["runId"]
         .as_str()
         .unwrap()
         .starts_with("run_"));
-    assert!(root.join("conversations/index.json").is_file());
+
+    let reloaded_messages = reloaded_state
+        .conversations()
+        .list_messages(conversation_id)
+        .await
+        .unwrap();
+    let prompt = ConversationService::prompt_with_attachments(&reloaded_messages[0]);
+    assert!(prompt.contains("reload-notes.txt"));
+    assert!(prompt.contains(&cache_path));
+
+    let saved_messages = reloaded_state
+        .orchestration()
+        .repos()
+        .saved_messages()
+        .await
+        .unwrap();
+    assert_eq!(saved_messages.len(), 1);
+    assert_eq!(saved_messages[0].message_id, message_id);
+    assert_eq!(saved_messages[0].source_id, conversation_id);
+    assert_eq!(saved_messages[0].session_id, saved_session_id);
+
+    assert!(!root.join("conversations/index.json").exists());
+    assert!(!root.join("conversations/sessions.json").exists());
+    assert!(!root.join("saved/messages.json").exists());
+    assert!(!root.join("conversations/messages").exists());
+    assert!(!root.join("attachments/index.json").exists());
+}
+
+#[tokio::test]
+async fn conversation_service_initial_load_uses_constructor_repositories() {
+    let root = make_temp_dir("conversation-shared-repo-root");
+    let db_root = make_temp_dir("conversation-shared-repo-db");
+    let database_url = format!("sqlite://{}", db_root.join("custom.sqlite").display());
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+    repos
+        .upsert_conversation(ConversationRow {
+            id: "dm:agent_shared_repo".to_string(),
+            kind: "dm".to_string(),
+            agent_id: "agent_shared_repo".to_string(),
+            active_session_id: None,
+            runtime_status: None,
+            created_at: "1".to_string(),
+            updated_at: "1".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let conversations = ConversationService::new(repos, root.clone())
+        .list_conversations()
+        .await;
+
+    assert_eq!(conversations.len(), 1);
+    assert_eq!(conversations[0].id, "dm:agent_shared_repo");
+    assert!(!root.join("slei.sqlite").exists());
+}
+
+#[tokio::test]
+async fn conversation_messages_scope_idempotency_keys_to_their_conversation() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("conversation-message-idempotency-scope");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let (first_conversation, _) = state
+        .conversations()
+        .create_dm("agent_first_scope")
+        .await
+        .unwrap();
+    let (second_conversation, _) = state
+        .conversations()
+        .create_dm("agent_second_scope")
+        .await
+        .unwrap();
+
+    let first = state
+        .conversations()
+        .append_message(
+            &first_conversation.id,
+            "human:local",
+            "first body",
+            Some("shared-message-key"),
+        )
+        .await
+        .unwrap();
+    let first_retry = state
+        .conversations()
+        .append_message(
+            &first_conversation.id,
+            "human:local",
+            "changed retry body",
+            Some("shared-message-key"),
+        )
+        .await
+        .unwrap();
+    let second = state
+        .conversations()
+        .append_message(
+            &second_conversation.id,
+            "human:local",
+            "second body",
+            Some("shared-message-key"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(first_retry.id, first.id);
+    assert_eq!(first_retry.body, "first body");
+    assert_ne!(second.id, first.id);
+
+    let reloaded = AppState::for_tests_with_agent_root(token, root);
+    let first_messages = reloaded
+        .conversations()
+        .list_messages(&first_conversation.id)
+        .await
+        .unwrap();
+    let second_messages = reloaded
+        .conversations()
+        .list_messages(&second_conversation.id)
+        .await
+        .unwrap();
+
+    assert_eq!(first_messages.len(), 1);
+    assert_eq!(first_messages[0].id, first.id);
+    assert_eq!(first_messages[0].body, "first body");
+    assert_eq!(second_messages.len(), 1);
+    assert_eq!(second_messages[0].id, second.id);
+    assert_eq!(second_messages[0].body, "second body");
+}
+
+#[tokio::test]
+async fn card_message_external_id_conflict_does_not_move_messages_between_conversations() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("card-message-cross-conversation-id");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let (first_conversation, _) = state
+        .conversations()
+        .create_dm("agent_card_first")
+        .await
+        .unwrap();
+    let (second_conversation, _) = state
+        .conversations()
+        .create_dm("agent_card_second")
+        .await
+        .unwrap();
+    let message_id = "externally_supplied_card_message";
+
+    let first = state
+        .conversations()
+        .upsert_card_message(
+            &first_conversation.id,
+            "agent_card_first",
+            message_id,
+            vec![test_card("card-first", "First")],
+            Some("approval"),
+        )
+        .await
+        .unwrap();
+    let first_update = state
+        .conversations()
+        .upsert_card_message(
+            &first_conversation.id,
+            "agent_card_first",
+            message_id,
+            vec![test_card("card-first", "First updated")],
+            Some("done"),
+        )
+        .await
+        .unwrap();
+    let second = state
+        .conversations()
+        .upsert_card_message(
+            &second_conversation.id,
+            "agent_card_second",
+            message_id,
+            vec![test_card("card-second", "Second")],
+            Some("approval"),
+        )
+        .await;
+
+    assert_eq!(first.id, message_id);
+    assert_eq!(first_update.id, first.id);
+    assert_eq!(first_update.status.as_deref(), Some("done"));
+    assert_eq!(first_update.cards[0].title, "First updated");
+    assert!(second.is_err());
+
+    let reloaded = AppState::for_tests_with_agent_root(token, root);
+    let first_messages = reloaded
+        .conversations()
+        .list_messages(&first_conversation.id)
+        .await
+        .unwrap();
+    let second_messages = reloaded
+        .conversations()
+        .list_messages(&second_conversation.id)
+        .await
+        .unwrap();
+
+    assert_eq!(first_messages.len(), 1);
+    assert_eq!(first_messages[0].id, message_id);
+    assert_eq!(first_messages[0].conversation_id, first_conversation.id);
+    assert_eq!(first_messages[0].cards[0].title, "First updated");
+    assert_eq!(second_messages.len(), 0);
 }
 
 #[tokio::test]
@@ -2009,6 +2263,323 @@ async fn old_conversation_json_without_runtime_session_still_loads() {
 }
 
 #[tokio::test]
+async fn legacy_conversation_import_completes_when_sqlite_is_partially_seeded() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("partial-legacy-conversation-import");
+    fs::create_dir_all(root.join("conversations/messages")).unwrap();
+    fs::write(
+        root.join("conversations/index.json"),
+        r#"[
+          {
+            "id": "dm:agent_partial",
+            "kind": "dm",
+            "agentId": "agent_partial",
+            "activeSessionId": "session:dm_agent_partial:legacy",
+            "createdAt": "1",
+            "updatedAt": "1"
+          }
+        ]"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("conversations/sessions.json"),
+        r#"[
+          {
+            "id": "session:dm_agent_partial:legacy",
+            "conversationId": "dm:agent_partial",
+            "title": "旧会话标题",
+            "status": "ready",
+            "runtimeSession": {
+              "runtimeKind": "ClaudeCode",
+              "sessionId": "legacy-runtime-session",
+              "status": "ready",
+              "createdAt": "1",
+              "updatedAt": "2"
+            },
+            "createdAt": "1",
+            "updatedAt": "2"
+          }
+        ]"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("conversations/messages/dm_agent_partial.json"),
+        r#"[
+          {
+            "id": "msg_partial_legacy",
+            "conversationId": "dm:agent_partial",
+            "authorId": "human:local",
+            "body": "半导入前留下的旧消息",
+            "createdAt": "3"
+          }
+        ]"#,
+    )
+    .unwrap();
+
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+    repos
+        .upsert_conversation(ConversationRow {
+            id: "dm:agent_partial".to_string(),
+            kind: "dm".to_string(),
+            agent_id: "agent_partial".to_string(),
+            active_session_id: Some("session:dm_agent_partial:legacy".to_string()),
+            runtime_status: None,
+            created_at: "1".to_string(),
+            updated_at: "1".to_string(),
+        })
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let app = build_router(state.clone());
+    let conversations = response_json(get_json(&app, &token, "/v1/conversations").await).await;
+    assert_eq!(
+        conversations["conversations"][0]["runtimeSession"]["sessionId"],
+        "legacy-runtime-session"
+    );
+    let sessions =
+        response_json(get_json(&app, &token, "/v1/conversations/dm:agent_partial/sessions").await)
+            .await;
+    assert_eq!(sessions["sessions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        sessions["sessions"][0]["id"],
+        "session:dm_agent_partial:legacy"
+    );
+    assert_eq!(sessions["sessions"][0]["title"], "旧会话标题");
+
+    let messages = response_json(
+        get_json(
+            &app,
+            &token,
+            "/v1/conversations/dm:agent_partial/messages?sessionId=session:dm_agent_partial:legacy",
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(messages["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(messages["messages"][0]["id"], "msg_partial_legacy");
+    assert_eq!(
+        messages["messages"][0]["sessionId"],
+        "session:dm_agent_partial:legacy"
+    );
+
+    let (runtime_session, created) = state
+        .conversations()
+        .ensure_runtime_session("dm:agent_partial", "ClaudeCode")
+        .await
+        .unwrap();
+    assert!(!created);
+    assert_eq!(runtime_session.session_id, "legacy-runtime-session");
+}
+
+#[tokio::test]
+async fn uploaded_attachment_can_be_sent_after_daemon_reload() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("unsent-attachment-reload");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let app = build_router(state);
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-unsent-attachment-agent"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda-unsent",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let agent_id = response_json(created).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let conversation = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/conversations/dm",
+            Some("unsent-attachment-dm"),
+            json!({ "agentId": agent_id }),
+        )
+        .await,
+    )
+    .await;
+    let conversation_id = conversation["conversation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let attachment = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/attachments",
+            Some("upload-before-reload"),
+            json!({ "name": "unsent-notes.txt", "mimeType": "text/plain", "bytesBase64": "dW5zZW50IG5vdGVz" }),
+        )
+        .await,
+    )
+    .await;
+    let attachment_id = attachment["attachment"]["id"].as_str().unwrap();
+    let cache_path = attachment["attachment"]["cachePath"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let reloaded_state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let reloaded = build_router(reloaded_state.clone());
+    let sent = post_json(
+        &reloaded,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("send-reloaded-attachment"),
+        json!({
+            "body": "请看附件",
+            "authorId": "human:local",
+            "attachmentIds": [attachment_id],
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::CREATED);
+    let sent_body = response_json(sent).await;
+    assert_eq!(
+        sent_body["message"]["attachments"][0]["name"],
+        "unsent-notes.txt"
+    );
+
+    let commands = reloaded_state.worker_commands();
+    let prompt = commands[0]["input"]["prompt"].as_str().unwrap();
+    assert!(prompt.contains("unsent-notes.txt"));
+    assert!(prompt.contains(&cache_path));
+}
+
+#[tokio::test]
+async fn dm_send_rejects_session_from_another_conversation() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("dm-cross-session-rejection");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let app = build_router(state.clone());
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-cross-session-first"),
+        json!({
+            "name": "Coda",
+            "handle": "@cross-session-first",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let first_agent_id = response_json(first).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let second = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-cross-session-second"),
+        json!({
+            "name": "Nova",
+            "handle": "@cross-session-second",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::CREATED);
+    let second_agent_id = response_json(second).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let first_conversation = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/conversations/dm",
+            Some("cross-session-first-dm"),
+            json!({ "agentId": first_agent_id }),
+        )
+        .await,
+    )
+    .await;
+    let first_conversation_id = first_conversation["conversation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let first_session_id = first_conversation["conversation"]["activeSessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let second_conversation = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/conversations/dm",
+            Some("cross-session-second-dm"),
+            json!({ "agentId": second_agent_id }),
+        )
+        .await,
+    )
+    .await;
+    let second_session_id = second_conversation["conversation"]["activeSessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let rejected = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{first_conversation_id}/messages"),
+        Some("cross-session-message"),
+        json!({
+            "body": "不应写入另一个会话",
+            "authorId": "human:local",
+            "sessionId": second_session_id,
+        }),
+    )
+    .await;
+    assert_eq!(rejected.status(), StatusCode::NOT_FOUND);
+
+    let listed = response_json(get_json(&app, &token, "/v1/conversations").await).await;
+    let first_after = listed["conversations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|conversation| conversation["id"] == first_conversation_id)
+        .unwrap();
+    assert_eq!(first_after["activeSessionId"], first_session_id);
+    let messages = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{first_conversation_id}/messages"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(messages["messages"].as_array().unwrap().len(), 0);
+    assert!(state.worker_commands().is_empty());
+}
+
+#[tokio::test]
 async fn dm_send_carries_previous_five_rounds_as_runtime_context() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("dm-runtime-context-window");
@@ -2338,4 +2909,17 @@ fn make_temp_dir(label: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("slei-{label}-{}", Uuid::new_v4()));
     fs::create_dir_all(&path).unwrap();
     path
+}
+
+fn test_card(id: &str, title: &str) -> InteractiveCardView {
+    InteractiveCardView {
+        id: id.to_string(),
+        kind: "test".to_string(),
+        state: "pending".to_string(),
+        title: title.to_string(),
+        summary: String::new(),
+        draft: json!({}),
+        action_label: "Apply".to_string(),
+        done_label: "Done".to_string(),
+    }
 }

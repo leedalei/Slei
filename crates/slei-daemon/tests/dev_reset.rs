@@ -1,3 +1,4 @@
+use std::fs;
 use std::sync::Mutex;
 
 use axum::body::{to_bytes, Body};
@@ -653,6 +654,63 @@ async fn dev_reset_in_progress_makes_dm_message_api_conflict_before_append() {
     assert!(state
         .conversations()
         .list_messages(&conversation.id)
+        .await
+        .unwrap()
+        .is_empty());
+    reset_guard.finish().await;
+}
+
+#[tokio::test]
+async fn dev_reset_in_progress_makes_conversation_reads_conflict_without_legacy_import() {
+    let token = AuthToken::from_static("test-token");
+    let root = temp_data_root();
+    fs::create_dir_all(root.join("conversations/messages")).unwrap();
+    fs::write(
+        root.join("conversations/index.json"),
+        r#"[
+          {
+            "id": "dm:agent_reset_legacy",
+            "kind": "dm",
+            "agentId": "agent_reset_legacy",
+            "createdAt": "1",
+            "updatedAt": "1"
+          }
+        ]"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("conversations/messages/dm_agent_reset_legacy.json"),
+        r#"[
+          {
+            "id": "legacy-reset-message",
+            "conversationId": "dm:agent_reset_legacy",
+            "authorId": "human:local",
+            "body": "不应在 reset 中导入",
+            "createdAt": "2"
+          }
+        ]"#,
+    )
+    .unwrap();
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
+    let reset_guard = state.reset().runtime().begin_reset().await.unwrap();
+
+    let response = build_router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/conversations")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(state
+        .orchestration()
+        .repos()
+        .conversations()
         .await
         .unwrap()
         .is_empty());

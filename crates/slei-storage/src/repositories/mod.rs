@@ -89,6 +89,63 @@ pub struct InteractiveCardRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationRow {
+    pub id: String,
+    pub kind: String,
+    pub agent_id: String,
+    pub active_session_id: Option<String>,
+    pub runtime_status: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationSessionRow {
+    pub id: String,
+    pub conversation_id: String,
+    pub title: String,
+    pub status: String,
+    pub runtime_session_payload: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationMessageRow {
+    pub id: String,
+    pub conversation_id: String,
+    pub session_id: Option<String>,
+    pub author_id: String,
+    pub body: String,
+    pub status: Option<String>,
+    pub run_id: Option<String>,
+    pub attachment_ids: String,
+    pub cards_payload: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationAttachmentRow {
+    pub id: String,
+    pub name: String,
+    pub mime_type: String,
+    pub size: u64,
+    pub url: Option<String>,
+    pub cache_path: Option<String>,
+    pub bytes_base64: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedMessageRow {
+    pub id: String,
+    pub message_id: String,
+    pub source_id: String,
+    pub source_kind: String,
+    pub session_id: Option<String>,
+    pub saved_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserPreferencesRow {
     pub locale: String,
     pub time_zone: String,
@@ -1812,6 +1869,291 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn upsert_conversation(&self, row: ConversationRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO conversations(
+                id, kind, agent_id, active_session_id, runtime_status, created_at, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                kind = excluded.kind,
+                agent_id = excluded.agent_id,
+                active_session_id = excluded.active_session_id,
+                runtime_status = excluded.runtime_status,
+                updated_at = excluded.updated_at",
+        )
+        .bind(row.id)
+        .bind(row.kind)
+        .bind(row.agent_id)
+        .bind(row.active_session_id)
+        .bind(row.runtime_status)
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn conversations(&self) -> Result<Vec<ConversationRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, kind, agent_id, active_session_id, runtime_status, created_at, updated_at
+             FROM conversations
+             ORDER BY created_at ASC, id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(conversation_row_from_sql).collect()
+    }
+
+    pub async fn conversation(&self, id: &str) -> Result<Option<ConversationRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, kind, agent_id, active_session_id, runtime_status, created_at, updated_at
+             FROM conversations
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(conversation_row_from_sql).transpose()
+    }
+
+    pub async fn upsert_conversation_session(
+        &self,
+        row: ConversationSessionRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO conversation_sessions(
+                id, conversation_id, title, status, runtime_session_payload, created_at, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                conversation_id = excluded.conversation_id,
+                title = excluded.title,
+                status = excluded.status,
+                runtime_session_payload = excluded.runtime_session_payload,
+                updated_at = excluded.updated_at",
+        )
+        .bind(row.id)
+        .bind(row.conversation_id)
+        .bind(row.title)
+        .bind(row.status)
+        .bind(row.runtime_session_payload)
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn conversation_sessions(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Vec<ConversationSessionRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, conversation_id, title, status, runtime_session_payload, created_at, updated_at
+             FROM conversation_sessions
+             WHERE conversation_id = ?
+             ORDER BY updated_at DESC, id ASC",
+        )
+        .bind(conversation_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(conversation_session_row_from_sql)
+            .collect()
+    }
+
+    pub async fn insert_conversation_message(
+        &self,
+        row: ConversationMessageRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO conversation_messages(
+                id, conversation_id, session_id, author_id, body, status, run_id,
+                attachment_ids, cards_payload, created_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                session_id = excluded.session_id,
+                author_id = excluded.author_id,
+                body = excluded.body,
+                status = excluded.status,
+                run_id = excluded.run_id,
+                attachment_ids = excluded.attachment_ids,
+                cards_payload = excluded.cards_payload
+             WHERE conversation_messages.conversation_id = excluded.conversation_id",
+        )
+        .bind(row.id)
+        .bind(row.conversation_id)
+        .bind(row.session_id)
+        .bind(row.author_id)
+        .bind(row.body)
+        .bind(row.status)
+        .bind(row.run_id)
+        .bind(row.attachment_ids)
+        .bind(row.cards_payload)
+        .bind(row.created_at)
+        .execute(&self.pool)
+        .await
+        .and_then(|result| {
+            if result.rows_affected() == 0 {
+                Err(sqlx::Error::RowNotFound)
+            } else {
+                Ok(result)
+            }
+        })?;
+        Ok(())
+    }
+
+    pub async fn conversation_messages(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Vec<ConversationMessageRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, conversation_id, session_id, author_id, body, status, run_id,
+                    attachment_ids, cards_payload, created_at
+             FROM conversation_messages
+             WHERE conversation_id = ?
+             ORDER BY rowid ASC",
+        )
+        .bind(conversation_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(conversation_message_row_from_sql)
+            .collect()
+    }
+
+    pub async fn delete_conversation_messages_for_session(
+        &self,
+        conversation_id: &str,
+        session_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "DELETE FROM conversation_messages
+             WHERE conversation_id = ? AND session_id = ?",
+        )
+        .bind(conversation_id)
+        .bind(session_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_conversation_attachment(
+        &self,
+        row: ConversationAttachmentRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO conversation_attachments(
+                id, name, mime_type, size, url, cache_path, bytes_base64
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                mime_type = excluded.mime_type,
+                size = excluded.size,
+                url = excluded.url,
+                cache_path = excluded.cache_path,
+                bytes_base64 = excluded.bytes_base64",
+        )
+        .bind(row.id)
+        .bind(row.name)
+        .bind(row.mime_type)
+        .bind(row.size.min(i64::MAX as u64) as i64)
+        .bind(row.url)
+        .bind(row.cache_path)
+        .bind(row.bytes_base64)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn conversation_attachment(
+        &self,
+        id: &str,
+    ) -> Result<Option<ConversationAttachmentRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, name, mime_type, size, url, cache_path, bytes_base64
+             FROM conversation_attachments
+             WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(conversation_attachment_row_from_sql).transpose()
+    }
+
+    pub async fn conversation_attachments(
+        &self,
+    ) -> Result<Vec<ConversationAttachmentRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, name, mime_type, size, url, cache_path, bytes_base64
+             FROM conversation_attachments
+             ORDER BY id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(conversation_attachment_row_from_sql)
+            .collect()
+    }
+
+    pub async fn delete_conversation_attachment(&self, id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM conversation_attachments WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_saved_message(&self, row: SavedMessageRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO saved_messages(id, message_id, source_id, source_kind, session_id, saved_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(message_id) DO UPDATE SET
+                source_id = excluded.source_id,
+                source_kind = excluded.source_kind,
+                session_id = excluded.session_id,
+                saved_at = excluded.saved_at",
+        )
+        .bind(row.id)
+        .bind(row.message_id)
+        .bind(row.source_id)
+        .bind(row.source_kind)
+        .bind(row.session_id)
+        .bind(row.saved_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_saved_message(&self, message_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM saved_messages WHERE message_id = ?")
+            .bind(message_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn saved_messages(&self) -> Result<Vec<SavedMessageRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, message_id, source_id, source_kind, session_id, saved_at
+             FROM saved_messages
+             ORDER BY saved_at DESC, id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(saved_message_row_from_sql).collect()
+    }
+
     pub async fn upsert_interactive_card(
         &self,
         row: InteractiveCardRow,
@@ -2091,6 +2433,79 @@ fn interactive_card_row_from_sql(
         action_payload: row.try_get("action_payload")?,
         template_payload: row.try_get("template_payload")?,
         state: row.try_get("state")?,
+    })
+}
+
+fn conversation_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<ConversationRow, sqlx::Error> {
+    Ok(ConversationRow {
+        id: row.try_get("id")?,
+        kind: row.try_get("kind")?,
+        agent_id: row
+            .try_get::<Option<String>, _>("agent_id")?
+            .unwrap_or_default(),
+        active_session_id: row.try_get("active_session_id")?,
+        runtime_status: row.try_get("runtime_status")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn conversation_session_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ConversationSessionRow, sqlx::Error> {
+    Ok(ConversationSessionRow {
+        id: row.try_get("id")?,
+        conversation_id: row.try_get("conversation_id")?,
+        title: row.try_get("title")?,
+        status: row.try_get("status")?,
+        runtime_session_payload: row.try_get("runtime_session_payload")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn conversation_message_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ConversationMessageRow, sqlx::Error> {
+    Ok(ConversationMessageRow {
+        id: row.try_get("id")?,
+        conversation_id: row.try_get("conversation_id")?,
+        session_id: row.try_get("session_id")?,
+        author_id: row.try_get("author_id")?,
+        body: row.try_get("body")?,
+        status: row.try_get("status")?,
+        run_id: row.try_get("run_id")?,
+        attachment_ids: row.try_get("attachment_ids")?,
+        cards_payload: row.try_get("cards_payload")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn conversation_attachment_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ConversationAttachmentRow, sqlx::Error> {
+    let size: i64 = row.try_get("size")?;
+    Ok(ConversationAttachmentRow {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        mime_type: row.try_get("mime_type")?,
+        size: size.max(0) as u64,
+        url: row.try_get("url")?,
+        cache_path: row.try_get("cache_path")?,
+        bytes_base64: row.try_get("bytes_base64")?,
+    })
+}
+
+fn saved_message_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<SavedMessageRow, sqlx::Error> {
+    Ok(SavedMessageRow {
+        id: row.try_get("id")?,
+        message_id: row.try_get("message_id")?,
+        source_id: row.try_get("source_id")?,
+        source_kind: row.try_get("source_kind")?,
+        session_id: row.try_get("session_id")?,
+        saved_at: row.try_get("saved_at")?,
     })
 }
 
