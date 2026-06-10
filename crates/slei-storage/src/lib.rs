@@ -45,6 +45,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migration_records_every_known_version() {
+        let (url, _path) = sqlite_file_url("migration-versions");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate().await.unwrap();
+
+        let versions = sqlx::query_scalar::<_, i64>(
+            "SELECT version FROM schema_migrations ORDER BY version ASC",
+        )
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+
+        assert_eq!(versions, vec![1, 2]);
+    }
+
+    #[tokio::test]
     async fn deleting_human_message_clears_content_and_raw_storage() {
         let (url, path) = sqlite_file_url("delete");
         let db = SleiDb::connect(&url).await.unwrap();

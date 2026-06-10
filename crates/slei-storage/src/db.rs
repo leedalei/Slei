@@ -3,7 +3,7 @@ use std::str::FromStr;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Row, SqlitePool};
 
-use crate::migrations::MIGRATION_0001;
+use crate::migrations::MIGRATIONS;
 
 pub struct SleiDb {
     pool: SqlitePool,
@@ -29,10 +29,12 @@ impl SleiDb {
     }
 
     pub async fn migrate(&self) -> Result<(), sqlx::Error> {
-        for statement in MIGRATION_0001.split(';') {
-            let statement = statement.trim();
-            if !statement.is_empty() {
-                sqlx::query(statement).execute(&self.pool).await?;
+        for (_version, migration) in MIGRATIONS {
+            for statement in migration.split(';') {
+                let statement = statement.trim();
+                if !statement.is_empty() {
+                    sqlx::query(statement).execute(&self.pool).await?;
+                }
             }
         }
         self.repair_legacy_sequence_columns().await?;
