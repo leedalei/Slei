@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::path::Path as FsPath;
 
-use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -58,7 +58,11 @@ pub async fn create(
     channel_create_log(
         &idempotency_key,
         "validate-agents",
-        &format!("agent_count={} project_path_count={}", agent_ids.len(), project_paths.len()),
+        &format!(
+            "agent_count={} project_path_count={}",
+            agent_ids.len(),
+            project_paths.len()
+        ),
     );
     for agent_id in &agent_ids {
         if let Err(error) = state.members().get_product_agent(agent_id).await {
@@ -84,11 +88,22 @@ pub async fn create(
         .await
     {
         Ok(channel) => {
-            channel_create_log(&idempotency_key, "channel-created", &format!("channel_id={}", channel.id));
+            channel_create_log(
+                &idempotency_key,
+                "channel-created",
+                &format!("channel_id={}", channel.id),
+            );
             let setup_state = state.clone();
             let setup_channel = channel.clone();
             tokio::spawn(async move {
-                run_channel_setup(setup_state, setup_channel, agent_ids, project_paths, idempotency_key).await;
+                run_channel_setup(
+                    setup_state,
+                    setup_channel,
+                    agent_ids,
+                    project_paths,
+                    idempotency_key,
+                )
+                .await;
             });
             (StatusCode::CREATED, Json(json!({ "channel": channel }))).into_response()
         }
@@ -103,30 +118,22 @@ async fn run_channel_setup(
     project_paths: Vec<String>,
     idempotency_key: String,
 ) {
-    channel_create_log(&idempotency_key, "setup-start", &format!("channel_id={}", channel.id));
+    channel_create_log(
+        &idempotency_key,
+        "setup-start",
+        &format!("channel_id={}", channel.id),
+    );
     match state
         .members()
-        .ensure_channel_coordinator_agent(&channel.id, &channel.name, "local-node")
+        .ensure_global_coordinator_agent("local-node")
         .await
     {
         Ok(coordinator) => {
             channel_create_log(
                 &idempotency_key,
                 "coordinator-ready",
-                &format!("channel_id={} coordinator_id={}", channel.id, coordinator.id),
+                &format!("coordinator_id={}", coordinator.id),
             );
-            match state.channels().add_agent_to_channel(&channel.id, &coordinator.id).await {
-                Ok(_) => channel_create_log(
-                    &idempotency_key,
-                    "agent-joined",
-                    &format!("channel_id={} agent_id={}", channel.id, coordinator.id),
-                ),
-                Err(error) => channel_create_log(
-                    &idempotency_key,
-                    "agent-joined-failed",
-                    &format!("channel_id={} agent_id={} error={error}", channel.id, coordinator.id),
-                ),
-            }
         }
         Err(error) => channel_create_log(
             &idempotency_key,
@@ -156,7 +163,10 @@ async fn run_channel_setup(
             Err(error) => channel_create_log(
                 &idempotency_key,
                 "workspace-mounted-failed",
-                &format!("channel_id={} path={project_path} error={error}", channel.id),
+                &format!(
+                    "channel_id={} path={project_path} error={error}",
+                    channel.id
+                ),
             ),
         }
     }
@@ -188,11 +198,18 @@ async fn run_channel_setup(
             Err(error) => channel_create_log(
                 &idempotency_key,
                 "agent-joined-failed",
-                &format!("channel_id={} agent_id={agent_id} error={error}", channel.id),
+                &format!(
+                    "channel_id={} agent_id={agent_id} error={error}",
+                    channel.id
+                ),
             ),
         }
     }
-    channel_create_log(&idempotency_key, "setup-complete", &format!("channel_id={}", channel.id));
+    channel_create_log(
+        &idempotency_key,
+        "setup-complete",
+        &format!("channel_id={}", channel.id),
+    );
 }
 
 pub async fn members(
@@ -245,7 +262,9 @@ fn workspace_label(path: &str) -> String {
 }
 
 fn channel_create_log(idempotency_key: &str, stage: &str, detail: &str) {
-    eprintln!("[slei-daemon][channel-create] idempotency_key={idempotency_key} stage={stage} {detail}");
+    eprintln!(
+        "[slei-daemon][channel-create] idempotency_key={idempotency_key} stage={stage} {detail}"
+    );
 }
 
 fn channel_error_response(error: ChannelError) -> Response {
