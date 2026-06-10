@@ -139,8 +139,8 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
             StatusCode::CONFLICT
         }
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
-        ChannelOrchestratorError::Channel(ChannelError::Io(_))
-        | ChannelOrchestratorError::Channel(ChannelError::Json(_))
+        ChannelOrchestratorError::Message(MessageError::Storage(_))
+        | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::Coordinator(_)

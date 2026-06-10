@@ -1,9 +1,11 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{ChannelMessageRow, NewChannelMessageRow, Repositories};
+use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -60,15 +62,15 @@ impl SendMessageOutcome {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MessageService {
+    repos: Repositories,
     inner: Arc<Mutex<MessageState>>,
-    data_root: Option<PathBuf>,
+    idempotency_gate: Arc<AsyncMutex<()>>,
 }
 
 #[derive(Debug, Default)]
 struct MessageState {
-    messages: HashMap<String, MessageRecord>,
     idempotency: HashMap<String, SendMessageOutcome>,
     primary_agents: HashMap<String, String>,
     agent_handles: HashMap<String, String>,
@@ -78,17 +80,16 @@ struct MessageState {
 
 impl MessageService {
     pub fn for_tests() -> Self {
-        Self::default()
+        Self::persistent(repositories_blocking(
+            std::env::temp_dir().join(format!("slei-messages-{}", Uuid::new_v4())),
+        ))
     }
 
-    pub fn persistent(data_root: PathBuf) -> Self {
-        let messages = load_persisted_messages(&data_root);
+    pub fn persistent(repos: Repositories) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(MessageState {
-                messages,
-                ..MessageState::default()
-            })),
-            data_root: Some(data_root),
+            repos,
+            inner: Arc::new(Mutex::new(MessageState::default())),
+            idempotency_gate: Arc::new(AsyncMutex::new(())),
         }
     }
 
@@ -117,54 +118,64 @@ impl MessageService {
         draft: SendMessageDraft,
         idempotency_key: &str,
     ) -> Result<SendMessageOutcome, MessageError> {
-        let mut state = self.inner.lock().expect("message state lock");
-        if let Some(outcome) = state.idempotency.get(idempotency_key) {
-            return Ok(outcome.clone());
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        if let Some(outcome) = self
+            .inner
+            .lock()
+            .expect("message state lock")
+            .idempotency
+            .get(idempotency_key)
+            .cloned()
+        {
+            return Ok(outcome);
         }
 
-        let message = MessageRecord {
-            id: format!("msg_{}", Uuid::new_v4().simple()),
-            channel_id: draft.channel_id.clone(),
-            author_id: draft.author_id,
-            body: Some(draft.body.clone()),
-            as_task: draft.as_task,
-            kind: MessageKind::Human,
-            deleted: false,
-            edited: false,
-        };
-        state.messages.insert(message.id.clone(), message.clone());
-        state
+        let message = build_message_with_as_task(
+            &draft.channel_id,
+            &draft.author_id,
+            Some(&draft.body),
+            MessageKind::Human,
+            draft.as_task,
+        );
+        self.insert_record(message.clone()).await?;
+        self.inner
+            .lock()
+            .expect("message state lock")
             .event_payloads
             .push(format!("message.created:{}", message.id));
-        self.persist_messages(&state);
 
-        let outcome = if let Some(handle) = first_mention(&draft.body) {
-            if let Some(agent_id) = state.agent_handles.get(&handle) {
-                SendMessageOutcome::AgentRun {
-                    message_id: message.id,
-                    agent_id: agent_id.clone(),
-                    restricted_no_workspace: draft.workspace_count == 0,
+        let outcome = {
+            let state = self.inner.lock().expect("message state lock");
+            if let Some(handle) = first_mention(&draft.body) {
+                if let Some(agent_id) = state.agent_handles.get(&handle) {
+                    SendMessageOutcome::AgentRun {
+                        message_id: message.id.clone(),
+                        agent_id: agent_id.clone(),
+                        restricted_no_workspace: draft.workspace_count == 0,
+                    }
+                } else {
+                    SendMessageOutcome::HumanNotification {
+                        message_id: message.id.clone(),
+                        handle,
+                    }
                 }
             } else {
-                SendMessageOutcome::HumanNotification {
-                    message_id: message.id,
-                    handle,
+                let agent_id = state
+                    .primary_agents
+                    .get(&draft.channel_id)
+                    .cloned()
+                    .ok_or(MessageError::PrimaryAgentMissing)?;
+                SendMessageOutcome::AgentRun {
+                    message_id: message.id.clone(),
+                    agent_id,
+                    restricted_no_workspace: draft.workspace_count == 0,
                 }
-            }
-        } else {
-            let agent_id = state
-                .primary_agents
-                .get(&draft.channel_id)
-                .cloned()
-                .ok_or(MessageError::PrimaryAgentMissing)?;
-            SendMessageOutcome::AgentRun {
-                message_id: message.id,
-                agent_id,
-                restricted_no_workspace: draft.workspace_count == 0,
             }
         };
 
-        state
+        self.inner
+            .lock()
+            .expect("message state lock")
             .idempotency
             .insert(idempotency_key.to_string(), outcome.clone());
         Ok(outcome)
@@ -218,13 +229,17 @@ impl MessageService {
         {
             return Err(MessageError::InvalidMessage);
         }
-        let mut state = self.inner.lock().expect("message state lock");
-        if let Some(message_id) = state.channel_message_idempotency.get(idempotency_key) {
-            return state
-                .messages
-                .get(message_id)
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        let idempotent_message_id = {
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .channel_message_idempotency
+                .get(idempotency_key)
                 .cloned()
-                .ok_or(MessageError::MessageNotFound);
+        };
+        if let Some(message_id) = idempotent_message_id {
+            return self.message(&message_id).await;
         }
 
         let message = build_message_with_as_task(
@@ -234,14 +249,14 @@ impl MessageService {
             MessageKind::Human,
             as_task,
         );
+        self.insert_record(message.clone()).await?;
+        let mut state = self.inner.lock().expect("message state lock");
         state
             .channel_message_idempotency
             .insert(idempotency_key.to_string(), message.id.clone());
-        state.messages.insert(message.id.clone(), message.clone());
         state
             .event_payloads
             .push(format!("message.created:{}", message.id));
-        self.persist_messages(&state);
         Ok(message)
     }
 
@@ -249,12 +264,15 @@ impl MessageService {
         &self,
         idempotency_key: &str,
     ) -> Option<MessageRecord> {
-        let state = self.inner.lock().expect("message state lock");
-        state
-            .channel_message_idempotency
-            .get(idempotency_key)
-            .and_then(|message_id| state.messages.get(message_id))
-            .cloned()
+        let message_id = {
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .channel_message_idempotency
+                .get(idempotency_key)
+                .cloned()?
+        };
+        self.message(&message_id).await.ok()
     }
 
     pub async fn create_task_card_message(
@@ -270,16 +288,17 @@ impl MessageService {
             return Err(MessageError::InvalidMessage);
         }
         let body = format!("task_card:{task_id}:source:{source_message_id}");
+        if let Some(existing) =
+            self.channel_messages(channel_id)
+                .await
+                .into_iter()
+                .find(|message| {
+                    message.kind == MessageKind::TaskCard
+                        && message.body.as_deref() == Some(body.as_str())
+                        && !message.deleted
+                })
         {
-            let state = self.inner.lock().expect("message state lock");
-            if let Some(existing) = state.messages.values().find(|message| {
-                message.channel_id == channel_id
-                    && message.kind == MessageKind::TaskCard
-                    && message.body.as_deref() == Some(body.as_str())
-                    && !message.deleted
-            }) {
-                return Ok(existing.clone());
-            }
+            return Ok(existing);
         }
         self.insert_channel_message(
             channel_id,
@@ -291,18 +310,14 @@ impl MessageService {
     }
 
     pub async fn channel_messages(&self, channel_id: &str) -> Vec<MessageRecord> {
-        let mut messages = self
-            .inner
-            .lock()
-            .expect("message state lock")
-            .messages
-            .values()
-            .filter(|message| message.channel_id == channel_id)
+        self.repos
+            .channel_messages_by_channel(channel_id)
+            .await
+            .expect("load channel messages")
+            .into_iter()
+            .map(message_row_to_record)
             .filter(|message| !message.deleted)
-            .cloned()
-            .collect::<Vec<_>>();
-        messages.sort_by(|left, right| left.id.cmp(&right.id));
-        messages
+            .collect()
     }
 
     pub async fn channel_messages_for_tests(&self, channel_id: &str) -> Vec<MessageRecord> {
@@ -310,21 +325,19 @@ impl MessageService {
     }
 
     pub async fn delete_human_message(&self, message_id: &str) -> Result<(), MessageError> {
-        let mut state = self.inner.lock().expect("message state lock");
-        let message = state
-            .messages
-            .get_mut(message_id)
-            .ok_or(MessageError::MessageNotFound)?;
+        let message = self.message(message_id).await?;
         if message.kind == MessageKind::Agent {
             return Err(MessageError::AgentMessageImmutable);
         }
-        message.kind = MessageKind::Tombstone;
-        message.body = None;
-        message.deleted = true;
-        state
+        self.repos
+            .update_message_tombstone(message_id)
+            .await
+            .map_err(message_storage_error)?;
+        self.inner
+            .lock()
+            .expect("message state lock")
             .event_payloads
             .push(format!("message.deleted:{message_id}"));
-        self.persist_messages(&state);
         Ok(())
     }
 
@@ -333,39 +346,31 @@ impl MessageService {
         message_id: &str,
         body: &str,
     ) -> Result<(), MessageError> {
-        let mut state = self.inner.lock().expect("message state lock");
-        let message = state
-            .messages
-            .get_mut(message_id)
-            .ok_or(MessageError::MessageNotFound)?;
+        let message = self.message(message_id).await?;
         if message.kind != MessageKind::Human {
             return Err(MessageError::AgentMessageImmutable);
         }
-        message.body = Some(body.to_string());
-        message.edited = true;
-        self.persist_messages(&state);
+        self.repos
+            .update_human_message_body(message_id, body)
+            .await
+            .map_err(message_storage_error)?;
         Ok(())
     }
 
     pub async fn message(&self, message_id: &str) -> Result<MessageRecord, MessageError> {
-        self.inner
-            .lock()
-            .expect("message state lock")
-            .messages
-            .get(message_id)
-            .cloned()
+        self.repos
+            .channel_message(message_id)
+            .await
+            .map_err(message_storage_error)?
+            .map(message_row_to_record)
             .ok_or(MessageError::MessageNotFound)
     }
 
     pub async fn reconstructed_context(&self, channel_id: &str) -> String {
-        self.inner
-            .lock()
-            .expect("message state lock")
-            .messages
-            .values()
-            .filter(|message| message.channel_id == channel_id)
-            .filter(|message| !message.deleted)
-            .filter_map(|message| message.body.clone())
+        self.channel_messages(channel_id)
+            .await
+            .into_iter()
+            .filter_map(|message| message.body)
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -385,22 +390,11 @@ impl MessageService {
         body: &str,
         kind: MessageKind,
     ) -> String {
-        let mut state = self.inner.lock().expect("message state lock");
-        let id = format!("msg_{}", Uuid::new_v4().simple());
-        state.messages.insert(
-            id.clone(),
-            MessageRecord {
-                id: id.clone(),
-                channel_id: channel_id.to_string(),
-                author_id: author_id.to_string(),
-                body: Some(body.to_string()),
-                as_task: false,
-                kind,
-                deleted: false,
-                edited: false,
-            },
-        );
-        id
+        let message = build_message(channel_id, author_id, Some(body), kind);
+        self.insert_record(message.clone())
+            .await
+            .expect("insert test message");
+        message.id
     }
 
     async fn insert_channel_message(
@@ -410,44 +404,30 @@ impl MessageService {
         body: &str,
         kind: MessageKind,
     ) -> Result<MessageRecord, MessageError> {
-        let mut state = self.inner.lock().expect("message state lock");
         let message = build_message(channel_id, author_id, Some(body), kind);
-        state.messages.insert(message.id.clone(), message.clone());
-        state
+        self.insert_record(message.clone()).await?;
+        self.inner
+            .lock()
+            .expect("message state lock")
             .event_payloads
             .push(format!("message.created:{}", message.id));
-        self.persist_messages(&state);
         Ok(message)
     }
 
-    fn persist_messages(&self, state: &MessageState) {
-        let Some(data_root) = &self.data_root else {
-            return;
-        };
-        let path = channel_messages_path(data_root);
-        if let Some(parent) = path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let mut messages = state.messages.values().cloned().collect::<Vec<_>>();
-        messages.sort_by(|left, right| left.id.cmp(&right.id));
-        if let Ok(payload) = serde_json::to_string_pretty(&messages) {
-            let _ = fs::write(path, payload);
-        }
+    async fn insert_record(&self, message: MessageRecord) -> Result<(), MessageError> {
+        self.repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: message.id,
+                channel_id: message.channel_id,
+                author_id: message.author_id,
+                body: message.body,
+                as_task: message.as_task,
+                kind: kind_to_storage(&message.kind).to_string(),
+            })
+            .await
+            .map_err(message_storage_error)?;
+        Ok(())
     }
-}
-
-fn load_persisted_messages(data_root: &Path) -> HashMap<String, MessageRecord> {
-    fs::read_to_string(channel_messages_path(data_root))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<MessageRecord>>(&raw).ok())
-        .unwrap_or_default()
-        .into_iter()
-        .map(|message| (message.id.clone(), message))
-        .collect()
-}
-
-fn channel_messages_path(data_root: &Path) -> PathBuf {
-    data_root.join("channels/messages.json")
 }
 
 fn build_message(
@@ -478,9 +458,64 @@ fn build_message_with_as_task(
     }
 }
 
+fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
+    MessageRecord {
+        id: row.id,
+        channel_id: row.channel_id,
+        author_id: row.author_id,
+        body: row.body,
+        as_task: row.as_task,
+        kind: kind_from_storage(&row.kind),
+        deleted: row.deleted,
+        edited: row.edited,
+    }
+}
+
+fn kind_to_storage(kind: &MessageKind) -> &'static str {
+    match kind {
+        MessageKind::Human => "human",
+        MessageKind::Agent => "agent",
+        MessageKind::TaskCard => "task_card",
+        MessageKind::Tombstone => "tombstone",
+    }
+}
+
+fn kind_from_storage(kind: &str) -> MessageKind {
+    match kind {
+        "agent" => MessageKind::Agent,
+        "task_card" => MessageKind::TaskCard,
+        "tombstone" => MessageKind::Tombstone,
+        _ => MessageKind::Human,
+    }
+}
+
 fn first_mention(body: &str) -> Option<String> {
     body.split_whitespace()
         .find_map(|part| part.strip_prefix('@').map(|handle| handle.to_string()))
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create message repository runtime");
+        runtime.block_on(async move {
+            std::fs::create_dir_all(&data_root).expect("create message data root");
+            let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+            let db = SleiDb::connect(&database_url)
+                .await
+                .expect("connect message db");
+            db.migrate().await.expect("migrate message db");
+            Repositories::new(db.pool().clone())
+        })
+    })
+    .join()
+    .expect("initialize message repositories")
+}
+
+fn message_storage_error(error: sqlx::Error) -> MessageError {
+    MessageError::Storage(error.to_string())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -493,4 +528,6 @@ pub enum MessageError {
     AgentMessageImmutable,
     #[error("invalid message")]
     InvalidMessage,
+    #[error("message storage error: {0}")]
+    Storage(String),
 }

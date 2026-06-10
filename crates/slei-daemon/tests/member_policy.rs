@@ -2,6 +2,8 @@ use slei_daemon::services::channel_service::{ChannelDraft, ChannelService, Works
 use slei_daemon::services::member_service::{
     AgentDraft, ChannelMemberDraft, MemberService, PermissionPreset,
 };
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::Repositories;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -200,9 +202,57 @@ async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempoten
 }
 
 #[tokio::test]
+async fn concurrent_channel_member_add_reports_created_once() {
+    let channels = ChannelService::for_tests();
+
+    for index in 0..25 {
+        let channel = channels
+            .create_channel(
+                ChannelDraft {
+                    name: format!("member-race-{index}"),
+                    description: None,
+                    permission: PermissionPreset::Controlled,
+                },
+                &format!("member-race-channel-{index}"),
+            )
+            .await
+            .unwrap();
+
+        let left = channels.clone();
+        let right = channels.clone();
+        let channel_id = channel.id.clone();
+        let (first, second) = tokio::join!(
+            left.add_agent_to_channel_with_outcome(&channel.id, "agent_race"),
+            right.add_agent_to_channel_with_outcome(&channel_id, "agent_race")
+        );
+        let first = first.unwrap();
+        let second = second.unwrap();
+
+        assert_eq!(first.member.channel_id, second.member.channel_id);
+        assert_eq!(first.member.agent_id, second.member.agent_id);
+        assert_eq!(
+            [first.created, second.created]
+                .into_iter()
+                .filter(|created| *created)
+                .count(),
+            1
+        );
+        assert_eq!(
+            channels.channel_members(&channel.id).await.unwrap().len(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
 async fn channel_service_persists_workspace_mounts() {
     let root = std::env::temp_dir().join(format!("slei-channel-workspaces-{}", Uuid::new_v4()));
-    let channels = ChannelService::new(root.clone());
+    std::fs::create_dir_all(&root).unwrap();
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+    let channels = ChannelService::new(repos.clone());
     let channel = channels
         .create_channel(
             ChannelDraft {
@@ -226,7 +276,7 @@ async fn channel_service_persists_workspace_mounts() {
         .await
         .unwrap();
 
-    let reloaded = ChannelService::new(root);
+    let reloaded = ChannelService::new(repos);
     let workspaces = reloaded.workspaces(&channel.id).await.unwrap();
     assert_eq!(
         workspaces,

@@ -21,6 +21,8 @@ use crate::services::settings_service::SettingsService;
 use crate::services::task_service::TaskService;
 use crate::services::workspace_service::WorkspaceService;
 use serde_json::Value;
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::Repositories;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
@@ -55,12 +57,14 @@ pub struct AppState {
 impl AppState {
     pub fn for_desktop(auth_token: AuthToken) -> Self {
         let data_root = default_data_root();
-        let orchestration_store = orchestration_store_blocking(data_root.clone());
+        let repos = repositories_blocking(data_root.clone());
+        let orchestration_store = OrchestrationStore::new(repos.clone());
         Self::with_agent_root_and_store(
             auth_token,
             data_root.clone(),
+            repos.clone(),
             orchestration_store,
-            MessageService::persistent(data_root),
+            MessageService::persistent(repos),
         )
     }
 
@@ -69,34 +73,49 @@ impl AppState {
     }
 
     pub fn for_tests_with_agent_root(auth_token: AuthToken, agent_data_root: PathBuf) -> Self {
-        let orchestration_store = orchestration_store_blocking(agent_data_root.clone());
-        Self::for_tests_with_agent_root_and_store(auth_token, agent_data_root, orchestration_store)
+        let repos = repositories_blocking(agent_data_root.clone());
+        let orchestration_store = OrchestrationStore::new(repos.clone());
+        Self::for_tests_with_agent_root_and_store(
+            auth_token,
+            agent_data_root,
+            repos,
+            orchestration_store,
+        )
     }
 
     pub async fn for_tests_with_agent_root_async(
         auth_token: AuthToken,
         agent_data_root: PathBuf,
     ) -> Self {
-        let orchestration_store = OrchestrationStore::for_data_root(agent_data_root.clone()).await;
-        Self::for_tests_with_agent_root_and_store(auth_token, agent_data_root, orchestration_store)
+        let repos = repositories_for_data_root(agent_data_root.clone()).await;
+        let orchestration_store = OrchestrationStore::new(repos.clone());
+        Self::for_tests_with_agent_root_and_store(
+            auth_token,
+            agent_data_root,
+            repos,
+            orchestration_store,
+        )
     }
 
     fn for_tests_with_agent_root_and_store(
         auth_token: AuthToken,
         agent_data_root: PathBuf,
+        repos: Repositories,
         orchestration_store: OrchestrationStore,
     ) -> Self {
         Self::with_agent_root_and_store(
             auth_token,
             agent_data_root,
+            repos.clone(),
             orchestration_store,
-            MessageService::for_tests(),
+            MessageService::persistent(repos),
         )
     }
 
     fn with_agent_root_and_store(
         auth_token: AuthToken,
         agent_data_root: PathBuf,
+        repos: Repositories,
         orchestration_store: OrchestrationStore,
         message_service: MessageService,
     ) -> Self {
@@ -108,7 +127,7 @@ impl AppState {
         let agent_dm_runs = AgentDmRunStore::default();
         let node_service = NodeService::for_tests();
         let member_service = MemberService::for_tests_with_data_root(agent_data_root);
-        let channel_service = ChannelService::new(data_root.clone());
+        let channel_service = ChannelService::new(repos.clone());
         let card_service = CardService::new(data_root.clone());
         let conversation_service = ConversationService::new(data_root.clone());
         let workspace_service = WorkspaceService::new(event_service.clone());
@@ -345,14 +364,24 @@ fn default_data_root() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(".slei"))
 }
 
-fn orchestration_store_blocking(data_root: PathBuf) -> OrchestrationStore {
+async fn repositories_for_data_root(data_root: PathBuf) -> Repositories {
+    std::fs::create_dir_all(&data_root).expect("create data root");
+    let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&database_url)
+        .await
+        .expect("connect application db");
+    db.migrate().await.expect("migrate application db");
+    Repositories::new(db.pool().clone())
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .expect("create orchestration test runtime");
-        runtime.block_on(OrchestrationStore::for_data_root(data_root))
+            .expect("create storage runtime");
+        runtime.block_on(repositories_for_data_root(data_root))
     })
     .join()
-    .expect("initialize orchestration store")
+    .expect("initialize repositories")
 }

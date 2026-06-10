@@ -479,7 +479,8 @@ async fn channels_normalize_hash_prefix_and_default_all_is_persistent() {
     ));
     let listed = response_json(get_json(&reloaded, &token, "/v1/channels").await).await;
     assert_eq!(listed["channels"].as_array().unwrap().len(), 2);
-    assert!(root.join("channels/index.json").is_file());
+    assert!(root.join("slei.sqlite").is_file());
+    assert!(!root.join("channels/index.json").exists());
 }
 
 #[tokio::test]
@@ -839,13 +840,11 @@ async fn create_channel_with_duplicate_agents_and_retries_requests_memory_once()
 }
 
 #[tokio::test]
-async fn old_serialized_channel_members_without_readiness_default_to_joining() {
+async fn sqlite_channel_members_default_to_joining_readiness() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-member-readiness-default");
-    let app = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let app = build_router(state.clone());
 
     let created_channel = post_json(
         &app,
@@ -857,19 +856,11 @@ async fn old_serialized_channel_members_without_readiness_default_to_joining() {
     .await;
     assert_eq!(created_channel.status(), StatusCode::CREATED);
 
-    fs::write(
-        root.join("channels/members.json"),
-        r#"{
-  "legacy-readiness": [
-    {
-      "channelId": "legacy-readiness",
-      "agentId": "agent_legacy",
-      "joinedAt": "1"
-    }
-  ]
-}"#,
-    )
-    .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("legacy-readiness", "agent_legacy")
+        .await
+        .unwrap();
 
     let reloaded = build_router(AppState::for_tests_with_agent_root(token.clone(), root));
     let members =

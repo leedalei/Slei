@@ -75,6 +75,36 @@ pub struct ChannelMemberRow {
     pub readiness: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceMountRow {
+    pub channel_id: String,
+    pub path: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewChannelMessageRow {
+    pub id: String,
+    pub channel_id: String,
+    pub author_id: String,
+    pub body: Option<String>,
+    pub as_task: bool,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelMessageRow {
+    pub id: String,
+    pub channel_id: String,
+    pub author_id: String,
+    pub body: Option<String>,
+    pub as_task: bool,
+    pub kind: String,
+    pub deleted: bool,
+    pub edited: bool,
+    pub created_at: String,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct MessageRecord {
     pub id: Uuid,
@@ -324,6 +354,14 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn delete_channel(&self, channel_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM channels WHERE id = ?")
+            .bind(channel_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn channels(&self) -> Result<Vec<ChannelRow>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, name, description, is_default, permission
@@ -367,6 +405,25 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn insert_channel_member_if_absent(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+        readiness: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT INTO channel_members(channel_id, agent_id, readiness)
+             VALUES (?, ?, ?)
+             ON CONFLICT(channel_id, agent_id) DO NOTHING",
+        )
+        .bind(channel_id)
+        .bind(agent_id)
+        .bind(readiness)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     pub async fn channel_members(
         &self,
         channel_id: &str,
@@ -391,6 +448,237 @@ impl Repositories {
                 })
             })
             .collect()
+    }
+
+    pub async fn update_channel_member_readiness(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+        readiness: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE channel_members
+             SET readiness = ?
+             WHERE channel_id = ? AND agent_id = ?",
+        )
+        .bind(readiness)
+        .bind(channel_id)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn remove_channel_member(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<Option<ChannelMemberRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT channel_id, agent_id, joined_at, readiness
+             FROM channel_members
+             WHERE channel_id = ? AND agent_id = ?",
+        )
+        .bind(channel_id)
+        .bind(agent_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let member = row
+            .map(|row| {
+                Ok::<ChannelMemberRow, sqlx::Error>(ChannelMemberRow {
+                    channel_id: row.try_get("channel_id")?,
+                    agent_id: row.try_get("agent_id")?,
+                    joined_at: row.try_get("joined_at")?,
+                    readiness: row.try_get("readiness")?,
+                })
+            })
+            .transpose()?;
+
+        if member.is_some() {
+            sqlx::query("DELETE FROM channel_members WHERE channel_id = ? AND agent_id = ?")
+                .bind(channel_id)
+                .bind(agent_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(member)
+    }
+
+    pub async fn remove_agent_from_channel_memberships(
+        &self,
+        agent_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM channel_members WHERE agent_id = ?")
+            .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_channel_workspace_mount(
+        &self,
+        channel_id: &str,
+        path: &str,
+        label: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO channel_workspace_mounts(channel_id, path, label)
+             VALUES (?, ?, ?)
+             ON CONFLICT(channel_id, path) DO UPDATE SET
+                label = excluded.label",
+        )
+        .bind(channel_id)
+        .bind(path)
+        .bind(label)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channel_workspace_mounts(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<WorkspaceMountRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT channel_id, path, label
+             FROM channel_workspace_mounts
+             WHERE channel_id = ?
+             ORDER BY created_at ASC, path ASC",
+        )
+        .bind(channel_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(WorkspaceMountRow {
+                    channel_id: row.try_get("channel_id")?,
+                    path: row.try_get("path")?,
+                    label: row.try_get("label")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn insert_channel_message(
+        &self,
+        row: NewChannelMessageRow,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO messages(id, channel_id, author_kind, kind, content, deleted, author_id, as_task, edited)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, 0)",
+        )
+        .bind(row.id)
+        .bind(row.channel_id)
+        .bind(row.kind.clone())
+        .bind(row.kind)
+        .bind(row.body)
+        .bind(row.author_id)
+        .bind(if row.as_task { 1 } else { 0 })
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channel_messages_by_channel(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, channel_id, author_id, content, as_task, kind, deleted, edited, created_at
+             FROM messages
+             WHERE channel_id = ?
+             ORDER BY rowid ASC",
+        )
+        .bind(channel_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let deleted: i64 = row.try_get("deleted")?;
+                let as_task: i64 = row.try_get("as_task")?;
+                let edited: i64 = row.try_get("edited")?;
+                Ok(ChannelMessageRow {
+                    id: row.try_get("id")?,
+                    channel_id: row.try_get("channel_id")?,
+                    author_id: row
+                        .try_get::<Option<String>, _>("author_id")?
+                        .unwrap_or_default(),
+                    body: row.try_get("content")?,
+                    as_task: as_task != 0,
+                    kind: row.try_get("kind")?,
+                    deleted: deleted != 0,
+                    edited: edited != 0,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn channel_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Option<ChannelMessageRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, channel_id, author_id, content, as_task, kind, deleted, edited, created_at
+             FROM messages
+             WHERE id = ?",
+        )
+        .bind(message_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            let deleted: i64 = row.try_get("deleted")?;
+            let as_task: i64 = row.try_get("as_task")?;
+            let edited: i64 = row.try_get("edited")?;
+            Ok(ChannelMessageRow {
+                id: row.try_get("id")?,
+                channel_id: row.try_get("channel_id")?,
+                author_id: row
+                    .try_get::<Option<String>, _>("author_id")?
+                    .unwrap_or_default(),
+                body: row.try_get("content")?,
+                as_task: as_task != 0,
+                kind: row.try_get("kind")?,
+                deleted: deleted != 0,
+                edited: edited != 0,
+                created_at: row.try_get("created_at")?,
+            })
+        })
+        .transpose()
+    }
+
+    pub async fn update_message_tombstone(&self, message_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages
+             SET kind = 'tombstone', author_kind = 'tombstone', content = NULL, deleted = 1
+             WHERE id = ?",
+        )
+        .bind(message_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_human_message_body(
+        &self,
+        message_id: &str,
+        body: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE messages
+             SET content = ?, edited = 1
+             WHERE id = ? AND kind = 'human'",
+        )
+        .bind(body)
+        .bind(message_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     pub async fn insert_human_message(

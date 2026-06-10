@@ -125,6 +125,23 @@ async fn dev_reset_clears_database_and_agent_workspace_when_enabled() {
             .coordinator_decision_count,
         0
     );
+    assert!(state
+        .orchestration()
+        .repos()
+        .channels()
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        state
+            .channels()
+            .list_channels()
+            .await
+            .into_iter()
+            .map(|channel| channel.id)
+            .collect::<Vec<_>>(),
+        vec!["all".to_string()]
+    );
 
     std::env::remove_var("SLEI_ENABLE_DEV_RESET");
 }

@@ -448,7 +448,7 @@ fn channel_error_response(error: ChannelError) -> Response {
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
-        ChannelError::Io(_) | ChannelError::Json(_) => (
+        ChannelError::Io(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": error.to_string() })),
         )

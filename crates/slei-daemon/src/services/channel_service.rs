@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::{ChannelMemberRow, ChannelRow, Repositories, WorkspaceMountRow};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -61,65 +62,55 @@ pub struct WorkspaceMount {
     pub label: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ChannelService {
-    root: Arc<PathBuf>,
-    inner: Arc<Mutex<ChannelState>>,
+    repos: Repositories,
+    idempotency: Arc<Mutex<ChannelIdempotencyState>>,
 }
 
 #[derive(Debug, Default)]
-struct ChannelState {
-    channels: HashMap<String, ChannelRecord>,
+struct ChannelIdempotencyState {
     channel_idempotency: HashMap<String, String>,
-    members: HashMap<String, Vec<ChannelMemberRecord>>,
-    workspaces: HashMap<String, Vec<WorkspaceMount>>,
     mount_idempotency: HashMap<String, (String, WorkspaceMount)>,
 }
 
 impl ChannelService {
-    pub fn new(root: PathBuf) -> Self {
-        let mut state = ChannelState::load(&root);
-        state.ensure_default_channel();
-        let service = Self {
-            root: Arc::new(root),
-            inner: Arc::new(Mutex::new(state)),
-        };
-        service.persist_snapshot();
-        service
+    pub fn new(repos: Repositories) -> Self {
+        Self {
+            repos,
+            idempotency: Arc::new(Mutex::new(ChannelIdempotencyState::default())),
+        }
     }
 
     pub fn for_tests() -> Self {
-        Self::new(std::env::temp_dir().join(format!("slei-channels-{}", Uuid::new_v4())))
+        Self::new(repositories_blocking(
+            std::env::temp_dir().join(format!("slei-channels-{}", Uuid::new_v4())),
+        ))
     }
 
     pub async fn list_channels(&self) -> Vec<ChannelRecord> {
-        let state = self.inner.lock().await;
-        let mut channels = state
-            .channels
-            .values()
-            .cloned()
-            .map(|mut channel| {
-                channel.project_paths = state
-                    .workspaces
-                    .get(&channel.id)
-                    .map(|mounts| mounts.iter().map(|mount| mount.path.clone()).collect())
-                    .unwrap_or_default();
-                channel
-            })
-            .collect::<Vec<_>>();
-        channels.sort_by(|left, right| {
-            left.is_default
-                .cmp(&right.is_default)
-                .reverse()
-                .then_with(|| left.name.cmp(&right.name))
-        });
-        channels
+        self.ensure_default_channel()
+            .await
+            .expect("ensure default channel");
+        let mut records = Vec::new();
+        for channel in self.repos.channels().await.expect("load channels") {
+            let mut record = channel_row_to_record(channel);
+            record.project_paths = self
+                .repos
+                .channel_workspace_mounts(&record.id)
+                .await
+                .expect("load channel workspace mounts")
+                .into_iter()
+                .map(|mount| mount.path)
+                .collect();
+            records.push(record);
+        }
+        sort_channels(&mut records);
+        records
     }
 
     pub async fn clear_for_development_reset(&self) {
-        let mut state = ChannelState::default();
-        state.ensure_default_channel();
-        *self.inner.lock().await = state;
+        *self.idempotency.lock().await = ChannelIdempotencyState::default();
     }
 
     pub async fn create_channel(
@@ -132,34 +123,49 @@ impl ChannelService {
             return Err(ChannelError::MissingIdempotencyKey);
         }
 
-        let mut state = self.inner.lock().await;
-        if let Some(id) = state.channel_idempotency.get(idempotency_key) {
-            return state
-                .channels
-                .get(id)
-                .cloned()
+        self.ensure_default_channel().await?;
+        let mut idempotency = self.idempotency.lock().await;
+        if let Some(id) = idempotency
+            .channel_idempotency
+            .get(idempotency_key)
+            .cloned()
+        {
+            return self
+                .channel_by_id(&id)
+                .await?
                 .ok_or(ChannelError::MissingChannel);
         }
 
         let name = normalize_channel_name(&draft.name)?;
-        if state.channels.contains_key(&name) {
+        if self.channel_by_id(&name).await?.is_some()
+            || self
+                .repos
+                .channels()
+                .await
+                .map_err(channel_storage_error)?
+                .iter()
+                .any(|channel| channel.name == name)
+        {
             return Err(ChannelError::DuplicateChannelName);
         }
 
-        let channel = ChannelRecord {
-            id: name.clone(),
-            name,
-            description: draft.description,
-            is_default: false,
-            permission: draft.permission,
-            project_paths: Vec::new(),
-        };
-        state
+        self.repos
+            .upsert_channel(
+                &name,
+                &name,
+                draft.description.as_deref(),
+                false,
+                permission_to_storage(draft.permission),
+            )
+            .await
+            .map_err(map_channel_insert_error)?;
+        idempotency
             .channel_idempotency
-            .insert(idempotency_key.to_string(), channel.id.clone());
-        state.channels.insert(channel.id.clone(), channel.clone());
-        persist_channels(&self.root, &state.channels)?;
-        Ok(channel)
+            .insert(idempotency_key.to_string(), name.clone());
+
+        self.channel_by_id(&name)
+            .await?
+            .ok_or(ChannelError::MissingChannel)
     }
 
     pub async fn channel_for_idempotency_key(
@@ -170,12 +176,14 @@ impl ChannelService {
         if idempotency_key.is_empty() {
             return None;
         }
-        let state = self.inner.lock().await;
-        state
+        let id = self
+            .idempotency
+            .lock()
+            .await
             .channel_idempotency
             .get(idempotency_key)
-            .and_then(|id| state.channels.get(id))
-            .cloned()
+            .cloned()?;
+        self.channel_by_id(&id).await.ok().flatten()
     }
 
     pub async fn ensure_default_agent_membership(
@@ -205,33 +213,30 @@ impl ChannelService {
         if trimmed_agent_id.is_empty() {
             return Err(ChannelError::InvalidChannel);
         }
-        let mut state = self.inner.lock().await;
-        state.ensure_default_channel();
-        if !state.channels.contains_key(channel_id) {
+        self.ensure_default_channel().await?;
+        if self.channel_by_id(channel_id).await?.is_none() {
             return Err(ChannelError::MissingChannel);
         }
-        let members = state.members.entry(channel_id.to_string()).or_default();
-        if let Some(existing) = members
-            .iter()
+        self.ensure_agent_placeholder(trimmed_agent_id).await?;
+        let created = self
+            .repos
+            .insert_channel_member_if_absent(
+                channel_id,
+                trimmed_agent_id,
+                readiness_to_storage(&ChannelMemberReadiness::Joining),
+            )
+            .await
+            .map_err(channel_storage_error)?;
+        let member = self
+            .repos
+            .channel_members(channel_id)
+            .await
+            .map_err(channel_storage_error)?
+            .into_iter()
             .find(|member| member.agent_id == trimmed_agent_id)
-        {
-            return Ok(AddChannelMemberOutcome {
-                member: existing.clone(),
-                created: false,
-            });
-        }
-        let member = ChannelMemberRecord {
-            channel_id: channel_id.to_string(),
-            agent_id: trimmed_agent_id.to_string(),
-            joined_at: current_timestamp(),
-            readiness: ChannelMemberReadiness::Joining,
-        };
-        members.push(member.clone());
-        persist_members(&self.root, &state.members)?;
-        Ok(AddChannelMemberOutcome {
-            member,
-            created: true,
-        })
+            .map(member_row_to_record)
+            .ok_or(ChannelError::MissingMember)?;
+        Ok(AddChannelMemberOutcome { member, created })
     }
 
     pub async fn set_member_readiness(
@@ -240,20 +245,23 @@ impl ChannelService {
         agent_id: &str,
         readiness: ChannelMemberReadiness,
     ) -> Result<(), ChannelError> {
-        let mut state = self.inner.lock().await;
-        if !state.channels.contains_key(channel_id) {
+        if self.channel_by_id(channel_id).await?.is_none() {
             return Err(ChannelError::MissingChannel);
         }
-        let members = state
-            .members
-            .get_mut(channel_id)
-            .ok_or(ChannelError::MissingMember)?;
-        let member = members
-            .iter_mut()
-            .find(|member| member.agent_id == agent_id)
-            .ok_or(ChannelError::MissingMember)?;
-        member.readiness = readiness;
-        persist_members(&self.root, &state.members)?;
+        if !self
+            .repos
+            .channel_members(channel_id)
+            .await
+            .map_err(channel_storage_error)?
+            .iter()
+            .any(|member| member.agent_id == agent_id)
+        {
+            return Err(ChannelError::MissingMember);
+        }
+        self.repos
+            .update_channel_member_readiness(channel_id, agent_id, readiness_to_storage(&readiness))
+            .await
+            .map_err(channel_storage_error)?;
         Ok(())
     }
 
@@ -261,24 +269,24 @@ impl ChannelService {
         &self,
         channel_id: &str,
     ) -> Result<Vec<ChannelMemberRecord>, ChannelError> {
-        let state = self.inner.lock().await;
-        if !state.channels.contains_key(channel_id) {
+        if self.channel_by_id(channel_id).await?.is_none() {
             return Err(ChannelError::MissingChannel);
         }
-        Ok(state.members.get(channel_id).cloned().unwrap_or_default())
+        Ok(self
+            .repos
+            .channel_members(channel_id)
+            .await
+            .map_err(channel_storage_error)?
+            .into_iter()
+            .map(member_row_to_record)
+            .collect())
     }
 
     pub async fn remove_agent_from_all_channels(&self, agent_id: &str) -> Result<(), ChannelError> {
-        let mut state = self.inner.lock().await;
-        let mut changed = false;
-        for members in state.members.values_mut() {
-            let before = members.len();
-            members.retain(|member| member.agent_id != agent_id);
-            changed = changed || members.len() != before;
-        }
-        if changed {
-            persist_members(&self.root, &state.members)?;
-        }
+        self.repos
+            .remove_agent_from_channel_memberships(agent_id)
+            .await
+            .map_err(channel_storage_error)?;
         Ok(())
     }
 
@@ -287,22 +295,15 @@ impl ChannelService {
         channel_id: &str,
         agent_id: &str,
     ) -> Result<Option<ChannelMemberRecord>, ChannelError> {
-        let mut state = self.inner.lock().await;
-        if !state.channels.contains_key(channel_id) {
+        if self.channel_by_id(channel_id).await?.is_none() {
             return Err(ChannelError::MissingChannel);
         }
-        let Some(members) = state.members.get_mut(channel_id) else {
-            return Ok(None);
-        };
-        let Some(index) = members
-            .iter()
-            .position(|member| member.agent_id == agent_id)
-        else {
-            return Ok(None);
-        };
-        let removed = members.remove(index);
-        persist_members(&self.root, &state.members)?;
-        Ok(Some(removed))
+        Ok(self
+            .repos
+            .remove_channel_member(channel_id, agent_id)
+            .await
+            .map_err(channel_storage_error)?
+            .map(member_row_to_record))
     }
 
     pub async fn mount_workspace(
@@ -311,21 +312,21 @@ impl ChannelService {
         mount: WorkspaceMount,
         idempotency_key: &str,
     ) -> Result<WorkspaceMount, ChannelError> {
-        let mut state = self.inner.lock().await;
+        let mut idempotency = self.idempotency.lock().await;
         if let Some((existing_channel_id, existing_mount)) =
-            state.mount_idempotency.get(idempotency_key)
+            idempotency.mount_idempotency.get(idempotency_key)
         {
             if existing_channel_id == channel_id {
                 return Ok(existing_mount.clone());
             }
         }
 
-        if !state.channels.contains_key(channel_id) {
+        if self.channel_by_id(channel_id).await?.is_none() {
             return Err(ChannelError::MissingChannel);
         }
 
         let normalized_path = normalize_workspace_path(&mount.path)?;
-        if workspace_path_exists(&state.workspaces, &normalized_path) {
+        if self.workspace_path_exists(&normalized_path).await? {
             return Err(ChannelError::DuplicateWorkspacePath);
         }
 
@@ -333,16 +334,14 @@ impl ChannelService {
             path: normalized_path,
             label: mount.label,
         };
-        state
-            .workspaces
-            .entry(channel_id.to_string())
-            .or_default()
-            .push(mount.clone());
-        state.mount_idempotency.insert(
+        self.repos
+            .upsert_channel_workspace_mount(channel_id, &mount.path, &mount.label)
+            .await
+            .map_err(map_workspace_insert_error)?;
+        idempotency.mount_idempotency.insert(
             idempotency_key.to_string(),
             (channel_id.to_string(), mount.clone()),
         );
-        persist_workspaces(&self.root, &state.workspaces)?;
         Ok(mount)
     }
 
@@ -350,7 +349,6 @@ impl ChannelService {
         &self,
         paths: &[String],
     ) -> Result<(), ChannelError> {
-        let state = self.inner.lock().await;
         let mut requested_paths = HashMap::<String, ()>::new();
         for path in paths {
             let normalized_path = normalize_workspace_path(path)?;
@@ -360,7 +358,7 @@ impl ChannelService {
             {
                 return Err(ChannelError::DuplicateWorkspacePath);
             }
-            if workspace_path_exists(&state.workspaces, &normalized_path) {
+            if self.workspace_path_exists(&normalized_path).await? {
                 return Err(ChannelError::DuplicateWorkspacePath);
             }
         }
@@ -369,37 +367,96 @@ impl ChannelService {
 
     pub async fn workspaces(&self, channel_id: &str) -> Result<Vec<WorkspaceMount>, ChannelError> {
         Ok(self
-            .inner
-            .lock()
+            .repos
+            .channel_workspace_mounts(channel_id)
             .await
-            .workspaces
-            .get(channel_id)
-            .cloned()
-            .unwrap_or_default())
+            .map_err(channel_storage_error)?
+            .into_iter()
+            .map(workspace_row_to_record)
+            .collect())
     }
-}
 
-impl ChannelState {
-    fn load(root: &PathBuf) -> Self {
-        Self {
-            channels: load_channels(root),
-            members: load_members(root),
-            workspaces: load_workspaces(root),
-            ..Self::default()
+    async fn ensure_default_channel(&self) -> Result<(), ChannelError> {
+        self.repos
+            .upsert_channel(
+                "all",
+                "all",
+                Some("默认团队频道"),
+                true,
+                permission_to_storage(PermissionPreset::Controlled),
+            )
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(())
+    }
+
+    async fn channel_by_id(&self, channel_id: &str) -> Result<Option<ChannelRecord>, ChannelError> {
+        let channels = self.repos.channels().await.map_err(channel_storage_error)?;
+        let Some(channel) = channels
+            .into_iter()
+            .find(|channel| channel.id == channel_id)
+        else {
+            return Ok(None);
+        };
+        let mut record = channel_row_to_record(channel);
+        record.project_paths = self
+            .repos
+            .channel_workspace_mounts(&record.id)
+            .await
+            .map_err(channel_storage_error)?
+            .into_iter()
+            .map(|mount| mount.path)
+            .collect();
+        Ok(Some(record))
+    }
+
+    async fn workspace_path_exists(&self, normalized_path: &str) -> Result<bool, ChannelError> {
+        for channel in self.repos.channels().await.map_err(channel_storage_error)? {
+            if self
+                .repos
+                .channel_workspace_mounts(&channel.id)
+                .await
+                .map_err(channel_storage_error)?
+                .iter()
+                .any(|mount| {
+                    normalize_workspace_path(&mount.path)
+                        .map(|path| path == normalized_path)
+                        .unwrap_or(false)
+                })
+            {
+                return Ok(true);
+            }
         }
+        Ok(false)
     }
 
-    fn ensure_default_channel(&mut self) {
-        self.channels
-            .entry("all".to_string())
-            .or_insert(ChannelRecord {
-                id: "all".to_string(),
-                name: "all".to_string(),
-                description: Some("默认团队频道".to_string()),
-                is_default: true,
-                permission: PermissionPreset::Controlled,
-                project_paths: Vec::new(),
-            });
+    async fn ensure_agent_placeholder(&self, agent_id: &str) -> Result<(), ChannelError> {
+        if self
+            .repos
+            .agents()
+            .await
+            .map_err(channel_storage_error)?
+            .iter()
+            .any(|agent| agent.id == agent_id)
+        {
+            return Ok(());
+        }
+        self.repos
+            .upsert_agent(
+                agent_id,
+                agent_id,
+                &format!("@{agent_id}"),
+                "agent",
+                false,
+                "unknown",
+                "unknown",
+                "local",
+                "",
+                agent_id,
+            )
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(())
     }
 }
 
@@ -449,105 +506,123 @@ pub fn normalize_workspace_path(path: &str) -> Result<String, ChannelError> {
     }
 }
 
-fn workspace_path_exists(
-    workspaces: &HashMap<String, Vec<WorkspaceMount>>,
-    normalized_path: &str,
-) -> bool {
-    workspaces.values().flatten().any(|mount| {
-        normalize_workspace_path(&mount.path)
-            .map(|path| path == normalized_path)
-            .unwrap_or(false)
-    })
-}
-
-fn load_channels(root: &PathBuf) -> HashMap<String, ChannelRecord> {
-    fs::read_to_string(root.join("channels/index.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<ChannelRecord>>(&raw).ok())
-        .unwrap_or_default()
-        .into_iter()
-        .map(|channel| (channel.id.clone(), channel))
-        .collect()
-}
-
-fn load_members(root: &PathBuf) -> HashMap<String, Vec<ChannelMemberRecord>> {
-    fs::read_to_string(root.join("channels/members.json"))
-        .ok()
-        .and_then(|raw| {
-            serde_json::from_str::<HashMap<String, Vec<ChannelMemberRecord>>>(&raw).ok()
-        })
-        .unwrap_or_default()
-}
-
-fn load_workspaces(root: &PathBuf) -> HashMap<String, Vec<WorkspaceMount>> {
-    fs::read_to_string(root.join("channels/workspaces.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<HashMap<String, Vec<WorkspaceMount>>>(&raw).ok())
-        .unwrap_or_default()
-}
-
-fn persist_channels(
-    root: &PathBuf,
-    channels: &HashMap<String, ChannelRecord>,
-) -> Result<(), ChannelError> {
-    let path = root.join("channels/index.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ChannelError::Io)?;
-    }
-    let mut ordered = channels.values().cloned().collect::<Vec<_>>();
-    ordered.sort_by(|left, right| {
+fn sort_channels(channels: &mut [ChannelRecord]) {
+    channels.sort_by(|left, right| {
         left.is_default
             .cmp(&right.is_default)
             .reverse()
             .then_with(|| left.name.cmp(&right.name))
     });
-    let payload = serde_json::to_string_pretty(&ordered).map_err(ChannelError::Json)?;
-    fs::write(path, payload).map_err(ChannelError::Io)
 }
 
-fn persist_members(
-    root: &PathBuf,
-    members: &HashMap<String, Vec<ChannelMemberRecord>>,
-) -> Result<(), ChannelError> {
-    let path = root.join("channels/members.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ChannelError::Io)?;
+fn channel_row_to_record(row: ChannelRow) -> ChannelRecord {
+    ChannelRecord {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        is_default: row.is_default,
+        permission: permission_from_storage(&row.permission),
+        project_paths: Vec::new(),
     }
-    let payload = serde_json::to_string_pretty(members).map_err(ChannelError::Json)?;
-    fs::write(path, payload).map_err(ChannelError::Io)
 }
 
-fn persist_workspaces(
-    root: &PathBuf,
-    workspaces: &HashMap<String, Vec<WorkspaceMount>>,
-) -> Result<(), ChannelError> {
-    let path = root.join("channels/workspaces.json");
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(ChannelError::Io)?;
+fn member_row_to_record(row: ChannelMemberRow) -> ChannelMemberRecord {
+    ChannelMemberRecord {
+        channel_id: row.channel_id,
+        agent_id: row.agent_id,
+        joined_at: row.joined_at,
+        readiness: readiness_from_storage(&row.readiness),
     }
-    let payload = serde_json::to_string_pretty(workspaces).map_err(ChannelError::Json)?;
-    fs::write(path, payload).map_err(ChannelError::Io)
 }
 
-fn current_timestamp() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs().to_string())
-        .unwrap_or_else(|_| "0".to_string())
+fn workspace_row_to_record(row: WorkspaceMountRow) -> WorkspaceMount {
+    WorkspaceMount {
+        path: row.path,
+        label: row.label,
+    }
+}
+
+fn permission_to_storage(permission: PermissionPreset) -> &'static str {
+    match permission {
+        PermissionPreset::ReadOnly => "ReadOnly",
+        PermissionPreset::Edit => "Edit",
+        PermissionPreset::Controlled => "Controlled",
+    }
+}
+
+fn permission_from_storage(permission: &str) -> PermissionPreset {
+    match permission {
+        "ReadOnly" | "read_only" => PermissionPreset::ReadOnly,
+        "Edit" | "edit" => PermissionPreset::Edit,
+        _ => PermissionPreset::Controlled,
+    }
+}
+
+fn readiness_to_storage(readiness: &ChannelMemberReadiness) -> &'static str {
+    match readiness {
+        ChannelMemberReadiness::Joining => "joining",
+        ChannelMemberReadiness::MemorySyncing => "memory_syncing",
+        ChannelMemberReadiness::Ready => "ready",
+        ChannelMemberReadiness::MemoryFailed => "memory_failed",
+        ChannelMemberReadiness::Unavailable => "unavailable",
+    }
+}
+
+fn readiness_from_storage(readiness: &str) -> ChannelMemberReadiness {
+    match readiness {
+        "memory_syncing" => ChannelMemberReadiness::MemorySyncing,
+        "ready" => ChannelMemberReadiness::Ready,
+        "memory_failed" => ChannelMemberReadiness::MemoryFailed,
+        "unavailable" => ChannelMemberReadiness::Unavailable,
+        _ => ChannelMemberReadiness::Joining,
+    }
 }
 
 fn default_channel_member_readiness() -> ChannelMemberReadiness {
     ChannelMemberReadiness::Joining
 }
 
-impl ChannelService {
-    fn persist_snapshot(&self) {
-        if let Ok(state) = self.inner.try_lock() {
-            let _ = persist_channels(&self.root, &state.channels);
-            let _ = persist_members(&self.root, &state.members);
-            let _ = persist_workspaces(&self.root, &state.workspaces);
-        }
+fn map_channel_insert_error(error: sqlx::Error) -> ChannelError {
+    if error.to_string().contains("UNIQUE") {
+        ChannelError::DuplicateChannelName
+    } else {
+        channel_storage_error(error)
     }
+}
+
+fn map_workspace_insert_error(error: sqlx::Error) -> ChannelError {
+    if error.to_string().contains("UNIQUE") {
+        ChannelError::DuplicateWorkspacePath
+    } else {
+        channel_storage_error(error)
+    }
+}
+
+fn channel_storage_error(error: sqlx::Error) -> ChannelError {
+    ChannelError::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        error.to_string(),
+    ))
+}
+
+fn repositories_blocking(data_root: PathBuf) -> Repositories {
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("create channel repository runtime");
+        runtime.block_on(async move {
+            std::fs::create_dir_all(&data_root).expect("create channel data root");
+            let database_url = format!("sqlite://{}", data_root.join("slei.sqlite").display());
+            let db = SleiDb::connect(&database_url)
+                .await
+                .expect("connect channel db");
+            db.migrate().await.expect("migrate channel db");
+            Repositories::new(db.pool().clone())
+        })
+    })
+    .join()
+    .expect("initialize channel repositories")
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -568,6 +643,4 @@ pub enum ChannelError {
     DuplicateWorkspacePath,
     #[error("channel io error: {0}")]
     Io(std::io::Error),
-    #[error("channel json error: {0}")]
-    Json(serde_json::Error),
 }
