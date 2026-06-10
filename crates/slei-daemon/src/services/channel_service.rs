@@ -260,6 +260,29 @@ impl ChannelService {
         Ok(())
     }
 
+    pub async fn remove_agent_from_channel(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<Option<ChannelMemberRecord>, ChannelError> {
+        let mut state = self.inner.lock().await;
+        if !state.channels.contains_key(channel_id) {
+            return Err(ChannelError::MissingChannel);
+        }
+        let Some(members) = state.members.get_mut(channel_id) else {
+            return Ok(None);
+        };
+        let Some(index) = members
+            .iter()
+            .position(|member| member.agent_id == agent_id)
+        else {
+            return Ok(None);
+        };
+        let removed = members.remove(index);
+        persist_members(&self.root, &state.members)?;
+        Ok(Some(removed))
+    }
+
     pub async fn mount_workspace(
         &self,
         channel_id: &str,

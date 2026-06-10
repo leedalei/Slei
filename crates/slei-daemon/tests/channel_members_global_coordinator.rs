@@ -3,9 +3,11 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
 use slei_daemon::services::coordinator_service::{
     parse_and_validate_coordinator_json, CoordinatorPromptMember,
 };
+use slei_daemon::services::member_service::ProductAgentDraft;
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -90,6 +92,139 @@ async fn global_coordinator_validation_rejects_global_and_legacy_coordinator_tar
     assert!(legacy_error.to_string().contains("agent_coordinator_dev"));
 }
 
+#[tokio::test]
+async fn channel_member_api_adds_and_retries_existing_ordinary_agent() {
+    let token = AuthToken::from_static("test-token");
+    let state = test_state(token.clone()).await;
+    create_channel(&state, "dev").await;
+    let coda_id = create_agent(&state, "Coda", "@coda").await;
+    let app = build_router(state.clone());
+
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/dev/members",
+        None,
+        json!({ "agentId": coda_id }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = response_json(response).await;
+    assert_eq!(body["member"]["agentId"], coda_id);
+    assert_eq!(body["member"]["readiness"], "joining");
+
+    let retry = post_json(
+        &app,
+        &token,
+        "/v1/channels/dev/members",
+        None,
+        json!({ "agentId": coda_id }),
+    )
+    .await;
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry_body = response_json(retry).await;
+    assert_eq!(retry_body["member"]["agentId"], coda_id);
+
+    let members = state.channels().channel_members("dev").await.unwrap();
+    assert_eq!(members.len(), 1);
+}
+
+#[tokio::test]
+async fn channel_member_api_rejects_coordinator_and_removes_from_one_channel_only() {
+    let token = AuthToken::from_static("test-token");
+    let state = test_state(token.clone()).await;
+    create_channel(&state, "dev").await;
+    create_channel(&state, "design").await;
+    let coda_id = create_agent(&state, "Coda", "@coda").await;
+    state
+        .members()
+        .ensure_global_coordinator_agent("local-node")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", &coda_id)
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("design", &coda_id)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let rejected = post_json(
+        &app,
+        &token,
+        "/v1/channels/dev/members",
+        None,
+        json!({ "agentId": "agent_global_coordinator" }),
+    )
+    .await;
+    assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
+
+    let removed = delete_json(&app, &token, &format!("/v1/channels/dev/members/{coda_id}")).await;
+    assert_eq!(removed.status(), StatusCode::OK);
+    let body = response_json(removed).await;
+    assert_eq!(body["removedMember"]["agentId"], coda_id);
+
+    assert!(state
+        .channels()
+        .channel_members("dev")
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        state
+            .channels()
+            .channel_members("design")
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(state.members().get_product_agent(&coda_id).await.is_ok());
+}
+
+async fn test_state(token: AuthToken) -> AppState {
+    let root = std::env::temp_dir().join(format!("slei-channel-members-{}", Uuid::new_v4()));
+    AppState::for_tests_with_agent_root_async(token, root).await
+}
+
+async fn create_channel(state: &AppState, channel_id: &str) {
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: channel_id.to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            &format!("create-{channel_id}"),
+        )
+        .await
+        .unwrap();
+}
+
+async fn create_agent(state: &AppState, name: &str, handle: &str) -> String {
+    state
+        .members()
+        .create_product_agent(
+            ProductAgentDraft {
+                name: name.to_string(),
+                handle: handle.to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: format!("{name} handles channel work."),
+            },
+            &format!("create-agent-{handle}"),
+        )
+        .await
+        .unwrap()
+        .id
+}
+
 async fn post_json(
     app: &axum::Router,
     token: &AuthToken,
@@ -107,6 +242,20 @@ async fn post_json(
     }
     app.clone()
         .oneshot(builder.body(Body::from(payload.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn delete_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap()
 }

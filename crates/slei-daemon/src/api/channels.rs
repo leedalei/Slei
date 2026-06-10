@@ -11,6 +11,7 @@ use serde_json::json;
 use crate::services::channel_service::{
     ChannelDraft, ChannelError, PermissionPreset, WorkspaceMount,
 };
+use crate::services::member_service::is_internal_coordinator_id;
 use crate::state::AppState;
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -29,6 +30,12 @@ pub struct CreateChannelRequest {
     agent_ids: Option<Vec<String>>,
     #[serde(default)]
     project_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddChannelMemberRequest {
+    agent_id: String,
 }
 
 pub async fn create(
@@ -223,6 +230,75 @@ pub async fn members(
 
     match state.channels().channel_members(&id).await {
         Ok(members) => Json(json!({ "members": members })).into_response(),
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn add_member(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<AddChannelMemberRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let agent = match state.members().get_product_agent(&payload.agent_id).await {
+        Ok(agent) => agent,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    if agent.agent_kind == "coordinator" || is_internal_coordinator_id(&agent.id) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "coordinator agents cannot join channels",
+        );
+    }
+
+    match state
+        .channels()
+        .add_agent_to_channel_with_outcome(&id, &agent.id)
+        .await
+    {
+        Ok(outcome) => {
+            let status = if outcome.created {
+                StatusCode::CREATED
+            } else {
+                StatusCode::OK
+            };
+            (status, Json(json!({ "member": outcome.member }))).into_response()
+        }
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn remove_member(
+    State(state): State<AppState>,
+    Path((id, agent_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let agent = match state.members().get_product_agent(&agent_id).await {
+        Ok(agent) => agent,
+        Err(error) => return error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    };
+    if agent.agent_kind == "coordinator" || is_internal_coordinator_id(&agent.id) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "coordinator agents cannot be removed from channels",
+        );
+    }
+
+    match state
+        .channels()
+        .remove_agent_from_channel(&id, &agent.id)
+        .await
+    {
+        Ok(Some(member)) => Json(json!({ "removedMember": member })).into_response(),
+        Ok(None) => Json(json!({ "removedMember": null })).into_response(),
         Err(error) => channel_error_response(error),
     }
 }

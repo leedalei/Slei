@@ -1,5 +1,5 @@
 use axum::extract::State;
-use axum::routing::{get, patch, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use serde_json::json;
 
@@ -16,7 +16,14 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/channels",
             get(api::channels::list).post(api::channels::create),
         )
-        .route("/v1/channels/{id}/members", get(api::channels::members))
+        .route(
+            "/v1/channels/{id}/members",
+            get(api::channels::members).post(api::channels::add_member),
+        )
+        .route(
+            "/v1/channels/{id}/members/{agent_id}",
+            delete(api::channels::remove_member),
+        )
         .route(
             "/v1/channels/{id}/messages",
             get(api::messages::list_channel_messages).post(api::messages::send_channel_message),
