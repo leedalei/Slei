@@ -146,9 +146,44 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain('data-testid="slei-channel-member-panel"');
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-menu"');
+    expect(html).toContain("lucide-plus");
     expect(html).toContain("Coda");
     expect(html).toContain("已就位");
     expect(html).toContain("添加成员");
+    expect(html).not.toContain("lucide-x");
+  });
+
+  it("moves channel member controls from the header to a right edge toggle", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const source = readChatPageSource();
+
+    expect(html).toContain('data-testid="slei-channel-members-edge-toggle"');
+    expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
+  });
+
+  it("keeps channel member add and remove mutations behind confirmation UI", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("confirmingAddId");
+    expect(source).toContain("setConfirmingAddId(member.id)");
+    expect(source).toContain("mutate(member.id, \"add\")");
+    expect(source).toContain("confirmingRemoveId");
+    expect(source).toContain("setConfirmingRemoveId(member.id)");
+    expect(source).toContain("mutate(member.id, \"remove\")");
+    expect(source).toContain("group-hover/member:opacity-100");
   });
 });
 
