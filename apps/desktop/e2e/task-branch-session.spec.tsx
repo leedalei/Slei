@@ -84,6 +84,9 @@ describe("task branch sessions", () => {
     expect(html).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
     expect(html).toContain("待指派");
     expect(html).toContain("data-task-root-entry");
+    expect(html).toContain("lucide-scroll-text");
+    expect(html).toContain("border-primary/20");
+    expect(html).toContain("data-task-root-entry-icon");
     expect(html).not.toContain('data-message-id="msg_root"');
   });
 

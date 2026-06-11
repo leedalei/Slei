@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
@@ -31,6 +32,68 @@ function memberWithLongMentionText(): SleiMember {
 }
 
 describe("ChatPage mention panel", () => {
+  it("renders channel titles at a size close to the hash icon", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("text-xl font-semibold");
+    expect(html).toContain('aria-label="# all"');
+  });
+
+  it("keeps long message role descriptions on one truncated header row", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_long_role",
+          author: member.name,
+          handle: member.handle,
+          role: "agent",
+          time: "10:24",
+          body: "我会检查这个交付。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("overflow-hidden whitespace-nowrap");
+    expect(html).toContain("min-w-0 flex-1 truncate");
+    expect(html).toContain("shrink-0 text-sm text-foreground");
+    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(1);
+  });
+
+  it("keeps a bottom sentinel for post-send timeline scrolling", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("timelineEndRef");
+    expect(source).toContain("pendingScrollToBottomRef");
+    expect(source).toContain("requestAnimationFrame");
+    expect(source).toContain("scrollIntoView({ block: \"end\" })");
+  });
+
   it("keeps mention suggestions constrained to the composer width", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
@@ -88,3 +151,7 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("添加成员");
   });
 });
+
+function readChatPageSource() {
+  return readFileSync(new URL("./ChatPageView.tsx", import.meta.url), "utf8");
+}

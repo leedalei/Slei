@@ -104,6 +104,7 @@ export function TasksPage({
       </Tabs>
 
       <TaskThreadDrawer
+        mentionMembers={data.members}
         messages={messages}
         onClose={() => setSelectedTaskId(undefined)}
         onReply={onTaskReply}

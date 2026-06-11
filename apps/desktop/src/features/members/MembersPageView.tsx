@@ -339,7 +339,6 @@ export function MembersPage(input: {
               <Card>
                 <CardHeader>
                   <CardTitle>{input.messages.members.profile}</CardTitle>
-                  <CardDescription>{memberDetails.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4">
                   <div className="grid gap-4 md:grid-cols-2">
