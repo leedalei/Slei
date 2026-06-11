@@ -312,3 +312,41 @@ async fn coordinator_service_starts_worker_run_with_prompt_instead_of_local_keyw
         .unwrap()
         .contains("\"targetAgentIds\""));
 }
+
+#[tokio::test]
+async fn coordinator_service_falls_back_to_valid_cwd_for_missing_workspace_mount() {
+    let transport = WorkerTransport::fake();
+    let coordinator = CoordinatorService::new_with_worker(
+        OrchestrationStore::for_tests().await,
+        ClaudeWorkerAdapter::new(transport.clone()),
+    );
+
+    coordinator
+        .start_runtime_run(CoordinatorRuntimeInput {
+            run_id: "coord_run_missing_workspace".to_string(),
+            channel_id: "content".to_string(),
+            channel_name: "content".to_string(),
+            message_id: "msg_count".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "报数".to_string(),
+            members: vec![CoordinatorPromptMember {
+                agent_id: "agent_coda".to_string(),
+                name: "Coda".to_string(),
+                handle: "@coda".to_string(),
+                agent_kind: "agent".to_string(),
+                readiness: "ready".to_string(),
+            }],
+            context_refs: vec![],
+            workspace_mounts: vec![WorkspaceMount {
+                path: "kol-content".to_string(),
+                label: "kol-content".to_string(),
+            }],
+        })
+        .await
+        .unwrap();
+
+    let commands = transport.commands();
+    let cwd = commands[0]["session"]["cwd"].as_str().unwrap();
+    assert_ne!(cwd, "kol-content");
+    assert!(std::path::Path::new(cwd).is_dir());
+}

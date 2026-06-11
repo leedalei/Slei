@@ -8,6 +8,8 @@ pub fn run() {
             commands::log_frontend_crash_command,
             commands::log_frontend_event_command,
             commands::daemon_status_command,
+            commands::app_runtime_flags_command,
+            commands::list_diagnostics_command,
             commands::reconnect_events_command,
             commands::list_nodes_command,
             commands::bootstrap_guide_agent_command,
@@ -57,17 +59,17 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_conversation_session, add_channel_member, bootstrap_guide_agent,
+        activate_conversation_session, add_channel_member, app_runtime_flags, bootstrap_guide_agent,
         complete_interactive_card, create_agent, create_channel, create_conversation_session,
         create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
         list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
         list_channel_messages, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_nodes, list_preferences, list_saved_messages, list_tasks,
-        open_agent_path, read_agent_workspace_file, reconnect_events, remember_agent_fact,
-        remove_channel_member, rename_local_node, reply_to_task, request_artifact_open,
-        reset_conversation_runtime_session, save_message, send_channel_message,
-        send_conversation_message, unsave_message, update_agent, update_preferences,
-        upload_conversation_attachment, FrontendCrashReport,
+        list_conversations, list_diagnostics, list_nodes, list_preferences, list_saved_messages,
+        list_tasks, open_agent_path, read_agent_workspace_file, reconnect_events,
+        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_task,
+        request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_channel_message, send_conversation_message, unsave_message, update_agent,
+        update_preferences, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
@@ -144,6 +146,87 @@ mod tests {
         );
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("ws://"));
+    }
+
+    #[test]
+    fn broker_fetches_diagnostics_snapshot_for_frontend_error_toasts() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                if String::from_utf8_lossy(&bytes).contains("\r\n\r\n") {
+                    break;
+                }
+            }
+            let response = r#"{
+              "node":"local-node",
+              "runtime":"ClaudeCode",
+              "worker":"claude-agent",
+              "protocolVersion":"v1",
+              "schemaVersion":"2026-05-27",
+              "coordinatorDecisionCount":1,
+              "agentInboxEventCount":0,
+              "memoryUpdateEventCount":0,
+              "recentEvents":[{
+                "sequence":66,
+                "eventType":"coordinator_runtime.failed",
+                "entityId":"event_1",
+                "payload":"run_id=coord_run_1 decision_failed",
+                "createdAt":"2026-06-11 09:57:39"
+              }]
+            }"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let snapshot = list_diagnostics(&broker);
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("GET /v1/diagnostics HTTP/1.1"));
+        assert_eq!(snapshot.recent_events[0].sequence, 66);
+        assert_eq!(
+            snapshot.recent_events[0].event_type,
+            "coordinator_runtime.failed"
+        );
+    }
+
+    #[test]
+    fn runtime_flags_enable_debug_from_environment() {
+        let _guard = test_env_lock();
+        std::env::set_var("SLEI_DEBUG", "1");
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            event_socket: "ws://127.0.0.1:1/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let flags = app_runtime_flags(&broker);
+
+        std::env::remove_var("SLEI_DEBUG");
+        assert!(flags.debug);
     }
 
     #[test]

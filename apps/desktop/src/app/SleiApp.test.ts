@@ -4,8 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   channelMessageToSleiMessage,
   createCoordinatorRoutingActivityMessage,
+  debugLaunchEnabledFromSearch,
   findActiveAgentActivities,
   hasUnsettledChannelMemberReadiness,
+  markCoordinatorActivityFailedByDiagnostic,
+  shouldToastBackendServiceError,
   replaceChannelMessages,
 } from "./SleiApp";
 import {
@@ -103,6 +106,44 @@ describe("createChannelAgentReplyMessage", () => {
     ]);
   });
 
+  it("marks pending coordinator activity failed when daemon diagnostics report the source message failure", () => {
+    const pending = {
+      id: "coordinator-activity-msg_route_1",
+      author: "频道协调员",
+      handle: "@coordinator",
+      avatar: "CO",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "content",
+      status: "pending",
+      toolCall: "coordinator_routing",
+    } satisfies SleiMessage;
+    const messages = markCoordinatorActivityFailedByDiagnostic([pending], {
+      sequence: 66,
+      eventType: "coordinator_runtime.failed",
+      entityId: "event_66",
+      payload: "run_id=coord_run_1 channel_id=content message_id=msg_route_1 decision_failed",
+      createdAt: "2026-06-11 09:57:39",
+    });
+
+    expect(messages[0]).toMatchObject({
+      id: "coordinator-activity-msg_route_1",
+      status: "failed",
+      toolCall: "coordinator_routing",
+    });
+  });
+
+  it("only enables backend service error toasts for debug launches", () => {
+    expect(debugLaunchEnabledFromSearch("?debug=1")).toBe(true);
+    expect(debugLaunchEnabledFromSearch("?debug=true")).toBe(true);
+    expect(debugLaunchEnabledFromSearch("?debug=0")).toBe(false);
+    expect(debugLaunchEnabledFromSearch("?debug=false")).toBe(false);
+    expect(debugLaunchEnabledFromSearch("")).toBe(false);
+    expect(shouldToastBackendServiceError(true)).toBe(true);
+    expect(shouldToastBackendServiceError(false)).toBe(false);
+  });
+
   it("builds stable activity messages for every routed channel target", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
@@ -193,6 +234,16 @@ describe("createChannelAgentReplyMessage", () => {
     expect(source).toContain("messages.agentCreate.createdFailed");
     expect(source).toContain("catch (error)");
     expect(source).toContain("input.onChannelCreateFailure?.");
+  });
+
+  it("surfaces global and daemon diagnostic failures through the app toast", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain('window.addEventListener("error"');
+    expect(source).toContain('window.addEventListener("unhandledrejection"');
+    expect(source).toContain("bridge.listDiagnostics()");
+    expect(source).toContain("diagnosticEventNeedsToast");
+    expect(source).toContain("showAppToast(formatAppErrorToast");
   });
 
   it("keeps the channel activity id stable across progress and completion", () => {

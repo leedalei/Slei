@@ -1,18 +1,19 @@
 use crate::daemon_broker::{
     AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
     AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt, AgentWorkspaceListReceipt,
+    AppRuntimeFlagsView,
     ArtifactOpenError, ArtifactOpenReceipt, CardError, ChannelCreateRequest, ChannelError,
     ChannelListReceipt, ChannelMemberAddRequest, ChannelMemberListReceipt, ChannelMemberReceipt,
     ChannelMemberRemoveReceipt, ChannelMessageListReceipt, ChannelReceipt,
     ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
     ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
     ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
-    ConversationSessionReceipt, DaemonBroker, EventReconnectReceipt, GuideBootstrapReceipt,
-    InteractiveCardReceipt, NodeListReceipt, NodeNameError, NodeRenameReceipt,
-    PermissionResolveRequest, PreferencesError, PreferencesReceipt, PreferencesUpdateRequest,
-    SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt,
-    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt, TaskError,
-    TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
+    ConversationSessionReceipt, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
+    GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt, NodeNameError,
+    NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
+    PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
+    SavedMessageReceipt, SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
+    TaskError, TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
     TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
@@ -69,6 +70,14 @@ pub fn log_frontend_event(report: FrontendEventReport) {
 
 pub fn daemon_status(broker: &DaemonBroker) -> SanitizedDaemonStatus {
     broker.status()
+}
+
+pub fn app_runtime_flags(broker: &DaemonBroker) -> AppRuntimeFlagsView {
+    broker.runtime_flags()
+}
+
+pub fn list_diagnostics(broker: &DaemonBroker) -> DiagnosticsSnapshotView {
+    broker.list_diagnostics()
 }
 
 pub fn reconnect_events(broker: &DaemonBroker, after: u64) -> EventReconnectReceipt {
@@ -348,6 +357,16 @@ pub fn log_frontend_event_command(report: FrontendEventReport) {
 #[tauri::command]
 pub fn daemon_status_command(state: tauri::State<'_, DaemonBroker>) -> SanitizedDaemonStatus {
     daemon_status(state.inner())
+}
+
+#[tauri::command]
+pub fn app_runtime_flags_command(state: tauri::State<'_, DaemonBroker>) -> AppRuntimeFlagsView {
+    app_runtime_flags(state.inner())
+}
+
+#[tauri::command]
+pub fn list_diagnostics_command(state: tauri::State<'_, DaemonBroker>) -> DiagnosticsSnapshotView {
+    list_diagnostics(state.inner())
 }
 
 #[tauri::command]

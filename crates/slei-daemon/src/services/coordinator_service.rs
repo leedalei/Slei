@@ -205,11 +205,7 @@ impl CoordinatorService {
             context_refs: input.context_refs,
             workspace_mounts: input.workspace_mounts.clone(),
         });
-        let cwd = input
-            .workspace_mounts
-            .first()
-            .map(|mount| mount.path.clone())
-            .unwrap_or_else(|| ".".to_string());
+        let cwd = coordinator_runtime_cwd(&input.workspace_mounts);
         let session = self
             .worker
             .create_session(CreateSessionRequest {
@@ -475,6 +471,18 @@ fn validate_member_target(
         ));
     }
     Ok(())
+}
+
+fn coordinator_runtime_cwd(workspace_mounts: &[WorkspaceMount]) -> String {
+    workspace_mounts
+        .iter()
+        .find(|mount| std::path::Path::new(&mount.path).is_dir())
+        .map(|mount| mount.path.clone())
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_else(|_| ".".to_string())
+        })
 }
 
 fn classify_intent(body: &str) -> IntentKind {

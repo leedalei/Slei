@@ -13,6 +13,7 @@ import type {
   ConversationSessionView,
   ConversationView,
   DaemonBridge,
+  DiagnosticsSnapshotView,
   DesktopAgentView,
   DesktopNodeView,
   InteractiveCardView,
@@ -125,6 +126,22 @@ export function createDaemonBridgeMock(input: {
         label: connected ? "connected" : "offline",
         daemonVersion: "0.1.0",
         protocolVersion: "v1",
+      };
+    },
+    async appRuntimeFlags() {
+      return { debug: false };
+    },
+    async listDiagnostics(): Promise<DiagnosticsSnapshotView> {
+      return {
+        node: connected ? "connected" : "offline",
+        runtime: "unknown",
+        worker: "unknown",
+        protocolVersion: "v1",
+        schemaVersion: "",
+        coordinatorDecisionCount: 0,
+        agentInboxEventCount: 0,
+        memoryUpdateEventCount: 0,
+        recentEvents: [],
       };
     },
     async listNodes() {

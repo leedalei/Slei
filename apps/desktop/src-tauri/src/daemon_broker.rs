@@ -145,6 +145,38 @@ pub struct PreferencesReceipt {
     pub preferences: UserPreferencesView,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppRuntimeFlagsView {
+    pub debug: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticEventView {
+    pub sequence: u64,
+    pub event_type: String,
+    pub entity_id: String,
+    pub payload: String,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticsSnapshotView {
+    pub node: String,
+    pub runtime: String,
+    pub worker: String,
+    pub protocol_version: String,
+    pub schema_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_summary: Option<String>,
+    pub coordinator_decision_count: u64,
+    pub agent_inbox_event_count: u64,
+    pub memory_update_event_count: u64,
+    pub recent_events: Vec<DiagnosticEventView>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreferencesUpdateRequest {
@@ -742,6 +774,46 @@ impl DaemonBroker {
             connected: true,
             daemon_version: self.descriptor.daemon_version.clone(),
             protocol_version: self.descriptor.protocol_version.clone(),
+        }
+    }
+
+    pub fn runtime_flags(&self) -> AppRuntimeFlagsView {
+        AppRuntimeFlagsView {
+            debug: slei_debug_enabled(),
+        }
+    }
+
+    pub fn list_diagnostics(&self) -> DiagnosticsSnapshotView {
+        if let Some(response) = self.send_daemon_request("GET", "/v1/diagnostics", None, &[]) {
+            if let Ok(snapshot) = serde_json::from_str::<DiagnosticsSnapshotView>(&response) {
+                return snapshot;
+            }
+        }
+        let local_events = self
+            .diagnostic_events
+            .lock()
+            .expect("diagnostic events mutex poisoned")
+            .iter()
+            .enumerate()
+            .map(|(index, payload)| DiagnosticEventView {
+                sequence: index as u64 + 1,
+                event_type: "desktop.local_diagnostic".to_string(),
+                entity_id: "local".to_string(),
+                payload: payload.clone(),
+                created_at: String::new(),
+            })
+            .collect();
+        DiagnosticsSnapshotView {
+            node: "local-node".to_string(),
+            runtime: "unknown".to_string(),
+            worker: "claude-agent".to_string(),
+            protocol_version: self.descriptor.protocol_version.clone(),
+            schema_version: "local".to_string(),
+            failure_summary: None,
+            coordinator_decision_count: 0,
+            agent_inbox_event_count: 0,
+            memory_update_event_count: 0,
+            recent_events: local_events,
         }
     }
 
@@ -3436,6 +3508,29 @@ fn local_data_root() -> String {
         .or_else(|_| env::var("HOME").map(|home| format!("{home}/.slei")))
         .unwrap_or_else(|_| ".slei".to_string());
     root
+}
+
+fn slei_debug_enabled() -> bool {
+    env::var("SLEI_DEBUG")
+        .map(|value| debug_flag_value_enabled(&value))
+        .unwrap_or(false)
+        || env::args().any(|arg| {
+            arg == "--debug"
+                || arg == "--slei-debug"
+                || arg
+                    .strip_prefix("--debug=")
+                    .map(debug_flag_value_enabled)
+                    .unwrap_or(false)
+                || arg
+                    .strip_prefix("--slei-debug=")
+                    .map(debug_flag_value_enabled)
+                    .unwrap_or(false)
+        })
+}
+
+fn debug_flag_value_enabled(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    !normalized.is_empty() && normalized != "0" && normalized != "false" && normalized != "off"
 }
 
 fn persist_local_agents_at_root(root: &str, agents: &[DesktopAgentView]) -> Result<(), AgentError> {

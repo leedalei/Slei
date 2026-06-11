@@ -425,9 +425,36 @@ export type FrontendEventReport = {
   context?: Record<string, unknown>;
 };
 
+export type AppRuntimeFlagsView = {
+  debug: boolean;
+};
+
+export type DiagnosticEventView = {
+  sequence: number;
+  eventType: string;
+  entityId: string;
+  payload: string;
+  createdAt: string;
+};
+
+export type DiagnosticsSnapshotView = {
+  node: string;
+  runtime: string;
+  worker: string;
+  protocolVersion: string;
+  schemaVersion: string;
+  failureSummary?: string;
+  coordinatorDecisionCount: number;
+  agentInboxEventCount: number;
+  memoryUpdateEventCount: number;
+  recentEvents: DiagnosticEventView[];
+};
+
 export type DaemonBridge = {
   logFrontendEvent(report: FrontendEventReport): Promise<void>;
   daemonStatus(): Promise<SanitizedDaemonStatus>;
+  appRuntimeFlags(): Promise<AppRuntimeFlagsView>;
+  listDiagnostics(): Promise<DiagnosticsSnapshotView>;
   listNodes(): Promise<NodeListReceipt>;
   bootstrapGuideAgent(): Promise<GuideBootstrapReceipt>;
   listChannels(): Promise<ChannelListReceipt>;
@@ -504,6 +531,22 @@ export function createOfflineDaemonBridge(): DaemonBridge {
         label: "offline",
         daemonVersion: "",
         protocolVersion: "",
+      };
+    },
+    async appRuntimeFlags() {
+      return { debug: false };
+    },
+    async listDiagnostics() {
+      return {
+        node: "offline",
+        runtime: "unknown",
+        worker: "unknown",
+        protocolVersion: "",
+        schemaVersion: "",
+        coordinatorDecisionCount: 0,
+        agentInboxEventCount: 0,
+        memoryUpdateEventCount: 0,
+        recentEvents: [],
       };
     },
     async listNodes() {
@@ -585,6 +628,8 @@ export function createDaemonBridge(): DaemonBridge {
     return {
       logFrontendEvent: (report: FrontendEventReport) => invoke<void>("log_frontend_event_command", { report }),
       daemonStatus: () => invoke<SanitizedDaemonStatus>("daemon_status_command"),
+      appRuntimeFlags: () => invoke<AppRuntimeFlagsView>("app_runtime_flags_command"),
+      listDiagnostics: () => invoke<DiagnosticsSnapshotView>("list_diagnostics_command"),
       listNodes: () => invoke<NodeListReceipt>("list_nodes_command"),
       bootstrapGuideAgent: () => invoke<GuideBootstrapReceipt>("bootstrap_guide_agent_command"),
       listChannels: () => invoke<ChannelListReceipt>("list_channels_command"),

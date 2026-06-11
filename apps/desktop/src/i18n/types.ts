@@ -19,6 +19,7 @@ export type DesktopMessages = {
     input: string;
     maximizeWindow: string;
     minimizeWindow: string;
+    operationFailed: string;
     resizeSidebar: string;
     retry: string;
     runtimeCheckFailed: string;

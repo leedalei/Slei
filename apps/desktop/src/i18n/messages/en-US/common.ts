@@ -14,6 +14,7 @@ export const common = {
   input: "input",
   maximizeWindow: "Maximize window",
   minimizeWindow: "Minimize window",
+  operationFailed: "Operation failed",
   resizeSidebar: "Resize sidebar",
   retry: "Retry",
   runtimeCheckFailed: "Runtime check failed",

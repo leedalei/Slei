@@ -14,6 +14,7 @@ export const common = {
   input: "输入",
   maximizeWindow: "最大化窗口",
   minimizeWindow: "最小化窗口",
+  operationFailed: "操作失败",
   resizeSidebar: "调整侧栏宽度",
   retry: "重试",
   runtimeCheckFailed: "Runtime 检测失败",

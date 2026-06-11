@@ -13,6 +13,7 @@ import {
   type ConversationMessageView,
   type ConversationSessionView,
   type DaemonBridge,
+  type DiagnosticEventView,
   type DesktopAgentView,
   type DesktopNodeView,
   type NotificationPreferences,
@@ -423,6 +424,56 @@ function formatLogError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function debugLaunchEnabledFromSearch(search: string): boolean {
+  const params = new URLSearchParams(search.startsWith("?") ? search : `?${search}`);
+  const value = params.get("debug");
+  return value !== null && value !== "0" && value.toLowerCase() !== "false";
+}
+
+export function shouldToastBackendServiceError(debugEnabled: boolean): boolean {
+  return debugEnabled;
+}
+
+function diagnosticEventNeedsToast(event: DiagnosticEventView): boolean {
+  return (
+    event.eventType.endsWith(".failed") ||
+    event.eventType.endsWith(".failed_event") ||
+    event.eventType.endsWith(".start_failed") ||
+    event.eventType.includes("failed")
+  );
+}
+
+function diagnosticPayloadValue(event: DiagnosticEventView, key: string): string | undefined {
+  const match = event.payload.match(new RegExp(`(?:^|\\s)${key}=([^\\s]+)`));
+  return match?.[1];
+}
+
+export function markCoordinatorActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+  if (!diagnosticEventNeedsToast(event)) return messages;
+  const messageId = diagnosticPayloadValue(event, "message_id");
+  if (!messageId) return messages;
+  const activityId = `coordinator-activity-${messageId}`;
+  let changed = false;
+  const nextMessages = messages.map((message) => {
+    if (message.id !== activityId || message.toolCall !== "coordinator_routing" || message.status === "failed") {
+      return message;
+    }
+    changed = true;
+    return { ...message, status: "failed" as const };
+  });
+  return changed ? nextMessages : messages;
+}
+
+function formatAppErrorToast(prefix: string, error: unknown) {
+  const detail = formatLogError(error).trim();
+  return detail ? `${prefix}：${detail}` : prefix;
+}
+
+function formatDiagnosticEventToast(prefix: string, event: DiagnosticEventView) {
+  const detail = [event.eventType, event.payload].filter(Boolean).join(" ");
+  return formatAppErrorToast(prefix, detail);
+}
+
 async function loadSleiConversationMessages(
   bridge: DaemonBridge,
   conversations: ConversationView[],
@@ -476,6 +527,7 @@ export function SleiApp() {
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [guideBootstrapping, setGuideBootstrapping] = useState(false);
   const [appToast, setAppToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
+  const [backendErrorToastsEnabled, setBackendErrorToastsEnabled] = useState(() => debugLaunchEnabledFromSearch(window.location.search));
   const [runtimeSetup, setRuntimeSetup] = useState<RuntimeSetupState>({
     loading: true,
     error: undefined,
@@ -483,6 +535,7 @@ export function SleiApp() {
     nodes: data.nodes,
   });
   const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lastDiagnosticToastSequenceRef = useRef(0);
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
 
@@ -534,6 +587,7 @@ export function SleiApp() {
       .then((members) => refreshChannelMessagesIntoState(channelId, members))
       .catch((error: unknown) => {
         logAppEvent(bridge, "channel-members", "readiness-refresh-failed", { channelId, error: formatLogError(error) });
+        showBackendServiceErrorToast(error);
       });
   }
 
@@ -581,6 +635,11 @@ export function SleiApp() {
     appToastTimerRef.current = setTimeout(() => setAppToast((current) => ({ ...current, message: "" })), 4_000);
   }
 
+  function showBackendServiceErrorToast(error: unknown) {
+    if (!shouldToastBackendServiceError(backendErrorToastsEnabled)) return;
+    showAppToast(formatAppErrorToast(messages.common.operationFailed, error), "error");
+  }
+
   useEffect(() => {
     const nextView = routeViewFromPath(location.pathname);
     setActiveView((current) => (current === nextView ? current : nextView));
@@ -595,6 +654,74 @@ export function SleiApp() {
       if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    bridge
+      .appRuntimeFlags()
+      .then((flags) => {
+        if (!mounted) return;
+        if (flags.debug) setBackendErrorToastsEnabled(true);
+      })
+      .catch((error: unknown) => {
+        logAppEvent(bridge, "runtime-flags", "read-failed", { error: formatLogError(error) });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [bridge]);
+
+  useEffect(() => {
+    function handleWindowError(event: ErrorEvent) {
+      const error = event.error ?? event.message;
+      showAppToast(formatAppErrorToast(messages.common.operationFailed, error), "error");
+      logAppEvent(bridge, "global-error", "window-error", { error: formatLogError(error) });
+    }
+
+    function handleUnhandledRejection(event: PromiseRejectionEvent) {
+      showAppToast(formatAppErrorToast(messages.common.operationFailed, event.reason), "error");
+      logAppEvent(bridge, "global-error", "unhandled-rejection", { error: formatLogError(event.reason) });
+    }
+
+    window.addEventListener("error", handleWindowError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    return () => {
+      window.removeEventListener("error", handleWindowError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, [bridge, messages.common.operationFailed]);
+
+  useEffect(() => {
+    let mounted = true;
+    const pollDiagnostics = async () => {
+      const snapshot = await bridge.listDiagnostics();
+      if (!mounted) return;
+      const events = [...snapshot.recentEvents]
+        .filter((event) => event.sequence > lastDiagnosticToastSequenceRef.current)
+        .sort((left, right) => left.sequence - right.sequence);
+      for (const event of events) {
+        lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
+        if (diagnosticEventNeedsToast(event)) {
+          setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
+          if (shouldToastBackendServiceError(backendErrorToastsEnabled)) {
+            showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
+          }
+        }
+      }
+    };
+    void pollDiagnostics().catch((error: unknown) => {
+      logAppEvent(bridge, "diagnostics", "poll-failed", { error: formatLogError(error) });
+    });
+    const interval = window.setInterval(() => {
+      void pollDiagnostics().catch((error: unknown) => {
+        logAppEvent(bridge, "diagnostics", "poll-failed", { error: formatLogError(error) });
+      });
+    }, 2000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [backendErrorToastsEnabled, bridge, messages.common.operationFailed]);
 
   useEffect(() => {
     let mounted = true;
@@ -762,10 +889,11 @@ export function SleiApp() {
         .then((members) => refreshChannelMessagesIntoState(activeChannelId, members))
         .catch((error: unknown) => {
           logAppEvent(bridge, "channel-members-readiness-interval", "readiness-refresh-failed", { channelId: activeChannelId, error: formatLogError(error) });
+          showBackendServiceErrorToast(error);
         });
     }, 1500);
     return () => window.clearInterval(interval);
-  }, [activeChannelId, activeConversationId, bridge, data.members]);
+  }, [activeChannelId, activeConversationId, backendErrorToastsEnabled, bridge, data.members]);
 
   async function handleOpenAgentPath(agentId: string, target: AgentPathTarget) {
     await bridge.openAgentPath(agentId, target);
@@ -1122,6 +1250,7 @@ export function SleiApp() {
     if (result.receipt.outcome.taskId) {
       void refreshTasks(targetId).catch((error: unknown) => {
         logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-channel-send", { channelId: targetId, error: formatLogError(error) });
+        showBackendServiceErrorToast(error);
       });
     }
 
@@ -1133,6 +1262,7 @@ export function SleiApp() {
     });
     void refreshChannelMessagesIntoState(targetId, data.members).catch((error: unknown) => {
       logAppEvent(bridge, "channel-refresh", "messages-refresh-failed-after-send", { channelId: targetId, error: formatLogError(error) });
+      showBackendServiceErrorToast(error);
     });
     if (result.receipt.outcome.action === "request_agent_reply" || result.receipt.outcome.taskId) {
       logAppEvent(bridge, "channel-agent-reply", "delegated-to-daemon", {
@@ -1158,9 +1288,11 @@ export function SleiApp() {
     } catch (error) {
       appendTaskReplyReceiptToState(taskId, receipt.reply);
       logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-reply", { channelId, taskId, error: formatLogError(error) });
+      showBackendServiceErrorToast(error);
     }
     void refreshTasks(channelId).catch((error: unknown) => {
       logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-reply", { channelId, taskId, error: formatLogError(error) });
+      showBackendServiceErrorToast(error);
     });
     if (receipt.route.handoffAgentIds.length > 0) {
       logAppEvent(bridge, "task-agent-reply", "delegated-to-daemon", {
@@ -1188,6 +1320,7 @@ export function SleiApp() {
     );
     void refreshTasks(activeChannelId).catch((error: unknown) => {
       logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-status", { channelId: activeChannelId, taskId, error: formatLogError(error) });
+      showBackendServiceErrorToast(error);
     });
   }
 
