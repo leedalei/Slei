@@ -4,7 +4,6 @@ export type AgentView = {
   runtimeKind: "ClaudeCode" | "CodexCli" | "OpenCode";
   model: string;
   presence: "online" | "offline";
-  primary: boolean;
   permission: "ReadOnly" | "Edit" | "Controlled";
   workspaceOverride?: "ReadOnly" | "Edit" | "Controlled";
 };

@@ -32,7 +32,6 @@ describe("Slei MVP acceptance", () => {
           runtimeKind: "ClaudeCode",
           model: "sonnet",
           presence: "online",
-          primary: true,
           permission: "Controlled",
         },
       ],

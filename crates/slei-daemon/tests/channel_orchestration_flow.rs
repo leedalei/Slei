@@ -271,7 +271,7 @@ async fn broadcast_channel_message_creates_inbox_events_for_all_selected_reply_t
     assert_eq!(payloads[0]["coordinatorRunId"], coordinator_run_id);
     assert_eq!(payloads[0]["channelId"], "dev");
     assert_eq!(payloads[0]["targetAgentId"], "agent_alice");
-    assert_eq!(payloads[0]["primaryAssigneeAgentId"], "agent_alice");
+    assert_eq!(payloads[0]["compatAssigneeAgentId"], "agent_alice");
     assert_eq!(
         payloads[0]["targetAgentIds"],
         serde_json::json!(["agent_alice", "agent_coda"])
@@ -280,6 +280,355 @@ async fn broadcast_channel_message_creates_inbox_events_for_all_selected_reply_t
     assert_eq!(payloads[0]["sourceBody"], "大家好，报数");
     assert!(payloads[0]["workspaceMounts"].is_array());
     assert_eq!(payloads[1]["targetAgentId"], "agent_coda");
+}
+
+#[tokio::test]
+async fn pure_consultation_routes_through_coordinator_without_creating_task() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-consultation",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let input = SendChannelMessageInput {
+        channel_id: "dev".to_string(),
+        author_id: "human_lei".to_string(),
+        body: "这个架构方案应该先怎么拆？".to_string(),
+        idempotency_key: "send-pure-consultation".to_string(),
+        as_task: false,
+    };
+    let pending = state
+        .channel_orchestrator()
+        .send_channel_message(input.clone())
+        .await
+        .unwrap();
+
+    assert_eq!(pending.action, "coordinator_pending");
+    assert_eq!(pending.decision_status.as_deref(), Some("pending"));
+    assert!(pending.assignee_agent_ids.is_empty());
+    assert!(state
+        .agent_inbox()
+        .events_for_agent("agent_alice")
+        .await
+        .is_empty());
+
+    let coordinator_run_id = pending.coordinator_run_id.clone().unwrap();
+    complete_coordinator_run(
+        &state,
+        &coordinator_run_id,
+        reply_decision_json("agent_alice", "consultation should be answered by alice"),
+    )
+    .await;
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(input)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "request_agent_reply");
+    assert_eq!(outcome.task_id, None);
+    assert_eq!(outcome.assignee_agent_id.as_deref(), Some("agent_alice"));
+    assert_eq!(outcome.assignee_agent_ids, vec!["agent_alice".to_string()]);
+    assert!(state
+        .tasks()
+        .list_tasks(TaskQuery::default())
+        .await
+        .is_empty());
+
+    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
+    assert_eq!(
+        inbox
+            .iter()
+            .filter(|event| event.event_type == "human_mention"
+                && event.message_id == outcome.message_id)
+            .count(),
+        1
+    );
+    assert!(state.worker_commands().iter().any(|command| {
+        command["type"] == "start_run" && command["session"]["agent_id"] == "agent_alice"
+    }));
+}
+
+#[tokio::test]
+async fn normal_channel_message_replay_recovers_completed_reply_route_side_effects() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-recover-reply-side-effects",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let body = "这个设计方案是否合理？";
+    let idempotency_key = "send-normal-recover-reply-side-effects";
+    let message = state
+        .messages()
+        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
+        .await
+        .unwrap();
+    let decision_id = Uuid::new_v4();
+    state
+        .orchestration()
+        .record_decision(
+            decision_id,
+            "dev",
+            &message.id,
+            "consultation",
+            "request_agent_reply",
+            Some("agent_alice"),
+            &["agent_alice".to_string()],
+            "consultation should be answered by Alice",
+        )
+        .await
+        .unwrap();
+    state
+        .orchestration()
+        .record_routing_context_package(
+            Uuid::new_v4(),
+            decision_id,
+            &message.id,
+            &json!({
+                "currentMessageId": message.id,
+                "targetAgentId": "agent_alice",
+                "targetAgentIds": ["agent_alice"],
+                "action": "request_agent_reply",
+                "sourceBody": body,
+            })
+            .to_string(),
+            false,
+        )
+        .await
+        .unwrap();
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: idempotency_key.to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "request_agent_reply");
+    assert_eq!(outcome.message_id, message.id);
+    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
+    assert_eq!(
+        inbox
+            .iter()
+            .filter(|event| event.event_type == "human_mention" && event.message_id == message.id)
+            .count(),
+        1
+    );
+    assert!(state.worker_commands().iter().any(|command| {
+        command["type"] == "start_run"
+            && command["session"]["agent_id"] == "agent_alice"
+            && command["input"]["prompt"] == body
+    }));
+}
+
+#[tokio::test]
+async fn explicit_multi_mention_routes_all_targets_without_coordinator_and_writes_each_reply() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-explicit-multi",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let body = "@alice-win @coda-win 一起看下这个频道路由";
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: body.to_string(),
+            idempotency_key: "send-explicit-multi".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "request_agent_reply");
+    assert_eq!(outcome.coordinator_run_id, None);
+    assert_eq!(
+        outcome.assignee_agent_ids,
+        vec!["agent_alice".to_string(), "agent_coda".to_string()]
+    );
+    for agent_id in ["agent_alice", "agent_coda"] {
+        let inbox = state.agent_inbox().events_for_agent(agent_id).await;
+        assert_eq!(
+            inbox
+                .iter()
+                .filter(|event| event.event_type == "human_mention"
+                    && event.message_id == outcome.message_id)
+                .count(),
+            1
+        );
+    }
+
+    let commands = state.worker_commands();
+    let started_agents = commands
+        .iter()
+        .filter(|command| command["type"] == "start_run")
+        .map(|command| command["session"]["agent_id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert!(started_agents.contains(&"agent_alice".to_string()));
+    assert!(started_agents.contains(&"agent_coda".to_string()));
+
+    complete_channel_agent_run(&state, "agent_alice", "Alice 收到").await;
+    complete_channel_agent_run(&state, "agent_coda", "Coda 收到").await;
+
+    let messages = state.channel_messages_for_tests("dev").await;
+    assert!(messages.iter().any(|message| {
+        message.author_id == "agent_alice" && message.body.as_deref() == Some("Alice 收到")
+    }));
+    assert!(messages.iter().any(|message| {
+        message.author_id == "agent_coda" && message.body.as_deref() == Some("Coda 收到")
+    }));
+}
+
+#[tokio::test]
+async fn task_command_creates_assignment_inbox_events_for_all_coordinator_targets() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-task-multi-target",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let input = SendChannelMessageInput {
+        channel_id: "dev".to_string(),
+        author_id: "human_lei".to_string(),
+        body: "Alice 和 Coda 一起实现导出功能".to_string(),
+        idempotency_key: "send-task-multi-target".to_string(),
+        as_task: false,
+    };
+    let pending = state
+        .channel_orchestrator()
+        .send_channel_message(input.clone())
+        .await
+        .unwrap();
+    let coordinator_run_id = pending.coordinator_run_id.as_deref().unwrap();
+    complete_coordinator_run(
+        &state,
+        coordinator_run_id,
+        task_decision_json_with_targets(
+            "agent_alice",
+            &["agent_alice", "agent_coda"],
+            "task command selected both implementation agents",
+        ),
+    )
+    .await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(input)
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "create_task_and_assign");
+    assert_eq!(
+        outcome.assignee_agent_ids,
+        vec!["agent_alice".to_string(), "agent_coda".to_string()]
+    );
+    let task_id = outcome.task_id.as_deref().unwrap();
+    assert_eq!(
+        state
+            .tasks()
+            .task(task_id)
+            .await
+            .unwrap()
+            .assignee_id
+            .as_deref(),
+        Some("agent_alice")
+    );
+    for agent_id in ["agent_alice", "agent_coda"] {
+        let inbox = state.agent_inbox().events_for_agent(agent_id).await;
+        assert!(inbox.iter().any(|event| {
+            event.event_type == "task_assigned"
+                && event.task_id.as_deref() == Some(task_id)
+                && event.message_id == outcome.message_id
+        }));
+    }
 }
 
 #[tokio::test]
@@ -316,7 +665,7 @@ async fn malformed_coordinator_json_does_not_fallback_to_first_ready_agent() {
     let input = SendChannelMessageInput {
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
-        body: "请看看这个问题 @alice-win".to_string(),
+        body: "请看看这个问题".to_string(),
         idempotency_key: "send-invalid-coordinator-json".to_string(),
         as_task: false,
     };
@@ -397,19 +746,6 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
         idempotency_key: "send-explicit".to_string(),
         as_task: false,
     };
-    let pending = state
-        .channel_orchestrator()
-        .send_channel_message(input.clone())
-        .await
-        .unwrap();
-
-    assert_eq!(pending.action, "coordinator_pending");
-    complete_coordinator_run(
-        &state,
-        pending.coordinator_run_id.as_deref().unwrap(),
-        reply_decision_json("agent_alice", "explicit @alice-win mention"),
-    )
-    .await;
     let outcome = state
         .channel_orchestrator()
         .send_channel_message(input)
@@ -418,6 +754,8 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
 
     assert_eq!(outcome.action, "request_agent_reply");
     assert_eq!(outcome.assignee_agent_id.as_deref(), Some("agent_alice"));
+    assert_eq!(outcome.assignee_agent_ids, vec!["agent_alice".to_string()]);
+    assert_eq!(outcome.coordinator_run_id, None);
     assert_eq!(outcome.task_id, None);
 
     let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
@@ -425,6 +763,68 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
         event.event_type == "human_mention"
             && event.message_id == outcome.message_id
             && event.delivery_state == DeliveryState::PendingMemoryReady
+    }));
+    let commands = state.worker_commands();
+    let start_run = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_alice"
+        })
+        .expect("explicit mention should start the target agent runtime");
+    let run_id = start_run["run_id"].as_str().unwrap();
+    assert_eq!(start_run["input"]["prompt"], "@alice-win 帮我看下");
+    assert_eq!(start_run["session"]["resume_session"], false);
+    state
+        .handle_worker_event(serde_json::json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "收到，我来处理。"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(serde_json::json!({
+            "type": "product_tool_requested",
+            "run_id": run_id,
+            "tool_use_id": "tool_card_1",
+            "agent_id": "agent_alice",
+            "tool_name": "slei_propose_interactive_card",
+            "payload": {
+                "kind": "createAgent",
+                "title": "创建 Nancy",
+                "summary": "Nancy · ClaudeCode / Sonnet",
+                "draft": {
+                    "name": "Nancy",
+                    "handle": "@nancy",
+                    "runtimeKind": "ClaudeCode",
+                    "model": "Sonnet",
+                    "nodeId": "local-node",
+                    "description": "负责测试频道卡片落地。"
+                },
+                "actionLabel": "创建",
+                "doneLabel": "DONE"
+            }
+        }))
+        .await
+        .unwrap();
+    let channel_messages = state.channel_messages_for_tests("dev").await;
+    assert!(channel_messages.iter().any(|message| {
+        message.author_id == "agent_alice"
+            && message
+                .cards
+                .iter()
+                .any(|card| card.kind == "createAgent" && card.draft["name"] == "Nancy")
+    }));
+    state
+        .handle_worker_event(serde_json::json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+    let channel_messages = state.channel_messages_for_tests("dev").await;
+    assert!(channel_messages.iter().any(|message| {
+        message.author_id == "agent_alice" && message.body.as_deref() == Some("收到，我来处理。")
     }));
     assert!(state
         .tasks()
@@ -571,6 +971,66 @@ async fn task_agent_reply_does_not_create_implicit_same_agent_handoff() {
         .filter(|event| event.event_type == "task_handoff")
         .collect::<Vec<_>>();
     assert!(handoffs.is_empty());
+}
+
+#[tokio::test]
+async fn task_human_reply_without_visible_mention_does_not_handoff_to_assignee() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-human-no-implicit-handoff",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "human_lei",
+            "msg_root_human_no_implicit",
+            "实现任务线程写回",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-human-no-implicit-root",
+        )
+        .await
+        .unwrap();
+
+    let reply = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "这里还需要继续修复一下频道发言。",
+            "task-human-no-implicit-reply",
+        )
+        .await
+        .unwrap();
+
+    assert!(reply.route.handoff_agent_ids.is_empty());
+    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
+    assert!(inbox
+        .iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -1550,6 +2010,190 @@ async fn public_channel_message_api_uses_channel_orchestrator() {
 }
 
 #[tokio::test]
+async fn public_channel_message_api_covers_normal_mentions_consultation_and_execution_routes() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-route-matrix",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("api-core", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let consultation = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-normal-consultation"),
+        json!({
+            "authorId": "human_lei",
+            "body": "这个频道路由方案是否合理？"
+        }),
+    )
+    .await;
+    assert_eq!(consultation.status(), StatusCode::OK);
+    let consultation = response_json(consultation).await;
+    assert_eq!(consultation["outcome"]["action"], "coordinator_pending");
+    complete_coordinator_run(
+        &state,
+        consultation["outcome"]["coordinatorRunId"]
+            .as_str()
+            .unwrap(),
+        reply_decision_json("agent_alice", "consultation should route to Alice"),
+    )
+    .await;
+    let consultation = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-normal-consultation"),
+        json!({
+            "authorId": "human_lei",
+            "body": "这个频道路由方案是否合理？"
+        }),
+    )
+    .await;
+    let consultation = response_json(consultation).await;
+    assert_eq!(consultation["outcome"]["action"], "request_agent_reply");
+    assert_eq!(consultation["outcome"]["taskId"], Value::Null);
+    assert_eq!(
+        consultation["outcome"]["assigneeAgentIds"],
+        json!(["agent_alice"])
+    );
+    complete_channel_agent_run(&state, "agent_alice", "咨询结论：路由合理。").await;
+
+    let explicit_single = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-explicit-single"),
+        json!({
+            "authorId": "human_lei",
+            "body": "@alice-win 请检查频道发言。"
+        }),
+    )
+    .await;
+    assert_eq!(explicit_single.status(), StatusCode::OK);
+    let explicit_single = response_json(explicit_single).await;
+    assert_eq!(explicit_single["outcome"]["action"], "request_agent_reply");
+    assert_eq!(explicit_single["outcome"]["coordinatorRunId"], Value::Null);
+    assert_eq!(
+        explicit_single["outcome"]["assigneeAgentIds"],
+        json!(["agent_alice"])
+    );
+    complete_channel_agent_run(&state, "agent_alice", "Alice 已检查。").await;
+
+    let explicit_multi = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-explicit-multi"),
+        json!({
+            "authorId": "human_lei",
+            "body": "@alice-win @coda-win 一起确认 coordinator 路由。"
+        }),
+    )
+    .await;
+    assert_eq!(explicit_multi.status(), StatusCode::OK);
+    let explicit_multi = response_json(explicit_multi).await;
+    assert_eq!(explicit_multi["outcome"]["action"], "request_agent_reply");
+    assert_eq!(explicit_multi["outcome"]["coordinatorRunId"], Value::Null);
+    assert_eq!(
+        explicit_multi["outcome"]["assigneeAgentIds"],
+        json!(["agent_alice", "agent_coda"])
+    );
+    complete_channel_agent_run(&state, "agent_alice", "Alice 确认路由。").await;
+    complete_channel_agent_run(&state, "agent_coda", "Coda 确认路由。").await;
+
+    let execution = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-execution-task"),
+        json!({
+            "authorId": "human_lei",
+            "body": "实现频道发言与 coordinator 路由的修复。"
+        }),
+    )
+    .await;
+    assert_eq!(execution.status(), StatusCode::OK);
+    let execution = response_json(execution).await;
+    assert_eq!(execution["outcome"]["action"], "coordinator_pending");
+    complete_coordinator_run(
+        &state,
+        execution["outcome"]["coordinatorRunId"].as_str().unwrap(),
+        task_decision_json_with_targets(
+            "agent_alice",
+            &["agent_alice", "agent_coda"],
+            "execution should create a task and notify both agents",
+        ),
+    )
+    .await;
+    let execution = post_json(
+        &app,
+        &token,
+        "/v1/channels/api-core/messages",
+        Some("api-core-execution-task"),
+        json!({
+            "authorId": "human_lei",
+            "body": "实现频道发言与 coordinator 路由的修复。"
+        }),
+    )
+    .await;
+    let execution = response_json(execution).await;
+    assert_eq!(execution["outcome"]["action"], "create_task_and_assign");
+    let task_id = execution["outcome"]["taskId"].as_str().unwrap();
+    assert_eq!(
+        execution["outcome"]["assigneeAgentIds"],
+        json!(["agent_alice", "agent_coda"])
+    );
+
+    for agent_id in ["agent_alice", "agent_coda"] {
+        let inbox = state.agent_inbox().events_for_agent(agent_id).await;
+        assert!(inbox.iter().any(|event| {
+            event.event_type == "task_assigned" && event.task_id.as_deref() == Some(task_id)
+        }));
+    }
+
+    let visible_messages = state.channel_messages_for_tests("api-core").await;
+    for expected in [
+        ("agent_alice", "咨询结论：路由合理。"),
+        ("agent_alice", "Alice 已检查。"),
+        ("agent_alice", "Alice 确认路由。"),
+        ("agent_coda", "Coda 确认路由。"),
+    ] {
+        assert!(visible_messages.iter().any(|message| {
+            message.author_id == expected.0 && message.body.as_deref() == Some(expected.1)
+        }));
+    }
+    assert!(visible_messages
+        .iter()
+        .any(|message| message.kind == MessageKind::TaskCard));
+}
+
+#[tokio::test]
 async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks() {
     let state = app_state_with_agent_handle("agent_coda", "@agent_coda").await;
     state
@@ -2099,13 +2743,48 @@ async fn complete_coordinator_run(state: &AppState, run_id: &str, output: String
         .unwrap();
 }
 
+async fn complete_channel_agent_run(state: &AppState, agent_id: &str, output: &str) {
+    let run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == agent_id
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("channel agent runtime should have started");
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": output,
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+}
+
 fn task_decision_json(agent_id: &str, reason: &str) -> String {
+    task_decision_json_with_targets(agent_id, &[agent_id], reason)
+}
+
+fn task_decision_json_with_targets(
+    agent_id: &str,
+    target_agent_ids: &[&str],
+    reason: &str,
+) -> String {
     json!({
         "intent": "task_command",
         "action": "create_task_and_assign",
         "routeMode": "task",
         "primaryAssigneeAgentId": agent_id,
-        "targetAgentIds": [agent_id],
+        "targetAgentIds": target_agent_ids,
         "task": {
             "title": "Implement requested channel work",
             "summary": "Complete the task requested by the channel message.",

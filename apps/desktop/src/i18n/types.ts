@@ -189,7 +189,6 @@ export type DesktopMessages = {
     channelCoordinator: string;
     permissionLabels: Record<"ReadOnly" | "Edit" | "Controlled", string>;
     profile: string;
-    primaryAgent: string;
     readOnly: string;
     runtimeConfig: string;
     skills: string;

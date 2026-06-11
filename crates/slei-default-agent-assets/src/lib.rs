@@ -202,6 +202,8 @@ mod tests {
         });
 
         assert!(memory.contains("该 Agent 按 Role 中的职责与用户协作"));
+        assert!(memory.contains("自发判断是否需要 @ 下一位成员接手"));
+        assert!(memory.contains("如果无需接手，应 @ 当前用户进行验收或审阅"));
         assert!(memory.contains("只记录真实存在的成员和用户明确要求记住的信息"));
     }
 

@@ -1,10 +1,40 @@
+use std::io::{BufRead, Read, Write};
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use serde_json::Value;
 
-#[derive(Clone, Debug, Default)]
+type WorkerEventHandler = Arc<dyn Fn(Value) + Send + Sync + 'static>;
+
+#[derive(Clone, Default)]
 pub struct WorkerTransport {
     commands: Arc<Mutex<Vec<Value>>>,
+    local_runner: Arc<Mutex<Option<LocalRunnerTransport>>>,
+}
+
+#[derive(Clone)]
+struct LocalRunnerTransport {
+    runner_path: PathBuf,
+    event_handler: WorkerEventHandler,
+}
+
+impl std::fmt::Debug for WorkerTransport {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("WorkerTransport")
+            .field("commands", &self.commands)
+            .field(
+                "local_runner",
+                &self
+                    .local_runner
+                    .lock()
+                    .map(|runner| runner.is_some())
+                    .unwrap_or(false),
+            )
+            .finish()
+    }
 }
 
 impl WorkerTransport {
@@ -12,11 +42,42 @@ impl WorkerTransport {
         Self::default()
     }
 
+    pub fn local_runner(
+        runner_path: PathBuf,
+        event_handler: impl Fn(Value) + Send + Sync + 'static,
+    ) -> Self {
+        let transport = Self::default();
+        transport.configure_local_runner(runner_path, event_handler);
+        transport
+    }
+
+    pub fn configure_local_runner(
+        &self,
+        runner_path: PathBuf,
+        event_handler: impl Fn(Value) + Send + Sync + 'static,
+    ) {
+        *self
+            .local_runner
+            .lock()
+            .expect("local worker transport lock") = Some(LocalRunnerTransport {
+            runner_path,
+            event_handler: Arc::new(event_handler),
+        });
+    }
+
     pub fn send(&self, command: Value) -> Result<(), WorkerRpcError> {
         self.commands
             .lock()
             .map_err(|_| WorkerRpcError::PoisonedTransport)?
-            .push(command);
+            .push(command.clone());
+        let local_runner = self
+            .local_runner
+            .lock()
+            .map_err(|_| WorkerRpcError::PoisonedTransport)?
+            .clone();
+        if let Some(local_runner) = local_runner {
+            local_runner.send(command);
+        }
         Ok(())
     }
 
@@ -26,6 +87,131 @@ impl WorkerTransport {
             .expect("fake worker transport lock")
             .clone()
     }
+}
+
+impl LocalRunnerTransport {
+    fn send(&self, command: Value) {
+        if command.get("type").and_then(Value::as_str) != Some("start_run") {
+            return;
+        }
+        let runner_path = self.runner_path.clone();
+        let handler = self.event_handler.clone();
+        thread::spawn(move || {
+            run_local_runner_command(runner_path, command, handler);
+        });
+    }
+}
+
+fn run_local_runner_command(runner_path: PathBuf, command: Value, handler: WorkerEventHandler) {
+    let run_id = command
+        .get("run_id")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+    let cwd = command
+        .get("session")
+        .and_then(|session| session.get("cwd"))
+        .and_then(Value::as_str)
+        .unwrap_or(".");
+    let payload = match serde_json::to_string(&command) {
+        Ok(payload) => payload,
+        Err(error) => {
+            handler(json_failed_event(
+                &run_id,
+                &format!("failed to serialize worker command: {error}"),
+            ));
+            return;
+        }
+    };
+    let mut child = match Command::new("node")
+        .arg(&runner_path)
+        .current_dir(cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            handler(json_failed_event(
+                &run_id,
+                &format!("failed to start worker runner: {error}"),
+            ));
+            return;
+        }
+    };
+    if let Some(stdin) = child.stdin.as_mut() {
+        if let Err(error) = stdin.write_all(payload.as_bytes()) {
+            handler(json_failed_event(
+                &run_id,
+                &format!("failed to write worker input: {error}"),
+            ));
+            return;
+        }
+    }
+    drop(child.stdin.take());
+
+    let Some(stdout) = child.stdout.take() else {
+        handler(json_failed_event(&run_id, "worker stdout was not captured"));
+        return;
+    };
+    let stderr = child.stderr.take();
+    let stderr_handle = stderr.map(|stderr| {
+        thread::spawn(move || {
+            let mut text = String::new();
+            let _ = std::io::BufReader::new(stderr).read_to_string(&mut text);
+            text
+        })
+    });
+
+    for line in std::io::BufReader::new(stdout).lines() {
+        match line {
+            Ok(line) if line.trim().is_empty() => {}
+            Ok(line) => match serde_json::from_str::<Value>(&line) {
+                Ok(event) => handler(event),
+                Err(error) => handler(json_failed_event(
+                    &run_id,
+                    &format!("invalid worker event JSON: {error}"),
+                )),
+            },
+            Err(error) => {
+                handler(json_failed_event(
+                    &run_id,
+                    &format!("failed to read worker output: {error}"),
+                ));
+                break;
+            }
+        }
+    }
+    match child.wait() {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            let stderr = stderr_handle
+                .and_then(|handle| handle.join().ok())
+                .unwrap_or_default();
+            let detail = stderr.trim();
+            let message;
+            let message = if detail.is_empty() {
+                message = format!("worker runner exited with status {status}");
+                message.as_str()
+            } else {
+                detail
+            };
+            handler(json_failed_event(&run_id, message));
+        }
+        Err(error) => handler(json_failed_event(
+            &run_id,
+            &format!("failed to wait for worker runner: {error}"),
+        )),
+    }
+}
+
+fn json_failed_event(run_id: &str, message: &str) -> Value {
+    serde_json::json!({
+        "type": "failed",
+        "run_id": run_id,
+        "message": message,
+    })
 }
 
 #[derive(Clone, Debug)]

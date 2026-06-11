@@ -238,6 +238,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::InvalidMessage)
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
+        | ChannelOrchestratorError::InvalidWorkerEvent(_)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
         | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath)
@@ -250,7 +251,9 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
+        | ChannelOrchestratorError::Card(_)
         | ChannelOrchestratorError::Coordinator(_)
+        | ChannelOrchestratorError::Worker(_)
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

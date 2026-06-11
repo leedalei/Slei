@@ -26,4 +26,17 @@ describe("default agent assets", () => {
     expect(defaultSkillContent({ skillId: "guide-create", handle: "@yeal" })).toContain("slei_propose_interactive_card");
     expect(defaultSkillContent({ skillId: "memory", handle: "@yeal" })).toContain("curated working memory, not as a chat log");
   });
+
+  it("renders ordinary agent handoff guidance in initial memory", () => {
+    const memory = renderInitialMemory({
+      name: "Coda",
+      handle: "@coda",
+      description: "开发 Agent",
+      agentKind: "agent",
+      channelIds: ["all"],
+    });
+
+    expect(memory).toContain("自发判断是否需要 @ 下一位成员接手");
+    expect(memory).toContain("如果无需接手，应 @ 当前用户进行验收或审阅");
+  });
 });

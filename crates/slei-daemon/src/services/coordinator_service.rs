@@ -141,8 +141,8 @@ pub enum CoordinatorDecisionError {
     InvalidJson(String),
     #[error("invalid coordinator target: {0}")]
     InvalidTarget(String),
-    #[error("primary coordinator target missing from target list: {0}")]
-    MissingPrimaryTarget(String),
+    #[error("compat coordinator target missing from target list: {0}")]
+    MissingCompatTarget(String),
     #[error("worker error: {0}")]
     Worker(String),
 }
@@ -215,7 +215,7 @@ impl CoordinatorService {
             .create_session(CreateSessionRequest {
                 agent_id: GLOBAL_COORDINATOR_AGENT_ID.to_string(),
                 cwd,
-                session_id: format!("session_{}", input.run_id),
+                session_id: Uuid::new_v4().to_string(),
                 resume_session: false,
             })
             .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
@@ -327,6 +327,9 @@ Routing policy:
 - Users may request one Agent, multiple Agents, or semantic groups without exact @handle syntax.
 - Choose only non-coordinator channel members as downstream targets.
 - For task commands, return task metadata instead of an ordinary visible reply.
+- After routing, there is no product-level "primary Agent" workflow. You are only choosing which Agent(s) to @ first.
+- Routed Agents decide any later handoff themselves from their memory of channel members and relationships.
+- The primaryAssigneeAgentId and task.assigneeAgentId fields are compatibility fields only. For request_agent_reply, targetAgentIds is the source of truth.
 - Do not explain routing in prose. Return only the JSON object.
 
 Channel:
@@ -398,7 +401,7 @@ fn validate_coordinator_decision(
     if let Some(primary) = parsed.primary_assignee_agent_id.as_deref() {
         validate_member_target(primary, members)?;
         if !target_agent_ids.iter().any(|agent_id| agent_id == primary) {
-            return Err(CoordinatorDecisionError::MissingPrimaryTarget(
+            return Err(CoordinatorDecisionError::MissingCompatTarget(
                 primary.to_string(),
             ));
         }

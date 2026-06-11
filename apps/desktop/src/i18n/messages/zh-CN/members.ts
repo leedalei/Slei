@@ -45,7 +45,6 @@ export const members = {
     Controlled: "受控",
   },
   profile: "资料",
-  primaryAgent: "主智能体",
   readOnly: "只读",
   runtimeConfig: "运行时配置",
   skills: "技能",

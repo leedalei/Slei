@@ -115,6 +115,8 @@ async fn coordinator_prompt_includes_raw_message_roster_and_json_schema() {
     assert!(prompt.contains("\"targetAgentIds\""));
     assert!(prompt.contains("Return JSON only"));
     assert!(prompt.contains("Coordinator must not visibly answer"));
+    assert!(prompt.contains("no product-level \"primary Agent\" workflow"));
+    assert!(prompt.contains("Routed Agents decide any later handoff themselves"));
 }
 
 #[test]
@@ -195,7 +197,7 @@ fn coordinator_json_validation_rejects_coordinator_targets_without_first_ready_f
 }
 
 #[test]
-fn coordinator_task_json_stays_task_action_with_primary_and_collaborators() {
+fn coordinator_task_json_stays_task_action_with_compat_assignee_and_collaborators() {
     let members = vec![
         CoordinatorPromptMember {
             agent_id: "agent_alice".to_string(),

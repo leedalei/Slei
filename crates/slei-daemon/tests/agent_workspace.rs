@@ -58,6 +58,8 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     assert!(memory.contains("## Key Knowledge"));
     assert!(memory.contains("主频道：#all"));
     assert!(memory.contains("已加入频道：#all"));
+    assert!(memory.contains("自发判断是否需要 @ 下一位成员接手"));
+    assert!(memory.contains("如果无需接手，应 @ 当前用户进行验收或审阅"));
     assert!(memory.contains("## Active Context"));
     assert_eq!(agent["agentKind"], "agent");
     assert_eq!(agent["systemOwned"], false);
@@ -531,7 +533,8 @@ async fn create_channel_with_agents_is_immediately_usable_and_requests_memory_up
     let created_channel_body = response_json(created_channel).await;
     assert_eq!(created_channel_body["channel"]["id"], "ready-channel");
 
-    let selected = wait_for_channel_member(&app, &token, "ready-channel", &alice_id).await;
+    let selected =
+        wait_for_channel_member_readiness(&app, &token, "ready-channel", &alice_id, "ready").await;
     assert_eq!(selected["readiness"], "ready");
 
     let events = wait_for_memory_update_requests(&state, &alice_id, "ready-channel", 1).await;

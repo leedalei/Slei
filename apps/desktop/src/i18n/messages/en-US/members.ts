@@ -45,7 +45,6 @@ export const members = {
     Controlled: "Controlled",
   },
   profile: "Profile",
-  primaryAgent: "Primary agent",
   readOnly: "Read-only",
   runtimeConfig: "Runtime configuration",
   skills: "Skills",

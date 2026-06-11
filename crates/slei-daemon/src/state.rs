@@ -59,14 +59,29 @@ impl AppState {
         let data_root = default_data_root();
         let (repos, local_node) = repositories_blocking(data_root.clone());
         let orchestration_store = OrchestrationStore::new(repos.clone());
-        Self::with_agent_root_and_store(
+        let state = Self::with_agent_root_and_store(
             auth_token,
             data_root.clone(),
             repos.clone(),
             local_node,
             orchestration_store,
             MessageService::persistent(repos),
-        )
+        );
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let event_state = state.clone();
+            state.worker_transport.configure_local_runner(
+                default_local_runner_path(),
+                move |event| {
+                    let event_state = event_state.clone();
+                    handle.spawn(async move {
+                        if let Err(error) = event_state.handle_worker_event(event).await {
+                            eprintln!("slei worker event failed: {error}");
+                        }
+                    });
+                },
+            );
+        }
+        state
     }
 
     pub fn for_tests(auth_token: AuthToken) -> Self {
@@ -161,10 +176,12 @@ impl AppState {
             message_service.clone(),
             channel_service.clone(),
             coordinator_service.clone(),
+            card_service.clone(),
             task_service.clone(),
             agent_inbox_service.clone(),
             orchestration_store.clone(),
             member_service.clone(),
+            worker.clone(),
             reset_runtime.clone(),
         );
         let reset_service = ResetService::new(
@@ -292,7 +309,15 @@ impl AppState {
         &self,
         channel_id: &str,
     ) -> Vec<crate::services::message_service::MessageRecord> {
-        self.messages().channel_messages_for_tests(channel_id).await
+        let mut messages = self.messages().channel_messages_for_tests(channel_id).await;
+        for message in &mut messages {
+            message.cards = self
+                .cards()
+                .cards_for_message(&message.id)
+                .await
+                .unwrap_or_default();
+        }
+        messages
     }
 
     pub async fn run_channel_join_memory_updates(
@@ -357,7 +382,15 @@ impl AppState {
             .handle_coordinator_worker_event_with_launch_guard(event.clone(), &activity_guard)
             .await
             .map_err(|error| error.to_string())?;
-        if !handled_by_coordinator {
+        let handled_by_channel_agent = if handled_by_coordinator {
+            false
+        } else {
+            self.channel_orchestrator()
+                .handle_channel_agent_worker_event_with_launch_guard(event.clone(), &activity_guard)
+                .await
+                .map_err(|error| error.to_string())?
+        };
+        if !handled_by_coordinator && !handled_by_channel_agent {
             self.agent_dm()
                 .handle_worker_event_with_launch_guard(event, &activity_guard)
                 .await
@@ -372,6 +405,17 @@ fn default_data_root() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|_| std::env::var("HOME").map(|home| PathBuf::from(home).join(".slei")))
         .unwrap_or_else(|_| PathBuf::from(".slei"))
+}
+
+fn default_local_runner_path() -> PathBuf {
+    if let Ok(path) = std::env::var("SLEI_CLAUDE_AGENT_RUNNER") {
+        return PathBuf::from(path);
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .map(|repo_root| repo_root.join("workers/claude-agent/dist/local-runner.js"))
+        .unwrap_or_else(|| PathBuf::from("workers/claude-agent/dist/local-runner.js"))
 }
 
 async fn repositories_for_data_root(data_root: PathBuf) -> (Repositories, Option<NodeRow>) {

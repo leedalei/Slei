@@ -9,6 +9,7 @@ use slei_storage::repositories::{ChannelMessageRow, NewChannelMessageRow, Reposi
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
+use crate::services::card_service::InteractiveCardView;
 use crate::services::idempotency::namespaced_key;
 
 #[derive(Clone, Debug)]
@@ -32,6 +33,8 @@ pub struct MessageRecord {
     pub kind: MessageKind,
     pub deleted: bool,
     pub edited: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cards: Vec<InteractiveCardView>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -238,6 +241,23 @@ impl MessageService {
         }
         self.insert_channel_message(channel_id, author_id, body, MessageKind::Agent)
             .await
+    }
+
+    pub async fn create_agent_card_channel_message(
+        &self,
+        channel_id: &str,
+        author_id: &str,
+        message_id: &str,
+        cards: Vec<InteractiveCardView>,
+    ) -> Result<MessageRecord, MessageError> {
+        if channel_id.trim().is_empty() || author_id.trim().is_empty() || cards.is_empty() {
+            return Err(MessageError::InvalidMessage);
+        }
+        let mut message = build_message(channel_id, author_id, Some(""), MessageKind::Agent);
+        message.id = message_id.to_string();
+        message.cards = cards;
+        self.insert_record(message.clone()).await?;
+        Ok(message)
     }
 
     pub async fn create_human_channel_message(
@@ -548,6 +568,7 @@ fn build_message_with_as_task(
         kind,
         deleted: false,
         edited: false,
+        cards: Vec::new(),
     }
 }
 
@@ -561,6 +582,7 @@ fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
         kind: kind_from_storage(&row.kind),
         deleted: row.deleted,
         edited: row.edited,
+        cards: Vec::new(),
     }
 }
 

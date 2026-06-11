@@ -245,7 +245,7 @@ impl MemoryMaintainerService {
         channel_id: &str,
     ) -> Result<(), MemoryMaintainerError> {
         let content = format!(
-            "# Relationship Notes\n\n## {name} in #{channel_id}\n- Self: {handle} — {description}\n- User: @lei-lee — 人类用户，项目发起人\n- Relationship hint: use the channel roster in notes/channels.md before assuming responsibility.\n\n## Acceptance Rule\nIf this Agent is unsure, has no relevant relationship, or the task appears complete, notify the user for验收/acceptance.\n",
+            "# Relationship Notes\n\n## {name} in #{channel_id}\n- Self: {handle} — {description}\n- User: @lei-lee — 人类用户，项目发起人\n- Relationship hint: use the channel roster in notes/channels.md before assuming responsibility.\n\n## Handoff Rule\nAfter finishing the current stage, decide from the current context and channel roster whether another member should take over. If so, visibly @ that member. If no handoff is needed, @ the current user for acceptance/review.\n\n## Acceptance Rule\nIf this Agent is unsure, has no relevant relationship, or the task appears complete, notify the user for 验收 / acceptance.\n",
             name = agent.name,
             handle = agent.handle,
             description = agent.description,

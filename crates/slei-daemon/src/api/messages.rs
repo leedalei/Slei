@@ -32,7 +32,14 @@ pub async fn list_channel_messages(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let messages = state.messages().channel_messages(&channel_id).await;
+    let mut messages = state.messages().channel_messages(&channel_id).await;
+    for message in &mut messages {
+        message.cards = state
+            .cards()
+            .cards_for_message(&message.id)
+            .await
+            .unwrap_or_default();
+    }
     Json(json!({ "messages": messages })).into_response()
 }
 
@@ -134,6 +141,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::InvalidWorkerEvent(_)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
         | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath)
@@ -146,7 +154,9 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
+        | ChannelOrchestratorError::Card(_)
         | ChannelOrchestratorError::Coordinator(_)
+        | ChannelOrchestratorError::Worker(_)
         | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,

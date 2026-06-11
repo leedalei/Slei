@@ -6,7 +6,11 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use crate::adapters::claude_worker::{
+    ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest,
+};
 use crate::services::agent_inbox_service::AgentInboxService;
+use crate::services::card_service::{CardError, CardService};
 use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
 };
@@ -15,7 +19,7 @@ use crate::services::coordinator_service::{
     CoordinatorDecisionError, CoordinatorPromptInput, CoordinatorPromptMember,
     CoordinatorRuntimeInput, CoordinatorService, WorkspaceMount,
 };
-use crate::services::member_service::{MemberError, MemberService};
+use crate::services::member_service::{is_internal_coordinator_id, MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
@@ -72,13 +76,24 @@ pub struct ChannelOrchestratorService {
     messages: MessageService,
     channels: ChannelService,
     coordinator: CoordinatorService,
+    cards: CardService,
     tasks: TaskService,
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
     members: MemberService,
+    worker: ClaudeWorkerAdapter,
     reset_runtime: ResetRuntimeState,
     outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
     send_lock: Arc<AsyncMutex<()>>,
+    channel_agent_runs: Arc<AsyncMutex<HashMap<String, ChannelAgentRunRecord>>>,
+}
+
+#[derive(Clone, Debug)]
+struct ChannelAgentRunRecord {
+    channel_id: String,
+    agent_id: String,
+    source_message_id: String,
+    output: String,
 }
 
 impl ChannelOrchestratorService {
@@ -86,23 +101,28 @@ impl ChannelOrchestratorService {
         messages: MessageService,
         channels: ChannelService,
         coordinator: CoordinatorService,
+        cards: CardService,
         tasks: TaskService,
         agent_inbox: AgentInboxService,
         orchestration: OrchestrationStore,
         members: MemberService,
+        worker: ClaudeWorkerAdapter,
         reset_runtime: ResetRuntimeState,
     ) -> Self {
         Self {
             messages,
             channels,
             coordinator,
+            cards,
             tasks,
             agent_inbox,
             orchestration,
             members,
+            worker,
             reset_runtime,
             outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
             send_lock: Arc::new(AsyncMutex::new(())),
+            channel_agent_runs: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 
@@ -188,6 +208,81 @@ impl ChannelOrchestratorService {
             let outcome = self
                 .outcome_for_completed_decision(&message.id, decision, run.as_ref())
                 .await?;
+            self.recover_completed_decision_side_effects(&message, &message_body, &outcome)
+                .await?;
+            self.outcome_idempotency
+                .lock()
+                .expect("channel orchestrator idempotency lock")
+                .insert(input.idempotency_key, outcome.clone());
+            return Ok(outcome);
+        }
+
+        let readiness_by_agent = channel_members
+            .iter()
+            .map(|member| (member.agent_id.clone(), member.readiness.clone()))
+            .collect::<HashMap<_, _>>();
+        let member_ids = readiness_by_agent.keys().cloned().collect::<HashSet<_>>();
+        let explicit_agent_ids = self
+            .resolve_explicit_mentions(&message_body, &member_ids)
+            .await;
+        if !message.as_task && !explicit_agent_ids.is_empty() {
+            let decision_id = Uuid::new_v4();
+            let assignee_agent_id = explicit_agent_ids.first().cloned();
+            let reason = "explicit channel mention routed without coordinator runtime";
+            self.orchestration
+                .record_decision(
+                    decision_id,
+                    &message.channel_id,
+                    &message.id,
+                    "consultation",
+                    "request_agent_reply",
+                    assignee_agent_id.as_deref(),
+                    &explicit_agent_ids,
+                    reason,
+                )
+                .await?;
+            for agent_id in &explicit_agent_ids {
+                if let Some(readiness) = readiness_by_agent.get(agent_id) {
+                    self.create_human_mention_once(
+                        agent_id,
+                        &message.channel_id,
+                        &message.id,
+                        readiness.clone(),
+                    )
+                    .await;
+                    self.start_channel_agent_reply_once(
+                        agent_id,
+                        &message.channel_id,
+                        &message.id,
+                        &message_body,
+                    )
+                    .await?;
+                }
+            }
+            self.persist_routing_context_packages(
+                &decision_id.to_string(),
+                None,
+                &message.channel_id,
+                Some(&message.channel_id),
+                &message.id,
+                &message_body,
+                None,
+                "consultation",
+                "request_agent_reply",
+                reason,
+                assignee_agent_id.as_deref(),
+                &explicit_agent_ids,
+            )
+            .await?;
+            let outcome = SendChannelMessageOutcome {
+                message_id: message.id,
+                action: "request_agent_reply".to_string(),
+                task_id: None,
+                assignee_agent_id,
+                assignee_agent_ids: explicit_agent_ids,
+                coordinator_run_id: None,
+                decision_status: Some("completed".to_string()),
+            };
             self.outcome_idempotency
                 .lock()
                 .expect("channel orchestrator idempotency lock")
@@ -320,35 +415,6 @@ impl ChannelOrchestratorService {
             }
         }
 
-        let is_human_reply = reply.role.as_deref() == Some("human");
-        if handoff_agent_ids.is_empty() && is_human_reply && reply_requires_work(&reply.body) {
-            if let Some(agent_id) = task.assignee_id.as_deref() {
-                if let Some(readiness) = readiness_by_agent.get(agent_id) {
-                    let created = self
-                        .create_task_handoff_once(
-                            agent_id,
-                            &task.channel_id,
-                            &task.id,
-                            &reply.id,
-                            &reply.sender_id,
-                            &reply.body,
-                            readiness.clone(),
-                        )
-                        .await;
-                    handoff_agent_ids.push(agent_id.to_string());
-                    if created {
-                        self.update_status_for_created_handoff(&task.id, task.status)
-                            .await?;
-                    }
-                }
-            } else if reply_outcome.created {
-                self.tasks
-                    .update_status(&task.id, TaskStatus::PendingAssignment)
-                    .await?;
-                self.tasks.set_attention_required(&task.id, true).await?;
-            }
-        }
-
         let public_reply = thread_message_for_reply(&reply_outcome.task_id, reply);
         let needs_assignment = handoff_agent_ids.is_empty()
             && task.assignee_id.is_none()
@@ -419,6 +485,127 @@ impl ChannelOrchestratorService {
                         .unwrap_or("Coordinator worker failed");
                     self.fail_coordinator_runtime_run(run_id, message).await?;
                 }
+                Ok(true)
+            }
+            _ => Ok(true),
+        }
+    }
+
+    pub(crate) async fn handle_channel_agent_worker_event_with_launch_guard(
+        &self,
+        event: Value,
+        _activity_guard: &ResetLaunchGuard,
+    ) -> Result<bool, ChannelOrchestratorError> {
+        let Some(run_id) = event.get("run_id").and_then(Value::as_str) else {
+            return Ok(false);
+        };
+        if self.reset_runtime.should_ignore_worker_event(run_id).await {
+            return Ok(true);
+        }
+        let event_type = event.get("type").and_then(Value::as_str);
+        let mut runs = self.channel_agent_runs.lock().await;
+        let Some(record) = runs.get_mut(run_id) else {
+            return Ok(false);
+        };
+        match event_type {
+            Some("output_delta") => {
+                let delta = event
+                    .get("delta")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                record.output.push_str(delta);
+                Ok(true)
+            }
+            Some("completed") => {
+                let record = runs.remove(run_id).expect("channel agent run exists");
+                drop(runs);
+                let body = record.output.trim();
+                if !body.is_empty() {
+                    self.messages
+                        .create_agent_channel_message(&record.channel_id, &record.agent_id, body)
+                        .await?;
+                    let _ = self
+                        .orchestration
+                        .record_diagnostic_event(
+                            "channel_agent_runtime.completed",
+                            &format!(
+                                "run_id={} agent_id={} channel_id={} source_message_id={}",
+                                run_id,
+                                record.agent_id,
+                                record.channel_id,
+                                record.source_message_id
+                            ),
+                        )
+                        .await;
+                }
+                Ok(true)
+            }
+            Some("failed") => {
+                let record = runs.remove(run_id).expect("channel agent run exists");
+                drop(runs);
+                let message = event
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Agent runtime failed");
+                self.messages
+                    .create_agent_channel_message(&record.channel_id, &record.agent_id, message)
+                    .await?;
+                let _ = self
+                    .orchestration
+                    .record_diagnostic_event(
+                        "channel_agent_runtime.failed",
+                        &format!(
+                            "run_id={} agent_id={} channel_id={} source_message_id={}",
+                            run_id, record.agent_id, record.channel_id, record.source_message_id
+                        ),
+                    )
+                    .await;
+                Ok(true)
+            }
+            Some("product_tool_requested") => {
+                let record = record.clone();
+                drop(runs);
+                let tool_name = event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if tool_name != "slei_propose_interactive_card" {
+                    return Ok(true);
+                }
+                let event_agent_id = event
+                    .get("agent_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if event_agent_id != record.agent_id {
+                    return Ok(true);
+                }
+                let tool_use_id = event
+                    .get("tool_use_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool");
+                let payload = event
+                    .get("payload")
+                    .ok_or(ChannelOrchestratorError::InvalidWorkerEvent("payload"))?;
+                let card = self
+                    .cards
+                    .propose_product_tool_card(
+                        run_id,
+                        &record.agent_id,
+                        &record.channel_id,
+                        payload,
+                        &format!("channel-product-tool:{run_id}:{tool_use_id}"),
+                    )
+                    .await?;
+                let message_id = format!("card_message_{}", card.id);
+                let card = self.cards.attach_message_id(&card.id, &message_id).await?;
+                self.messages
+                    .create_agent_card_channel_message(
+                        &record.channel_id,
+                        &record.agent_id,
+                        &message_id,
+                        vec![card.to_view()],
+                    )
+                    .await?;
                 Ok(true)
             }
             _ => Ok(true),
@@ -601,6 +788,13 @@ impl ChannelOrchestratorService {
                             readiness.clone(),
                         )
                         .await;
+                        self.start_channel_agent_reply_once(
+                            &agent_id,
+                            &message.channel_id,
+                            &message.id,
+                            message_body,
+                        )
+                        .await?;
                     }
                 }
             }
@@ -629,17 +823,19 @@ impl ChannelOrchestratorService {
                 self.messages
                     .create_task_card_message(&message.channel_id, &task.id, &message.id)
                     .await?;
-                if let Some(agent_id) = assignee.as_deref() {
+                let targets = if assignee_agent_ids.is_empty() {
+                    assignee
+                        .as_ref()
+                        .or(task.assignee_id.as_ref())
+                        .cloned()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                } else {
+                    assignee_agent_ids.clone()
+                };
+                for agent_id in targets {
                     self.create_task_assignment_once(
-                        agent_id,
-                        &message.channel_id,
-                        &task.id,
-                        &message.id,
-                    )
-                    .await;
-                } else if let Some(agent_id) = task.assignee_id.as_deref() {
-                    self.create_task_assignment_once(
-                        agent_id,
+                        &agent_id,
                         &message.channel_id,
                         &task.id,
                         &message.id,
@@ -734,6 +930,90 @@ impl ChannelOrchestratorService {
         })
     }
 
+    async fn recover_completed_decision_side_effects(
+        &self,
+        message: &crate::services::message_service::MessageRecord,
+        message_body: &str,
+        outcome: &SendChannelMessageOutcome,
+    ) -> Result<(), ChannelOrchestratorError> {
+        match outcome.action.as_str() {
+            "request_agent_reply" => {
+                let readiness_by_agent = self
+                    .channels
+                    .channel_members(&message.channel_id)
+                    .await?
+                    .into_iter()
+                    .map(|member| (member.agent_id, member.readiness))
+                    .collect::<HashMap<_, _>>();
+                let targets = if outcome.assignee_agent_ids.is_empty() {
+                    outcome
+                        .assignee_agent_id
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                } else {
+                    outcome.assignee_agent_ids.clone()
+                };
+                for agent_id in targets {
+                    if let Some(readiness) = readiness_by_agent.get(&agent_id) {
+                        let created = self
+                            .create_human_mention_once(
+                                &agent_id,
+                                &message.channel_id,
+                                &message.id,
+                                readiness.clone(),
+                            )
+                            .await;
+                        if created {
+                            self.start_channel_agent_reply_once(
+                                &agent_id,
+                                &message.channel_id,
+                                &message.id,
+                                message_body,
+                            )
+                            .await?;
+                        }
+                    }
+                }
+            }
+            "create_task_and_assign" => {
+                let Some(task_id) = outcome.task_id.as_deref() else {
+                    return Ok(());
+                };
+                self.messages
+                    .create_task_card_message(&message.channel_id, task_id, &message.id)
+                    .await?;
+                let targets = if outcome.assignee_agent_ids.is_empty() {
+                    outcome
+                        .assignee_agent_id
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                } else {
+                    outcome.assignee_agent_ids.clone()
+                };
+                for agent_id in targets {
+                    self.create_task_assignment_once(
+                        &agent_id,
+                        &message.channel_id,
+                        task_id,
+                        &message.id,
+                    )
+                    .await;
+                }
+            }
+            "needs_manual_assignment" => {
+                if let Some(task_id) = outcome.task_id.as_deref() {
+                    self.messages
+                        .create_task_card_message(&message.channel_id, task_id, &message.id)
+                        .await?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     async fn coordinator_runtime_input(
         &self,
         run_id: String,
@@ -826,7 +1106,10 @@ impl ChannelOrchestratorService {
         let mut resolved = Vec::new();
         for handle in mentioned_handles {
             if let Some(agent_id) = handle_to_agent.get(&handle) {
-                if member_ids.contains(agent_id) && !resolved.contains(agent_id) {
+                if member_ids.contains(agent_id)
+                    && !is_internal_coordinator_id(agent_id)
+                    && !resolved.contains(agent_id)
+                {
                     resolved.push(agent_id.clone());
                 }
             }
@@ -840,7 +1123,7 @@ impl ChannelOrchestratorService {
         channel_id: &str,
         message_id: &str,
         readiness: ChannelMemberReadiness,
-    ) {
+    ) -> bool {
         let already_created = self
             .agent_inbox
             .events_for_agent(agent_id)
@@ -871,7 +1154,55 @@ impl ChannelOrchestratorService {
                     ),
                 )
                 .await;
+            return true;
         }
+        false
+    }
+
+    async fn start_channel_agent_reply_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        source_message_id: &str,
+        prompt: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        if self.channel_agent_runs.lock().await.values().any(|run| {
+            run.agent_id == agent_id
+                && run.channel_id == channel_id
+                && run.source_message_id == source_message_id
+        }) {
+            return Ok(());
+        }
+        let agent = self.members.get_product_agent(agent_id).await?;
+        let run_id = format!("run_{}", Uuid::new_v4().simple());
+        self.channel_agent_runs.lock().await.insert(
+            run_id.clone(),
+            ChannelAgentRunRecord {
+                channel_id: channel_id.to_string(),
+                agent_id: agent_id.to_string(),
+                source_message_id: source_message_id.to_string(),
+                output: String::new(),
+            },
+        );
+        let session = self.worker.create_session(CreateSessionRequest {
+            agent_id: agent.id.clone(),
+            cwd: agent.workspace_path.clone(),
+            session_id: Uuid::new_v4().to_string(),
+            resume_session: false,
+        })?;
+        self.worker
+            .start_run(&run_id, &session, prompt, Vec::new())?;
+        let _ = self
+            .orchestration
+            .record_diagnostic_event(
+                "channel_agent_runtime.started",
+                &format!(
+                    "run_id={} agent_id={} channel_id={} source_message_id={}",
+                    run_id, agent_id, channel_id, source_message_id
+                ),
+            )
+            .await;
+        Ok(())
     }
 
     async fn sync_declared_channel_members(
@@ -1028,7 +1359,7 @@ impl ChannelOrchestratorService {
                 "taskId": task_id,
                 "intent": intent,
                 "action": action,
-                "primaryAssigneeAgentId": assignee_agent_id,
+                "compatAssigneeAgentId": assignee_agent_id,
                 "targetAgentIds": assignee_agent_ids,
                 "assignmentReason": assignment_reason,
                 "sourceBody": message_body,
@@ -1150,13 +1481,19 @@ pub enum ChannelOrchestratorError {
     #[error(transparent)]
     Member(#[from] MemberError),
     #[error(transparent)]
+    Card(#[from] CardError),
+    #[error(transparent)]
     Coordinator(#[from] CoordinatorDecisionError),
+    #[error(transparent)]
+    Worker(#[from] ClaudeWorkerError),
     #[error(transparent)]
     Reset(#[from] ResetRuntimeError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error("invalid coordinator decision id")]
     InvalidDecisionId,
+    #[error("worker channel event is missing or invalid field: {0}")]
+    InvalidWorkerEvent(&'static str),
     #[error("inactive idempotent message cannot be routed: {message_id}")]
     InactiveIdempotentMessage { message_id: String },
     #[error("orchestration persistence error: {0}")]

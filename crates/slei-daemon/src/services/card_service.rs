@@ -366,6 +366,35 @@ impl CardService {
         Ok(card)
     }
 
+    pub async fn cards_for_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<InteractiveCardView>, CardError> {
+        if let Some(repos) = &self.repos {
+            let rows = repos
+                .interactive_cards()
+                .await
+                .map_err(card_storage_error)?;
+            let mut cards = Vec::new();
+            for row in rows {
+                if row.message_id.as_deref() != Some(message_id) {
+                    continue;
+                }
+                cards.push(card_from_row(row)?.to_view());
+            }
+            return Ok(cards);
+        }
+        Ok(self
+            .inner
+            .lock()
+            .expect("card state lock")
+            .cards
+            .values()
+            .filter(|card| card.message_id.as_deref() == Some(message_id))
+            .map(InteractiveCard::to_view)
+            .collect())
+    }
+
     pub async fn executed_actions(&self) -> Vec<String> {
         self.inner
             .lock()
