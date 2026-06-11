@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { createDaemonBridgeMock, type DesktopAgentView } from "../src/lib/daemon-bridge";
+import type { DesktopAgentView } from "../src/lib/daemon-bridge";
+import { createDaemonBridgeMock } from "../src/test/daemon-bridge-mock";
 import { createEventBridge } from "../src/lib/event-bridge";
 import { renderAppShell } from "../src/app/App";
 

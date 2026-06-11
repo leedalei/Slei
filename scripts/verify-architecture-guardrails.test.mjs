@@ -182,10 +182,10 @@ test("allows legitimate JSON assets, protocol contracts, and legacy read cleanup
   );
 });
 
-test("allows testMock helpers in mock bridge but not offline bridge", () => {
+test("allows testMock helpers only in test paths and not offline bridge", () => {
   assert.deepEqual(
     messagesFor(
-      "apps/desktop/src/lib/daemon-bridge.ts",
+      "apps/desktop/src/test/daemon-bridge-mock.ts",
       [
         "export function createDaemonBridgeMock() {",
         "  return { listAgentWorkspace: () => testMockAgentWorkspaceEntries() };",
@@ -195,6 +195,17 @@ test("allows testMock helpers in mock bridge but not offline bridge", () => {
     ),
     [],
   );
+
+  const productionMessages = messagesFor(
+    "apps/desktop/src/lib/daemon-bridge.ts",
+    [
+      "export function createDaemonBridgeMock() {",
+      "  return { listAgentWorkspace: () => testMockAgentWorkspaceEntries() };",
+      "}",
+      "function testMockAgentWorkspaceEntries() { return []; }",
+    ].join("\n"),
+  );
+  assert(productionMessages.some((message) => message.includes("define createDaemonBridgeMock")));
 
   const messages = messagesFor(
     "apps/desktop/src/lib/daemon-bridge.ts",
@@ -207,6 +218,19 @@ test("allows testMock helpers in mock bridge but not offline bridge", () => {
   );
 
   assert(messages.some((message) => message.includes("test mock workspace helper")));
+});
+
+test("flags production UI agent orchestration helpers", () => {
+  const messages = messagesFor(
+    "apps/desktop/src/app/SleiApp.tsx",
+    [
+      "function runTaskAgentReply() {}",
+      "function createChannelTaskPlaceholder() {}",
+      "function createChannelAgentActivityMessages() {}",
+    ].join("\n"),
+  );
+
+  assert(messages.some((message) => message.includes("delegate execution to daemon")));
 });
 
 test("flags production bridge paths delegated to daemon bridge mock", () => {

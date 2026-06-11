@@ -28,34 +28,19 @@ describe("task branch sessions", () => {
     expect(appSource).toContain("replyToTask");
   });
 
-  it("writes task-scoped agent output to the task thread instead of the outer channel", () => {
+  it("keeps task agent execution delegated to the daemon", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
     const appSource = readFileSync(resolve(root, "src/app/SleiApp.tsx"), "utf8");
 
-    expect(appSource).toContain("runTaskAgentReply");
-    expect(appSource).toContain("replyToTask(input.taskId");
-    expect(appSource).toContain("taskId: result.receipt.outcome.taskId");
-    expect(appSource).toContain("taskAgentReplyPrompt");
-    expect(appSource).toContain('"任务根消息："');
-    expect(appSource).toContain('"用户在任务线程中的最新指令："');
-    expect(appSource).toContain("input.sourceBody");
-    expect(appSource).toContain("input.triggerBody");
-    expect(appSource).not.toContain('input.triggerBody ? "用户在任务线程中的最新指令：" : "任务根消息："');
-    expect(appSource).not.toContain("input.triggerBody ?? input.sourceBody");
-    expect(appSource).toContain("let sourceBody = fallbackSourceBody");
-    expect(appSource).toContain("const fallbackSourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
+    expect(appSource).not.toContain("runTaskAgentReply");
+    expect(appSource).not.toContain("runChannelAgentReply");
+    expect(appSource).not.toContain("taskAgentReplyPrompt");
+    expect(appSource).not.toContain("createChannelTaskPlaceholder");
+    expect(appSource).not.toContain("createChannelAgentActivityMessages(result.receipt.outcome");
     expect(appSource).toContain("const threadReceipt = await bridge.getTaskThread(taskId)");
-    expect(appSource).toContain("sourceBody = threadReceipt.thread.root.body || fallbackSourceBody");
     expect(appSource).toContain("applyTaskThreadReceiptToState(threadReceipt)");
-    expect(appSource).toContain("task-agent-handoff-root-fallback");
-    expect(appSource).not.toContain("const sourceBody = task?.replies?.[0]?.body ?? task?.title ?? trimmed");
-    expect(appSource).toContain("result.receipt.outcome.taskId ? [] : createChannelAgentActivityMessages");
-    expect(appSource).not.toContain("agentActivity = createChannelAgentActivityMessage(result.receipt.outcome");
-    expect(appSource).toContain("const empty = replies.length > 0 && !combinedBody");
-    expect(appSource).toContain("const failed = replies.length === 0 || empty || replies.some");
-    expect(appSource).toContain('combinedBody || "智能体回复为空。"');
-    expect(appSource).toContain('failed ? "in_progress" : "in_review"');
-    expect(appSource).not.toContain("const failed = replies.length === 0 || replies.some");
+    expect(appSource).toContain('"task-agent-reply", "delegated-to-daemon"');
+    expect(appSource).toContain('"channel-agent-reply", "delegated-to-daemon"');
   });
 
   it("renders a collapsed task root entry and hides the source channel message", () => {

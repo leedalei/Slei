@@ -971,14 +971,21 @@ impl DaemonBroker {
     }
 
     pub fn list_channels(&self) -> ChannelListReceipt {
-        self.fetch_channels_from_daemon()
-            .unwrap_or_else(|| ChannelListReceipt {
-                channels: self
-                    .channels
-                    .lock()
-                    .expect("channels mutex poisoned")
-                    .clone(),
-            })
+        if let Some(receipt) = self.fetch_channels_from_daemon() {
+            return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return ChannelListReceipt {
+                channels: Vec::new(),
+            };
+        }
+        ChannelListReceipt {
+            channels: self
+                .channels
+                .lock()
+                .expect("channels mutex poisoned")
+                .clone(),
+        }
     }
 
     pub fn create_channel(
@@ -991,17 +998,24 @@ impl DaemonBroker {
     }
 
     pub fn list_channel_members(&self, channel_id: &str) -> ChannelMemberListReceipt {
-        self.fetch_channel_members_from_daemon(channel_id)
-            .unwrap_or_else(|| ChannelMemberListReceipt {
-                members: self
-                    .channel_members
-                    .lock()
-                    .expect("channel members mutex poisoned")
-                    .iter()
-                    .filter(|member| member.channel_id == channel_id)
-                    .cloned()
-                    .collect(),
-            })
+        if let Some(receipt) = self.fetch_channel_members_from_daemon(channel_id) {
+            return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return ChannelMemberListReceipt {
+                members: Vec::new(),
+            };
+        }
+        ChannelMemberListReceipt {
+            members: self
+                .channel_members
+                .lock()
+                .expect("channel members mutex poisoned")
+                .iter()
+                .filter(|member| member.channel_id == channel_id)
+                .cloned()
+                .collect(),
+        }
     }
 
     pub fn add_channel_member(
@@ -1033,17 +1047,24 @@ impl DaemonBroker {
     }
 
     pub fn list_channel_messages(&self, channel_id: &str) -> ChannelMessageListReceipt {
-        self.fetch_channel_messages_from_daemon(channel_id)
-            .unwrap_or_else(|| ChannelMessageListReceipt {
-                messages: self
-                    .channel_messages
-                    .lock()
-                    .expect("channel messages mutex poisoned")
-                    .iter()
-                    .filter(|message| message.channel_id == channel_id && !message.deleted)
-                    .cloned()
-                    .collect(),
-            })
+        if let Some(receipt) = self.fetch_channel_messages_from_daemon(channel_id) {
+            return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return ChannelMessageListReceipt {
+                messages: Vec::new(),
+            };
+        }
+        ChannelMessageListReceipt {
+            messages: self
+                .channel_messages
+                .lock()
+                .expect("channel messages mutex poisoned")
+                .iter()
+                .filter(|message| message.channel_id == channel_id && !message.deleted)
+                .cloned()
+                .collect(),
+        }
     }
 
     pub fn send_channel_message(
@@ -1080,8 +1101,13 @@ impl DaemonBroker {
     }
 
     pub fn list_tasks(&self, query: TaskListQuery) -> TaskListReceipt {
-        self.fetch_tasks_from_daemon(&query)
-            .unwrap_or_else(|| self.list_tasks_locally(&query))
+        if let Some(receipt) = self.fetch_tasks_from_daemon(&query) {
+            return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return TaskListReceipt { tasks: Vec::new() };
+        }
+        self.list_tasks_locally(&query)
     }
 
     pub fn get_task_thread(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -1089,6 +1115,11 @@ impl DaemonBroker {
             Ok(receipt) => {
                 self.upsert_local_task_thread(receipt.thread.clone());
                 Ok(receipt)
+            }
+            Err(TaskError::DaemonRequest(error))
+                if self.offline_fallback == OfflineFallback::Empty =>
+            {
+                Err(TaskError::DaemonRequest(error))
             }
             Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
                 self.get_task_thread_locally(task_id)
@@ -1107,6 +1138,11 @@ impl DaemonBroker {
                 self.apply_local_task_reply(task_id, receipt.reply.clone());
                 Ok(receipt)
             }
+            Err(TaskError::DaemonRequest(error))
+                if self.offline_fallback == OfflineFallback::Empty =>
+            {
+                Err(TaskError::DaemonRequest(error))
+            }
             Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
                 self.reply_to_task_locally(task_id, request)
             }
@@ -1123,6 +1159,11 @@ impl DaemonBroker {
             Ok(receipt) => {
                 self.upsert_local_task(receipt.task.clone());
                 Ok(receipt)
+            }
+            Err(TaskError::DaemonRequest(error))
+                if self.offline_fallback == OfflineFallback::Empty =>
+            {
+                Err(TaskError::DaemonRequest(error))
             }
             Err(TaskError::DaemonRequest(error)) if is_daemon_unavailable_error(&error) => {
                 self.update_task_status_locally(task_id, request)
@@ -1156,6 +1197,9 @@ impl DaemonBroker {
             }
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(CardError::CardNotFound);
+        }
         if let Some(card) = self
             .complete_loaded_message_card(card_id)
             .map_err(CardError::Conversation)?
@@ -1181,6 +1225,13 @@ impl DaemonBroker {
         &self,
         request: PermissionResolveRequest,
     ) -> Result<ConversationMessageReceipt, ConversationError> {
+        if let Some(receipt) = self.resolve_permission_in_daemon(&request) {
+            self.upsert_local_conversation_message(receipt.message.clone())?;
+            return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
+        }
         let mut messages = self
             .conversation_messages
             .lock()
@@ -2418,6 +2469,20 @@ impl DaemonBroker {
             &[],
         )?;
         serde_json::from_str::<InteractiveCardReceipt>(&response).ok()
+    }
+
+    fn resolve_permission_in_daemon(
+        &self,
+        request: &PermissionResolveRequest,
+    ) -> Option<ConversationMessageReceipt> {
+        let payload = serde_json::to_string(request).ok()?;
+        let response = self.send_daemon_request(
+            "POST",
+            "/v1/approvals/permissions/resolve",
+            Some(&payload),
+            &[],
+        )?;
+        serde_json::from_str::<ConversationMessageReceipt>(&response).ok()
     }
 
     fn update_preferences_in_daemon(

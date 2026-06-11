@@ -2,13 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  hasUnsettledChannelMemberReadiness,
+} from "./SleiApp";
+import {
   channelReplyTargetIds,
   createChannelAgentActivityMessages,
   createChannelAgentReplyMessage,
   createChannelAgentReplyMessageFromReplies,
-  hasUnsettledChannelMemberReadiness,
   waitForChannelAgentReplies,
-} from "./SleiApp";
+} from "../test/channel-agent-reply-utils";
 import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
 import type { SleiMember } from "./types";
 

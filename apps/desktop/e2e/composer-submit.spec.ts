@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { createChannelAgentActivityMessage, createChannelAgentActivityMessages, createChannelArchiveNoticeMessage, sendChatComposerMessage, submitComposerDraft, submitComposerDraftWithFeedback, waitForChannelAgentReply } from "../src/app/SleiApp";
+import { createChannelArchiveNoticeMessage, sendChatComposerMessage, submitComposerDraft, submitComposerDraftWithFeedback } from "../src/app/SleiApp";
+import { createChannelAgentActivityMessage, createChannelAgentActivityMessages, waitForChannelAgentReply } from "../src/test/channel-agent-reply-utils";
 import { createDesktopMessages } from "../src/i18n";
 import { defaultProfile } from "../src/app/model";
 

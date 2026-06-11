@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures } from "../src/test/fixtures";
-import { createDaemonBridgeMock } from "../src/lib/daemon-bridge";
+import { createDaemonBridgeMock } from "../src/test/daemon-bridge-mock";
 
 const data = createSleiFixtures();
 const readyRuntime = {
