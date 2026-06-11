@@ -58,7 +58,7 @@ describe("MembersPage coordinator agents", () => {
 
     expect(html).toContain("#all Coordinator");
     expect(html).not.toContain("@all-coordinator");
-    expect(html).toContain("Channel coordinator");
+    expect(html).toContain("Routes channel messages.");
     expect(html).toContain("Runtime configuration");
     expect(html).toContain("ClaudeCode");
     expect(html).toContain("Capabilities");
@@ -121,6 +121,9 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
+    expect(html).toContain('<span class="truncate text-xs text-muted-foreground">@coda</span>');
+    expect(html).toContain('aria-label="Copy"');
+    expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('data-slot="alert-dialog-trigger"');
     expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
     expect(html).toContain("col-start-3 row-start-1");
