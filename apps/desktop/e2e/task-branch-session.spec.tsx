@@ -86,7 +86,11 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-task-root-entry");
     expect(html).toContain("lucide-scroll-text");
     expect(html).toContain("border-primary/20");
+    expect(html).toContain("hover:bg-muted/20");
     expect(html).toContain("data-task-root-entry-icon");
+    const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
+    const taskEntryClose = taskEntryHtml.indexOf("</article>");
+    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('data-task-root-entry-trigger="replies"');
     expect(html).not.toContain('data-message-id="msg_root"');
   });
 
