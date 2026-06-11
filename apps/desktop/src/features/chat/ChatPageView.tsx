@@ -6,7 +6,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
+import { MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
+import { MentionPicker } from "./MentionPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
@@ -455,6 +456,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const timelineEndRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollToBottomRef = useRef(false);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -532,6 +535,15 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     mentionOptionRefs.current[selectedMentionIndex]?.scrollIntoView({ block: "nearest" });
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
+  useEffect(() => {
+    if (!pendingScrollToBottomRef.current) return;
+    pendingScrollToBottomRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      timelineEndRef.current?.scrollIntoView({ block: "end" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [timelineMessages.length]);
+
   async function submitMessage() {
     if (sendDisabled) return;
     setSubmitting(true);
@@ -547,6 +559,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         onSendMessage,
       });
       if (result.sent) {
+        pendingScrollToBottomRef.current = true;
         setDraft(result.draft);
         setAttachments(result.attachments);
         setAsTask(result.asTask);
@@ -599,7 +612,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-1.5">
             <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-              <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-base font-semibold">
+              <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-xl font-semibold">
                 {dmMember ? <MessageCircle aria-hidden="true" size={20} /> : <Hash aria-hidden="true" size={20} />}
                 <span className={cn("truncate", !dmMember && "select-none")}>{detailTitle}</span>
               </h1>
@@ -729,12 +742,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 >
                   <MemberAvatar identity={memberFromMessage(message, data.members)} />
                   <div className="min-w-0">
-                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <strong className="text-sm text-foreground">{message.author}</strong>
-                        {message.handle ? <span>{message.handle}</span> : null}
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                        <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
+                        {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
                         <span aria-hidden="true">｜</span>
-                        <span>{messageRoleDescription(message, data.members, messages)}</span>
+                        <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                       </div>
                       <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                         <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
@@ -743,7 +756,6 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                         <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
                           <Bookmark aria-hidden="true" size={14} />
                         </Button>
-                        <span aria-hidden="true">｜</span>
                         <span className="inline-flex items-center gap-1">
                           <time>{message.time}</time>
                           <MessageStatusSquare status={message.status} />
@@ -772,6 +784,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 </article>
               );
             })}
+            <div ref={timelineEndRef} />
           </div>
         </ScrollArea>
       ) : effectiveChannelView === "tasks" ? (
@@ -784,6 +797,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         onClose={() => setSelectedTaskId(undefined)}
         onReply={onTaskReply}
         onStatusChange={onTaskStatusChange}
+        mentionMembers={data.members}
         open={Boolean(selectedTask)}
         task={selectedTask}
       />
@@ -791,38 +805,15 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <footer className="border-t bg-background/95">
           {mention && mentionTargets.length > 0 ? (
             <div className="px-4 pt-3">
-              <Card aria-label={messages.chat.chooseMentionMember} className="max-h-[12.5rem] w-full max-w-full gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
-                <CardContent className="grid min-h-0 gap-1 px-2">
-                  <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
-                    <div className="grid min-w-0 gap-1">
-                      {mentionTargets.map((member, index) => (
-                        <Button
-                          aria-current={index === selectedMentionIndex ? "true" : undefined}
-                          className={cn("h-auto min-h-12 w-full min-w-0 max-w-full overflow-hidden justify-start gap-2 px-2 py-2 text-left", index === selectedMentionIndex && "bg-accent text-accent-foreground")}
-                          data-mention-option-index={index}
-                          key={member.id}
-                          onClick={() => selectMention(index)}
-                          ref={(node) => {
-                            mentionOptionRefs.current[index] = node;
-                          }}
-                          type="button"
-                          variant="ghost"
-                        >
-                          <MemberAvatar identity={member} />
-                          <span className="grid min-w-0 flex-1 gap-0.5">
-                            <span className="flex min-w-0 items-center gap-2">
-                              <strong className="truncate text-sm">{member.name}</strong>
-                              <StatusDot status={member.runtimeStatus} />
-                            </span>
-                            <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
-                          </span>
-                          <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground" title={member.handle}>{member.handle}</span>
-                        </Button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+              <MentionPicker
+                members={mentionTargets}
+                messages={messages}
+                onSelect={selectMention}
+                optionRef={(index, node) => {
+                  mentionOptionRefs.current[index] = node;
+                }}
+                selectedIndex={selectedMentionIndex}
+              />
             </div>
           ) : null}
           <form className="grid gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import { createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
 import { createSleiFixtures, type SleiMessage } from "../src/test/fixtures";
 import { appendTaskReply, parseTaskCardBody, taskReplyRequiresWork } from "../src/app/model";
+import { TaskThreadDrawer } from "../src/features/tasks/TaskThreadDrawer";
+import { createDesktopMessages } from "../src/i18n";
 
 const readyRuntime = {
   loading: false,
@@ -128,7 +130,84 @@ describe("chat to task thread flow", () => {
     expect(html).toContain("待评审");
     expect(html).toContain("标记已完成");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>标记已完成/);
+    expect(html).not.toContain("标记待评审");
     expect(html).toContain("2 条回复");
+  });
+
+  it("renders task reply mention suggestions without coordinator targets", () => {
+    const data = createSleiFixtures({
+      members: [
+        {
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          avatar: "CO",
+          type: "agent",
+          runtimeStatus: "idle",
+          role: "开发 Agent",
+          description: "负责实现。",
+          computer: "Local",
+          created: "2026-06-11",
+          creator: "Lei",
+          runtime: "ClaudeCode",
+          model: "Sonnet",
+          instructions: "",
+          permissions: [],
+          environmentVariables: [],
+          createdAgents: [],
+          activity: "Idle",
+          capabilities: [],
+        },
+        {
+          id: "agent_coordinator_all",
+          name: "#all Coordinator",
+          handle: "@all-coordinator",
+          avatar: "CO",
+          agentKind: "coordinator",
+          type: "agent",
+          runtimeStatus: "idle",
+          role: "频道协调员",
+          description: "内部路由。",
+          computer: "Local",
+          created: "2026-06-11",
+          creator: "System",
+          runtime: "ClaudeCode",
+          model: "Sonnet",
+          instructions: "",
+          permissions: [],
+          environmentVariables: [],
+          createdAgents: [],
+          activity: "Idle",
+          capabilities: [],
+        },
+      ],
+      tasks: [{
+        id: "T-mention",
+        title: "任务 mention",
+        owner: "Lei",
+        status: "in_progress",
+        channelId: "all",
+        replies: [{ id: "root", sender: "Lei", role: "human", body: "根消息" }],
+      }],
+    });
+
+    const html = renderToStaticMarkup(
+      <TaskThreadDrawer
+        initialReplyDraft="@"
+        mentionMembers={data.members}
+        messages={createDesktopMessages("zh-CN")}
+        onClose={() => undefined}
+        onReply={() => undefined}
+        open
+        task={data.tasks[0]}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-mention-panel"');
+    expect(html).toContain("Coda");
+    expect(html).toContain("@coda");
+    expect(html).not.toContain("@all-coordinator");
+    expect(html).not.toContain("标记待评审");
   });
 
   it("keeps task drawer async errors and thread-open rejections handled in source", () => {
@@ -143,7 +222,7 @@ describe("chat to task thread flow", () => {
     expect(drawerSource).toContain("disabled={replySubmitting");
     expect(drawerSource).toContain("disabled={statusActionDisabled}");
     expect(drawerSource).toContain("useEffect");
-    expect(drawerSource).toContain("[input.open, task?.id]");
+    expect(drawerSource).toContain("[input.open, input.initialReplyDraft, task?.id]");
     expect(drawerSource).toContain("replySubmitting || statusSubmitting");
     expect(drawerSource).toContain("isDrawerOperationCurrent");
     const chatSource = chatPageSource();

@@ -132,6 +132,61 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain("ClaudeCode");
   });
 
+  it("shows the profile description only in the editable description field", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const description = "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。";
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="agent_yeal"
+        data={createSleiFixtures({
+          members: [
+            {
+              id: "agent_yeal",
+              name: "Yeal",
+              handle: "@yeal",
+              avatar: "YE",
+              avatarSeed: "agent_yeal",
+              type: "agent",
+              runtimeStatus: "idle",
+              role: "Guide",
+              runtime: "ClaudeCode",
+              model: "Sonnet",
+              computer: "Local",
+              nodeId: "local-node",
+              created: "2026-06-04",
+              creator: "system",
+              instructions: "Guide users.",
+              description,
+              permissions: [],
+              environmentVariables: [],
+              activity: "Idle",
+              skills: [],
+              capabilities: ["ClaudeCode"],
+              createdAgents: [],
+              directMessageEnabled: true,
+            },
+          ],
+        })}
+        messages={messages}
+        nodes={[
+          {
+            id: "local-node",
+            name: "Local",
+            status: "connected",
+            daemonVersion: "0.1.0",
+            device: { platform: "darwin", arch: "arm64", hostname: "local" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+          },
+        ]}
+        onAgentUpdate={() => undefined}
+        onMessage={() => undefined}
+      />,
+    );
+
+    expect(html).toContain(`>${messages.members.description}<`);
+    expect(html.match(new RegExp(description, "g")) ?? []).toHaveLength(2);
+  });
+
   it("renders the agent workspace as a file explorer backed by directory entries", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(
