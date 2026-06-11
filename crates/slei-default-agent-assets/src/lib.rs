@@ -233,7 +233,8 @@ mod tests {
 
         assert!(body.contains("slei_propose_interactive_card"));
         assert!(body.contains("Multiple requested agents require multiple tool calls"));
-        assert!(body.contains("assign a simple random unused name"));
+        assert!(body.contains("assign a simple random unused English name"));
+        assert!(body.contains("Do not use role-only labels such as"));
         assert!(body.contains("已准备创建卡片，请确认。"));
     }
 

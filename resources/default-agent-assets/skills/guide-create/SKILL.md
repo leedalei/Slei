@@ -18,8 +18,8 @@ Use this skill when the user asks Yeal to create, add, set up, or prepare one or
 
 1. Extract every requested agent from the user message.
 2. Normalize each draft:
-   - `name`: short display name, 1-32 characters. If a requested role has responsibilities but no explicit name, assign a simple random unused name such as Coda, Mira, Nova, Owen, Luna, Kai, Iris, or Theo.
-   - `handle`: lowercase kebab handle with a leading `@`, derived from the name if omitted.
+   - `name`: short display name, 1-32 characters. If a requested role has responsibilities but no explicit personal name, assign a simple random unused English name such as Coda, Mira, Nova, Owen, Luna, Kai, Iris, or Theo. Do not use role-only labels such as Developer, QA, Architect, 开发工程师, QA质保员, or 架构师 as the display name.
+   - `handle`: lowercase kebab handle with a leading `@`, derived from the random English display name if the user omitted a personal name. Do not derive handles from role-only labels; for example, use `Mira` with `@mira` instead of `开发工程师` with `@developer`.
    - `runtimeKind`: default `ClaudeCode`.
    - `model`: default `Sonnet`.
    - `nodeId`: default `local-node` unless the user names another device.

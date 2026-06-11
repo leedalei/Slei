@@ -1330,6 +1330,7 @@ export function SleiApp() {
       onSavedMessageSelect={handleSavedMessageSelect}
       onMessageSaveToggle={handleMessageSaveToggle}
       onSendMessage={handleSendMessage}
+      onMessageSendFailure={showAppToast}
       onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}
       onTaskStatusChange={handleTaskStatusChange}

@@ -426,6 +426,18 @@ describe("chat search, channel management, and mentions", () => {
     expect(source).not.toContain("createChannelCreating : input.messages.common.create");
   });
 
+  it("routes composer send failures through the app-level toast", () => {
+    const appSource = readFileSync(new URL("../src/app/SleiApp.tsx", import.meta.url), "utf8");
+    const frameSource = appFrameSource();
+    const chatSource = readFileSync(new URL("../src/features/chat/ChatPageView.tsx", import.meta.url), "utf8");
+
+    expect(appSource).toContain("onMessageSendFailure={showAppToast}");
+    expect(frameSource).toContain("onMessageSendFailure?:");
+    expect(frameSource).toContain("onSendFailure={onMessageSendFailure}");
+    expect(chatSource).toContain("onSendFailure ?? showToast");
+    expect(chatSource).toContain('sendFailureToast(message, "error")');
+  });
+
   it("centers far-left rail menu items with shadcn icon labels", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
