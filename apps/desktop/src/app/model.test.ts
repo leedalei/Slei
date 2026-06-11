@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { SleiMember } from "./fixtures";
+import type { SleiMember } from "./types";
 import { isInternalCoordinatorMember, mentionSuggestions } from "./model";
 
 function agent(overrides: Partial<SleiMember> = {}): SleiMember {

@@ -1,6 +1,6 @@
 import type { AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
-import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./fixtures";
+import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./types";
 
 export type AppView = "chat" | "search" | "tasks" | "members" | "computers" | "settings";
 

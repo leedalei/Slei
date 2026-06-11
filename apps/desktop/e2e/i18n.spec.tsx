@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures } from "../src/app/fixtures";
+import { createSleiFixtures } from "../src/test/fixtures";
 
 const data = createSleiFixtures({
   channels: [{ id: "all", name: "general", description: "默认团队频道", unread: 0 }],

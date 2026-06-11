@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { createSleiFixtures } from "../src/app/fixtures";
+import { createSleiFixtures } from "../src/test/fixtures";
 import { routeItems, routePathForView, routeViewFromPath } from "../src/app/router";
 import { SleiAppFrameRoutes } from "../src/app/SleiApp";
 

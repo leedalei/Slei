@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
-import { createSleiFixtures } from "../../app/fixtures";
+import { createSleiFixtures } from "../../test/fixtures";
 import { buildWorkspaceTreeRows, MembersPage } from "./MembersPageView";
 
 describe("MembersPage coordinator agents", () => {

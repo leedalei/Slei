@@ -23,7 +23,7 @@ import type {
   AgentWorkspaceListReceipt,
   DesktopNodeView,
 } from "../../lib/daemon-bridge";
-import type { SleiFixtures, SleiMember } from "../../app/fixtures";
+import type { SleiFixtures, SleiMember } from "../../app/types";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";

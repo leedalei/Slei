@@ -1,5 +1,5 @@
 import type { DesktopMessages } from "../../i18n";
-import type { SleiTaskStatus } from "../../app/fixtures";
+import type { SleiTaskStatus } from "../../app/types";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 

@@ -1,7 +1,7 @@
 import { MessageSquare } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiTask } from "../../app/fixtures";
+import type { SleiTask } from "../../app/types";
 import { Button } from "@/components/ui/button";
 import { TaskStatusBadge } from "../tasks/TaskStatusBadge";
 

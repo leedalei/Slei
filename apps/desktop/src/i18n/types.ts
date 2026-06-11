@@ -1,6 +1,6 @@
 import type { AppView, EmptySize, EmptyVariant, SettingsPanel } from "../app/SleiApp";
 import type { AppearancePreferences } from "../lib/daemon-bridge";
-import type { SleiTaskStatus } from "../app/fixtures";
+import type { SleiTaskStatus } from "../app/types";
 
 export type DesktopMessages = {
   common: {

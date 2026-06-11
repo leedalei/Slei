@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiTask, SleiTaskStatus } from "../../app/fixtures";
+import type { SleiTask, SleiTaskStatus } from "../../app/types";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures } from "../src/app/fixtures";
+import { createSleiFixtures } from "../src/test/fixtures";
 import { renderInteractiveCard, renderInteractiveCardDialog } from "../src/features/chat/InteractiveCard";
 
 describe("interactive cards", () => {

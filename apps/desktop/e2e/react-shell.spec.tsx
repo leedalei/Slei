@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures } from "../src/app/fixtures";
+import { createSleiFixtures } from "../src/test/fixtures";
 
 function sendButtonMarkup(html: string) {
   return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";

@@ -2,7 +2,7 @@ import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { Hash, Search } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiFixtures } from "../../app/fixtures";
+import type { SleiFixtures } from "../../app/types";
 import { filterConversationMessages, stripChannelHash, type ChatSearchFilters } from "../../app/model";
 import { Empty } from "../../components";
 import { Button } from "@/components/ui/button";

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { createSleiFixtures, type SleiMember } from "../../app/fixtures";
+import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
 import { defaultProfile } from "../../app/model";
 import { createDesktopMessages } from "../../i18n";
 import { ChatPage } from "./ChatPageView";
@@ -34,6 +34,7 @@ describe("ChatPage mention panel", () => {
   it("keeps mention suggestions constrained to the composer width", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
       members: [memberWithLongMentionText()],
     });
 
@@ -58,6 +59,7 @@ describe("ChatPage mention panel", () => {
   it("renders channel members and addable agents in the member panel", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
       members: [
         memberWithLongMentionText(),
         {

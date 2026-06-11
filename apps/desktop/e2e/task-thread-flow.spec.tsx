@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { createTaskFromChatMessage, SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures, type SleiMessage } from "../src/app/fixtures";
+import { createSleiFixtures, type SleiMessage } from "../src/test/fixtures";
 import { appendTaskReply, parseTaskCardBody, taskReplyRequiresWork } from "../src/app/model";
 
 const readyRuntime = {

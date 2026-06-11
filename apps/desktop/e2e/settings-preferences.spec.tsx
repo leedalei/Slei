@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures } from "../src/app/fixtures";
+import { createSleiFixtures } from "../src/test/fixtures";
 import { createDaemonBridgeMock } from "../src/lib/daemon-bridge";
 
 const data = createSleiFixtures();

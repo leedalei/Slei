@@ -65,14 +65,14 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { MemberAvatar, StatusDot, Toast, type ToastType } from "../components";
+import { Empty, MemberAvatar, StatusDot, Toast, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
 import { SearchRoute } from "./routes/SearchRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TasksRoute } from "./routes/TasksRoute";
-import { type SleiFixtures, type SleiMember, type SleiMessage } from "./fixtures";
+import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import {
   channelReadinessLabel,
   defaultAppearance,
@@ -179,6 +179,7 @@ export type SleiAppFrameProps = {
 
 export function SleiAppFrame(input: SleiAppFrameProps) {
   const activeChannel = input.data.channels.find((channel) => channel.id === input.activeChannelId) ?? input.data.channels[0];
+  const activeTargetId = activeChannel?.id ?? "";
   const activeConversation = input.data.conversations.find((conversation) => conversation.id === input.activeConversationId);
   const activeSessionId = input.activeSessionId ?? activeConversation?.activeSessionId;
   const firstComputer = input.runtimeSetup.nodes[0];
@@ -212,7 +213,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
   useEffect(() => {
     setAgentActivityTick(0);
-  }, [activeChannel.id, activeConversation?.id, activeSessionId]);
+  }, [activeTargetId, activeConversation?.id, activeSessionId]);
 
   useEffect(() => {
     if (activeAgentActivities.length <= 1) return;
@@ -220,7 +221,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       setAgentActivityTick((current) => current + 1);
     }, AGENT_ACTIVITY_ROTATION_MS);
     return () => window.clearInterval(timer);
-  }, [activeAgentActivities.length, activeChannel.id, activeConversation?.id, activeSessionId]);
+  }, [activeAgentActivities.length, activeTargetId, activeConversation?.id, activeSessionId]);
 
   return (
     <div
@@ -262,7 +263,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         <SidebarFrame title={sidebarTitle}>
           {input.activeView === "chat" || input.activeView === "search" ? (
             <ChannelList
-              activeChannelId={input.activeConversationId ? undefined : activeChannel.id}
+              activeChannelId={input.activeConversationId ? undefined : activeChannel?.id}
               activeConversationId={input.activeConversationId}
               data={input.data}
               initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
@@ -555,11 +556,12 @@ export type AgentActivityView = {
 
 export function findActiveAgentActivities(
   data: SleiFixtures,
-  activeChannel: SleiFixtures["channels"][number],
+  activeChannel?: SleiFixtures["channels"][number],
   activeConversation?: ConversationView,
   activeSessionId?: string,
 ): AgentActivityView[] {
-  const targetId = activeConversation?.id ?? activeChannel.id;
+  const targetId = activeConversation?.id ?? activeChannel?.id;
+  if (!targetId) return [];
   const activeMessages = data.messages.filter((message) => {
     if (message.channelId !== targetId) return false;
     if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
@@ -1168,7 +1170,7 @@ function ComputersNavigator(input: {
 function renderWorkspace(
   activeView: AppView,
   data: SleiFixtures,
-  activeChannel: SleiFixtures["channels"][number],
+  activeChannel: SleiFixtures["channels"][number] | undefined,
   activeConversation: ConversationView | undefined,
   activeSessionId: string | undefined,
   runtimeSetup: RuntimeSetupState,
@@ -1251,6 +1253,13 @@ function renderWorkspace(
         profile={profile}
         timeZone={timeZone}
       />
+    );
+  }
+  if (!activeChannel) {
+    return (
+      <div className="grid h-full place-items-center p-6">
+        <Empty centered description={messages.empty.defaultDescription.nodata} size="lg" title={messages.empty.defaultTitle.nodata} />
+      </div>
     );
   }
   return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;

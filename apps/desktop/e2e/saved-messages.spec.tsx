@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures, type SleiMember } from "../src/app/fixtures";
+import { createSleiFixtures, type SleiMember } from "../src/test/fixtures";
 
 const nodes = createSleiFixtures().nodes;
 const readyRuntime = {

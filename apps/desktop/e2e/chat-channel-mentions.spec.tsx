@@ -13,7 +13,7 @@ import {
   moveMentionSelection,
   SleiAppFrame,
 } from "../src/app/SleiApp";
-import { createDemoMembers, createSleiFixtures } from "../src/app/fixtures";
+import { createDemoMembers, createSleiFixtures } from "../src/test/fixtures";
 
 const readyRuntime = {
   loading: false,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { MessageSquare } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiFixtures, SleiTask } from "../../app/fixtures";
+import type { SleiFixtures, SleiTask } from "../../app/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

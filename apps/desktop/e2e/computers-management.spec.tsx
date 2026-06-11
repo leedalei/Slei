@@ -8,7 +8,7 @@ import {
   SleiAppFrame,
   renameComputerNode,
 } from "../src/app/SleiApp";
-import { createDemoMembers, createSleiFixtures } from "../src/app/fixtures";
+import { createDemoMembers, createSleiFixtures } from "../src/test/fixtures";
 import type { DesktopNodeView } from "../src/lib/daemon-bridge";
 
 const nodes: DesktopNodeView[] = [

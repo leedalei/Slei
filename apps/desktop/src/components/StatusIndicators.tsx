@@ -1,4 +1,4 @@
-import type { SleiMessage } from "../app/fixtures";
+import type { SleiMessage } from "../app/types";
 import { cn } from "@/lib/utils";
 
 export function MessageStatusSquare({ status }: { status?: SleiMessage["status"] }) {

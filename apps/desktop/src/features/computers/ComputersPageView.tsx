@@ -3,7 +3,7 @@ import { Bot, Calendar, Cpu, Monitor, Plus, Server, type LucideIcon } from "luci
 
 import type { DesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
-import type { SleiMember } from "../../app/fixtures";
+import type { SleiMember } from "../../app/types";
 import { agentsForComputerNode, deviceOsLabel } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Badge } from "@/components/ui/badge";

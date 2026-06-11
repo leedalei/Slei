@@ -3,7 +3,7 @@ import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIco
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
-import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/fixtures";
+import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";

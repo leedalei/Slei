@@ -10,7 +10,7 @@ import {
   waitForChannelAgentReplies,
 } from "./SleiApp";
 import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
-import type { SleiMember } from "./fixtures";
+import type { SleiMember } from "./types";
 
 describe("createChannelAgentReplyMessage", () => {
   it("builds stable activity messages for every routed channel target", () => {
