@@ -106,6 +106,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("Slei Desktop");
     expect(html).toContain("删除频道 dev-team");
     expect(html).not.toContain("删除频道 all");
+    expect(html).toContain('class="truncate select-none">dev-team</span>');
+    expect(html).toContain('aria-label="复制"');
 
     const deleteButtonMarkup = html.match(/<button\b(?=[^>]*aria-label="删除频道 dev-team")[^>]*>/)?.[0] ?? "";
     expect(deleteButtonMarkup).toContain("text-destructive");

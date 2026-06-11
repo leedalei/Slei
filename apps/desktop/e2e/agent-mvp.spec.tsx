@@ -211,6 +211,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("@handle");
     expect(html).toContain("关联设备");
     expect(html).toContain("描述");
+    expect(html.match(/class="text-destructive">\*<\/span>/g) ?? []).toHaveLength(2);
   });
 
   it("detects explicit remember requests without deriving guide-created agent drafts", () => {

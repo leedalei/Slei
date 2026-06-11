@@ -575,6 +575,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     showToast(messages.chat.copySuccess, "success");
   }
 
+  async function copyChannelTitle() {
+    const copied = await copyMessageBody(detailTitle);
+    if (!copied) return;
+    showToast(messages.chat.copySuccess, "success");
+  }
+
   function showToast(message: string, type: ToastType = "info") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
@@ -591,11 +597,20 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       <Toast message={toast.message} type={toast.type} />
       <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
         <div className="min-w-0">
-          <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-base font-semibold">
-            {dmMember ? <MessageCircle aria-hidden="true" size={20} /> : <Hash aria-hidden="true" size={20} />}
-            <span className="truncate">{detailTitle}</span>
-          </h1>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
+          <div className="flex min-w-0 items-start gap-1.5">
+            <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
+              <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-base font-semibold">
+                {dmMember ? <MessageCircle aria-hidden="true" size={20} /> : <Hash aria-hidden="true" size={20} />}
+                <span className={cn("truncate", !dmMember && "select-none")}>{detailTitle}</span>
+              </h1>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
+            </div>
+            {!dmMember ? (
+              <Button aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                <Copy aria-hidden="true" size={14} />
+              </Button>
+            ) : null}
+          </div>
         </div>
         {dmMember && activeConversation ? (
           <div className="flex shrink-0 items-center gap-2">

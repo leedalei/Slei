@@ -54,7 +54,7 @@ export function ComputersPage(input: {
     <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
       <header className="border-b px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
+          <div className="flex min-w-0 items-center gap-4" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
             <span className="grid size-12 shrink-0 place-items-center rounded-lg border bg-muted text-muted-foreground">
               <Monitor aria-hidden="true" className="size-6" />
             </span>

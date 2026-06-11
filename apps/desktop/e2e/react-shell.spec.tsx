@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
-import { createSleiFixtures } from "../src/test/fixtures";
+import { createDemoMembers, createSleiFixtures } from "../src/test/fixtures";
 
 function sendButtonMarkup(html: string) {
   return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";
@@ -50,7 +50,7 @@ describe("Slei React desktop shell", () => {
     expect(html).not.toContain("Slei 智能体</strong>");
   });
 
-  it("marks only shell chrome regions as draggable", () => {
+  it("marks shell chrome and page title bars as draggable", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -70,11 +70,38 @@ describe("Slei React desktop shell", () => {
 
     expect(navIndex).toBeGreaterThanOrEqual(0);
     expect(html.slice(Math.max(0, navIndex - 120), navIndex + 120)).toContain('data-tauri-drag-region="deep"');
+    expect(html).toContain('data-slot="sidebar-titlebar"');
+    expect(html).toContain('data-slot="workspace-titlebar"');
     expect(html).not.toContain('aria-label="关闭窗口"');
     expect(html).not.toContain('aria-label="最小化窗口"');
     expect(html).not.toContain('aria-label="最大化窗口"');
-    expect(html).not.toContain("<header data-tauri-drag-region");
     expect(html).not.toContain("<textarea data-tauri-drag-region");
+  });
+
+  it("marks every workspace page title bar as draggable", () => {
+    const data = createSleiFixtures({ members: createDemoMembers() });
+    const views = ["chat", "search", "tasks", "members", "computers", "settings"] as const;
+
+    for (const activeView of views) {
+      const html = renderToStaticMarkup(
+        <SleiAppFrame
+          activeView={activeView}
+          locale="zh-CN"
+          runtimeSetup={{
+            loading: false,
+            error: undefined,
+            hasClaudeRuntimeReady: true,
+            nodes: data.nodes,
+          }}
+          data={data}
+        />,
+      );
+
+      expect(html).toContain('data-slot="workspace-titlebar"');
+      expect(html).toContain('data-tauri-drag-region="deep"');
+      expect(html).not.toContain("<input data-tauri-drag-region");
+      expect(html).not.toContain("<textarea data-tauri-drag-region");
+    }
   });
 
   it("uses native window controls instead of rendering custom sidebar controls", () => {
