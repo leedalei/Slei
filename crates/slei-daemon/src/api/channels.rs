@@ -323,11 +323,14 @@ pub async fn add_member(
                     return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
                 }
                 if let Err(error) = state
-                    .channel_join_reports()
-                    .create_join_report(&id, &agent.id)
+                    .channel_orchestrator()
+                    .start_channel_agent_join_report(&id, &agent.id)
                     .await
                 {
-                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                    eprintln!(
+                        "slei channel join report failed to start: channel_id={id} agent_id={} error={error}",
+                        agent.id
+                    );
                 }
             }
             let status = if outcome.created {

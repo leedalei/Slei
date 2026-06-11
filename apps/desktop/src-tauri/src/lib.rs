@@ -635,6 +635,126 @@ mod tests {
     }
 
     #[test]
+    fn agent_create_command_uses_daemon_route_with_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let response = r#"{"agent":{"id":"agent_nova","name":"Nova","handle":"@nova","agentKind":"agent","systemOwned":false,"runtimeKind":"ClaudeCode","model":"Opus","nodeId":"local-node","description":"Architect","workspacePath":"/tmp/agents/agent_nova","memoryPath":"/tmp/agents/agent_nova/MEMORY.md","docsPath":"/tmp/agents/agent_nova/docs","avatarSeed":"agent_nova","runtimeThread":{"runtimeKind":"ClaudeCode","status":"ready","createdAt":"1"},"channelIds":["all"],"createdAt":"1","updatedAt":"1"}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Nova".to_string(),
+                handle: "@nova".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Opus".to_string(),
+                node_id: "local-node".to_string(),
+                description: "Architect".to_string(),
+            },
+        )
+        .unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.agent.id, "agent_nova");
+        assert!(request.contains("POST /v1/agents HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains("Idempotency-Key: desktop-agent-create-"));
+        assert!(request.contains(r#""handle":"@nova""#));
+    }
+
+    #[test]
+    fn interactive_card_complete_uses_daemon_route_with_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0_u8; 512];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                if count == 0 {
+                    break;
+                }
+                bytes.extend_from_slice(&buffer[..count]);
+                let request = String::from_utf8_lossy(&bytes);
+                let Some(header_end) = request.find("\r\n\r\n") else {
+                    continue;
+                };
+                let content_length = request
+                    .lines()
+                    .find_map(|line| line.strip_prefix("Content-Length: "))
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(0);
+                if bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let response = r#"{"card":{"id":"card_nova","kind":"createAgent","state":"done","title":"创建 Nova","summary":"Nova","draft":{"name":"Nova"},"actionLabel":"创建","doneLabel":"DONE"}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            String::from_utf8(bytes).unwrap()
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = complete_interactive_card(&broker, "card_nova").unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.card.state, "done");
+        assert!(request.contains("POST /v1/interactive-cards/card_nova/complete HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains("Idempotency-Key: desktop-card-complete-"));
+    }
+
+    #[test]
     fn channel_create_command_does_not_fallback_when_daemon_rejects_request() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1994,7 +2114,9 @@ mod tests {
         assert!(guide_skill.content.contains("Single agent example"));
         assert!(guide_skill.content.contains("Multiple agents example"));
         assert!(guide_skill.content.contains("Call the tool once per agent"));
-        assert!(guide_skill.content.contains("simple random unused name"));
+        assert!(guide_skill
+            .content
+            .contains("simple random unused English name"));
         let dm = list_conversations(&broker).conversations[0].clone();
         send_conversation_message(
             &broker,

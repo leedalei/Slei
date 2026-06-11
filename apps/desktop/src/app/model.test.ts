@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SleiMember } from "./types";
-import { isInternalCoordinatorMember, mentionSuggestions } from "./model";
+import { isInternalCoordinatorMember, mentionSuggestions, shouldRefreshChannelMessages } from "./model";
 
 function agent(overrides: Partial<SleiMember> = {}): SleiMember {
   return {
@@ -43,5 +43,62 @@ describe("internal coordinator members", () => {
     ];
 
     expect(mentionSuggestions("", members).map((member) => member.id)).toEqual(["agent_coda"]);
+  });
+});
+
+describe("channel message refresh", () => {
+  it("keeps polling while the active channel has coordinator or agent pending activity", () => {
+    expect(
+      shouldRefreshChannelMessages(
+        [
+          {
+            id: "coordinator-activity-msg_1",
+            author: "频道协调员",
+            role: "agent",
+            time: "",
+            body: "",
+            channelId: "all",
+            status: "pending",
+            toolCall: "coordinator_routing",
+          },
+        ],
+        "all",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not poll inactive channels or settled channel messages", () => {
+    expect(
+      shouldRefreshChannelMessages(
+        [
+          {
+            id: "msg_agent_done",
+            author: "Yeal",
+            role: "agent",
+            time: "",
+            body: "完成了",
+            channelId: "all",
+            status: "done",
+          },
+        ],
+        "all",
+      ),
+    ).toBe(false);
+    expect(
+      shouldRefreshChannelMessages(
+        [
+          {
+            id: "coordinator-activity-msg_2",
+            author: "频道协调员",
+            role: "agent",
+            time: "",
+            body: "",
+            channelId: "all",
+            status: "pending",
+          },
+        ],
+        "dev",
+      ),
+    ).toBe(false);
   });
 });

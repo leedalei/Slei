@@ -57,6 +57,7 @@ import {
   normalizeAppearance,
   parseTaskCardBody,
   renameComputerNode,
+  shouldRefreshChannelMessages,
   shouldRefreshConversationMessages,
   sendChatComposerMessage,
   stripChannelHash,
@@ -93,6 +94,7 @@ export {
   isComposerImeComposing,
   moveMentionSelection,
   renameComputerNode,
+  shouldRefreshChannelMessages,
   shouldRefreshConversationMessages,
   sendChatComposerMessage,
   submitComposerDraftWithFeedback,
@@ -137,7 +139,7 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
   ];
 }
 
-function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
+export function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
   if (message.deleted || message.kind === "tombstone") return null;
   if (message.kind === "task_card") {
     const taskCard = parseTaskCardBody(message.body ?? "");
@@ -162,15 +164,36 @@ function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiM
     role: member?.type ?? (isHuman ? "human" : message.kind === "agent" ? "agent" : "system"),
     time: "",
     body: message.body ?? "",
+    cards: message.cards,
     channelId: message.channelId,
     status: message.kind === "agent" ? "done" : undefined,
   };
 }
 
-function replaceChannelMessages(current: SleiMessage[], channelMessages: SleiMessage[], channelIds: string[]): SleiMessage[] {
+function coordinatorRoutingActivitySourceId(message: SleiMessage): string | undefined {
+  return message.toolCall === "coordinator_routing"
+    ? message.id.match(/^coordinator-activity-(.+)$/)?.[1]
+    : undefined;
+}
+
+function hasRoutedChannelResultAfterSource(channelMessages: SleiMessage[], sourceMessageId: string): boolean {
+  const sourceIndex = channelMessages.findIndex((message) => message.id === sourceMessageId);
+  if (sourceIndex < 0) return false;
+  return channelMessages.slice(sourceIndex + 1).some((message) => {
+    if (message.role === "agent") return true;
+    return message.taskCard?.sourceMessageId === sourceMessageId;
+  });
+}
+
+export function replaceChannelMessages(current: SleiMessage[], channelMessages: SleiMessage[], channelIds: string[]): SleiMessage[] {
   const ids = new Set(channelIds);
   return [
-    ...current.filter((message) => !message.channelId || message.channelId.startsWith("dm:") || !ids.has(message.channelId)),
+    ...current.filter((message) => {
+      if (!message.channelId || message.channelId.startsWith("dm:") || !ids.has(message.channelId)) return true;
+      const coordinatorSourceId = coordinatorRoutingActivitySourceId(message);
+      if (!coordinatorSourceId) return false;
+      return !hasRoutedChannelResultAfterSource(channelMessages, coordinatorSourceId);
+    }),
     ...channelMessages,
   ];
 }
@@ -371,6 +394,22 @@ export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOut
     body: messages.chat.localArchiveOnly,
     channelId,
     status: "done",
+  };
+}
+
+export function createCoordinatorRoutingActivityMessage(outcome: SendChannelMessageOutcome, channelId: string, messages: DesktopMessages): SleiMessage | null {
+  if (outcome.action !== "coordinator_pending") return null;
+  return {
+    id: `coordinator-activity-${outcome.messageId}`,
+    author: messages.members.channelCoordinator,
+    handle: "@coordinator",
+    avatar: "CO",
+    role: "agent",
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    body: "",
+    channelId,
+    status: "pending",
+    toolCall: "coordinator_routing",
   };
 }
 
@@ -693,6 +732,40 @@ export function SleiApp() {
     }, 300);
     return () => window.clearInterval(interval);
   }, [activeConversationId, bridge, data.members, data.messages, profile]);
+
+  useEffect(() => {
+    if (activeConversationId || !activeChannelId) return;
+    if (!shouldRefreshChannelMessages(data.messages, activeChannelId)) return;
+    const refreshChannel = async () => {
+      const receipt = await bridge.listChannelMessages(activeChannelId);
+      const channelMessages = receipt.messages
+        .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
+        .filter((message): message is SleiMessage => Boolean(message));
+      setData((current) =>
+        createEmptySleiData({
+          ...current,
+          messages: replaceChannelMessages(current.messages, channelMessages, [activeChannelId]),
+        }),
+      );
+    };
+    const interval = window.setInterval(() => {
+      void refreshChannel();
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeChannelId, activeConversationId, bridge, data.members, data.messages, messages, profile]);
+
+  useEffect(() => {
+    if (activeConversationId || !activeChannelId) return;
+    if (!hasUnsettledChannelMemberReadiness(data.members, activeChannelId)) return;
+    const interval = window.setInterval(() => {
+      void refreshChannelMembersIntoState(activeChannelId)
+        .then((members) => refreshChannelMessagesIntoState(activeChannelId, members))
+        .catch((error: unknown) => {
+          logAppEvent(bridge, "channel-members-readiness-interval", "readiness-refresh-failed", { channelId: activeChannelId, error: formatLogError(error) });
+        });
+    }, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeChannelId, activeConversationId, bridge, data.members]);
 
   async function handleOpenAgentPath(agentId: string, target: AgentPathTarget) {
     await bridge.openAgentPath(agentId, target);
@@ -1054,7 +1127,8 @@ export function SleiApp() {
 
     setData((current) => {
       const archiveNotice = createChannelArchiveNoticeMessage(result.receipt.outcome, targetId, messages);
-      const nextMessages = [channelMessage, archiveNotice].filter((message): message is SleiMessage => Boolean(message));
+      const coordinatorActivity = createCoordinatorRoutingActivityMessage(result.receipt.outcome, targetId, messages);
+      const nextMessages = [channelMessage, archiveNotice, coordinatorActivity].filter((message): message is SleiMessage => Boolean(message));
       return createEmptySleiData({ ...current, messages: [...current.messages, ...nextMessages] });
     });
     void refreshChannelMessagesIntoState(targetId, data.members).catch((error: unknown) => {

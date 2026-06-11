@@ -338,10 +338,60 @@ impl ChannelOrchestratorService {
                 &prompt,
             )
             .await?;
-        let run = self
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.created",
+            &coordinator_input.run_id,
+            &channel_id,
+            &message.id,
+            format!("prompt_len={}", prompt.len()),
+        )
+        .await;
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.starting",
+            &coordinator_input.run_id,
+            &channel_id,
+            &message.id,
+            format!(
+                "workspace_mounts={}",
+                coordinator_input.workspace_mounts.len()
+            ),
+        )
+        .await;
+        let coordinator_run_id = coordinator_input.run_id.clone();
+        let run = match self
             .coordinator
             .start_runtime_run_with_launch_guard(coordinator_input, launch_guard)
-            .await?;
+            .await
+        {
+            Ok(run) => run,
+            Err(error) => {
+                self.record_coordinator_runtime_diagnostic(
+                    "coordinator_runtime.start_failed",
+                    &coordinator_run_id,
+                    &channel_id,
+                    &message.id,
+                    format!("error={}", error),
+                )
+                .await;
+                let _ = self
+                    .orchestration
+                    .finish_coordinator_runtime_run(
+                        &coordinator_run_id,
+                        "failed",
+                        Some(&error.to_string()),
+                    )
+                    .await;
+                return Err(error.into());
+            }
+        };
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.started",
+            &run.run_id,
+            &channel_id,
+            &message.id,
+            "worker_run_started".to_string(),
+        )
+        .await;
         let outcome = pending_outcome(message.id, run.run_id);
         self.outcome_idempotency
             .lock()
@@ -428,6 +478,25 @@ impl ChannelOrchestratorService {
         })
     }
 
+    pub async fn start_channel_agent_join_report(
+        &self,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        let agent = self.members.get_product_agent(agent_id).await?;
+        let prompt = format!(
+            "你刚完成加入频道 #{channel_id} 的记忆初始化。请根据你当前工作区里的 MEMORY.md 和 notes/channels.md，自主写一条简短入场消息发到频道里。说明你是谁、负责什么、用户或其他成员什么时候应该 mention 你。不要承诺开始无关工作，不要输出 JSON，不要复述这些系统要求。"
+        );
+        self.start_channel_agent_run_once(
+            agent_id,
+            channel_id,
+            &format!("channel_join:{channel_id}:{agent_id}"),
+            &prompt,
+            Some(agent),
+        )
+        .await
+    }
+
     pub async fn handle_coordinator_worker_event(
         &self,
         event: Value,
@@ -468,11 +537,27 @@ impl ChannelOrchestratorService {
                     self.orchestration
                         .append_coordinator_runtime_output(run_id, delta)
                         .await?;
+                    self.record_coordinator_runtime_diagnostic(
+                        "coordinator_runtime.output_delta",
+                        run_id,
+                        &run.channel_id,
+                        &run.message_id,
+                        format!("delta_len={}", delta.len()),
+                    )
+                    .await;
                 }
                 Ok(true)
             }
             Some("completed") => {
                 if run.status == "pending" {
+                    self.record_coordinator_runtime_diagnostic(
+                        "coordinator_runtime.completed_event",
+                        run_id,
+                        &run.channel_id,
+                        &run.message_id,
+                        "worker_completed".to_string(),
+                    )
+                    .await;
                     self.complete_coordinator_runtime_run(run_id).await?;
                 }
                 Ok(true)
@@ -483,6 +568,14 @@ impl ChannelOrchestratorService {
                         .get("message")
                         .and_then(Value::as_str)
                         .unwrap_or("Coordinator worker failed");
+                    self.record_coordinator_runtime_diagnostic(
+                        "coordinator_runtime.failed_event",
+                        run_id,
+                        &run.channel_id,
+                        &run.message_id,
+                        "worker_failed".to_string(),
+                    )
+                    .await;
                     self.fail_coordinator_runtime_run(run_id, message).await?;
                 }
                 Ok(true)
@@ -524,6 +617,15 @@ impl ChannelOrchestratorService {
                     self.messages
                         .create_agent_channel_message(&record.channel_id, &record.agent_id, body)
                         .await?;
+                    if is_channel_join_run(&record.source_message_id) {
+                        self.channels
+                            .set_member_readiness(
+                                &record.channel_id,
+                                &record.agent_id,
+                                ChannelMemberReadiness::Ready,
+                            )
+                            .await?;
+                    }
                     let _ = self
                         .orchestration
                         .record_diagnostic_event(
@@ -547,9 +649,22 @@ impl ChannelOrchestratorService {
                     .get("message")
                     .and_then(Value::as_str)
                     .unwrap_or("Agent runtime failed");
-                self.messages
-                    .create_agent_channel_message(&record.channel_id, &record.agent_id, message)
-                    .await?;
+                if is_channel_join_run(&record.source_message_id) {
+                    let _ = self
+                        .orchestration
+                        .record_diagnostic_event(
+                            "channel_join_report.failed",
+                            &format!(
+                                "run_id={} agent_id={} channel_id={} message={}",
+                                run_id, record.agent_id, record.channel_id, message
+                            ),
+                        )
+                        .await;
+                } else {
+                    self.messages
+                        .create_agent_channel_message(&record.channel_id, &record.agent_id, message)
+                        .await?;
+                }
                 let _ = self
                     .orchestration
                     .record_diagnostic_event(
@@ -622,6 +737,14 @@ impl ChannelOrchestratorService {
         if run.status != "pending" {
             return Ok(());
         }
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.completing",
+            run_id,
+            &run.channel_id,
+            &run.message_id,
+            format!("output_len={}", run.output.len()),
+        )
+        .await;
         let message = self.messages.message(&run.message_id).await?;
         let message_body = message.body.clone().ok_or_else(|| {
             ChannelOrchestratorError::InactiveIdempotentMessage {
@@ -637,17 +760,45 @@ impl ChannelOrchestratorService {
                 decision
             }
             Err(error) => {
+                self.record_coordinator_runtime_diagnostic(
+                    "coordinator_runtime.decision_parse_failed",
+                    run_id,
+                    &run.channel_id,
+                    &run.message_id,
+                    format!("error={}", error),
+                )
+                .await;
                 self.persist_failed_coordinator_decision(&run, &message, &message_body, &error)
                     .await?;
                 return Ok(());
             }
         };
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.decision_parsed",
+            run_id,
+            &run.channel_id,
+            &run.message_id,
+            format!(
+                "action={} assignee_agent_ids={}",
+                enum_storage_str(&decision.action),
+                decision.assignee_agent_ids.len()
+            ),
+        )
+        .await;
 
         self.apply_completed_coordinator_decision(&run, &message, &message_body, decision)
             .await?;
         self.orchestration
             .finish_coordinator_runtime_run(run_id, "completed", None)
             .await?;
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.completed",
+            run_id,
+            &run.channel_id,
+            &run.message_id,
+            "decision_applied".to_string(),
+        )
+        .await;
         Ok(())
     }
 
@@ -679,7 +830,35 @@ impl ChannelOrchestratorService {
             &CoordinatorDecisionError::Worker(message.to_string()),
         )
         .await?;
+        self.record_coordinator_runtime_diagnostic(
+            "coordinator_runtime.failed",
+            run_id,
+            &run.channel_id,
+            &run.message_id,
+            "decision_failed".to_string(),
+        )
+        .await;
         Ok(())
+    }
+
+    async fn record_coordinator_runtime_diagnostic(
+        &self,
+        event_type: &str,
+        run_id: &str,
+        channel_id: &str,
+        message_id: &str,
+        detail: String,
+    ) {
+        let _ = self
+            .orchestration
+            .record_diagnostic_event(
+                event_type,
+                &format!(
+                    "run_id={} channel_id={} message_id={} {}",
+                    run_id, channel_id, message_id, detail
+                ),
+            )
+            .await;
     }
 
     async fn persist_failed_coordinator_decision(
@@ -1166,6 +1345,18 @@ impl ChannelOrchestratorService {
         source_message_id: &str,
         prompt: &str,
     ) -> Result<(), ChannelOrchestratorError> {
+        self.start_channel_agent_run_once(agent_id, channel_id, source_message_id, prompt, None)
+            .await
+    }
+
+    async fn start_channel_agent_run_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        source_message_id: &str,
+        prompt: &str,
+        agent: Option<crate::services::member_service::ProductAgentRecord>,
+    ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
             run.agent_id == agent_id
                 && run.channel_id == channel_id
@@ -1173,7 +1364,10 @@ impl ChannelOrchestratorService {
         }) {
             return Ok(());
         }
-        let agent = self.members.get_product_agent(agent_id).await?;
+        let agent = match agent {
+            Some(agent) => agent,
+            None => self.members.get_product_agent(agent_id).await?,
+        };
         let run_id = format!("run_{}", Uuid::new_v4().simple());
         self.channel_agent_runs.lock().await.insert(
             run_id.clone(),
@@ -1219,11 +1413,6 @@ impl ChannelOrchestratorService {
             self.channels
                 .add_agent_to_channel(channel_id, &agent.id)
                 .await?;
-            if agent.runtime_thread.status == "ready" {
-                self.channels
-                    .set_member_readiness(channel_id, &agent.id, ChannelMemberReadiness::Ready)
-                    .await?;
-            }
         }
         Ok(())
     }
@@ -1415,6 +1604,10 @@ fn readiness_label(readiness: &ChannelMemberReadiness) -> &'static str {
         ChannelMemberReadiness::MemoryFailed => "memory_failed",
         ChannelMemberReadiness::Unavailable => "unavailable",
     }
+}
+
+fn is_channel_join_run(source_message_id: &str) -> bool {
+    source_message_id.starts_with("channel_join:")
 }
 
 fn explicit_handles(body: &str) -> Vec<String> {

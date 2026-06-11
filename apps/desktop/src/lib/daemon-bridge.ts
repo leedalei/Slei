@@ -249,6 +249,7 @@ export type ChannelMessageView = {
   channelId: string;
   authorId: string;
   body?: string;
+  cards?: InteractiveCardView[];
   kind: "human" | "agent" | "task_card" | "tombstone" | string;
   deleted?: boolean;
   edited?: boolean;

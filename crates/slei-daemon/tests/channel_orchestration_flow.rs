@@ -2440,6 +2440,81 @@ async fn public_default_all_channel_message_api_accepts_messages() {
 }
 
 #[tokio::test]
+async fn coordinator_runtime_accepts_fenced_json_and_records_lifecycle_diagnostics() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/channels/all/messages",
+        Some("coordinator-runtime-diagnostics"),
+        serde_json::json!({
+            "authorId": "human_lei",
+            "body": "这个问题应该交给谁看？"
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    assert_eq!(body["outcome"]["action"], "coordinator_pending");
+    let message_id = body["outcome"]["messageId"].as_str().unwrap();
+    let coordinator_run_id = body["outcome"]["coordinatorRunId"].as_str().unwrap();
+
+    complete_coordinator_run(
+        &state,
+        coordinator_run_id,
+        format!(
+            "```json\n{}\n```",
+            reply_decision_json("agent_alice", "fenced JSON should still route to Alice")
+        ),
+    )
+    .await;
+
+    let decisions = state
+        .orchestration()
+        .decisions_for_message_for_tests(message_id)
+        .await;
+    assert_eq!(decisions.len(), 1);
+    assert_eq!(decisions[0].action, "request_agent_reply");
+    assert_eq!(
+        decisions[0].assignee_agent_id.as_deref(),
+        Some("agent_alice")
+    );
+
+    let diagnostics = get_json(&app, &token, "/v1/diagnostics").await;
+    assert_eq!(diagnostics.status(), StatusCode::OK);
+    let diagnostics_body = response_json(diagnostics).await;
+    let recent_events = diagnostics_body["recentEvents"].as_array().unwrap();
+    let event_types = recent_events
+        .iter()
+        .filter_map(|event| event["eventType"].as_str())
+        .collect::<Vec<_>>();
+    for expected in [
+        "coordinator_runtime.created",
+        "coordinator_runtime.starting",
+        "coordinator_runtime.started",
+        "coordinator_runtime.output_delta",
+        "coordinator_runtime.completed_event",
+        "coordinator_runtime.completing",
+        "coordinator_runtime.decision_parsed",
+        "coordinator_runtime.completed",
+    ] {
+        assert!(
+            event_types.contains(&expected),
+            "missing diagnostic event {expected}; got {event_types:?}"
+        );
+    }
+    assert!(recent_events.iter().any(|event| {
+        event["eventType"] == "coordinator_runtime.output_delta"
+            && event["payload"].as_str().is_some_and(|payload| {
+                payload.contains("delta_len=") && !payload.contains("这个问题")
+            })
+    }));
+}
+
+#[tokio::test]
 async fn public_channel_message_api_lists_channel_history() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");

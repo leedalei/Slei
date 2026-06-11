@@ -363,11 +363,15 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             setActiveCardId(undefined);
           }}
           onCreate={async (request) => {
-            await input.onAgentCreate?.(request);
-            if (activeCardId) await input.onInteractiveCardComplete?.(activeCardId);
-            setAgentCreateOpen(false);
-            setAgentDraft(undefined);
-            setActiveCardId(undefined);
+            try {
+              await input.onAgentCreate?.(request);
+              if (activeCardId) await input.onInteractiveCardComplete?.(activeCardId);
+              setAgentCreateOpen(false);
+              setAgentDraft(undefined);
+              setActiveCardId(undefined);
+            } catch (error) {
+              input.onChannelCreateFailure?.(formatChannelCreateFailure(messages.agentCreate.createdFailed, error), "error");
+            }
           }}
         />
       ) : null}

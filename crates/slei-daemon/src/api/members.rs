@@ -62,6 +62,23 @@ pub async fn create_agent(
             {
                 return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
             }
+            if let Err(error) = state
+                .memory_maintainer()
+                .sync_added_channel_member("all", &agent.id)
+                .await
+            {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            if let Err(error) = state
+                .channel_orchestrator()
+                .start_channel_agent_join_report("all", &agent.id)
+                .await
+            {
+                eprintln!(
+                    "slei channel join report failed to start: channel_id=all agent_id={} error={error}",
+                    agent.id
+                );
+            }
             (StatusCode::CREATED, Json(json!({ "agent": agent }))).into_response()
         }
         Err(MemberError::DuplicateHandle) => {

@@ -226,13 +226,51 @@ async fn membership_memory_add_member_marks_ready_and_posts_agent_join_report() 
         .into_iter()
         .find(|member| member.agent_id == coda.id)
         .unwrap();
-    assert_eq!(format!("{:?}", member.readiness), "Ready");
+    assert_eq!(format!("{:?}", member.readiness), "MemorySyncing");
     assert!(state
         .memory_events()
         .events_for_agent(&coda.id)
         .await
         .iter()
         .any(|event| event.event_type == "memory_updated"));
+
+    let commands = state.worker_commands();
+    let start_run = commands
+        .iter()
+        .find(|command| command["type"] == "start_run")
+        .expect("added channel member should start a runtime join report");
+    assert_eq!(start_run["session"]["agent_id"], coda.id);
+    assert!(start_run["input"]["prompt"]
+        .as_str()
+        .unwrap()
+        .contains("入场"));
+
+    assert!(state.channel_messages_for_tests("dev").await.is_empty());
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": start_run["run_id"].as_str().unwrap(),
+            "delta": "Coda 已读完频道记忆，我负责把架构方案落实成代码。"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": start_run["run_id"].as_str().unwrap()
+        }))
+        .await
+        .unwrap();
+
+    let member = state
+        .channels()
+        .channel_members("dev")
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|member| member.agent_id == coda.id)
+        .unwrap();
+    assert_eq!(format!("{:?}", member.readiness), "Ready");
 
     let messages = state.channel_messages_for_tests("dev").await;
     assert!(messages.iter().any(|message| {
@@ -241,7 +279,7 @@ async fn membership_memory_add_member_marks_ready_and_posts_agent_join_report() 
             && message
                 .body
                 .as_deref()
-                .is_some_and(|body| body.contains("Coda") && body.contains("handles channel work"))
+                .is_some_and(|body| body.contains("Coda") && body.contains("架构方案落实成代码"))
     }));
 }
 

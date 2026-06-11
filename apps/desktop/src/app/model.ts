@@ -281,6 +281,11 @@ export function shouldRefreshConversationMessages(messages: SleiMessage[], conve
   return messages.some((message) => message.channelId === conversationId && (message.status === "running" || message.status === "pending"));
 }
 
+export function shouldRefreshChannelMessages(messages: SleiMessage[], channelId?: string): boolean {
+  if (!channelId) return false;
+  return messages.some((message) => message.channelId === channelId && (message.status === "running" || message.status === "pending"));
+}
+
 export function formatMessageTime(value: string): string {
   const raw = value.trim();
   let date: Date;

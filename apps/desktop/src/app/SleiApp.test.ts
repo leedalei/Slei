@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  channelMessageToSleiMessage,
+  createCoordinatorRoutingActivityMessage,
+  findActiveAgentActivities,
   hasUnsettledChannelMemberReadiness,
+  replaceChannelMessages,
 } from "./SleiApp";
 import {
   channelReplyTargetIds,
@@ -11,10 +15,94 @@ import {
   createChannelAgentReplyMessageFromReplies,
   waitForChannelAgentReplies,
 } from "../test/channel-agent-reply-utils";
-import type { ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
-import type { SleiMember } from "./types";
+import { createDesktopMessages } from "../i18n";
+import { defaultProfile } from "./model";
+import type { ChannelMessageView, ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
+import type { SleiMember, SleiMessage } from "./types";
 
 describe("createChannelAgentReplyMessage", () => {
+  it("shows coordinator pending work in the chat sidebar agent activity area", () => {
+    const outcome: SendChannelMessageOutcome = {
+      messageId: "msg_route_1",
+      action: "coordinator_pending",
+      coordinatorRunId: "coord_run_1",
+      decisionStatus: "pending",
+    };
+    const message = createCoordinatorRoutingActivityMessage(outcome, "all", createDesktopMessages("zh-CN"));
+
+    expect(message).toMatchObject({
+      id: "coordinator-activity-msg_route_1",
+      author: "频道协调员",
+      handle: "@coordinator",
+      role: "agent",
+      channelId: "all",
+      status: "pending",
+      toolCall: "coordinator_routing",
+    });
+    expect(
+      findActiveAgentActivities(
+        { channels: [{ id: "all", name: "all", description: "", unread: 0 }], messages: [message!], members: [] } as never,
+        { id: "all", name: "all", description: "", unread: 0 },
+      ).map((activity) => activity.message.id),
+    ).toEqual(["coordinator-activity-msg_route_1"]);
+  });
+
+  it("keeps coordinator sidebar activity during pending refresh and removes it after route output appears", () => {
+    const pending = {
+      id: "coordinator-activity-msg_route_1",
+      author: "频道协调员",
+      handle: "@coordinator",
+      avatar: "CO",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "all",
+      status: "pending",
+      toolCall: "coordinator_routing",
+    } satisfies SleiMessage;
+    const human = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "",
+      body: "这个方案怎么看？",
+      channelId: "all",
+    } satisfies SleiMessage;
+
+    expect(replaceChannelMessages([human, pending], [human], ["all"]).map((message) => message.id)).toEqual([
+      "coordinator-activity-msg_route_1",
+      "msg_route_1",
+    ]);
+
+    const agentReply = {
+      id: "msg_agent_1",
+      author: "Alice",
+      role: "agent",
+      time: "",
+      body: "我来看。",
+      channelId: "all",
+      status: "done",
+    } satisfies SleiMessage;
+    expect(replaceChannelMessages([human, pending], [human, agentReply], ["all"]).map((message) => message.id)).toEqual([
+      "msg_route_1",
+      "msg_agent_1",
+    ]);
+
+    const taskCard = {
+      id: "msg_task_1",
+      author: "系统",
+      role: "system",
+      time: "",
+      body: "task_card:task_1:source:msg_route_1",
+      channelId: "all",
+      taskCard: { taskId: "task_1", sourceMessageId: "msg_route_1" },
+    } satisfies SleiMessage;
+    expect(replaceChannelMessages([human, pending], [human, taskCard], ["all"]).map((message) => message.id)).toEqual([
+      "msg_route_1",
+      "msg_task_1",
+    ]);
+  });
+
   it("builds stable activity messages for every routed channel target", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
@@ -84,11 +172,27 @@ describe("createChannelAgentReplyMessage", () => {
     expect(hasUnsettledChannelMemberReadiness(members, "ops")).toBe(false);
   });
 
+  it("polls active channel member readiness while members are joining", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("channel-members-readiness-interval");
+    expect(source).toContain("hasUnsettledChannelMemberReadiness(data.members, activeChannelId)");
+    expect(source).toContain("refreshChannelMembersIntoState(activeChannelId)");
+  });
+
   it("keeps the current chat view after a member is created from an interactive card", () => {
     const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("messages.agentCreate.createdSuccess");
     expect(source).not.toContain('navigateToView("members");');
+  });
+
+  it("surfaces agent creation failures from the modal", () => {
+    const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("messages.agentCreate.createdFailed");
+    expect(source).toContain("catch (error)");
+    expect(source).toContain("input.onChannelCreateFailure?.");
   });
 
   it("keeps the channel activity id stable across progress and completion", () => {
@@ -144,6 +248,59 @@ describe("createChannelAgentReplyMessage", () => {
     expect(message.id).toBe("agent-activity-msg_123");
     expect(message.status).toBe("done");
     expect(message.cards).toEqual(reply.cards);
+  });
+
+  it("preserves cards from channel agent card messages", () => {
+    const card = {
+      id: "card_1",
+      kind: "createAgent",
+      state: "pending",
+      title: "创建 Nova",
+      summary: "Nova · ClaudeCode / Opus",
+      draft: { name: "Nova", handle: "@nova" },
+      actionLabel: "创建",
+      doneLabel: "DONE",
+    };
+    const message: ChannelMessageView = {
+      id: "card_message_card_1",
+      channelId: "all",
+      authorId: "agent_guide_local_node",
+      body: "",
+      kind: "agent",
+      deleted: false,
+      cards: [card],
+    };
+
+    const converted = channelMessageToSleiMessage(
+      message,
+      [{
+        id: "agent_guide_local_node",
+        name: "Yeal",
+        handle: "@yeal",
+        avatar: "YE",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "引导员",
+        description: "",
+        computer: "本机设备",
+        created: "2026-06-04",
+        creator: "system",
+        runtime: "ClaudeCode",
+        model: "Sonnet",
+        instructions: "",
+        permissions: [],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "",
+        capabilities: [],
+      }],
+      defaultProfile,
+      createDesktopMessages("zh-CN"),
+    );
+
+    expect(converted?.body).toBe("");
+    expect(converted?.cards).toEqual([card]);
+    expect(converted?.status).toBe("done");
   });
 
   it("collects multiple completed card messages from one runtime run", async () => {

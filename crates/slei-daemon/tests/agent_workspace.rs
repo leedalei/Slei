@@ -21,7 +21,7 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("agent-root");
     let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
-    let app = build_router(state);
+    let app = build_router(state.clone());
 
     let response = post_json(
         &app,
@@ -72,6 +72,52 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     assert_eq!(all_members.status(), StatusCode::OK);
     let all_members_body = response_json(all_members).await;
     assert_eq!(all_members_body["members"][0]["agentId"], id);
+    assert_eq!(
+        all_members_body["members"][0]["readiness"],
+        "memory_syncing"
+    );
+
+    let commands = state.worker_commands();
+    let start_run = commands
+        .iter()
+        .find(|command| command["type"] == "start_run")
+        .expect("created all-channel agent should start a runtime join report");
+    assert_eq!(start_run["session"]["agent_id"], id);
+    assert_eq!(
+        start_run["session"]["cwd"].as_str().unwrap(),
+        workspace.to_string_lossy()
+    );
+    assert!(start_run["input"]["prompt"]
+        .as_str()
+        .unwrap()
+        .contains("入场"));
+    assert!(state.channel_messages_for_tests("all").await.is_empty());
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": start_run["run_id"].as_str().unwrap(),
+            "delta": "Coda 已完成 all 频道记忆初始化，我负责开发实现。"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": start_run["run_id"].as_str().unwrap()
+        }))
+        .await
+        .unwrap();
+    let all_members = response_json(get_json(&app, &token, "/v1/channels/all/members").await).await;
+    assert_eq!(all_members["members"][0]["readiness"], "ready");
+    assert!(state
+        .channel_messages_for_tests("all")
+        .await
+        .iter()
+        .any(|message| message.author_id == id
+            && message
+                .body
+                .as_deref()
+                .is_some_and(|body| body.contains("Coda"))));
 }
 
 #[tokio::test]
@@ -533,9 +579,15 @@ async fn create_channel_with_agents_is_immediately_usable_and_requests_memory_up
     let created_channel_body = response_json(created_channel).await;
     assert_eq!(created_channel_body["channel"]["id"], "ready-channel");
 
-    let selected =
-        wait_for_channel_member_readiness(&app, &token, "ready-channel", &alice_id, "ready").await;
-    assert_eq!(selected["readiness"], "ready");
+    let selected = wait_for_channel_member_readiness(
+        &app,
+        &token,
+        "ready-channel",
+        &alice_id,
+        "memory_syncing",
+    )
+    .await;
+    assert_eq!(selected["readiness"], "memory_syncing");
 
     let events = wait_for_memory_update_requests(&state, &alice_id, "ready-channel", 1).await;
     assert!(events
@@ -611,7 +663,8 @@ async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
         .events_for_agent(&alice_id)
         .await
         .iter()
-        .any(|event| event.event_type == "memory_updated"));
+        .any(|event| event.event_type == "memory_updated"
+            && event.channel_id.as_deref() == Some("ready-channel")));
 
     state
         .run_channel_join_memory_updates("ready-channel")
@@ -626,13 +679,40 @@ async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
         .iter()
         .find(|member| member["agentId"] == alice_id)
         .expect("selected agent should be a channel member");
-    assert_eq!(selected["readiness"], "ready");
+    assert_eq!(selected["readiness"], "memory_syncing");
 
+    let commands = state.worker_commands();
+    let join_command = start_run_command_containing_prompt(&commands, "ready-channel");
+    assert_eq!(join_command["session"]["agent_id"], alice_id);
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": join_command["run_id"].as_str().unwrap(),
+            "delta": "Alice 已完成频道记忆初始化。"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": join_command["run_id"].as_str().unwrap()
+        }))
+        .await
+        .unwrap();
+    let members =
+        response_json(get_json(&app, &token, "/v1/channels/ready-channel/members").await).await;
+    let selected = members["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|member| member["agentId"] == alice_id)
+        .expect("selected agent should be a channel member");
+    assert_eq!(selected["readiness"], "ready");
     let messages = state
         .messages()
         .reconstructed_context("ready-channel")
         .await;
-    assert!(messages.contains("已就位"));
+    assert!(messages.contains("Alice"));
 
     let events = state.memory_events().events_for_agent(&alice_id).await;
     let updated_position = events
@@ -694,10 +774,15 @@ async fn channel_create_setup_completes_join_memory_updates() {
     .await;
     assert_eq!(created_channel.status(), StatusCode::CREATED);
 
-    let selected =
-        wait_for_channel_member_readiness(&app, &token, "auto-ready-channel", &alice_id, "ready")
-            .await;
-    assert_eq!(selected["readiness"], "ready");
+    let selected = wait_for_channel_member_readiness(
+        &app,
+        &token,
+        "auto-ready-channel",
+        &alice_id,
+        "memory_syncing",
+    )
+    .await;
+    assert_eq!(selected["readiness"], "memory_syncing");
     assert!(state
         .memory_events()
         .events_for_agent(&alice_id)
@@ -710,7 +795,19 @@ async fn channel_create_setup_completes_join_memory_updates() {
         .messages()
         .reconstructed_context("auto-ready-channel")
         .await;
-    assert!(messages.contains("已就位"));
+    assert!(messages.is_empty());
+    let commands = state.worker_commands();
+    let join_command = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["session"]["agent_id"] == alice_id
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains("入场消息"))
+        })
+        .expect("channel create should start a runtime join report");
+    assert_eq!(join_command["session"]["agent_id"], alice_id);
 }
 
 #[tokio::test]
@@ -1881,15 +1978,13 @@ async fn dm_send_starts_agent_runtime() {
     assert_eq!(sent.status(), StatusCode::CREATED);
 
     let commands = state.worker_commands();
-    assert_eq!(commands.len(), 1);
-    assert_eq!(commands[0]["type"], "start_run");
-    assert_eq!(commands[0]["session"]["agent_id"], agent_id);
-    assert_eq!(commands[0]["session"]["cwd"], workspace);
-    assert_eq!(commands[0]["session"]["persist_session"], true);
-    assert_eq!(commands[0]["session"]["resume_session"], false);
-    assert!(Uuid::parse_str(commands[0]["session"]["session_id"].as_str().unwrap()).is_ok());
-    assert_eq!(commands[0]["input"]["prompt"], "帮我看一下初始化流程");
-    assert_eq!(commands[0]["input"]["context"], json!([]));
+    let command = start_run_command_with_prompt(&commands, "帮我看一下初始化流程");
+    assert_eq!(command["session"]["agent_id"], agent_id);
+    assert_eq!(command["session"]["cwd"], workspace);
+    assert_eq!(command["session"]["persist_session"], true);
+    assert_eq!(command["session"]["resume_session"], false);
+    assert!(Uuid::parse_str(command["session"]["session_id"].as_str().unwrap()).is_ok());
+    assert_eq!(command["input"]["context"], json!([]));
 }
 
 #[tokio::test]
@@ -1944,7 +2039,8 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     )
     .await;
     assert_eq!(first.status(), StatusCode::CREATED);
-    let first_command = state.worker_commands()[0].clone();
+    let commands = state.worker_commands();
+    let first_command = start_run_command_with_prompt(&commands, "第一句").clone();
     let first_run_id = first_command["run_id"].as_str().unwrap().to_string();
     let first_session_id = first_command["session"]["session_id"]
         .as_str()
@@ -1984,10 +2080,11 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     .await;
     assert_eq!(second.status(), StatusCode::CREATED);
     let commands = state.worker_commands();
-    assert_eq!(commands[1]["session"]["session_id"], first_session_id);
-    assert_eq!(commands[1]["session"]["persist_session"], true);
-    assert_eq!(commands[1]["session"]["resume_session"], true);
-    assert_eq!(commands[1]["input"]["context"], json!([]));
+    let second_command = start_run_command_with_prompt(&commands, "第二句");
+    assert_eq!(second_command["session"]["session_id"], first_session_id);
+    assert_eq!(second_command["session"]["persist_session"], true);
+    assert_eq!(second_command["session"]["resume_session"], true);
+    assert_eq!(second_command["input"]["context"], json!([]));
 
     let reset = post_json(
         &app,
@@ -2029,8 +2126,14 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     .await;
     assert_eq!(reset_messages["messages"].as_array().unwrap().len(), 0);
     let commands = state.worker_commands();
-    assert_eq!(commands[2]["type"], "clear_session");
-    assert_eq!(commands[2]["session"]["session_id"], first_session_id);
+    let clear_session = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "clear_session"
+                && command["session"]["session_id"] == first_session_id
+        })
+        .expect("runtime reset should clear the previous session");
+    assert_eq!(clear_session["session"]["session_id"], first_session_id);
 
     let third = post_json(
         &app,
@@ -2042,9 +2145,10 @@ async fn dm_runtime_session_persists_resumes_and_resets() {
     .await;
     assert_eq!(third.status(), StatusCode::CREATED);
     let commands = state.worker_commands();
-    let reset_session_id = commands[3]["session"]["session_id"].as_str().unwrap();
+    let third_command = start_run_command_with_prompt(&commands, "第三句");
+    let reset_session_id = third_command["session"]["session_id"].as_str().unwrap();
     assert_ne!(reset_session_id, first_session_id);
-    assert_eq!(commands[3]["session"]["resume_session"], false);
+    assert_eq!(third_command["session"]["resume_session"], false);
 }
 
 #[tokio::test]
@@ -2144,7 +2248,9 @@ async fn dm_sessions_and_attachments_round_trip_through_api() {
         messages["messages"][0]["attachments"][0]["name"],
         "notes.md"
     );
-    assert!(state.worker_commands()[0]["input"]["prompt"]
+    let commands = state.worker_commands();
+    let attachment_command = start_run_command_containing_prompt(&commands, "Attachments:");
+    assert!(attachment_command["input"]["prompt"]
         .as_str()
         .unwrap()
         .contains("Attachments:"));
@@ -2579,7 +2685,11 @@ async fn dm_send_rejects_session_from_another_conversation() {
     )
     .await;
     assert_eq!(messages["messages"].as_array().unwrap().len(), 0);
-    assert!(state.worker_commands().is_empty());
+    assert!(state.worker_commands().iter().all(|command| {
+        command["input"]["prompt"]
+            .as_str()
+            .is_none_or(|prompt| !prompt.contains("不应写入另一个会话"))
+    }));
 }
 
 #[tokio::test]
@@ -2666,9 +2776,8 @@ async fn dm_send_carries_previous_five_rounds_as_runtime_context() {
     assert_eq!(sent.status(), StatusCode::CREATED);
 
     let commands = state.worker_commands();
-    assert_eq!(commands.len(), 1);
-    assert_eq!(commands[0]["input"]["prompt"], "用户第 7 轮");
-    let context = commands[0]["input"]["context"].as_array().unwrap();
+    let command = start_run_command_with_prompt(&commands, "用户第 7 轮");
+    let context = command["input"]["context"].as_array().unwrap();
     assert_eq!(context.len(), 10);
     assert_eq!(context[0]["role"], "user");
     assert_eq!(context[0]["content"], "用户第 2 轮");
@@ -2731,7 +2840,8 @@ async fn dm_runtime_events_append_to_conversation() {
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
-    let run_id = state.worker_commands()[0]["run_id"]
+    let commands = state.worker_commands();
+    let run_id = start_run_command_with_prompt(&commands, "请给我一个方案")["run_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -2843,6 +2953,25 @@ async fn delete_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+fn start_run_command_with_prompt<'a>(commands: &'a [Value], prompt: &str) -> &'a Value {
+    commands
+        .iter()
+        .find(|command| command["type"] == "start_run" && command["input"]["prompt"] == prompt)
+        .expect("expected worker start_run command with prompt")
+}
+
+fn start_run_command_containing_prompt<'a>(commands: &'a [Value], needle: &str) -> &'a Value {
+    commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains(needle))
+        })
+        .expect("expected worker start_run command containing prompt")
 }
 
 async fn wait_for_channel_member(

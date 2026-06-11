@@ -329,9 +329,15 @@ impl AppState {
             .run_pending_channel_join_updates(channel_id)
             .await?;
         for agent_id in ready_agent_ids {
-            self.messages()
-                .create_agent_channel_message(channel_id, &agent_id, "已就位")
-                .await?;
+            if let Err(error) = self
+                .channel_orchestrator()
+                .start_channel_agent_join_report(channel_id, &agent_id)
+                .await
+            {
+                eprintln!(
+                    "slei channel join report failed to start: channel_id={channel_id} agent_id={agent_id} error={error}"
+                );
+            }
         }
         Ok(())
     }

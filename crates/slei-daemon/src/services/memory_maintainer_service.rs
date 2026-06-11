@@ -54,13 +54,6 @@ impl MemoryMaintainerService {
                     self.memory_events
                         .complete_update(&member.agent_id, channel_id)
                         .await;
-                    self.channels
-                        .set_member_readiness(
-                            channel_id,
-                            &member.agent_id,
-                            ChannelMemberReadiness::Ready,
-                        )
-                        .await?;
                     completed.push(member.agent_id.clone());
                 }
                 Err(error) => {
@@ -98,9 +91,6 @@ impl MemoryMaintainerService {
                 self.memory_events
                     .complete_update(agent_id, channel_id)
                     .await;
-                self.channels
-                    .set_member_readiness(channel_id, agent_id, ChannelMemberReadiness::Ready)
-                    .await?;
                 Ok(())
             }
             Err(error) => {

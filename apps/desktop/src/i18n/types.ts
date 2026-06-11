@@ -303,6 +303,7 @@ export type DesktopMessages = {
   agentCreate: {
     addAgent: string;
     associatedDevice: string;
+    createdFailed: string;
     createdSuccess: string;
     defaultDescription: (name: string) => string;
     description: string;

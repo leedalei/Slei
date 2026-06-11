@@ -411,6 +411,8 @@ pub struct ChannelMessageView {
     pub author_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cards: Option<Vec<InteractiveCardView>>,
     pub kind: String,
     #[serde(default)]
     pub deleted: bool,
@@ -2462,11 +2464,12 @@ impl DaemonBroker {
     }
 
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
+        let idempotency_key = format!("desktop-card-complete-{card_id}-{}", monotonic_id());
         let response = self.send_daemon_request(
             "POST",
             &format!("/v1/interactive-cards/{card_id}/complete"),
             Some("{}"),
-            &[],
+            &[("Idempotency-Key", idempotency_key.as_str())],
         )?;
         serde_json::from_str::<InteractiveCardReceipt>(&response).ok()
     }
@@ -2516,7 +2519,19 @@ impl DaemonBroker {
 
     fn create_agent_in_daemon(&self, request: &AgentCreateRequest) -> Option<AgentReceipt> {
         let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request("POST", "/v1/agents", Some(&payload), &[])?;
+        let idempotency_key = format!(
+            "desktop-agent-create-{}-{}",
+            normalize_handle(&request.handle)
+                .ok()?
+                .trim_start_matches('@'),
+            monotonic_id()
+        );
+        let response = self.send_daemon_request(
+            "POST",
+            "/v1/agents",
+            Some(&payload),
+            &[("Idempotency-Key", idempotency_key.as_str())],
+        )?;
         serde_json::from_str::<AgentReceipt>(&response).ok()
     }
 
@@ -2804,6 +2819,7 @@ impl DaemonBroker {
                 channel_id: "all".to_string(),
                 author_id: request.author_id.clone(),
                 body: Some(request.body.trim().to_string()),
+                cards: None,
                 kind: "human".to_string(),
                 deleted: false,
                 edited: false,

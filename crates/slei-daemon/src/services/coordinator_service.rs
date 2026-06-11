@@ -381,9 +381,34 @@ pub fn parse_and_validate_coordinator_json(
     raw: &str,
     members: &[CoordinatorPromptMember],
 ) -> Result<CoordinatorDecision, CoordinatorDecisionError> {
-    let parsed: CoordinatorDecisionJson = serde_json::from_str(raw)
+    let parsed: CoordinatorDecisionJson = serde_json::from_str(coordinator_json_payload(raw))
         .map_err(|error| CoordinatorDecisionError::InvalidJson(error.to_string()))?;
     validate_coordinator_decision(parsed, members)
+}
+
+fn coordinator_json_payload(raw: &str) -> &str {
+    let trimmed = raw.trim();
+    if !trimmed.starts_with("```") {
+        return trimmed;
+    }
+
+    let Some(first_newline) = trimmed.find('\n') else {
+        return trimmed;
+    };
+    let info = trimmed[3..first_newline].trim();
+    if !info.is_empty() && !info.eq_ignore_ascii_case("json") {
+        return trimmed;
+    }
+
+    let body = trimmed[first_newline + 1..].trim();
+    let Some(fence_start) = body.rfind("```") else {
+        return trimmed;
+    };
+    if body[fence_start + 3..].trim().is_empty() {
+        body[..fence_start].trim()
+    } else {
+        trimmed
+    }
 }
 
 fn validate_coordinator_decision(
