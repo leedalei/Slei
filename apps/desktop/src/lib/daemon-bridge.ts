@@ -480,6 +480,22 @@ export type DaemonBridgeMock = DaemonBridge & {
   setConnected(connected: boolean): void;
 };
 
+function defaultUserPreferences(): UserPreferences {
+  return {
+    locale: "zh-CN",
+    timeZone: "Asia/Shanghai",
+    appearance: {
+      theme: "light",
+      fontSize: "md",
+    },
+    notifications: {
+      mentions: true,
+      humanReplies: true,
+      approvals: true,
+    },
+  };
+}
+
 function normalizeChannelName(name: string) {
   return name.trim().replace(/^#+/, "").trim().toLowerCase().split(/\s+/).filter(Boolean).join("-");
 }
@@ -537,19 +553,7 @@ export function createDaemonBridgeMock(input: {
   let attachments: ConversationAttachmentView[] = [];
   let savedMessages: SavedMessageView[] = [];
   let cards: InteractiveCardView[] = [];
-  let preferences: UserPreferences = {
-    locale: "zh-CN",
-    timeZone: "Asia/Shanghai",
-    appearance: {
-      theme: "light",
-      fontSize: "md",
-    },
-    notifications: {
-      mentions: true,
-      humanReplies: true,
-      approvals: true,
-    },
-  };
+  let preferences = defaultUserPreferences();
   const eventSubscriptions: Array<{ after: number }> = [];
 
   return {
@@ -913,7 +917,7 @@ export function createDaemonBridgeMock(input: {
       const agent = agents.find((candidate) => candidate.id === agentId);
       if (!agent) throw new Error("agent not found");
       if (relativePath.includes("..")) throw new Error("invalid path");
-      const entries = mockAgentWorkspaceEntries(agent, relativePath);
+      const entries = testMockAgentWorkspaceEntries(agent, relativePath);
       return { agentId, relativePath, entries };
     },
     async readAgentWorkspaceFile(agentId, relativePath) {
@@ -923,7 +927,7 @@ export function createDaemonBridgeMock(input: {
       const name = relativePath.split("/").at(-1) ?? relativePath;
       return {
         agentId,
-        content: mockAgentWorkspaceFileContent(agent, relativePath),
+        content: testMockAgentWorkspaceFileContent(agent, relativePath),
         name,
         relativePath,
       };
@@ -1106,7 +1110,7 @@ function normalizeGuideAgentIdentity(agent: DesktopAgentView): DesktopAgentView 
   };
 }
 
-function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
+function testMockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string): AgentWorkspaceEntry[] {
   if (!relativePath) {
     return [];
   }
@@ -1129,7 +1133,7 @@ function mockAgentWorkspaceEntries(agent: DesktopAgentView, relativePath: string
   throw new Error("workspace path not found");
 }
 
-function mockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: string): string {
+function testMockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: string): string {
   if (relativePath === "MEMORY.md") {
     return renderInitialMemory({
       name: agent.name,
@@ -1151,6 +1155,99 @@ function mockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath: st
 
 function containsAny(body: string, markers: string[]) {
   return markers.some((marker) => body.includes(marker));
+}
+
+function rejectDaemonOffline(): Promise<never> {
+  return Promise.reject(new Error("daemon offline"));
+}
+
+export function createOfflineDaemonBridge(): DaemonBridge {
+  const preferences = defaultUserPreferences();
+
+  return {
+    async logFrontendEvent() {
+      return undefined;
+    },
+    async daemonStatus() {
+      return {
+        connected: false,
+        label: "offline",
+        daemonVersion: "",
+        protocolVersion: "",
+      };
+    },
+    async listNodes() {
+      return { nodes: [] };
+    },
+    async bootstrapGuideAgent() {
+      return { status: "runtimeUnavailable" };
+    },
+    async listChannels() {
+      return { channels: [] };
+    },
+    createChannel: rejectDaemonOffline,
+    async listChannelMembers() {
+      return { members: [] };
+    },
+    addChannelMember: rejectDaemonOffline,
+    removeChannelMember: rejectDaemonOffline,
+    async listChannelMessages() {
+      return { messages: [] };
+    },
+    sendChannelMessage: rejectDaemonOffline,
+    async listTasks() {
+      return { tasks: [] };
+    },
+    getTaskThread: rejectDaemonOffline,
+    replyToTask: rejectDaemonOffline,
+    updateTaskStatus: rejectDaemonOffline,
+    completeInteractiveCard: rejectDaemonOffline,
+    async listAgents() {
+      return { agents: [] };
+    },
+    createAgent: rejectDaemonOffline,
+    updateAgent: rejectDaemonOffline,
+    deleteAgent: rejectDaemonOffline,
+    rememberAgentFact: rejectDaemonOffline,
+    async listAgentSkills() {
+      return { skills: [] };
+    },
+    openAgentPath: rejectDaemonOffline,
+    listAgentWorkspace: rejectDaemonOffline,
+    readAgentWorkspaceFile: rejectDaemonOffline,
+    async listConversations() {
+      return { conversations: [] };
+    },
+    createDmConversation: rejectDaemonOffline,
+    resetConversationRuntimeSession: rejectDaemonOffline,
+    async listConversationSessions() {
+      return { sessions: [] };
+    },
+    createConversationSession: rejectDaemonOffline,
+    activateConversationSession: rejectDaemonOffline,
+    async listConversationMessages() {
+      return { messages: [] };
+    },
+    sendConversationMessage: rejectDaemonOffline,
+    resolvePermission: rejectDaemonOffline,
+    uploadConversationAttachment: rejectDaemonOffline,
+    async listSavedMessages() {
+      return { savedMessages: [] };
+    },
+    saveMessage: rejectDaemonOffline,
+    unsaveMessage: rejectDaemonOffline,
+    async listPreferences() {
+      return { preferences };
+    },
+    updatePreferences: rejectDaemonOffline,
+    renameLocalNode: rejectDaemonOffline,
+    async refreshRuntimeStatus() {
+      return { nodes: [] };
+    },
+    async subscribeEvents() {
+      return undefined;
+    },
+  };
 }
 
 export function createDaemonBridge(): DaemonBridge {
@@ -1202,7 +1299,7 @@ export function createDaemonBridge(): DaemonBridge {
     };
   }
 
-  return createDaemonBridgeMock({ connected: false });
+  return createOfflineDaemonBridge();
 }
 
 function hasTauriRuntime() {
