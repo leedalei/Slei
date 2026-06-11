@@ -33,4 +33,19 @@ describe("shadcn design system wiring", () => {
     expect(webEntry).not.toContain(["@slei", "ui/styles/tokens.css"].join("/"));
     expect(webEntry).not.toContain(["@slei", "ui/styles/globals.css"].join("/"));
   });
+
+  it("uses 16px bold titles across modal surfaces", () => {
+    const titleSources = [
+      readFileSync("src/components/ui/dialog.tsx", "utf8"),
+      readFileSync("src/components/ui/alert-dialog.tsx", "utf8"),
+      readFileSync("src/components/ui/sheet.tsx", "utf8"),
+    ];
+
+    for (const source of titleSources) {
+      expect(source).toContain("text-[16px]");
+      expect(source).toContain("font-bold");
+      expect(source).not.toContain("font-heading text-base font-medium");
+      expect(source).not.toContain("font-heading text-base leading-none font-medium");
+    }
+  });
 });

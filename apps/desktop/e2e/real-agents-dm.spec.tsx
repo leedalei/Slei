@@ -71,6 +71,10 @@ function sendButtonMarkup(html: string) {
   return html.match(/<button\b(?=[^>]*data-testid="slei-send-button")[^>]*>/)?.[0] ?? "";
 }
 
+function agentCreateTitleMarkup(html: string) {
+  return html.match(/<h2\b(?=[^>]*data-slot="dialog-title")[^>]*>[\s\S]*?创建智能体[\s\S]*?<\/h2>/)?.[0] ?? "";
+}
+
 describe("real agent members and direct messages", () => {
   it("does not ship fake default members", () => {
     expect(createSleiFixtures().members).toEqual([]);
@@ -172,6 +176,10 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain("创建智能体");
+    const title = agentCreateTitleMarkup(html);
+    expect(title).toContain("text-[16px]");
+    expect(title).toContain("font-bold");
+    expect(title).not.toContain("<svg");
     expect(html).toContain(">名字<");
     expect(html).toContain(">@handle<");
     expect(html).toContain(">关联设备<");

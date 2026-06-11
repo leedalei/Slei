@@ -1,7 +1,6 @@
 import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import {
   ArrowUpDown,
-  AtSign,
   Bell,
   Bookmark,
   CheckSquare,
@@ -1393,7 +1392,7 @@ function AgentCreateModal(input: {
     }} className="slei-agent-modal max-h-[min(90vh,44rem)] overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <Badge className="w-fit" variant="secondary">{input.messages.agentCreate.fallbackAgent}</Badge>
-          <DialogTitle className="flex items-center gap-2"><AtSign aria-hidden="true" size={20} />{input.messages.agentCreate.title}</DialogTitle>
+          <DialogTitle>{input.messages.agentCreate.title}</DialogTitle>
           <DialogDescription>{input.messages.agentCreate.associatedDevice} / {input.messages.agentCreate.model} / {input.messages.agentCreate.description}</DialogDescription>
         </DialogHeader>
         <form className="grid min-h-0 gap-4" onSubmit={submitCreate}>
