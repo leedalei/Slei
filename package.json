@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "dev:reset": "node scripts/dev-reset.mjs",
-    "test": "pnpm -r test",
+    "verify:architecture": "node scripts/verify-architecture-guardrails.mjs",
+    "test": "pnpm -r test && pnpm test:guardrails",
+    "test:guardrails": "node --test scripts/verify-architecture-guardrails.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },
