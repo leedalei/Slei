@@ -30,6 +30,7 @@ pub struct RuntimeDescriptor {
 pub struct DaemonBroker {
     descriptor: RuntimeDescriptor,
     data_root: String,
+    offline_fallback: OfflineFallback,
     last_authorization_header: Mutex<Option<String>>,
     local_node_name: Mutex<String>,
     agents: Mutex<Vec<DesktopAgentView>>,
@@ -41,11 +42,17 @@ pub struct DaemonBroker {
     cards: Mutex<Vec<InteractiveCardView>>,
     conversations: Arc<Mutex<Vec<ConversationView>>>,
     conversation_sessions: Mutex<Vec<ConversationSessionView>>,
-    conversation_messages: Mutex<Vec<ConversationMessageView>>,
+    conversation_messages: Arc<Mutex<Vec<ConversationMessageView>>>,
     conversation_attachments: Mutex<Vec<ConversationAttachmentView>>,
     saved_messages: Mutex<Vec<SavedMessageView>>,
     preferences: Mutex<UserPreferencesView>,
     diagnostic_events: Mutex<Vec<String>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OfflineFallback {
+    Empty,
+    MemoryOnly,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -681,23 +688,31 @@ pub struct SaveMessageRequest {
 
 impl DaemonBroker {
     pub fn default_local() -> Self {
-        Self::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
-            token: "desktop-session-token".to_string(),
-            daemon_version: "0.1.0".to_string(),
-            protocol_version: "v1".to_string(),
-        })
+        Self::new(
+            RuntimeDescriptor {
+                endpoint: "http://127.0.0.1:4319".to_string(),
+                event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+                token: "desktop-session-token".to_string(),
+                daemon_version: "0.1.0".to_string(),
+                protocol_version: "v1".to_string(),
+            },
+            OfflineFallback::Empty,
+        )
     }
 
     pub fn for_tests(descriptor: RuntimeDescriptor) -> Self {
+        Self::new(descriptor, OfflineFallback::MemoryOnly)
+    }
+
+    fn new(descriptor: RuntimeDescriptor, offline_fallback: OfflineFallback) -> Self {
         let data_root = local_data_root();
         Self {
             descriptor,
             data_root: data_root.clone(),
+            offline_fallback,
             last_authorization_header: Mutex::new(None),
             local_node_name: Mutex::new("本机设备".to_string()),
-            agents: Mutex::new(load_local_agents_at_root(&data_root)),
+            agents: Mutex::new(Vec::new()),
             channels: Mutex::new(vec![ChannelView {
                 id: "all".to_string(),
                 name: "all".to_string(),
@@ -710,14 +725,12 @@ impl DaemonBroker {
             tasks: Mutex::new(Vec::new()),
             task_threads: Mutex::new(Vec::new()),
             cards: Mutex::new(Vec::new()),
-            conversations: Arc::new(Mutex::new(load_local_conversations_at_root(&data_root))),
-            conversation_sessions: Mutex::new(load_local_conversation_sessions_at_root(&data_root)),
-            conversation_messages: Mutex::new(load_all_local_conversation_messages_at_root(
-                &data_root,
-            )),
-            conversation_attachments: Mutex::new(load_local_attachments_at_root(&data_root)),
-            saved_messages: Mutex::new(load_local_saved_messages_at_root(&data_root)),
-            preferences: Mutex::new(load_local_preferences()),
+            conversations: Arc::new(Mutex::new(Vec::new())),
+            conversation_sessions: Mutex::new(Vec::new()),
+            conversation_messages: Arc::new(Mutex::new(Vec::new())),
+            conversation_attachments: Mutex::new(Vec::new()),
+            saved_messages: Mutex::new(Vec::new()),
+            preferences: Mutex::new(default_preferences()),
             diagnostic_events: Mutex::new(Vec::new()),
         }
     }
@@ -792,8 +805,10 @@ impl DaemonBroker {
     ) -> Result<PreferencesReceipt, PreferencesError> {
         if let Some(receipt) = self.update_preferences_in_daemon(&request) {
             self.replace_local_preferences(receipt.preferences.clone());
-            persist_local_preferences(&receipt.preferences)?;
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(PreferencesError::DaemonUnavailable);
         }
 
         let mut preferences = self.preferences.lock().expect("preferences mutex poisoned");
@@ -822,7 +837,6 @@ impl DaemonBroker {
         if let Some(notifications) = request.notifications {
             preferences.notifications = notifications;
         }
-        persist_local_preferences(&preferences)?;
         Ok(PreferencesReceipt {
             preferences: preferences.clone(),
         })
@@ -844,6 +858,9 @@ impl DaemonBroker {
                 .expect("node name mutex poisoned") = receipt.node.name.clone();
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(NodeNameError::DaemonUnavailable);
+        }
 
         *self
             .local_node_name
@@ -864,6 +881,13 @@ impl DaemonBroker {
                 let _ = self.upsert_local_conversation(conversation);
             }
             return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return GuideBootstrapReceipt {
+                status: "daemonUnavailable".to_string(),
+                agent: None,
+                conversation: None,
+            };
         }
 
         let has_ready_runtime = self.list_nodes().nodes.iter().any(|node| {
@@ -1042,9 +1066,13 @@ impl DaemonBroker {
             Err(ChannelError::DaemonRequest(error))
                 if channel_id == "all" && is_daemon_unavailable_error(&error) =>
             {
-                self.record_local_diagnostic(format!(
+                if self.offline_fallback == OfflineFallback::Empty {
+                    return Err(ChannelError::DaemonRequest(error));
+                }
+                self.record_local_diagnostic(
                     "desktop_channel_message.fallback channel_id=all reason=daemon_unavailable body=[redacted-body]"
-                ));
+                        .to_string(),
+                );
                 self.send_default_all_channel_message_locally(&request)
             }
             Err(error) => Err(error),
@@ -1214,6 +1242,8 @@ impl DaemonBroker {
                 self.upsert_local_agent(agent.clone());
             }
             receipt
+        } else if self.offline_fallback == OfflineFallback::Empty {
+            AgentListReceipt { agents: Vec::new() }
         } else {
             let _ = self.ensure_local_global_coordinator();
             AgentListReceipt {
@@ -1228,6 +1258,9 @@ impl DaemonBroker {
         if let Some(receipt) = self.create_agent_in_daemon(&request) {
             self.upsert_local_agent(receipt.agent.clone());
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(AgentError::DaemonUnavailable);
         }
 
         let handle = normalize_handle(&request.handle)?;
@@ -1284,6 +1317,9 @@ impl DaemonBroker {
             self.upsert_local_agent(receipt.agent.clone());
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(AgentError::DaemonUnavailable);
+        }
 
         let mut agents = self.agents.lock().expect("agents mutex poisoned");
         let agent = agents
@@ -1323,6 +1359,9 @@ impl DaemonBroker {
             self.remove_local_agent_state(agent_id, None)?;
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(AgentError::DaemonUnavailable);
+        }
 
         let agent = self
             .agents
@@ -1348,6 +1387,9 @@ impl DaemonBroker {
             self.upsert_local_agent(receipt.agent.clone());
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(AgentError::DaemonUnavailable);
+        }
 
         let agent = self
             .agents
@@ -1364,6 +1406,9 @@ impl DaemonBroker {
     pub fn list_agent_skills(&self, agent_id: &str) -> Result<SkillListReceipt, AgentError> {
         if let Some(receipt) = self.fetch_agent_skills_from_daemon(agent_id) {
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(AgentError::DaemonUnavailable);
         }
 
         let agent = self
@@ -1497,14 +1542,21 @@ impl DaemonBroker {
     }
 
     pub fn list_conversations(&self) -> ConversationListReceipt {
-        self.fetch_conversations_from_daemon()
-            .unwrap_or_else(|| ConversationListReceipt {
-                conversations: self
-                    .conversations
-                    .lock()
-                    .expect("conversations mutex poisoned")
-                    .clone(),
-            })
+        self.fetch_conversations_from_daemon().unwrap_or_else(|| {
+            if self.offline_fallback == OfflineFallback::Empty {
+                ConversationListReceipt {
+                    conversations: Vec::new(),
+                }
+            } else {
+                ConversationListReceipt {
+                    conversations: self
+                        .conversations
+                        .lock()
+                        .expect("conversations mutex poisoned")
+                        .clone(),
+                }
+            }
+        })
     }
 
     pub fn create_dm_conversation(
@@ -1531,6 +1583,9 @@ impl DaemonBroker {
         if let Some(receipt) = self.create_dm_conversation_in_daemon(agent_id) {
             self.upsert_local_conversation(receipt.conversation.clone())?;
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
 
         let mut conversations = self
@@ -1587,6 +1642,9 @@ impl DaemonBroker {
             self.clear_local_active_session_cache(conversation_id)?;
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
+        }
 
         let existing = self
             .conversations
@@ -1635,6 +1693,11 @@ impl DaemonBroker {
         if let Some(receipt) = self.list_conversation_sessions_from_daemon(conversation_id) {
             return receipt;
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return ConversationSessionListReceipt {
+                sessions: Vec::new(),
+            };
+        }
         let mut sessions = self
             .conversation_sessions
             .lock()
@@ -1674,6 +1737,9 @@ impl DaemonBroker {
             self.upsert_local_conversation(receipt.conversation.clone())?;
             self.upsert_local_conversation_session(receipt.session.clone())?;
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
         let mut conversations = self
             .conversations
@@ -1723,6 +1789,9 @@ impl DaemonBroker {
             self.upsert_local_conversation_session(receipt.session.clone())?;
             return Ok(receipt);
         }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
+        }
         let session = self
             .list_conversation_sessions(conversation_id)
             .sessions
@@ -1752,6 +1821,13 @@ impl DaemonBroker {
         &self,
         conversation_id: &str,
     ) -> ConversationMessageListReceipt {
+        if self.offline_fallback == OfflineFallback::Empty {
+            return self
+                .list_conversation_messages_from_daemon(conversation_id)
+                .unwrap_or_else(|| ConversationMessageListReceipt {
+                    messages: Vec::new(),
+                });
+        }
         if self.has_local_conversation_messages(conversation_id) {
             return self.list_local_conversation_messages(conversation_id);
         }
@@ -1768,26 +1844,6 @@ impl DaemonBroker {
     ) -> ConversationMessageListReceipt {
         ConversationMessageListReceipt {
             messages: {
-                let active_session_id = self
-                    .conversations
-                    .lock()
-                    .expect("conversations mutex poisoned")
-                    .iter()
-                    .find(|conversation| conversation.id == conversation_id)
-                    .and_then(|conversation| conversation.active_session_id.clone());
-                let disk_messages = load_local_conversation_messages_at_root(
-                    &self.data_root,
-                    conversation_id,
-                    active_session_id.as_deref(),
-                );
-                if !disk_messages.is_empty() {
-                    let mut messages = self
-                        .conversation_messages
-                        .lock()
-                        .expect("conversation messages mutex poisoned");
-                    messages.retain(|message| message.conversation_id != conversation_id);
-                    messages.extend(disk_messages);
-                }
                 self.conversation_messages
                     .lock()
                     .expect("conversation messages mutex poisoned")
@@ -1805,8 +1861,6 @@ impl DaemonBroker {
             .expect("conversation messages mutex poisoned")
             .iter()
             .any(|message| message.conversation_id == conversation_id)
-            || !load_local_conversation_messages_at_root(&self.data_root, conversation_id, None)
-                .is_empty()
     }
 
     pub fn send_conversation_message(
@@ -1839,6 +1893,9 @@ impl DaemonBroker {
         {
             self.upsert_local_conversation_message(receipt.message.clone())?;
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
 
         let mut conversations = self
@@ -1957,8 +2014,8 @@ impl DaemonBroker {
                 .find(|agent| agent.id == agent_id)
                 .cloned();
             let conversation_id = conversation_id.to_string();
-            let data_root = self.data_root.clone();
             let conversations = self.conversations.clone();
+            let conversation_messages = self.conversation_messages.clone();
             let prompt = append_attachment_context(body, &selected_attachments);
             let runtime_session = runtime_session.expect("human dm has runtime session");
             let workspace_mounts = request.workspace_mounts.clone();
@@ -1966,8 +2023,8 @@ impl DaemonBroker {
             let source_channel_name = request.source_channel_name.clone();
             thread::spawn(move || {
                 run_local_agent_dm_background(
-                    data_root,
                     conversations,
+                    conversation_messages,
                     conversation_id,
                     run_id,
                     agent,
@@ -1989,6 +2046,9 @@ impl DaemonBroker {
         if let Some(receipt) = self.upload_conversation_attachment_to_daemon(&request) {
             self.upsert_local_attachment(receipt.attachment.clone())?;
             return Ok(receipt);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
         let name = sanitize_attachment_name(&request.name)?;
         let mime_type = if request.mime_type.trim().is_empty() {
@@ -2029,6 +2089,11 @@ impl DaemonBroker {
     }
 
     pub fn list_saved_messages(&self) -> SavedMessageListReceipt {
+        if self.offline_fallback == OfflineFallback::Empty {
+            return SavedMessageListReceipt {
+                saved_messages: Vec::new(),
+            };
+        }
         let mut saved_messages = self
             .saved_messages
             .lock()
@@ -2048,6 +2113,9 @@ impl DaemonBroker {
         if message_id.is_empty() || source_id.is_empty() || !matches!(source_kind, "channel" | "dm")
         {
             return Err(ConversationError::InvalidMessage);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
 
         let mut saved_messages = self
@@ -2086,6 +2154,9 @@ impl DaemonBroker {
         let message_id = message_id.trim();
         if message_id.is_empty() {
             return Err(ConversationError::InvalidMessage);
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
         }
         let mut saved_messages = self
             .saved_messages
@@ -2738,12 +2809,12 @@ impl DaemonBroker {
                 query
                     .channel_id
                     .as_ref()
-                    .map_or(true, |channel_id| task.channel_id == *channel_id)
+                    .is_none_or(|channel_id| task.channel_id == *channel_id)
                     && query
                         .creator_id
                         .as_ref()
-                        .map_or(true, |creator_id| task.creator_id == *creator_id)
-                    && query.assignee_id.as_ref().map_or(true, |assignee_id| {
+                        .is_none_or(|creator_id| task.creator_id == *creator_id)
+                    && query.assignee_id.as_ref().is_none_or(|assignee_id| {
                         task.assignee_id.as_deref() == Some(assignee_id.as_str())
                     })
             })
@@ -3212,7 +3283,7 @@ impl DaemonBroker {
         } else {
             format!(
                 "Content-Type: application/json\r\nContent-Length: {}\r\n",
-                body.as_bytes().len()
+                body.len()
             )
         };
         let extra_headers = extra_headers
@@ -3286,175 +3357,9 @@ fn local_data_root() -> String {
     root
 }
 
-fn load_local_agents_at_root(root: &str) -> Vec<DesktopAgentView> {
-    let index_path = Path::new(root).join("agents/index.json");
-    let mut agents = fs::read_to_string(&index_path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<DesktopAgentView>>(&raw).ok())
-        .unwrap_or_default();
-
-    let mut should_persist = false;
-    for agent in &mut agents {
-        if let Some(handle) = recover_local_agent_handle(agent) {
-            if agent.handle != handle {
-                agent.handle = handle;
-                should_persist = true;
-            }
-        }
-        if migrate_local_agent_skills_on_load(agent) {
-            should_persist = true;
-        }
-    }
-
-    let recovered = recover_local_agent_workspaces(root, &agents);
-    if !recovered.is_empty() {
-        agents.extend(recovered);
-        should_persist = true;
-    }
-
-    agents.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-    if should_persist {
-        let _ = persist_local_agents_at_root(root, &agents);
-    }
-    agents
-}
-
 fn persist_local_agents_at_root(root: &str, agents: &[DesktopAgentView]) -> Result<(), AgentError> {
-    let agents_dir = Path::new(root).join("agents");
-    fs::create_dir_all(&agents_dir).map_err(AgentError::Io)?;
-    let payload = serde_json::to_string_pretty(agents).map_err(AgentError::Json)?;
-    fs::write(agents_dir.join("index.json"), payload).map_err(AgentError::Io)
-}
-
-fn recover_local_agent_workspaces(
-    root: &str,
-    indexed_agents: &[DesktopAgentView],
-) -> Vec<DesktopAgentView> {
-    let agents_dir = Path::new(root).join("agents");
-    let Ok(entries) = fs::read_dir(&agents_dir) else {
-        return Vec::new();
-    };
-
-    entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let path = entry.path();
-            if !path.is_dir() {
-                return None;
-            }
-            let id = path.file_name()?.to_string_lossy().to_string();
-            if indexed_agents.iter().any(|agent| agent.id == id) {
-                return None;
-            }
-            recover_local_agent_workspace(&path, id)
-        })
-        .collect()
-}
-
-fn recover_local_agent_workspace(path: &Path, id: String) -> Option<DesktopAgentView> {
-    let memory_path = path.join("MEMORY.md");
-    let memory = fs::read_to_string(&memory_path).ok()?;
-    let name = memory
-        .lines()
-        .find_map(|line| line.strip_prefix("# "))
-        .map(str::trim)
-        .filter(|name| !name.is_empty())?
-        .to_string();
-    let handle = recover_self_handle_from_memory(&memory, &name)
-        .unwrap_or_else(|| format!("@{}", name.to_lowercase().replace(' ', "-")));
-    let description = recover_agent_role(&memory).unwrap_or_else(|| "本地恢复的 Agent".to_string());
-    let workspace_path = path.to_string_lossy().to_string();
-    let docs_path = path.join("docs").to_string_lossy().to_string();
-    let created_at = id.strip_prefix("agent_").unwrap_or(&id).to_string();
-    let mut agent = DesktopAgentView {
-        id: id.clone(),
-        name,
-        handle,
-        agent_kind: Some(
-            if id == "agent_guide_local_node" {
-                "guide"
-            } else {
-                "agent"
-            }
-            .to_string(),
-        ),
-        system_owned: Some(id == "agent_guide_local_node"),
-        runtime_kind: "ClaudeCode".to_string(),
-        model: "Sonnet".to_string(),
-        node_id: "local-node".to_string(),
-        description,
-        workspace_path,
-        memory_path: memory_path.to_string_lossy().to_string(),
-        docs_path,
-        avatar_seed: id.clone(),
-        runtime_thread: Some(RuntimeThreadView {
-            runtime_kind: "ClaudeCode".to_string(),
-            status: "ready".to_string(),
-            created_at: created_at.clone(),
-        }),
-        skills: None,
-        channel_ids: Some(vec!["all".to_string()]),
-        created_at: created_at.clone(),
-        updated_at: created_at,
-    };
-    agent.skills = read_local_agent_skills(&agent).ok();
-    Some(agent)
-}
-
-fn migrate_local_agent_skills_on_load(agent: &mut DesktopAgentView) -> bool {
-    let _ = write_local_agent_skills(agent);
-    let Ok(skills) = read_local_agent_skills(agent) else {
-        return false;
-    };
-    if agent.skills.as_ref() == Some(&skills) {
-        return false;
-    }
-    agent.skills = Some(skills);
-    true
-}
-
-fn recover_local_agent_handle(agent: &DesktopAgentView) -> Option<String> {
-    let memory = fs::read_to_string(&agent.memory_path).ok()?;
-    recover_self_handle_from_memory(&memory, &agent.name)
-}
-
-fn recover_self_handle_from_memory(memory: &str, name: &str) -> Option<String> {
-    let team_lines = memory
-        .lines()
-        .skip_while(|line| line.trim() != "## Team")
-        .skip(1)
-        .take_while(|line| !line.trim_start().starts_with("## "));
-
-    let candidates = team_lines
-        .filter(|line| line.trim_start().starts_with('@'))
-        .collect::<Vec<_>>();
-    candidates
-        .iter()
-        .copied()
-        .find(|line| line.contains("我自己"))
-        .or_else(|| {
-            candidates
-                .iter()
-                .copied()
-                .find(|line| line.to_lowercase().contains(&name.to_lowercase()))
-        })
-        .and_then(recover_handle_from_team_line)
-}
-
-fn recover_handle_from_team_line(line: &str) -> Option<String> {
-    let handle = line.trim().split_whitespace().next()?;
-    normalize_handle(handle).ok()
-}
-
-fn recover_agent_role(memory: &str) -> Option<String> {
-    let role_start = memory.find("## Role")?;
-    let after_role = &memory[role_start + "## Role".len()..];
-    let role = after_role
-        .split("\n## ")
-        .next()
-        .map(str::trim)
-        .filter(|role| !role.is_empty())?;
-    Some(role.to_string())
+    let _ = (root, agents);
+    Ok(())
 }
 
 fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentError> {
@@ -3813,7 +3718,7 @@ fn replace_active_context(memory: &mut String, fact: &str) {
             .find("\n## ")
             .map(|relative| after_heading + relative)
             .unwrap_or(memory.len());
-        memory.replace_range(start..end, &replacement.trim_end_matches('\n'));
+        memory.replace_range(start..end, replacement.trim_end_matches('\n'));
         if !memory.ends_with('\n') {
             memory.push('\n');
         }
@@ -3981,115 +3886,36 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
     (!stdout.is_empty()).then_some(stdout)
 }
 
-fn load_local_conversations_at_root(root: &str) -> Vec<ConversationView> {
-    let mut conversations = fs::read_to_string(format!("{root}/conversations/index.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<ConversationView>>(&raw).ok())
-        .unwrap_or_default();
-    for conversation in &mut conversations {
-        if conversation.active_session_id.is_none() {
-            conversation.active_session_id = Some(format!(
-                "session:{}:default",
-                safe_conversation_id(&conversation.id)
-            ));
-        }
-    }
-    conversations
-}
-
 fn persist_local_conversations_at_root(
     root: &str,
     conversations: &[ConversationView],
 ) -> Result<(), ConversationError> {
-    let path = format!("{root}/conversations/index.json");
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
-    }
-    let mut ordered = conversations.to_vec();
-    ordered.sort_by(|left, right| left.created_at.cmp(&right.created_at));
-    let payload = serde_json::to_string_pretty(&ordered).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
-}
-
-fn load_all_local_conversation_messages_at_root(root: &str) -> Vec<ConversationMessageView> {
-    let conversations = load_local_conversations_at_root(root);
-    conversations
-        .iter()
-        .flat_map(|conversation| {
-            load_local_conversation_messages_at_root(
-                root,
-                &conversation.id,
-                conversation.active_session_id.as_deref(),
-            )
-        })
-        .collect()
-}
-
-fn load_local_conversation_sessions_at_root(root: &str) -> Vec<ConversationSessionView> {
-    let mut sessions = fs::read_to_string(format!("{root}/conversations/sessions.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<ConversationSessionView>>(&raw).ok())
-        .unwrap_or_default();
-    let existing = sessions
-        .iter()
-        .map(|session| session.conversation_id.clone())
-        .collect::<std::collections::HashSet<_>>();
-    for conversation in load_local_conversations_at_root(root) {
-        if !existing.contains(&conversation.id) {
-            sessions.push(legacy_session_for_conversation(&conversation));
-        }
-    }
-    sessions
+    let _ = (root, conversations);
+    Ok(())
 }
 
 fn persist_local_conversation_sessions_at_root(
     root: &str,
     sessions: &[ConversationSessionView],
 ) -> Result<(), ConversationError> {
-    let path = format!("{root}/conversations/sessions.json");
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
-    }
-    let payload = serde_json::to_string_pretty(sessions).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
-}
-
-fn load_local_attachments_at_root(root: &str) -> Vec<ConversationAttachmentView> {
-    fs::read_to_string(format!("{root}/attachments/index.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<ConversationAttachmentView>>(&raw).ok())
-        .unwrap_or_default()
+    let _ = (root, sessions);
+    Ok(())
 }
 
 fn persist_local_attachments_at_root(
     root: &str,
     attachments: &[ConversationAttachmentView],
 ) -> Result<(), ConversationError> {
-    let path = format!("{root}/attachments/index.json");
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
-    }
-    let payload = serde_json::to_string_pretty(attachments).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
-}
-
-fn load_local_saved_messages_at_root(root: &str) -> Vec<SavedMessageView> {
-    fs::read_to_string(format!("{root}/saved/messages.json"))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Vec<SavedMessageView>>(&raw).ok())
-        .unwrap_or_default()
+    let _ = (root, attachments);
+    Ok(())
 }
 
 fn persist_local_saved_messages_at_root(
     root: &str,
     saved_messages: &[SavedMessageView],
 ) -> Result<(), ConversationError> {
-    let path = format!("{root}/saved/messages.json");
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
-    }
-    let payload = serde_json::to_string_pretty(saved_messages).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
+    let _ = (root, saved_messages);
+    Ok(())
 }
 
 fn default_preferences() -> UserPreferencesView {
@@ -4106,43 +3932,6 @@ fn default_preferences() -> UserPreferencesView {
             approvals: true,
         },
     }
-}
-
-fn load_local_preferences() -> UserPreferencesView {
-    fs::read_to_string(format!("{}/settings/preferences.json", local_data_root()))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<UserPreferencesView>(&raw).ok())
-        .filter(|preferences| matches!(preferences.locale.as_str(), "zh-CN" | "en-US"))
-        .unwrap_or_else(default_preferences)
-}
-
-fn persist_local_preferences(preferences: &UserPreferencesView) -> Result<(), PreferencesError> {
-    let path = format!("{}/settings/preferences.json", local_data_root());
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(PreferencesError::Io)?;
-    }
-    let payload = serde_json::to_string_pretty(preferences).map_err(PreferencesError::Json)?;
-    fs::write(path, payload).map_err(PreferencesError::Io)
-}
-
-fn load_local_conversation_messages_at_root(
-    root: &str,
-    conversation_id: &str,
-    legacy_session_id: Option<&str>,
-) -> Vec<ConversationMessageView> {
-    let mut messages = fs::read_to_string(format!(
-        "{root}/conversations/messages/{}.json",
-        safe_conversation_id(conversation_id)
-    ))
-    .ok()
-    .and_then(|raw| serde_json::from_str::<Vec<ConversationMessageView>>(&raw).ok())
-    .unwrap_or_default();
-    for message in &mut messages {
-        if message.session_id.is_none() {
-            message.session_id = legacy_session_id.map(str::to_string);
-        }
-    }
-    messages
 }
 
 fn legacy_session_for_conversation(conversation: &ConversationView) -> ConversationSessionView {
@@ -4224,73 +4013,21 @@ fn persist_local_conversation_messages_at_root(
     conversation_id: &str,
     messages: &[ConversationMessageView],
 ) -> Result<(), ConversationError> {
-    let path = format!(
-        "{root}/conversations/messages/{}.json",
-        safe_conversation_id(conversation_id)
-    );
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        fs::create_dir_all(parent).map_err(ConversationError::Io)?;
-    }
-    let conversation_messages = messages
-        .iter()
-        .filter(|message| message.conversation_id == conversation_id)
-        .cloned()
-        .collect::<Vec<_>>();
-    let payload =
-        serde_json::to_string_pretty(&conversation_messages).map_err(ConversationError::Json)?;
-    fs::write(path, payload).map_err(ConversationError::Io)
+    let _ = (root, conversation_id, messages);
+    Ok(())
 }
 
 fn complete_local_message_card(
     data_root: &str,
     card_id: &str,
 ) -> Result<Option<InteractiveCardView>, ConversationError> {
-    let messages_root = Path::new(data_root).join("conversations/messages");
-    let entries = match fs::read_dir(&messages_root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(ConversationError::Io(error)),
-    };
-    for entry in entries {
-        let entry = entry.map_err(ConversationError::Io)?;
-        if entry
-            .path()
-            .extension()
-            .and_then(|extension| extension.to_str())
-            != Some("json")
-        {
-            continue;
-        }
-        let raw = fs::read_to_string(entry.path()).map_err(ConversationError::Io)?;
-        let mut messages: Vec<ConversationMessageView> =
-            serde_json::from_str(&raw).map_err(ConversationError::Json)?;
-        let mut completed = None;
-        for message in &mut messages {
-            let Some(cards) = message.cards.as_mut() else {
-                continue;
-            };
-            let Some(card) = cards.iter_mut().find(|card| card.id == card_id) else {
-                continue;
-            };
-            card.state = "done".to_string();
-            completed = Some(card.clone());
-            break;
-        }
-        if let Some(card) = completed {
-            let conversation_id = messages
-                .first()
-                .map(|message| message.conversation_id.clone())
-                .unwrap_or_default();
-            persist_local_conversation_messages_at_root(data_root, &conversation_id, &messages)?;
-            return Ok(Some(card));
-        }
-    }
+    let _ = (data_root, card_id);
     Ok(None)
 }
 
 fn run_local_agent_dm_background(
-    data_root: String,
     conversations: Arc<Mutex<Vec<ConversationView>>>,
+    conversation_messages: Arc<Mutex<Vec<ConversationMessageView>>>,
     conversation_id: String,
     run_id: String,
     agent: Option<DesktopAgentView>,
@@ -4308,8 +4045,8 @@ fn run_local_agent_dm_background(
                 run_id, agent.id, agent.workspace_path
             );
             complete_local_agent_run(
-                &data_root,
                 &conversations,
+                &conversation_messages,
                 &conversation_id,
                 &run_id,
                 run_local_claude_agent(
@@ -4321,7 +4058,12 @@ fn run_local_agent_dm_background(
                     source_channel_id.as_deref(),
                     source_channel_name.as_deref(),
                     |body| {
-                        update_local_agent_run_body(&data_root, &conversation_id, &run_id, body);
+                        update_local_agent_run_body(
+                            &conversation_messages,
+                            &conversation_id,
+                            &run_id,
+                            body,
+                        );
                     },
                 ),
                 started,
@@ -4333,8 +4075,8 @@ fn run_local_agent_dm_background(
                 run_id
             );
             complete_local_agent_run(
-                &data_root,
                 &conversations,
+                &conversation_messages,
                 &conversation_id,
                 &run_id,
                 Err("agent not found".to_string()),
@@ -4345,80 +4087,80 @@ fn run_local_agent_dm_background(
 }
 
 fn complete_local_agent_run(
-    data_root: &str,
     conversations: &Arc<Mutex<Vec<ConversationView>>>,
+    conversation_messages: &Arc<Mutex<Vec<ConversationMessageView>>>,
     conversation_id: &str,
     run_id: &str,
     result: Result<LocalAgentRunOutput, String>,
     started: Instant,
 ) {
-    let mut messages = load_local_conversation_messages_at_root(data_root, conversation_id, None);
-    if let Some(reply) = messages
-        .iter_mut()
-        .find(|candidate| candidate.run_id.as_deref() == Some(run_id))
-    {
-        let mut card_messages = Vec::new();
-        match result {
-            Ok(output) => {
-                let reply_session_id = reply.session_id.clone();
-                let reply_author_id = reply.author_id.clone();
-                reply.body = output.body;
-                reply.status = Some("done".to_string());
-                for card in output.cards {
-                    card_messages.push(ConversationMessageView {
-                        id: format!("card_message_{}", card.id),
-                        conversation_id: conversation_id.to_string(),
-                        session_id: reply_session_id.clone(),
-                        author_id: reply_author_id.clone(),
-                        body: String::new(),
-                        attachments: None,
-                        cards: Some(vec![card]),
-                        run_id: None,
-                        status: Some("done".to_string()),
-                        created_at: monotonic_id(),
-                    });
-                }
-                mark_local_runtime_session_ready(data_root, conversations, conversation_id);
-                eprintln!(
-                    "[slei-runtime] completed run_id={} elapsed_ms={}",
-                    run_id,
-                    started.elapsed().as_millis()
-                );
-            }
-            Err(error) => {
-                reply.body = error.clone();
-                reply.status = Some("failed".to_string());
-                eprintln!(
-                    "[slei-runtime] failed run_id={} elapsed_ms={} error={}",
-                    run_id,
-                    started.elapsed().as_millis(),
-                    error
-                );
-            }
-        }
-        messages.extend(card_messages);
-        if let Err(error) =
-            persist_local_conversation_messages_at_root(data_root, conversation_id, &messages)
-        {
-            eprintln!(
-                "[slei-runtime] failed run_id={} error=persist_message_failed:{}",
-                run_id, error
-            );
-        }
-    } else {
+    let mut messages = conversation_messages
+        .lock()
+        .expect("conversation messages mutex poisoned");
+    let Some(reply_index) = messages
+        .iter()
+        .position(|candidate| candidate.run_id.as_deref() == Some(run_id))
+    else {
         eprintln!(
             "[slei-runtime] failed run_id={} error=run_message_not_found",
             run_id
         );
-    }
+        return;
+    };
+    let mut card_messages = Vec::new();
+    match result {
+        Ok(output) => {
+            let reply_session_id = messages[reply_index].session_id.clone();
+            let reply_author_id = messages[reply_index].author_id.clone();
+            messages[reply_index].body = output.body;
+            messages[reply_index].status = Some("done".to_string());
+            for card in output.cards {
+                card_messages.push(ConversationMessageView {
+                    id: format!("card_message_{}", card.id),
+                    conversation_id: conversation_id.to_string(),
+                    session_id: reply_session_id.clone(),
+                    author_id: reply_author_id.clone(),
+                    body: String::new(),
+                    attachments: None,
+                    cards: Some(vec![card]),
+                    run_id: None,
+                    status: Some("done".to_string()),
+                    created_at: monotonic_id(),
+                });
+            }
+            mark_local_runtime_session_ready(conversations, conversation_id);
+            eprintln!(
+                "[slei-runtime] completed run_id={} elapsed_ms={}",
+                run_id,
+                started.elapsed().as_millis()
+            );
+        }
+        Err(error) => {
+            messages[reply_index].body = error.clone();
+            messages[reply_index].status = Some("failed".to_string());
+            eprintln!(
+                "[slei-runtime] failed run_id={} elapsed_ms={} error={}",
+                run_id,
+                started.elapsed().as_millis(),
+                error
+            );
+        }
+    };
+    messages.extend(card_messages);
 }
 
-fn update_local_agent_run_body(data_root: &str, conversation_id: &str, run_id: &str, body: &str) {
-    let mut messages = load_local_conversation_messages_at_root(data_root, conversation_id, None);
-    let Some(reply) = messages
-        .iter_mut()
-        .find(|candidate| candidate.run_id.as_deref() == Some(run_id))
-    else {
+fn update_local_agent_run_body(
+    conversation_messages: &Arc<Mutex<Vec<ConversationMessageView>>>,
+    conversation_id: &str,
+    run_id: &str,
+    body: &str,
+) {
+    let mut messages = conversation_messages
+        .lock()
+        .expect("conversation messages mutex poisoned");
+    let Some(reply) = messages.iter_mut().find(|candidate| {
+        candidate.conversation_id == conversation_id && candidate.run_id.as_deref() == Some(run_id)
+    }) else {
         eprintln!(
             "[slei-runtime] stream_update_missed run_id={} error=run_message_not_found",
             run_id
@@ -4427,24 +4169,14 @@ fn update_local_agent_run_body(data_root: &str, conversation_id: &str, run_id: &
     };
     reply.body = body.to_string();
     reply.status = Some("running".to_string());
-    if let Err(error) =
-        persist_local_conversation_messages_at_root(data_root, conversation_id, &messages)
-    {
-        eprintln!(
-            "[slei-runtime] stream_update_failed run_id={} error={}",
-            run_id, error
-        );
-    } else {
-        eprintln!(
-            "[slei-runtime] stream_update run_id={} body_chars={}",
-            run_id,
-            body.chars().count()
-        );
-    }
+    eprintln!(
+        "[slei-runtime] stream_update run_id={} body_chars={}",
+        run_id,
+        body.chars().count()
+    );
 }
 
 fn mark_local_runtime_session_ready(
-    data_root: &str,
     conversations: &Arc<Mutex<Vec<ConversationView>>>,
     conversation_id: &str,
 ) {
@@ -4458,9 +4190,6 @@ fn mark_local_runtime_session_ready(
     if let Some(session) = conversation.runtime_session.as_mut() {
         session.status = "ready".to_string();
         session.updated_at = monotonic_id();
-    }
-    if let Err(error) = persist_local_conversations_at_root(data_root, &conversations) {
-        eprintln!("[slei-runtime] failed to mark runtime session ready: {error}");
     }
 }
 
@@ -4653,12 +4382,10 @@ fn run_local_claude_agent_impl(
                 output.body.push_str(&event.delta);
                 on_output(&output.body);
             }
-            "product_tool_requested" => {
-                if event.tool_name == "slei_propose_interactive_card" {
-                    output
-                        .cards
-                        .push(local_card_from_product_tool_event(&event)?);
-                }
+            "product_tool_requested" if event.tool_name == "slei_propose_interactive_card" => {
+                output
+                    .cards
+                    .push(local_card_from_product_tool_event(&event)?);
             }
             "failed" => {
                 failed = Some(event.message);
@@ -4820,7 +4547,7 @@ fn required_payload_string(
 }
 
 fn safe_conversation_id(conversation_id: &str) -> String {
-    conversation_id.replace(':', "_").replace('/', "_")
+    conversation_id.replace([':', '/'], "_")
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4831,6 +4558,8 @@ pub enum ArtifactOpenError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum NodeNameError {
+    #[error("daemon unavailable")]
+    DaemonUnavailable,
     #[error("node name is required")]
     NameRequired,
     #[error("node name must be 64 characters or fewer")]
@@ -4839,6 +4568,8 @@ pub enum NodeNameError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PreferencesError {
+    #[error("daemon unavailable")]
+    DaemonUnavailable,
     #[error("locale must be zh-CN or en-US")]
     InvalidLocale,
     #[error("time zone is invalid")]
@@ -4853,6 +4584,8 @@ pub enum PreferencesError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
+    #[error("daemon unavailable")]
+    DaemonUnavailable,
     #[error("agent not found")]
     AgentNotFound,
     #[error("agent name, runtime, and node are required")]
@@ -4919,6 +4652,8 @@ pub enum CardError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConversationError {
+    #[error("daemon unavailable")]
+    DaemonUnavailable,
     #[error("agent not found")]
     AgentNotFound,
     #[error("conversation not found")]

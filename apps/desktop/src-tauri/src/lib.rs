@@ -61,10 +61,10 @@ mod tests {
         complete_interactive_card, create_agent, create_channel, create_conversation_session,
         create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
         list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
-        list_conversation_messages, list_conversation_sessions, list_conversations, list_nodes,
-        list_preferences, list_saved_messages, list_tasks, open_agent_path,
-        read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
-        rename_local_node, reply_to_task, request_artifact_open,
+        list_channel_messages, list_conversation_messages, list_conversation_sessions,
+        list_conversations, list_nodes, list_preferences, list_saved_messages, list_tasks,
+        open_agent_path, read_agent_workspace_file, reconnect_events, remember_agent_fact,
+        remove_channel_member, rename_local_node, reply_to_task, request_artifact_open,
         reset_conversation_runtime_session, save_message, send_channel_message,
         send_conversation_message, unsave_message, update_agent, update_preferences,
         upload_conversation_attachment, FrontendCrashReport,
@@ -959,7 +959,7 @@ mod tests {
         assert!(agents
             .agents
             .iter()
-            .any(|agent| agent.id == "agent_coordinator_all"));
+            .any(|agent| agent.id == "agent_global_coordinator"));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
@@ -1064,7 +1064,7 @@ mod tests {
             .agents
             .iter()
             .any(|agent| agent.id == created.id));
-        let coordinator_id = "agent_coordinator_all";
+        let coordinator_id = "agent_global_coordinator";
         assert!(delete_agent(&broker, coordinator_id).is_err());
         assert!(list_agents(&broker)
             .agents
@@ -1074,7 +1074,7 @@ mod tests {
     }
 
     #[test]
-    fn broker_lists_default_channel_coordinator_and_blocks_direct_message() {
+    fn broker_lists_global_coordinator_and_blocks_direct_message() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-coordinator-test-{}",
@@ -1095,14 +1095,11 @@ mod tests {
             .agents
             .iter()
             .find(|agent| agent.agent_kind.as_deref() == Some("coordinator"))
-            .expect("default channel coordinator should be listed");
+            .expect("global coordinator should be listed");
 
-        assert_eq!(coordinator.id, "agent_coordinator_all");
-        assert_eq!(coordinator.handle, "@all-coordinator");
-        assert_eq!(
-            coordinator.channel_ids.as_deref(),
-            Some(&["all".to_string()][..])
-        );
+        assert_eq!(coordinator.id, "agent_global_coordinator");
+        assert_eq!(coordinator.handle, "@global-coordinator");
+        assert_eq!(coordinator.channel_ids.as_deref(), Some(&[] as &[String]));
         assert_eq!(coordinator.runtime_kind, "ClaudeCode");
         assert!(fs::metadata(&coordinator.memory_path).unwrap().is_file());
         assert!(create_dm_conversation(&broker, &coordinator.id).is_err());
@@ -1151,7 +1148,7 @@ mod tests {
     }
 
     #[test]
-    fn created_agents_persist_and_reload_from_local_registry() {
+    fn created_agents_stay_memory_only_and_do_not_write_local_registry() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-agent-persist-test-{}",
@@ -1182,27 +1179,20 @@ mod tests {
         .unwrap()
         .agent;
 
-        assert!(agent_root.join("agents/index.json").is_file());
+        assert!(!agent_root.join("agents/index.json").exists());
 
         let reloaded = DaemonBroker::for_tests(descriptor);
         let agents = list_agents(&reloaded);
-        let bob = agents
-            .agents
-            .iter()
-            .find(|agent| agent.id == created.id)
-            .expect("created agent should persist across broker restart");
+        assert!(!agents.agents.iter().any(|agent| agent.id == created.id));
         assert!(agents
             .agents
             .iter()
-            .any(|agent| agent.id == "agent_coordinator_all"));
-        assert_eq!(bob.name, "Bob");
-        assert_eq!(bob.handle, "@bob");
-        assert_eq!(bob.channel_ids.as_deref(), Some(&["all".to_string()][..]));
+            .any(|agent| agent.id == "agent_global_coordinator"));
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
     #[test]
-    fn local_agent_registry_recovers_self_handle_from_memory() {
+    fn local_agent_registry_json_is_not_recovered_as_product_state() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-agent-handle-recover-test-{}",
@@ -1227,21 +1217,20 @@ mod tests {
         };
 
         let recovered = list_agents(&DaemonBroker::for_tests(descriptor.clone()));
-        assert_eq!(recovered.agents[0].handle, "@bob");
+        assert!(!recovered.agents.iter().any(|agent| agent.id == agent_id));
+        assert!(recovered
+            .agents
+            .iter()
+            .any(|agent| agent.id == "agent_global_coordinator"));
 
         let index_path = agent_root.join("agents/index.json");
-        let mut indexed_agents = recovered.agents;
-        indexed_agents[0].handle = "@lei-lee".to_string();
-        fs::write(
-            &index_path,
-            serde_json::to_string_pretty(&indexed_agents).unwrap(),
-        )
-        .unwrap();
+        fs::create_dir_all(index_path.parent().unwrap()).unwrap();
+        fs::write(&index_path, "[]").unwrap();
 
         let healed = list_agents(&DaemonBroker::for_tests(descriptor));
-        assert_eq!(healed.agents[0].handle, "@bob");
+        assert!(!healed.agents.iter().any(|agent| agent.id == agent_id));
         let index = fs::read_to_string(&index_path).unwrap();
-        assert!(index.contains("\"handle\": \"@bob\""));
+        assert_eq!(index, "[]");
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -1263,11 +1252,8 @@ mod tests {
             protocol_version: "v1".to_string(),
         };
 
-        assert_eq!(
-            bootstrap_guide_agent(&DaemonBroker::for_tests(descriptor.clone())).status,
-            "created"
-        );
         let broker = DaemonBroker::for_tests(descriptor);
+        assert_eq!(bootstrap_guide_agent(&broker).status, "created");
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let receipt = bootstrap_guide_agent(&broker);
@@ -1407,7 +1393,7 @@ mod tests {
     }
 
     #[test]
-    fn broker_startup_migrates_legacy_skill_files_to_claude_skill_dirs() {
+    fn broker_startup_does_not_recover_legacy_skill_files_from_json_registry() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-legacy-skill-migration-{}",
@@ -1461,19 +1447,18 @@ mod tests {
             protocol_version: "v1".to_string(),
         });
 
-        let skills = list_agent_skills(&broker, "agent_legacy").unwrap();
-        assert_eq!(skills.skills[0].id, "memory");
-        assert!(workspace.join(".claude/skills/memory/SKILL.md").is_file());
-        assert!(!workspace.join("skills/index.json").exists());
-        assert!(!workspace.join("skills/memory.skill.md").exists());
-        assert!(!workspace.join("memory.skill.md").exists());
+        assert!(list_agent_skills(&broker, "agent_legacy").is_err());
+        assert!(!workspace.join(".claude/skills/memory/SKILL.md").exists());
+        assert!(workspace.join("skills/index.json").exists());
+        assert!(workspace.join("skills/memory.skill.md").exists());
+        assert!(workspace.join("memory.skill.md").exists());
         assert!(workspace.join("skills/custom.skill.md").is_file());
 
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
     #[test]
-    fn broker_startup_updates_existing_guide_create_skill_body() {
+    fn broker_startup_does_not_update_existing_guide_workspace_from_json_registry() {
         let _env_guard = test_env_lock();
         let agent_root = std::env::temp_dir().join(format!(
             "slei-desktop-guide-skill-update-{}",
@@ -1546,13 +1531,11 @@ mod tests {
             &broker,
             "agent_guide_local_node",
             ".claude/skills/guide-create/SKILL.md",
-        )
-        .unwrap();
-        assert!(skill.content.contains("slei_propose_interactive_card"));
-        assert!(skill.content.contains("Input schema"));
-        assert!(skill.content.contains("simple random unused name"));
-        assert!(skill.content.contains("Multiple agents example"));
-        assert!(!skill.content.contains("description: old"));
+        );
+        assert!(skill.is_err());
+        let guide_skill_body = fs::read_to_string(&guide_skill).unwrap();
+        assert!(guide_skill_body.contains("description: old"));
+        assert!(!guide_skill_body.contains("slei_propose_interactive_card"));
 
         std::env::remove_var("SLEI_DATA_ROOT");
     }
@@ -2159,13 +2142,158 @@ mod tests {
         assert_eq!(updated.preferences.locale, "en-US");
         assert!(!updated.preferences.notifications.human_replies);
         let serialized = serde_json::to_string(&list_preferences(&broker)).unwrap();
-        assert!(serialized.contains("secret-token") == false);
-        assert!(serialized.contains("127.0.0.1") == false);
+        assert!(!serialized.contains("secret-token"));
+        assert!(!serialized.contains("127.0.0.1"));
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
     #[test]
-    fn saved_messages_persist_across_broker_restarts_and_support_unsave() {
+    fn broker_does_not_persist_product_state_json_when_daemon_unavailable() {
+        let _env_guard = test_env_lock();
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-no-json-fallback-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        std::env::set_var("SLEI_DATA_ROOT", &root);
+        let broker = DaemonBroker::default_local();
+
+        let _ = update_preferences(
+            &broker,
+            PreferencesUpdateRequest {
+                locale: Some("en-US".to_string()),
+                time_zone: Some("America/Los_Angeles".to_string()),
+                appearance: None,
+                notifications: Some(NotificationPreferencesView {
+                    mentions: true,
+                    human_replies: false,
+                    approvals: true,
+                }),
+            },
+        );
+        assert!(list_agents(&broker).agents.is_empty());
+        assert!(list_conversations(&broker).conversations.is_empty());
+        assert!(list_saved_messages(&broker).saved_messages.is_empty());
+        assert!(list_agent_workspace(&broker, "agent_missing", None).is_err());
+        assert!(read_agent_workspace_file(&broker, "agent_missing", "MEMORY.md").is_err());
+        assert!(create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Offline".to_string(),
+                handle: "@offline".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "should not be created locally".to_string(),
+            },
+        )
+        .is_err());
+        assert!(save_message(
+            &broker,
+            SaveMessageRequest {
+                message_id: "msg_1".to_string(),
+                source_id: "dm:agent_missing".to_string(),
+                source_kind: "dm".to_string(),
+                session_id: None,
+            },
+        )
+        .is_err());
+
+        assert!(!root.join("settings/preferences.json").exists());
+        assert!(!root.join("agents/index.json").exists());
+        assert!(!root.join("conversations/index.json").exists());
+        assert!(!root.join("conversations/sessions.json").exists());
+        assert!(!root.join("saved/messages.json").exists());
+        assert!(!root.join("attachments/index.json").exists());
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn default_local_rejects_offline_channel_message_mutations_without_memory_state() {
+        let _env_guard = test_env_lock();
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-offline-channel-mutation-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        std::env::set_var("SLEI_DATA_ROOT", &root);
+        let broker = DaemonBroker::default_local();
+
+        for as_task in [false, true] {
+            let result = send_channel_message(
+                &broker,
+                "all",
+                SendChannelMessageRequest {
+                    author_id: "human_lei".to_string(),
+                    body: format!("offline mutation should fail as_task={as_task}"),
+                    as_task,
+                },
+            );
+
+            assert!(result.is_err());
+        }
+
+        assert!(list_channel_messages(&broker, "all").messages.is_empty());
+        assert!(list_tasks(
+            &broker,
+            TaskListQuery {
+                channel_id: Some("all".to_string()),
+                creator_id: None,
+                assignee_id: None,
+            },
+        )
+        .tasks
+        .is_empty());
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn default_local_rejects_offline_preferences_and_node_mutations_without_memory_state() {
+        let _env_guard = test_env_lock();
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-offline-settings-mutation-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        std::env::set_var("SLEI_DATA_ROOT", &root);
+        let broker = DaemonBroker::default_local();
+
+        let original_preferences = list_preferences(&broker).preferences;
+        let original_node_name = list_nodes(&broker).nodes[0].name.clone();
+
+        let preferences_result = update_preferences(
+            &broker,
+            PreferencesUpdateRequest {
+                locale: Some("en-US".to_string()),
+                time_zone: Some("America/Los_Angeles".to_string()),
+                appearance: None,
+                notifications: Some(NotificationPreferencesView {
+                    mentions: true,
+                    human_replies: false,
+                    approvals: true,
+                }),
+            },
+        );
+        let rename_result = rename_local_node(&broker, "Lei MacBook");
+
+        assert!(preferences_result.is_err());
+        assert!(rename_result.is_err());
+        let current_preferences = list_preferences(&broker).preferences;
+        assert_eq!(current_preferences.locale, original_preferences.locale);
+        assert_eq!(
+            current_preferences.time_zone,
+            original_preferences.time_zone
+        );
+        assert_eq!(
+            current_preferences.notifications.human_replies,
+            original_preferences.notifications.human_replies
+        );
+        assert_eq!(list_nodes(&broker).nodes[0].name, original_node_name);
+        std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn saved_messages_are_memory_only_and_support_unsave() {
         let _env_guard = test_env_lock();
         let root = std::env::temp_dir().join(format!(
             "slei-desktop-saved-messages-test-{}",
@@ -2195,17 +2323,17 @@ mod tests {
         .saved_message;
         assert_eq!(saved.id, "saved:channel:dev-team:msg_1");
         assert_eq!(list_saved_messages(&broker).saved_messages.len(), 1);
+        assert!(!root.join("saved/messages.json").exists());
 
         let restarted = DaemonBroker::for_tests(descriptor);
         let reloaded = list_saved_messages(&restarted);
-        assert_eq!(reloaded.saved_messages.len(), 1);
-        assert_eq!(reloaded.saved_messages[0].message_id, "msg_1");
+        assert!(reloaded.saved_messages.is_empty());
         let serialized = serde_json::to_string(&reloaded).unwrap();
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
 
-        unsave_message(&restarted, "msg_1").unwrap();
-        assert!(list_saved_messages(&restarted).saved_messages.is_empty());
+        unsave_message(&broker, "msg_1").unwrap();
+        assert!(list_saved_messages(&broker).saved_messages.is_empty());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 }
