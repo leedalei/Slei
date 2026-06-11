@@ -226,6 +226,34 @@ async fn channel_create_replays_concurrent_same_idempotency_key() {
 }
 
 #[tokio::test]
+async fn channel_create_and_human_message_keys_do_not_cross_replay_after_reload() {
+    let root = std::env::temp_dir().join(format!("slei-channel-idem-{}", Uuid::new_v4()));
+    let token = AuthToken::from_static("channel-idem-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    state
+        .messages()
+        .create_human_channel_message("all", "human:local", "message first", "shared-key", false)
+        .await
+        .unwrap();
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    let channel = reloaded
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "shared-key-channel".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "shared-key",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(channel.id, "shared-key-channel");
+}
+
+#[tokio::test]
 async fn human_channel_message_replays_concurrent_same_idempotency_key() {
     let service = MessageService::for_tests();
 
@@ -253,6 +281,73 @@ async fn human_channel_message_replays_concurrent_same_idempotency_key() {
     assert_eq!(first.id, second.id);
     assert_eq!(first.body, second.body);
     assert_eq!(service.channel_messages("dev").await.len(), 1);
+}
+
+#[tokio::test]
+async fn workspace_mount_replay_after_reload_checks_original_channel() {
+    let root = std::env::temp_dir().join(format!("slei-mount-idem-{}", Uuid::new_v4()));
+    let token = AuthToken::from_static("mount-idem-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    let dev = state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "mount-dev-channel",
+        )
+        .await
+        .unwrap();
+    let qa = state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "qa".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "mount-qa-channel",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .mount_workspace(
+            &dev.id,
+            WorkspaceMount {
+                path: "/workspace/shared".to_string(),
+                label: "shared".to_string(),
+            },
+            "same-mount-key",
+        )
+        .await
+        .unwrap();
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    let error = reloaded
+        .channels()
+        .mount_workspace(
+            &qa.id,
+            WorkspaceMount {
+                path: "/workspace/shared".to_string(),
+                label: "other".to_string(),
+            },
+            "same-mount-key",
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        slei_daemon::services::channel_service::ChannelError::IdempotencyConflict
+    ));
+    assert!(reloaded
+        .channels()
+        .workspaces(&qa.id)
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]

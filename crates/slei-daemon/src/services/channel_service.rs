@@ -3,10 +3,13 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use slei_storage::db::SleiDb;
 use slei_storage::repositories::{ChannelMemberRow, ChannelRow, Repositories, WorkspaceMountRow};
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+use crate::services::idempotency::namespaced_key;
 
 pub use crate::services::member_service::PermissionPreset;
 
@@ -122,14 +125,29 @@ impl ChannelService {
         if idempotency_key.is_empty() {
             return Err(ChannelError::MissingIdempotencyKey);
         }
+        let durable_key = namespaced_key("channel:create", idempotency_key)
+            .ok_or(ChannelError::MissingIdempotencyKey)?;
 
         self.ensure_default_channel().await?;
-        let mut idempotency = self.idempotency.lock().await;
-        if let Some(id) = idempotency
-            .channel_idempotency
-            .get(idempotency_key)
-            .cloned()
+        if let Some(payload) = self
+            .repos
+            .idempotent_response(&durable_key)
+            .await
+            .map_err(channel_storage_error)?
         {
+            let id = idempotent_channel_id(&payload);
+            self.idempotency
+                .lock()
+                .await
+                .channel_idempotency
+                .insert(durable_key.clone(), id.clone());
+            return self
+                .channel_by_id(&id)
+                .await?
+                .ok_or(ChannelError::MissingChannel);
+        }
+        let mut idempotency = self.idempotency.lock().await;
+        if let Some(id) = idempotency.channel_idempotency.get(&durable_key).cloned() {
             return self
                 .channel_by_id(&id)
                 .await?
@@ -150,18 +168,20 @@ impl ChannelService {
         }
 
         self.repos
-            .upsert_channel(
+            .upsert_channel_idempotent(
                 &name,
                 &name,
                 draft.description.as_deref(),
                 false,
                 permission_to_storage(draft.permission),
+                &durable_key,
+                &json!({ "channelId": name }).to_string(),
             )
             .await
             .map_err(map_channel_insert_error)?;
         idempotency
             .channel_idempotency
-            .insert(idempotency_key.to_string(), name.clone());
+            .insert(durable_key, name.clone());
 
         self.channel_by_id(&name)
             .await?
@@ -176,12 +196,20 @@ impl ChannelService {
         if idempotency_key.is_empty() {
             return None;
         }
+        let durable_key = namespaced_key("channel:create", idempotency_key)?;
+        if let Ok(Some(payload)) = self.repos.idempotent_response(&durable_key).await {
+            return self
+                .channel_by_id(&idempotent_channel_id(&payload))
+                .await
+                .ok()
+                .flatten();
+        }
         let id = self
             .idempotency
             .lock()
             .await
             .channel_idempotency
-            .get(idempotency_key)
+            .get(&durable_key)
             .cloned()?;
         self.channel_by_id(&id).await.ok().flatten()
     }
@@ -312,13 +340,36 @@ impl ChannelService {
         mount: WorkspaceMount,
         idempotency_key: &str,
     ) -> Result<WorkspaceMount, ChannelError> {
+        let idempotency_key = idempotency_key.trim();
+        if idempotency_key.is_empty() {
+            return Err(ChannelError::MissingIdempotencyKey);
+        }
+        let durable_key = namespaced_key("channel:mount_workspace", idempotency_key)
+            .ok_or(ChannelError::MissingIdempotencyKey)?;
+        if let Some(payload) = self
+            .repos
+            .idempotent_response(&durable_key)
+            .await
+            .map_err(channel_storage_error)?
+        {
+            let (existing_channel_id, existing_mount) = idempotent_mount(&payload)?;
+            if existing_channel_id == channel_id {
+                self.idempotency.lock().await.mount_idempotency.insert(
+                    durable_key.clone(),
+                    (existing_channel_id, existing_mount.clone()),
+                );
+                return Ok(existing_mount);
+            }
+            return Err(ChannelError::IdempotencyConflict);
+        }
         let mut idempotency = self.idempotency.lock().await;
         if let Some((existing_channel_id, existing_mount)) =
-            idempotency.mount_idempotency.get(idempotency_key)
+            idempotency.mount_idempotency.get(&durable_key)
         {
             if existing_channel_id == channel_id {
                 return Ok(existing_mount.clone());
             }
+            return Err(ChannelError::IdempotencyConflict);
         }
 
         if self.channel_by_id(channel_id).await?.is_none() {
@@ -335,13 +386,23 @@ impl ChannelService {
             label: mount.label,
         };
         self.repos
-            .upsert_channel_workspace_mount(channel_id, &mount.path, &mount.label)
+            .upsert_channel_workspace_mount_idempotent(
+                channel_id,
+                &mount.path,
+                &mount.label,
+                &durable_key,
+                &json!({
+                    "channelId": channel_id,
+                    "path": &mount.path,
+                    "label": &mount.label,
+                })
+                .to_string(),
+            )
             .await
             .map_err(map_workspace_insert_error)?;
-        idempotency.mount_idempotency.insert(
-            idempotency_key.to_string(),
-            (channel_id.to_string(), mount.clone()),
-        );
+        idempotency
+            .mount_idempotency
+            .insert(durable_key, (channel_id.to_string(), mount.clone()));
         Ok(mount)
     }
 
@@ -605,6 +666,49 @@ fn channel_storage_error(error: sqlx::Error) -> ChannelError {
     ))
 }
 
+fn idempotent_channel_id(payload: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("channelId")
+                .and_then(|id| id.as_str())
+                .map(ToString::to_string)
+                .or_else(|| {
+                    value
+                        .get("channel_id")
+                        .and_then(|id| id.as_str())
+                        .map(ToString::to_string)
+                })
+        })
+        .unwrap_or_else(|| payload.to_string())
+}
+
+fn idempotent_mount(payload: &str) -> Result<(String, WorkspaceMount), ChannelError> {
+    let value = serde_json::from_str::<serde_json::Value>(payload).map_err(|error| {
+        ChannelError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            error.to_string(),
+        ))
+    })?;
+    let channel_id = value
+        .get("channelId")
+        .and_then(|id| id.as_str())
+        .ok_or(ChannelError::InvalidChannel)?
+        .to_string();
+    let path = value
+        .get("path")
+        .and_then(|path| path.as_str())
+        .ok_or(ChannelError::InvalidWorkspacePath)?
+        .to_string();
+    let label = value
+        .get("label")
+        .and_then(|label| label.as_str())
+        .ok_or(ChannelError::InvalidWorkspacePath)?
+        .to_string();
+    Ok((channel_id, WorkspaceMount { path, label }))
+}
+
 fn repositories_blocking(data_root: PathBuf) -> Repositories {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -633,6 +737,8 @@ pub enum ChannelError {
     MissingMember,
     #[error("idempotency-key is required")]
     MissingIdempotencyKey,
+    #[error("idempotency-key was already used for another channel")]
+    IdempotencyConflict,
     #[error("invalid channel")]
     InvalidChannel,
     #[error("invalid workspace path")]

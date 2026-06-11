@@ -11,9 +11,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::db::SleiDb;
-    use super::repositories::{
-        Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
-    };
+    use super::repositories::{Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES};
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("slei-{name}-{}.sqlite", Uuid::new_v4()));
@@ -382,7 +380,10 @@ mod tests {
 
         for table in RESET_MUTABLE_TABLES {
             let query = format!("SELECT COUNT(*) FROM {table}");
-            let count: i64 = sqlx::query_scalar(&query).fetch_one(db.pool()).await.unwrap();
+            let count: i64 = sqlx::query_scalar(&query)
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
             assert!(count > 0, "expected seeded rows in {table}");
         }
 
@@ -393,13 +394,19 @@ mod tests {
         .fetch_one(db.pool())
         .await
         .unwrap();
-        assert_eq!(seeded_sequence_count, RESET_MUTABLE_SEQUENCE_TABLES.len() as i64);
+        assert_eq!(
+            seeded_sequence_count,
+            RESET_MUTABLE_SEQUENCE_TABLES.len() as i64
+        );
 
         repos.reset_mutable_state().await.unwrap();
 
         for table in RESET_MUTABLE_TABLES {
             let query = format!("SELECT COUNT(*) FROM {table}");
-            let count: i64 = sqlx::query_scalar(&query).fetch_one(db.pool()).await.unwrap();
+            let count: i64 = sqlx::query_scalar(&query)
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
             assert_eq!(count, 0, "expected reset to empty {table}");
         }
 

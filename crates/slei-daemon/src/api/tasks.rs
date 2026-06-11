@@ -55,10 +55,18 @@ pub async fn create(
         Err(response) => return response,
     };
 
-    let idempotency_key = headers
+    let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
 
     match state
         .tasks()
@@ -113,10 +121,18 @@ pub async fn reply(
         Err(response) => return response,
     };
 
-    let idempotency_key = headers
+    let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
 
     match state
         .channel_orchestrator()
@@ -187,8 +203,13 @@ fn task_error_response(error: TaskError) -> Response {
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
-        TaskError::ActiveTaskRootDeletionBlocked => (
+        TaskError::ActiveTaskRootDeletionBlocked | TaskError::MissingIdempotencyKey => (
             StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        TaskError::Storage(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
@@ -203,6 +224,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::AgentNotFound)
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
+        | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidWorkspacePath)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
@@ -218,11 +240,13 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
-        | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath) => {
+        | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath)
+        | ChannelOrchestratorError::Channel(ChannelError::IdempotencyConflict) => {
             StatusCode::CONFLICT
         }
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Message(MessageError::Storage(_))
+        | ChannelOrchestratorError::Task(TaskError::Storage(_))
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))

@@ -1,4 +1,6 @@
 use slei_daemon::services::message_service::{MessageService, SendMessageDraft};
+use slei_daemon::{auth::AuthToken, state::AppState};
+use uuid::Uuid;
 
 #[tokio::test]
 async fn deleted_message_body_is_not_recovered_into_events_context_or_subsequent_runs() {
@@ -38,4 +40,30 @@ async fn deleted_message_body_is_not_recovered_into_events_context_or_subsequent
         .reconstructed_context("channel_dev")
         .await
         .contains("remove this secret"));
+}
+
+#[tokio::test]
+async fn recovery_channel_message_idempotency_survives_daemon_reload() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("message-idempotency-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    let message = state
+        .messages()
+        .create_human_channel_message("all", "human:local", "hello", "idem-message", false)
+        .await
+        .expect("message is created");
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    let replayed = reloaded
+        .messages()
+        .create_human_channel_message("all", "human:local", "hello", "idem-message", false)
+        .await
+        .expect("message idempotency replays after reload");
+
+    assert_eq!(replayed.id, message.id);
+}
+
+fn temp_data_root() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("slei-recovery-{}", Uuid::new_v4()))
 }

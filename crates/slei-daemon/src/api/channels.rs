@@ -441,7 +441,9 @@ fn channel_error_response(error: ChannelError) -> Response {
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
-        ChannelError::DuplicateChannelName | ChannelError::DuplicateWorkspacePath => (
+        ChannelError::DuplicateChannelName
+        | ChannelError::DuplicateWorkspacePath
+        | ChannelError::IdempotencyConflict => (
             StatusCode::CONFLICT,
             Json(json!({ "error": error.to_string() })),
         )

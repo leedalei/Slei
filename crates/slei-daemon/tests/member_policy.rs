@@ -138,13 +138,11 @@ async fn member_policy_channels_workspace_mounts_and_agent_members_are_idempoten
         .await
         .unwrap();
     assert_eq!(zero_workspace.id, retry.id);
-    assert!(
-        channels
-            .workspaces(&zero_workspace.id)
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(channels
+        .workspaces(&zero_workspace.id)
+        .await
+        .unwrap()
+        .is_empty());
 
     channels
         .mount_workspace(

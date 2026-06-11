@@ -358,6 +358,35 @@ impl Repositories {
         Self { pool }
     }
 
+    pub async fn idempotent_response(&self, key: &str) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT response_payload
+             FROM idempotent_mutations
+             WHERE idempotency_key = ?",
+        )
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    pub async fn record_idempotent_response(
+        &self,
+        key: &str,
+        entity_id: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO idempotent_mutations(idempotency_key, entity_id, response_payload)
+             VALUES (?, ?, ?)",
+        )
+        .bind(key)
+        .bind(entity_id)
+        .bind(response_payload)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn reset_mutable_state(&self) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("PRAGMA defer_foreign_keys = ON")
@@ -561,6 +590,39 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn upsert_channel_idempotent(
+        &self,
+        id: &str,
+        name: &str,
+        description: Option<&str>,
+        is_default: bool,
+        permission: &str,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO channels(id, name, description, is_default, permission)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                is_default = excluded.is_default,
+                permission = excluded.permission,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(id)
+        .bind(name)
+        .bind(description)
+        .bind(if is_default { 1 } else { 0 })
+        .bind(permission)
+        .execute(&mut *tx)
+        .await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, id, response_payload).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn delete_channel(&self, channel_id: &str) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM channels WHERE id = ?")
             .bind(channel_id)
@@ -744,6 +806,37 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn upsert_channel_workspace_mount_idempotent(
+        &self,
+        channel_id: &str,
+        path: &str,
+        label: &str,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO channel_workspace_mounts(channel_id, path, label)
+             VALUES (?, ?, ?)
+             ON CONFLICT(channel_id, path) DO UPDATE SET
+                label = excluded.label",
+        )
+        .bind(channel_id)
+        .bind(path)
+        .bind(label)
+        .execute(&mut *tx)
+        .await?;
+        record_idempotent_response_tx(
+            &mut tx,
+            idempotency_key,
+            &format!("{channel_id}:{path}"),
+            response_payload,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn channel_workspace_mounts(
         &self,
         channel_id: &str,
@@ -786,6 +879,31 @@ impl Repositories {
         .bind(if row.as_task { 1 } else { 0 })
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    pub async fn insert_channel_message_idempotent(
+        &self,
+        row: NewChannelMessageRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO messages(id, channel_id, author_kind, kind, content, deleted, author_id, as_task, edited)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, 0)",
+        )
+        .bind(&row.id)
+        .bind(&row.channel_id)
+        .bind(row.kind.clone())
+        .bind(&row.kind)
+        .bind(&row.body)
+        .bind(&row.author_id)
+        .bind(if row.as_task { 1 } else { 0 })
+        .execute(&mut *tx)
+        .await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &row.id, response_payload).await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -962,77 +1080,22 @@ impl Repositories {
 
     pub async fn upsert_task_root(&self, row: TaskRootRow) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
-        let root_message_id = if let Some(source_message_id) = row.source_message_id.as_deref() {
-            let source_exists =
-                sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM messages WHERE id = ? LIMIT 1")
-                    .bind(source_message_id)
-                    .fetch_one(&mut *tx)
-                    .await?;
-            if source_exists > 0 {
-                source_message_id.to_string()
-            } else {
-                insert_synthetic_task_message(
-                    &mut tx,
-                    &row.id,
-                    &row.channel_id,
-                    &row.creator_id,
-                    "task_root",
-                    &row.root_body,
-                )
-                .await?
-            }
-        } else {
-            insert_synthetic_task_message(
-                &mut tx,
-                &row.id,
-                &row.channel_id,
-                &row.creator_id,
-                "task_root",
-                &row.root_body,
-            )
-            .await?
-        };
+        upsert_task_root_tx(&mut tx, row).await?;
+        tx.commit().await?;
+        Ok(())
+    }
 
-        sqlx::query(
-            "INSERT INTO tasks(
-                id, channel_id, root_message_id, title, status, created_at, creator_id,
-                assignee_id, source_message_id, assignment_reason, needs_assignment,
-                attention_required, root_deleted, root_body, updated_at
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO UPDATE SET
-                channel_id = excluded.channel_id,
-                root_message_id = excluded.root_message_id,
-                title = excluded.title,
-                status = excluded.status,
-                creator_id = excluded.creator_id,
-                assignee_id = excluded.assignee_id,
-                source_message_id = excluded.source_message_id,
-                assignment_reason = excluded.assignment_reason,
-                needs_assignment = excluded.needs_assignment,
-                attention_required = excluded.attention_required,
-                root_deleted = excluded.root_deleted,
-                root_body = excluded.root_body,
-                updated_at = excluded.updated_at",
-        )
-        .bind(row.id)
-        .bind(row.channel_id)
-        .bind(root_message_id)
-        .bind(row.title)
-        .bind(row.status)
-        .bind(row.created_at)
-        .bind(row.creator_id)
-        .bind(row.assignee_id)
-        .bind(row.source_message_id)
-        .bind(row.assignment_reason)
-        .bind(if row.needs_assignment { 1 } else { 0 })
-        .bind(if row.attention_required { 1 } else { 0 })
-        .bind(if row.root_deleted { 1 } else { 0 })
-        .bind(row.root_body)
-        .bind(row.updated_at)
-        .execute(&mut *tx)
-        .await?;
-
+    pub async fn upsert_task_root_idempotent(
+        &self,
+        row: TaskRootRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let entity_id = row.id.clone();
+        let mut tx = self.pool.begin().await?;
+        upsert_task_root_tx(&mut tx, row).await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &entity_id, response_payload)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -1168,48 +1231,22 @@ impl Repositories {
 
     pub async fn insert_task_reply(&self, row: TaskReplyRow) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
-        let task = sqlx::query("SELECT channel_id FROM tasks WHERE id = ?")
-            .bind(&row.task_id)
-            .fetch_optional(&mut *tx)
+        insert_task_reply_tx(&mut tx, row).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn insert_task_reply_idempotent(
+        &self,
+        row: TaskReplyRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let entity_id = row.id.clone();
+        let mut tx = self.pool.begin().await?;
+        insert_task_reply_tx(&mut tx, row).await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &entity_id, response_payload)
             .await?;
-        let Some(task) = task else {
-            return Err(sqlx::Error::RowNotFound);
-        };
-        let channel_id: String = task.try_get("channel_id")?;
-        let author_message_id = insert_synthetic_task_message(
-            &mut tx,
-            &row.id,
-            &channel_id,
-            &row.sender_id,
-            "task_reply",
-            &row.body,
-        )
-        .await?;
-
-        sqlx::query(
-            "INSERT INTO thread_replies(
-                id, task_id, author_message_id, content, created_at, sender_id, role, status
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT(id) DO NOTHING",
-        )
-        .bind(&row.id)
-        .bind(&row.task_id)
-        .bind(author_message_id)
-        .bind(&row.body)
-        .bind(&row.created_at)
-        .bind(&row.sender_id)
-        .bind(&row.role)
-        .bind(&row.status)
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query("UPDATE tasks SET updated_at = ? WHERE id = ?")
-            .bind(now_string())
-            .bind(&row.task_id)
-            .execute(&mut *tx)
-            .await?;
-
         tx.commit().await?;
         Ok(())
     }
@@ -2186,6 +2223,21 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn upsert_interactive_card_idempotent(
+        &self,
+        row: InteractiveCardRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let entity_id = row.id.clone();
+        let mut tx = self.pool.begin().await?;
+        upsert_interactive_card_tx(&mut tx, row).await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &entity_id, response_payload)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn interactive_card(
         &self,
         id: &str,
@@ -2317,6 +2369,181 @@ impl Repositories {
         let count: i64 = row.try_get("count")?;
         Ok(count.max(0) as u64)
     }
+}
+
+async fn record_idempotent_response_tx(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    key: &str,
+    entity_id: &str,
+    response_payload: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO idempotent_mutations(idempotency_key, entity_id, response_payload)
+         VALUES (?, ?, ?)",
+    )
+    .bind(key)
+    .bind(entity_id)
+    .bind(response_payload)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn upsert_task_root_tx(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    row: TaskRootRow,
+) -> Result<(), sqlx::Error> {
+    let root_message_id = if let Some(source_message_id) = row.source_message_id.as_deref() {
+        let source_exists =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM messages WHERE id = ? LIMIT 1")
+                .bind(source_message_id)
+                .fetch_one(&mut **tx)
+                .await?;
+        if source_exists > 0 {
+            source_message_id.to_string()
+        } else {
+            insert_synthetic_task_message(
+                tx,
+                &row.id,
+                &row.channel_id,
+                &row.creator_id,
+                "task_root",
+                &row.root_body,
+            )
+            .await?
+        }
+    } else {
+        insert_synthetic_task_message(
+            tx,
+            &row.id,
+            &row.channel_id,
+            &row.creator_id,
+            "task_root",
+            &row.root_body,
+        )
+        .await?
+    };
+
+    sqlx::query(
+        "INSERT INTO tasks(
+            id, channel_id, root_message_id, title, status, created_at, creator_id,
+            assignee_id, source_message_id, assignment_reason, needs_assignment,
+            attention_required, root_deleted, root_body, updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+            channel_id = excluded.channel_id,
+            root_message_id = excluded.root_message_id,
+            title = excluded.title,
+            status = excluded.status,
+            creator_id = excluded.creator_id,
+            assignee_id = excluded.assignee_id,
+            source_message_id = excluded.source_message_id,
+            assignment_reason = excluded.assignment_reason,
+            needs_assignment = excluded.needs_assignment,
+            attention_required = excluded.attention_required,
+            root_deleted = excluded.root_deleted,
+            root_body = excluded.root_body,
+            updated_at = excluded.updated_at",
+    )
+    .bind(row.id)
+    .bind(row.channel_id)
+    .bind(root_message_id)
+    .bind(row.title)
+    .bind(row.status)
+    .bind(row.created_at)
+    .bind(row.creator_id)
+    .bind(row.assignee_id)
+    .bind(row.source_message_id)
+    .bind(row.assignment_reason)
+    .bind(if row.needs_assignment { 1 } else { 0 })
+    .bind(if row.attention_required { 1 } else { 0 })
+    .bind(if row.root_deleted { 1 } else { 0 })
+    .bind(row.root_body)
+    .bind(row.updated_at)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn insert_task_reply_tx(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    row: TaskReplyRow,
+) -> Result<(), sqlx::Error> {
+    let task = sqlx::query("SELECT channel_id FROM tasks WHERE id = ?")
+        .bind(&row.task_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    let Some(task) = task else {
+        return Err(sqlx::Error::RowNotFound);
+    };
+    let channel_id: String = task.try_get("channel_id")?;
+    let author_message_id = insert_synthetic_task_message(
+        tx,
+        &row.id,
+        &channel_id,
+        &row.sender_id,
+        "task_reply",
+        &row.body,
+    )
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO thread_replies(
+            id, task_id, author_message_id, content, created_at, sender_id, role, status
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO NOTHING",
+    )
+    .bind(&row.id)
+    .bind(&row.task_id)
+    .bind(author_message_id)
+    .bind(&row.body)
+    .bind(&row.created_at)
+    .bind(&row.sender_id)
+    .bind(&row.role)
+    .bind(&row.status)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query("UPDATE tasks SET updated_at = ? WHERE id = ?")
+        .bind(now_string())
+        .bind(&row.task_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
+
+async fn upsert_interactive_card_tx(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    row: InteractiveCardRow,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO interactive_cards(
+            id, run_id, agent_id, conversation_id, message_id, action_payload, template_payload, state
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+            run_id = excluded.run_id,
+            agent_id = excluded.agent_id,
+            conversation_id = excluded.conversation_id,
+            message_id = excluded.message_id,
+            action_payload = excluded.action_payload,
+            template_payload = excluded.template_payload,
+            state = excluded.state,
+            updated_at = CURRENT_TIMESTAMP",
+    )
+    .bind(row.id)
+    .bind(row.run_id)
+    .bind(row.agent_id)
+    .bind(row.conversation_id)
+    .bind(row.message_id)
+    .bind(row.action_payload)
+    .bind(row.template_payload)
+    .bind(row.state)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 async fn insert_synthetic_task_message(

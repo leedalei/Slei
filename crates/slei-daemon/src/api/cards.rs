@@ -20,10 +20,18 @@ pub async fn complete(
         Err(response) => return response,
     };
 
-    let idempotency_key = headers
+    let Some(idempotency_key) = headers
         .get("idempotency-key")
         .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
 
     match state.cards().complete(&id, idempotency_key).await {
         Ok(card) => Json(json!({ "card": card })).into_response(),
@@ -38,7 +46,8 @@ fn card_error_response(error: CardError) -> Response {
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
-        CardError::FreeformRejected
+        CardError::MissingIdempotencyKey
+        | CardError::FreeformRejected
         | CardError::WorkspaceMountRejected
         | CardError::PrivilegeEscalationRejected
         | CardError::UnsupportedProductToolCardKind(_)

@@ -133,13 +133,16 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::WorkspaceBoundary)
         | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
+        | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
-        | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath) => {
+        | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath)
+        | ChannelOrchestratorError::Channel(ChannelError::IdempotencyConflict) => {
             StatusCode::CONFLICT
         }
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Message(MessageError::Storage(_))
+        | ChannelOrchestratorError::Task(TaskError::Storage(_))
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))

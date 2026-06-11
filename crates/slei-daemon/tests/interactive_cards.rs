@@ -1,8 +1,12 @@
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
 use serde_json::json;
+use slei_daemon::app::build_router;
 use slei_daemon::services::card_service::{
     CardAction, CardDecision, CardProposal, CardService, CardState, InteractiveCardTemplate,
 };
 use slei_daemon::{auth::AuthToken, state::AppState};
+use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -46,6 +50,108 @@ async fn interactive_cards_require_typed_proposal_and_user_confirmation() {
         service.executed_actions().await,
         vec!["create_channel:dev-team-edited"]
     );
+}
+
+#[tokio::test]
+async fn interactive_card_proposal_key_does_not_replay_decision_after_reload() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("card-namespace-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    let card = state
+        .cards()
+        .propose_card(
+            CardProposal {
+                run_id: "run_card_namespace".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateChannel {
+                    name: "namespace-card".to_string(),
+                },
+            },
+            "shared-card-key",
+        )
+        .await
+        .unwrap();
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    reloaded
+        .cards()
+        .decide(
+            CardDecision {
+                card_id: card.id.clone(),
+                confirm: true,
+                edited_name: Some("namespace-card-edited".to_string()),
+            },
+            "shared-card-key",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        reloaded.cards().card(&card.id).await.unwrap().state,
+        CardState::Confirmed
+    );
+    assert_eq!(
+        reloaded.cards().executed_actions().await,
+        vec!["create_channel:namespace-card-edited"]
+    );
+}
+
+#[tokio::test]
+async fn interactive_card_complete_rejects_empty_idempotency_key() {
+    let service = CardService::for_tests();
+    let card = service
+        .propose_card(
+            CardProposal {
+                run_id: "run_empty_complete".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateChannel {
+                    name: "empty-complete".to_string(),
+                },
+            },
+            "empty-complete-proposal",
+        )
+        .await
+        .unwrap();
+
+    let error = service.complete(&card.id, " ").await.unwrap_err();
+    assert!(error.to_string().contains("idempotency-key"));
+}
+
+#[tokio::test]
+async fn interactive_card_complete_api_requires_idempotency_key() {
+    let token = AuthToken::from_static("card-api-key-token");
+    let state = AppState::for_tests(token.clone());
+    let card = state
+        .cards()
+        .propose_card(
+            CardProposal {
+                run_id: "run_card_api_key".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateChannel {
+                    name: "api-key-card".to_string(),
+                },
+            },
+            "card-api-key-proposal",
+        )
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/interactive-cards/{}/complete", card.id))
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["error"], "idempotency-key is required");
 }
 
 #[tokio::test]
@@ -128,6 +234,46 @@ async fn interactive_cards_survive_app_state_reload_without_legacy_json_index() 
     assert_eq!(restored.state, CardState::Confirmed);
     assert_eq!(restored.action, card.action);
     assert!(!root.join("cards/index.json").exists());
+}
+
+#[tokio::test]
+async fn interactive_cards_proposal_idempotency_survives_app_state_reload() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("card-idempotency-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    let card = state
+        .cards()
+        .propose_card(
+            CardProposal {
+                run_id: "run_card_idem".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateChannel {
+                    name: "ops-idem".to_string(),
+                },
+            },
+            "card-idem",
+        )
+        .await
+        .expect("card is proposed");
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root).await;
+    let replayed = reloaded
+        .cards()
+        .propose_card(
+            CardProposal {
+                run_id: "run_card_idem".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateChannel {
+                    name: "ops-idem".to_string(),
+                },
+            },
+            "card-idem",
+        )
+        .await
+        .expect("card idempotency replays after reload");
+
+    assert_eq!(replayed.id, card.id);
 }
 
 #[tokio::test]

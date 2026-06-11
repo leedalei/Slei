@@ -37,6 +37,73 @@ async fn task_service_creates_task_root_and_keeps_replies_attached() {
 }
 
 #[tokio::test]
+async fn task_service_rejects_empty_idempotency_keys() {
+    let service = TaskService::for_tests();
+
+    let create_error = service
+        .create_task_root("channel_dev", "human_lei", "missing key", "")
+        .await
+        .unwrap_err();
+    assert!(create_error.to_string().contains("idempotency-key"));
+
+    let task = service
+        .create_task_root(
+            "channel_dev",
+            "human_lei",
+            "has key",
+            "task-empty-key-source",
+        )
+        .await
+        .unwrap();
+    let reply_error = service
+        .add_reply(&task.id, "human_lei", "missing key reply", "   ")
+        .await
+        .unwrap_err();
+    assert!(reply_error.to_string().contains("idempotency-key"));
+}
+
+#[tokio::test]
+async fn task_create_and_reply_idempotency_keys_do_not_cross_replay_after_reload() {
+    let root = std::env::temp_dir().join(format!("slei-task-idem-{}", uuid::Uuid::new_v4()));
+    let first = AppState::for_tests_with_agent_root_async(
+        AuthToken::from_static("task-idem-token"),
+        root.clone(),
+    )
+    .await;
+    let task = first
+        .tasks()
+        .create_task_root("all", "human:local", "root title", "shared-task-key")
+        .await
+        .unwrap();
+    let reply = first
+        .tasks()
+        .add_reply(&task.id, "human:local", "reply body", "reply-then-create")
+        .await
+        .unwrap();
+
+    let second =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("task-idem-token"), root)
+            .await;
+    let create_after_reply = second
+        .tasks()
+        .create_task_root("all", "human:local", "new root", "reply-then-create")
+        .await
+        .unwrap();
+    assert_ne!(create_after_reply.id, task.id);
+    assert_ne!(create_after_reply.id, reply.id);
+    assert_eq!(create_after_reply.title, "new root");
+
+    let reply_after_create = second
+        .tasks()
+        .add_reply(&task.id, "human:local", "new reply", "shared-task-key")
+        .await
+        .unwrap();
+    assert_ne!(reply_after_create.id, task.id);
+    assert_ne!(reply_after_create.id, reply.id);
+    assert_eq!(reply_after_create.body, "new reply");
+}
+
+#[tokio::test]
 async fn task_service_blocks_root_delete_while_active_and_updates_status() {
     let service = TaskService::for_tests();
     let task = service
@@ -75,12 +142,11 @@ async fn task_created_from_coordinator_keeps_source_and_assignment_reason() {
     assert_eq!(task.source_message_id.as_deref(), Some("msg_1"));
     assert_eq!(task.assignee_id.as_deref(), Some("agent_alice"));
     assert!(!task.needs_assignment);
-    assert!(
-        task.assignment_reason
-            .as_deref()
-            .unwrap()
-            .contains("command intent")
-    );
+    assert!(task
+        .assignment_reason
+        .as_deref()
+        .unwrap()
+        .contains("command intent"));
 }
 
 #[tokio::test]

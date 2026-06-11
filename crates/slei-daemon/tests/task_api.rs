@@ -1,6 +1,6 @@
-use axum::body::{Body, to_bytes};
+use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::channel_service::{
@@ -159,6 +159,81 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
         json["thread"]["replies"][0]["body"],
         "我会继续在这个任务 session 里处理"
     );
+}
+
+#[tokio::test]
+async fn task_api_requires_idempotency_key_for_mutations() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state.channels().list_channels().await;
+    let app = build_router(state);
+
+    let missing_create_key = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tasks")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "channelId": "all",
+                        "creatorId": "human:local",
+                        "title": "missing key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_create_key.status(), StatusCode::BAD_REQUEST);
+
+    let created = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tasks")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "task-api-required-create")
+                .body(Body::from(
+                    json!({
+                        "channelId": "all",
+                        "creatorId": "human:local",
+                        "title": "has key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = to_bytes(created.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    let task_id = json["task"]["id"].as_str().unwrap();
+
+    let missing_reply_key = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/tasks/{task_id}/replies"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "senderId": "human:local",
+                        "body": "missing reply key"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing_reply_key.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

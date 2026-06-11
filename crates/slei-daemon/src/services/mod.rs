@@ -12,6 +12,7 @@ pub mod coordinator_service;
 pub mod delegation_service;
 pub mod diagnostics_service;
 pub mod event_service;
+mod idempotency;
 pub mod member_service;
 pub mod memory_event_service;
 pub mod memory_maintainer_service;

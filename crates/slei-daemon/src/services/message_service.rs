@@ -3,10 +3,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use slei_storage::db::SleiDb;
 use slei_storage::repositories::{ChannelMessageRow, NewChannelMessageRow, Repositories};
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
+
+use crate::services::idempotency::namespaced_key;
 
 #[derive(Clone, Debug)]
 pub struct SendMessageDraft {
@@ -40,7 +43,8 @@ pub enum MessageKind {
     Tombstone,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum SendMessageOutcome {
     AgentRun {
         message_id: String,
@@ -118,13 +122,30 @@ impl MessageService {
         draft: SendMessageDraft,
         idempotency_key: &str,
     ) -> Result<SendMessageOutcome, MessageError> {
+        let idempotency_key =
+            namespaced_key("message:send", idempotency_key).ok_or(MessageError::InvalidMessage)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
+        if let Some(payload) = self
+            .repos
+            .idempotent_response(&idempotency_key)
+            .await
+            .map_err(message_storage_error)?
+        {
+            let outcome: SendMessageOutcome = serde_json::from_str(&payload)
+                .map_err(|error| MessageError::Storage(error.to_string()))?;
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .idempotency
+                .insert(idempotency_key.clone(), outcome.clone());
+            return Ok(outcome);
+        }
         if let Some(outcome) = self
             .inner
             .lock()
             .expect("message state lock")
             .idempotency
-            .get(idempotency_key)
+            .get(&idempotency_key)
             .cloned()
         {
             return Ok(outcome);
@@ -137,13 +158,6 @@ impl MessageService {
             MessageKind::Human,
             draft.as_task,
         );
-        self.insert_record(message.clone()).await?;
-        self.inner
-            .lock()
-            .expect("message state lock")
-            .event_payloads
-            .push(format!("message.created:{}", message.id));
-
         let outcome = {
             let state = self.inner.lock().expect("message state lock");
             if let Some(handle) = first_mention(&draft.body) {
@@ -173,11 +187,23 @@ impl MessageService {
             }
         };
 
+        self.insert_record_idempotent(
+            message.clone(),
+            &idempotency_key,
+            &serde_json::to_string(&outcome)
+                .map_err(|error| MessageError::Storage(error.to_string()))?,
+        )
+        .await?;
+        self.inner
+            .lock()
+            .expect("message state lock")
+            .event_payloads
+            .push(format!("message.created:{}", message.id));
         self.inner
             .lock()
             .expect("message state lock")
             .idempotency
-            .insert(idempotency_key.to_string(), outcome.clone());
+            .insert(idempotency_key, outcome.clone());
         Ok(outcome)
     }
 
@@ -229,13 +255,29 @@ impl MessageService {
         {
             return Err(MessageError::InvalidMessage);
         }
+        let idempotency_key = namespaced_key("message:create_human", idempotency_key)
+            .ok_or(MessageError::InvalidMessage)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
+        if let Some(payload) = self
+            .repos
+            .idempotent_response(&idempotency_key)
+            .await
+            .map_err(message_storage_error)?
+        {
+            let message_id = idempotent_entity_id(&payload);
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .channel_message_idempotency
+                .insert(idempotency_key.clone(), message_id.clone());
+            return self.message(&message_id).await;
+        }
         let idempotent_message_id = {
             self.inner
                 .lock()
                 .expect("message state lock")
                 .channel_message_idempotency
-                .get(idempotency_key)
+                .get(&idempotency_key)
                 .cloned()
         };
         if let Some(message_id) = idempotent_message_id {
@@ -249,11 +291,16 @@ impl MessageService {
             MessageKind::Human,
             as_task,
         );
-        self.insert_record(message.clone()).await?;
+        self.insert_record_idempotent(
+            message.clone(),
+            &idempotency_key,
+            &json!({ "messageId": message.id }).to_string(),
+        )
+        .await?;
         let mut state = self.inner.lock().expect("message state lock");
         state
             .channel_message_idempotency
-            .insert(idempotency_key.to_string(), message.id.clone());
+            .insert(idempotency_key, message.id.clone());
         state
             .event_payloads
             .push(format!("message.created:{}", message.id));
@@ -264,12 +311,16 @@ impl MessageService {
         &self,
         idempotency_key: &str,
     ) -> Option<MessageRecord> {
+        let idempotency_key = namespaced_key("message:create_human", idempotency_key)?;
+        if let Ok(Some(payload)) = self.repos.idempotent_response(&idempotency_key).await {
+            return self.message(&idempotent_entity_id(&payload)).await.ok();
+        }
         let message_id = {
             self.inner
                 .lock()
                 .expect("message state lock")
                 .channel_message_idempotency
-                .get(idempotency_key)
+                .get(&idempotency_key)
                 .cloned()?
         };
         self.message(&message_id).await.ok()
@@ -428,6 +479,48 @@ impl MessageService {
             .map_err(message_storage_error)?;
         Ok(())
     }
+
+    async fn insert_record_idempotent(
+        &self,
+        message: MessageRecord,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), MessageError> {
+        self.repos
+            .insert_channel_message_idempotent(
+                NewChannelMessageRow {
+                    id: message.id,
+                    channel_id: message.channel_id,
+                    author_id: message.author_id,
+                    body: message.body,
+                    as_task: message.as_task,
+                    kind: kind_to_storage(&message.kind).to_string(),
+                },
+                idempotency_key,
+                response_payload,
+            )
+            .await
+            .map_err(message_storage_error)?;
+        Ok(())
+    }
+}
+
+fn idempotent_entity_id(payload: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("messageId")
+                .and_then(|id| id.as_str())
+                .map(ToString::to_string)
+                .or_else(|| {
+                    value
+                        .get("message_id")
+                        .and_then(|id| id.as_str())
+                        .map(ToString::to_string)
+                })
+        })
+        .unwrap_or_else(|| payload.to_string())
 }
 
 fn build_message(

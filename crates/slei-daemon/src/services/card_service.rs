@@ -9,6 +9,8 @@ use slei_storage::repositories::{InteractiveCardRow, Repositories};
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
+use crate::services::idempotency::namespaced_key;
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum CardAction {
     CreateChannel { name: String },
@@ -97,9 +99,14 @@ impl CardService {
     ) -> Result<InteractiveCard, CardError> {
         let _gate = self.mutation_gate.lock().await;
         validate_action(&proposal)?;
+        let idempotency_key = namespaced_key("card:propose", idempotency_key)
+            .ok_or(CardError::MissingIdempotencyKey)?;
+        if let Some(card) = self.card_for_idempotency(&idempotency_key).await? {
+            return Ok(card);
+        }
         {
             let state = self.inner.lock().expect("card state lock");
-            if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
+            if let Some(card_id) = state.proposal_idempotency.get(&idempotency_key) {
                 return state
                     .cards
                     .get(card_id)
@@ -118,11 +125,16 @@ impl CardService {
             view: None,
             state: CardState::Pending,
         };
-        self.persist_card(&card).await?;
+        self.persist_card_idempotent(
+            &card,
+            &idempotency_key,
+            &json!({ "cardId": card.id, "operation": "propose" }).to_string(),
+        )
+        .await?;
         let mut state = self.inner.lock().expect("card state lock");
         state
             .proposal_idempotency
-            .insert(idempotency_key.to_string(), card.id.clone());
+            .insert(idempotency_key, card.id.clone());
         state.cards.insert(card.id.clone(), card.clone());
         Ok(card)
     }
@@ -140,6 +152,8 @@ impl CardService {
         idempotency_key: &str,
     ) -> Result<InteractiveCardView, CardError> {
         let _gate = self.mutation_gate.lock().await;
+        let idempotency_key = namespaced_key("card:product_tool", idempotency_key)
+            .ok_or(CardError::MissingIdempotencyKey)?;
         let template = product_tool_template(payload)?;
         let name = required_string(&template.draft, "name")?.to_string();
         let action = CardAction::CreateAgent {
@@ -153,9 +167,12 @@ impl CardService {
         };
         validate_action(&proposal)?;
 
+        if let Some(card) = self.card_for_idempotency(&idempotency_key).await? {
+            return Ok(card.to_view());
+        }
         {
             let state = self.inner.lock().expect("card state lock");
-            if let Some(card_id) = state.proposal_idempotency.get(idempotency_key) {
+            if let Some(card_id) = state.proposal_idempotency.get(&idempotency_key) {
                 let card = state
                     .cards
                     .get(card_id)
@@ -175,11 +192,16 @@ impl CardService {
             view: Some(template),
             state: CardState::Pending,
         };
-        self.persist_card(&card).await?;
+        self.persist_card_idempotent(
+            &card,
+            &idempotency_key,
+            &json!({ "cardId": card.id, "operation": "proposeProductTool" }).to_string(),
+        )
+        .await?;
         let mut state = self.inner.lock().expect("card state lock");
         state
             .proposal_idempotency
-            .insert(idempotency_key.to_string(), card.id.clone());
+            .insert(idempotency_key, card.id.clone());
         state.cards.insert(card.id.clone(), card.clone());
         Ok(card.to_view())
     }
@@ -190,10 +212,19 @@ impl CardService {
         idempotency_key: &str,
     ) -> Result<(), CardError> {
         let _gate = self.mutation_gate.lock().await;
+        let idempotency_key = namespaced_key("card:decide", idempotency_key)
+            .ok_or(CardError::MissingIdempotencyKey)?;
+        if self
+            .idempotent_response_payload(&idempotency_key)
+            .await?
+            .is_some()
+        {
+            return Ok(());
+        }
         self.ensure_card_cached(&decision.card_id).await?;
         let (card, executed, next_state) = {
             let state = self.inner.lock().expect("card state lock");
-            if state.decision_idempotency.contains_key(idempotency_key) {
+            if state.decision_idempotency.contains_key(&idempotency_key) {
                 return Ok(());
             }
 
@@ -211,7 +242,17 @@ impl CardService {
                 (card, None, CardState::Dismissed)
             }
         };
-        self.persist_card(&card).await?;
+        self.persist_card_idempotent(
+            &card,
+            &idempotency_key,
+            &json!({
+                "cardId": card.id,
+                "operation": "decide",
+                "state": next_state,
+            })
+            .to_string(),
+        )
+        .await?;
         let mut state = self.inner.lock().expect("card state lock");
         state.cards.insert(card.id.clone(), card);
         if let Some(executed) = executed {
@@ -219,7 +260,7 @@ impl CardService {
         }
         state
             .decision_idempotency
-            .insert(idempotency_key.to_string(), next_state);
+            .insert(idempotency_key, next_state);
         Ok(())
     }
 
@@ -229,10 +270,15 @@ impl CardService {
         idempotency_key: &str,
     ) -> Result<InteractiveCardView, CardError> {
         let _gate = self.mutation_gate.lock().await;
+        let idempotency_key = namespaced_key("card:complete", idempotency_key)
+            .ok_or(CardError::MissingIdempotencyKey)?;
+        if let Some(card) = self.card_for_idempotency(&idempotency_key).await? {
+            return Ok(card.to_view());
+        }
         self.ensure_card_cached(card_id).await?;
         let card = {
             let state = self.inner.lock().expect("card state lock");
-            if let Some(existing_state) = state.decision_idempotency.get(idempotency_key) {
+            if let Some(existing_state) = state.decision_idempotency.get(&idempotency_key) {
                 let card = state
                     .cards
                     .get(card_id)
@@ -250,13 +296,19 @@ impl CardService {
             card.state = CardState::Done;
             card
         };
-        self.persist_card(&card).await?;
+        self.persist_card_idempotent(
+            &card,
+            &idempotency_key,
+            &json!({ "cardId": card.id, "operation": "complete", "state": CardState::Done })
+                .to_string(),
+        )
+        .await?;
         let view = card.to_view();
         let mut state = self.inner.lock().expect("card state lock");
         state.cards.insert(card.id.clone(), card);
         state
             .decision_idempotency
-            .insert(idempotency_key.to_string(), CardState::Done);
+            .insert(idempotency_key, CardState::Done);
         Ok(view)
     }
 
@@ -330,6 +382,55 @@ impl CardService {
             .upsert_interactive_card(card_to_row(card)?)
             .await
             .map_err(card_storage_error)
+    }
+
+    async fn persist_card_idempotent(
+        &self,
+        card: &InteractiveCard,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), CardError> {
+        let Some(repos) = &self.repos else {
+            return Ok(());
+        };
+        repos
+            .upsert_interactive_card_idempotent(
+                card_to_row(card)?,
+                idempotency_key,
+                response_payload,
+            )
+            .await
+            .map_err(card_storage_error)
+    }
+
+    async fn idempotent_response_payload(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<String>, CardError> {
+        let Some(repos) = &self.repos else {
+            return Ok(None);
+        };
+        repos
+            .idempotent_response(idempotency_key)
+            .await
+            .map_err(card_storage_error)
+    }
+
+    async fn card_for_idempotency(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<InteractiveCard>, CardError> {
+        let Some(payload) = self.idempotent_response_payload(idempotency_key).await? else {
+            return Ok(None);
+        };
+        let card_id = idempotent_card_id(&payload);
+        let card = self.card(&card_id).await?;
+        self.inner
+            .lock()
+            .expect("card state lock")
+            .proposal_idempotency
+            .insert(idempotency_key.to_string(), card.id.clone());
+        Ok(Some(card))
     }
 
     async fn ensure_card_cached(&self, card_id: &str) -> Result<(), CardError> {
@@ -542,6 +643,24 @@ fn card_from_row(row: InteractiveCardRow) -> Result<InteractiveCard, CardError> 
     })
 }
 
+fn idempotent_card_id(payload: &str) -> String {
+    serde_json::from_str::<Value>(payload)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("cardId")
+                .and_then(|id| id.as_str())
+                .map(ToString::to_string)
+                .or_else(|| {
+                    value
+                        .get("card_id")
+                        .and_then(|id| id.as_str())
+                        .map(ToString::to_string)
+                })
+        })
+        .unwrap_or_else(|| payload.to_string())
+}
+
 fn repositories_blocking(data_root: PathBuf) -> Repositories {
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -597,6 +716,8 @@ fn execute_action(action: &CardAction, edited_name: Option<&str>) -> String {
 pub enum CardError {
     #[error("card not found")]
     CardNotFound,
+    #[error("idempotency-key is required")]
+    MissingIdempotencyKey,
     #[error("free-form assistant text cannot create interactive cards")]
     FreeformRejected,
     #[error("workspace mounts are not allowed through interactive cards")]
