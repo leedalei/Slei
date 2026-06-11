@@ -49,7 +49,7 @@ export function TasksPage({
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
       <header className="border-b px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="grid gap-1">
+          <div className="grid gap-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
             <h1 className="text-2xl font-semibold">{messages.tasks.title}</h1>
             <p className="max-w-2xl text-sm text-muted-foreground">{messages.tasks.description}</p>
           </div>

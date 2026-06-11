@@ -542,7 +542,7 @@ function formatChannelProjectLabel(channel: SleiFixtures["channels"][number], me
 function SidebarFrame(input: { children: ReactNode; title: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b px-3 pb-3 pt-4">
+      <div className="shrink-0 border-b px-3 pb-3 pt-4" data-slot="sidebar-titlebar" data-tauri-drag-region="deep">
         <h2 className="text-base font-bold leading-none">{input.title}</h2>
       </div>
       <div className="min-h-0 flex-1">{input.children}</div>
@@ -1375,10 +1375,11 @@ function AgentCreateModal(input: {
   function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    const trimmedHandle = handle.trim();
+    if (!trimmedName || !trimmedHandle) return;
     input.onCreate?.({
       name: trimmedName,
-      handle: normalizeHandleInput(handle || trimmedName),
+      handle: normalizeHandleInput(trimmedHandle),
       runtimeKind,
       model,
       nodeId,
@@ -1411,15 +1412,21 @@ function AgentCreateModal(input: {
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="slei-agent-name">{input.messages.agentCreate.name}</Label>
+            <Label className="gap-1" htmlFor="slei-agent-name">
+              {input.messages.agentCreate.name}
+              <span aria-hidden="true" className="text-destructive">*</span>
+            </Label>
             <Input id="slei-agent-name" onChange={(event) => {
               setName(event.currentTarget.value);
               if (!handle.trim()) setHandle(normalizeHandleInput(event.currentTarget.value));
-            }} value={name} />
+            }} required value={name} />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="slei-agent-handle">{input.messages.agentCreate.handle}</Label>
-            <Input id="slei-agent-handle" onChange={(event) => setHandle(event.currentTarget.value)} value={handle} />
+            <Label className="gap-1" htmlFor="slei-agent-handle">
+              {input.messages.agentCreate.handle}
+              <span aria-hidden="true" className="text-destructive">*</span>
+            </Label>
+            <Input id="slei-agent-handle" onChange={(event) => setHandle(event.currentTarget.value)} required value={handle} />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="slei-agent-node">{input.messages.agentCreate.associatedDevice}</Label>

@@ -40,7 +40,7 @@ export function SearchPage({ data, initialFilters, messages, onResultSelect }: {
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
       <header className="border-b px-6 py-5">
-        <div className="grid gap-1">
+        <div className="grid gap-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
           <h1 className="inline-flex items-center gap-2 text-2xl font-semibold"><Search aria-hidden="true" className="size-5" />{messages.search.title}</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">{messages.search.description}</p>
         </div>

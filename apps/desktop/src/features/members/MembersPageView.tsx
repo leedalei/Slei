@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Copy,
   Cpu,
   ExternalLink,
   FileText,
@@ -25,7 +26,7 @@ import type {
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
 import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
+import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -53,6 +54,31 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MemberTab = "profile" | "workspace" | "capabilities";
 
+type ClipboardWriter = {
+  writeText?: (text: string) => Promise<void>;
+};
+
+async function copyPlainText(text: string) {
+  const content = text.trim();
+  if (!content) return false;
+  const clipboard: ClipboardWriter | undefined = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+  if (clipboard?.writeText) {
+    await clipboard.writeText(content);
+    return true;
+  }
+  if (typeof document === "undefined") return false;
+  const textarea = document.createElement("textarea");
+  textarea.value = content;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  return copied;
+}
+
 export function MembersPage(input: {
   activeMemberId?: string;
   data: SleiFixtures;
@@ -77,6 +103,8 @@ export function MembersPage(input: {
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [workspaceEntriesByDirectory, setWorkspaceEntriesByDirectory] = useState<Record<string, AgentWorkspaceEntry[]>>(() => ({
     "": selectedMember ? initialWorkspaceEntries(selectedMember) : [],
   }));
@@ -112,6 +140,18 @@ export function MembersPage(input: {
     if (selectedMember?.type === "agent") {
       input.onAgentUpdate?.(selectedMember.id, { [updateKey]: value });
     }
+  }
+
+  function showToast(message: string, type: ToastType = "info") {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
+  }
+
+  async function copyDescription() {
+    const copied = await copyPlainText(memberDetails.description);
+    if (!copied) return;
+    showToast(input.messages.chat.copySuccess, "success");
   }
 
   async function openAgentPath(target: AgentPathTarget) {
@@ -219,19 +259,25 @@ export function MembersPage(input: {
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
+      <Toast message={toast.message} type={toast.type} />
       <header className="border-b bg-background px-6 py-5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
           <MemberAvatar identity={selectedMember} large />
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 space-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
               <h1 className="truncate text-2xl font-semibold">{memberDetails.name}</h1>
+              {showHandle ? <span className="truncate text-xs text-muted-foreground">{selectedMember.handle}</span> : null}
               <Badge variant="outline" className="gap-1">
                 <StatusDot status={selectedMember.runtimeStatus} />
                 {input.messages.members.online}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">{selectedMember.role}</p>
-            {showHandle ? <p className="truncate text-sm text-muted-foreground">{selectedMember.handle}</p> : null}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className="truncate text-sm text-muted-foreground">{memberDetails.description}</p>
+              <Button aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" title={input.messages.chat.copyMessage} type="button" variant="ghost">
+                <Copy aria-hidden="true" size={14} />
+              </Button>
+            </div>
           </div>
           {canMessage ? (
             <div className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 self-start">
