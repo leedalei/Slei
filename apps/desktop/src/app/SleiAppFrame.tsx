@@ -828,18 +828,12 @@ function ChannelList(input: {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="slei-channel-project">{input.messages.chat.project}</Label>
+              <Label htmlFor="slei-channel-project-picker">{input.messages.chat.project}</Label>
               <div className="grid gap-2">
-                <Input
-                  aria-label={input.messages.chat.project}
-                  id="slei-channel-project"
-                  onChange={(event) => setChannelDraft((current) => ({ ...current, projectName: event.currentTarget.value }))}
-                  placeholder="Slei Desktop"
-                  value={channelDraft.projectName}
-                />
                 <input
                   aria-label={input.messages.chat.projectFolderPicker}
                   className="sr-only"
+                  id="slei-channel-project-picker"
                   multiple
                   onChange={(event) => {
                     addProjectFolders(event.currentTarget.files);

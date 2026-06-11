@@ -310,6 +310,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('type="file"');
     expect(html).toContain("webkitdirectory");
     expect(html).toContain("可关联多个项目文件夹");
+    expect(html).not.toContain('aria-label="关联项目"');
   });
 
   it("detects, navigates, and inserts composer mention selections", () => {
