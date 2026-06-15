@@ -191,6 +191,101 @@ async fn task_created_from_source_message_uses_source_body_and_reuses_source() {
 }
 
 #[tokio::test]
+async fn source_message_create_replays_idempotency_before_same_source_fallback() {
+    let root = std::env::temp_dir().join(format!("slei-source-idem-{}", uuid::Uuid::new_v4()));
+    let state =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
+    let first_source = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "第一个任务来源",
+            "source-idem-first",
+            false,
+        )
+        .await
+        .unwrap();
+    let second_source = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "第二个任务来源",
+            "source-idem-second",
+            false,
+        )
+        .await
+        .unwrap();
+
+    let first_task = state
+        .tasks()
+        .create_from_source_message(&first_source.id, "agent_cindy", "shared-source-key")
+        .await
+        .unwrap();
+    let second_task = state
+        .tasks()
+        .create_from_source_message(&second_source.id, "agent_cindy", "second-source-key")
+        .await
+        .unwrap();
+    let replay = state
+        .tasks()
+        .create_from_source_message(&second_source.id, "agent_cindy", "shared-source-key")
+        .await
+        .unwrap();
+
+    assert_ne!(first_task.id, second_task.id);
+    assert_eq!(replay.id, first_task.id);
+}
+
+#[tokio::test]
+async fn coordinator_and_source_message_create_reuse_same_source_task() {
+    let root = std::env::temp_dir().join(format!("slei-source-dedupe-{}", uuid::Uuid::new_v4()));
+    let state =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
+    let source = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "同一条源消息只能有一个任务",
+            "source-dedupe-message",
+            false,
+        )
+        .await
+        .unwrap();
+
+    let from_source = state
+        .tasks()
+        .create_from_source_message(&source.id, "agent_cindy", "source-dedupe-api")
+        .await
+        .unwrap();
+    let from_coordinator = state
+        .tasks()
+        .create_from_coordinator(
+            "all",
+            "human_lei",
+            &source.id,
+            "coordinator title should not duplicate",
+            Some("agent_cindy".to_string()),
+            "coordinator duplicate check",
+            "source-dedupe-coordinator",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(from_coordinator.id, from_source.id);
+    assert_eq!(
+        state
+            .tasks()
+            .list_task_summaries(Default::default())
+            .await
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn task_reply_preserves_explicit_role_and_idempotent_status_replays_summary() {
     let service = TaskService::for_tests();
     let task = service
@@ -234,6 +329,41 @@ async fn task_reply_preserves_explicit_role_and_idempotent_status_replays_summar
 
     assert_eq!(updated.id, retried.id);
     assert_eq!(retried.status, TaskStatus::InProgress);
+}
+
+#[tokio::test]
+async fn task_status_idempotency_replays_original_response_after_service_reload() {
+    let root = std::env::temp_dir().join(format!("slei-status-idem-{}", uuid::Uuid::new_v4()));
+    let first = AppState::for_tests_with_agent_root_async(
+        AuthToken::from_static("test-token"),
+        root.clone(),
+    )
+    .await;
+    let task = first
+        .tasks()
+        .create_task_root("all", "human_lei", "status task", "status-idem-create")
+        .await
+        .unwrap();
+    let updated = first
+        .tasks()
+        .update_status_idempotent(&task.id, TaskStatus::InProgress, "status-idem-update")
+        .await
+        .unwrap();
+
+    let second =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
+    let replay = second
+        .tasks()
+        .update_status_idempotent(&task.id, TaskStatus::Done, "status-idem-update")
+        .await
+        .unwrap();
+
+    assert_eq!(updated.id, replay.id);
+    assert_eq!(replay.status, TaskStatus::InProgress);
+    assert_eq!(
+        second.tasks().task(&task.id).await.unwrap().status,
+        TaskStatus::InProgress
+    );
 }
 
 #[tokio::test]

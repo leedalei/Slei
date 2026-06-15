@@ -1762,6 +1762,66 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn update_task_status_idempotent(
+        &self,
+        task_id: &str,
+        status: &str,
+        idempotency_key: &str,
+    ) -> Result<String, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        if let Some(payload) = sqlx::query_scalar::<_, String>(
+            "SELECT response_payload
+             FROM idempotent_mutations
+             WHERE idempotency_key = ?",
+        )
+        .bind(idempotency_key)
+        .fetch_optional(&mut *tx)
+        .await?
+        {
+            tx.commit().await?;
+            return Ok(payload);
+        }
+
+        let updated_at = now_string();
+        let result = sqlx::query(
+            "UPDATE tasks
+             SET status = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(status)
+        .bind(updated_at)
+        .bind(task_id)
+        .execute(&mut *tx)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        let row = sqlx::query(
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+                    assignment_reason, needs_assignment, title, status, attention_required,
+                    root_deleted, root_body, created_at, updated_at
+             FROM tasks
+             WHERE id = ?",
+        )
+        .bind(task_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let task = task_root_row_from_sql(row)?;
+        let reply_count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*)
+             FROM thread_replies
+             WHERE task_id = ?",
+        )
+        .bind(task_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let payload = task_summary_response_payload(&task, reply_count.max(0) as usize);
+        record_idempotent_response_tx(&mut tx, idempotency_key, task_id, &payload).await?;
+        tx.commit().await?;
+        Ok(payload)
+    }
+
     pub async fn update_task_assignment(
         &self,
         task_id: &str,
@@ -3320,6 +3380,22 @@ fn task_reply_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskReplyRow,
         status: row.try_get("status")?,
         created_at: row.try_get("created_at")?,
     })
+}
+
+fn task_summary_response_payload(task: &TaskRootRow, reply_count: usize) -> String {
+    serde_json::json!({
+        "id": &task.id,
+        "channelId": &task.channel_id,
+        "creatorId": &task.creator_id,
+        "assigneeId": &task.assignee_id,
+        "sourceMessageId": &task.source_message_id,
+        "title": &task.title,
+        "status": &task.status,
+        "attentionRequired": task.attention_required,
+        "replyCount": reply_count,
+        "updatedAt": &task.updated_at,
+    })
+    .to_string()
 }
 
 fn interactive_card_row_from_sql(

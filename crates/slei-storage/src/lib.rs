@@ -8,12 +8,13 @@ pub mod repositories;
 mod tests {
     use std::fs;
 
+    use sqlx::Row;
     use uuid::Uuid;
 
     use super::db::SleiDb;
     use super::repositories::{
         AgentStatusRow, ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
-        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        TaskRootRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
@@ -66,7 +67,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3]);
+        assert_eq!(versions, vec![1, 2, 3, 4]);
     }
 
     #[tokio::test]
@@ -83,7 +84,27 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3]);
+        assert_eq!(versions, vec![1, 2, 3, 4]);
+    }
+
+    #[tokio::test]
+    async fn migration_creates_unique_task_source_message_index() {
+        let (url, _path) = sqlite_file_url("task-source-index");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate().await.unwrap();
+
+        let indexes = sqlx::query("PRAGMA index_list('tasks')")
+            .fetch_all(db.pool())
+            .await
+            .unwrap();
+        let has_unique_source_index = indexes.iter().any(|row| {
+            let name: String = row.try_get("name").unwrap();
+            let unique: i64 = row.try_get("unique").unwrap();
+            name == "idx_tasks_source_message_id_unique" && unique == 1
+        });
+
+        assert!(has_unique_source_index);
     }
 
     #[tokio::test]
@@ -188,6 +209,59 @@ mod tests {
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].run_id.as_deref(), Some("run_1"));
         assert_eq!(payload.as_deref(), Some(r#"{"ok":true}"#));
+    }
+
+    #[tokio::test]
+    async fn task_status_idempotent_mutation_is_transactional() {
+        let (url, _path) = sqlite_file_url("task-status-idempotent-tx");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_task_root(TaskRootRow {
+                id: "task_1".to_string(),
+                channel_id: "all".to_string(),
+                creator_id: "human_lei".to_string(),
+                assignee_id: None,
+                source_message_id: None,
+                assignment_reason: None,
+                needs_assignment: true,
+                title: "Transactional status".to_string(),
+                status: "pending_assignment".to_string(),
+                attention_required: true,
+                root_deleted: false,
+                root_body: "Transactional status".to_string(),
+                created_at: "1".to_string(),
+                updated_at: "1".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let first_payload = repos
+            .update_task_status_idempotent(
+                "task_1",
+                "in_progress",
+                "task:update_status:status-once",
+            )
+            .await
+            .unwrap();
+        let retry_payload = repos
+            .update_task_status_idempotent("task_1", "done", "task:update_status:status-once")
+            .await
+            .unwrap();
+        let task = repos.task_by_id("task_1").await.unwrap().unwrap();
+
+        assert_eq!(retry_payload, first_payload);
+        assert_eq!(task.status, "in_progress");
+        assert_eq!(
+            repos
+                .idempotent_response("task:update_status:status-once")
+                .await
+                .unwrap()
+                .as_deref(),
+            Some(first_payload.as_str())
+        );
     }
 
     #[tokio::test]
@@ -1011,7 +1085,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 3);
+        assert_eq!(migration_count, 4);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

@@ -255,6 +255,14 @@ impl TaskService {
         if let Some(task_id) = existing_task_id {
             return self.task(&task_id).await;
         }
+        if let Some(existing) = self.task_for_source_message(source_message_id).await {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .insert(idempotency_key, existing.id.clone());
+            return Ok(existing);
+        }
 
         let has_assignee = assignee_id.is_some();
         let now = now_string();
@@ -278,14 +286,25 @@ impl TaskService {
             created_at: now.clone(),
             updated_at: now,
         };
-        self.repos
+        if let Err(error) = self
+            .repos
             .upsert_task_root_idempotent(
                 task_record_to_row(&task),
                 &idempotency_key,
                 &json!({ "taskId": task.id }).to_string(),
             )
             .await
-            .map_err(storage_error)?;
+        {
+            if let Some(existing) = self.task_for_source_message(source_message_id).await {
+                self.idempotency
+                    .lock()
+                    .expect("task idempotency lock")
+                    .task_idempotency
+                    .insert(idempotency_key, existing.id.clone());
+                return Ok(existing);
+            }
+            return Err(storage_error(error));
+        }
         self.idempotency
             .lock()
             .expect("task idempotency lock")
@@ -309,14 +328,6 @@ impl TaskService {
             .ok_or(TaskError::MissingIdempotencyKey)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
 
-        if let Some(existing) = self.task_for_source_message(source_message_id).await {
-            self.idempotency
-                .lock()
-                .expect("task idempotency lock")
-                .task_idempotency
-                .insert(idempotency_key, existing.id.clone());
-            return Ok(existing);
-        }
         if let Some(task_id) = self.task_id_for_idempotency(&idempotency_key).await? {
             self.idempotency
                 .lock()
@@ -335,6 +346,14 @@ impl TaskService {
         };
         if let Some(task_id) = existing_task_id {
             return self.task(&task_id).await;
+        }
+        if let Some(existing) = self.task_for_source_message(source_message_id).await {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .insert(idempotency_key, existing.id.clone());
+            return Ok(existing);
         }
 
         let source = self
@@ -362,14 +381,25 @@ impl TaskService {
             created_at: now.clone(),
             updated_at: now,
         };
-        self.repos
+        if let Err(error) = self
+            .repos
             .upsert_task_root_idempotent(
                 task_record_to_row(&task),
                 &idempotency_key,
                 &json!({ "taskId": task.id }).to_string(),
             )
             .await
-            .map_err(storage_error)?;
+        {
+            if let Some(existing) = self.task_for_source_message(source_message_id).await {
+                self.idempotency
+                    .lock()
+                    .expect("task idempotency lock")
+                    .task_idempotency
+                    .insert(idempotency_key, existing.id.clone());
+                return Ok(existing);
+            }
+            return Err(storage_error(error));
+        }
         self.idempotency
             .lock()
             .expect("task idempotency lock")
@@ -573,17 +603,6 @@ impl TaskService {
         let idempotency_key = namespaced_key("task:update_status", idempotency_key)
             .ok_or(TaskError::MissingIdempotencyKey)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
-        if let Some(task) = self
-            .status_summary_for_idempotency(&idempotency_key)
-            .await?
-        {
-            self.idempotency
-                .lock()
-                .expect("task idempotency lock")
-                .status_idempotency
-                .insert(idempotency_key.clone(), task.clone());
-            return Ok(task);
-        }
         let existing_task = {
             self.idempotency
                 .lock()
@@ -596,17 +615,13 @@ impl TaskService {
             return Ok(task);
         }
 
-        self.update_status(task_id, status).await?;
-        let task = self.task_summary(task_id).await?;
-        self.repos
-            .record_idempotent_response(
-                &idempotency_key,
-                task_id,
-                &serde_json::to_string(&task)
-                    .map_err(|error| TaskError::Storage(error.to_string()))?,
-            )
+        let payload = self
+            .repos
+            .update_task_status_idempotent(task_id, status_to_storage(status), &idempotency_key)
             .await
             .map_err(storage_error)?;
+        let task = serde_json::from_str::<TaskSummaryView>(&payload)
+            .map_err(|error| TaskError::Storage(error.to_string()))?;
         self.idempotency
             .lock()
             .expect("task idempotency lock")
@@ -777,23 +792,6 @@ impl TaskService {
             return Ok(None);
         };
         Ok(Some(idempotent_reply_ids(&payload)?))
-    }
-
-    async fn status_summary_for_idempotency(
-        &self,
-        idempotency_key: &str,
-    ) -> Result<Option<TaskSummaryView>, TaskError> {
-        let Some(payload) = self
-            .repos
-            .idempotent_response(idempotency_key)
-            .await
-            .map_err(storage_error)?
-        else {
-            return Ok(None);
-        };
-        serde_json::from_str(&payload)
-            .map(Some)
-            .map_err(|error| TaskError::Storage(error.to_string()))
     }
 
     async fn reply_by_id(&self, task_id: &str, reply_id: &str) -> Result<TaskReply, TaskError> {

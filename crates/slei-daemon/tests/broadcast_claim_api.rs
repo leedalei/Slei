@@ -3,9 +3,14 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::channel_service::{
+    ChannelDraft, ChannelMemberReadiness, PermissionPreset,
+};
+use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRecord};
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 fn authed_json_request(
     token: &AuthToken,
@@ -594,6 +599,7 @@ async fn task_claim_api_returns_owner_for_losing_agents() {
 async fn task_cli_api_creates_from_source_replies_updates_and_lists_thread() {
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests(token.clone());
+    state.channels().list_channels().await;
     let source = state
         .messages()
         .create_human_channel_message(
@@ -764,6 +770,89 @@ async fn task_cli_api_creates_from_source_replies_updates_and_lists_thread() {
     );
     assert_eq!(thread_json["thread"]["replies"][0]["id"], reply_id);
     assert_eq!(thread_json["thread"]["replies"][0]["role"], "agent");
+}
+
+#[tokio::test]
+async fn task_cli_reply_preserves_role_and_routes_visible_handoff_mentions() {
+    let token = AuthToken::from_static("test-token");
+    let state = app_state_with_agent_handle("agent_coda", "@coda-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "task-cli-handoff-channel",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("api-dev", "agent_coda")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("api-dev", "agent_coda", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let created = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/tasks",
+            "task-cli-handoff-create",
+            json!({
+                "channelId": "api-dev",
+                "creatorId": "human_lei",
+                "title": "CLI handoff task"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_json = response_json(created).await;
+    let task_id = created_json["task"]["id"].as_str().unwrap().to_string();
+
+    let reply = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            format!("/v1/tasks/{task_id}/replies"),
+            "task-cli-handoff-reply",
+            json!({
+                "agentId": "agent_cindy",
+                "role": "agent",
+                "body": "我处理完第一步。@coda-win 请接手后续验证。"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), StatusCode::CREATED);
+    let reply_json = response_json(reply).await;
+    assert_eq!(reply_json["reply"]["role"], "agent");
+    assert_eq!(reply_json["route"]["handoffAgentIds"][0], "agent_coda");
+
+    let handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_coda")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert_eq!(handoffs.len(), 1);
+    assert_eq!(handoffs[0].task_id.as_deref(), Some(task_id.as_str()));
+    assert_eq!(handoffs[0].sender_id.as_deref(), Some("agent_cindy"));
+    assert_eq!(
+        handoffs[0].handoff_text.as_deref(),
+        Some("我处理完第一步。@coda-win 请接手后续验证。")
+    );
 }
 
 #[tokio::test]
@@ -1093,4 +1182,48 @@ async fn agent_activity_api_returns_latest_100_logs() {
     assert_eq!(logs.len(), 100);
     assert_eq!(logs.first().unwrap()["runId"], "run_104");
     assert_eq!(logs.last().unwrap()["runId"], "run_5");
+}
+
+async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
+    let root = std::env::temp_dir().join(format!("slei-broadcast-api-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(root.join("agents")).unwrap();
+    let workspace_path = root.join("agents").join(agent_id);
+    std::fs::create_dir_all(workspace_path.join("docs")).unwrap();
+    std::fs::write(
+        workspace_path.join("MEMORY.md"),
+        format!("# {agent_id}\n\n## Active Context\n"),
+    )
+    .unwrap();
+    let agents = vec![ProductAgentRecord {
+        id: agent_id.to_string(),
+        name: agent_id.trim_start_matches("agent_").to_string(),
+        handle: handle.to_string(),
+        agent_kind: "agent".to_string(),
+        system_owned: false,
+        runtime_kind: "ClaudeCode".to_string(),
+        model: "Sonnet".to_string(),
+        node_id: "local-node".to_string(),
+        description: "工程协作 Agent".to_string(),
+        workspace_path: workspace_path.to_string_lossy().to_string(),
+        memory_path: workspace_path
+            .join("MEMORY.md")
+            .to_string_lossy()
+            .to_string(),
+        docs_path: workspace_path.join("docs").to_string_lossy().to_string(),
+        avatar_seed: agent_id.trim_start_matches("agent_").to_string(),
+        runtime_thread: RuntimeThreadRecord {
+            runtime_kind: "ClaudeCode".to_string(),
+            status: "ready".to_string(),
+            created_at: "0".to_string(),
+        },
+        channel_ids: vec!["all".to_string()],
+        created_at: "0".to_string(),
+        updated_at: "0".to_string(),
+    }];
+    std::fs::write(
+        root.join("agents/index.json"),
+        serde_json::to_string_pretty(&agents).unwrap(),
+    )
+    .unwrap();
+    AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await
 }

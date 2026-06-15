@@ -507,12 +507,32 @@ impl ChannelOrchestratorService {
         sender_id: &str,
         body: &str,
         idempotency_key: &str,
+        activity_guard: &ResetLaunchGuard,
+    ) -> Result<TaskReplyReceipt, ChannelOrchestratorError> {
+        self.add_task_reply_with_role_with_launch_guard(
+            task_id,
+            sender_id,
+            None,
+            body,
+            idempotency_key,
+            activity_guard,
+        )
+        .await
+    }
+
+    pub async fn add_task_reply_with_role_with_launch_guard(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        role: Option<&str>,
+        body: &str,
+        idempotency_key: &str,
         _activity_guard: &ResetLaunchGuard,
     ) -> Result<TaskReplyReceipt, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         let reply_outcome = self
             .tasks
-            .add_reply_with_task(task_id, sender_id, body, idempotency_key)
+            .add_reply_with_role(task_id, sender_id, role, body, idempotency_key)
             .await?;
         let reply = reply_outcome.reply;
         let task = self.tasks.task(&reply_outcome.task_id).await?;

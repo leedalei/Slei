@@ -9,7 +9,7 @@ use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
 use crate::services::channel_service::ChannelError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
-use crate::services::task_service::{thread_message_for_reply, TaskError, TaskQuery, TaskStatus};
+use crate::services::task_service::{TaskError, TaskQuery, TaskStatus};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -181,28 +181,26 @@ pub async fn reply(
             return task_error_response(TaskError::InvalidTaskInput);
         };
         return match state
-            .tasks()
-            .add_reply_with_role(
+            .channel_orchestrator()
+            .add_task_reply_with_role_with_launch_guard(
                 &id,
                 &sender_id,
                 payload.role.as_deref(),
                 &payload.body,
                 idempotency_key,
+                &activity_guard,
             )
             .await
         {
             Ok(outcome) => (
                 StatusCode::CREATED,
                 Json(json!({
-                    "reply": thread_message_for_reply(&outcome.task_id, outcome.reply),
-                    "route": {
-                        "handoffAgentIds": [],
-                        "needsAssignment": false
-                    }
+                    "reply": outcome.reply,
+                    "route": outcome.route
                 })),
             )
                 .into_response(),
-            Err(error) => task_error_response(error),
+            Err(error) => task_reply_error_response(error),
         };
     }
 
