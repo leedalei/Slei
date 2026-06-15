@@ -98,6 +98,32 @@ impl ClaimService {
             .map_err(ClaimError::Storage)
     }
 
+    pub async fn message_deliveries_for_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<MessageDeliveryRow>, ClaimError> {
+        let message_id = required_value(message_id, "message_id")?;
+        self.repos
+            .message_deliveries_for_message(&message_id)
+            .await
+            .map_err(ClaimError::Storage)
+    }
+
+    pub async fn mark_message_delivery_running(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<bool, ClaimError> {
+        let message_id = required_value(message_id, "message_id")?;
+        let agent_id = required_value(agent_id, "agent_id")?;
+        let run_id = required_value(run_id, "run_id")?;
+        self.repos
+            .mark_message_delivery_running(&message_id, &agent_id, &run_id)
+            .await
+            .map_err(ClaimError::Storage)
+    }
+
     pub async fn update_agent_status(
         &self,
         agent_id: &str,

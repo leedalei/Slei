@@ -21,7 +21,7 @@ use crate::services::coordinator_service::{
     CoordinatorRuntimeInput, CoordinatorService, WorkspaceMount,
 };
 use crate::services::member_service::{is_internal_coordinator_id, MemberError, MemberService};
-use crate::services::message_service::{MessageError, MessageKind, MessageService};
+use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
 use crate::services::task_service::{
@@ -227,7 +227,7 @@ impl ChannelOrchestratorService {
 
         if !message.as_task {
             let assignee_agent_ids = self
-                .create_broadcast_deliveries_for_members(&message.id, &channel_id, &channel_members)
+                .create_broadcast_deliveries_for_members(&message, &channel_members)
                 .await?;
             let outcome = SendChannelMessageOutcome {
                 message_id: message.id,
@@ -517,12 +517,8 @@ impl ChannelOrchestratorService {
         self.sync_declared_channel_members(&message.channel_id)
             .await?;
         let channel_members = self.channels.channel_members(&message.channel_id).await?;
-        self.create_broadcast_deliveries_for_members(
-            &message.id,
-            &message.channel_id,
-            &channel_members,
-        )
-        .await
+        self.create_broadcast_deliveries_for_members(message, &channel_members)
+            .await
     }
 
     pub async fn add_task_reply(
@@ -1561,6 +1557,29 @@ impl ChannelOrchestratorService {
         agent: Option<crate::services::member_service::ProductAgentRecord>,
         task_id: Option<String>,
     ) -> Result<(), ChannelOrchestratorError> {
+        let run_id = format!("run_{}", Uuid::new_v4().simple());
+        self.start_channel_agent_run_once_with_run_id(
+            &run_id,
+            agent_id,
+            channel_id,
+            source_message_id,
+            prompt,
+            agent,
+            task_id,
+        )
+        .await
+    }
+
+    async fn start_channel_agent_run_once_with_run_id(
+        &self,
+        run_id: &str,
+        agent_id: &str,
+        channel_id: &str,
+        source_message_id: &str,
+        prompt: &str,
+        agent: Option<crate::services::member_service::ProductAgentRecord>,
+        task_id: Option<String>,
+    ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
             run.agent_id == agent_id
                 && run.channel_id == channel_id
@@ -1588,9 +1607,8 @@ impl ChannelOrchestratorService {
                 .ok()
                 .map(|session| session.id),
         };
-        let run_id = format!("run_{}", Uuid::new_v4().simple());
         self.channel_agent_runs.lock().await.insert(
-            run_id.clone(),
+            run_id.to_string(),
             ChannelAgentRunRecord {
                 channel_id: channel_id.to_string(),
                 session_id,
@@ -1607,7 +1625,7 @@ impl ChannelOrchestratorService {
             resume_session: false,
         })?;
         self.worker
-            .start_run(&run_id, &session, prompt, Vec::new())?;
+            .start_run(run_id, &session, prompt, Vec::new())?;
         let _ = self
             .orchestration
             .record_diagnostic_event(
@@ -1641,8 +1659,7 @@ impl ChannelOrchestratorService {
 
     async fn create_broadcast_deliveries_for_members(
         &self,
-        message_id: &str,
-        channel_id: &str,
+        message: &MessageRecord,
         channel_members: &[ChannelMemberRecord],
     ) -> Result<Vec<String>, ChannelOrchestratorError> {
         let mut delivered_agent_ids = Vec::new();
@@ -1659,8 +1676,26 @@ impl ChannelOrchestratorService {
                 continue;
             }
             self.claims
-                .create_message_delivery(message_id, channel_id, &agent.id)
+                .create_message_delivery(&message.id, &message.channel_id, &agent.id)
                 .await?;
+            let run_id = format!("run_{}", Uuid::new_v4().simple());
+            if self
+                .claims
+                .mark_message_delivery_running(&message.id, &agent.id, &run_id)
+                .await?
+            {
+                let prompt = broadcast_message_prompt(&agent.id, message);
+                self.start_channel_agent_run_once_with_run_id(
+                    &run_id,
+                    &agent.id,
+                    &message.channel_id,
+                    &message.id,
+                    &prompt,
+                    Some(agent.clone()),
+                    None,
+                )
+                .await?;
+            }
             delivered_agent_ids.push(agent.id);
         }
         Ok(delivered_agent_ids)
@@ -1869,6 +1904,27 @@ fn pending_outcome(
         coordinator_run_id: Some(coordinator_run_id),
         decision_status: Some("pending".to_string()),
     }
+}
+
+fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
+    let message_type = match message.kind {
+        MessageKind::Human => "human",
+        MessageKind::Agent => "agent",
+        MessageKind::TaskCard => "task_card",
+        MessageKind::Tombstone => "tombstone",
+    };
+    let body = message.body.as_deref().unwrap_or_default();
+    let visible_message = format!(
+        "[target=#{} msg={} time={} type={}] {}: {}",
+        message.channel_id, message.id, message.created_at, message_type, message.author_id, body
+    );
+    format!(
+        "agent_id={agent_id}\nchannel_id={channel_id}\nmessage_id={message_id}\nauthor_id={author_id}\ncreated_at={created_at}\n\nTriggering message:\n{visible_message}\n\nDecide whether this message needs your response. If you should handle it, first run exactly:\nslei message claim {message_id} --agent {agent_id}\n\nIf the claim succeeds, use the Slei CLI for all follow-up work: pull history with `slei message read`, inspect status with `slei status`, send channel replies with `slei message send`, and create/read/update tasks with `slei task` commands. Do not rely on this prompt for channel history; fetch history with CLI only when needed.",
+        channel_id = message.channel_id,
+        message_id = message.id,
+        author_id = message.author_id,
+        created_at = message.created_at,
+    )
 }
 
 fn readiness_label(readiness: &ChannelMemberReadiness) -> &'static str {

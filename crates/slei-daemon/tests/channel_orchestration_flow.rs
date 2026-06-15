@@ -412,17 +412,20 @@ async fn broadcast_channel_message_creates_deliveries_for_all_regular_targets() 
         outcome.assignee_agent_ids,
         vec!["agent_alice".to_string(), "agent_coda".to_string()]
     );
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice", "agent_coda"],
+        &outcome.message_id,
+        &["大家好，报数"],
+        &[],
+    );
 
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].message_id, outcome.message_id);
-    }
+    assert_broadcast_deliveries_running(
+        &state,
+        &outcome.message_id,
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
 
     let decisions = state
         .orchestration()
@@ -470,6 +473,17 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
             .unwrap();
     }
 
+    state
+        .messages()
+        .create_human_channel_message(
+            "dev",
+            "human_lei",
+            "旧历史不应进 broadcast prompt",
+            "plain-broadcast-prior-history",
+            false,
+        )
+        .await
+        .unwrap();
     let input = SendChannelMessageInput {
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
@@ -497,7 +511,13 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
         outcome.assignee_agent_ids,
         vec!["agent_alice".to_string(), "agent_coda".to_string()]
     );
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice", "agent_coda"],
+        &outcome.message_id,
+        &["大家看一下这个发布风险"],
+        &["旧历史不应进 broadcast prompt"],
+    );
     assert!(state
         .orchestration()
         .coordinator_runtime_run_for_idempotency("send-plain-broadcast-delivery")
@@ -505,16 +525,12 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
         .unwrap()
         .is_none());
 
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].message_id, outcome.message_id);
-        assert_eq!(deliveries[0].channel_id, "dev");
-    }
+    assert_broadcast_deliveries_running(
+        &state,
+        &outcome.message_id,
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
     for agent_id in ["agent_coordinator_dev", "agent_system_guide"] {
         assert!(state
             .claims()
@@ -568,26 +584,29 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_coordinat
         outcome.assignee_agent_ids,
         vec!["agent_alice".to_string(), "agent_coda".to_string()]
     );
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice", "agent_coda"],
+        &outcome.message_id,
+        &["@alice-win 你先看一下"],
+        &[],
+    );
     assert!(state
         .orchestration()
         .coordinator_runtime_run_for_idempotency("send-mention-broadcast-delivery")
         .await
         .unwrap()
         .is_none());
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].message_id, outcome.message_id);
-    }
+    assert_broadcast_deliveries_running(
+        &state,
+        &outcome.message_id,
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
 }
 
 #[tokio::test]
-async fn pure_consultation_routes_through_coordinator_without_creating_task() {
+async fn pure_consultation_broadcasts_without_creating_task() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
         .channels()
@@ -642,14 +661,14 @@ async fn pure_consultation_routes_through_coordinator_without_creating_task() {
         .await
         .is_empty());
 
-    let deliveries = state
-        .claims()
-        .pending_message_deliveries("agent_alice", 20)
-        .await
-        .unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].message_id, outcome.message_id);
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_deliveries_running(&state, &outcome.message_id, &["agent_alice"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice"],
+        &outcome.message_id,
+        &["这个架构方案应该先怎么拆？"],
+        &[],
+    );
 }
 
 #[tokio::test]
@@ -797,17 +816,20 @@ async fn explicit_multi_mention_routes_all_targets_without_coordinator_and_write
         outcome.assignee_agent_ids,
         vec!["agent_alice".to_string(), "agent_coda".to_string()]
     );
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].message_id, outcome.message_id);
-    }
+    assert_broadcast_deliveries_running(
+        &state,
+        &outcome.message_id,
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
 
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice", "agent_coda"],
+        &outcome.message_id,
+        &[body],
+        &[],
+    );
 }
 
 #[tokio::test]
@@ -1023,19 +1045,19 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
     assert_eq!(outcome.coordinator_run_id, None);
     assert_eq!(outcome.task_id, None);
 
-    let deliveries = state
-        .claims()
-        .pending_message_deliveries("agent_alice", 20)
-        .await
-        .unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].message_id, outcome.message_id);
+    assert_broadcast_deliveries_running(&state, &outcome.message_id, &["agent_alice"]).await;
     assert!(state
         .agent_inbox()
         .events_for_agent("agent_alice")
         .await
         .is_empty());
-    assert!(state.worker_commands().is_empty());
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice"],
+        &outcome.message_id,
+        &["@alice-win 帮我看下"],
+        &[],
+    );
     assert!(state
         .tasks()
         .list_tasks(TaskQuery::default())
@@ -1856,14 +1878,7 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
         .iter()
         .all(|message| message.kind != MessageKind::TaskCard));
 
-    let deliveries = state
-        .claims()
-        .pending_message_deliveries("agent_alice", 20)
-        .await
-        .unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].channel_id, "dev");
-    assert_eq!(deliveries[0].message_id, message.id);
+    assert_broadcast_deliveries_running(&state, &message.id, &["agent_alice"]).await;
 }
 
 #[tokio::test]
@@ -2183,13 +2198,7 @@ async fn public_channel_message_api_uses_channel_orchestrator() {
     let body = response_json(response).await;
     assert_eq!(body["outcome"]["action"], "broadcast_delivered");
     let message_id = body["outcome"]["messageId"].as_str().unwrap();
-    let deliveries = state
-        .claims()
-        .pending_message_deliveries("agent_alice", 20)
-        .await
-        .unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].message_id, message_id);
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_alice"]).await;
 }
 
 #[tokio::test]
@@ -2337,14 +2346,24 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
         }));
     }
 
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 3);
-    }
+    assert_broadcast_deliveries_running(
+        &state,
+        consultation["outcome"]["messageId"].as_str().unwrap(),
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
+    assert_broadcast_deliveries_running(
+        &state,
+        explicit_single["outcome"]["messageId"].as_str().unwrap(),
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
+    assert_broadcast_deliveries_running(
+        &state,
+        explicit_multi["outcome"]["messageId"].as_str().unwrap(),
+        &["agent_alice", "agent_coda"],
+    )
+    .await;
     let visible_messages = state.channel_messages_for_tests("api-core").await;
     assert!(visible_messages
         .iter()
@@ -2399,16 +2418,14 @@ async fn agent_send_api_broadcasts_agent_message_to_channel_members() {
     let sent = response_json(sent).await;
     let message_id = sent["messageId"].as_str().unwrap();
 
-    for agent_id in ["agent_alice", "agent_coda"] {
-        let deliveries = state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap();
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].message_id, message_id);
-        assert_eq!(deliveries[0].channel_id, "api-core");
-    }
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_alice", "agent_coda"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice", "agent_coda"],
+        message_id,
+        &["Alice 已完成第一轮检查"],
+        &[],
+    );
 }
 
 #[tokio::test]
@@ -2781,13 +2798,7 @@ async fn public_default_all_channel_message_api_accepts_messages() {
         .await;
     assert!(decisions.is_empty());
 
-    let deliveries = state
-        .claims()
-        .pending_message_deliveries("agent_alice", 20)
-        .await
-        .unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0].message_id, message_id);
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_alice"]).await;
 
     let diagnostics = get_json(&app, &token, "/v1/diagnostics").await;
     assert_eq!(diagnostics.status(), StatusCode::OK);
@@ -3170,6 +3181,96 @@ async fn public_channel_message_api_rejects_empty_idempotency_key_before_orchest
 
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     app_state_with_agent_handles(&[(agent_id, handle)]).await
+}
+
+fn assert_broadcast_runs_started(
+    state: &AppState,
+    expected_agent_ids: &[&str],
+    message_id: &str,
+    expected_prompt_fragments: &[&str],
+    forbidden_prompt_fragments: &[&str],
+) {
+    let commands = state.worker_commands();
+    let start_runs = commands
+        .iter()
+        .filter(|command| command["type"] == "start_run")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        start_runs.len(),
+        expected_agent_ids.len(),
+        "expected one broadcast run per regular agent; commands={commands:?}"
+    );
+    for agent_id in expected_agent_ids {
+        let command = start_runs
+            .iter()
+            .find(|command| command["session"]["agent_id"] == *agent_id)
+            .unwrap_or_else(|| panic!("missing start_run for {agent_id}; commands={commands:?}"));
+        let prompt = command["input"]["prompt"].as_str().unwrap();
+        assert!(
+            prompt.contains(&format!("agent_id={agent_id}")),
+            "prompt missing agent metadata: {prompt}"
+        );
+        assert!(
+            prompt.contains(&format!("message_id={message_id}")),
+            "prompt missing message metadata: {prompt}"
+        );
+        assert!(
+            prompt.contains(&format!(
+                "slei message claim {message_id} --agent {agent_id}"
+            )),
+            "prompt missing claim instruction: {prompt}"
+        );
+        assert!(
+            prompt.contains("slei message read") && prompt.contains("slei message send"),
+            "prompt should direct agent to use Slei CLI for history/reply operations: {prompt}"
+        );
+        for fragment in expected_prompt_fragments {
+            assert!(
+                prompt.contains(fragment),
+                "prompt missing triggering message fragment {fragment:?}: {prompt}"
+            );
+        }
+        for fragment in forbidden_prompt_fragments {
+            assert!(
+                !prompt.contains(fragment),
+                "prompt should not include unrelated prior history {fragment:?}: {prompt}"
+            );
+        }
+    }
+}
+
+async fn assert_broadcast_deliveries_running(
+    state: &AppState,
+    message_id: &str,
+    expected_agent_ids: &[&str],
+) {
+    let deliveries = state
+        .claims()
+        .message_deliveries_for_message(message_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        deliveries.len(),
+        expected_agent_ids.len(),
+        "unexpected deliveries for message {message_id}: {deliveries:?}"
+    );
+    for agent_id in expected_agent_ids {
+        let delivery = deliveries
+            .iter()
+            .find(|delivery| delivery.agent_id == *agent_id)
+            .unwrap_or_else(|| panic!("missing delivery for {agent_id}: {deliveries:?}"));
+        assert_eq!(delivery.delivery_state, "running");
+        assert!(delivery.run_id.is_some());
+        let commands = state.worker_commands();
+        assert!(
+            commands.iter().any(|command| {
+                command["type"] == "start_run"
+                    && command["run_id"] == delivery.run_id.as_deref().unwrap()
+                    && command["session"]["agent_id"] == *agent_id
+            }),
+            "delivery run_id was not started for {agent_id}: delivery={delivery:?} commands={commands:?}"
+        );
+    }
 }
 
 struct TestAgentSpec {

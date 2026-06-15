@@ -1436,6 +1436,25 @@ impl Repositories {
             .collect()
     }
 
+    pub async fn message_deliveries_for_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Vec<MessageDeliveryRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT sequence, id, message_id, channel_id, agent_id, delivery_state, run_id, created_at, updated_at
+             FROM message_deliveries
+             WHERE message_id = ?
+             ORDER BY sequence ASC",
+        )
+        .bind(message_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(message_delivery_row_from_sql)
+            .collect()
+    }
+
     pub async fn mark_message_delivery_running(
         &self,
         message_id: &str,
