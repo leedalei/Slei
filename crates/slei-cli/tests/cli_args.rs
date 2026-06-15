@@ -8,6 +8,7 @@ use cli::{
 };
 use serde_json::json;
 use std::process::Command as ProcessCommand;
+use std::process::Output;
 
 #[test]
 fn parses_message_commands() {
@@ -227,10 +228,7 @@ fn normalizes_channels_and_targets() {
 
 #[test]
 fn cli_parameter_errors_exit_one_without_stdout() {
-    let output = ProcessCommand::new(env!("CARGO_BIN_EXE_slei"))
-        .args(["message", "send", "--target", "#all"])
-        .output()
-        .unwrap();
+    let output = run_slei(["message", "send", "--target", "#all"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
@@ -238,8 +236,35 @@ fn cli_parameter_errors_exit_one_without_stdout() {
 }
 
 #[test]
+fn cli_help_exits_zero_and_writes_stdout() {
+    let output = run_slei(["--help"]);
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Command line client for the Slei daemon"));
+    assert!(stdout.contains("Usage:"));
+}
+
+#[test]
+fn cli_version_exits_zero() {
+    let output = run_slei(["--version"]);
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("slei"));
+}
+
+#[test]
 fn claimed_false_remains_exit_two() {
     assert_eq!(claim_exit_code(&json!({ "claimed": false })), 2);
     assert_eq!(claim_exit_code(&json!({ "claimed": true })), 0);
     assert_eq!(claim_exit_code(&json!({ "ok": true })), 0);
+}
+
+fn run_slei(args: impl IntoIterator<Item = &'static str>) -> Output {
+    ProcessCommand::new(env!("CARGO_BIN_EXE_slei"))
+        .args(args)
+        .output()
+        .unwrap()
 }

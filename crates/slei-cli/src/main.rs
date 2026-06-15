@@ -3,7 +3,7 @@
 mod client;
 
 use anyhow::{bail, Context, Result};
-use clap::{Args, Parser, Subcommand};
+use clap::{error::ErrorKind, Args, Parser, Subcommand};
 use client::DaemonClient;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -171,7 +171,19 @@ async fn main() {
 }
 
 async fn run() -> Result<i32> {
-    let cli = Cli::try_parse()?;
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+            ) =>
+        {
+            error.print()?;
+            return Ok(0);
+        }
+        Err(error) => return Err(error.into()),
+    };
     let client = DaemonClient::from_env()?;
     let exit_code = execute(cli, &client).await?;
     Ok(exit_code)
