@@ -12,7 +12,8 @@ mod tests {
 
     use super::db::SleiDb;
     use super::repositories::{
-        ChannelSessionRow, Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
+        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
@@ -133,6 +134,204 @@ mod tests {
         assert_eq!(logs.len(), 100);
         assert_eq!(logs.first().unwrap().run_id.as_deref(), Some("run_104"));
         assert_eq!(logs.last().unwrap().run_id.as_deref(), Some("run_5"));
+    }
+
+    #[tokio::test]
+    async fn new_repository_limits_are_normalized() {
+        let (url, _path) = sqlite_file_url("repository-limit-normalization");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..205 {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: format!("msg_{index}"),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(format!("needle body {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            repos
+                .create_message_delivery(&format!("msg_{index}"), "all", "agent_a")
+                .await
+                .unwrap();
+            repos
+                .record_agent_activity(
+                    "agent_a",
+                    Some(&format!("run_{index}")),
+                    Some("all"),
+                    Some(&format!("msg_{index}")),
+                    None,
+                    "working",
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+
+        let default_read = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: None,
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        let negative_read = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(-5),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        let negative_deliveries = repos
+            .pending_message_deliveries("agent_a", -5)
+            .await
+            .unwrap();
+        let negative_logs = repos.agent_activity_logs("agent_a", -5).await.unwrap();
+        let negative_search = repos.search_channel_messages("needle", -5).await.unwrap();
+        let capped_read = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(500),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        let capped_deliveries = repos
+            .pending_message_deliveries("agent_a", 500)
+            .await
+            .unwrap();
+        let capped_search = repos.search_channel_messages("needle", 500).await.unwrap();
+
+        assert_eq!(default_read.len(), 20);
+        assert_eq!(negative_read.len(), 20);
+        assert_eq!(negative_deliveries.len(), 20);
+        assert_eq!(negative_logs.len(), 20);
+        assert_eq!(negative_search.len(), 20);
+        assert_eq!(capped_read.len(), 200);
+        assert_eq!(capped_deliveries.len(), 200);
+        assert_eq!(capped_search.len(), 200);
+    }
+
+    #[tokio::test]
+    async fn message_delivery_running_transition_is_guarded() {
+        let (url, _path) = sqlite_file_url("delivery-running-guard");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .create_message_delivery("msg_1", "all", "agent_a")
+            .await
+            .unwrap();
+
+        let first = repos
+            .mark_message_delivery_running("msg_1", "agent_a", "run_1")
+            .await
+            .unwrap();
+        let second = repos
+            .mark_message_delivery_running("msg_1", "agent_a", "run_2")
+            .await
+            .unwrap();
+
+        let run_id = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT run_id FROM message_deliveries WHERE message_id = ? AND agent_id = ?",
+        )
+        .bind("msg_1")
+        .bind("agent_a")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+
+        assert!(first);
+        assert!(!second);
+        assert_eq!(run_id.as_deref(), Some("run_1"));
+    }
+
+    #[tokio::test]
+    async fn read_channel_messages_returns_usable_sequence_cursors() {
+        let (url, _path) = sqlite_file_url("message-read-cursors");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..3 {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: format!("msg_{index}"),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(format!("body {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let messages = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(10),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        let first_sequence = messages[0].sequence.unwrap();
+        let third_sequence = messages[2].sequence.unwrap();
+
+        let after_first = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(10),
+                after_sequence: Some(first_sequence),
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        let before_third = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(10),
+                after_sequence: None,
+                before_sequence: Some(third_sequence),
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            after_first
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_1", "msg_2"]
+        );
+        assert_eq!(
+            before_third
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_0", "msg_1"]
+        );
     }
 
     #[tokio::test]

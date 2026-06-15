@@ -226,6 +226,7 @@ pub struct NewChannelMessageRow {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelMessageRow {
     pub id: String,
+    pub sequence: Option<i64>,
     pub channel_id: String,
     pub session_id: Option<String>,
     pub author_id: String,
@@ -1111,7 +1112,7 @@ impl Repositories {
         &self,
         query: MessageReadQueryRow,
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
-        let limit = query.limit.unwrap_or(i64::MAX);
+        let limit = normalize_repository_limit(query.limit);
 
         let rows = if let Some(around_message_id) = query.around_message_id.as_deref() {
             let center = sqlx::query_scalar::<_, i64>(
@@ -1127,7 +1128,7 @@ impl Repositories {
             match center {
                 Some(center) => {
                     sqlx::query(
-                        "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                          FROM messages
                          WHERE rowid IN (
                             SELECT rowid
@@ -1149,7 +1150,7 @@ impl Repositories {
             }
         } else if query.before_sequence.is_some() && query.after_sequence.is_none() {
             sqlx::query(
-                "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                  FROM (
                     SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                     FROM messages
@@ -1168,7 +1169,7 @@ impl Repositories {
             .await?
         } else {
             sqlx::query(
-                "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                  FROM messages
                  WHERE channel_id = ?
                    AND (? IS NULL OR rowid > ?)
@@ -1195,9 +1196,10 @@ impl Repositories {
         query: &str,
         limit: i64,
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit));
         let pattern = format!("%{}%", escape_like_pattern(query));
         let rows = sqlx::query(
-            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE content LIKE ? ESCAPE '\\'
                AND kind NOT IN ('task_root', 'task_reply')
@@ -1395,6 +1397,7 @@ impl Repositories {
         agent_id: &str,
         limit: i64,
     ) -> Result<Vec<MessageDeliveryRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit));
         let rows = sqlx::query(
             "SELECT sequence, id, message_id, channel_id, agent_id, delivery_state, run_id, created_at, updated_at
              FROM message_deliveries
@@ -1417,20 +1420,20 @@ impl Repositories {
         message_id: &str,
         agent_id: &str,
         run_id: &str,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
             "UPDATE message_deliveries
              SET delivery_state = 'running',
                  run_id = ?,
                  updated_at = CURRENT_TIMESTAMP
-             WHERE message_id = ? AND agent_id = ?",
+             WHERE message_id = ? AND agent_id = ? AND delivery_state = 'pending'",
         )
         .bind(run_id)
         .bind(message_id)
         .bind(agent_id)
         .execute(&self.pool)
         .await?;
-        Ok(())
+        Ok(result.rows_affected() == 1)
     }
 
     pub async fn upsert_agent_status(&self, row: AgentStatusRow) -> Result<(), sqlx::Error> {
@@ -1517,6 +1520,7 @@ impl Repositories {
         agent_id: &str,
         limit: i64,
     ) -> Result<Vec<AgentActivityLogRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit));
         let rows = sqlx::query(
             "SELECT id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason, created_at
              FROM agent_activity_logs
@@ -3077,8 +3081,14 @@ fn channel_message_row_from_sql(
     let deleted: i64 = row.try_get("deleted")?;
     let as_task: i64 = row.try_get("as_task")?;
     let edited: i64 = row.try_get("edited")?;
+    let sequence = match row.try_get::<Option<i64>, _>("sequence") {
+        Ok(sequence) => sequence,
+        Err(sqlx::Error::ColumnNotFound(_)) => None,
+        Err(error) => return Err(error),
+    };
     Ok(ChannelMessageRow {
         id: row.try_get("id")?,
+        sequence,
         channel_id: row.try_get("channel_id")?,
         session_id: row.try_get("session_id")?,
         author_id: row
@@ -3091,6 +3101,16 @@ fn channel_message_row_from_sql(
         edited: edited != 0,
         created_at: row.try_get("created_at")?,
     })
+}
+
+fn normalize_repository_limit(limit: Option<i64>) -> i64 {
+    const DEFAULT_LIMIT: i64 = 20;
+    const MAX_LIMIT: i64 = 200;
+
+    match limit {
+        Some(limit) if limit > 0 => limit.min(MAX_LIMIT),
+        _ => DEFAULT_LIMIT,
+    }
 }
 
 fn message_delivery_row_from_sql(
