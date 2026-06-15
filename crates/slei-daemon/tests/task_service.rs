@@ -179,12 +179,14 @@ async fn task_created_from_source_message_uses_source_body_and_reuses_source() {
 
     assert_eq!(retry.id, task.id);
     assert_eq!(task.channel_id, "all");
-    assert_eq!(task.creator_id, "agent_cindy");
+    assert_eq!(task.creator_id, "human_lei");
     assert_eq!(task.source_message_id.as_deref(), Some(source.id.as_str()));
     assert_eq!(
         task.root_body,
         "请把广播 claim CLI 任务语义补齐，正文要完整保留。"
     );
+    let thread = state.tasks().thread_view(&task.id).await.unwrap();
+    assert_eq!(thread.root.sender_id, "human_lei");
     assert_eq!(state.channel_messages_for_tests("all").await.len(), 1);
 }
 

@@ -343,12 +343,13 @@ impl TaskService {
             .await
             .map_err(storage_error)?
             .ok_or(TaskError::TaskNotFound)?;
+        let source_author_id = source.author_id;
         let source_body = source.body.unwrap_or_default();
         let now = now_string();
         let task = TaskRecord {
             id: format!("task_{}", Uuid::new_v4().simple()),
             channel_id: source.channel_id,
-            creator_id: creator_id.to_string(),
+            creator_id: source_author_id,
             assignee_id: None,
             source_message_id: Some(source_message_id.to_string()),
             assignment_reason: None,

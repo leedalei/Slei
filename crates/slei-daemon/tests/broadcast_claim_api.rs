@@ -625,6 +625,7 @@ async fn task_cli_api_creates_from_source_replies_updates_and_lists_thread() {
     let created_json = response_json(created).await;
     let task_id = created_json["task"]["id"].as_str().unwrap().to_string();
     assert_eq!(created_json["task"]["sourceMessageId"], source.id);
+    assert_eq!(created_json["task"]["creatorId"], "human_lei");
     assert_eq!(
         created_json["task"]["title"],
         "请从这条消息创建任务，并保留完整正文。"
@@ -756,6 +757,7 @@ async fn task_cli_api_creates_from_source_replies_updates_and_lists_thread() {
         thread_json["thread"]["root"]["body"],
         "请从这条消息创建任务，并保留完整正文。"
     );
+    assert_eq!(thread_json["thread"]["root"]["senderId"], "human_lei");
     assert_eq!(
         thread_json["thread"]["replies"].as_array().unwrap().len(),
         1
