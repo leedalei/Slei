@@ -1344,7 +1344,7 @@ impl Repositories {
         .await?;
 
         Ok(ClaimAttemptRecord {
-            claimed: false,
+            claimed: holder.as_deref() == Some(agent_id),
             agent_id: holder,
         })
     }
@@ -1382,7 +1382,7 @@ impl Repositories {
         .await?;
 
         Ok(ClaimAttemptRecord {
-            claimed: false,
+            claimed: holder.as_deref() == Some(agent_id),
             agent_id: holder,
         })
     }
@@ -1529,6 +1529,91 @@ impl Repositories {
 
         tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn record_agent_status_idempotent(
+        &self,
+        idempotency_key: &str,
+        response_payload: &str,
+        row: AgentStatusRow,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let idempotency = sqlx::query(
+            "INSERT OR IGNORE INTO idempotent_mutations(idempotency_key, entity_id, response_payload)
+             VALUES (?, ?, ?)",
+        )
+        .bind(idempotency_key)
+        .bind(&row.agent_id)
+        .bind(response_payload)
+        .execute(&mut *tx)
+        .await?;
+        if idempotency.rows_affected() == 0 {
+            tx.commit().await?;
+            return Ok(false);
+        }
+
+        sqlx::query(
+            "INSERT INTO agent_statuses(
+                agent_id, state, phase, reason, run_id, channel_id, message_id, task_id, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+             ON CONFLICT(agent_id) DO UPDATE SET
+                state = excluded.state,
+                phase = excluded.phase,
+                reason = excluded.reason,
+                run_id = excluded.run_id,
+                channel_id = excluded.channel_id,
+                message_id = excluded.message_id,
+                task_id = excluded.task_id,
+                updated_at = excluded.updated_at",
+        )
+        .bind(&row.agent_id)
+        .bind(&row.state)
+        .bind(&row.phase)
+        .bind(&row.reason)
+        .bind(&row.run_id)
+        .bind(&row.channel_id)
+        .bind(&row.message_id)
+        .bind(&row.task_id)
+        .bind(&row.updated_at)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "INSERT INTO agent_activity_logs(
+                id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&row.agent_id)
+        .bind(&row.run_id)
+        .bind(&row.channel_id)
+        .bind(&row.message_id)
+        .bind(&row.task_id)
+        .bind(&row.state)
+        .bind(&row.phase)
+        .bind(&row.reason)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "DELETE FROM agent_activity_logs
+             WHERE agent_id = ?
+               AND sequence NOT IN (
+                 SELECT sequence FROM agent_activity_logs
+                 WHERE agent_id = ?
+                 ORDER BY sequence DESC
+                 LIMIT 100
+               )",
+        )
+        .bind(&row.agent_id)
+        .bind(&row.agent_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(true)
     }
 
     pub async fn agent_activity_logs(

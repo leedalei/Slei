@@ -12,7 +12,7 @@ mod tests {
 
     use super::db::SleiDb;
     use super::repositories::{
-        ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
+        AgentStatusRow, ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
         RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
@@ -105,6 +105,89 @@ mod tests {
         assert!(first.claimed);
         assert!(!second.claimed);
         assert_eq!(second.agent_id.as_deref(), Some("agent_a"));
+    }
+
+    #[tokio::test]
+    async fn same_agent_claim_retry_is_idempotent_success() {
+        let (url, _path) = sqlite_file_url("same-agent-claim");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        let first_message = repos
+            .try_claim_message("msg_1", "reply", "agent_a")
+            .await
+            .unwrap();
+        let retry_message = repos
+            .try_claim_message("msg_1", "reply", "agent_a")
+            .await
+            .unwrap();
+        let first_task = repos.try_claim_task("task_1", "agent_a").await.unwrap();
+        let retry_task = repos.try_claim_task("task_1", "agent_a").await.unwrap();
+
+        assert!(first_message.claimed);
+        assert!(retry_message.claimed);
+        assert_eq!(retry_message.agent_id.as_deref(), Some("agent_a"));
+        assert!(first_task.claimed);
+        assert!(retry_task.claimed);
+        assert_eq!(retry_task.agent_id.as_deref(), Some("agent_a"));
+    }
+
+    #[tokio::test]
+    async fn agent_status_idempotent_mutation_is_transactional() {
+        let (url, _path) = sqlite_file_url("status-idempotent-tx");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        let applied = repos
+            .record_agent_status_idempotent(
+                "agent:status:status-once",
+                r#"{"ok":true}"#,
+                AgentStatusRow {
+                    agent_id: "agent_a".to_string(),
+                    state: "working".to_string(),
+                    phase: Some("reading_history".to_string()),
+                    reason: None,
+                    run_id: Some("run_1".to_string()),
+                    channel_id: Some("all".to_string()),
+                    message_id: Some("msg_1".to_string()),
+                    task_id: None,
+                    updated_at: None,
+                },
+            )
+            .await
+            .unwrap();
+        let duplicate = repos
+            .record_agent_status_idempotent(
+                "agent:status:status-once",
+                r#"{"ok":true}"#,
+                AgentStatusRow {
+                    agent_id: "agent_a".to_string(),
+                    state: "working".to_string(),
+                    phase: Some("reading_history".to_string()),
+                    reason: None,
+                    run_id: Some("run_2".to_string()),
+                    channel_id: Some("all".to_string()),
+                    message_id: Some("msg_2".to_string()),
+                    task_id: None,
+                    updated_at: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
+        let payload = repos
+            .idempotent_response("agent:status:status-once")
+            .await
+            .unwrap();
+
+        assert!(applied);
+        assert!(!duplicate);
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].run_id.as_deref(), Some("run_1"));
+        assert_eq!(payload.as_deref(), Some(r#"{"ok":true}"#));
     }
 
     #[tokio::test]

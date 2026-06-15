@@ -55,6 +55,7 @@ async fn message_claim_api_returns_owner_for_losing_agents() {
     assert_eq!(first_json["agentId"], "agent_cindy");
 
     let second = app
+        .clone()
         .oneshot(authed_json_request(
             &token,
             "POST",
@@ -67,6 +68,20 @@ async fn message_claim_api_returns_owner_for_losing_agents() {
     let second_json = response_json(second).await;
     assert_eq!(second_json["claimed"], false);
     assert_eq!(second_json["agentId"], "agent_cindy");
+
+    let retry = app
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/messages/msg_123",
+            json!({ "agentId": "agent_cindy" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry_json = response_json(retry).await;
+    assert_eq!(retry_json["claimed"], true);
+    assert_eq!(retry_json["agentId"], "agent_cindy");
 }
 
 #[tokio::test]
@@ -90,6 +105,7 @@ async fn task_claim_api_returns_owner_for_losing_agents() {
     assert_eq!(first_json["agentId"], "agent_cindy");
 
     let second = app
+        .clone()
         .oneshot(authed_json_request(
             &token,
             "POST",
@@ -102,6 +118,20 @@ async fn task_claim_api_returns_owner_for_losing_agents() {
     let second_json = response_json(second).await;
     assert_eq!(second_json["claimed"], false);
     assert_eq!(second_json["agentId"], "agent_cindy");
+
+    let retry = app
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/tasks/task_123",
+            json!({ "agentId": "agent_cindy" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry_json = response_json(retry).await;
+    assert_eq!(retry_json["claimed"], true);
+    assert_eq!(retry_json["agentId"], "agent_cindy");
 }
 
 #[tokio::test]
@@ -208,6 +238,121 @@ async fn agent_status_api_requires_idempotency_key() {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = response_json(response).await;
     assert_eq!(body["error"], "idempotency-key is required");
+}
+
+#[tokio::test]
+async fn claim_and_status_apis_reject_blank_required_ids() {
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    let blank_claim_agent = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/messages/msg_123",
+            json!({ "agentId": "   " }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blank_claim_agent.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_claim_agent).await["error"],
+        "agentId is required"
+    );
+
+    let blank_message_id = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/messages/%20%20",
+            json!({ "agentId": "agent_cindy" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blank_message_id.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_message_id).await["error"],
+        "message_id is required"
+    );
+
+    let blank_task_id = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/tasks/%20%20",
+            json!({ "agentId": "agent_cindy" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blank_task_id.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_task_id).await["error"],
+        "task_id is required"
+    );
+
+    let blank_status_agent = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/%20%20/status")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "blank-agent")
+                .body(Body::from(
+                    json!({
+                        "state": "working",
+                        "phase": null,
+                        "reason": null,
+                        "runId": null,
+                        "channelId": null,
+                        "messageId": null,
+                        "taskId": null
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blank_status_agent.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_status_agent).await["error"],
+        "agent_id is required"
+    );
+
+    let blank_status_state = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/agent_cindy/status")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "blank-state")
+                .body(Body::from(
+                    json!({
+                        "state": "   ",
+                        "phase": null,
+                        "reason": null,
+                        "runId": null,
+                        "channelId": null,
+                        "messageId": null,
+                        "taskId": null
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blank_status_state.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_status_state).await["error"],
+        "state is required"
+    );
 }
 
 #[tokio::test]

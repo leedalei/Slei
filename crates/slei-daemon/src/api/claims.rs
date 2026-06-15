@@ -168,7 +168,7 @@ pub async fn agent_activity(
 
 fn claim_error_response(error: ClaimError) -> Response {
     let status = match &error {
-        ClaimError::MissingIdempotencyKey => StatusCode::BAD_REQUEST,
+        ClaimError::MissingIdempotencyKey | ClaimError::InvalidInput(_) => StatusCode::BAD_REQUEST,
         ClaimError::Json(_) | ClaimError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
     };
     (status, Json(json!({ "error": error.to_string() }))).into_response()
