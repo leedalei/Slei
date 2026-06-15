@@ -414,7 +414,10 @@ impl MessageService {
         before_sequence: Option<i64>,
         around_message_id: Option<&str>,
     ) -> Result<Vec<AgentVisibleMessageRecord>, MessageError> {
-        let (channel_id, _) = parse_message_target(channel)?;
+        let (channel_id, thread_message_id) = parse_message_target(channel)?;
+        if thread_message_id.is_some() {
+            return Err(MessageError::InvalidMessage);
+        }
         let around_message_id = match around_message_id.map(str::trim) {
             Some("") => return Err(MessageError::InvalidMessage),
             Some(message_id) => Some(message_id.to_string()),
@@ -466,12 +469,17 @@ impl MessageService {
         body: &str,
         idempotency_key: &str,
     ) -> Result<MessageRecord, MessageError> {
-        let (channel_id, _) = parse_message_target(target)?;
+        let (channel_id, thread_message_id) = parse_message_target(target)?;
+        if thread_message_id.is_some() {
+            return Err(MessageError::InvalidMessage);
+        }
         if agent_id.trim().is_empty() || body.trim().is_empty() || idempotency_key.trim().is_empty()
         {
             return Err(MessageError::InvalidMessage);
         }
-        let idempotency_key = namespaced_key("message:create_agent", idempotency_key)
+        let agent_id = agent_id.trim();
+        let idempotency_namespace = format!("message:create_agent:{agent_id}");
+        let idempotency_key = namespaced_key(&idempotency_namespace, idempotency_key)
             .ok_or(MessageError::InvalidMessage)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
         if let Some(payload) = self
@@ -503,7 +511,7 @@ impl MessageService {
         let message = build_message_with_as_task(
             &channel_id,
             None,
-            agent_id.trim(),
+            agent_id,
             Some(body),
             MessageKind::Agent,
             false,

@@ -379,6 +379,118 @@ async fn agent_send_api_is_idempotent_for_retries() {
 }
 
 #[tokio::test]
+async fn agent_send_api_idempotency_key_is_scoped_per_agent() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state.clone());
+
+    let first = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "shared-agent-send-key",
+            json!({
+                "target": "#all",
+                "agentId": "agent_cindy",
+                "body": "Cindy done"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_body = response_json(first).await;
+    let first_message_id = first_body["messageId"].as_str().unwrap().to_string();
+
+    let second = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "shared-agent-send-key",
+            json!({
+                "target": "#all",
+                "agentId": "agent_mina",
+                "body": "Mina done"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(second.status(), StatusCode::OK);
+    let second_body = response_json(second).await;
+    let second_message_id = second_body["messageId"].as_str().unwrap().to_string();
+
+    let first_retry = app
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "shared-agent-send-key",
+            json!({
+                "target": "#all",
+                "agentId": "agent_cindy",
+                "body": "Cindy done"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_retry.status(), StatusCode::OK);
+    let first_retry_body = response_json(first_retry).await;
+
+    assert_ne!(first_message_id, second_message_id);
+    assert_eq!(first_retry_body["messageId"], first_message_id);
+    let messages = state.channel_messages_for_tests("all").await;
+    assert_eq!(messages.len(), 2);
+    assert!(messages
+        .iter()
+        .any(|message| message.author_id == "agent_cindy" && message.id == first_message_id));
+    assert!(messages
+        .iter()
+        .any(|message| message.author_id == "agent_mina" && message.id == second_message_id));
+}
+
+#[tokio::test]
+async fn message_read_api_rejects_thread_target_until_thread_reads_exist() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/read?channel=%23all:msg_123",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn agent_send_api_rejects_thread_target_until_thread_sends_exist() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "agent-send-thread-target",
+            json!({
+                "target": "#all:msg_123",
+                "agentId": "agent_cindy",
+                "body": "@lei-lee 已完成"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn message_claim_api_returns_owner_for_losing_agents() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));

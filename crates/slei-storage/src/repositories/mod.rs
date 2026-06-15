@@ -1118,7 +1118,7 @@ impl Repositories {
             let center = sqlx::query_scalar::<_, i64>(
                 "SELECT rowid
                  FROM messages
-                 WHERE id = ? AND channel_id = ?",
+                 WHERE id = ? AND channel_id = ? AND deleted = 0",
             )
             .bind(around_message_id)
             .bind(&query.channel_id)
@@ -1134,6 +1134,7 @@ impl Repositories {
                             SELECT rowid
                             FROM messages
                             WHERE channel_id = ?
+                              AND deleted = 0
                               AND kind NOT IN ('task_root', 'task_reply')
                             ORDER BY ABS(rowid - ?) ASC, rowid ASC
                             LIMIT ?
@@ -1156,6 +1157,7 @@ impl Repositories {
                     FROM messages
                     WHERE channel_id = ?
                       AND rowid < ?
+                      AND deleted = 0
                       AND kind NOT IN ('task_root', 'task_reply')
                     ORDER BY rowid DESC
                     LIMIT ?
@@ -1174,6 +1176,7 @@ impl Repositories {
                  WHERE channel_id = ?
                    AND rowid > ?
                    AND (? IS NULL OR rowid < ?)
+                   AND deleted = 0
                    AND kind NOT IN ('task_root', 'task_reply')
                  ORDER BY rowid ASC
                  LIMIT ?",
@@ -1192,6 +1195,7 @@ impl Repositories {
                     SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                     FROM messages
                     WHERE channel_id = ?
+                      AND deleted = 0
                       AND kind NOT IN ('task_root', 'task_reply')
                     ORDER BY rowid DESC
                     LIMIT ?
@@ -1218,6 +1222,7 @@ impl Repositories {
             "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE content LIKE ? ESCAPE '\\'
+               AND deleted = 0
                AND kind NOT IN ('task_root', 'task_reply')
              ORDER BY rowid DESC
              LIMIT ?",

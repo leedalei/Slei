@@ -460,6 +460,111 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_channel_messages_excludes_deleted_before_limit_windows() {
+        let (url, _path) = sqlite_file_url("message-read-deleted-before-limit");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for (id, body) in [
+            ("msg_0", "visible old"),
+            ("msg_1", "visible middle"),
+            ("msg_2", "deleted newest"),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+        repos.update_message_tombstone("msg_2").await.unwrap();
+
+        let latest = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(2),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            latest.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            vec!["msg_0", "msg_1"]
+        );
+
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_3".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human".to_string(),
+                body: Some("visible after".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+        let around = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(3),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: Some("msg_1".to_string()),
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            around.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            vec!["msg_0", "msg_1", "msg_3"]
+        );
+    }
+
+    #[tokio::test]
+    async fn search_channel_messages_excludes_deleted_before_limit() {
+        let (url, _path) = sqlite_file_url("message-search-deleted-before-limit");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for (id, body) in [
+            ("msg_visible", "needle visible"),
+            ("msg_deleted", "needle deleted"),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+        sqlx::query("UPDATE messages SET deleted = 1 WHERE id = ?")
+            .bind("msg_deleted")
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        let matches = repos.search_channel_messages("needle", 1).await.unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].id, "msg_visible");
+    }
+
+    #[tokio::test]
     async fn migration_creates_app_state_tables() {
         let (url, _path) = sqlite_file_url("app-state");
         let db = SleiDb::connect(&url).await.unwrap();
