@@ -175,6 +175,16 @@ mod tests {
         assert!(memory.contains("创建成员时通过 guide-create Skill 生成产品交互卡"));
         assert!(memory.contains("已加入频道：#all、#zeta"));
         assert!(memory.contains("## Active Context"));
+        assert!(memory.contains("最多 3 个频道"));
+        assert!(memory.contains("频道"));
+        assert!(memory.contains("时间"));
+        assert!(memory.contains("当前处理事项"));
+        assert!(memory.contains("进展"));
+        assert!(memory.contains("淘汰最旧"));
+        assert!(memory.contains("不要复制完整聊天历史"));
+        assert!(memory.contains("slei message read/search"));
+        assert!(memory.contains("空闲"));
+        assert!(!memory.contains("| #all | 首次启动 | 等待用户提出需要引导的任务 | idle |"));
     }
 
     #[test]
@@ -248,6 +258,19 @@ mod tests {
         assert!(body.contains("Key Knowledge"));
         assert!(body.contains("Active Context"));
         assert!(body.contains("replace or compact"));
+        assert!(body.contains("最多 3 个频道"));
+        assert!(body.contains("淘汰最旧"));
+        assert!(body.contains("完成一步工作"));
+        assert!(body.contains("等待用户确认"));
+        assert!(body.contains("认领消息或任务并开始真实工作"));
+        assert!(body.contains("handoff"));
+        assert!(body.contains("下一次 spawn"));
+        assert!(body.contains("不要在这里保存完整历史"));
+        assert!(body.contains("slei message read/search"));
+        assert!(body.contains("#频道名"));
+        assert!(body.contains("空闲"));
+        assert!(!body.contains("#channel"));
+        assert!(!body.contains("| #all | YYYY-MM-DD HH:MM | idle |"));
         assert!(body.contains("Do not store secrets"));
         assert!(body.contains("notes/*.md"));
     }

@@ -10,7 +10,7 @@ Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat 
 ## Memory Model
 
 - `Key Knowledge`: durable facts, role expectations, user preferences, project conventions, and lessons likely to matter across many sessions.
-- `Active Context`: current task state for resuming later: goal, latest meaningful progress, blocker, next action, and relevant channel/project. Replace stale context instead of appending a history.
+- `Active Context`: current task state for resuming later: channel, time, current item, latest meaningful progress, blocker, and next action. It is a small working set, not a transcript.
 - `Maintained Notes`: links to `notes/*.md` for detailed channel/project/team context.
 
 ## Workflow
@@ -25,14 +25,26 @@ Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat 
 5. Do not store secrets, one-off chatter, unverified guesses, or facts that can be cheaply rediscovered.
 6. Preserve existing Markdown headings and links.
 
+## When To Update Active Context
+
+在以下时机更新 `Active Context`：
+
+- 认领消息或任务并开始真实工作；
+- 完成一步工作或改变处理方向；
+- 将工作转交给其他 Agent，或收到其他 Agent 的 handoff；
+- 遇到阻塞、等待用户确认，或提出后续问题；
+- 结束当前事项，并且下一次 spawn 需要知道最新状态。
+
 ## Active Context Format
 
-Prefer 2-5 bullets:
+在 `## Active Context` 下使用紧凑表格。Active Context 最多 3 个频道/事项；如果新的频道或事项进入时表格已有 3 行，先淘汰最旧的一行。不要在这里保存完整历史；需要历史时使用 `slei message read/search` 和 `slei task thread/list` 主动拉取。
 
-- Task:
-- State:
-- Blocker:
-- Next:
-- Context:
+必需列：
 
-If there is no active work, write `- State: idle; waiting for the next user request.`
+| 频道 | 时间 | 当前处理事项 | 进展 |
+|------|------|--------------|------|
+| #频道名 | YYYY-MM-DD HH:MM | 当前事项摘要 | 最新进展 / 阻塞 / 下一步 |
+
+如果没有活跃工作，保留一行空闲状态，例如：
+
+| #all | YYYY-MM-DD HH:MM | 空闲 | 等待下一次用户请求 |
