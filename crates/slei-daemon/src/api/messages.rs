@@ -3,15 +3,18 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
 
+use crate::services::card_service::InteractiveCardView;
 use crate::services::channel_orchestrator_service::{
     ChannelOrchestratorError, SendChannelMessageInput,
 };
 use crate::services::channel_service::ChannelError;
 use crate::services::member_service::MemberError;
-use crate::services::message_service::MessageError;
+use crate::services::message_service::{MessageError, MessageKind, MessageRecord};
 use crate::services::task_service::TaskError;
+use crate::services::task_service::TaskSummaryView;
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -23,6 +26,41 @@ pub struct SendChannelMessageRequest {
     as_task: bool,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChannelMessageView {
+    id: String,
+    channel_id: String,
+    author_id: String,
+    body: Option<String>,
+    #[serde(default)]
+    as_task: bool,
+    kind: MessageKind,
+    deleted: bool,
+    edited: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    cards: Vec<InteractiveCardView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task: Option<TaskSummaryView>,
+}
+
+impl ChannelMessageView {
+    fn from_record(record: MessageRecord, task: Option<TaskSummaryView>) -> Self {
+        Self {
+            id: record.id,
+            channel_id: record.channel_id,
+            author_id: record.author_id,
+            body: record.body,
+            as_task: record.as_task,
+            kind: record.kind,
+            deleted: record.deleted,
+            edited: record.edited,
+            cards: record.cards,
+            task,
+        }
+    }
+}
+
 pub async fn list_channel_messages(
     State(state): State<AppState>,
     Path(channel_id): Path<String>,
@@ -32,13 +70,22 @@ pub async fn list_channel_messages(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let mut messages = state.messages().channel_messages(&channel_id).await;
-    for message in &mut messages {
+    let mut messages = Vec::new();
+    for mut message in state.messages().channel_messages(&channel_id).await {
         message.cards = state
             .cards()
             .cards_for_message(&message.id)
             .await
             .unwrap_or_default();
+        let task = if message.kind == MessageKind::Human {
+            state
+                .tasks()
+                .task_summary_for_source_message(&message.id)
+                .await
+        } else {
+            None
+        };
+        messages.push(ChannelMessageView::from_record(message, task));
     }
     Json(json!({ "messages": messages })).into_response()
 }

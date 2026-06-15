@@ -17,7 +17,7 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn command_message_creates_task_assignment_inbox_decision_and_task_card() {
+async fn command_message_creates_task_assignment_inbox_decision_and_links_source_message() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
         .channels()
@@ -97,13 +97,12 @@ async fn command_message_creates_task_assignment_inbox_decision_and_task_card() 
     }));
 
     let messages = state.channel_messages_for_tests("dev").await;
-    assert!(messages.iter().any(|message| {
-        message.kind == MessageKind::TaskCard
-            && message
-                .body
-                .as_deref()
-                .is_some_and(|body| body.contains(task_id))
-    }));
+    assert!(messages
+        .iter()
+        .all(|message| message.kind != MessageKind::TaskCard));
+    assert!(messages
+        .iter()
+        .any(|message| { message.id == outcome.message_id && message.kind == MessageKind::Human }));
 
     let decisions = state
         .orchestration()
@@ -1298,13 +1297,16 @@ async fn command_message_retry_replays_outcome_without_duplicate_side_effects() 
     assert_eq!(first.assignee_agent_id, retry.assignee_agent_id);
 
     let task_id = first.task_id.as_deref().unwrap();
-    let task_cards = state
+    let task = state.tasks().task(task_id).await.unwrap();
+    assert_eq!(
+        task.source_message_id.as_deref(),
+        Some(first.message_id.as_str())
+    );
+    assert!(state
         .channel_messages_for_tests("dev")
         .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    assert_eq!(task_cards.len(), 1);
+        .iter()
+        .all(|message| message.kind != MessageKind::TaskCard));
 
     let matching_assignments = state
         .agent_inbox()
@@ -1638,20 +1640,22 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
     assert_eq!(decisions.len(), 1);
     assert_eq!(decisions[0].channel_id, "dev");
 
-    let dev_cards = state
+    let task = state
+        .tasks()
+        .task(outcome.task_id.as_deref().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(task.source_message_id.as_deref(), Some(message.id.as_str()));
+    assert!(state
         .channel_messages_for_tests("dev")
         .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    let qa_cards = state
+        .iter()
+        .all(|message| message.kind != MessageKind::TaskCard));
+    assert!(state
         .channel_messages_for_tests("qa")
         .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    assert_eq!(dev_cards.len(), 1);
-    assert!(qa_cards.is_empty());
+        .iter()
+        .all(|message| message.kind != MessageKind::TaskCard));
 
     let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
     assert_eq!(inbox.len(), 1);
@@ -1898,13 +1902,16 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
     assert_eq!(first.assignee_agent_id, second.assignee_agent_id);
 
     let task_id = first.task_id.as_deref().unwrap();
-    let task_cards = state
+    let task = state.tasks().task(task_id).await.unwrap();
+    assert_eq!(
+        task.source_message_id.as_deref(),
+        Some(first.message_id.as_str())
+    );
+    assert!(state
         .channel_messages_for_tests("dev")
         .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    assert_eq!(task_cards.len(), 1);
+        .iter()
+        .all(|message| message.kind != MessageKind::TaskCard));
 
     let matching_assignments = state
         .agent_inbox()
@@ -2190,7 +2197,12 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
     }
     assert!(visible_messages
         .iter()
-        .any(|message| message.kind == MessageKind::TaskCard));
+        .all(|message| message.kind != MessageKind::TaskCard));
+    let task = state.tasks().task(task_id).await.unwrap();
+    assert!(visible_messages.iter().any(|message| {
+        task.source_message_id.as_deref() == Some(message.id.as_str())
+            && message.kind == MessageKind::Human
+    }));
 }
 
 #[tokio::test]
@@ -2280,17 +2292,39 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
     assert_eq!(json["outcome"]["assigneeAgentId"], "agent_coda");
     assert_eq!(json["outcome"]["assigneeAgentIds"], json!(["agent_coda"]));
     let task_id = json["outcome"]["taskId"].as_str().unwrap();
-    let task_cards = state
-        .channel_messages_for_tests("dev")
-        .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    assert_eq!(task_cards.len(), 1);
-    assert!(task_cards[0]
-        .body
-        .as_deref()
-        .is_some_and(|body| body.contains(task_id)));
+    let listed = response_json(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/channels/dev/messages")
+                    .header("authorization", token.authorization_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .await;
+    let listed_messages = listed["messages"].as_array().unwrap();
+    assert_eq!(
+        listed_messages
+            .iter()
+            .filter(|message| message["kind"] == "task_card")
+            .count(),
+        0
+    );
+    let task_source_message = listed_messages
+        .iter()
+        .find(|message| message["id"] == json["outcome"]["messageId"])
+        .unwrap();
+    assert_eq!(task_source_message["kind"], "human");
+    assert_eq!(task_source_message["task"]["id"], task_id);
+    assert_eq!(
+        task_source_message["task"]["sourceMessageId"],
+        json["outcome"]["messageId"]
+    );
+    assert_eq!(task_source_message["task"]["replyCount"], 0);
     let inbox = state.agent_inbox().events_for_agent("agent_coda").await;
     assert!(inbox.iter().any(|event| {
         event.event_type == "task_assigned" && event.task_id.as_deref() == Some(task_id)

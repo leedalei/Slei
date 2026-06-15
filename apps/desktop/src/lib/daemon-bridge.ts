@@ -253,6 +253,7 @@ export type ChannelMessageView = {
   kind: "human" | "agent" | "task_card" | "tombstone" | string;
   deleted?: boolean;
   edited?: boolean;
+  task?: TaskSummaryView;
 };
 
 export type ChannelMessageListReceipt = {

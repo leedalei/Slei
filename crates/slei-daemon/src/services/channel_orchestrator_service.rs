@@ -1006,9 +1006,6 @@ impl ChannelOrchestratorService {
                             .await?
                     }
                 };
-                self.messages
-                    .create_task_card_message(&message.channel_id, &task.id, &message.id)
-                    .await?;
                 let targets = if assignee_agent_ids.is_empty() {
                     assignee
                         .as_ref()
@@ -1166,9 +1163,6 @@ impl ChannelOrchestratorService {
                 let Some(task_id) = outcome.task_id.as_deref() else {
                     return Ok(());
                 };
-                self.messages
-                    .create_task_card_message(&message.channel_id, task_id, &message.id)
-                    .await?;
                 let targets = if outcome.assignee_agent_ids.is_empty() {
                     outcome
                         .assignee_agent_id
@@ -1188,13 +1182,7 @@ impl ChannelOrchestratorService {
                     .await;
                 }
             }
-            "needs_manual_assignment" => {
-                if let Some(task_id) = outcome.task_id.as_deref() {
-                    self.messages
-                        .create_task_card_message(&message.channel_id, task_id, &message.id)
-                        .await?;
-                }
-            }
+            "needs_manual_assignment" => {}
             _ => {}
         }
         Ok(())

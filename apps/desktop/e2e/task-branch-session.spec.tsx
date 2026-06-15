@@ -45,20 +45,31 @@ describe("task branch sessions", () => {
     expect(appSource).toContain('"channel-agent-reply", "delegated-to-daemon"');
   });
 
-  it("renders a collapsed task root entry and hides the source channel message", () => {
+  it("renders a task-linked source message as the task root entry", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
         data={createSleiFixtures({
           messages: [
-            { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "实现任务分支", channelId: "all" },
             {
-              id: "task_card_1",
-              author: "channel_coordinator",
-              role: "system",
+              id: "msg_root",
+              author: "Lei",
+              handle: "@lei",
+              role: "human",
               time: "10:00",
-              body: "task_card:task_1:source:msg_root",
+              body: "请实现任务分支，并保持频道简洁。",
               channelId: "all",
+              task: {
+                id: "task_1",
+                title: "实现任务分支",
+                owner: "Lei",
+                creatorId: "human:local",
+                status: "pending_assignment",
+                channelId: "all",
+                sourceMessageId: "msg_root",
+                replyCount: 0,
+                attentionRequired: true,
+              },
             },
           ],
           tasks: [
@@ -86,6 +97,8 @@ describe("task branch sessions", () => {
     expect(html).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
     expect(html).toContain("待指派");
     expect(html).toContain("data-task-root-entry");
+    expect(html).toContain('data-source-message-id="msg_root"');
+    expect(html).toContain("@lei");
     expect(html).toContain("lucide-scroll-text");
     expect(html).toContain("border-primary/20");
     expect(html).toContain("hover:bg-muted/20");
@@ -261,7 +274,7 @@ describe("task branch sessions", () => {
     expect(html).not.toContain("task_card:");
   });
 
-  it("binds the task root body trigger to open the drawer without nesting buttons", () => {
+  it("binds the task root card to open the drawer without nesting buttons", () => {
     let opened = false;
     const entry = TaskRootEntry({
       messages: createDesktopMessages("zh-CN"),
@@ -278,9 +291,10 @@ describe("task branch sessions", () => {
         replyCount: 0,
         replies: [{ id: "root-msg_root", sender: "Lei", role: "human", body: "请实现任务分支，并保持频道简洁。" }],
       },
+      sourceMessage: { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "请实现任务分支，并保持频道简洁。", channelId: "all" },
     });
 
-    const bodyTrigger = entry.props.children[0];
+    const bodyTrigger = entry.props.children;
     expect(bodyTrigger.type).toBe("button");
     expect(bodyTrigger.props["data-task-root-entry-trigger"]).toBe("body");
     bodyTrigger.props.onClick();
@@ -290,8 +304,7 @@ describe("task branch sessions", () => {
     expect(html).toContain("请实现任务分支，并保持频道简洁。");
     expect(html).toContain("data-task-root-entry-trigger=\"body\"");
     const firstButtonOpen = html.indexOf("<button");
-    const firstButtonClose = html.indexOf("</button>");
     const secondButtonOpen = html.indexOf("<button", firstButtonOpen + 1);
-    expect(secondButtonOpen).toBeGreaterThan(firstButtonClose);
+    expect(secondButtonOpen).toBe(-1);
   });
 });

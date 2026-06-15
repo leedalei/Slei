@@ -34,6 +34,7 @@ export type SleiMessage = {
   channelId?: string;
   status?: "running" | "approval" | "done" | "failed" | "pending" | "undecided";
   sourceMessageId?: string;
+  task?: SleiTask;
   taskCard?: { taskId: string; sourceMessageId?: string };
   toolCall?: string;
 };

@@ -168,6 +168,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     cards: message.cards,
     channelId: message.channelId,
     status: message.kind === "agent" ? "done" : undefined,
+    task: message.task ? taskSummaryToSleiTask(message.task, members) : undefined,
   };
 }
 
@@ -185,6 +186,7 @@ function channelAgentActivitySourceId(message: SleiMessage): string | undefined 
 function hasRoutedChannelResultAfterSource(channelMessages: SleiMessage[], sourceMessageId: string): boolean {
   const sourceIndex = channelMessages.findIndex((message) => message.id === sourceMessageId);
   if (sourceIndex < 0) return false;
+  if (channelMessages[sourceIndex].task?.sourceMessageId === sourceMessageId) return true;
   return channelMessages.slice(sourceIndex + 1).some((message) => {
     if (message.role === "agent") return true;
     return message.taskCard?.sourceMessageId === sourceMessageId;

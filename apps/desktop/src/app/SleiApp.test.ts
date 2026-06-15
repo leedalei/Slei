@@ -106,6 +106,42 @@ describe("createChannelAgentReplyMessage", () => {
     ]);
   });
 
+  it("removes coordinator sidebar activity when the source message carries task metadata", () => {
+    const pending = {
+      id: "coordinator-activity-msg_route_1",
+      author: "频道协调员",
+      handle: "@coordinator",
+      avatar: "CO",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "all",
+      status: "pending",
+      toolCall: "coordinator_routing",
+    } satisfies SleiMessage;
+    const taskSource = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "",
+      body: "实现任务分支",
+      channelId: "all",
+      task: {
+        id: "task_1",
+        title: "实现任务分支",
+        owner: "Lei",
+        status: "pending_assignment",
+        channelId: "all",
+        sourceMessageId: "msg_route_1",
+        replyCount: 0,
+      },
+    } satisfies SleiMessage;
+
+    expect(replaceChannelMessages([pending], [taskSource], ["all"]).map((message) => message.id)).toEqual([
+      "msg_route_1",
+    ]);
+  });
+
   it("keeps direct agent activity during pending refresh and removes it after the agent reply appears", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_alice",

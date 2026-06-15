@@ -502,11 +502,21 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       })
       .filter((id): id is string => Boolean(id)),
   );
+  const messageTaskSourceIds = new Set(
+    visibleMessages
+      .map((message) =>
+        message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
+          ? message.id
+          : undefined,
+      )
+      .filter((id): id is string => Boolean(id)),
+  );
+  const taskSourceIds = new Set([...renderableTaskCardsBySource, ...messageTaskSourceIds]);
   const timelineMessages = visibleMessages
     .filter((message) => !isTransientAgentActivity(message))
-    .filter((message) => !isLinkedTaskAgentReply(message, renderableTaskCardsBySource))
+    .filter((message) => !isLinkedTaskAgentReply(message, taskSourceIds))
     .filter((message) => !isTaskCardControlMessage(message) || Boolean(taskCardFromMessage(message)))
-    .filter((message) => message.role !== "human" || !renderableTaskCardsBySource.has(message.id));
+    .filter((message) => message.role !== "human" || !renderableTaskCardsBySource.has(message.id) || Boolean(message.task));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -754,6 +764,17 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
           <div className="grid gap-1 px-4 py-3">
             {timelineMessages.map((message) => {
+              if (message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id) {
+                return (
+                  <TaskRootEntry
+                    key={message.id}
+                    messages={messages}
+                    onOpen={() => openTaskThread(message.task!.id)}
+                    sourceMessage={message}
+                    task={message.task}
+                  />
+                );
+              }
               const taskCard = taskCardFromMessage(message);
               if (taskCard) {
                 const task = renderableTaskForTaskCard(taskCard, data.tasks, activeChannel.id);

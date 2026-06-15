@@ -435,6 +435,15 @@ impl TaskService {
         Ok(summary_for(&task, reply_count))
     }
 
+    pub async fn task_summary_for_source_message(
+        &self,
+        source_message_id: &str,
+    ) -> Option<TaskSummaryView> {
+        let task = self.task_for_source_message(source_message_id).await?;
+        let reply_count = self.repos.task_replies(&task.id).await.ok()?.len();
+        Some(summary_for(&task, reply_count))
+    }
+
     pub async fn update_status(&self, task_id: &str, status: TaskStatus) -> Result<(), TaskError> {
         self.task(task_id).await?;
         self.repos
