@@ -171,7 +171,7 @@ async fn main() {
 }
 
 async fn run() -> Result<i32> {
-    let cli = Cli::parse();
+    let cli = Cli::try_parse()?;
     let client = DaemonClient::from_env()?;
     let exit_code = execute(cli, &client).await?;
     Ok(exit_code)
@@ -373,7 +373,7 @@ pub fn normalize_send_target(target: &str) -> Result<String> {
     Ok(target.to_string())
 }
 
-fn claim_exit_code(response: &Value) -> i32 {
+pub(crate) fn claim_exit_code(response: &Value) -> i32 {
     if response
         .get("claimed")
         .and_then(Value::as_bool)

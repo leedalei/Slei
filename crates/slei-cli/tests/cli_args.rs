@@ -3,9 +3,11 @@ mod cli;
 
 use clap::Parser;
 use cli::{
-    normalize_channel_arg, normalize_send_target, AgentCommand, Cli, Command, MessageCommand,
-    ReadArgs, TaskCommand,
+    claim_exit_code, normalize_channel_arg, normalize_send_target, AgentCommand, Cli, Command,
+    MessageCommand, ReadArgs, TaskCommand,
 };
+use serde_json::json;
+use std::process::Command as ProcessCommand;
 
 #[test]
 fn parses_message_commands() {
@@ -221,4 +223,23 @@ fn normalizes_channels_and_targets() {
 
     assert_eq!(normalize_send_target("#all").unwrap(), "#all");
     assert!(normalize_send_target("   ").is_err());
+}
+
+#[test]
+fn cli_parameter_errors_exit_one_without_stdout() {
+    let output = ProcessCommand::new(env!("CARGO_BIN_EXE_slei"))
+        .args(["message", "send", "--target", "#all"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("error:"));
+}
+
+#[test]
+fn claimed_false_remains_exit_two() {
+    assert_eq!(claim_exit_code(&json!({ "claimed": false })), 2);
+    assert_eq!(claim_exit_code(&json!({ "claimed": true })), 0);
+    assert_eq!(claim_exit_code(&json!({ "ok": true })), 0);
 }
