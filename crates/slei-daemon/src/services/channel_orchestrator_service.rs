@@ -91,6 +91,7 @@ pub struct ChannelOrchestratorService {
 #[derive(Clone, Debug)]
 struct ChannelAgentRunRecord {
     channel_id: String,
+    session_id: Option<String>,
     agent_id: String,
     source_message_id: String,
     output: String,
@@ -167,6 +168,7 @@ impl ChannelOrchestratorService {
         self.sync_declared_channel_members(&input.channel_id)
             .await?;
 
+        let active_session = self.channels.active_session(&input.channel_id).await?;
         let message = match self
             .messages
             .channel_message_for_idempotency(&input.idempotency_key)
@@ -176,8 +178,9 @@ impl ChannelOrchestratorService {
             None => {
                 self.channels.channel_members(&input.channel_id).await?;
                 self.messages
-                    .create_human_channel_message(
+                    .create_human_channel_message_with_session(
                         &input.channel_id,
+                        Some(&active_session.id),
                         &input.author_id,
                         &input.body,
                         &input.idempotency_key,
@@ -615,7 +618,12 @@ impl ChannelOrchestratorService {
                 let body = record.output.trim();
                 if !body.is_empty() {
                     self.messages
-                        .create_agent_channel_message(&record.channel_id, &record.agent_id, body)
+                        .create_agent_channel_message_with_session(
+                            &record.channel_id,
+                            record.session_id.as_deref(),
+                            &record.agent_id,
+                            body,
+                        )
                         .await?;
                     if is_channel_join_run(&record.source_message_id) {
                         self.channels
@@ -662,7 +670,12 @@ impl ChannelOrchestratorService {
                         .await;
                 } else {
                     self.messages
-                        .create_agent_channel_message(&record.channel_id, &record.agent_id, message)
+                        .create_agent_channel_message_with_session(
+                            &record.channel_id,
+                            record.session_id.as_deref(),
+                            &record.agent_id,
+                            message,
+                        )
                         .await?;
                 }
                 let _ = self
@@ -714,8 +727,9 @@ impl ChannelOrchestratorService {
                 let message_id = format!("card_message_{}", card.id);
                 let card = self.cards.attach_message_id(&card.id, &message_id).await?;
                 self.messages
-                    .create_agent_card_channel_message(
+                    .create_agent_card_channel_message_with_session(
                         &record.channel_id,
+                        record.session_id.as_deref(),
                         &record.agent_id,
                         &message_id,
                         vec![card.to_view()],
@@ -1363,11 +1377,28 @@ impl ChannelOrchestratorService {
             Some(agent) => agent,
             None => self.members.get_product_agent(agent_id).await?,
         };
+        let session_id = self
+            .messages
+            .message(source_message_id)
+            .await
+            .ok()
+            .and_then(|message| message.session_id)
+            .or_else(|| None);
+        let session_id = match session_id {
+            Some(session_id) => Some(session_id),
+            None => self
+                .channels
+                .active_session(channel_id)
+                .await
+                .ok()
+                .map(|session| session.id),
+        };
         let run_id = format!("run_{}", Uuid::new_v4().simple());
         self.channel_agent_runs.lock().await.insert(
             run_id.clone(),
             ChannelAgentRunRecord {
                 channel_id: channel_id.to_string(),
+                session_id,
                 agent_id: agent_id.to_string(),
                 source_message_id: source_message_id.to_string(),
                 output: String::new(),

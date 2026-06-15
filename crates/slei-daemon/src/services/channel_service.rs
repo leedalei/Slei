@@ -5,7 +5,9 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use slei_storage::db::SleiDb;
-use slei_storage::repositories::{ChannelMemberRow, ChannelRow, Repositories, WorkspaceMountRow};
+use slei_storage::repositories::{
+    ChannelMemberRow, ChannelRow, ChannelSessionRow, Repositories, WorkspaceMountRow,
+};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -28,8 +30,21 @@ pub struct ChannelRecord {
     pub description: Option<String>,
     pub is_default: bool,
     pub permission: PermissionPreset,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelSessionRecord {
+    pub id: String,
+    pub channel_id: String,
+    pub title: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -96,7 +111,12 @@ impl ChannelService {
             .await
             .expect("ensure default channel");
         let mut records = Vec::new();
-        for channel in self.repos.channels().await.expect("load channels") {
+        for mut channel in self.repos.channels().await.expect("load channels") {
+            let session = self
+                .ensure_active_session(&channel.id)
+                .await
+                .expect("ensure channel session");
+            channel.active_session_id = Some(session.id);
             let mut record = channel_row_to_record(channel);
             record.project_paths = self
                 .repos
@@ -179,6 +199,7 @@ impl ChannelService {
             )
             .await
             .map_err(map_channel_insert_error)?;
+        self.ensure_active_session(&name).await?;
         idempotency
             .channel_idempotency
             .insert(durable_key, name.clone());
@@ -437,6 +458,83 @@ impl ChannelService {
             .collect())
     }
 
+    pub async fn list_sessions(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<ChannelSessionRecord>, ChannelError> {
+        if !self.channel_exists(channel_id).await? {
+            return Err(ChannelError::MissingChannel);
+        }
+        self.ensure_active_session(channel_id).await?;
+        Ok(self
+            .repos
+            .channel_sessions(channel_id)
+            .await
+            .map_err(channel_storage_error)?
+            .into_iter()
+            .map(channel_session_row_to_record)
+            .collect())
+    }
+
+    pub async fn create_session(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelSessionRecord, ChannelError> {
+        if !self.channel_exists(channel_id).await? {
+            return Err(ChannelError::MissingChannel);
+        }
+        let now = current_timestamp();
+        let session = ChannelSessionRecord {
+            id: format!("session:channel:{channel_id}:{}", Uuid::new_v4().simple()),
+            channel_id: channel_id.to_string(),
+            title: "新会话".to_string(),
+            status: "ready".to_string(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.repos
+            .upsert_channel_session(channel_session_record_to_row(&session))
+            .await
+            .map_err(channel_storage_error)?;
+        self.repos
+            .update_channel_active_session(channel_id, &session.id)
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(session)
+    }
+
+    pub async fn activate_session(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Result<ChannelSessionRecord, ChannelError> {
+        if !self.channel_exists(channel_id).await? {
+            return Err(ChannelError::MissingChannel);
+        }
+        let session = self
+            .repos
+            .channel_session(channel_id, session_id)
+            .await
+            .map_err(channel_storage_error)?
+            .map(channel_session_row_to_record)
+            .ok_or(ChannelError::MissingChannel)?;
+        self.repos
+            .update_channel_active_session(channel_id, &session.id)
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(session)
+    }
+
+    pub async fn active_session(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelSessionRecord, ChannelError> {
+        if !self.channel_exists(channel_id).await? {
+            return Err(ChannelError::MissingChannel);
+        }
+        self.ensure_active_session(channel_id).await
+    }
+
     async fn ensure_default_channel(&self) -> Result<(), ChannelError> {
         self.repos
             .upsert_channel(
@@ -448,17 +546,20 @@ impl ChannelService {
             )
             .await
             .map_err(channel_storage_error)?;
+        self.ensure_active_session("all").await?;
         Ok(())
     }
 
     async fn channel_by_id(&self, channel_id: &str) -> Result<Option<ChannelRecord>, ChannelError> {
         let channels = self.repos.channels().await.map_err(channel_storage_error)?;
-        let Some(channel) = channels
+        let Some(mut channel) = channels
             .into_iter()
             .find(|channel| channel.id == channel_id)
         else {
             return Ok(None);
         };
+        let session = self.ensure_active_session(&channel.id).await?;
+        channel.active_session_id = Some(session.id);
         let mut record = channel_row_to_record(channel);
         record.project_paths = self
             .repos
@@ -469,6 +570,60 @@ impl ChannelService {
             .map(|mount| mount.path)
             .collect();
         Ok(Some(record))
+    }
+
+    async fn ensure_active_session(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelSessionRecord, ChannelError> {
+        let channels = self.repos.channels().await.map_err(channel_storage_error)?;
+        let channel = channels
+            .into_iter()
+            .find(|channel| channel.id == channel_id)
+            .ok_or(ChannelError::MissingChannel)?;
+        if let Some(active_session_id) = channel
+            .active_session_id
+            .as_deref()
+            .filter(|id| !id.trim().is_empty())
+        {
+            if let Some(session) = self
+                .repos
+                .channel_session(channel_id, active_session_id)
+                .await
+                .map_err(channel_storage_error)?
+            {
+                return Ok(channel_session_row_to_record(session));
+            }
+        }
+
+        let now = current_timestamp();
+        let session = ChannelSessionRecord {
+            id: default_channel_session_id(channel_id),
+            channel_id: channel_id.to_string(),
+            title: "新会话".to_string(),
+            status: "ready".to_string(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.repos
+            .upsert_channel_session(channel_session_record_to_row(&session))
+            .await
+            .map_err(channel_storage_error)?;
+        self.repos
+            .update_channel_active_session(channel_id, &session.id)
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(session)
+    }
+
+    async fn channel_exists(&self, channel_id: &str) -> Result<bool, ChannelError> {
+        Ok(self
+            .repos
+            .channels()
+            .await
+            .map_err(channel_storage_error)?
+            .into_iter()
+            .any(|channel| channel.id == channel_id))
     }
 
     async fn workspace_path_exists(&self, normalized_path: &str) -> Result<bool, ChannelError> {
@@ -583,8 +738,42 @@ fn channel_row_to_record(row: ChannelRow) -> ChannelRecord {
         description: row.description,
         is_default: row.is_default,
         permission: permission_from_storage(&row.permission),
+        active_session_id: row.active_session_id,
         project_paths: Vec::new(),
     }
+}
+
+fn channel_session_row_to_record(row: ChannelSessionRow) -> ChannelSessionRecord {
+    ChannelSessionRecord {
+        id: row.id,
+        channel_id: row.channel_id,
+        title: row.title,
+        status: row.status,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
+fn channel_session_record_to_row(record: &ChannelSessionRecord) -> ChannelSessionRow {
+    ChannelSessionRow {
+        id: record.id.clone(),
+        channel_id: record.channel_id.clone(),
+        title: record.title.clone(),
+        status: record.status.clone(),
+        created_at: record.created_at.clone(),
+        updated_at: record.updated_at.clone(),
+    }
+}
+
+fn default_channel_session_id(channel_id: &str) -> String {
+    format!("session:channel:{channel_id}:default")
+}
+
+fn current_timestamp() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string())
 }
 
 fn member_row_to_record(row: ChannelMemberRow) -> ChannelMemberRecord {

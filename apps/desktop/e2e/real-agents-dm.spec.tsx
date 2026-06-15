@@ -380,7 +380,8 @@ describe("real agent members and direct messages", () => {
     expect(dmHtml).not.toContain("Runtime 已检测");
     expect(dmHtml).not.toContain('aria-label="频道视图"');
     expect(channelHtml).not.toContain("重置会话");
-    expect(channelHtml).not.toContain("历史对话");
+    expect(channelHtml).toContain("新会话");
+    expect(channelHtml).toContain("历史对话");
   });
 
   it("hides the as-task composer toggle in direct messages", () => {

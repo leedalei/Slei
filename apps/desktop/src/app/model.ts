@@ -176,6 +176,7 @@ export function createLocalChatMessage(input: {
   messages?: DesktopMessages;
   profile: UserProfile;
   channelId?: string;
+  sessionId?: string;
 }): (SleiMessage & { handle: string; avatar: string }) | null {
   const body = input.body.trim();
   if (!body) {
@@ -191,6 +192,7 @@ export function createLocalChatMessage(input: {
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     body,
     channelId: input.channelId,
+    sessionId: input.sessionId,
   };
 }
 

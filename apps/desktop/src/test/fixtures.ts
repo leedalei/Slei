@@ -27,8 +27,11 @@ export function createSleiFixtures(overrides: Partial<SleiFixtures> = {}): SleiF
     ],
     conversations: overrides.conversations ?? [],
     conversationSessions: overrides.conversationSessions ?? [],
+    channelSessions: overrides.channelSessions ?? [
+      { id: "session:channel:all:default", channelId: "all", title: "新会话", status: "ready", createdAt: "0", updatedAt: "0" },
+    ],
     channels: overrides.channels ?? [
-      { id: "all", name: "all", description: "所有成员的默认频道", unread: 0 },
+      { id: "all", name: "all", description: "所有成员的默认频道", unread: 0, activeSessionId: "session:channel:all:default" },
     ],
     messages: overrides.messages ?? [],
     tasks: overrides.tasks ?? [

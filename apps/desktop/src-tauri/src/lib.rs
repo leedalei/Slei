@@ -19,6 +19,9 @@ pub fn run() {
             commands::add_channel_member_command,
             commands::remove_channel_member_command,
             commands::list_channel_messages_command,
+            commands::list_channel_sessions_command,
+            commands::create_channel_session_command,
+            commands::activate_channel_session_command,
             commands::send_channel_message_command,
             commands::list_tasks_command,
             commands::get_task_thread_command,
@@ -59,17 +62,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_conversation_session, add_channel_member, app_runtime_flags, bootstrap_guide_agent,
-        complete_interactive_card, create_agent, create_channel, create_conversation_session,
+        activate_channel_session, activate_conversation_session, add_channel_member,
+        app_runtime_flags, bootstrap_guide_agent, complete_interactive_card, create_agent,
+        create_channel, create_channel_session, create_conversation_session,
         create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
         list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
-        list_channel_messages, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_diagnostics, list_nodes, list_preferences, list_saved_messages,
-        list_tasks, open_agent_path, read_agent_workspace_file, reconnect_events,
-        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_task,
-        request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, upload_conversation_attachment, FrontendCrashReport,
+        list_channel_messages, list_channel_sessions, list_conversation_messages,
+        list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
+        list_preferences, list_saved_messages, list_tasks, open_agent_path,
+        read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
+        rename_local_node, reply_to_task, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
@@ -2438,7 +2443,9 @@ mod tests {
             assert!(result.is_err());
         }
 
-        assert!(list_channel_messages(&broker, "all").messages.is_empty());
+        assert!(list_channel_messages(&broker, "all", None)
+            .messages
+            .is_empty());
         assert!(list_tasks(
             &broker,
             TaskListQuery {

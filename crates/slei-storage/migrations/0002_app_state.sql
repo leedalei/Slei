@@ -29,9 +29,22 @@ CREATE TABLE IF NOT EXISTS channels (
     description TEXT,
     is_default INTEGER NOT NULL DEFAULT 0,
     permission TEXT NOT NULL DEFAULT 'Controlled',
+    active_session_id TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS channel_sessions (
+    id TEXT PRIMARY KEY,
+    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ready',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_sessions_channel_id
+    ON channel_sessions(channel_id);
 
 CREATE TABLE IF NOT EXISTS channel_members (
     channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

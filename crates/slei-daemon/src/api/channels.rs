@@ -147,6 +147,87 @@ pub async fn create(
     }
 }
 
+pub async fn sessions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_read(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    match state.channels().list_sessions(&id).await {
+        Ok(sessions) => Json(json!({ "sessions": sessions })).into_response(),
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn create_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    match state.channels().create_session(&id).await {
+        Ok(session) => match state
+            .channels()
+            .list_channels()
+            .await
+            .into_iter()
+            .find(|channel| channel.id == id)
+        {
+            Some(channel) => (
+                StatusCode::CREATED,
+                Json(json!({ "channel": channel, "session": session })),
+            )
+                .into_response(),
+            None => channel_error_response(ChannelError::MissingChannel),
+        },
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn activate_session(
+    State(state): State<AppState>,
+    Path((id, session_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    match state.channels().activate_session(&id, &session_id).await {
+        Ok(session) => match state
+            .channels()
+            .list_channels()
+            .await
+            .into_iter()
+            .find(|channel| channel.id == id)
+        {
+            Some(channel) => {
+                Json(json!({ "channel": channel, "session": session })).into_response()
+            }
+            None => channel_error_response(ChannelError::MissingChannel),
+        },
+        Err(error) => channel_error_response(error),
+    }
+}
+
 async fn run_channel_setup(
     state: AppState,
     channel: crate::services::channel_service::ChannelRecord,

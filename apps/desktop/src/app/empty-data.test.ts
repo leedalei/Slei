@@ -8,6 +8,7 @@ describe("createEmptySleiData", () => {
       nodes: [],
       conversations: [],
       conversationSessions: [],
+      channelSessions: [],
       channels: [],
       messages: [],
       tasks: [],

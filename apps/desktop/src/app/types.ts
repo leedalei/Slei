@@ -1,6 +1,7 @@
 import type {
   AgentWorkspaceEntry,
   AgentWorkspaceFileReceipt,
+  ChannelSessionView,
   ConversationAttachmentView,
   ConversationSessionView,
   ConversationView,
@@ -14,6 +15,7 @@ export type SleiChannel = {
   name: string;
   description: string;
   unread: number;
+  activeSessionId?: string;
   projectName?: string;
   projectPaths?: string[];
 };
@@ -102,6 +104,7 @@ export type SleiFixtures = {
   nodes: DesktopNodeView[];
   conversations: ConversationView[];
   conversationSessions: ConversationSessionView[];
+  channelSessions: ChannelSessionView[];
   channels: SleiChannel[];
   messages: SleiMessage[];
   tasks: SleiTask[];

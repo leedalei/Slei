@@ -15,6 +15,7 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "thread_replies",
     "tasks",
     "messages",
+    "channel_sessions",
     "saved_messages",
     "conversation_messages",
     "conversation_attachments",
@@ -174,6 +175,17 @@ pub struct ChannelRow {
     pub description: Option<String>,
     pub is_default: bool,
     pub permission: String,
+    pub active_session_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelSessionRow {
+    pub id: String,
+    pub channel_id: String,
+    pub title: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +207,7 @@ pub struct WorkspaceMountRow {
 pub struct NewChannelMessageRow {
     pub id: String,
     pub channel_id: String,
+    pub session_id: Option<String>,
     pub author_id: String,
     pub body: Option<String>,
     pub as_task: bool,
@@ -205,6 +218,7 @@ pub struct NewChannelMessageRow {
 pub struct ChannelMessageRow {
     pub id: String,
     pub channel_id: String,
+    pub session_id: Option<String>,
     pub author_id: String,
     pub body: Option<String>,
     pub as_task: bool,
@@ -590,6 +604,23 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn update_channel_active_session(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE channels
+             SET active_session_id = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+        )
+        .bind(session_id)
+        .bind(channel_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn upsert_channel_idempotent(
         &self,
         id: &str,
@@ -633,7 +664,7 @@ impl Repositories {
 
     pub async fn channels(&self) -> Result<Vec<ChannelRow>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, name, description, is_default, permission
+            "SELECT id, name, description, is_default, permission, active_session_id
              FROM channels
              ORDER BY created_at ASC, id ASC",
         )
@@ -649,9 +680,66 @@ impl Repositories {
                     description: row.try_get("description")?,
                     is_default: is_default != 0,
                     permission: row.try_get("permission")?,
+                    active_session_id: row.try_get("active_session_id")?,
                 })
             })
             .collect()
+    }
+
+    pub async fn upsert_channel_session(&self, row: ChannelSessionRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO channel_sessions(id, channel_id, title, status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+                channel_id = excluded.channel_id,
+                title = excluded.title,
+                status = excluded.status,
+                updated_at = excluded.updated_at",
+        )
+        .bind(row.id)
+        .bind(row.channel_id)
+        .bind(row.title)
+        .bind(row.status)
+        .bind(row.created_at)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn channel_sessions(
+        &self,
+        channel_id: &str,
+    ) -> Result<Vec<ChannelSessionRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, channel_id, title, status, created_at, updated_at
+             FROM channel_sessions
+             WHERE channel_id = ?
+             ORDER BY updated_at DESC, id ASC",
+        )
+        .bind(channel_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(channel_session_row_from_sql).collect()
+    }
+
+    pub async fn channel_session(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Result<Option<ChannelSessionRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, channel_id, title, status, created_at, updated_at
+             FROM channel_sessions
+             WHERE channel_id = ? AND id = ?",
+        )
+        .bind(channel_id)
+        .bind(session_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(channel_session_row_from_sql).transpose()
     }
 
     pub async fn upsert_channel_member(
@@ -867,11 +955,12 @@ impl Repositories {
         row: NewChannelMessageRow,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO messages(id, channel_id, author_kind, kind, content, deleted, author_id, as_task, edited)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, 0)",
+            "INSERT INTO messages(id, channel_id, session_id, author_kind, kind, content, deleted, author_id, as_task, edited)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 0)",
         )
         .bind(row.id)
         .bind(row.channel_id)
+        .bind(row.session_id)
         .bind(row.kind.clone())
         .bind(row.kind)
         .bind(row.body)
@@ -890,11 +979,12 @@ impl Repositories {
     ) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
-            "INSERT INTO messages(id, channel_id, author_kind, kind, content, deleted, author_id, as_task, edited)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, 0)",
+            "INSERT INTO messages(id, channel_id, session_id, author_kind, kind, content, deleted, author_id, as_task, edited)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, 0)",
         )
         .bind(&row.id)
         .bind(&row.channel_id)
+        .bind(&row.session_id)
         .bind(row.kind.clone())
         .bind(&row.kind)
         .bind(&row.body)
@@ -911,13 +1001,26 @@ impl Repositories {
         &self,
         channel_id: &str,
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        self.channel_messages_by_channel_and_session(channel_id, None)
+            .await
+    }
+
+    pub async fn channel_messages_by_channel_and_session(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
+    ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, channel_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
              FROM messages
-             WHERE channel_id = ? AND kind NOT IN ('task_root', 'task_reply')
+             WHERE channel_id = ?
+               AND (? IS NULL OR session_id = ?)
+               AND kind NOT IN ('task_root', 'task_reply')
              ORDER BY rowid ASC",
         )
         .bind(channel_id)
+        .bind(session_id)
+        .bind(session_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -929,6 +1032,7 @@ impl Repositories {
                 Ok(ChannelMessageRow {
                     id: row.try_get("id")?,
                     channel_id: row.try_get("channel_id")?,
+                    session_id: row.try_get("session_id")?,
                     author_id: row
                         .try_get::<Option<String>, _>("author_id")?
                         .unwrap_or_default(),
@@ -948,7 +1052,7 @@ impl Repositories {
         message_id: &str,
     ) -> Result<Option<ChannelMessageRow>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT id, channel_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE id = ?",
         )
@@ -963,6 +1067,7 @@ impl Repositories {
             Ok(ChannelMessageRow {
                 id: row.try_get("id")?,
                 channel_id: row.try_get("channel_id")?,
+                session_id: row.try_get("session_id")?,
                 author_id: row
                     .try_get::<Option<String>, _>("author_id")?
                     .unwrap_or_default(),
@@ -2686,6 +2791,19 @@ fn conversation_session_row_from_sql(
         title: row.try_get("title")?,
         status: row.try_get("status")?,
         runtime_session_payload: row.try_get("runtime_session_payload")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn channel_session_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ChannelSessionRow, sqlx::Error> {
+    Ok(ChannelSessionRow {
+        id: row.try_get("id")?,
+        channel_id: row.try_get("channel_id")?,
+        title: row.try_get("title")?,
+        status: row.try_get("status")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })

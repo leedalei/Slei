@@ -3,15 +3,19 @@ use std::net::{TcpListener, TcpStream};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+use uuid::Uuid;
 
 #[test]
 fn daemon_binary_serves_health_on_configured_addr() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
     let addr = listener.local_addr().expect("read local addr");
     drop(listener);
+    let data_root = std::env::temp_dir().join(format!("slei-daemon-binary-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&data_root).expect("create isolated daemon data root");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_slei-daemon"))
         .env("SLEI_DAEMON_ADDR", addr.to_string())
+        .env("SLEI_DATA_ROOT", &data_root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

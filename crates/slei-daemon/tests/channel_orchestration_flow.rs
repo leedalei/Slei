@@ -17,6 +17,223 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
+async fn channel_sessions_group_channel_messages_through_api() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state.clone());
+
+    let channels = response_json(get_json(&app, &token, "/v1/channels").await).await;
+    let channel = channels["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|channel| channel["id"] == "all")
+        .expect("default channel");
+    let default_session_id = channel["activeSessionId"]
+        .as_str()
+        .expect("default channel should have active session");
+
+    let sessions = response_json(get_json(&app, &token, "/v1/channels/all/sessions").await).await;
+    assert_eq!(sessions["sessions"].as_array().unwrap().len(), 1);
+    assert_eq!(sessions["sessions"][0]["id"], default_session_id);
+
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/channels/all/messages",
+        Some("channel-session-message-1"),
+        json!({
+            "authorId": "human:local",
+            "body": "帮我看看今天的发布风险",
+            "asTask": false
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+
+    let default_messages = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/channels/all/messages?sessionId={default_session_id}"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(default_messages["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        default_messages["messages"][0]["sessionId"],
+        default_session_id
+    );
+
+    let new_session =
+        response_json(post_json(&app, &token, "/v1/channels/all/sessions", None, json!({})).await)
+            .await;
+    let new_session_id = new_session["session"]["id"].as_str().unwrap();
+    assert_ne!(new_session_id, default_session_id);
+    assert_eq!(new_session["channel"]["activeSessionId"], new_session_id);
+
+    let active_messages =
+        response_json(get_json(&app, &token, "/v1/channels/all/messages").await).await;
+    assert_eq!(active_messages["messages"].as_array().unwrap().len(), 0);
+
+    let sent_new = post_json(
+        &app,
+        &token,
+        "/v1/channels/all/messages",
+        Some("channel-session-message-2"),
+        json!({
+            "authorId": "human:local",
+            "body": "这是新会话里的消息",
+            "asTask": false
+        }),
+    )
+    .await;
+    assert_eq!(sent_new.status(), StatusCode::OK);
+    let new_messages = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/channels/all/messages?sessionId={new_session_id}"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(new_messages["messages"].as_array().unwrap().len(), 1);
+    assert_eq!(new_messages["messages"][0]["sessionId"], new_session_id);
+
+    let activated = response_json(
+        patch_json(
+            &app,
+            &token,
+            &format!("/v1/channels/all/sessions/{default_session_id}/active"),
+            None,
+            json!({}),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(activated["channel"]["activeSessionId"], default_session_id);
+}
+
+#[tokio::test]
+async fn channel_agent_replies_and_cards_inherit_source_message_session() {
+    let state = app_state_with_agent_handle("agent_nova", "@nova").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-session-inherit",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_nova")
+        .await
+        .unwrap();
+    state
+        .channels()
+        .set_member_readiness("dev", "agent_nova", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+
+    let second_session = state.channels().create_session("dev").await.unwrap();
+    state
+        .channels()
+        .activate_session("dev", &second_session.id)
+        .await
+        .unwrap();
+
+    let input = SendChannelMessageInput {
+        channel_id: "dev".to_string(),
+        author_id: "human_lei".to_string(),
+        body: "@nova 帮我改 alert 文案".to_string(),
+        idempotency_key: "send-explicit-session".to_string(),
+        as_task: false,
+    };
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(input)
+        .await
+        .unwrap();
+    assert_eq!(outcome.action, "request_agent_reply");
+
+    let run_id = state
+        .worker_commands()
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_nova"
+        })
+        .and_then(|command| command["run_id"].as_str())
+        .unwrap()
+        .to_string();
+
+    state
+        .handle_worker_event(json!({
+            "type": "product_tool_requested",
+            "run_id": run_id,
+            "agent_id": "agent_nova",
+            "tool_name": "slei_propose_interactive_card",
+            "tool_use_id": "tool-1",
+            "payload": {
+                "kind": "createAgent",
+                "title": "创建临时 Agent",
+                "summary": "用于 session 继承测试",
+                "actionLabel": "创建",
+                "doneLabel": "已创建",
+                "draft": {
+                    "name": "Temp",
+                    "handle": "@temp",
+                    "runtimeKind": "ClaudeCode",
+                    "model": "Sonnet",
+                    "nodeId": "local-node",
+                    "description": "临时测试 Agent"
+                }
+            }
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "已处理。",
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+
+    let messages = state.channel_messages_for_tests("dev").await;
+    let source = messages
+        .iter()
+        .find(|message| message.id == outcome.message_id)
+        .unwrap();
+    assert_eq!(
+        source.session_id.as_deref(),
+        Some(second_session.id.as_str())
+    );
+    let agent_messages = messages
+        .iter()
+        .filter(|message| message.author_id == "agent_nova")
+        .collect::<Vec<_>>();
+    assert_eq!(agent_messages.len(), 2);
+    assert!(agent_messages
+        .iter()
+        .all(|message| message.session_id.as_deref() == Some(second_session.id.as_str())));
+}
+
+#[tokio::test]
 async fn command_message_creates_task_assignment_inbox_decision_and_links_source_message() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
@@ -3040,6 +3257,28 @@ async fn post_json(
 ) -> axum::response::Response {
     let mut builder = Request::builder()
         .method("POST")
+        .uri(uri)
+        .header("authorization", token.authorization_header())
+        .header("content-type", "application/json");
+    if let Some(idempotency_key) = idempotency_key {
+        builder = builder.header("idempotency-key", idempotency_key);
+    }
+
+    app.clone()
+        .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn patch_json(
+    app: &axum::Router,
+    token: &AuthToken,
+    uri: &str,
+    idempotency_key: Option<&str>,
+    body: Value,
+) -> axum::response::Response {
+    let mut builder = Request::builder()
+        .method("PATCH")
         .uri(uri)
         .header("authorization", token.authorization_header())
         .header("content-type", "application/json");

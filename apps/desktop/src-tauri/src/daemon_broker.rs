@@ -35,6 +35,7 @@ pub struct DaemonBroker {
     local_node_name: Mutex<String>,
     agents: Mutex<Vec<DesktopAgentView>>,
     channels: Mutex<Vec<ChannelView>>,
+    channel_sessions: Mutex<Vec<ChannelSessionView>>,
     channel_members: Mutex<Vec<ChannelMemberView>>,
     channel_messages: Mutex<Vec<ChannelMessageView>>,
     tasks: Mutex<Vec<TaskSummaryView>>,
@@ -375,8 +376,21 @@ pub struct ChannelView {
     pub name: String,
     pub description: Option<String>,
     pub is_default: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_session_id: Option<String>,
     #[serde(default, alias = "projectPaths")]
     pub project_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelSessionView {
+    pub id: String,
+    pub channel_id: String,
+    pub title: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -398,6 +412,19 @@ pub struct ChannelListReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ChannelReceipt {
     pub channel: ChannelView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelSessionListReceipt {
+    pub sessions: Vec<ChannelSessionView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelSessionReceipt {
+    pub channel: ChannelView,
+    pub session: ChannelSessionView,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -440,6 +467,8 @@ pub struct ChannelMemberRemoveReceipt {
 pub struct ChannelMessageView {
     pub id: String,
     pub channel_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     pub author_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
@@ -752,7 +781,16 @@ impl DaemonBroker {
                 name: "all".to_string(),
                 description: Some("默认团队频道".to_string()),
                 is_default: Some(true),
+                active_session_id: Some("session:channel:all:default".to_string()),
                 project_paths: Vec::new(),
+            }]),
+            channel_sessions: Mutex::new(vec![ChannelSessionView {
+                id: "session:channel:all:default".to_string(),
+                channel_id: "all".to_string(),
+                title: "新会话".to_string(),
+                status: "ready".to_string(),
+                created_at: "0".to_string(),
+                updated_at: "0".to_string(),
             }]),
             channel_members: Mutex::new(Vec::new()),
             channel_messages: Mutex::new(Vec::new()),
@@ -1120,8 +1158,12 @@ impl DaemonBroker {
         Ok(receipt)
     }
 
-    pub fn list_channel_messages(&self, channel_id: &str) -> ChannelMessageListReceipt {
-        if let Some(receipt) = self.fetch_channel_messages_from_daemon(channel_id) {
+    pub fn list_channel_messages(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
+    ) -> ChannelMessageListReceipt {
+        if let Some(receipt) = self.fetch_channel_messages_from_daemon(channel_id, session_id) {
             return receipt;
         }
         if self.offline_fallback == OfflineFallback::Empty {
@@ -1135,10 +1177,66 @@ impl DaemonBroker {
                 .lock()
                 .expect("channel messages mutex poisoned")
                 .iter()
-                .filter(|message| message.channel_id == channel_id && !message.deleted)
+                .filter(|message| {
+                    message.channel_id == channel_id
+                        && session_id
+                            .map(|session_id| message.session_id.as_deref() == Some(session_id))
+                            .unwrap_or(true)
+                        && !message.deleted
+                })
                 .cloned()
                 .collect(),
         }
+    }
+
+    pub fn list_channel_sessions(&self, channel_id: &str) -> ChannelSessionListReceipt {
+        if let Some(receipt) = self.list_channel_sessions_from_daemon(channel_id) {
+            return receipt;
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return ChannelSessionListReceipt {
+                sessions: Vec::new(),
+            };
+        }
+        let mut sessions = self
+            .channel_sessions
+            .lock()
+            .expect("channel sessions mutex poisoned")
+            .iter()
+            .filter(|session| session.channel_id == channel_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        sessions.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+        ChannelSessionListReceipt { sessions }
+    }
+
+    pub fn create_channel_session(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelSessionReceipt, ChannelError> {
+        if let Some(receipt) = self.create_channel_session_in_daemon(channel_id) {
+            self.upsert_local_channel(receipt.channel.clone());
+            self.upsert_local_channel_session(receipt.session.clone());
+            return Ok(receipt);
+        }
+        Err(ChannelError::DaemonRequest(
+            "daemon unavailable for channel session creation".to_string(),
+        ))
+    }
+
+    pub fn activate_channel_session(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Result<ChannelSessionReceipt, ChannelError> {
+        if let Some(receipt) = self.activate_channel_session_in_daemon(channel_id, session_id) {
+            self.upsert_local_channel(receipt.channel.clone());
+            self.upsert_local_channel_session(receipt.session.clone());
+            return Ok(receipt);
+        }
+        Err(ChannelError::DaemonRequest(
+            "daemon unavailable for channel session activation".to_string(),
+        ))
     }
 
     pub fn send_channel_message(
@@ -2449,14 +2547,53 @@ impl DaemonBroker {
     fn fetch_channel_messages_from_daemon(
         &self,
         channel_id: &str,
+        session_id: Option<&str>,
     ) -> Option<ChannelMessageListReceipt> {
+        let path = match session_id {
+            Some(session_id) if !session_id.trim().is_empty() => {
+                format!("/v1/channels/{channel_id}/messages?sessionId={session_id}")
+            }
+            _ => format!("/v1/channels/{channel_id}/messages"),
+        };
+        let response = self.send_daemon_request("GET", &path, None, &[])?;
+        serde_json::from_str::<ChannelMessageListReceipt>(&response).ok()
+    }
+
+    fn list_channel_sessions_from_daemon(
+        &self,
+        channel_id: &str,
+    ) -> Option<ChannelSessionListReceipt> {
         let response = self.send_daemon_request(
             "GET",
-            &format!("/v1/channels/{channel_id}/messages"),
+            &format!("/v1/channels/{channel_id}/sessions"),
             None,
             &[],
         )?;
-        serde_json::from_str::<ChannelMessageListReceipt>(&response).ok()
+        serde_json::from_str::<ChannelSessionListReceipt>(&response).ok()
+    }
+
+    fn create_channel_session_in_daemon(&self, channel_id: &str) -> Option<ChannelSessionReceipt> {
+        let response = self.send_daemon_request(
+            "POST",
+            &format!("/v1/channels/{channel_id}/sessions"),
+            Some("{}"),
+            &[],
+        )?;
+        serde_json::from_str::<ChannelSessionReceipt>(&response).ok()
+    }
+
+    fn activate_channel_session_in_daemon(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Option<ChannelSessionReceipt> {
+        let response = self.send_daemon_request(
+            "PATCH",
+            &format!("/v1/channels/{channel_id}/sessions/{session_id}/active"),
+            Some("{}"),
+            &[],
+        )?;
+        serde_json::from_str::<ChannelSessionReceipt>(&response).ok()
     }
 
     fn send_channel_message_to_daemon(
@@ -2866,6 +3003,20 @@ impl DaemonBroker {
         }
     }
 
+    fn upsert_local_channel_session(&self, session: ChannelSessionView) {
+        let mut sessions = self
+            .channel_sessions
+            .lock()
+            .expect("channel sessions mutex poisoned");
+        match sessions
+            .iter_mut()
+            .find(|candidate| candidate.id == session.id)
+        {
+            Some(existing) => *existing = session,
+            None => sessions.push(session),
+        }
+    }
+
     fn send_default_all_channel_message_locally(
         &self,
         request: &SendChannelMessageRequest,
@@ -2883,12 +3034,20 @@ impl DaemonBroker {
             return Err(ChannelError::InvalidChannel);
         }
         let message_id = format!("msg_channel_all_{}", monotonic_id());
+        let session_id = self
+            .channels
+            .lock()
+            .expect("channels mutex poisoned")
+            .iter()
+            .find(|channel| channel.id == "all")
+            .and_then(|channel| channel.active_session_id.clone());
         self.channel_messages
             .lock()
             .expect("channel messages mutex poisoned")
             .push(ChannelMessageView {
                 id: message_id.clone(),
                 channel_id: "all".to_string(),
+                session_id,
                 author_id: request.author_id.clone(),
                 body: Some(request.body.trim().to_string()),
                 cards: None,

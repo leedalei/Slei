@@ -1,4 +1,4 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -31,6 +31,8 @@ pub struct SendChannelMessageRequest {
 struct ChannelMessageView {
     id: String,
     channel_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
     author_id: String,
     body: Option<String>,
     #[serde(default)]
@@ -49,6 +51,7 @@ impl ChannelMessageView {
         Self {
             id: record.id,
             channel_id: record.channel_id,
+            session_id: record.session_id,
             author_id: record.author_id,
             body: record.body,
             as_task: record.as_task,
@@ -61,17 +64,40 @@ impl ChannelMessageView {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessagesQuery {
+    session_id: Option<String>,
+}
+
 pub async fn list_channel_messages(
     State(state): State<AppState>,
     Path(channel_id): Path<String>,
+    Query(query): Query<ChannelMessagesQuery>,
     headers: HeaderMap,
 ) -> Response {
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let session_id = match query
+        .session_id
+        .as_deref()
+        .filter(|session_id| !session_id.trim().is_empty())
+    {
+        Some(session_id) => session_id.to_string(),
+        None => match state.channels().active_session(&channel_id).await {
+            Ok(session) => session.id,
+            Err(error) => return channel_message_error_response(error.into()),
+        },
+    };
+
     let mut messages = Vec::new();
-    for mut message in state.messages().channel_messages(&channel_id).await {
+    for mut message in state
+        .messages()
+        .channel_messages_for_session(&channel_id, &session_id)
+        .await
+    {
         message.cards = state
             .cards()
             .cards_for_message(&message.id)

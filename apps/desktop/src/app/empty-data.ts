@@ -5,6 +5,7 @@ export function createEmptySleiData(overrides: Partial<SleiFixtures> = {}): Slei
     nodes: [],
     conversations: [],
     conversationSessions: [],
+    channelSessions: [],
     channels: [],
     messages: [],
     tasks: [],

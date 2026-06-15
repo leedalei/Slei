@@ -239,6 +239,61 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("mutate(member.id, \"remove\")");
     expect(source).toContain("group-hover/member:opacity-100");
   });
+
+  it("renders channel tabs followed by new-session and history buttons", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0, activeSessionId: "session:channel:all:default" }],
+      channelSessions: [{ id: "session:channel:all:default", channelId: "all", title: "新会话", status: "ready", createdAt: "0", updatedAt: "0" }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.shell.nav.chat);
+    expect(html).toContain(messages.chat.tasks);
+    expect(html).toContain(messages.chat.files);
+    expect(html).toContain(messages.chat.newSession);
+    expect(html).toContain(messages.chat.history);
+    expect(readChatPageSource()).toContain("onChannelNewSession?.(activeChannel.id)");
+  });
+
+  it("filters channel timeline and history drawer by active channel session", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0, activeSessionId: "session-new" }],
+      channelSessions: [
+        { id: "session-old", channelId: "all", title: "旧会话", status: "ready", createdAt: "1", updatedAt: "1" },
+        { id: "session-new", channelId: "all", title: "新会话", status: "ready", createdAt: "2", updatedAt: "2" },
+      ],
+      messages: [
+        { id: "msg-old", author: "Lei", role: "human", time: "10:00", body: "旧消息", channelId: "all", sessionId: "session-old" },
+        { id: "msg-new", author: "Lei", role: "human", time: "10:01", body: "新消息", channelId: "all", sessionId: "session-new" },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+        sessionDrawerOpen
+      />,
+    );
+
+    expect(html).toContain("新消息");
+    expect(html).not.toContain("旧消息");
+    expect(html).toContain("旧会话");
+    expect(html).toContain("新会话");
+    expect(readChatPageSource()).toContain("onChannelSessionSelect?.(activeChannel.id, session.id)");
+  });
 });
 
 function readChatPageSource() {

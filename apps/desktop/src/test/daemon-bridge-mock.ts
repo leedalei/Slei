@@ -7,6 +7,7 @@ import type {
   AgentWorkspaceEntry,
   ChannelMemberView,
   ChannelMessageView,
+  ChannelSessionView,
   ChannelView,
   ConversationAttachmentView,
   ConversationMessageView,
@@ -71,6 +72,7 @@ export function createDaemonBridgeMock(input: {
   nodes?: DesktopNodeView[];
   agents?: DesktopAgentView[];
   channels?: ChannelView[];
+  channelSessions?: ChannelSessionView[];
   channelMembers?: ChannelMemberView[];
   channelMessages?: ChannelMessageView[];
 }): DaemonBridgeMock {
@@ -90,7 +92,8 @@ export function createDaemonBridgeMock(input: {
     },
   ];
   let agents = input.agents ?? [];
-  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true, projectPaths: [] }];
+  let channels: ChannelView[] = input.channels ?? [{ id: "all", name: "all", description: "默认团队频道", isDefault: true, activeSessionId: "session:channel:all:default", projectPaths: [] }];
+  let channelSessions: ChannelSessionView[] = input.channelSessions ?? [{ id: "session:channel:all:default", channelId: "all", title: "新会话", status: "ready", createdAt: "0", updatedAt: "0" }];
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
   let tasks: TaskSummaryView[] = [];
@@ -209,8 +212,17 @@ export function createDaemonBridgeMock(input: {
       const projectPaths = uniqueProjectPaths(request.projectPaths);
       const mountedProjectPaths = new Set(channels.flatMap((channel) => uniqueProjectPaths(channel.projectPaths ?? [])));
       if (projectPaths.some((path) => mountedProjectPaths.has(path))) throw new Error("workspace path already mounted");
-      const channel: ChannelView = { id: name, name, description: request.description, isDefault: false, projectPaths };
+      const session: ChannelSessionView = {
+        id: `session:channel:${name}:default`,
+        channelId: name,
+        title: "新会话",
+        status: "ready",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const channel: ChannelView = { id: name, name, description: request.description, isDefault: false, activeSessionId: session.id, projectPaths };
       channels = [...channels, channel];
+      channelSessions = [...channelSessions, session];
       const joinedAt = new Date().toISOString();
       const selectedMembers = (request.agentIds ?? []).map((agentId) => ({
         channelId: channel.id,
@@ -253,8 +265,37 @@ export function createDaemonBridgeMock(input: {
       channelMembers = channelMembers.filter((member) => member.channelId !== channelId || member.agentId !== agentId);
       return { removedMember };
     },
-    async listChannelMessages(channelId) {
-      return { messages: channelMessages.filter((message) => message.channelId === channelId && !message.deleted) };
+    async listChannelMessages(channelId, sessionId) {
+      return { messages: channelMessages.filter((message) => message.channelId === channelId && (!sessionId || message.sessionId === sessionId) && !message.deleted) };
+    },
+    async listChannelSessions(channelId) {
+      return { sessions: channelSessions.filter((session) => session.channelId === channelId) };
+    },
+    async createChannelSession(channelId) {
+      const existing = channels.find((candidate) => candidate.id === channelId);
+      if (!existing) throw new Error("channel not found");
+      const now = new Date().toISOString();
+      const session: ChannelSessionView = {
+        id: `session:channel:${channelId}:${Date.now()}`,
+        channelId,
+        title: "新会话",
+        status: "ready",
+        createdAt: now,
+        updatedAt: now,
+      };
+      const channel = { ...existing, activeSessionId: session.id };
+      channels = channels.map((candidate) => candidate.id === channelId ? channel : candidate);
+      channelSessions = [...channelSessions, session];
+      return { channel, session };
+    },
+    async activateChannelSession(channelId, sessionId) {
+      const existing = channels.find((candidate) => candidate.id === channelId);
+      if (!existing) throw new Error("channel not found");
+      const session = channelSessions.find((candidate) => candidate.channelId === channelId && candidate.id === sessionId);
+      if (!session) throw new Error("channel session not found");
+      const channel = { ...existing, activeSessionId: session.id };
+      channels = channels.map((candidate) => candidate.id === channelId ? channel : candidate);
+      return { channel, session };
     },
     async sendChannelMessage(channelId, request) {
       const channel = channels.find((candidate) => candidate.id === channelId);
@@ -268,6 +309,7 @@ export function createDaemonBridgeMock(input: {
         {
           id: messageId,
           channelId,
+          sessionId: channel.activeSessionId,
           authorId: request.authorId,
           body,
           kind: "human",

@@ -21,6 +21,14 @@ pub fn build_router(state: AppState) -> Router {
             get(api::channels::members).post(api::channels::add_member),
         )
         .route(
+            "/v1/channels/{id}/sessions",
+            get(api::channels::sessions).post(api::channels::create_session),
+        )
+        .route(
+            "/v1/channels/{id}/sessions/{session_id}/active",
+            patch(api::channels::activate_session),
+        )
+        .route(
             "/v1/channels/{id}/members/{agent_id}",
             delete(api::channels::remove_member),
         )

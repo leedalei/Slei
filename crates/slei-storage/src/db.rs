@@ -108,6 +108,11 @@ impl SleiDb {
     }
 
     async fn repair_legacy_app_state_columns(&self) -> Result<(), sqlx::Error> {
+        self.add_column_if_missing("channels", "active_session_id", "TEXT")
+            .await?;
+        self.ensure_channel_sessions_table().await?;
+        self.add_column_if_missing("messages", "session_id", "TEXT")
+            .await?;
         self.add_column_if_missing("messages", "author_id", "TEXT")
             .await?;
         self.add_column_if_missing("messages", "as_task", "INTEGER NOT NULL DEFAULT 0")
@@ -141,6 +146,85 @@ impl SleiDb {
         sqlx::query("UPDATE tasks SET updated_at = created_at WHERE updated_at = ''")
             .execute(&self.pool)
             .await?;
+        self.backfill_channel_sessions().await?;
+        Ok(())
+    }
+
+    async fn ensure_channel_sessions_table(&self) -> Result<(), sqlx::Error> {
+        if !self.table_exists("channel_sessions").await? {
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS channel_sessions (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ready',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )",
+            )
+            .execute(&self.pool)
+            .await?;
+        }
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_channel_sessions_channel_id
+             ON channel_sessions(channel_id)",
+        )
+        .execute(&self.pool)
+        .await?;
+        sqlx::query(
+            "CREATE INDEX IF NOT EXISTS idx_messages_session_id
+             ON messages(session_id)",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn backfill_channel_sessions(&self) -> Result<(), sqlx::Error> {
+        if !self.table_exists("channels").await?
+            || !self.table_exists("channel_sessions").await?
+            || !self.column_exists("channels", "active_session_id").await?
+        {
+            return Ok(());
+        }
+        let channels = sqlx::query("SELECT id, active_session_id FROM channels")
+            .fetch_all(&self.pool)
+            .await?;
+        for row in channels {
+            let channel_id: String = row.try_get("id")?;
+            let active_session_id: Option<String> = row.try_get("active_session_id")?;
+            let session_id = active_session_id
+                .filter(|id| !id.trim().is_empty())
+                .unwrap_or_else(|| default_channel_session_id(&channel_id));
+            sqlx::query(
+                "INSERT OR IGNORE INTO channel_sessions(id, channel_id, title, status)
+                 VALUES (?, ?, '新会话', 'ready')",
+            )
+            .bind(&session_id)
+            .bind(&channel_id)
+            .execute(&self.pool)
+            .await?;
+            sqlx::query(
+                "UPDATE channels
+                 SET active_session_id = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND (active_session_id IS NULL OR active_session_id = '')",
+            )
+            .bind(&session_id)
+            .bind(&channel_id)
+            .execute(&self.pool)
+            .await?;
+            if self.column_exists("messages", "session_id").await? {
+                sqlx::query(
+                    "UPDATE messages
+                     SET session_id = ?
+                     WHERE channel_id = ? AND (session_id IS NULL OR session_id = '')",
+                )
+                .bind(&session_id)
+                .bind(&channel_id)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
         Ok(())
     }
 
@@ -168,4 +252,8 @@ impl SleiDb {
         }
         Ok(false)
     }
+}
+
+fn default_channel_session_id(channel_id: &str) -> String {
+    format!("session:channel:{channel_id}:default")
 }

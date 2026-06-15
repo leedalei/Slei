@@ -463,7 +463,7 @@ function ChannelMemberPanel(input: {
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelNewSession, onChannelSessionSelect, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelNewSession?: (channelId: string) => Promise<void> | void; onChannelSessionSelect?: (channelId: string, sessionId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -485,13 +485,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
-  const currentSessionId = activeSessionId ?? activeConversation?.activeSessionId;
+  const currentSessionId = activeConversation ? activeSessionId ?? activeConversation.activeSessionId : activeChannel.activeSessionId;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
   }).filter((message) => {
-    if (!activeConversation) return true;
-    if (!currentSessionId) return false;
-    return message.sessionId === currentSessionId;
+    if (!currentSessionId) return !message.sessionId;
+    return message.sessionId === currentSessionId || (!activeConversation && !message.sessionId);
   });
   const renderableTaskCardsBySource = new Set(
     visibleMessages
@@ -527,7 +526,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       })),
     )
     .reverse();
-  const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id);
+  const visibleMessageIds = new Set(visibleMessages.map((message) => message.id));
+  const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id && (!task.sourceMessageId || visibleMessageIds.has(task.sourceMessageId)));
   const channelMembers = data.members.filter((member) => member.type === "agent" && Boolean(member.channelReadiness?.[activeChannel.id]));
   const availableChannelMembers = data.members.filter((member) =>
     member.type === "agent" &&
@@ -535,7 +535,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     !member.channelReadiness?.[activeChannel.id],
   );
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
-  const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : [];
+  const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : data.channelSessions.filter((session) => session.channelId === activeChannel.id);
   const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
   const allowAsTask = !dmMember;
@@ -676,6 +676,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                 <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><FileText aria-hidden="true" size={14} />{messages.chat.files}</TabsTrigger>
               </TabsList>
             </Tabs>
+            <Button onClick={() => onChannelNewSession?.(activeChannel.id)} size="sm" type="button" variant="outline">
+              <Plus aria-hidden="true" size={14} />{messages.chat.newSession}
+            </Button>
+            <Button onClick={onConversationHistoryToggle} size="sm" type="button" variant="outline">
+              <History aria-hidden="true" size={14} />{messages.chat.history}
+            </Button>
           </div>
         )}
       </header>
@@ -711,7 +717,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         onOpenChange={(open) => {
           if (!open && sessionDrawerOpen) onConversationHistoryToggle?.();
         }}
-        open={Boolean(sessionDrawerOpen && activeConversation)}
+        open={Boolean(sessionDrawerOpen && (activeConversation || activeChannel))}
       >
         <SheetContent aria-label={messages.chat.history} className="w-80 p-0" showCloseButton={false}>
           <SheetHeader className="flex-row items-center justify-between border-b">
@@ -722,13 +728,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </SheetHeader>
           <ScrollArea className="min-h-0 flex-1 px-3">
             <div className="grid gap-1 py-3">
-              {activeConversation
+              {sortedActiveSessions.length > 0
                 ? sortedActiveSessions.map((session) => (
                     <Button
                       aria-current={session.id === currentSessionId ? "true" : undefined}
                       className={cn("h-auto w-full justify-start overflow-hidden px-3 py-2 text-left", session.id === currentSessionId && "bg-accent text-accent-foreground")}
                       key={session.id}
-                      onClick={() => onConversationSessionSelect?.(activeConversation.id, session.id)}
+                      onClick={() => activeConversation ? onConversationSessionSelect?.(activeConversation.id, session.id) : onChannelSessionSelect?.(activeChannel.id, session.id)}
                       type="button"
                       variant="ghost"
                     >
@@ -743,7 +749,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </ScrollArea>
         </SheetContent>
       </Sheet>
-      {sessionDrawerOpen && activeConversation ? (
+      {sessionDrawerOpen && (activeConversation || activeChannel) ? (
         <aside aria-label={messages.chat.history} data-slot="sheet-ssr-fallback" hidden>
           <h2>{messages.chat.history}</h2>
           {sortedActiveSessions.map((session) => (
@@ -751,7 +757,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
               aria-current={session.id === currentSessionId ? "true" : undefined}
               className="overflow-hidden text-left"
               key={session.id}
-              onClick={() => onConversationSessionSelect?.(activeConversation.id, session.id)}
+              onClick={() => activeConversation ? onConversationSessionSelect?.(activeConversation.id, session.id) : onChannelSessionSelect?.(activeChannel.id, session.id)}
               type="button"
             >
               <strong className="block truncate">{session.title || messages.chat.newSession}</strong>

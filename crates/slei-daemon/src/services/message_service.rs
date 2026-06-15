@@ -26,6 +26,8 @@ pub struct SendMessageDraft {
 pub struct MessageRecord {
     pub id: String,
     pub channel_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
     pub author_id: String,
     pub body: Option<String>,
     #[serde(default)]
@@ -156,6 +158,7 @@ impl MessageService {
 
         let message = build_message_with_as_task(
             &draft.channel_id,
+            None,
             &draft.author_id,
             Some(&draft.body),
             MessageKind::Human,
@@ -236,10 +239,21 @@ impl MessageService {
         author_id: &str,
         body: &str,
     ) -> Result<MessageRecord, MessageError> {
+        self.create_agent_channel_message_with_session(channel_id, None, author_id, body)
+            .await
+    }
+
+    pub async fn create_agent_channel_message_with_session(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
+        author_id: &str,
+        body: &str,
+    ) -> Result<MessageRecord, MessageError> {
         if channel_id.trim().is_empty() || author_id.trim().is_empty() || body.trim().is_empty() {
             return Err(MessageError::InvalidMessage);
         }
-        self.insert_channel_message(channel_id, author_id, body, MessageKind::Agent)
+        self.insert_channel_message(channel_id, session_id, author_id, body, MessageKind::Agent)
             .await
     }
 
@@ -250,10 +264,30 @@ impl MessageService {
         message_id: &str,
         cards: Vec<InteractiveCardView>,
     ) -> Result<MessageRecord, MessageError> {
+        self.create_agent_card_channel_message_with_session(
+            channel_id, None, author_id, message_id, cards,
+        )
+        .await
+    }
+
+    pub async fn create_agent_card_channel_message_with_session(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
+        author_id: &str,
+        message_id: &str,
+        cards: Vec<InteractiveCardView>,
+    ) -> Result<MessageRecord, MessageError> {
         if channel_id.trim().is_empty() || author_id.trim().is_empty() || cards.is_empty() {
             return Err(MessageError::InvalidMessage);
         }
-        let mut message = build_message(channel_id, author_id, Some(""), MessageKind::Agent);
+        let mut message = build_message_with_session(
+            channel_id,
+            session_id,
+            author_id,
+            Some(""),
+            MessageKind::Agent,
+        );
         message.id = message_id.to_string();
         message.cards = cards;
         self.insert_record(message.clone()).await?;
@@ -263,6 +297,26 @@ impl MessageService {
     pub async fn create_human_channel_message(
         &self,
         channel_id: &str,
+        author_id: &str,
+        body: &str,
+        idempotency_key: &str,
+        as_task: bool,
+    ) -> Result<MessageRecord, MessageError> {
+        self.create_human_channel_message_with_session(
+            channel_id,
+            None,
+            author_id,
+            body,
+            idempotency_key,
+            as_task,
+        )
+        .await
+    }
+
+    pub async fn create_human_channel_message_with_session(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
         author_id: &str,
         body: &str,
         idempotency_key: &str,
@@ -306,6 +360,7 @@ impl MessageService {
 
         let message = build_message_with_as_task(
             channel_id,
+            session_id,
             author_id,
             Some(body),
             MessageKind::Human,
@@ -373,6 +428,7 @@ impl MessageService {
         }
         self.insert_channel_message(
             channel_id,
+            None,
             "channel_coordinator",
             &body,
             MessageKind::TaskCard,
@@ -383,6 +439,21 @@ impl MessageService {
     pub async fn channel_messages(&self, channel_id: &str) -> Vec<MessageRecord> {
         self.repos
             .channel_messages_by_channel(channel_id)
+            .await
+            .expect("load channel messages")
+            .into_iter()
+            .map(message_row_to_record)
+            .filter(|message| !message.deleted)
+            .collect()
+    }
+
+    pub async fn channel_messages_for_session(
+        &self,
+        channel_id: &str,
+        session_id: &str,
+    ) -> Vec<MessageRecord> {
+        self.repos
+            .channel_messages_by_channel_and_session(channel_id, Some(session_id))
             .await
             .expect("load channel messages")
             .into_iter()
@@ -471,11 +542,13 @@ impl MessageService {
     async fn insert_channel_message(
         &self,
         channel_id: &str,
+        session_id: Option<&str>,
         author_id: &str,
         body: &str,
         kind: MessageKind,
     ) -> Result<MessageRecord, MessageError> {
-        let message = build_message(channel_id, author_id, Some(body), kind);
+        let message =
+            build_message_with_session(channel_id, session_id, author_id, Some(body), kind);
         self.insert_record(message.clone()).await?;
         self.inner
             .lock()
@@ -490,6 +563,7 @@ impl MessageService {
             .insert_channel_message(NewChannelMessageRow {
                 id: message.id,
                 channel_id: message.channel_id,
+                session_id: message.session_id,
                 author_id: message.author_id,
                 body: message.body,
                 as_task: message.as_task,
@@ -511,6 +585,7 @@ impl MessageService {
                 NewChannelMessageRow {
                     id: message.id,
                     channel_id: message.channel_id,
+                    session_id: message.session_id,
                     author_id: message.author_id,
                     body: message.body,
                     as_task: message.as_task,
@@ -549,11 +624,22 @@ fn build_message(
     body: Option<&str>,
     kind: MessageKind,
 ) -> MessageRecord {
-    build_message_with_as_task(channel_id, author_id, body, kind, false)
+    build_message_with_as_task(channel_id, None, author_id, body, kind, false)
+}
+
+fn build_message_with_session(
+    channel_id: &str,
+    session_id: Option<&str>,
+    author_id: &str,
+    body: Option<&str>,
+    kind: MessageKind,
+) -> MessageRecord {
+    build_message_with_as_task(channel_id, session_id, author_id, body, kind, false)
 }
 
 fn build_message_with_as_task(
     channel_id: &str,
+    session_id: Option<&str>,
     author_id: &str,
     body: Option<&str>,
     kind: MessageKind,
@@ -562,6 +648,7 @@ fn build_message_with_as_task(
     MessageRecord {
         id: format!("msg_{}", Uuid::new_v4().simple()),
         channel_id: channel_id.to_string(),
+        session_id: session_id.map(ToString::to_string),
         author_id: author_id.to_string(),
         body: body.map(ToString::to_string),
         as_task,
@@ -576,6 +663,7 @@ fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
     MessageRecord {
         id: row.id,
         channel_id: row.channel_id,
+        session_id: row.session_id,
         author_id: row.author_id,
         body: row.body,
         as_task: row.as_task,
