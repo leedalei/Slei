@@ -150,6 +150,91 @@ async fn task_created_from_coordinator_keeps_source_and_assignment_reason() {
 }
 
 #[tokio::test]
+async fn task_created_from_source_message_uses_source_body_and_reuses_source() {
+    let root = std::env::temp_dir().join(format!("slei-source-task-{}", uuid::Uuid::new_v4()));
+    let state =
+        AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
+    let source = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "请把广播 claim CLI 任务语义补齐，正文要完整保留。",
+            "source-task-message",
+            false,
+        )
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_source_message(&source.id, "agent_cindy", "source-task-create")
+        .await
+        .unwrap();
+    let retry = state
+        .tasks()
+        .create_from_source_message(&source.id, "agent_mina", "source-task-create-retry")
+        .await
+        .unwrap();
+
+    assert_eq!(retry.id, task.id);
+    assert_eq!(task.channel_id, "all");
+    assert_eq!(task.creator_id, "agent_cindy");
+    assert_eq!(task.source_message_id.as_deref(), Some(source.id.as_str()));
+    assert_eq!(
+        task.root_body,
+        "请把广播 claim CLI 任务语义补齐，正文要完整保留。"
+    );
+    assert_eq!(state.channel_messages_for_tests("all").await.len(), 1);
+}
+
+#[tokio::test]
+async fn task_reply_preserves_explicit_role_and_idempotent_status_replays_summary() {
+    let service = TaskService::for_tests();
+    let task = service
+        .create_task_root("all", "human_lei", "role task", "role-task-create")
+        .await
+        .unwrap();
+
+    let reply = service
+        .add_reply_with_role(
+            &task.id,
+            "agent_cindy",
+            Some("agent"),
+            "已处理到第一步",
+            "role-reply-key",
+        )
+        .await
+        .unwrap();
+    let retry = service
+        .add_reply_with_role(
+            &task.id,
+            "agent_cindy",
+            Some("human"),
+            "重试不能改正文",
+            "role-reply-key",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(retry.reply.id, reply.reply.id);
+    assert_eq!(retry.reply.role.as_deref(), Some("agent"));
+    assert_eq!(retry.reply.body, "已处理到第一步");
+
+    let updated = service
+        .update_status_idempotent(&task.id, TaskStatus::InProgress, "role-status-key")
+        .await
+        .unwrap();
+    let retried = service
+        .update_status_idempotent(&task.id, TaskStatus::Done, "role-status-key")
+        .await
+        .unwrap();
+
+    assert_eq!(updated.id, retried.id);
+    assert_eq!(retried.status, TaskStatus::InProgress);
+}
+
+#[tokio::test]
 async fn tasks_survive_service_reload() {
     let root = std::env::temp_dir().join(format!("slei-task-reload-{}", uuid::Uuid::new_v4()));
     let first = AppState::for_tests_with_agent_root_async(

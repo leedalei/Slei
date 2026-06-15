@@ -9,7 +9,7 @@ use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
 use crate::services::channel_service::ChannelError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
-use crate::services::task_service::{TaskError, TaskQuery, TaskStatus};
+use crate::services::task_service::{thread_message_for_reply, TaskError, TaskQuery, TaskStatus};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -22,8 +22,16 @@ pub struct CreateTaskRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CreateTaskFromSourceMessageRequest {
+    source_message_id: String,
+    creator_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskListQuery {
     channel_id: Option<String>,
+    channel: Option<String>,
     creator_id: Option<String>,
     assignee_id: Option<String>,
 }
@@ -37,7 +45,9 @@ pub struct UpdateTaskStatusRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTaskReplyRequest {
-    sender_id: String,
+    sender_id: Option<String>,
+    agent_id: Option<String>,
+    role: Option<String>,
     body: String,
 }
 
@@ -86,6 +96,41 @@ pub async fn create(
     }
 }
 
+pub async fn create_from_source_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateTaskFromSourceMessageRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let Some(idempotency_key) = idempotency_key(&headers) else {
+        return missing_idempotency_response();
+    };
+
+    match state
+        .tasks()
+        .create_from_source_message(
+            &payload.source_message_id,
+            &payload.creator_id,
+            idempotency_key,
+        )
+        .await
+    {
+        Ok(task) => match state.tasks().task_summary(&task.id).await {
+            Ok(task) => (StatusCode::CREATED, Json(json!({ "task": task }))).into_response(),
+            Err(error) => task_error_response(error),
+        },
+        Err(error) => task_error_response(error),
+    }
+}
+
 pub async fn list(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -95,10 +140,16 @@ pub async fn list(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let _activity_guard = match crate::api::begin_resettable_read(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let channel_id = query.channel_id.or(query.channel);
     let tasks = state
         .tasks()
         .list_task_summaries(TaskQuery {
-            channel_id: query.channel_id,
+            channel_id,
             creator_id: query.creator_id,
             assignee_id: query.assignee_id,
         })
@@ -121,24 +172,49 @@ pub async fn reply(
         Err(response) => return response,
     };
 
-    let Some(idempotency_key) = headers
-        .get("idempotency-key")
-        .and_then(|value| value.to_str().ok())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "idempotency-key is required" })),
-        )
-            .into_response();
+    let Some(idempotency_key) = idempotency_key(&headers) else {
+        return missing_idempotency_response();
+    };
+
+    if payload.agent_id.is_some() || payload.role.is_some() {
+        let Some(sender_id) = payload.agent_id.or(payload.sender_id) else {
+            return task_error_response(TaskError::InvalidTaskInput);
+        };
+        return match state
+            .tasks()
+            .add_reply_with_role(
+                &id,
+                &sender_id,
+                payload.role.as_deref(),
+                &payload.body,
+                idempotency_key,
+            )
+            .await
+        {
+            Ok(outcome) => (
+                StatusCode::CREATED,
+                Json(json!({
+                    "reply": thread_message_for_reply(&outcome.task_id, outcome.reply),
+                    "route": {
+                        "handoffAgentIds": [],
+                        "needsAssignment": false
+                    }
+                })),
+            )
+                .into_response(),
+            Err(error) => task_error_response(error),
+        };
+    }
+
+    let Some(sender_id) = payload.sender_id else {
+        return task_error_response(TaskError::InvalidTaskInput);
     };
 
     match state
         .channel_orchestrator()
         .add_task_reply_with_launch_guard(
             &id,
-            &payload.sender_id,
+            &sender_id,
             &payload.body,
             idempotency_key,
             &activity_guard,
@@ -165,6 +241,11 @@ pub async fn thread(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+
+    let _activity_guard = match crate::api::begin_resettable_read(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state.tasks().thread_view(&id).await {
         Ok(thread) => Json(json!({ "thread": thread })).into_response(),
@@ -196,6 +277,35 @@ pub async fn update_status(
     }
 }
 
+pub async fn update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateTaskStatusRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let Some(idempotency_key) = idempotency_key(&headers) else {
+        return missing_idempotency_response();
+    };
+
+    match state
+        .tasks()
+        .update_status_idempotent(&id, payload.status, idempotency_key)
+        .await
+    {
+        Ok(task) => Json(json!({ "task": task })).into_response(),
+        Err(error) => task_error_response(error),
+    }
+}
+
 fn task_error_response(error: TaskError) -> Response {
     match error {
         TaskError::TaskNotFound => (
@@ -203,7 +313,9 @@ fn task_error_response(error: TaskError) -> Response {
             Json(json!({ "error": error.to_string() })),
         )
             .into_response(),
-        TaskError::ActiveTaskRootDeletionBlocked | TaskError::MissingIdempotencyKey => (
+        TaskError::ActiveTaskRootDeletionBlocked
+        | TaskError::MissingIdempotencyKey
+        | TaskError::InvalidTaskInput => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": error.to_string() })),
         )
@@ -216,6 +328,22 @@ fn task_error_response(error: TaskError) -> Response {
     }
 }
 
+fn idempotency_key(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get("idempotency-key")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn missing_idempotency_response() -> Response {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(json!({ "error": "idempotency-key is required" })),
+    )
+        .into_response()
+}
+
 fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
     let status = match &error {
         ChannelOrchestratorError::Task(TaskError::TaskNotFound)
@@ -225,6 +353,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidWorkspacePath)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)

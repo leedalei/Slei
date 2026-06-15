@@ -68,7 +68,7 @@ pub struct AddTaskReplyOutcome {
     pub created: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskSummaryView {
     pub id: String,
@@ -138,6 +138,7 @@ pub struct TaskService {
 struct TaskIdempotencyState {
     task_idempotency: HashMap<String, String>,
     reply_idempotency: HashMap<String, (String, String)>,
+    status_idempotency: HashMap<String, TaskSummaryView>,
 }
 
 impl TaskService {
@@ -293,6 +294,89 @@ impl TaskService {
         Ok(task)
     }
 
+    pub async fn create_from_source_message(
+        &self,
+        source_message_id: &str,
+        creator_id: &str,
+        idempotency_key: &str,
+    ) -> Result<TaskRecord, TaskError> {
+        let source_message_id = source_message_id.trim();
+        let creator_id = creator_id.trim();
+        if source_message_id.is_empty() || creator_id.is_empty() {
+            return Err(TaskError::InvalidTaskInput);
+        }
+        let idempotency_key = namespaced_key("task:create_from_source_message", idempotency_key)
+            .ok_or(TaskError::MissingIdempotencyKey)?;
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+
+        if let Some(existing) = self.task_for_source_message(source_message_id).await {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .insert(idempotency_key, existing.id.clone());
+            return Ok(existing);
+        }
+        if let Some(task_id) = self.task_id_for_idempotency(&idempotency_key).await? {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .insert(idempotency_key.clone(), task_id.clone());
+            return self.task(&task_id).await;
+        }
+        let existing_task_id = {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .task_idempotency
+                .get(&idempotency_key)
+                .cloned()
+        };
+        if let Some(task_id) = existing_task_id {
+            return self.task(&task_id).await;
+        }
+
+        let source = self
+            .repos
+            .channel_message(source_message_id)
+            .await
+            .map_err(storage_error)?
+            .ok_or(TaskError::TaskNotFound)?;
+        let source_body = source.body.unwrap_or_default();
+        let now = now_string();
+        let task = TaskRecord {
+            id: format!("task_{}", Uuid::new_v4().simple()),
+            channel_id: source.channel_id,
+            creator_id: creator_id.to_string(),
+            assignee_id: None,
+            source_message_id: Some(source_message_id.to_string()),
+            assignment_reason: None,
+            needs_assignment: true,
+            title: title_from_body(&source_body, source_message_id),
+            status: TaskStatus::PendingAssignment,
+            attention_required: true,
+            root_deleted: false,
+            root_body: source_body,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.repos
+            .upsert_task_root_idempotent(
+                task_record_to_row(&task),
+                &idempotency_key,
+                &json!({ "taskId": task.id }).to_string(),
+            )
+            .await
+            .map_err(storage_error)?;
+        self.idempotency
+            .lock()
+            .expect("task idempotency lock")
+            .task_idempotency
+            .insert(idempotency_key, task.id.clone());
+        Ok(task)
+    }
+
     pub async fn add_reply(
         &self,
         task_id: &str,
@@ -301,7 +385,7 @@ impl TaskService {
         idempotency_key: &str,
     ) -> Result<TaskReply, TaskError> {
         Ok(self
-            .add_reply_with_task(task_id, sender_id, body, idempotency_key)
+            .add_reply_with_role(task_id, sender_id, None, body, idempotency_key)
             .await?
             .reply)
     }
@@ -313,6 +397,24 @@ impl TaskService {
         body: &str,
         idempotency_key: &str,
     ) -> Result<AddTaskReplyOutcome, TaskError> {
+        self.add_reply_with_role(task_id, sender_id, None, body, idempotency_key)
+            .await
+    }
+
+    pub async fn add_reply_with_role(
+        &self,
+        task_id: &str,
+        sender_id: &str,
+        role: Option<&str>,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<AddTaskReplyOutcome, TaskError> {
+        let task_id = task_id.trim();
+        let sender_id = sender_id.trim();
+        let body = body.trim();
+        if task_id.is_empty() || sender_id.is_empty() || body.is_empty() {
+            return Err(TaskError::InvalidTaskInput);
+        }
         let idempotency_key = namespaced_key("task:add_reply", idempotency_key)
             .ok_or(TaskError::MissingIdempotencyKey)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
@@ -366,7 +468,11 @@ impl TaskService {
         let reply = TaskReply {
             id: format!("reply_{}", Uuid::new_v4().simple()),
             sender_id: sender_id.to_string(),
-            role: role_for_sender(sender_id),
+            role: role
+                .map(str::trim)
+                .filter(|role| !role.is_empty())
+                .map(ToString::to_string)
+                .or_else(|| role_for_sender(sender_id)),
             body: body.to_string(),
             status: Some("done".to_string()),
             created_at: now.clone(),
@@ -451,6 +557,61 @@ impl TaskService {
             .await
             .map_err(storage_error)?;
         Ok(())
+    }
+
+    pub async fn update_status_idempotent(
+        &self,
+        task_id: &str,
+        status: TaskStatus,
+        idempotency_key: &str,
+    ) -> Result<TaskSummaryView, TaskError> {
+        let task_id = task_id.trim();
+        if task_id.is_empty() {
+            return Err(TaskError::InvalidTaskInput);
+        }
+        let idempotency_key = namespaced_key("task:update_status", idempotency_key)
+            .ok_or(TaskError::MissingIdempotencyKey)?;
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        if let Some(task) = self
+            .status_summary_for_idempotency(&idempotency_key)
+            .await?
+        {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .status_idempotency
+                .insert(idempotency_key.clone(), task.clone());
+            return Ok(task);
+        }
+        let existing_task = {
+            self.idempotency
+                .lock()
+                .expect("task idempotency lock")
+                .status_idempotency
+                .get(&idempotency_key)
+                .cloned()
+        };
+        if let Some(task) = existing_task {
+            return Ok(task);
+        }
+
+        self.update_status(task_id, status).await?;
+        let task = self.task_summary(task_id).await?;
+        self.repos
+            .record_idempotent_response(
+                &idempotency_key,
+                task_id,
+                &serde_json::to_string(&task)
+                    .map_err(|error| TaskError::Storage(error.to_string()))?,
+            )
+            .await
+            .map_err(storage_error)?;
+        self.idempotency
+            .lock()
+            .expect("task idempotency lock")
+            .status_idempotency
+            .insert(idempotency_key, task.clone());
+        Ok(task)
     }
 
     pub async fn assign(
@@ -615,6 +776,23 @@ impl TaskService {
             return Ok(None);
         };
         Ok(Some(idempotent_reply_ids(&payload)?))
+    }
+
+    async fn status_summary_for_idempotency(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<TaskSummaryView>, TaskError> {
+        let Some(payload) = self
+            .repos
+            .idempotent_response(idempotency_key)
+            .await
+            .map_err(storage_error)?
+        else {
+            return Ok(None);
+        };
+        serde_json::from_str(&payload)
+            .map(Some)
+            .map_err(|error| TaskError::Storage(error.to_string()))
     }
 
     async fn reply_by_id(&self, task_id: &str, reply_id: &str) -> Result<TaskReply, TaskError> {
@@ -785,6 +963,18 @@ fn now_string() -> String {
         .to_string()
 }
 
+fn title_from_body(body: &str, source_message_id: &str) -> String {
+    let body = body.trim();
+    if body.is_empty() {
+        return format!("Task from {source_message_id}");
+    }
+    let mut title = body.chars().take(80).collect::<String>();
+    if body.chars().count() > 80 {
+        title.push_str("...");
+    }
+    title
+}
+
 fn role_for_sender(sender_id: &str) -> Option<String> {
     if sender_id.starts_with("agent") {
         Some("agent".to_string())
@@ -823,6 +1013,8 @@ pub enum TaskError {
     TaskNotFound,
     #[error("idempotency-key is required")]
     MissingIdempotencyKey,
+    #[error("task input is invalid")]
+    InvalidTaskInput,
     #[error("active task root cannot be deleted")]
     ActiveTaskRootDeletionBlocked,
     #[error("task storage error: {0}")]

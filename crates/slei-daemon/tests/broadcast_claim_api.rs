@@ -591,6 +591,180 @@ async fn task_claim_api_returns_owner_for_losing_agents() {
 }
 
 #[tokio::test]
+async fn task_cli_api_creates_from_source_replies_updates_and_lists_thread() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let source = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "请从这条消息创建任务，并保留完整正文。",
+            "task-cli-source-message",
+            false,
+        )
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let created = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/tasks/from-source-message",
+            "task-cli-create",
+            json!({
+                "sourceMessageId": source.id,
+                "creatorId": "agent_cindy"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_json = response_json(created).await;
+    let task_id = created_json["task"]["id"].as_str().unwrap().to_string();
+    assert_eq!(created_json["task"]["sourceMessageId"], source.id);
+    assert_eq!(
+        created_json["task"]["title"],
+        "请从这条消息创建任务，并保留完整正文。"
+    );
+
+    let same_source = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/tasks/from-source-message",
+            "task-cli-create-same-source",
+            json!({
+                "sourceMessageId": source.id,
+                "creatorId": "agent_mina"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(same_source.status(), StatusCode::CREATED);
+    let same_source_json = response_json(same_source).await;
+    assert_eq!(same_source_json["task"]["id"], task_id);
+    assert_eq!(state.channel_messages_for_tests("all").await.len(), 1);
+
+    let listed = app
+        .clone()
+        .oneshot(authed_empty_request(&token, "/v1/tasks?channel=all"))
+        .await
+        .unwrap();
+    assert_eq!(listed.status(), StatusCode::OK);
+    let listed_json = response_json(listed).await;
+    assert_eq!(listed_json["tasks"].as_array().unwrap().len(), 1);
+    assert_eq!(listed_json["tasks"][0]["id"], task_id);
+
+    let reply = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            format!("/v1/tasks/{task_id}/replies"),
+            "task-cli-reply",
+            json!({
+                "agentId": "agent_cindy",
+                "role": "agent",
+                "body": "已处理到第一步"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), StatusCode::CREATED);
+    let reply_json = response_json(reply).await;
+    let reply_id = reply_json["reply"]["id"].as_str().unwrap().to_string();
+    assert_eq!(reply_json["reply"]["senderId"], "agent_cindy");
+    assert_eq!(reply_json["reply"]["role"], "agent");
+
+    let reply_retry = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            format!("/v1/tasks/{task_id}/replies"),
+            "task-cli-reply",
+            json!({
+                "agentId": "agent_cindy",
+                "role": "human",
+                "body": "重试不能新增或覆盖"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(reply_retry.status(), StatusCode::CREATED);
+    let reply_retry_json = response_json(reply_retry).await;
+    assert_eq!(reply_retry_json["reply"]["id"], reply_id);
+    assert_eq!(reply_retry_json["reply"]["role"], "agent");
+    assert_eq!(reply_retry_json["reply"]["body"], "已处理到第一步");
+
+    let missing_update_key = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "PATCH",
+            format!("/v1/tasks/{task_id}"),
+            json!({ "status": "in_progress" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(missing_update_key.status(), StatusCode::BAD_REQUEST);
+
+    let updated = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/tasks/{task_id}"),
+            "task-cli-update",
+            json!({ "status": "in_progress" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), StatusCode::OK);
+    let updated_json = response_json(updated).await;
+    assert_eq!(updated_json["task"]["status"], "in_progress");
+
+    let update_retry = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/tasks/{task_id}"),
+            "task-cli-update",
+            json!({ "status": "done" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(update_retry.status(), StatusCode::OK);
+    let update_retry_json = response_json(update_retry).await;
+    assert_eq!(update_retry_json["task"]["status"], "in_progress");
+
+    let thread = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!("/v1/tasks/{task_id}/thread"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(thread.status(), StatusCode::OK);
+    let thread_json = response_json(thread).await;
+    assert_eq!(
+        thread_json["thread"]["root"]["body"],
+        "请从这条消息创建任务，并保留完整正文。"
+    );
+    assert_eq!(
+        thread_json["thread"]["replies"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(thread_json["thread"]["replies"][0]["id"], reply_id);
+    assert_eq!(thread_json["thread"]["replies"][0]["role"], "agent");
+}
+
+#[tokio::test]
 async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));

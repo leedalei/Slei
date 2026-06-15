@@ -364,6 +364,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
         | ChannelOrchestratorError::InvalidWorkerEvent(_)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
