@@ -213,6 +213,65 @@ async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
 }
 
 #[tokio::test]
+async fn agent_status_idempotency_key_is_scoped_per_agent() {
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    for (agent_id, run_id, message_id) in [
+        ("agent_a", "run_agent_a", "msg_agent_a"),
+        ("agent_b", "run_agent_b", "msg_agent_b"),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/v1/agents/{agent_id}/status"))
+                    .header("authorization", token.authorization_header())
+                    .header("content-type", "application/json")
+                    .header("idempotency-key", "shared-status-key")
+                    .body(Body::from(
+                        json!({
+                            "state": "working",
+                            "phase": "reading_history",
+                            "reason": null,
+                            "runId": run_id,
+                            "channelId": "all",
+                            "messageId": message_id,
+                            "taskId": null
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    for (agent_id, run_id, message_id) in [
+        ("agent_a", "run_agent_a", "msg_agent_a"),
+        ("agent_b", "run_agent_b", "msg_agent_b"),
+    ] {
+        let activity = app
+            .clone()
+            .oneshot(authed_empty_request(
+                &token,
+                format!("/v1/agents/{agent_id}/activity?limit=200"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(activity.status(), StatusCode::OK);
+        let activity_json = response_json(activity).await;
+        let logs = activity_json["logs"].as_array().unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0]["agentId"], agent_id);
+        assert_eq!(logs[0]["runId"], run_id);
+        assert_eq!(logs[0]["messageId"], message_id);
+    }
+}
+
+#[tokio::test]
 async fn agent_status_api_requires_idempotency_key() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));

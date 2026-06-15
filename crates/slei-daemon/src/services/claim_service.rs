@@ -115,8 +115,9 @@ impl ClaimService {
     ) -> Result<(), ClaimError> {
         let agent_id = required_value(agent_id, "agent_id")?;
         let update = normalize_update(update)?;
-        let idempotency_key = namespaced_key("agent:status", idempotency_key)
-            .ok_or(ClaimError::MissingIdempotencyKey)?;
+        let namespace = format!("agent:status:{agent_id}");
+        let idempotency_key =
+            namespaced_key(&namespace, idempotency_key).ok_or(ClaimError::MissingIdempotencyKey)?;
 
         let payload = json!({ "agentId": agent_id, "ok": true }).to_string();
         self.repos
