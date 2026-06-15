@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_memory_says_it_routes_but_does_not_answer() {
+    fn coordinator_memory_says_it_is_legacy_and_does_not_route_new_flow() {
         let memory = initial_memory(&AgentTemplateInput {
             name: "Coordinator",
             handle: "@coordinator",
@@ -197,8 +197,9 @@ mod tests {
             channel_ids: vec![],
         });
 
-        assert!(memory.contains("负责分析用户意图并路由 Agent"));
-        assert!(memory.contains("自己不做任何关于用户问题的回复"));
+        assert!(memory.contains("历史内部路由角色"));
+        assert!(memory.contains("slei message claim"));
+        assert!(memory.contains("不要生成新的中心路由决策"));
     }
 
     #[test]

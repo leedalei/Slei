@@ -1120,12 +1120,12 @@ git commit -m "docs: define multi-channel active context"
 - [ ] **Step 3: 搜索并修正旧命名**
 
 ```bash
-rg -n "raft|coordinator|Coordinator|routing JSON|coordinator runtime" docs/architecture docs/superpowers/specs docs/superpowers/plans resources/default-agent-assets
+rg -n "旧 CLI 命令名|coordinator|Coordinator|routing JSON|coordinator runtime" docs/architecture docs/superpowers/specs docs/superpowers/plans resources/default-agent-assets
 ```
 
 Expected:
 
-- 不应出现 `raft` 作为新命令名。
+- 不应出现旧 CLI 命令名作为新命令名。
 - `coordinator` 只能出现在历史/被替换说明里，不能作为新架构 guardrail。
 
 - [ ] **Step 4: 提交**
