@@ -526,7 +526,8 @@ async fn dev_reset_queued_behind_channel_send_guard_does_not_deadlock_inner_laun
     .await
     .expect("channel send should not deadlock behind its own outer reset guard")
     .unwrap();
-    assert_eq!(outcome.action, "coordinator_pending");
+    assert_eq!(outcome.action, "broadcast_delivered");
+    assert_eq!(outcome.coordinator_run_id, None);
 
     drop(activity_guard);
     let response = reset_task.await.unwrap();
@@ -800,31 +801,8 @@ async fn dev_reset_clears_channel_orchestrator_outcome_idempotency_cache() {
         })
         .await
         .unwrap();
-    let first_run_id = first.coordinator_run_id.clone().unwrap();
-    state
-        .handle_worker_event(json!({
-            "type": "output_delta",
-            "run_id": first_run_id,
-            "delta": json!({
-                "intent": "noise",
-                "action": "archive_only",
-                "routeMode": "none",
-                "primaryAssigneeAgentId": null,
-                "targetAgentIds": [],
-                "task": null,
-                "reason": "no routing required",
-                "confidence": 1.0
-            }).to_string(),
-        }))
-        .await
-        .unwrap();
-    state
-        .handle_worker_event(json!({
-            "type": "completed",
-            "run_id": first_run_id,
-        }))
-        .await
-        .unwrap();
+    assert_eq!(first.action, "broadcast_delivered");
+    assert_eq!(first.coordinator_run_id, None);
 
     let response = post_dev_reset(state.clone(), token).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -853,13 +831,16 @@ async fn dev_reset_clears_channel_orchestrator_outcome_idempotency_cache() {
         .await
         .unwrap();
 
-    assert_ne!(second.coordinator_run_id.as_ref(), Some(&first_run_id));
+    assert_eq!(second.action, "broadcast_delivered");
+    assert_eq!(second.coordinator_run_id, None);
+    assert_ne!(second.message_id, first.message_id);
+    assert!(state.messages().message(&first.message_id).await.is_err());
     assert!(state
-        .orchestration()
-        .coordinator_runtime_run(&first_run_id)
+        .claims()
+        .message_deliveries_for_message(&first.message_id)
         .await
         .unwrap()
-        .is_none());
+        .is_empty());
 
     std::env::remove_var("SLEI_ENABLE_DEV_RESET");
 }
