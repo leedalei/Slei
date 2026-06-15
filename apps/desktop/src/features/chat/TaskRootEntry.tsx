@@ -20,7 +20,7 @@ export function TaskRootEntry(input: {
     <article className="group grid gap-2 rounded-lg border border-primary/20 bg-card p-2 text-sm shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_auto]" data-task-root-entry={input.task.id}>
       <button
         aria-label={openLabel}
-        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-md px-1 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-md px-1 py-1.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
         data-task-root-entry-trigger="body"
         onClick={input.onOpen}
         type="button"
