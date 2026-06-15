@@ -1058,11 +1058,26 @@ pub fn is_internal_coordinator_id(agent_id: &str) -> bool {
 fn coordinator_handle(channel_id: &str) -> String {
     let normalized = channel_id.trim().to_lowercase();
     let handle = format!("{normalized}-coordinator");
-    if handle.len() <= 32 {
+    if is_valid_handle_stem(&normalized) && handle.len() <= 32 {
         return format!("@{handle}");
     }
-    let suffix = normalized.chars().take(25).collect::<String>();
-    format!("@coord-{suffix}")
+    format!("@coord-{:016x}", stable_channel_hash(&normalized))
+}
+
+fn is_valid_handle_stem(value: &str) -> bool {
+    !value.is_empty()
+        && value.chars().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        })
+}
+
+fn stable_channel_hash(value: &str) -> u64 {
+    value
+        .as_bytes()
+        .iter()
+        .fold(0xcbf29ce484222325, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
+        })
 }
 
 fn current_timestamp() -> String {

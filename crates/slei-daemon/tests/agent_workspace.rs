@@ -430,6 +430,51 @@ async fn list_agents_exposes_default_channel_coordinator_as_system_agent() {
 }
 
 #[tokio::test]
+async fn list_agents_handles_non_ascii_channel_coordinator_names() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("channel-coordinator-non-ascii");
+    let app = build_router(AppState::for_tests_with_agent_root(
+        token.clone(),
+        root.clone(),
+    ));
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-content-channel"),
+        json!({
+            "name": "内容营销开发",
+            "description": "kol-content",
+            "agentIds": []
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+
+    let listed = get_json(&app, &token, "/v1/agents").await;
+
+    assert_eq!(listed.status(), StatusCode::OK);
+    let body = response_json(listed).await;
+    let agents = body["agents"].as_array().unwrap();
+    let coordinator = agents
+        .iter()
+        .find(|agent| {
+            agent["agentKind"] == "coordinator" && agent["channelIds"] == json!(["内容营销开发"])
+        })
+        .expect("non-ASCII channel should get a listable coordinator");
+    let handle = coordinator["handle"].as_str().unwrap();
+    assert!(handle.starts_with("@coord-"));
+    assert!(handle
+        .trim_start_matches('@')
+        .chars()
+        .all(|character| character.is_ascii_lowercase()
+            || character.is_ascii_digit()
+            || character == '-'));
+    assert!(PathBuf::from(coordinator["workspacePath"].as_str().unwrap()).starts_with(root));
+}
+
+#[tokio::test]
 async fn coordinator_agents_cannot_be_used_for_direct_messages() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-no-dm");
