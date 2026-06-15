@@ -124,6 +124,21 @@ impl ClaimService {
             .map_err(ClaimError::Storage)
     }
 
+    pub async fn mark_message_delivery_pending_for_run(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<bool, ClaimError> {
+        let message_id = required_value(message_id, "message_id")?;
+        let agent_id = required_value(agent_id, "agent_id")?;
+        let run_id = required_value(run_id, "run_id")?;
+        self.repos
+            .mark_message_delivery_pending_for_run(&message_id, &agent_id, &run_id)
+            .await
+            .map_err(ClaimError::Storage)
+    }
+
     pub async fn update_agent_status(
         &self,
         agent_id: &str,

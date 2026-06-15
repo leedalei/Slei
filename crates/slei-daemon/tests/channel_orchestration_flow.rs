@@ -606,6 +606,78 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_coordinat
 }
 
 #[tokio::test]
+async fn broadcast_start_failure_rolls_delivery_back_for_retry() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-broadcast-start-failure",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+
+    let input = SendChannelMessageInput {
+        channel_id: "dev".to_string(),
+        author_id: "human_lei".to_string(),
+        body: "这次启动 worker 会先失败，然后重试".to_string(),
+        idempotency_key: "send-broadcast-start-failure".to_string(),
+        as_task: false,
+    };
+
+    state.fail_next_worker_send_for_tests();
+    let first = state
+        .channel_orchestrator()
+        .send_channel_message(input.clone())
+        .await;
+    assert!(first.is_err());
+    assert!(
+        state.worker_commands().is_empty(),
+        "failed worker send should not leave a start_run command behind"
+    );
+
+    let message = state
+        .messages()
+        .channel_message_for_idempotency("send-broadcast-start-failure")
+        .await
+        .unwrap();
+    let deliveries = state
+        .claims()
+        .message_deliveries_for_message(&message.id)
+        .await
+        .unwrap();
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].agent_id, "agent_alice");
+    assert_eq!(deliveries[0].delivery_state, "pending");
+    assert!(deliveries[0].run_id.is_none());
+
+    let retry = state
+        .channel_orchestrator()
+        .send_channel_message(input)
+        .await
+        .unwrap();
+    assert_eq!(retry.action, "broadcast_delivered");
+    assert_eq!(retry.message_id, message.id);
+    assert_broadcast_deliveries_running(&state, &retry.message_id, &["agent_alice"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_alice"],
+        &retry.message_id,
+        &["这次启动 worker 会先失败，然后重试"],
+        &[],
+    );
+}
+
+#[tokio::test]
 async fn pure_consultation_broadcasts_without_creating_task() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
@@ -1143,8 +1215,8 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .contains("@coda-win"));
     complete_channel_agent_run(&state, "agent_coda", "Coda 已在任务线程继续实现。").await;
     let thread = state.tasks().thread_view(&task.id).await.unwrap();
-    assert!(thread.replies.iter().all(|reply| {
-        reply.sender_id != "agent_coda" || reply.body != "Coda 已在任务线程继续实现。"
+    assert!(thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_coda" && reply.body == "Coda 已在任务线程继续实现。"
     }));
 }
 
@@ -2429,8 +2501,7 @@ async fn agent_send_api_broadcasts_agent_message_to_channel_members() {
 }
 
 #[tokio::test]
-async fn channel_agent_worker_completed_or_failed_output_does_not_create_visible_messages_or_task_replies(
-) {
+async fn broadcast_channel_agent_worker_completed_or_failed_output_is_suppressed() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
         .channels()
@@ -2450,62 +2521,39 @@ async fn channel_agent_worker_completed_or_failed_output_does_not_create_visible
         .await
         .unwrap();
 
-    let task = state
-        .tasks()
-        .create_from_coordinator(
-            "dev",
-            "human_lei",
-            "worker-output-source-message",
-            "验证 worker output 不自动写回复",
-            Some("agent_alice".to_string()),
-            "initial assignment",
-            "worker-output-source-task",
-        )
-        .await
-        .unwrap();
-
-    state
+    let completed = state
         .channel_orchestrator()
-        .add_task_reply(
-            &task.id,
-            "human_lei",
-            "@alice-win 请验证 worker 输出路径。",
-            "worker-output-handoff-completed",
-        )
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "广播消息的 stdout 不应自动可见".to_string(),
+            idempotency_key: "broadcast-output-suppressed-completed".to_string(),
+            as_task: false,
+        })
         .await
         .unwrap();
     complete_channel_agent_run(&state, "agent_alice", "这段 stdout 不应成为任务回复").await;
 
-    let completed_run_id = state
-        .worker_commands()
-        .into_iter()
-        .rev()
-        .find(|command| {
-            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_alice"
-        })
-        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
-        .expect("channel agent runtime should have started");
-    state
+    let failed = state
         .channel_orchestrator()
-        .add_task_reply(
-            &task.id,
-            "human_lei",
-            "@alice-win 再验证 failed output 路径。",
-            "worker-output-handoff-failed",
-        )
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "广播消息的 failed 也不应自动可见".to_string(),
+            idempotency_key: "broadcast-output-suppressed-failed".to_string(),
+            as_task: false,
+        })
         .await
         .unwrap();
     let failed_run_id = state
-        .worker_commands()
+        .claims()
+        .message_deliveries_for_message(&failed.message_id)
+        .await
+        .unwrap()
         .into_iter()
-        .rev()
-        .find(|command| {
-            command["type"] == "start_run"
-                && command["session"]["agent_id"] == "agent_alice"
-                && command["run_id"] != completed_run_id
-        })
-        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
-        .expect("second channel agent runtime should have started");
+        .find(|delivery| delivery.agent_id == "agent_alice")
+        .and_then(|delivery| delivery.run_id)
+        .expect("failed broadcast run should have started");
     state
         .handle_worker_event(json!({
             "type": "failed",
@@ -2515,10 +2563,101 @@ async fn channel_agent_worker_completed_or_failed_output_does_not_create_visible
         .await
         .unwrap();
 
+    assert_eq!(completed.action, "broadcast_delivered");
+    assert_eq!(failed.action, "broadcast_delivered");
+    assert!(state
+        .channel_messages_for_tests("dev")
+        .await
+        .iter()
+        .all(|message| message.author_id != "agent_alice"));
+    assert!(state
+        .tasks()
+        .list_tasks(TaskQuery::default())
+        .await
+        .is_empty());
+}
+
+#[tokio::test]
+async fn task_channel_agent_worker_completed_or_failed_output_creates_task_replies() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-worker-task-output",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+
+    let task = state
+        .tasks()
+        .create_from_coordinator(
+            "dev",
+            "human_lei",
+            "worker-task-output-source-message",
+            "验证任务 worker output 仍写回复",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "worker-task-output-source-task",
+        )
+        .await
+        .unwrap();
+
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "@alice-win 请验证 completed output 路径。",
+            "worker-task-output-handoff-completed",
+        )
+        .await
+        .unwrap();
+    complete_channel_agent_run(&state, "agent_alice", "这段 stdout 应成为任务回复").await;
+
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "@alice-win 再验证 failed output 路径。",
+            "worker-task-output-handoff-failed",
+        )
+        .await
+        .unwrap();
+    let failed_run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_alice"
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("second channel agent runtime should have started");
+    state
+        .handle_worker_event(json!({
+            "type": "failed",
+            "run_id": failed_run_id,
+            "message": "失败 stdout 应成为任务回复"
+        }))
+        .await
+        .unwrap();
+
     let thread = state.tasks().thread_view(&task.id).await.unwrap();
-    assert!(thread.replies.iter().all(|reply| {
-        reply.body != "这段 stdout 不应成为任务回复"
-            && reply.body != "失败 stdout 也不应成为任务回复"
+    assert!(thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_alice" && reply.body == "这段 stdout 应成为任务回复"
+    }));
+    assert!(thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_alice" && reply.body == "失败 stdout 应成为任务回复"
     }));
     assert!(state
         .channel_messages_for_tests("dev")
@@ -2723,8 +2862,10 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
     }));
     complete_channel_agent_run(&state, "agent_coda", "Coda 已开始处理这个任务。").await;
     let mentioned_thread = state.tasks().thread_view(mentioned_task_id).await.unwrap();
-    assert_eq!(mentioned_thread.task.reply_count, 0);
-    assert!(mentioned_thread.replies.is_empty());
+    assert_eq!(mentioned_thread.task.reply_count, 1);
+    assert!(mentioned_thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_coda" && reply.body == "Coda 已开始处理这个任务。"
+    }));
     let listed = response_json(
         app.clone()
             .oneshot(
@@ -2745,7 +2886,7 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
         .iter()
         .find(|message| message["id"] == json["outcome"]["messageId"])
         .unwrap();
-    assert_eq!(task_source_message["task"]["replyCount"], 0);
+    assert_eq!(task_source_message["task"]["replyCount"], 1);
 }
 
 #[tokio::test]
@@ -3223,6 +3364,14 @@ fn assert_broadcast_runs_started(
         assert!(
             prompt.contains("slei message read") && prompt.contains("slei message send"),
             "prompt should direct agent to use Slei CLI for history/reply operations: {prompt}"
+        );
+        assert!(
+            prompt.contains(&format!("slei agent status --agent {agent_id} --state")),
+            "prompt should use the real agent status command shape: {prompt}"
+        );
+        assert!(
+            !prompt.contains("slei status"),
+            "prompt should not include obsolete status command: {prompt}"
         );
         for fragment in expected_prompt_fragments {
             assert!(

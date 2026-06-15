@@ -1476,6 +1476,27 @@ impl Repositories {
         Ok(result.rows_affected() == 1)
     }
 
+    pub async fn mark_message_delivery_pending_for_run(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE message_deliveries
+             SET delivery_state = 'pending',
+                 run_id = NULL,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE message_id = ? AND agent_id = ? AND run_id = ? AND delivery_state = 'running'",
+        )
+        .bind(message_id)
+        .bind(agent_id)
+        .bind(run_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     pub async fn upsert_agent_status(&self, row: AgentStatusRow) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO agent_statuses(

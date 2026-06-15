@@ -96,7 +96,8 @@ struct ChannelAgentRunRecord {
     session_id: Option<String>,
     agent_id: String,
     source_message_id: String,
-    _task_id: Option<String>,
+    task_id: Option<String>,
+    suppress_visible_output: bool,
     output: String,
 }
 
@@ -737,7 +738,7 @@ impl ChannelOrchestratorService {
     pub(crate) async fn handle_channel_agent_worker_event_with_launch_guard(
         &self,
         event: Value,
-        _activity_guard: &ResetLaunchGuard,
+        activity_guard: &ResetLaunchGuard,
     ) -> Result<bool, ChannelOrchestratorError> {
         let Some(run_id) = event.get("run_id").and_then(Value::as_str) else {
             return Ok(false);
@@ -763,16 +764,17 @@ impl ChannelOrchestratorService {
                 let record = runs.remove(run_id).expect("channel agent run exists");
                 drop(runs);
                 let body = record.output.trim();
-                if !body.is_empty() && is_channel_join_run(&record.source_message_id) {
-                    self.messages
-                        .create_agent_channel_message_with_session(
-                            &record.channel_id,
-                            record.session_id.as_deref(),
-                            &record.agent_id,
-                            body,
-                        )
-                        .await?;
+                let mut visible_output_created = false;
+                if !body.is_empty() {
                     if is_channel_join_run(&record.source_message_id) {
+                        self.messages
+                            .create_agent_channel_message_with_session(
+                                &record.channel_id,
+                                record.session_id.as_deref(),
+                                &record.agent_id,
+                                body,
+                            )
+                            .await?;
                         self.channels
                             .set_member_readiness(
                                 &record.channel_id,
@@ -780,6 +782,31 @@ impl ChannelOrchestratorService {
                                 ChannelMemberReadiness::Ready,
                             )
                             .await?;
+                        visible_output_created = true;
+                    } else if let Some(task_id) = record.task_id.as_deref() {
+                        self.add_task_reply_with_launch_guard(
+                            task_id,
+                            &record.agent_id,
+                            body,
+                            &format!("channel-agent-run:{run_id}:task-reply"),
+                            activity_guard,
+                        )
+                        .await?;
+                        visible_output_created = true;
+                    } else if !record.suppress_visible_output {
+                        let _ = self
+                            .orchestration
+                            .record_diagnostic_event(
+                                "channel_agent_runtime.output_suppressed",
+                                &format!(
+                                    "run_id={} agent_id={} channel_id={} source_message_id={}",
+                                    run_id,
+                                    record.agent_id,
+                                    record.channel_id,
+                                    record.source_message_id
+                                ),
+                            )
+                            .await;
                     }
                 }
                 let _ = self
@@ -793,7 +820,7 @@ impl ChannelOrchestratorService {
                             record.channel_id,
                             record.source_message_id,
                             body.len(),
-                            is_channel_join_run(&record.source_message_id)
+                            visible_output_created
                         ),
                     )
                     .await;
@@ -814,6 +841,29 @@ impl ChannelOrchestratorService {
                             &format!(
                                 "run_id={} agent_id={} channel_id={} message={}",
                                 run_id, record.agent_id, record.channel_id, message
+                            ),
+                        )
+                        .await;
+                } else if let Some(task_id) = record.task_id.as_deref() {
+                    self.add_task_reply_with_launch_guard(
+                        task_id,
+                        &record.agent_id,
+                        message,
+                        &format!("channel-agent-run:{run_id}:task-failed"),
+                        activity_guard,
+                    )
+                    .await?;
+                } else if !record.suppress_visible_output {
+                    let _ = self
+                        .orchestration
+                        .record_diagnostic_event(
+                            "channel_agent_runtime.failed_output_suppressed",
+                            &format!(
+                                "run_id={} agent_id={} channel_id={} source_message_id={}",
+                                run_id,
+                                record.agent_id,
+                                record.channel_id,
+                                record.source_message_id
                             ),
                         )
                         .await;
@@ -1566,6 +1616,7 @@ impl ChannelOrchestratorService {
             prompt,
             agent,
             task_id,
+            false,
         )
         .await
     }
@@ -1579,6 +1630,7 @@ impl ChannelOrchestratorService {
         prompt: &str,
         agent: Option<crate::services::member_service::ProductAgentRecord>,
         task_id: Option<String>,
+        suppress_visible_output: bool,
     ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
             run.agent_id == agent_id
@@ -1614,18 +1666,27 @@ impl ChannelOrchestratorService {
                 session_id,
                 agent_id: agent_id.to_string(),
                 source_message_id: source_message_id.to_string(),
-                _task_id: task_id,
+                task_id,
+                suppress_visible_output,
                 output: String::new(),
             },
         );
-        let session = self.worker.create_session(CreateSessionRequest {
+        let session = match self.worker.create_session(CreateSessionRequest {
             agent_id: agent.id.clone(),
             cwd: agent.workspace_path.clone(),
             session_id: Uuid::new_v4().to_string(),
             resume_session: false,
-        })?;
-        self.worker
-            .start_run(run_id, &session, prompt, Vec::new())?;
+        }) {
+            Ok(session) => session,
+            Err(error) => {
+                self.channel_agent_runs.lock().await.remove(run_id);
+                return Err(error.into());
+            }
+        };
+        if let Err(error) = self.worker.start_run(run_id, &session, prompt, Vec::new()) {
+            self.channel_agent_runs.lock().await.remove(run_id);
+            return Err(error.into());
+        }
         let _ = self
             .orchestration
             .record_diagnostic_event(
@@ -1685,16 +1746,25 @@ impl ChannelOrchestratorService {
                 .await?
             {
                 let prompt = broadcast_message_prompt(&agent.id, message);
-                self.start_channel_agent_run_once_with_run_id(
-                    &run_id,
-                    &agent.id,
-                    &message.channel_id,
-                    &message.id,
-                    &prompt,
-                    Some(agent.clone()),
-                    None,
-                )
-                .await?;
+                if let Err(error) = self
+                    .start_channel_agent_run_once_with_run_id(
+                        &run_id,
+                        &agent.id,
+                        &message.channel_id,
+                        &message.id,
+                        &prompt,
+                        Some(agent.clone()),
+                        None,
+                        true,
+                    )
+                    .await
+                {
+                    let _ = self
+                        .claims
+                        .mark_message_delivery_pending_for_run(&message.id, &agent.id, &run_id)
+                        .await;
+                    return Err(error);
+                }
             }
             delivered_agent_ids.push(agent.id);
         }
@@ -1919,7 +1989,7 @@ fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
         message.channel_id, message.id, message.created_at, message_type, message.author_id, body
     );
     format!(
-        "agent_id={agent_id}\nchannel_id={channel_id}\nmessage_id={message_id}\nauthor_id={author_id}\ncreated_at={created_at}\n\nTriggering message:\n{visible_message}\n\nDecide whether this message needs your response. If you should handle it, first run exactly:\nslei message claim {message_id} --agent {agent_id}\n\nIf the claim succeeds, use the Slei CLI for all follow-up work: pull history with `slei message read`, inspect status with `slei status`, send channel replies with `slei message send`, and create/read/update tasks with `slei task` commands. Do not rely on this prompt for channel history; fetch history with CLI only when needed.",
+        "agent_id={agent_id}\nchannel_id={channel_id}\nmessage_id={message_id}\nauthor_id={author_id}\ncreated_at={created_at}\n\nTriggering message:\n{visible_message}\n\nDecide whether this message needs your response. If you should handle it, first run exactly:\nslei message claim {message_id} --agent {agent_id}\n\nIf the claim succeeds, use the Slei CLI for all follow-up work: pull history with `slei message read --channel #{channel_id}`, update status with `slei agent status --agent {agent_id} --state ... --phase ...`, send channel replies with `slei message send --target #{channel_id} --agent {agent_id} --body ...`, and create/read/update tasks with `slei task` commands. Do not rely on this prompt for channel history; fetch history with CLI only when needed.",
         channel_id = message.channel_id,
         message_id = message.id,
         author_id = message.author_id,

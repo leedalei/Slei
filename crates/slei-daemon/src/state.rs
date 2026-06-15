@@ -382,6 +382,11 @@ impl AppState {
         self.worker_transport.commands()
     }
 
+    #[doc(hidden)]
+    pub fn fail_next_worker_send_for_tests(&self) {
+        self.worker_transport.fail_next_send_for_tests();
+    }
+
     pub async fn handle_worker_event(&self, event: Value) -> Result<(), String> {
         let activity_guard = match self.reset_runtime.begin_launch().await {
             Ok(guard) => guard,

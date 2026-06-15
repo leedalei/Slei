@@ -12,6 +12,7 @@ type WorkerEventHandler = Arc<dyn Fn(Value) + Send + Sync + 'static>;
 pub struct WorkerTransport {
     commands: Arc<Mutex<Vec<Value>>>,
     local_runner: Arc<Mutex<Option<LocalRunnerTransport>>>,
+    fail_next_sends: Arc<Mutex<usize>>,
 }
 
 #[derive(Clone)]
@@ -32,6 +33,10 @@ impl std::fmt::Debug for WorkerTransport {
                     .lock()
                     .map(|runner| runner.is_some())
                     .unwrap_or(false),
+            )
+            .field(
+                "fail_next_sends",
+                &self.fail_next_sends.lock().map(|count| *count).unwrap_or(0),
             )
             .finish()
     }
@@ -66,6 +71,16 @@ impl WorkerTransport {
     }
 
     pub fn send(&self, command: Value) -> Result<(), WorkerRpcError> {
+        {
+            let mut fail_next_sends = self
+                .fail_next_sends
+                .lock()
+                .map_err(|_| WorkerRpcError::PoisonedTransport)?;
+            if *fail_next_sends > 0 {
+                *fail_next_sends -= 1;
+                return Err(WorkerRpcError::ForcedTransportFailure);
+            }
+        }
         self.commands
             .lock()
             .map_err(|_| WorkerRpcError::PoisonedTransport)?
@@ -86,6 +101,14 @@ impl WorkerTransport {
             .lock()
             .expect("fake worker transport lock")
             .clone()
+    }
+
+    #[doc(hidden)]
+    pub fn fail_next_send_for_tests(&self) {
+        *self
+            .fail_next_sends
+            .lock()
+            .expect("fake worker transport lock") += 1;
     }
 }
 
@@ -264,6 +287,8 @@ impl WorkerEvent {
 pub enum WorkerRpcError {
     #[error("worker transport lock poisoned")]
     PoisonedTransport,
+    #[error("forced worker transport failure")]
+    ForcedTransportFailure,
     #[error("worker event missing type")]
     MissingEventType,
     #[error("unknown worker event type: {0}")]
