@@ -159,6 +159,11 @@ pub async fn read_messages(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
+    let _activity_guard = match crate::api::begin_resettable_read(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
     match state
         .messages()
         .read_agent_messages(
@@ -183,6 +188,11 @@ pub async fn search_messages(
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+
+    let _activity_guard = match crate::api::begin_resettable_read(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
 
     match state
         .messages()

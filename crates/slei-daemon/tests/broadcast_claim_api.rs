@@ -243,6 +243,64 @@ async fn search_api_returns_matching_agent_visible_messages() {
 }
 
 #[tokio::test]
+async fn message_read_api_conflicts_during_reset() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "reset read", "reset-read-1", false)
+        .await
+        .unwrap();
+    let reset_guard = state.reset().runtime().begin_reset().await.unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/read?channel=all&limit=20",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = response_json(response).await;
+    assert_eq!(
+        body["error"],
+        "reset in progress; runtime launches are temporarily disabled"
+    );
+
+    reset_guard.finish().await;
+}
+
+#[tokio::test]
+async fn search_api_conflicts_during_reset() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "reset search", "reset-search-1", false)
+        .await
+        .unwrap();
+    let reset_guard = state.reset().runtime().begin_reset().await.unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/search?query=reset",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = response_json(response).await;
+    assert_eq!(
+        body["error"],
+        "reset in progress; runtime launches are temporarily disabled"
+    );
+
+    reset_guard.finish().await;
+}
+
+#[tokio::test]
 async fn agent_send_api_writes_agent_message_and_returns_message_id() {
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests(token.clone());
