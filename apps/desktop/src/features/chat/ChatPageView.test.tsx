@@ -178,10 +178,33 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("top-[20%]");
     expect(html).toContain("active:!translate-y-0");
     expect(html).toContain("transition-[right,background-color,color] duration-200 ease-out");
+    expect(html).toContain("right-0 bg-popover text-popover-foreground");
     expect(source).not.toContain("top-1/2");
     expect(source).not.toContain("-translate-y-1/2");
-    expect(source).toContain("bg-popover text-popover-foreground");
+    expect(source).toContain('variant={channelMembersOpen ? "outline" : "secondary"}');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
+  });
+
+  it("uses the lighter edge toggle background while the channel member drawer is expanded", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelMembersOpen
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("right-[min(20rem,calc(100%-2rem))]");
+    const toggleHtml = html.slice(html.indexOf('data-testid="slei-channel-members-edge-toggle"'));
+    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).not.toContain("bg-popover text-popover-foreground");
   });
 
   it("keeps the channel member panel mounted as an animated right drawer", () => {

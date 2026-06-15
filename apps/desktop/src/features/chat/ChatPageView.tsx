@@ -685,13 +685,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           aria-label={messages.chat.channelMembers}
           className={cn(
             "absolute top-[20%] z-30 h-12 w-8 rounded-r-none rounded-l-md border-r-0 shadow-sm transition-[right,background-color,color] duration-200 ease-out active:!translate-y-0",
-            channelMembersOpen ? "right-[min(20rem,calc(100%-2rem))] bg-popover text-popover-foreground" : "right-0",
+            channelMembersOpen ? "right-[min(20rem,calc(100%-2rem))]" : "right-0 bg-popover text-popover-foreground",
           )}
           data-testid="slei-channel-members-edge-toggle"
           onClick={() => setChannelMembersOpen((current) => !current)}
           title={messages.chat.channelMembers}
           type="button"
-          variant={channelMembersOpen ? "secondary" : "outline"}
+          variant={channelMembersOpen ? "outline" : "secondary"}
         >
           <Users aria-hidden="true" size={15} />
         </Button>
