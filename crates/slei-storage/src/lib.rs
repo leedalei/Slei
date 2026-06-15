@@ -335,6 +335,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_channel_messages_without_cursor_returns_latest_window_old_to_new() {
+        let (url, _path) = sqlite_file_url("message-read-latest-window");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..3 {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: format!("msg_{index}"),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(format!("body {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let messages = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(2),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            messages
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_1", "msg_2"]
+        );
+    }
+
+    #[tokio::test]
     async fn migration_creates_app_state_tables() {
         let (url, _path) = sqlite_file_url("app-state");
         let db = SleiDb::connect(&url).await.unwrap();

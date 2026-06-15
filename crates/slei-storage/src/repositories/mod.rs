@@ -1167,22 +1167,38 @@ impl Repositories {
             .bind(limit)
             .fetch_all(&self.pool)
             .await?
-        } else {
+        } else if query.after_sequence.is_some() {
             sqlx::query(
                 "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
                  FROM messages
                  WHERE channel_id = ?
-                   AND (? IS NULL OR rowid > ?)
+                   AND rowid > ?
                    AND (? IS NULL OR rowid < ?)
                    AND kind NOT IN ('task_root', 'task_reply')
                  ORDER BY rowid ASC
                  LIMIT ?",
             )
             .bind(&query.channel_id)
-            .bind(query.after_sequence)
-            .bind(query.after_sequence)
+            .bind(query.after_sequence.unwrap_or_default())
             .bind(query.before_sequence)
             .bind(query.before_sequence)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                 FROM (
+                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                    FROM messages
+                    WHERE channel_id = ?
+                      AND kind NOT IN ('task_root', 'task_reply')
+                    ORDER BY rowid DESC
+                    LIMIT ?
+                 )
+                 ORDER BY sequence ASC",
+            )
+            .bind(&query.channel_id)
             .bind(limit)
             .fetch_all(&self.pool)
             .await?
