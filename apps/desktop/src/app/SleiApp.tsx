@@ -177,6 +177,11 @@ function coordinatorRoutingActivitySourceId(message: SleiMessage): string | unde
     : undefined;
 }
 
+function channelAgentActivitySourceId(message: SleiMessage): string | undefined {
+  if (message.toolCall !== "channel_agent_reply") return undefined;
+  return message.sourceMessageId ?? message.id.match(/^agent-activity-(.+)-agent[_-]/)?.[1];
+}
+
 function hasRoutedChannelResultAfterSource(channelMessages: SleiMessage[], sourceMessageId: string): boolean {
   const sourceIndex = channelMessages.findIndex((message) => message.id === sourceMessageId);
   if (sourceIndex < 0) return false;
@@ -192,8 +197,10 @@ export function replaceChannelMessages(current: SleiMessage[], channelMessages: 
     ...current.filter((message) => {
       if (!message.channelId || message.channelId.startsWith("dm:") || !ids.has(message.channelId)) return true;
       const coordinatorSourceId = coordinatorRoutingActivitySourceId(message);
-      if (!coordinatorSourceId) return false;
-      return !hasRoutedChannelResultAfterSource(channelMessages, coordinatorSourceId);
+      const agentSourceId = channelAgentActivitySourceId(message);
+      const activitySourceId = coordinatorSourceId ?? agentSourceId;
+      if (!activitySourceId) return false;
+      return !hasRoutedChannelResultAfterSource(channelMessages, activitySourceId);
     }),
     ...channelMessages,
   ];
@@ -412,6 +419,37 @@ export function createCoordinatorRoutingActivityMessage(outcome: SendChannelMess
     status: "pending",
     toolCall: "coordinator_routing",
   };
+}
+
+function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
+  const ids = outcome.assigneeAgentIds && outcome.assigneeAgentIds.length > 0
+    ? outcome.assigneeAgentIds
+    : outcome.assigneeAgentId
+      ? [outcome.assigneeAgentId]
+      : [];
+  return ids.filter((agentId, index) => agentId && ids.indexOf(agentId) === index);
+}
+
+export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
+  if (outcome.action !== "request_agent_reply") return [];
+  return channelReplyTargetIds(outcome).flatMap((agentId) => {
+    const member = members.find((candidate) => candidate.id === agentId);
+    if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];
+    if (member?.directMessageEnabled === false) return [];
+    return [{
+      id: `agent-activity-${outcome.messageId}-${agentId}`,
+      author: member?.name ?? agentId,
+      handle: member?.handle,
+      avatar: member?.avatar,
+      role: "agent" as const,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      body: "",
+      channelId,
+      status: "pending" as const,
+      sourceMessageId: outcome.messageId,
+      toolCall: "channel_agent_reply",
+    }];
+  });
 }
 
 function logAppEvent(bridge: DaemonBridge, scope: string, message: string, context?: Record<string, unknown>) {
@@ -1257,7 +1295,8 @@ export function SleiApp() {
     setData((current) => {
       const archiveNotice = createChannelArchiveNoticeMessage(result.receipt.outcome, targetId, messages);
       const coordinatorActivity = createCoordinatorRoutingActivityMessage(result.receipt.outcome, targetId, messages);
-      const nextMessages = [channelMessage, archiveNotice, coordinatorActivity].filter((message): message is SleiMessage => Boolean(message));
+      const agentActivities = createChannelAgentActivityMessages(result.receipt.outcome, targetId, current.members);
+      const nextMessages = [channelMessage, archiveNotice, coordinatorActivity, ...agentActivities].filter((message): message is SleiMessage => Boolean(message));
       return createEmptySleiData({ ...current, messages: [...current.messages, ...nextMessages] });
     });
     void refreshChannelMessagesIntoState(targetId, data.members).catch((error: unknown) => {

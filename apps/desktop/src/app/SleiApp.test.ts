@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   channelMessageToSleiMessage,
+  createChannelAgentActivityMessages,
   createCoordinatorRoutingActivityMessage,
   debugLaunchEnabledFromSearch,
   findActiveAgentActivities,
@@ -13,7 +14,6 @@ import {
 } from "./SleiApp";
 import {
   channelReplyTargetIds,
-  createChannelAgentActivityMessages,
   createChannelAgentReplyMessage,
   createChannelAgentReplyMessageFromReplies,
   waitForChannelAgentReplies,
@@ -103,6 +103,48 @@ describe("createChannelAgentReplyMessage", () => {
     expect(replaceChannelMessages([human, pending], [human, taskCard], ["all"]).map((message) => message.id)).toEqual([
       "msg_route_1",
       "msg_task_1",
+    ]);
+  });
+
+  it("keeps direct agent activity during pending refresh and removes it after the agent reply appears", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_alice",
+      author: "Alice",
+      handle: "@alice",
+      avatar: "AL",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "all",
+      status: "pending",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const human = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "",
+      body: "@alice 看下这个页面",
+      channelId: "all",
+    } satisfies SleiMessage;
+
+    expect(replaceChannelMessages([human, pending], [human], ["all"]).map((message) => message.id)).toEqual([
+      "agent-activity-msg_route_1-agent_alice",
+      "msg_route_1",
+    ]);
+
+    const agentReply = {
+      id: "msg_agent_1",
+      author: "Alice",
+      role: "agent",
+      time: "",
+      body: "我来看。",
+      channelId: "all",
+      status: "done",
+    } satisfies SleiMessage;
+    expect(replaceChannelMessages([human, pending], [human, agentReply], ["all"]).map((message) => message.id)).toEqual([
+      "msg_route_1",
+      "msg_agent_1",
     ]);
   });
 

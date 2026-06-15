@@ -33,6 +33,7 @@ export type SleiMessage = {
   cards?: InteractiveCardView[];
   channelId?: string;
   status?: "running" | "approval" | "done" | "failed" | "pending" | "undecided";
+  sourceMessageId?: string;
   taskCard?: { taskId: string; sourceMessageId?: string };
   toolCall?: string;
 };

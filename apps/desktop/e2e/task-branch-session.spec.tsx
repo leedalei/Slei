@@ -36,7 +36,9 @@ describe("task branch sessions", () => {
     expect(appSource).not.toContain("runChannelAgentReply");
     expect(appSource).not.toContain("taskAgentReplyPrompt");
     expect(appSource).not.toContain("createChannelTaskPlaceholder");
-    expect(appSource).not.toContain("createChannelAgentActivityMessages(result.receipt.outcome");
+    expect(appSource).not.toContain("waitForChannelAgentReply");
+    expect(appSource).not.toContain("createChannelAgentReplyMessage(result.receipt.outcome");
+    expect(appSource).toContain("createChannelAgentActivityMessages(result.receipt.outcome");
     expect(appSource).toContain("const threadReceipt = await bridge.getTaskThread(taskId)");
     expect(appSource).toContain("applyTaskThreadReceiptToState(threadReceipt)");
     expect(appSource).toContain('"task-agent-reply", "delegated-to-daemon"');
