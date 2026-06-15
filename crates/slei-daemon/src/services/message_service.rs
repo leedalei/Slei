@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use slei_storage::db::SleiDb;
-use slei_storage::repositories::{ChannelMessageRow, NewChannelMessageRow, Repositories};
+use slei_storage::repositories::{
+    ChannelMessageRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
+};
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
@@ -38,6 +40,27 @@ pub struct MessageRecord {
     pub created_at: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cards: Vec<InteractiveCardView>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentVisibleMessageRecord {
+    pub id: String,
+    pub message_id: String,
+    pub sequence: Option<i64>,
+    pub channel_id: String,
+    pub author_id: String,
+    pub body: Option<String>,
+    pub as_task: bool,
+    pub kind: MessageKind,
+    #[serde(rename = "type")]
+    pub message_type: MessageKind,
+    pub deleted: bool,
+    pub edited: bool,
+    pub created_at: String,
+    pub header_text: String,
+    pub visible_text: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -383,6 +406,124 @@ impl MessageService {
         Ok(message)
     }
 
+    pub async fn read_agent_messages(
+        &self,
+        channel: &str,
+        limit: Option<i64>,
+        after_sequence: Option<i64>,
+        before_sequence: Option<i64>,
+        around_message_id: Option<&str>,
+    ) -> Result<Vec<AgentVisibleMessageRecord>, MessageError> {
+        let (channel_id, _) = parse_message_target(channel)?;
+        let around_message_id = match around_message_id.map(str::trim) {
+            Some("") => return Err(MessageError::InvalidMessage),
+            Some(message_id) => Some(message_id.to_string()),
+            None => None,
+        };
+        let rows = self
+            .repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id,
+                limit,
+                after_sequence,
+                before_sequence,
+                around_message_id,
+            })
+            .await
+            .map_err(message_storage_error)?;
+        Ok(rows
+            .into_iter()
+            .filter(|row| !row.deleted)
+            .map(agent_visible_message_from_row)
+            .collect())
+    }
+
+    pub async fn search_agent_messages(
+        &self,
+        query: &str,
+        limit: Option<i64>,
+    ) -> Result<Vec<AgentVisibleMessageRecord>, MessageError> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Err(MessageError::InvalidMessage);
+        }
+        let rows = self
+            .repos
+            .search_channel_messages(query, limit.unwrap_or(20))
+            .await
+            .map_err(message_storage_error)?;
+        Ok(rows
+            .into_iter()
+            .filter(|row| !row.deleted)
+            .map(agent_visible_message_from_row)
+            .collect())
+    }
+
+    pub async fn send_agent_channel_message(
+        &self,
+        target: &str,
+        agent_id: &str,
+        body: &str,
+        idempotency_key: &str,
+    ) -> Result<MessageRecord, MessageError> {
+        let (channel_id, _) = parse_message_target(target)?;
+        if agent_id.trim().is_empty() || body.trim().is_empty() || idempotency_key.trim().is_empty()
+        {
+            return Err(MessageError::InvalidMessage);
+        }
+        let idempotency_key = namespaced_key("message:create_agent", idempotency_key)
+            .ok_or(MessageError::InvalidMessage)?;
+        let _idempotency_guard = self.idempotency_gate.lock().await;
+        if let Some(payload) = self
+            .repos
+            .idempotent_response(&idempotency_key)
+            .await
+            .map_err(message_storage_error)?
+        {
+            let message_id = idempotent_entity_id(&payload);
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .channel_message_idempotency
+                .insert(idempotency_key.clone(), message_id.clone());
+            return self.message(&message_id).await;
+        }
+        let idempotent_message_id = {
+            self.inner
+                .lock()
+                .expect("message state lock")
+                .channel_message_idempotency
+                .get(&idempotency_key)
+                .cloned()
+        };
+        if let Some(message_id) = idempotent_message_id {
+            return self.message(&message_id).await;
+        }
+
+        let message = build_message_with_as_task(
+            &channel_id,
+            None,
+            agent_id.trim(),
+            Some(body),
+            MessageKind::Agent,
+            false,
+        );
+        self.insert_record_idempotent(
+            message.clone(),
+            &idempotency_key,
+            &json!({ "messageId": message.id }).to_string(),
+        )
+        .await?;
+        let mut state = self.inner.lock().expect("message state lock");
+        state
+            .channel_message_idempotency
+            .insert(idempotency_key, message.id.clone());
+        state
+            .event_payloads
+            .push(format!("message.created:{}", message.id));
+        Ok(message)
+    }
+
     pub async fn channel_message_for_idempotency(
         &self,
         idempotency_key: &str,
@@ -617,6 +758,77 @@ fn idempotent_entity_id(payload: &str) -> String {
                 })
         })
         .unwrap_or_else(|| payload.to_string())
+}
+
+pub fn format_agent_visible_message(
+    target: &str,
+    msg_id: &str,
+    time: &str,
+    message_type: &str,
+    sender_handle: &str,
+    body: &str,
+) -> String {
+    format!(
+        "[target={target} msg={msg_id} time={time} type={message_type}] {sender_handle}: {body}"
+    )
+}
+
+fn agent_visible_message_from_row(row: ChannelMessageRow) -> AgentVisibleMessageRecord {
+    let message_type = kind_from_storage(&row.kind);
+    let body = row.body.unwrap_or_default();
+    let target = channel_target(&row.channel_id);
+    let header_text = format!(
+        "[target={} msg={} time={} type={}]",
+        target, row.id, row.created_at, row.kind
+    );
+    let visible_text = format_agent_visible_message(
+        &target,
+        &row.id,
+        &row.created_at,
+        &row.kind,
+        &row.author_id,
+        &body,
+    );
+    AgentVisibleMessageRecord {
+        id: row.id.clone(),
+        message_id: row.id,
+        sequence: row.sequence,
+        channel_id: row.channel_id,
+        author_id: row.author_id,
+        body: Some(body),
+        as_task: row.as_task,
+        kind: message_type.clone(),
+        message_type,
+        deleted: row.deleted,
+        edited: row.edited,
+        created_at: row.created_at,
+        header_text,
+        text: visible_text.clone(),
+        visible_text,
+    }
+}
+
+fn parse_message_target(target: &str) -> Result<(String, Option<String>), MessageError> {
+    let target = target.trim();
+    if target.is_empty() {
+        return Err(MessageError::InvalidMessage);
+    }
+    let target = target.strip_prefix('#').unwrap_or(target).trim();
+    let (channel_id, thread_message_id) = target
+        .split_once(':')
+        .map(|(channel_id, message_id)| (channel_id.trim(), Some(message_id.trim())))
+        .unwrap_or((target, None));
+    if channel_id.is_empty() || thread_message_id == Some("") {
+        return Err(MessageError::InvalidMessage);
+    }
+    Ok((
+        channel_id.to_string(),
+        thread_message_id.map(ToString::to_string),
+    ))
+}
+
+fn channel_target(channel_id: &str) -> String {
+    format!("#{channel_id}")
 }
 
 fn build_message(

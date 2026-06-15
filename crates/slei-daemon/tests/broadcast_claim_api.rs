@@ -3,6 +3,7 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::state::AppState;
 use tower::ServiceExt;
 
@@ -29,9 +30,294 @@ fn authed_empty_request(token: &AuthToken, uri: impl AsRef<str>) -> Request<Body
         .unwrap()
 }
 
+fn authed_json_request_with_idempotency(
+    token: &AuthToken,
+    method: &str,
+    uri: impl AsRef<str>,
+    idempotency_key: &str,
+    body: Value,
+) -> Request<Body> {
+    Request::builder()
+        .method(method)
+        .uri(uri.as_ref())
+        .header("authorization", token.authorization_header())
+        .header("content-type", "application/json")
+        .header("idempotency-key", idempotency_key)
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn message_read_api_returns_agent_visible_recent_messages() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "大家好", "read-recent-1", false)
+        .await
+        .unwrap();
+    let agent_message = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "@lei-lee 已完成")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/read?channel=all&limit=20",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 2);
+
+    let message = messages
+        .iter()
+        .find(|message| message["messageId"] == agent_message.id)
+        .unwrap();
+    assert_eq!(message["id"], agent_message.id);
+    assert_eq!(message["channelId"], "all");
+    assert_eq!(message["authorId"], "agent_cindy");
+    assert_eq!(message["kind"], "agent");
+    assert_eq!(message["type"], "agent");
+    assert_eq!(message["body"], "@lei-lee 已完成");
+    assert!(message["sequence"].as_i64().unwrap() > 0);
+    let created_at = message["createdAt"].as_str().unwrap();
+    assert_eq!(
+        message["visibleText"],
+        format!(
+            "[target=#all msg={} time={} type=agent] agent_cindy: @lei-lee 已完成",
+            agent_message.id, created_at
+        )
+    );
+}
+
+#[tokio::test]
+async fn message_read_api_reads_after_and_before_sequence_anchors() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let first = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "第一条", "read-anchor-1", false)
+        .await
+        .unwrap();
+    let second = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "第二条")
+        .await
+        .unwrap();
+    let third = state
+        .messages()
+        .create_agent_channel_message("all", "agent_mina", "第三条")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let recent = app
+        .clone()
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/read?channel=all&limit=20",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(recent.status(), StatusCode::OK);
+    let recent_body = response_json(recent).await;
+    let messages = recent_body["messages"].as_array().unwrap();
+    let second_sequence = messages
+        .iter()
+        .find(|message| message["messageId"] == second.id)
+        .unwrap()["sequence"]
+        .as_i64()
+        .unwrap();
+
+    let after = app
+        .clone()
+        .oneshot(authed_empty_request(
+            &token,
+            format!("/v1/messages/read?channel=all&after={second_sequence}&limit=20"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(after.status(), StatusCode::OK);
+    let after_body = response_json(after).await;
+    let after_messages = after_body["messages"].as_array().unwrap();
+    assert_eq!(after_messages.len(), 1);
+    assert_eq!(after_messages[0]["messageId"], third.id);
+
+    let before = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!("/v1/messages/read?channel=all&before={second_sequence}&limit=20"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(before.status(), StatusCode::OK);
+    let before_body = response_json(before).await;
+    let before_messages = before_body["messages"].as_array().unwrap();
+    assert_eq!(before_messages.len(), 1);
+    assert_eq!(before_messages[0]["messageId"], first.id);
+}
+
+#[tokio::test]
+async fn message_read_api_reads_context_around_message_id() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let before = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "before", "read-around-1", false)
+        .await
+        .unwrap();
+    let center = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "center")
+        .await
+        .unwrap();
+    let after = state
+        .messages()
+        .create_agent_channel_message("all", "agent_mina", "after")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!("/v1/messages/read?channel=all&around={}&limit=3", center.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let message_ids = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| message["messageId"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(message_ids, vec![before.id, center.id, after.id]);
+}
+
+#[tokio::test]
+async fn search_api_returns_matching_agent_visible_messages() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "普通消息", "search-1", false)
+        .await
+        .unwrap();
+    let matched = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "包含关键词的消息")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/messages/search?query=关键词",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let messages = body["messages"].as_array().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["messageId"], matched.id);
+    assert_eq!(messages[0]["body"], "包含关键词的消息");
+    assert!(messages[0]["visibleText"]
+        .as_str()
+        .unwrap()
+        .starts_with(&format!("[target=#all msg={}", matched.id)));
+}
+
+#[tokio::test]
+async fn agent_send_api_writes_agent_message_and_returns_message_id() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state.clone());
+
+    let response = app
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "agent-send-once",
+            json!({
+                "target": "#all",
+                "agentId": "agent_cindy",
+                "body": "@lei-lee 已完成"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let message_id = body["messageId"].as_str().unwrap();
+
+    let messages = state.channel_messages_for_tests("all").await;
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].id, message_id);
+    assert_eq!(messages[0].author_id, "agent_cindy");
+    assert_eq!(messages[0].kind, MessageKind::Agent);
+    assert_eq!(messages[0].body.as_deref(), Some("@lei-lee 已完成"));
+    assert!(!messages[0].as_task);
+}
+
+#[tokio::test]
+async fn agent_send_api_is_idempotent_for_retries() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let app = build_router(state.clone());
+
+    let first = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "agent-send-retry",
+            json!({
+                "target": "#all",
+                "agentId": "agent_cindy",
+                "body": "@lei-lee 已完成"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first_body = response_json(first).await;
+    let message_id = first_body["messageId"].as_str().unwrap().to_string();
+
+    let retry = app
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/messages/send",
+            "agent-send-retry",
+            json!({
+                "target": "#all",
+                "agentId": "agent_cindy",
+                "body": "@lei-lee 已完成"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(retry.status(), StatusCode::OK);
+    let retry_body = response_json(retry).await;
+    assert_eq!(retry_body["messageId"], message_id);
+    assert_eq!(state.channel_messages_for_tests("all").await.len(), 1);
 }
 
 #[tokio::test]

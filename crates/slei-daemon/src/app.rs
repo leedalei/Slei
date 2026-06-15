@@ -36,6 +36,9 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/channels/{id}/messages",
             get(api::messages::list_channel_messages).post(api::messages::send_channel_message),
         )
+        .route("/v1/messages/read", get(api::messages::read_messages))
+        .route("/v1/messages/search", get(api::messages::search_messages))
+        .route("/v1/messages/send", post(api::messages::send_agent_message))
         .route(
             "/v1/claims/messages/{message_id}",
             post(api::claims::claim_message),

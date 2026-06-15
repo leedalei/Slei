@@ -26,6 +26,38 @@ pub struct SendChannelMessageRequest {
     as_task: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadMessagesQuery {
+    channel: String,
+    limit: Option<i64>,
+    after: Option<i64>,
+    before: Option<i64>,
+    around: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchMessagesQuery {
+    query: String,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendAgentMessageRequest {
+    target: String,
+    agent_id: String,
+    body: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SendAgentMessageResponse {
+    message_id: String,
+    message: ChannelMessageView,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChannelMessageView {
@@ -118,6 +150,101 @@ pub async fn list_channel_messages(
     Json(json!({ "messages": messages })).into_response()
 }
 
+pub async fn read_messages(
+    State(state): State<AppState>,
+    Query(query): Query<ReadMessagesQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state
+        .messages()
+        .read_agent_messages(
+            &query.channel,
+            query.limit,
+            query.after,
+            query.before,
+            query.around.as_deref(),
+        )
+        .await
+    {
+        Ok(messages) => Json(json!({ "messages": messages })).into_response(),
+        Err(error) => message_error_response(error),
+    }
+}
+
+pub async fn search_messages(
+    State(state): State<AppState>,
+    Query(query): Query<SearchMessagesQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state
+        .messages()
+        .search_agent_messages(&query.query, query.limit)
+        .await
+    {
+        Ok(messages) => Json(json!({ "messages": messages })).into_response(),
+        Err(error) => message_error_response(error),
+    }
+}
+
+pub async fn send_agent_message(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SendAgentMessageRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let Some(idempotency_key) = headers
+        .get("idempotency-key")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "idempotency-key is required" })),
+        )
+            .into_response();
+    };
+
+    let activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let result = state
+        .messages()
+        .send_agent_channel_message(
+            &payload.target,
+            &payload.agent_id,
+            &payload.body,
+            idempotency_key,
+        )
+        .await;
+    drop(activity_guard);
+
+    match result {
+        Ok(message) => {
+            let message_id = message.id.clone();
+            Json(SendAgentMessageResponse {
+                message_id,
+                message: ChannelMessageView::from_record(message, None),
+            })
+            .into_response()
+        }
+        Err(error) => message_error_response(error),
+    }
+}
+
 pub async fn send_channel_message(
     State(state): State<AppState>,
     Path(channel_id): Path<String>,
@@ -192,6 +319,17 @@ pub async fn send_channel_message(
         }
         Err(error) => channel_message_error_response(error),
     }
+}
+
+fn message_error_response(error: MessageError) -> Response {
+    let status = match error {
+        MessageError::MessageNotFound => StatusCode::NOT_FOUND,
+        MessageError::InvalidMessage
+        | MessageError::AgentMessageImmutable
+        | MessageError::PrimaryAgentMissing => StatusCode::BAD_REQUEST,
+        MessageError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    (status, Json(json!({ "error": error.to_string() }))).into_response()
 }
 
 fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
