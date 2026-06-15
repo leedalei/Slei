@@ -927,9 +927,16 @@ impl ChannelOrchestratorService {
         let mut assignee_agent_ids = decision.assignee_agent_ids.clone();
         let mut reason = decision.reason.clone();
         if message.as_task {
-            assignee_agent_id = assignee_agent_id.or_else(|| explicit_agent_ids.first().cloned());
-            assignee_agent_ids = assignee_agent_id.iter().cloned().collect();
-            action = if assignee_agent_id.is_some() {
+            let task_targets = if !explicit_agent_ids.is_empty() {
+                explicit_agent_ids.clone()
+            } else if !assignee_agent_ids.is_empty() {
+                assignee_agent_ids.clone()
+            } else {
+                assignee_agent_id.iter().cloned().collect()
+            };
+            assignee_agent_id = task_targets.first().cloned();
+            assignee_agent_ids = task_targets;
+            action = if !assignee_agent_ids.is_empty() {
                 "create_task_and_assign".to_string()
             } else {
                 "needs_manual_assignment".to_string()

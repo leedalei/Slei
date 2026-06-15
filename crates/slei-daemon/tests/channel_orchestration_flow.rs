@@ -2248,7 +2248,10 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
     complete_coordinator_run(
         &state,
         json["outcome"]["coordinatorRunId"].as_str().unwrap(),
-        manual_reply_decision_json("asTask without mention should still become manual assignment"),
+        reply_decision_targets_only_json(
+            "agent_coda",
+            "coordinator selected Coda for the converted task",
+        ),
     )
     .await;
     let response = app
@@ -2273,8 +2276,25 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
         .await
         .unwrap();
     let json = response_json(response).await;
-    assert_eq!(json["outcome"]["action"], "needs_manual_assignment");
-    assert!(json["outcome"]["taskId"].as_str().is_some());
+    assert_eq!(json["outcome"]["action"], "create_task_and_assign");
+    assert_eq!(json["outcome"]["assigneeAgentId"], "agent_coda");
+    assert_eq!(json["outcome"]["assigneeAgentIds"], json!(["agent_coda"]));
+    let task_id = json["outcome"]["taskId"].as_str().unwrap();
+    let task_cards = state
+        .channel_messages_for_tests("dev")
+        .await
+        .into_iter()
+        .filter(|message| message.kind == MessageKind::TaskCard)
+        .collect::<Vec<_>>();
+    assert_eq!(task_cards.len(), 1);
+    assert!(task_cards[0]
+        .body
+        .as_deref()
+        .is_some_and(|body| body.contains(task_id)));
+    let inbox = state.agent_inbox().events_for_agent("agent_coda").await;
+    assert!(inbox.iter().any(|event| {
+        event.event_type == "task_assigned" && event.task_id.as_deref() == Some(task_id)
+    }));
 
     let response = app
         .clone()
@@ -2892,6 +2912,20 @@ fn reply_decision_json(agent_id: &str, reason: &str) -> String {
         "action": "request_agent_reply",
         "routeMode": "explicit",
         "primaryAssigneeAgentId": agent_id,
+        "targetAgentIds": [agent_id],
+        "task": null,
+        "reason": reason,
+        "confidence": 0.9
+    })
+    .to_string()
+}
+
+fn reply_decision_targets_only_json(agent_id: &str, reason: &str) -> String {
+    json!({
+        "intent": "consultation",
+        "action": "request_agent_reply",
+        "routeMode": "semantic",
+        "primaryAssigneeAgentId": null,
         "targetAgentIds": [agent_id],
         "task": null,
         "reason": reason,
