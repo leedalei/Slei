@@ -356,6 +356,7 @@ function ChannelMemberPanel(input: {
   channelId: string;
   members: SleiMember[];
   messages: DesktopMessages;
+  open: boolean;
   onAdd?: (agentId: string) => Promise<void> | void;
   onRemove?: (agentId: string) => Promise<void> | void;
 }) {
@@ -381,7 +382,16 @@ function ChannelMemberPanel(input: {
   }
 
   return (
-    <aside aria-label={input.messages.chat.channelMembers} className="absolute bottom-0 right-0 top-16 z-20 grid w-80 max-w-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-popover p-3 text-popover-foreground shadow-lg" data-testid="slei-channel-member-panel">
+    <aside
+      aria-hidden={input.open ? undefined : "true"}
+      aria-label={input.messages.chat.channelMembers}
+      className={cn(
+        "absolute bottom-0 right-0 top-[calc(4rem+1px)] z-20 grid w-[min(20rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-popover p-3 text-popover-foreground shadow-lg transition-transform duration-200 ease-out",
+        input.open ? "translate-x-0" : "pointer-events-none translate-x-full",
+      )}
+      data-testid="slei-channel-member-panel"
+      inert={input.open ? undefined : true}
+    >
       <div className="relative flex items-center justify-between gap-2">
         <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
           <Users aria-hidden="true" size={16} />
@@ -663,7 +673,10 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <Button
           aria-expanded={channelMembersOpen ? "true" : "false"}
           aria-label={messages.chat.channelMembers}
-          className={cn("absolute top-1/2 z-30 h-12 w-8 -translate-y-1/2 rounded-r-none rounded-l-md border-r-0 shadow-sm", channelMembersOpen ? "right-[min(20rem,calc(100%-2rem))]" : "right-0")}
+          className={cn(
+            "absolute top-[20%] z-30 h-12 w-8 rounded-r-none rounded-l-md border-r-0 shadow-sm transition-[right,background-color,color] duration-200 ease-out active:!translate-y-0",
+            channelMembersOpen ? "right-[min(20rem,calc(100%-2rem))] bg-popover text-popover-foreground" : "right-0",
+          )}
           data-testid="slei-channel-members-edge-toggle"
           onClick={() => setChannelMembersOpen((current) => !current)}
           title={messages.chat.channelMembers}
@@ -673,12 +686,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           <Users aria-hidden="true" size={15} />
         </Button>
       ) : null}
-      {!dmMember && channelMembersOpen ? (
+      {!dmMember ? (
         <ChannelMemberPanel
           availableMembers={availableChannelMembers}
           channelId={activeChannel.id}
           members={channelMembers}
           messages={messages}
+          open={channelMembersOpen}
           onAdd={onChannelMemberAdd}
           onRemove={onChannelMemberRemove}
         />

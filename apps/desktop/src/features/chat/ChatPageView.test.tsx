@@ -146,6 +146,10 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain('data-testid="slei-channel-member-panel"');
+    expect(html).toContain("top-[calc(4rem+1px)]");
+    expect(html).toContain("w-[min(20rem,calc(100%-2rem))]");
+    expect(html).toContain("transition-transform duration-200 ease-out");
+    expect(html).toContain("translate-x-0");
     expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-menu"');
     expect(html).toContain("lucide-plus");
     expect(html).toContain("Coda");
@@ -171,7 +175,34 @@ describe("ChatPage mention panel", () => {
     const source = readChatPageSource();
 
     expect(html).toContain('data-testid="slei-channel-members-edge-toggle"');
+    expect(html).toContain("top-[20%]");
+    expect(html).toContain("active:!translate-y-0");
+    expect(html).toContain("transition-[right,background-color,color] duration-200 ease-out");
+    expect(source).not.toContain("top-1/2");
+    expect(source).not.toContain("-translate-y-1/2");
+    expect(source).toContain("bg-popover text-popover-foreground");
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
+  });
+
+  it("keeps the channel member panel mounted as an animated right drawer", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-channel-member-panel"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("translate-x-full");
+    expect(html).toContain("pointer-events-none");
   });
 
   it("keeps channel member add and remove mutations behind confirmation UI", () => {
