@@ -7,6 +7,7 @@ pub mod card_service;
 pub mod channel_join_report_service;
 pub mod channel_orchestrator_service;
 pub mod channel_service;
+pub mod claim_service;
 pub mod conversation_service;
 pub mod coordinator_service;
 pub mod delegation_service;

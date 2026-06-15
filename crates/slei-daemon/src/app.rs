@@ -37,8 +37,21 @@ pub fn build_router(state: AppState) -> Router {
             get(api::messages::list_channel_messages).post(api::messages::send_channel_message),
         )
         .route(
+            "/v1/claims/messages/{message_id}",
+            post(api::claims::claim_message),
+        )
+        .route("/v1/claims/tasks/{task_id}", post(api::claims::claim_task))
+        .route(
             "/v1/agents",
             get(api::members::list_agents).post(api::members::create_agent),
+        )
+        .route(
+            "/v1/agents/{agent_id}/status",
+            post(api::claims::update_agent_status),
+        )
+        .route(
+            "/v1/agents/{agent_id}/activity",
+            get(api::claims::agent_activity),
         )
         .route(
             "/v1/agents/guide/bootstrap",

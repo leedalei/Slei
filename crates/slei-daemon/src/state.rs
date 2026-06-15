@@ -7,6 +7,7 @@ use crate::services::card_service::CardService;
 use crate::services::channel_join_report_service::ChannelJoinReportService;
 use crate::services::channel_orchestrator_service::ChannelOrchestratorService;
 use crate::services::channel_service::ChannelService;
+use crate::services::claim_service::ClaimService;
 use crate::services::conversation_service::ConversationService;
 use crate::services::coordinator_service::CoordinatorService;
 use crate::services::event_service::EventService;
@@ -39,6 +40,7 @@ pub struct AppState {
     event_service: EventService,
     settings_service: SettingsService,
     task_service: TaskService,
+    claims: ClaimService,
     orchestration_store: OrchestrationStore,
     coordinator_service: CoordinatorService,
     agent_inbox_service: AgentInboxService,
@@ -165,6 +167,7 @@ impl AppState {
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let task_service = TaskService::new(repos.clone());
+        let claims = ClaimService::new(repos.clone());
         let memory_maintainer_service = MemoryMaintainerService::new(
             member_service.clone(),
             channel_service.clone(),
@@ -217,6 +220,7 @@ impl AppState {
             event_service,
             settings_service,
             task_service,
+            claims,
             orchestration_store,
             coordinator_service,
             agent_inbox_service,
@@ -267,6 +271,10 @@ impl AppState {
 
     pub fn tasks(&self) -> &TaskService {
         &self.task_service
+    }
+
+    pub fn claims(&self) -> &ClaimService {
+        &self.claims
     }
 
     pub fn orchestration(&self) -> &OrchestrationStore {

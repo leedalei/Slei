@@ -3,6 +3,7 @@ pub mod artifacts;
 pub mod capabilities;
 pub mod cards;
 pub mod channels;
+pub mod claims;
 pub mod conversations;
 pub mod delegations;
 pub mod dev;
