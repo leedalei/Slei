@@ -41,6 +41,11 @@ mod tests {
             "memory_document_states",
             "routing_context_packages",
             "schema_migrations",
+            "message_deliveries",
+            "message_claims",
+            "task_claims",
+            "agent_statuses",
+            "agent_activity_logs",
         ] {
             assert!(db.table_exists(table).await.unwrap(), "missing {table}");
         }
@@ -60,7 +65,24 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2]);
+        assert_eq!(versions, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn migration_records_broadcast_claim_version() {
+        let (url, _path) = sqlite_file_url("broadcast-claim-version");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate().await.unwrap();
+
+        let versions = sqlx::query_scalar::<_, i64>(
+            "SELECT version FROM schema_migrations ORDER BY version ASC",
+        )
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+
+        assert_eq!(versions, vec![1, 2, 3]);
     }
 
     #[tokio::test]
@@ -277,6 +299,73 @@ mod tests {
             .await
             .unwrap();
         sqlx::query(
+            "INSERT INTO message_deliveries(id, message_id, channel_id, agent_id, delivery_state, run_id)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(message_id.to_string())
+        .bind(channel_uuid.to_string())
+        .bind("agent_reset")
+        .bind("pending")
+        .bind("run-reset")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO message_claims(id, message_id, claim_scope, agent_id, status)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(message_id.to_string())
+        .bind("reply")
+        .bind("agent_reset")
+        .bind("claimed")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO task_claims(id, task_id, agent_id, status)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(task_id.to_string())
+        .bind("agent_reset")
+        .bind("claimed")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO agent_statuses(agent_id, state, phase, reason, run_id, channel_id, message_id, task_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind("agent_reset")
+        .bind("running")
+        .bind("reset")
+        .bind("reset test")
+        .bind("run-reset")
+        .bind(channel_uuid.to_string())
+        .bind(message_id.to_string())
+        .bind(task_id.to_string())
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO agent_activity_logs(id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind("agent_reset")
+        .bind("run-reset")
+        .bind(channel_uuid.to_string())
+        .bind(message_id.to_string())
+        .bind(task_id.to_string())
+        .bind("running")
+        .bind("reset")
+        .bind("reset test")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
             "INSERT INTO conversations(id, kind, agent_id, active_session_id, runtime_status)
              VALUES (?, ?, ?, ?, ?)",
         )
@@ -409,7 +498,7 @@ mod tests {
 
         let seeded_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -432,7 +521,7 @@ mod tests {
 
         let retained_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -443,7 +532,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 2);
+        assert_eq!(migration_count, 3);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

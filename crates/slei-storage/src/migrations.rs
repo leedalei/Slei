@@ -169,5 +169,10 @@ INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
 "#;
 
 pub const MIGRATION_0002: &str = include_str!("../migrations/0002_app_state.sql");
+pub const MIGRATION_0003: &str = include_str!("../migrations/0003_broadcast_claim.sql");
 
-pub const MIGRATIONS: &[(i64, &str)] = &[(1, MIGRATION_0001), (2, MIGRATION_0002)];
+pub const MIGRATIONS: &[(i64, &str)] = &[
+    (1, MIGRATION_0001),
+    (2, MIGRATION_0002),
+    (3, MIGRATION_0003),
+];

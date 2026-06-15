@@ -2,6 +2,11 @@ use sqlx::{Row, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 pub const RESET_MUTABLE_TABLES: &[&str] = &[
+    "agent_activity_logs",
+    "agent_statuses",
+    "task_claims",
+    "message_claims",
+    "message_deliveries",
     "routing_context_packages",
     "memory_document_states",
     "memory_update_events",
@@ -32,6 +37,10 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
 ];
 
 pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
+    "message_deliveries",
+    "message_claims",
+    "task_claims",
+    "agent_activity_logs",
     "event_log",
     "coordinator_decisions",
     "agent_inbox_events",
