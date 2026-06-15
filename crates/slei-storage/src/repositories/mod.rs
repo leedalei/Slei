@@ -237,6 +237,61 @@ pub struct ChannelMessageRow {
     pub created_at: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClaimAttemptRecord {
+    pub claimed: bool,
+    pub agent_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MessageDeliveryRow {
+    pub sequence: i64,
+    pub id: String,
+    pub message_id: String,
+    pub channel_id: String,
+    pub agent_id: String,
+    pub delivery_state: String,
+    pub run_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentStatusRow {
+    pub agent_id: String,
+    pub state: String,
+    pub phase: Option<String>,
+    pub reason: Option<String>,
+    pub run_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub message_id: Option<String>,
+    pub task_id: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentActivityLogRow {
+    pub id: String,
+    pub agent_id: String,
+    pub run_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub message_id: Option<String>,
+    pub task_id: Option<String>,
+    pub state: String,
+    pub phase: Option<String>,
+    pub reason: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MessageReadQueryRow {
+    pub channel_id: String,
+    pub limit: Option<i64>,
+    pub after_sequence: Option<i64>,
+    pub before_sequence: Option<i64>,
+    pub around_message_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRootRow {
     pub id: String,
@@ -1033,27 +1088,7 @@ impl Repositories {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|row| {
-                let deleted: i64 = row.try_get("deleted")?;
-                let as_task: i64 = row.try_get("as_task")?;
-                let edited: i64 = row.try_get("edited")?;
-                Ok(ChannelMessageRow {
-                    id: row.try_get("id")?,
-                    channel_id: row.try_get("channel_id")?,
-                    session_id: row.try_get("session_id")?,
-                    author_id: row
-                        .try_get::<Option<String>, _>("author_id")?
-                        .unwrap_or_default(),
-                    body: row.try_get("content")?,
-                    as_task: as_task != 0,
-                    kind: row.try_get("kind")?,
-                    deleted: deleted != 0,
-                    edited: edited != 0,
-                    created_at: row.try_get("created_at")?,
-                })
-            })
-            .collect()
+        rows.into_iter().map(channel_message_row_from_sql).collect()
     }
 
     pub async fn channel_message(
@@ -1069,26 +1104,112 @@ impl Repositories {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|row| {
-            let deleted: i64 = row.try_get("deleted")?;
-            let as_task: i64 = row.try_get("as_task")?;
-            let edited: i64 = row.try_get("edited")?;
-            Ok(ChannelMessageRow {
-                id: row.try_get("id")?,
-                channel_id: row.try_get("channel_id")?,
-                session_id: row.try_get("session_id")?,
-                author_id: row
-                    .try_get::<Option<String>, _>("author_id")?
-                    .unwrap_or_default(),
-                body: row.try_get("content")?,
-                as_task: as_task != 0,
-                kind: row.try_get("kind")?,
-                deleted: deleted != 0,
-                edited: edited != 0,
-                created_at: row.try_get("created_at")?,
-            })
-        })
-        .transpose()
+        row.map(channel_message_row_from_sql).transpose()
+    }
+
+    pub async fn read_channel_messages(
+        &self,
+        query: MessageReadQueryRow,
+    ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        let limit = query.limit.unwrap_or(i64::MAX);
+
+        let rows = if let Some(around_message_id) = query.around_message_id.as_deref() {
+            let center = sqlx::query_scalar::<_, i64>(
+                "SELECT rowid
+                 FROM messages
+                 WHERE id = ? AND channel_id = ?",
+            )
+            .bind(around_message_id)
+            .bind(&query.channel_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            match center {
+                Some(center) => {
+                    sqlx::query(
+                        "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                         FROM messages
+                         WHERE rowid IN (
+                            SELECT rowid
+                            FROM messages
+                            WHERE channel_id = ?
+                              AND kind NOT IN ('task_root', 'task_reply')
+                            ORDER BY ABS(rowid - ?) ASC, rowid ASC
+                            LIMIT ?
+                         )
+                         ORDER BY rowid ASC",
+                    )
+                    .bind(&query.channel_id)
+                    .bind(center)
+                    .bind(limit)
+                    .fetch_all(&self.pool)
+                    .await?
+                }
+                None => Vec::new(),
+            }
+        } else if query.before_sequence.is_some() && query.after_sequence.is_none() {
+            sqlx::query(
+                "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                 FROM (
+                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                    FROM messages
+                    WHERE channel_id = ?
+                      AND rowid < ?
+                      AND kind NOT IN ('task_root', 'task_reply')
+                    ORDER BY rowid DESC
+                    LIMIT ?
+                 )
+                 ORDER BY sequence ASC",
+            )
+            .bind(&query.channel_id)
+            .bind(query.before_sequence.unwrap_or_default())
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query(
+                "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                 FROM messages
+                 WHERE channel_id = ?
+                   AND (? IS NULL OR rowid > ?)
+                   AND (? IS NULL OR rowid < ?)
+                   AND kind NOT IN ('task_root', 'task_reply')
+                 ORDER BY rowid ASC
+                 LIMIT ?",
+            )
+            .bind(&query.channel_id)
+            .bind(query.after_sequence)
+            .bind(query.after_sequence)
+            .bind(query.before_sequence)
+            .bind(query.before_sequence)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        rows.into_iter().map(channel_message_row_from_sql).collect()
+    }
+
+    pub async fn search_channel_messages(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        let rows = sqlx::query(
+            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+             FROM messages
+             WHERE content LIKE ? ESCAPE '\\'
+               AND kind NOT IN ('task_root', 'task_reply')
+             ORDER BY rowid DESC
+             LIMIT ?",
+        )
+        .bind(pattern)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(channel_message_row_from_sql).collect()
     }
 
     pub async fn update_message_tombstone(&self, message_id: &str) -> Result<(), sqlx::Error> {
@@ -1167,6 +1288,250 @@ impl Repositories {
             })
         })
         .transpose()
+    }
+
+    pub async fn try_claim_message(
+        &self,
+        message_id: &str,
+        claim_scope: &str,
+        agent_id: &str,
+    ) -> Result<ClaimAttemptRecord, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO message_claims(id, message_id, claim_scope, agent_id, status)
+             VALUES (?, ?, ?, ?, 'claimed')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(message_id)
+        .bind(claim_scope)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 1 {
+            return Ok(ClaimAttemptRecord {
+                claimed: true,
+                agent_id: Some(agent_id.to_string()),
+            });
+        }
+
+        let holder = sqlx::query_scalar::<_, String>(
+            "SELECT agent_id
+             FROM message_claims
+             WHERE message_id = ? AND claim_scope = ?
+             LIMIT 1",
+        )
+        .bind(message_id)
+        .bind(claim_scope)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(ClaimAttemptRecord {
+            claimed: false,
+            agent_id: holder,
+        })
+    }
+
+    pub async fn try_claim_task(
+        &self,
+        task_id: &str,
+        agent_id: &str,
+    ) -> Result<ClaimAttemptRecord, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO task_claims(id, task_id, agent_id, status)
+             VALUES (?, ?, ?, 'claimed')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(task_id)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 1 {
+            return Ok(ClaimAttemptRecord {
+                claimed: true,
+                agent_id: Some(agent_id.to_string()),
+            });
+        }
+
+        let holder = sqlx::query_scalar::<_, String>(
+            "SELECT agent_id
+             FROM task_claims
+             WHERE task_id = ?
+             LIMIT 1",
+        )
+        .bind(task_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(ClaimAttemptRecord {
+            claimed: false,
+            agent_id: holder,
+        })
+    }
+
+    pub async fn create_message_delivery(
+        &self,
+        message_id: &str,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT OR IGNORE INTO message_deliveries(
+                id, message_id, channel_id, agent_id, delivery_state
+             )
+             VALUES (?, ?, ?, ?, 'pending')",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(message_id)
+        .bind(channel_id)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn pending_message_deliveries(
+        &self,
+        agent_id: &str,
+        limit: i64,
+    ) -> Result<Vec<MessageDeliveryRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT sequence, id, message_id, channel_id, agent_id, delivery_state, run_id, created_at, updated_at
+             FROM message_deliveries
+             WHERE agent_id = ? AND delivery_state = 'pending'
+             ORDER BY sequence ASC
+             LIMIT ?",
+        )
+        .bind(agent_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(message_delivery_row_from_sql)
+            .collect()
+    }
+
+    pub async fn mark_message_delivery_running(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE message_deliveries
+             SET delivery_state = 'running',
+                 run_id = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE message_id = ? AND agent_id = ?",
+        )
+        .bind(run_id)
+        .bind(message_id)
+        .bind(agent_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_agent_status(&self, row: AgentStatusRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO agent_statuses(
+                agent_id, state, phase, reason, run_id, channel_id, message_id, task_id, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+             ON CONFLICT(agent_id) DO UPDATE SET
+                state = excluded.state,
+                phase = excluded.phase,
+                reason = excluded.reason,
+                run_id = excluded.run_id,
+                channel_id = excluded.channel_id,
+                message_id = excluded.message_id,
+                task_id = excluded.task_id,
+                updated_at = excluded.updated_at",
+        )
+        .bind(row.agent_id)
+        .bind(row.state)
+        .bind(row.phase)
+        .bind(row.reason)
+        .bind(row.run_id)
+        .bind(row.channel_id)
+        .bind(row.message_id)
+        .bind(row.task_id)
+        .bind(row.updated_at)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn record_agent_activity(
+        &self,
+        agent_id: &str,
+        run_id: Option<&str>,
+        channel_id: Option<&str>,
+        message_id: Option<&str>,
+        task_id: Option<&str>,
+        state: &str,
+        phase: Option<&str>,
+        reason: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO agent_activity_logs(
+                id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(agent_id)
+        .bind(run_id)
+        .bind(channel_id)
+        .bind(message_id)
+        .bind(task_id)
+        .bind(state)
+        .bind(phase)
+        .bind(reason)
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query(
+            "DELETE FROM agent_activity_logs
+             WHERE agent_id = ?
+               AND sequence NOT IN (
+                 SELECT sequence FROM agent_activity_logs
+                 WHERE agent_id = ?
+                 ORDER BY sequence DESC
+                 LIMIT 100
+               )",
+        )
+        .bind(agent_id)
+        .bind(agent_id)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn agent_activity_logs(
+        &self,
+        agent_id: &str,
+        limit: i64,
+    ) -> Result<Vec<AgentActivityLogRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason, created_at
+             FROM agent_activity_logs
+             WHERE agent_id = ?
+             ORDER BY sequence DESC
+             LIMIT ?",
+        )
+        .bind(agent_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(agent_activity_log_row_from_sql)
+            .collect()
     }
 
     pub async fn upsert_runtime_session(
@@ -2704,6 +3069,75 @@ fn author_kind_for(author_id: &str) -> &'static str {
     } else {
         "human"
     }
+}
+
+fn channel_message_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ChannelMessageRow, sqlx::Error> {
+    let deleted: i64 = row.try_get("deleted")?;
+    let as_task: i64 = row.try_get("as_task")?;
+    let edited: i64 = row.try_get("edited")?;
+    Ok(ChannelMessageRow {
+        id: row.try_get("id")?,
+        channel_id: row.try_get("channel_id")?,
+        session_id: row.try_get("session_id")?,
+        author_id: row
+            .try_get::<Option<String>, _>("author_id")?
+            .unwrap_or_default(),
+        body: row.try_get("content")?,
+        as_task: as_task != 0,
+        kind: row.try_get("kind")?,
+        deleted: deleted != 0,
+        edited: edited != 0,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn message_delivery_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<MessageDeliveryRow, sqlx::Error> {
+    Ok(MessageDeliveryRow {
+        sequence: row.try_get("sequence")?,
+        id: row.try_get("id")?,
+        message_id: row.try_get("message_id")?,
+        channel_id: row.try_get("channel_id")?,
+        agent_id: row.try_get("agent_id")?,
+        delivery_state: row.try_get("delivery_state")?,
+        run_id: row.try_get("run_id")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn agent_activity_log_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<AgentActivityLogRow, sqlx::Error> {
+    Ok(AgentActivityLogRow {
+        id: row.try_get("id")?,
+        agent_id: row.try_get("agent_id")?,
+        run_id: row.try_get("run_id")?,
+        channel_id: row.try_get("channel_id")?,
+        message_id: row.try_get("message_id")?,
+        task_id: row.try_get("task_id")?,
+        state: row.try_get("state")?,
+        phase: row.try_get("phase")?,
+        reason: row.try_get("reason")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn escape_like_pattern(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '%' | '_' | '\\' => {
+                escaped.push('\\');
+                escaped.push(character);
+            }
+            _ => escaped.push(character),
+        }
+    }
+    escaped
 }
 
 fn agent_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentRow, sqlx::Error> {

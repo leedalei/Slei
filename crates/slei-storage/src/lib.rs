@@ -86,6 +86,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn message_claim_is_atomic_per_message_scope() {
+        let (url, _path) = sqlite_file_url("message-claim");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        let first = repos
+            .try_claim_message("msg_1", "reply", "agent_a")
+            .await
+            .unwrap();
+        let second = repos
+            .try_claim_message("msg_1", "reply", "agent_b")
+            .await
+            .unwrap();
+
+        assert!(first.claimed);
+        assert!(!second.claimed);
+        assert_eq!(second.agent_id.as_deref(), Some("agent_a"));
+    }
+
+    #[tokio::test]
+    async fn agent_activity_logs_keep_latest_100_per_agent() {
+        let (url, _path) = sqlite_file_url("activity-log-retention");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..105 {
+            repos
+                .record_agent_activity(
+                    "agent_a",
+                    Some(&format!("run_{index}")),
+                    Some("all"),
+                    Some(&format!("msg_{index}")),
+                    None,
+                    "working",
+                    Some("reading_history"),
+                    None,
+                )
+                .await
+                .unwrap();
+        }
+
+        let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
+        assert_eq!(logs.len(), 100);
+        assert_eq!(logs.first().unwrap().run_id.as_deref(), Some("run_104"));
+        assert_eq!(logs.last().unwrap().run_id.as_deref(), Some("run_5"));
+    }
+
+    #[tokio::test]
     async fn migration_creates_app_state_tables() {
         let (url, _path) = sqlite_file_url("app-state");
         let db = SleiDb::connect(&url).await.unwrap();
