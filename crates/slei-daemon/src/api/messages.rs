@@ -11,6 +11,7 @@ use crate::services::channel_orchestrator_service::{
     ChannelOrchestratorError, SendChannelMessageInput,
 };
 use crate::services::channel_service::ChannelError;
+use crate::services::claim_service::ClaimError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord};
 use crate::services::task_service::TaskError;
@@ -240,10 +241,18 @@ pub async fn send_agent_message(
             idempotency_key,
         )
         .await;
-    drop(activity_guard);
 
     match result {
         Ok(message) => {
+            if let Err(error) = state
+                .channel_orchestrator()
+                .broadcast_existing_channel_message(&message)
+                .await
+            {
+                drop(activity_guard);
+                return channel_message_error_response(error);
+            }
+            drop(activity_guard);
             let message_id = message.id.clone();
             Json(SendAgentMessageResponse {
                 message_id,
@@ -251,7 +260,10 @@ pub async fn send_agent_message(
             })
             .into_response()
         }
-        Err(error) => message_error_response(error),
+        Err(error) => {
+            drop(activity_guard);
+            message_error_response(error)
+        }
     }
 }
 
@@ -365,6 +377,8 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
+        | ChannelOrchestratorError::Claim(ClaimError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Claim(ClaimError::InvalidInput(_))
         | ChannelOrchestratorError::InvalidWorkerEvent(_)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
@@ -379,6 +393,8 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::Card(_)
+        | ChannelOrchestratorError::Claim(ClaimError::Json(_))
+        | ChannelOrchestratorError::Claim(ClaimError::Storage(_))
         | ChannelOrchestratorError::Coordinator(_)
         | ChannelOrchestratorError::Worker(_)
         | ChannelOrchestratorError::InvalidDecisionId

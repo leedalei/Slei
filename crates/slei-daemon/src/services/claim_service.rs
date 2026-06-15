@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use slei_storage::repositories::{AgentActivityLogRow, AgentStatusRow, Repositories};
+use slei_storage::repositories::{
+    AgentActivityLogRow, AgentStatusRow, MessageDeliveryRow, Repositories,
+};
 
 use crate::services::idempotency::namespaced_key;
 
@@ -67,6 +69,33 @@ impl ClaimService {
             claimed: claim.claimed,
             agent_id: claim.agent_id,
         })
+    }
+
+    pub async fn create_message_delivery(
+        &self,
+        message_id: &str,
+        channel_id: &str,
+        agent_id: &str,
+    ) -> Result<(), ClaimError> {
+        let message_id = required_value(message_id, "message_id")?;
+        let channel_id = required_value(channel_id, "channel_id")?;
+        let agent_id = required_value(agent_id, "agent_id")?;
+        self.repos
+            .create_message_delivery(&message_id, &channel_id, &agent_id)
+            .await
+            .map_err(ClaimError::Storage)
+    }
+
+    pub async fn pending_message_deliveries(
+        &self,
+        agent_id: &str,
+        limit: i64,
+    ) -> Result<Vec<MessageDeliveryRow>, ClaimError> {
+        let agent_id = required_value(agent_id, "agent_id")?;
+        self.repos
+            .pending_message_deliveries(&agent_id, limit)
+            .await
+            .map_err(ClaimError::Storage)
     }
 
     pub async fn update_agent_status(

@@ -7,6 +7,7 @@ use serde_json::json;
 
 use crate::services::channel_orchestrator_service::ChannelOrchestratorError;
 use crate::services::channel_service::ChannelError;
+use crate::services::claim_service::ClaimError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
 use crate::services::task_service::{TaskError, TaskQuery, TaskStatus};
@@ -365,6 +366,8 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::InvalidMessage)
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
+        | ChannelOrchestratorError::Claim(ClaimError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Claim(ClaimError::InvalidInput(_))
         | ChannelOrchestratorError::InvalidWorkerEvent(_)
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
@@ -379,6 +382,8 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::Card(_)
+        | ChannelOrchestratorError::Claim(ClaimError::Json(_))
+        | ChannelOrchestratorError::Claim(ClaimError::Storage(_))
         | ChannelOrchestratorError::Coordinator(_)
         | ChannelOrchestratorError::Worker(_)
         | ChannelOrchestratorError::InvalidDecisionId

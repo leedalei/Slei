@@ -181,6 +181,7 @@ impl AppState {
             coordinator_service.clone(),
             card_service.clone(),
             task_service.clone(),
+            claims.clone(),
             agent_inbox_service.clone(),
             orchestration_store.clone(),
             member_service.clone(),

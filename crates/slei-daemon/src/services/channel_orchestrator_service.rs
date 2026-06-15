@@ -14,6 +14,7 @@ use crate::services::card_service::{CardError, CardService};
 use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
 };
+use crate::services::claim_service::{ClaimError, ClaimService};
 use crate::services::coordinator_service::{
     build_coordinator_prompt, parse_and_validate_coordinator_json, CoordinatorDecision,
     CoordinatorDecisionError, CoordinatorPromptInput, CoordinatorPromptMember,
@@ -78,6 +79,7 @@ pub struct ChannelOrchestratorService {
     coordinator: CoordinatorService,
     cards: CardService,
     tasks: TaskService,
+    claims: ClaimService,
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
     members: MemberService,
@@ -94,7 +96,7 @@ struct ChannelAgentRunRecord {
     session_id: Option<String>,
     agent_id: String,
     source_message_id: String,
-    task_id: Option<String>,
+    _task_id: Option<String>,
     output: String,
 }
 
@@ -105,6 +107,7 @@ impl ChannelOrchestratorService {
         coordinator: CoordinatorService,
         cards: CardService,
         tasks: TaskService,
+        claims: ClaimService,
         agent_inbox: AgentInboxService,
         orchestration: OrchestrationStore,
         members: MemberService,
@@ -117,6 +120,7 @@ impl ChannelOrchestratorService {
             coordinator,
             cards,
             tasks,
+            claims,
             agent_inbox,
             orchestration,
             members,
@@ -214,6 +218,26 @@ impl ChannelOrchestratorService {
                 .await?;
             self.recover_completed_decision_side_effects(&message, &message_body, &outcome)
                 .await?;
+            self.outcome_idempotency
+                .lock()
+                .expect("channel orchestrator idempotency lock")
+                .insert(input.idempotency_key, outcome.clone());
+            return Ok(outcome);
+        }
+
+        if !message.as_task {
+            let assignee_agent_ids = self
+                .create_broadcast_deliveries_for_members(&message.id, &channel_id, &channel_members)
+                .await?;
+            let outcome = SendChannelMessageOutcome {
+                message_id: message.id,
+                action: "broadcast_delivered".to_string(),
+                task_id: None,
+                assignee_agent_id: None,
+                assignee_agent_ids,
+                coordinator_run_id: None,
+                decision_status: Some("completed".to_string()),
+            };
             self.outcome_idempotency
                 .lock()
                 .expect("channel orchestrator idempotency lock")
@@ -483,6 +507,24 @@ impl ChannelOrchestratorService {
         Ok(outcome)
     }
 
+    pub async fn broadcast_existing_channel_message(
+        &self,
+        message: &crate::services::message_service::MessageRecord,
+    ) -> Result<Vec<String>, ChannelOrchestratorError> {
+        if message.channel_id == "all" {
+            self.channels.list_channels().await;
+        }
+        self.sync_declared_channel_members(&message.channel_id)
+            .await?;
+        let channel_members = self.channels.channel_members(&message.channel_id).await?;
+        self.create_broadcast_deliveries_for_members(
+            &message.id,
+            &message.channel_id,
+            &channel_members,
+        )
+        .await
+    }
+
     pub async fn add_task_reply(
         &self,
         task_id: &str,
@@ -725,26 +767,15 @@ impl ChannelOrchestratorService {
                 let record = runs.remove(run_id).expect("channel agent run exists");
                 drop(runs);
                 let body = record.output.trim();
-                if !body.is_empty() {
-                    if let Some(task_id) = record.task_id.as_deref() {
-                        self.add_task_reply_with_launch_guard(
-                            task_id,
+                if !body.is_empty() && is_channel_join_run(&record.source_message_id) {
+                    self.messages
+                        .create_agent_channel_message_with_session(
+                            &record.channel_id,
+                            record.session_id.as_deref(),
                             &record.agent_id,
                             body,
-                            &format!("channel-agent-run:{run_id}:task-reply"),
-                            _activity_guard,
                         )
                         .await?;
-                    } else {
-                        self.messages
-                            .create_agent_channel_message_with_session(
-                                &record.channel_id,
-                                record.session_id.as_deref(),
-                                &record.agent_id,
-                                body,
-                            )
-                            .await?;
-                    }
                     if is_channel_join_run(&record.source_message_id) {
                         self.channels
                             .set_member_readiness(
@@ -754,20 +785,22 @@ impl ChannelOrchestratorService {
                             )
                             .await?;
                     }
-                    let _ = self
-                        .orchestration
-                        .record_diagnostic_event(
-                            "channel_agent_runtime.completed",
-                            &format!(
-                                "run_id={} agent_id={} channel_id={} source_message_id={}",
-                                run_id,
-                                record.agent_id,
-                                record.channel_id,
-                                record.source_message_id
-                            ),
-                        )
-                        .await;
                 }
+                let _ = self
+                    .orchestration
+                    .record_diagnostic_event(
+                        "channel_agent_runtime.completed",
+                        &format!(
+                            "run_id={} agent_id={} channel_id={} source_message_id={} output_len={} visible_output_created={}",
+                            run_id,
+                            record.agent_id,
+                            record.channel_id,
+                            record.source_message_id,
+                            body.len(),
+                            is_channel_join_run(&record.source_message_id)
+                        ),
+                    )
+                    .await;
                 Ok(true)
             }
             Some("failed") => {
@@ -788,24 +821,6 @@ impl ChannelOrchestratorService {
                             ),
                         )
                         .await;
-                } else if let Some(task_id) = record.task_id.as_deref() {
-                    self.add_task_reply_with_launch_guard(
-                        task_id,
-                        &record.agent_id,
-                        message,
-                        &format!("channel-agent-run:{run_id}:task-failed"),
-                        _activity_guard,
-                    )
-                    .await?;
-                } else {
-                    self.messages
-                        .create_agent_channel_message_with_session(
-                            &record.channel_id,
-                            record.session_id.as_deref(),
-                            &record.agent_id,
-                            message,
-                        )
-                        .await?;
                 }
                 let _ = self
                     .orchestration
@@ -1581,7 +1596,7 @@ impl ChannelOrchestratorService {
                 session_id,
                 agent_id: agent_id.to_string(),
                 source_message_id: source_message_id.to_string(),
-                task_id,
+                _task_id: task_id,
                 output: String::new(),
             },
         );
@@ -1622,6 +1637,33 @@ impl ChannelOrchestratorService {
                 .await?;
         }
         Ok(())
+    }
+
+    async fn create_broadcast_deliveries_for_members(
+        &self,
+        message_id: &str,
+        channel_id: &str,
+        channel_members: &[ChannelMemberRecord],
+    ) -> Result<Vec<String>, ChannelOrchestratorError> {
+        let mut delivered_agent_ids = Vec::new();
+        let mut seen = HashSet::new();
+        for member in channel_members {
+            if !seen.insert(member.agent_id.clone()) {
+                continue;
+            }
+            if is_internal_coordinator_id(&member.agent_id) {
+                continue;
+            }
+            let agent = self.members.get_product_agent(&member.agent_id).await?;
+            if agent.agent_kind == "coordinator" || agent.system_owned {
+                continue;
+            }
+            self.claims
+                .create_message_delivery(message_id, channel_id, &agent.id)
+                .await?;
+            delivered_agent_ids.push(agent.id);
+        }
+        Ok(delivered_agent_ids)
     }
 
     async fn create_task_assignment_once(
@@ -1908,6 +1950,8 @@ pub enum ChannelOrchestratorError {
     Member(#[from] MemberError),
     #[error(transparent)]
     Card(#[from] CardError),
+    #[error(transparent)]
+    Claim(#[from] ClaimError),
     #[error(transparent)]
     Coordinator(#[from] CoordinatorDecisionError),
     #[error(transparent)]
