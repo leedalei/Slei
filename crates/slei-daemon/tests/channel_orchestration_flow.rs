@@ -3366,6 +3366,14 @@ fn assert_broadcast_runs_started(
             "prompt should direct agent to use Slei CLI for history/reply operations: {prompt}"
         );
         assert!(
+            prompt.contains("printf \"...\" | slei message send"),
+            "prompt should show message send reading the body from stdin: {prompt}"
+        );
+        assert!(
+            !prompt.contains("--body"),
+            "prompt should not mention unsupported --body flag: {prompt}"
+        );
+        assert!(
             prompt.contains(&format!("slei agent status --agent {agent_id} --state")),
             "prompt should use the real agent status command shape: {prompt}"
         );
