@@ -204,16 +204,24 @@ function hasRoutedChannelResultAfterSource(channelMessages: SleiMessage[], sourc
   });
 }
 
+function hasChannelAgentResultAfterSource(channelMessages: SleiMessage[], sourceMessageId: string): boolean {
+  const sourceIndex = channelMessages.findIndex((message) => message.id === sourceMessageId);
+  if (sourceIndex < 0) return false;
+  const task = channelMessages[sourceIndex].task;
+  if (task?.sourceMessageId === sourceMessageId && (task.replyCount ?? task.replies?.length ?? 0) > 0) return true;
+  return channelMessages.slice(sourceIndex + 1).some((message) => message.role === "agent");
+}
+
 export function replaceChannelMessages(current: SleiMessage[], channelMessages: SleiMessage[], channelIds: string[]): SleiMessage[] {
   const ids = new Set(channelIds);
   return [
     ...current.filter((message) => {
       if (!message.channelId || message.channelId.startsWith("dm:") || !ids.has(message.channelId)) return true;
       const coordinatorSourceId = coordinatorRoutingActivitySourceId(message);
+      if (coordinatorSourceId) return !hasRoutedChannelResultAfterSource(channelMessages, coordinatorSourceId);
       const agentSourceId = channelAgentActivitySourceId(message);
-      const activitySourceId = coordinatorSourceId ?? agentSourceId;
-      if (!activitySourceId) return false;
-      return !hasRoutedChannelResultAfterSource(channelMessages, activitySourceId);
+      if (agentSourceId) return !hasChannelAgentResultAfterSource(channelMessages, agentSourceId);
+      return false;
     }),
     ...channelMessages,
   ];
@@ -449,7 +457,7 @@ function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
 }
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
-  if (outcome.action !== "request_agent_reply") return [];
+  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign") return [];
   const now = new Date().toISOString();
   return channelReplyTargetIds(outcome).flatMap((agentId) => {
     const member = members.find((candidate) => candidate.id === agentId);
@@ -508,18 +516,57 @@ function diagnosticPayloadValue(event: DiagnosticEventView, key: string): string
 
 export function markCoordinatorActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
   if (!diagnosticEventNeedsToast(event)) return messages;
-  const messageId = diagnosticPayloadValue(event, "message_id");
+  const messageId = diagnosticPayloadValue(event, "message_id") ?? diagnosticPayloadValue(event, "source_message_id");
   if (!messageId) return messages;
   const activityId = `coordinator-activity-${messageId}`;
   let changed = false;
   const nextMessages = messages.map((message) => {
-    if (message.id !== activityId || message.toolCall !== "coordinator_routing" || message.status === "failed") {
+    const matchesCoordinator = message.id === activityId && message.toolCall === "coordinator_routing";
+    const matchesAgent = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
+    if ((!matchesCoordinator && !matchesAgent) || message.status === "failed") {
       return message;
     }
     changed = true;
     return { ...message, status: "failed" as const };
   });
   return changed ? nextMessages : messages;
+}
+
+export const CHANNEL_AGENT_ACTIVITY_STALE_MS = 120_000;
+
+export function failStaleAgentActivities(
+  messages: SleiMessage[],
+  nowMs = Date.now(),
+  staleMs = CHANNEL_AGENT_ACTIVITY_STALE_MS,
+): { messages: SleiMessage[]; failedActivities: SleiMessage[] } {
+  const failedActivities: SleiMessage[] = [];
+  const nextMessages = messages.map((message) => {
+    if (!isPendingAgentActivity(message)) return message;
+    const sentAtMs = Date.parse(message.sentAt ?? "");
+    if (!Number.isFinite(sentAtMs) || nowMs - sentAtMs < staleMs) return message;
+    const failed = { ...message, status: "failed" as const };
+    failedActivities.push(failed);
+    return failed;
+  });
+  return {
+    messages: failedActivities.length > 0 ? nextMessages : messages,
+    failedActivities,
+  };
+}
+
+function isPendingAgentActivity(message: SleiMessage) {
+  return (
+    message.role === "agent" &&
+    (message.status === "pending" || message.status === "running") &&
+    (message.toolCall === "channel_agent_reply" || message.toolCall === "coordinator_routing")
+  );
+}
+
+export function hasPendingAgentActivity(messages: SleiMessage[], channelId?: string): boolean {
+  return messages.some((message) =>
+    isPendingAgentActivity(message) &&
+    (!channelId || message.channelId === channelId)
+  );
 }
 
 function formatAppErrorToast(prefix: string, error: unknown) {
@@ -767,9 +814,7 @@ export function SleiApp() {
         lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
         if (diagnosticEventNeedsToast(event)) {
           setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
-          if (shouldToastBackendServiceError(backendErrorToastsEnabled)) {
-            showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
-          }
+          showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
         }
       }
     };
@@ -785,7 +830,41 @@ export function SleiApp() {
       mounted = false;
       window.clearInterval(interval);
     };
-  }, [backendErrorToastsEnabled, bridge, messages.common.operationFailed]);
+  }, [bridge, messages.common.operationFailed]);
+
+  useEffect(() => {
+    const failStaleActivities = () => {
+      let failedActivities: SleiMessage[] = [];
+      setData((current) => {
+        const result = failStaleAgentActivities(current.messages);
+        failedActivities = result.failedActivities;
+        if (failedActivities.length === 0) return current;
+        return createEmptySleiData({ ...current, messages: result.messages });
+      });
+      if (failedActivities.length === 0) return;
+      const names = failedActivities.map((message) => message.author).filter(Boolean).join(", ");
+      showAppToast(names ? `${messages.chat.agentRunFailed}：${names}` : messages.chat.agentRunFailed, "error");
+      logAppEvent(bridge, "channel-agent-reply", "stale-activity-timeout", {
+        activityIds: failedActivities.map((message) => message.id),
+      });
+    };
+    failStaleActivities();
+    const interval = window.setInterval(failStaleActivities, 10_000);
+    return () => window.clearInterval(interval);
+  }, [bridge, messages.chat.agentRunFailed]);
+
+  useEffect(() => {
+    if (!activeChannelId || !hasPendingAgentActivity(data.messages, activeChannelId)) return;
+    const refreshActiveTaskSummaries = () => {
+      void refreshTasks(activeChannelId).catch((error: unknown) => {
+        logAppEvent(bridge, "task-refresh", "summary-refresh-failed-while-agent-pending", { channelId: activeChannelId, error: formatLogError(error) });
+        showBackendServiceErrorToast(error);
+      });
+    };
+    refreshActiveTaskSummaries();
+    const interval = window.setInterval(refreshActiveTaskSummaries, 1500);
+    return () => window.clearInterval(interval);
+  }, [activeChannelId, backendErrorToastsEnabled, bridge, data.messages]);
 
   useEffect(() => {
     let mounted = true;

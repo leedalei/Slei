@@ -6,7 +6,9 @@ import {
   createChannelAgentActivityMessages,
   createCoordinatorRoutingActivityMessage,
   debugLaunchEnabledFromSearch,
+  failStaleAgentActivities,
   findActiveAgentActivities,
+  hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
   markCoordinatorActivityFailedByDiagnostic,
   shouldToastBackendServiceError,
@@ -212,6 +214,96 @@ describe("createChannelAgentReplyMessage", () => {
     });
   });
 
+  it("marks pending agent activity failed when daemon diagnostics report the agent run failure", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "content",
+      status: "pending",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const messages = markCoordinatorActivityFailedByDiagnostic([pending], {
+      sequence: 67,
+      eventType: "channel_agent_runtime.failed",
+      entityId: "event_67",
+      payload: "run_id=run_1 agent_id=agent_nova channel_id=content source_message_id=msg_route_1",
+      createdAt: "2026-06-11 09:58:39",
+    });
+
+    expect(messages[0]).toMatchObject({
+      id: "agent-activity-msg_route_1-agent_nova",
+      status: "failed",
+      toolCall: "channel_agent_reply",
+    });
+  });
+
+  it("marks stale pending agent activity failed so the sidebar stops thinking", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "08:00",
+      sentAt: "2026-06-15T08:00:00.000Z",
+      body: "",
+      channelId: "content",
+      status: "pending",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const fresh = {
+      ...pending,
+      id: "agent-activity-msg_route_2-agent_nova",
+      sentAt: "2026-06-15T08:02:30.000Z",
+      sourceMessageId: "msg_route_2",
+    } satisfies SleiMessage;
+
+    const result = failStaleAgentActivities(
+      [pending, fresh],
+      Date.parse("2026-06-15T08:03:01.000Z"),
+      120_000,
+    );
+
+    expect(result.failedActivities.map((message) => message.id)).toEqual(["agent-activity-msg_route_1-agent_nova"]);
+    expect(result.messages.map((message) => [message.id, message.status])).toEqual([
+      ["agent-activity-msg_route_1-agent_nova", "failed"],
+      ["agent-activity-msg_route_2-agent_nova", "pending"],
+    ]);
+  });
+
+  it("detects pending agent activities for task summary refresh", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "",
+      sentAt: "2026-06-15T08:00:00.000Z",
+      body: "",
+      channelId: "content",
+      status: "pending",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const failed = {
+      ...pending,
+      id: "agent-activity-msg_route_2-agent_nova",
+      status: "failed" as const,
+    } satisfies SleiMessage;
+
+    expect(hasPendingAgentActivity([failed], "content")).toBe(false);
+    expect(hasPendingAgentActivity([pending], "content")).toBe(true);
+    expect(hasPendingAgentActivity([pending], "other")).toBe(false);
+  });
+
   it("only enables backend service error toasts for debug launches", () => {
     expect(debugLaunchEnabledFromSearch("?debug=1")).toBe(true);
     expect(debugLaunchEnabledFromSearch("?debug=true")).toBe(true);
@@ -277,6 +369,76 @@ describe("createChannelAgentReplyMessage", () => {
         },
       ]).map((message) => message.id),
     ).toEqual(["agent-activity-msg_123-agent_alice", "agent-activity-msg_123-agent_coda"]);
+  });
+
+  it("shows task-assigned agent activity until the task thread has replies", () => {
+    const outcome: SendChannelMessageOutcome = {
+      messageId: "msg_task_1",
+      action: "create_task_and_assign",
+      taskId: "task_1",
+      assigneeAgentId: "agent_coda",
+      assigneeAgentIds: ["agent_coda"],
+    };
+    const [activity] = createChannelAgentActivityMessages(outcome, "all", [
+      {
+        id: "agent_coda",
+        name: "Coda",
+        handle: "@coda",
+        avatar: "CO",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "工程师",
+        description: "",
+        computer: "本机设备",
+        created: "2026-06-04",
+        creator: "system",
+        runtime: "ClaudeCode",
+        model: "Sonnet",
+        instructions: "",
+        permissions: [],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "",
+        capabilities: [],
+      },
+    ]);
+
+    expect(activity).toMatchObject({
+      id: "agent-activity-msg_task_1-agent_coda",
+      status: "pending",
+      toolCall: "channel_agent_reply",
+      sourceMessageId: "msg_task_1",
+    });
+
+    const sourceMessage = {
+      id: "msg_task_1",
+      author: "Lei",
+      role: "human",
+      time: "",
+      body: "@coda 请处理",
+      channelId: "all",
+      task: {
+        id: "task_1",
+        title: "@coda 请处理",
+        owner: "Coda",
+        status: "in_progress",
+        channelId: "all",
+        sourceMessageId: "msg_task_1",
+        replyCount: 0,
+      },
+    } satisfies SleiMessage;
+
+    expect(replaceChannelMessages([activity], [sourceMessage], ["all"]).map((message) => message.id)).toEqual([
+      "agent-activity-msg_task_1-agent_coda",
+      "msg_task_1",
+    ]);
+    expect(
+      replaceChannelMessages(
+        [activity],
+        [{ ...sourceMessage, task: { ...sourceMessage.task, replyCount: 1 } }],
+        ["all"],
+      ).map((message) => message.id),
+    ).toEqual(["msg_task_1"]);
   });
 
   it("detects channel members that still need readiness refresh", () => {

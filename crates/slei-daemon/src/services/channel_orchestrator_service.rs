@@ -94,6 +94,7 @@ struct ChannelAgentRunRecord {
     session_id: Option<String>,
     agent_id: String,
     source_message_id: String,
+    task_id: Option<String>,
     output: String,
 }
 
@@ -255,13 +256,14 @@ impl ChannelOrchestratorService {
                     )
                     .await?;
                 for agent_id in &explicit_agent_ids {
-                    self.create_task_assignment_once(
+                    self.create_task_assignment_and_start_once(
                         agent_id,
                         &message.channel_id,
                         &task.id,
                         &message.id,
+                        &message_body,
                     )
-                    .await;
+                    .await?;
                 }
                 self.persist_routing_context_packages(
                     &decision_id.to_string(),
@@ -540,6 +542,14 @@ impl ChannelOrchestratorService {
                     .await;
                 handoff_agent_ids.push(agent_id.clone());
                 if created {
+                    self.start_channel_agent_task_reply_once(
+                        &agent_id,
+                        &task.channel_id,
+                        &reply.id,
+                        &task.id,
+                        &reply.body,
+                    )
+                    .await?;
                     self.update_status_for_created_handoff(&task.id, task.status)
                         .await?;
                 }
@@ -574,6 +584,7 @@ impl ChannelOrchestratorService {
             &format!("channel_join:{channel_id}:{agent_id}"),
             &prompt,
             Some(agent),
+            None,
         )
         .await
     }
@@ -695,14 +706,25 @@ impl ChannelOrchestratorService {
                 drop(runs);
                 let body = record.output.trim();
                 if !body.is_empty() {
-                    self.messages
-                        .create_agent_channel_message_with_session(
-                            &record.channel_id,
-                            record.session_id.as_deref(),
+                    if let Some(task_id) = record.task_id.as_deref() {
+                        self.add_task_reply_with_launch_guard(
+                            task_id,
                             &record.agent_id,
                             body,
+                            &format!("channel-agent-run:{run_id}:task-reply"),
+                            _activity_guard,
                         )
                         .await?;
+                    } else {
+                        self.messages
+                            .create_agent_channel_message_with_session(
+                                &record.channel_id,
+                                record.session_id.as_deref(),
+                                &record.agent_id,
+                                body,
+                            )
+                            .await?;
+                    }
                     if is_channel_join_run(&record.source_message_id) {
                         self.channels
                             .set_member_readiness(
@@ -746,6 +768,15 @@ impl ChannelOrchestratorService {
                             ),
                         )
                         .await;
+                } else if let Some(task_id) = record.task_id.as_deref() {
+                    self.add_task_reply_with_launch_guard(
+                        task_id,
+                        &record.agent_id,
+                        message,
+                        &format!("channel-agent-run:{run_id}:task-failed"),
+                        _activity_guard,
+                    )
+                    .await?;
                 } else {
                     self.messages
                         .create_agent_channel_message_with_session(
@@ -1102,13 +1133,14 @@ impl ChannelOrchestratorService {
                     assignee_agent_ids.clone()
                 };
                 for agent_id in targets {
-                    self.create_task_assignment_once(
+                    self.create_task_assignment_and_start_once(
                         &agent_id,
                         &message.channel_id,
                         &task.id,
                         &message.id,
+                        message_body,
                     )
-                    .await;
+                    .await?;
                 }
                 task_id = Some(task.id);
             }
@@ -1258,13 +1290,14 @@ impl ChannelOrchestratorService {
                     outcome.assignee_agent_ids.clone()
                 };
                 for agent_id in targets {
-                    self.create_task_assignment_once(
+                    self.create_task_assignment_and_start_once(
                         &agent_id,
                         &message.channel_id,
                         task_id,
                         &message.id,
+                        message_body,
                     )
-                    .await;
+                    .await?;
                 }
             }
             "needs_manual_assignment" => {}
@@ -1454,8 +1487,34 @@ impl ChannelOrchestratorService {
         source_message_id: &str,
         prompt: &str,
     ) -> Result<(), ChannelOrchestratorError> {
-        self.start_channel_agent_run_once(agent_id, channel_id, source_message_id, prompt, None)
-            .await
+        self.start_channel_agent_run_once(
+            agent_id,
+            channel_id,
+            source_message_id,
+            prompt,
+            None,
+            None,
+        )
+        .await
+    }
+
+    async fn start_channel_agent_task_reply_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        source_message_id: &str,
+        task_id: &str,
+        prompt: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        self.start_channel_agent_run_once(
+            agent_id,
+            channel_id,
+            source_message_id,
+            prompt,
+            None,
+            Some(task_id.to_string()),
+        )
+        .await
     }
 
     async fn start_channel_agent_run_once(
@@ -1465,6 +1524,7 @@ impl ChannelOrchestratorService {
         source_message_id: &str,
         prompt: &str,
         agent: Option<crate::services::member_service::ProductAgentRecord>,
+        task_id: Option<String>,
     ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
             run.agent_id == agent_id
@@ -1501,6 +1561,7 @@ impl ChannelOrchestratorService {
                 session_id,
                 agent_id: agent_id.to_string(),
                 source_message_id: source_message_id.to_string(),
+                task_id,
                 output: String::new(),
             },
         );
@@ -1549,7 +1610,7 @@ impl ChannelOrchestratorService {
         channel_id: &str,
         task_id: &str,
         message_id: &str,
-    ) {
+    ) -> bool {
         let already_created = self
             .agent_inbox
             .events_for_agent(agent_id)
@@ -1565,7 +1626,29 @@ impl ChannelOrchestratorService {
             self.agent_inbox
                 .create_task_assignment(agent_id, channel_id, task_id, message_id)
                 .await;
+            return true;
         }
+        false
+    }
+
+    async fn create_task_assignment_and_start_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        message_id: &str,
+        prompt: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        if self
+            .create_task_assignment_once(agent_id, channel_id, task_id, message_id)
+            .await
+        {
+            self.start_channel_agent_task_reply_once(
+                agent_id, channel_id, message_id, task_id, prompt,
+            )
+            .await?;
+        }
+        Ok(())
     }
 
     async fn create_task_handoff_once(

@@ -93,7 +93,7 @@ export function createChannelAgentActivityMessage(outcome: SendChannelMessageOut
 }
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
-  if (outcome.action !== "request_agent_reply") return [];
+  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign") return [];
   return channelReplyTargetIds(outcome).flatMap((agentId) => {
     const member = members.find((candidate) => candidate.id === agentId);
     if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];

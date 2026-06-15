@@ -1125,6 +1125,13 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .as_deref()
         .unwrap()
         .contains("@coda-win"));
+    complete_channel_agent_run(&state, "agent_coda", "Coda 已在任务线程继续实现。").await;
+    let thread = state.tasks().thread_view(&task.id).await.unwrap();
+    assert!(thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_coda"
+            && reply.role == "agent"
+            && reply.body == "Coda 已在任务线程继续实现。"
+    }));
 }
 
 #[tokio::test]
@@ -2619,6 +2626,35 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
             && event.message_id == json["outcome"]["messageId"]
             && event.task_id.as_deref() == Some(mentioned_task_id)
     }));
+    complete_channel_agent_run(&state, "agent_coda", "Coda 已开始处理这个任务。").await;
+    let mentioned_thread = state.tasks().thread_view(mentioned_task_id).await.unwrap();
+    assert_eq!(mentioned_thread.task.reply_count, 1);
+    assert!(mentioned_thread.replies.iter().any(|reply| {
+        reply.sender_id == "agent_coda"
+            && reply.role == "agent"
+            && reply.body == "Coda 已开始处理这个任务。"
+    }));
+    let listed = response_json(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/channels/dev/messages")
+                    .header("authorization", token.authorization_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .await;
+    let task_source_message = listed["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| message["id"] == json["outcome"]["messageId"])
+        .unwrap();
+    assert_eq!(task_source_message["task"]["replyCount"], 1);
 }
 
 #[tokio::test]
