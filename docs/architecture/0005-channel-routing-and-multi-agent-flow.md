@@ -20,6 +20,7 @@ Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 
 - 无显式目标的普通频道消息走 coordinator runtime。代码只验证和执行 coordinator JSON，不用关键词替代 coordinator 判断。
 - 单纯咨询问题即使不创建 task，也必须先由 coordinator 判断目标 Agent，再以 `request_agent_reply` 路由到一个或多个普通 Agent；不得由 UI 或 daemon 本地规则直接挑选第一个可用 Agent。
 - coordinator 路由之后不存在产品层面的 primary Agent。被路由到的 Agent 只是当前被 `@` 到的协作者；TA 是否需要交给下一个 Agent、是否需要用户补充、是否认为工作结束，都由该 Agent 根据自身记忆中的频道成员信息和当前上下文自发决定。
+- 任务消息和任务卡片必须遵守 `docs/architecture/0006-task-source-message-card.md`：任务卡片是源消息的展示状态，不是新增消息。
 - 所有可变生产状态使用 SQLite repository，不用 JSON 或前端 fixture 作为生产状态来源。
 - 失败必须可诊断：worker/coordinator 失败要记录 failed/manual-assignment 状态，不得静默吞掉或伪造成功回复。
 
@@ -94,7 +95,7 @@ sequenceDiagram
             Orch->>Store: create agent_inbox human_mention
             Orch->>Agent: start_channel_agent_reply_once
         else create_task_and_assign
-            Orch->>Store: create task root + task card message
+            Orch->>Store: create/reuse task attached to source message
             Orch->>Store: create task assignment inbox event
         else needs_manual_assignment / archive_only
             Orch->>Store: decision and diagnostics only
@@ -207,7 +208,7 @@ coordinator 的职责是在频道消息进入系统后，判断应该先 `@` 哪
 - 如果当前 Agent 认为需要其他 Agent 接手或参与，TA 在频道或任务线程里显式 `@agent`；daemon 只把这个可见提及转换成 handoff/inbox/runtime。
 - 如果当前 Agent 认为需要用户补充信息，TA 自己 `@用户` 或直接向用户说明需要补充。
 - 如果当前 Agent 认为工作可以结束，TA 自己说明完成或请求验收；这不是 daemon 固定插入的“用户验收节点”。
-- 如果 coordinator 判断消息应成为 task，daemon 可以创建 task root 和 task card；但 task 只是持久化工作对象，不应把后续协作变成 daemon 固定的 primary-agent 流程。
+- 如果 coordinator 判断消息应成为 task，daemon 创建或复用绑定到源消息的 task root；任务卡片是源消息的展示状态，不新增 `task_card` 消息。详细约束见 `docs/architecture/0006-task-source-message-card.md`。
 
 ```mermaid
 flowchart LR
@@ -217,11 +218,11 @@ flowchart LR
     AgentB["@agent-b\n被 Agent A 自发 @ 到"]
     AgentC["@agent-c\n可能继续被 @ 到"]
     User["@user\n可能被 Agent 请求补充或验收"]
-    Task["可选 task/card\n仅作为持久化工作对象"]
+    Task["可选 task\n挂载到源消息"]
 
     UserMsg --> Coordinator
     Coordinator -->|"request_agent_reply / create_task_and_assign"| AgentA
-    Coordinator -.->|"可选创建"| Task
+    Coordinator -.->|"可选创建 / 复用"| Task
     AgentA -->|"需要协作时自发 @agent-b"| AgentB
     AgentB -->|"需要继续协作时自发 @agent-c"| AgentC
     AgentA -->|"需要信息或完成说明时自发 @user"| User
@@ -231,7 +232,7 @@ flowchart LR
 
 关键边界：
 
-- Coordinator 只做路由判断和必要的 task/card 初始化，不持续当项目经理。
+- Coordinator 只做路由判断和必要的 task 初始化，不持续当项目经理。
 - 下游 handoff 是 Agent 的可见自发行为，由当前 Agent 根据记忆里的频道成员关系通过 `@agent` 触发。
 - 任务线程里没有显式 `@agent` 的回复不得自动 handoff 给 task 的兼容 `assignee_id`；`assignee_id` 只能作为任务存储和旧 API 兼容字段，不能隐式驱动协作接管。
 - 用户补充、用户验收、工作结束都不是固定状态机节点；它们只能来自 Agent 或用户的可见消息。
@@ -244,7 +245,7 @@ flowchart LR
 
 | 对象 | 用途 |
 | --- | --- |
-| `channel_messages` | 人类消息、Agent 可见回复、任务卡片消息、Agent 卡片消息 |
+| `channel_messages` | 人类消息、Agent 可见回复、Agent 卡片消息；历史 `task_card` control message 仅作为旧数据过滤/清理对象，不做任务卡片 UI 兼容 |
 | `coordinator_runtime_runs` | coordinator 异步 run、prompt、output buffer、状态 |
 | `coordinator_decisions` | 已验证的路由决策和 failed/manual decision |
 | `routing_context_packages` | 下游 Agent 可审计上下文包 |
@@ -266,6 +267,7 @@ flowchart LR
 - coordinator/system Agent 是否仍被所有用户可见列表、mention suggestion、DM、routing target 过滤。
 - worker event 是否仍按 coordinator -> channel agent -> DM 顺序分发。
 - channel agent reply 是否真实启动 worker，并在 completed 后由 daemon 写回频道消息。
+- 任务消息是否仍遵守 `docs/architecture/0006-task-source-message-card.md`：源消息原地升级，新增路径不写 `task_card` 消息。
 - 任务线程回复是否仍只有可见 `@agent` 才创建 handoff；不能因为 task 有 `assignee_id` 就隐式把消息转给该 Agent。
 - product tool card 是否由 daemon 落 `interactive_cards` 并挂到频道消息。
 - reset 期间是否阻止旧 run 写入状态。

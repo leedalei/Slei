@@ -16,6 +16,17 @@ const readyRuntime = {
   nodes: createSleiFixtures().nodes,
 };
 
+function findTaskReplyButton(node: unknown): any {
+  if (!node || typeof node !== "object") return undefined;
+  if (Array.isArray(node)) {
+    return node.map(findTaskReplyButton).find(Boolean);
+  }
+  const props = (node as { props?: Record<string, unknown> }).props;
+  if (!props) return undefined;
+  if (props["data-task-root-entry-replies"]) return node;
+  return findTaskReplyButton(props.children);
+}
+
 describe("task branch sessions", () => {
   it("keeps drawer reply persistence wiring connected at the source level", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -99,14 +110,123 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-task-root-entry");
     expect(html).toContain('data-source-message-id="msg_root"');
     expect(html).toContain("@lei");
-    expect(html).toContain("lucide-scroll-text");
-    expect(html).toContain("border-primary/20");
-    expect(html).toContain("hover:bg-muted/20");
-    expect(html).toContain("data-task-root-entry-icon");
+    expect(html).not.toContain("data-task-root-entry-corner-icon");
+    expect(html).toContain("data-task-root-entry-status");
+    expect(html).toContain("data-task-root-entry-status-dot");
+    expect(html).toContain("data-task-root-entry-actions");
+    expect(html).toContain("data-task-root-entry-replies");
+    expect(html).toContain("data-avatar-size");
+    expect(html).toContain("用户");
+    expect(html).toContain("border-primary/30");
+    expect(html).toContain("10:00");
     const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
     const taskEntryClose = taskEntryHtml.indexOf("</article>");
-    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('data-task-root-entry-trigger="replies"');
+    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="复制"');
+    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="收藏"');
+    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
+    expect(taskEntryHtml.slice(0, taskEntryClose)).not.toContain("bg-card");
+    expect(taskEntryHtml.indexOf("data-task-root-entry-replies")).toBeLessThan(taskEntryHtml.indexOf("data-task-root-entry-status"));
     expect(html).not.toContain('data-message-id="msg_root"');
+  });
+
+  it("renders a task-linked source message body only once without a separate visible task title", () => {
+    const sourceBody = "帮我把大盘数据页的alert文案改成 2026/06/16";
+    const taskTitle = "修改大盘数据页 alert 文案";
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            {
+              id: "msg_task_source",
+              author: "Lei",
+              handle: "@lei",
+              role: "human",
+              time: "10:00",
+              body: sourceBody,
+              channelId: "all",
+              task: {
+                id: "task_source",
+                title: taskTitle,
+                owner: "Lei",
+                creatorId: "human:local",
+                status: "in_progress",
+                channelId: "all",
+                sourceMessageId: "msg_task_source",
+                replyCount: 0,
+              },
+            },
+          ],
+          tasks: [
+            {
+              id: "task_source",
+              title: taskTitle,
+              owner: "Lei",
+              creatorId: "human:local",
+              status: "in_progress",
+              channelId: "all",
+              sourceMessageId: "msg_task_source",
+              replyCount: 0,
+              replies: [{ id: "root-msg_task_source", sender: "Lei", role: "human", body: sourceBody }],
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    const taskEntryHtml = html.slice(html.indexOf('data-task-root-entry="task_source"'));
+    const articleHtml = taskEntryHtml.slice(0, taskEntryHtml.indexOf("</article>"));
+    const visibleText = articleHtml
+      .replace(/<button\b[^>]*>[\s\S]*?<\/button>/g, "")
+      .replace(/<[^>]+>/g, "");
+
+    expect(visibleText.match(new RegExp(sourceBody, "g"))?.length).toBe(1);
+    expect(visibleText).not.toContain(taskTitle);
+    expect(articleHtml).toContain(`aria-label="打开任务讨论: ${taskTitle}, 0 条回复"`);
+  });
+
+  it("renders a task source message as a task card when the task arrives from the task list", () => {
+    const sourceBody = "帮我把大盘数据页的alert文案改成 2026/06/16";
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [
+            {
+              id: "msg_task_source",
+              author: "Lei",
+              handle: "@lei",
+              role: "human",
+              time: "10:00",
+              body: sourceBody,
+              channelId: "all",
+            },
+          ],
+          tasks: [
+            {
+              id: "task_source",
+              title: sourceBody,
+              owner: "Coda",
+              creatorId: "human:local",
+              assigneeId: "agent_coda",
+              status: "in_progress",
+              channelId: "all",
+              sourceMessageId: "msg_task_source",
+              replyCount: 0,
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    const taskEntryHtml = html.slice(html.indexOf('data-task-root-entry="task_source"'));
+
+    expect(taskEntryHtml).toContain(sourceBody);
+    expect(taskEntryHtml).toContain("进行中");
+    expect(html).toContain('data-source-message-id="msg_task_source"');
+    expect(html).not.toContain('data-message-id="msg_task_source"');
   });
 
   it("keeps the source channel message visible when task-card data is missing", () => {
@@ -179,14 +299,22 @@ describe("task branch sessions", () => {
         activeView="chat"
         data={createSleiFixtures({
           messages: [
-            { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "实现任务分支", channelId: "all" },
             {
-              id: "task_card_1",
-              author: "channel_coordinator",
-              role: "system",
+              id: "msg_root",
+              author: "Lei",
+              role: "human",
               time: "10:00",
-              body: "task_card:task_1:source:msg_root",
+              body: "实现任务分支",
               channelId: "all",
+              task: {
+                id: "task_1",
+                title: "实现任务分支",
+                owner: "Lei",
+                status: "in_progress",
+                channelId: "all",
+                sourceMessageId: "msg_root",
+                replyCount: 1,
+              },
             },
             { id: "agent-activity-msg_root", author: "Coda", role: "agent", time: "10:01", body: "任务已经完成。", channelId: "all", status: "done" },
             { id: "agent-reply-msg_root", author: "Coda", role: "agent", time: "10:02", body: "任务执行失败。", channelId: "all", status: "failed" },
@@ -294,17 +422,14 @@ describe("task branch sessions", () => {
       sourceMessage: { id: "msg_root", author: "Lei", role: "human", time: "10:00", body: "请实现任务分支，并保持频道简洁。", channelId: "all" },
     });
 
-    const bodyTrigger = entry.props.children;
-    expect(bodyTrigger.type).toBe("button");
-    expect(bodyTrigger.props["data-task-root-entry-trigger"]).toBe("body");
-    bodyTrigger.props.onClick();
-    expect(opened).toBe(true);
-
     const html = renderToStaticMarkup(entry);
     expect(html).toContain("请实现任务分支，并保持频道简洁。");
-    expect(html).toContain("data-task-root-entry-trigger=\"body\"");
-    const firstButtonOpen = html.indexOf("<button");
-    const secondButtonOpen = html.indexOf("<button", firstButtonOpen + 1);
-    expect(secondButtonOpen).toBe(-1);
+    expect(html).toContain("data-task-root-entry-replies");
+    expect(html).not.toContain("data-task-root-entry-corner-icon");
+    expect(html).not.toContain("data-task-root-entry-trigger=\"body\"");
+    const replyButton = findTaskReplyButton(entry);
+    expect(replyButton.props["data-task-root-entry-replies"]).toBe(true);
+    replyButton.props.onClick();
+    expect(opened).toBe(true);
   });
 });

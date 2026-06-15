@@ -40,6 +40,7 @@ struct ChannelMessageView {
     kind: MessageKind,
     deleted: bool,
     edited: bool,
+    created_at: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     cards: Vec<InteractiveCardView>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,6 +59,7 @@ impl ChannelMessageView {
             kind: record.kind,
             deleted: record.deleted,
             edited: record.edited,
+            created_at: record.created_at,
             cards: record.cards,
             task,
         }

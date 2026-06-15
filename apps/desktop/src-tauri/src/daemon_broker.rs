@@ -479,6 +479,8 @@ pub struct ChannelMessageView {
     pub deleted: bool,
     #[serde(default)]
     pub edited: bool,
+    #[serde(default)]
+    pub created_at: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -3034,6 +3036,7 @@ impl DaemonBroker {
             return Err(ChannelError::InvalidChannel);
         }
         let message_id = format!("msg_channel_all_{}", monotonic_id());
+        let created_at = monotonic_id();
         let session_id = self
             .channels
             .lock()
@@ -3054,6 +3057,7 @@ impl DaemonBroker {
                 kind: "human".to_string(),
                 deleted: false,
                 edited: false,
+                created_at: created_at.clone(),
             });
         let should_create_task = request.as_task || is_task_command(&request.body);
         if should_create_task {
@@ -4255,8 +4259,8 @@ fn persist_local_saved_messages_at_root(
 
 fn default_preferences() -> UserPreferencesView {
     UserPreferencesView {
-        locale: "zh-CN".to_string(),
-        time_zone: "Asia/Shanghai".to_string(),
+        locale: system_default_locale(),
+        time_zone: system_default_time_zone(),
         appearance: AppearancePreferencesView {
             theme: "system".to_string(),
             font_size: "md".to_string(),
@@ -4267,6 +4271,58 @@ fn default_preferences() -> UserPreferencesView {
             approvals: true,
         },
     }
+}
+
+fn system_default_locale() -> String {
+    locale_from_env(
+        env::var("LC_ALL").ok().as_deref(),
+        env::var("LC_MESSAGES").ok().as_deref(),
+        env::var("LANG").ok().as_deref(),
+    )
+}
+
+fn locale_from_env(lc_all: Option<&str>, lc_messages: Option<&str>, lang: Option<&str>) -> String {
+    for value in [lc_all, lc_messages, lang].into_iter().flatten() {
+        let normalized = value.trim().to_ascii_lowercase().replace('_', "-");
+        if normalized.starts_with("zh") {
+            return "zh-CN".to_string();
+        }
+        if normalized.starts_with("en") {
+            return "en-US".to_string();
+        }
+    }
+    "zh-CN".to_string()
+}
+
+fn system_default_time_zone() -> String {
+    if let Ok(time_zone) = env::var("TZ") {
+        let trimmed = time_zone.trim();
+        if is_supported_time_zone(trimmed) {
+            return trimmed.to_string();
+        }
+    }
+    if let Some(time_zone) = time_zone_from_localtime_path("/etc/localtime") {
+        return time_zone;
+    }
+    "Asia/Shanghai".to_string()
+}
+
+fn time_zone_from_localtime_path(path: &str) -> Option<String> {
+    let target = fs::read_link(path).ok()?;
+    let target = target.to_string_lossy();
+    let marker = "zoneinfo/";
+    let index = target.find(marker)?;
+    let time_zone = &target[index + marker.len()..];
+    is_supported_time_zone(time_zone).then(|| time_zone.to_string())
+}
+
+fn is_supported_time_zone(time_zone: &str) -> bool {
+    !time_zone.is_empty()
+        && time_zone.chars().count() <= 64
+        && time_zone.contains('/')
+        && time_zone.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '/' | '_' | '-' | '+')
+        })
 }
 
 fn legacy_session_for_conversation(conversation: &ConversationView) -> ConversationSessionView {
@@ -5003,4 +5059,25 @@ pub enum ConversationError {
     Io(std::io::Error),
     #[error("conversation json error: {0}")]
     Json(serde_json::Error),
+}
+
+#[cfg(test)]
+mod system_preference_tests {
+    use super::{is_supported_time_zone, locale_from_env};
+
+    #[test]
+    fn locale_from_env_matches_supported_app_locales() {
+        assert_eq!(locale_from_env(Some("en_US.UTF-8"), None, None), "en-US");
+        assert_eq!(locale_from_env(None, Some("zh_CN.UTF-8"), None), "zh-CN");
+        assert_eq!(locale_from_env(None, None, Some("en_GB.UTF-8")), "en-US");
+        assert_eq!(locale_from_env(None, None, Some("fr_FR.UTF-8")), "zh-CN");
+    }
+
+    #[test]
+    fn system_time_zone_validator_accepts_iana_names() {
+        assert!(is_supported_time_zone("Asia/Shanghai"));
+        assert!(is_supported_time_zone("America/Los_Angeles"));
+        assert!(!is_supported_time_zone("UTC"));
+        assert!(!is_supported_time_zone("../Asia/Shanghai"));
+    }
 }

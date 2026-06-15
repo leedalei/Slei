@@ -11,7 +11,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::db::SleiDb;
-    use super::repositories::{Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES};
+    use super::repositories::{
+        ChannelSessionRow, Repositories, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+    };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("slei-{name}-{}.sqlite", Uuid::new_v4()));
@@ -136,6 +138,24 @@ mod tests {
                 true,
                 "Controlled",
             )
+            .await
+            .unwrap();
+        let channel_session_id = Uuid::new_v4().to_string();
+        repos
+            .upsert_channel_session(ChannelSessionRow {
+                id: channel_session_id.clone(),
+                channel_id: channel_uuid.to_string(),
+                title: "reset session".to_string(),
+                status: "ready".to_string(),
+                created_at: "2026-06-15T00:00:00Z".to_string(),
+                updated_at: "2026-06-15T00:00:00Z".to_string(),
+            })
+            .await
+            .unwrap();
+        sqlx::query("UPDATE channels SET active_session_id = ? WHERE id = ?")
+            .bind(channel_session_id)
+            .bind(channel_uuid.to_string())
+            .execute(db.pool())
             .await
             .unwrap();
         repos
@@ -593,6 +613,36 @@ mod tests {
         .unwrap();
 
         assert!(db.table_exists("later_migration_probe").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn migration_repairs_legacy_messages_before_session_index() {
+        let (url, _path) = sqlite_file_url("legacy-message-session-index");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        sqlx::query(
+            r#"
+            CREATE TABLE messages (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                author_kind TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                content TEXT,
+                deleted INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            "#,
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+        db.migrate().await.unwrap();
+
+        sqlx::query("SELECT session_id FROM messages LIMIT 0")
+            .fetch_all(db.pool())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

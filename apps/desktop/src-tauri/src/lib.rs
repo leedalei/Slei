@@ -62,12 +62,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::commands::{
-        activate_channel_session, activate_conversation_session, add_channel_member,
-        app_runtime_flags, bootstrap_guide_agent, complete_interactive_card, create_agent,
-        create_channel, create_channel_session, create_conversation_session,
-        create_dm_conversation, daemon_status, delete_agent, format_frontend_crash_log,
-        list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
-        list_channel_messages, list_channel_sessions, list_conversation_messages,
+        activate_conversation_session, add_channel_member, app_runtime_flags,
+        bootstrap_guide_agent, complete_interactive_card, create_agent, create_channel,
+        create_conversation_session, create_dm_conversation, daemon_status, delete_agent,
+        format_frontend_crash_log, list_agent_skills, list_agent_workspace, list_agents,
+        list_channel_members, list_channel_messages, list_conversation_messages,
         list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
         list_preferences, list_saved_messages, list_tasks, open_agent_path,
         read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
@@ -2333,7 +2332,8 @@ mod tests {
             protocol_version: "v1".to_string(),
         });
 
-        assert_eq!(list_preferences(&broker).preferences.locale, "zh-CN");
+        let default_locale = list_preferences(&broker).preferences.locale;
+        assert!(matches!(default_locale.as_str(), "zh-CN" | "en-US"));
         let updated = update_preferences(
             &broker,
             PreferencesUpdateRequest {

@@ -35,6 +35,7 @@ pub struct MessageRecord {
     pub kind: MessageKind,
     pub deleted: bool,
     pub edited: bool,
+    pub created_at: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cards: Vec<InteractiveCardView>,
 }
@@ -655,6 +656,7 @@ fn build_message_with_as_task(
         kind,
         deleted: false,
         edited: false,
+        created_at: current_timestamp(),
         cards: Vec::new(),
     }
 }
@@ -670,8 +672,16 @@ fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
         kind: kind_from_storage(&row.kind),
         deleted: row.deleted,
         edited: row.edited,
+        created_at: row.created_at,
         cards: Vec::new(),
     }
+}
+
+fn current_timestamp() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(|_| "0".to_string())
 }
 
 fn kind_to_storage(kind: &MessageKind) -> &'static str {

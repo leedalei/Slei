@@ -29,6 +29,7 @@ export type SleiMessage = {
   avatar?: string;
   role: "human" | "agent" | "system";
   time: string;
+  sentAt?: string;
   body: string;
   sessionId?: string;
   attachments?: ConversationAttachmentView[];

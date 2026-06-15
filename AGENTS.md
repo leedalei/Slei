@@ -9,6 +9,7 @@
 
 - Slei 的核心架构理念是：业务逻辑、状态变更、路由决策、持久化、幂等、重置和数据恢复都必须在 daemon 中处理。
 - 频道发言、coordinator 路由和 multi-agent 协作必须遵守 `docs/architecture/0005-channel-routing-and-multi-agent-flow.md`；改动相关代码前应先对照其中的信息流转图和 Drift Guardrails，避免路由逻辑漂移到 UI、本地 mock、关键词兜底或不可持久化状态。
+- 任务消息、任务卡片、coordinator 建任务和任务线程入口必须遵守 `docs/architecture/0006-task-source-message-card.md`；任务卡片是源消息的展示状态，不是新增消息。若行为、DTO、UX 或兼容策略变化，必须在同一任务中同步更新该 ADR，避免功能漂移。
 - UI shell 只负责展示 daemon 返回的数据、收集用户输入、触发 daemon command/API、呈现 loading/error/empty 状态。不要在 UI 中写复杂业务逻辑。
 - UI 可以做轻量 view-model 映射，例如格式化时间、选择本地 tab、打开/关闭 drawer、toast、表单临时输入状态；但不能把 agents、channels、messages、tasks、workspace、settings 等生产数据的规则写在 React 组件里。
 - Production 代码中禁止使用 mock、demo、sample、fake seed 数据来填充真实界面。Mock/fixture 只允许存在于测试、contract fixture、acceptance fixture 或明确命名的 test helper 中。

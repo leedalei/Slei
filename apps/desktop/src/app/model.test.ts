@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SleiMember } from "./types";
-import { isInternalCoordinatorMember, mentionSuggestions, shouldRefreshChannelMessages } from "./model";
+import { isInternalCoordinatorMember, localeFromSystemLanguages, mentionSuggestions, shouldRefreshChannelMessages, timeZoneFromSystemValue } from "./model";
 
 function agent(overrides: Partial<SleiMember> = {}): SleiMember {
   return {
@@ -100,5 +100,21 @@ describe("channel message refresh", () => {
         "dev",
       ),
     ).toBe(false);
+  });
+});
+
+describe("system preference defaults", () => {
+  it("maps system languages to supported app locales", () => {
+    expect(localeFromSystemLanguages(["en-GB", "zh-CN"])).toBe("en-US");
+    expect(localeFromSystemLanguages(["zh-Hans-CN", "en-US"])).toBe("zh-CN");
+    expect(localeFromSystemLanguages(["fr-FR"])).toBe("zh-CN");
+    expect(localeFromSystemLanguages([])).toBe("zh-CN");
+  });
+
+  it("uses IANA-like system time zones with the project fallback", () => {
+    expect(timeZoneFromSystemValue("America/Los_Angeles")).toBe("America/Los_Angeles");
+    expect(timeZoneFromSystemValue("Asia/Shanghai")).toBe("Asia/Shanghai");
+    expect(timeZoneFromSystemValue("UTC")).toBe("Asia/Shanghai");
+    expect(timeZoneFromSystemValue(undefined)).toBe("Asia/Shanghai");
   });
 });

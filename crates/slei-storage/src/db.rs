@@ -110,9 +110,9 @@ impl SleiDb {
     async fn repair_legacy_app_state_columns(&self) -> Result<(), sqlx::Error> {
         self.add_column_if_missing("channels", "active_session_id", "TEXT")
             .await?;
-        self.ensure_channel_sessions_table().await?;
         self.add_column_if_missing("messages", "session_id", "TEXT")
             .await?;
+        self.ensure_channel_sessions_table().await?;
         self.add_column_if_missing("messages", "author_id", "TEXT")
             .await?;
         self.add_column_if_missing("messages", "as_task", "INTEGER NOT NULL DEFAULT 0")

@@ -82,7 +82,52 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("overflow-hidden whitespace-nowrap");
     expect(html).toContain("min-w-0 flex-1 truncate");
     expect(html).toContain("shrink-0 text-sm text-foreground");
-    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(1);
+    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(2);
+  });
+
+  it("renders copy and star actions before the full message send time", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_timestamp",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          sentAt: "06-16 09:08:07",
+          body: "带完整发送时间的消息。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const messageHtml = html.slice(html.indexOf('data-message-id="msg_timestamp"'));
+    const timestampIndex = messageHtml.indexOf("06-16");
+    const copyIndex = messageHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
+    const saveIndex = messageHtml.indexOf(`aria-label="${messages.chat.saveMessage}"`);
+
+    expect(messageHtml).toContain('data-slot="message-actions"');
+    expect(messageHtml).not.toContain("2026-06-16");
+    expect(messageHtml).toContain("06-16 09:08");
+    expect(messageHtml).not.toContain("09:08:07");
+    expect(messageHtml).not.toContain("06-16</span><span>09:08:07");
+    expect(messageHtml).toContain("flex shrink-0 items-center gap-1");
+    expect(messageHtml).not.toContain("min-w-[7.5rem]");
+    expect(timestampIndex).toBeGreaterThan(-1);
+    expect(copyIndex).toBeGreaterThan(-1);
+    expect(saveIndex).toBeGreaterThan(copyIndex);
+    expect(timestampIndex).toBeGreaterThan(saveIndex);
   });
 
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {

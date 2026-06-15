@@ -48,11 +48,13 @@ import {
   createLocalChatMessage,
   createTaskFromChatMessage,
   defaultAppearance,
+  defaultLocale,
   defaultNotifications,
   defaultProfile,
   defaultTimeZone,
   deleteComputerNode,
   detectAgentMemoryRequest,
+  formatMessageDateTime,
   formatMessageTime,
   formatMemberCreatedDate,
   isInternalCoordinatorMember,
@@ -91,6 +93,7 @@ export {
   deleteComputerNode,
   detectAgentMemoryRequest,
   filterConversationMessages,
+  formatMessageDateTime,
   formatMemberCreatedDate,
   insertMention,
   isComposerImeComposing,
@@ -114,6 +117,7 @@ function conversationMessageToSleiMessage(message: ConversationMessageView, memb
     avatar: member?.avatar ?? (isHuman ? profile.avatar : undefined),
     role: member?.type ?? (isHuman ? "human" : "agent"),
     time: formatMessageTime(message.createdAt),
+    sentAt: formatMessageDateTime(message.createdAt),
     body: message.body,
     sessionId: message.sessionId,
     attachments: message.attachments,
@@ -143,6 +147,8 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
 
 export function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
   if (message.deleted || message.kind === "tombstone") return null;
+  const time = message.createdAt ? formatMessageTime(message.createdAt) : "";
+  const sentAt = message.createdAt ? formatMessageDateTime(message.createdAt) : undefined;
   if (message.kind === "task_card") {
     const taskCard = parseTaskCardBody(message.body ?? "");
     if (!taskCard) return null;
@@ -150,7 +156,8 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
       id: message.id,
       author: messages.common.system,
       role: "system",
-      time: "",
+      time,
+      sentAt,
       body: message.body ?? "",
       channelId: message.channelId,
       sessionId: message.sessionId,
@@ -165,7 +172,8 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     handle: member?.handle ?? (isHuman ? profile.handle : undefined),
     avatar: member?.avatar ?? (isHuman ? profile.avatar : undefined),
     role: member?.type ?? (isHuman ? "human" : message.kind === "agent" ? "agent" : "system"),
-    time: "",
+    time,
+    sentAt,
     body: message.body ?? "",
     cards: message.cards,
     channelId: message.channelId,
@@ -400,11 +408,13 @@ function taskThreadMessageRole(message: TaskThreadMessageView): SleiMessage["rol
 
 export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOutcome, channelId: string, messages: DesktopMessages): SleiMessage | null {
   if (outcome.action !== "local_archive_only") return null;
+  const now = new Date().toISOString();
   return {
     id: `archive-notice-${outcome.messageId}`,
     author: messages.common.system,
     role: "system",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    time: formatMessageTime(now),
+    sentAt: formatMessageDateTime(now),
     body: messages.chat.localArchiveOnly,
     channelId,
     status: "done",
@@ -413,13 +423,15 @@ export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOut
 
 export function createCoordinatorRoutingActivityMessage(outcome: SendChannelMessageOutcome, channelId: string, messages: DesktopMessages): SleiMessage | null {
   if (outcome.action !== "coordinator_pending") return null;
+  const now = new Date().toISOString();
   return {
     id: `coordinator-activity-${outcome.messageId}`,
     author: messages.members.channelCoordinator,
     handle: "@coordinator",
     avatar: "CO",
     role: "agent",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    time: formatMessageTime(now),
+    sentAt: formatMessageDateTime(now),
     body: "",
     channelId,
     status: "pending",
@@ -438,6 +450,7 @@ function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
   if (outcome.action !== "request_agent_reply") return [];
+  const now = new Date().toISOString();
   return channelReplyTargetIds(outcome).flatMap((agentId) => {
     const member = members.find((candidate) => candidate.id === agentId);
     if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];
@@ -448,7 +461,8 @@ export function createChannelAgentActivityMessages(outcome: SendChannelMessageOu
       handle: member?.handle,
       avatar: member?.avatar,
       role: "agent" as const,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: formatMessageTime(now),
+      sentAt: formatMessageDateTime(now),
       body: "",
       channelId,
       status: "pending" as const,
@@ -569,7 +583,7 @@ export function SleiApp() {
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
   const [sendingConversationIds, setSendingConversationIds] = useState<string[]>([]);
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
-  const [locale, setLocale] = useState<AppLocale>("zh-CN");
+  const [locale, setLocale] = useState<AppLocale>(defaultLocale);
   const [timeZone, setTimeZone] = useState(defaultTimeZone);
   const [appearance, setAppearance] = useState<AppearancePreferences>(defaultAppearance);
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
@@ -1274,11 +1288,13 @@ export function SleiApp() {
         if (memoryRequest) {
           void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
           const agent = data.members.find((member) => member.id === memoryRequest.agentId);
+          const now = new Date().toISOString();
           const systemMessage: SleiMessage = {
             id: `memory-${Date.now()}`,
             author: messages.common.system,
             role: "system",
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            time: formatMessageTime(now),
+            sentAt: formatMessageDateTime(now),
             body: messages.chat.memoryUpdated(agent?.handle ?? messages.agentCreate.fallbackAgent),
             channelId: targetId,
             sessionId: options?.sessionId ?? activeSessionId,
@@ -1330,11 +1346,13 @@ export function SleiApp() {
     if (memoryRequest) {
       void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
       const agent = data.members.find((member) => member.id === memoryRequest.agentId);
+      const now = new Date().toISOString();
       const systemMessage: SleiMessage = {
         id: `memory-${channelMessage.id}`,
         author: messages.common.system,
         role: "system",
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        time: formatMessageTime(now),
+        sentAt: formatMessageDateTime(now),
         body: messages.chat.memoryUpdated(agent?.handle ?? messages.agentCreate.fallbackAgent),
         channelId: targetId,
         sessionId: channelSessionId,

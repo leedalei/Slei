@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatMessageTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, parseTaskCardBody, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -115,26 +115,8 @@ function isTransientAgentActivity(message: SleiMessage) {
   return message.role === "agent" && (message.status === "running" || message.status === "pending");
 }
 
-function taskCardFromMessage(message: SleiMessage) {
-  return message.taskCard ?? (message.role === "system" ? parseTaskCardBody(message.body) : null);
-}
-
 function isTaskCardControlMessage(message: SleiMessage) {
   return Boolean(message.taskCard) || (message.role === "system" && message.body.trim().startsWith("task_card:"));
-}
-
-function renderableTaskForTaskCard(
-  taskCard: NonNullable<ReturnType<typeof parseTaskCardBody>>,
-  tasks: SleiFixtures["tasks"],
-  activeChannelId: string,
-) {
-  if (!taskCard.sourceMessageId) return undefined;
-  return tasks.find(
-    (task) =>
-      task.id === taskCard.taskId &&
-      task.sourceMessageId === taskCard.sourceMessageId &&
-      task.channelId === activeChannelId,
-  );
 }
 
 function isLinkedTaskAgentReply(message: SleiMessage, sourceMessageIds: Set<string>) {
@@ -273,6 +255,13 @@ function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): Sle
 
 function messageRoleDescription(message: SleiMessage, members: SleiMember[], messages: DesktopMessages): string {
   return memberMatchingMessage(message, members)?.role ?? messages.chat.roleLabels[message.role];
+}
+
+function messageTimestampLabel(message: SleiMessage): string {
+  const raw = (message.sentAt ?? message.time).trim();
+  const match = raw.match(/^(?:(\d{4})-)?(\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?/);
+  if (match) return `${match[2]} ${match[3]}`;
+  return raw;
 }
 
 async function copyMessageBody(body: string) {
@@ -492,30 +481,27 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     if (!currentSessionId) return !message.sessionId;
     return message.sessionId === currentSessionId || (!activeConversation && !message.sessionId);
   });
-  const renderableTaskCardsBySource = new Set(
-    visibleMessages
-      .map((message) => {
-        const taskCard = taskCardFromMessage(message);
-        if (!taskCard?.sourceMessageId) return undefined;
-        return renderableTaskForTaskCard(taskCard, data.tasks, activeChannel.id) ? taskCard.sourceMessageId : undefined;
-      })
-      .filter((id): id is string => Boolean(id)),
+  const visibleMessageIds = new Set(visibleMessages.map((message) => message.id));
+  const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id && (!task.sourceMessageId || visibleMessageIds.has(task.sourceMessageId)));
+  const taskBySourceMessageId = new Map(
+    channelTasks
+      .filter((task) => task.sourceMessageId)
+      .map((task) => [task.sourceMessageId!, task]),
   );
   const messageTaskSourceIds = new Set(
     visibleMessages
       .map((message) =>
-        message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
+        (message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id) || taskBySourceMessageId.has(message.id)
           ? message.id
           : undefined,
       )
       .filter((id): id is string => Boolean(id)),
   );
-  const taskSourceIds = new Set([...renderableTaskCardsBySource, ...messageTaskSourceIds]);
+  const taskSourceIds = new Set([...messageTaskSourceIds]);
   const timelineMessages = visibleMessages
     .filter((message) => !isTransientAgentActivity(message))
     .filter((message) => !isLinkedTaskAgentReply(message, taskSourceIds))
-    .filter((message) => !isTaskCardControlMessage(message) || Boolean(taskCardFromMessage(message)))
-    .filter((message) => message.role !== "human" || !renderableTaskCardsBySource.has(message.id) || Boolean(message.task));
+    .filter((message) => !isTaskCardControlMessage(message));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -526,8 +512,6 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
       })),
     )
     .reverse();
-  const visibleMessageIds = new Set(visibleMessages.map((message) => message.id));
-  const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id && (!task.sourceMessageId || visibleMessageIds.has(task.sourceMessageId)));
   const channelMembers = data.members.filter((member) => member.type === "agent" && Boolean(member.channelReadiness?.[activeChannel.id]));
   const availableChannelMembers = data.members.filter((member) =>
     member.type === "agent" &&
@@ -770,32 +754,34 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
           <div className="grid gap-1 px-4 py-3">
             {timelineMessages.map((message) => {
-              if (message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id) {
+              const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
+                ? message.task
+                : taskBySourceMessageId.get(message.id);
+              if (sourceTask) {
+                const saved = savedMessageIds.includes(message.id);
+                const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+                const timestamp = messageTimestampLabel(message);
                 return (
                   <TaskRootEntry
+                    copyLabel={messages.chat.copyMessage}
                     key={message.id}
                     messages={messages}
-                    onOpen={() => openTaskThread(message.task!.id)}
+                    onCopy={() => copyMessage(message)}
+                    onOpen={() => openTaskThread(sourceTask.id)}
+                    onSaveToggle={() => onMessageSaveToggle?.(message)}
+                    avatarIdentity={memberFromMessage(message, data.members)}
+                    roleDescription={messageRoleDescription(message, data.members, messages)}
+                    saved={saved}
+                    saveLabel={saveLabel}
                     sourceMessage={message}
-                    task={message.task}
-                  />
-                );
-              }
-              const taskCard = taskCardFromMessage(message);
-              if (taskCard) {
-                const task = renderableTaskForTaskCard(taskCard, data.tasks, activeChannel.id);
-                if (!task) return null;
-                return (
-                  <TaskRootEntry
-                    key={message.id}
-                    messages={messages}
-                    onOpen={() => openTaskThread(task.id)}
-                    task={task}
+                    task={sourceTask}
+                    timestamp={timestamp}
                   />
                 );
               }
               const saved = savedMessageIds.includes(message.id);
               const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+              const timestamp = messageTimestampLabel(message);
               return (
                 <article
                   className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
@@ -813,15 +799,18 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                         <span aria-hidden="true">｜</span>
                         <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
                         <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
                           <Copy aria-hidden="true" size={14} />
                         </Button>
                         <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
                           <Bookmark aria-hidden="true" size={14} />
                         </Button>
+                        <span aria-hidden="true">｜</span>
                         <span className="inline-flex items-center gap-1">
-                          <time>{message.time}</time>
+                          <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
+                            {timestamp}
+                          </time>
                           <MessageStatusSquare status={message.status} />
                         </span>
                       </div>

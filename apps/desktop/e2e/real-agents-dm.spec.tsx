@@ -437,7 +437,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("10:00");
     expect(html).toContain('aria-label="复制"');
     expect(html).not.toContain(">复制</button>");
-    expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf("<time>10:00</time>"));
+    expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf(">10:00</time>"));
   });
 
   it("uses localized fallback role labels for unmatched direct message authors", () => {

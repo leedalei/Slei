@@ -432,6 +432,28 @@ describe("createChannelAgentReplyMessage", () => {
     expect(converted?.status).toBe("done");
   });
 
+  it("maps channel message created time for chat message headers", () => {
+    const message: ChannelMessageView = {
+      id: "channel_msg_1",
+      channelId: "all",
+      authorId: "human:lei",
+      body: "频道消息",
+      kind: "human",
+      deleted: false,
+      createdAt: "2026-06-16 09:08:07",
+    };
+
+    const converted = channelMessageToSleiMessage(
+      message,
+      [],
+      defaultProfile,
+      createDesktopMessages("zh-CN"),
+    );
+
+    expect(converted?.time).toBe("09:08");
+    expect(converted?.sentAt).toBe("06-16 09:08");
+  });
+
   it("collects multiple completed card messages from one runtime run", async () => {
     const messages: ConversationMessageView[] = [
       {

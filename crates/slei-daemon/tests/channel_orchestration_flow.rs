@@ -2016,6 +2016,9 @@ async fn channel_message_replay_uses_original_as_task_flag() {
 
     assert_eq!(outcome.message_id, message.id);
     assert_eq!(outcome.action, "coordinator_pending");
+    let pending_task_id = outcome.task_id.as_deref().unwrap().to_string();
+    let task = state.tasks().task(&pending_task_id).await.unwrap();
+    assert_eq!(task.source_message_id.as_deref(), Some(message.id.as_str()));
     let coordinator_run_id = outcome.coordinator_run_id.as_deref().unwrap().to_string();
     complete_coordinator_run(
         &state,
@@ -2038,7 +2041,7 @@ async fn channel_message_replay_uses_original_as_task_flag() {
 
     assert_eq!(outcome.message_id, message.id);
     assert_eq!(outcome.action, "needs_manual_assignment");
-    assert!(outcome.task_id.as_deref().is_some());
+    assert_eq!(outcome.task_id.as_deref(), Some(pending_task_id.as_str()));
 }
 
 #[tokio::test]
@@ -2474,6 +2477,40 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
         .unwrap();
     let json = response_json(response).await;
     assert_eq!(json["outcome"]["action"], "coordinator_pending");
+    let pending_task_id = json["outcome"]["taskId"].as_str().unwrap();
+    assert!(!pending_task_id.is_empty());
+    let listed = response_json(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/v1/channels/dev/messages")
+                    .header("authorization", token.authorization_header())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .await;
+    let listed_messages = listed["messages"].as_array().unwrap();
+    assert_eq!(
+        listed_messages
+            .iter()
+            .filter(|message| message["kind"] == "task_card")
+            .count(),
+        0
+    );
+    let pending_source_message = listed_messages
+        .iter()
+        .find(|message| message["id"] == json["outcome"]["messageId"])
+        .unwrap();
+    assert_eq!(pending_source_message["kind"], "human");
+    assert_eq!(pending_source_message["task"]["id"], pending_task_id);
+    assert_eq!(
+        pending_source_message["task"]["sourceMessageId"],
+        json["outcome"]["messageId"]
+    );
     complete_coordinator_run(
         &state,
         json["outcome"]["coordinatorRunId"].as_str().unwrap(),
@@ -2509,6 +2546,7 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
     assert_eq!(json["outcome"]["assigneeAgentId"], "agent_coda");
     assert_eq!(json["outcome"]["assigneeAgentIds"], json!(["agent_coda"]));
     let task_id = json["outcome"]["taskId"].as_str().unwrap();
+    assert_eq!(task_id, pending_task_id);
     let listed = response_json(
         app.clone()
             .oneshot(
@@ -2569,38 +2607,18 @@ async fn public_channel_message_api_converts_explicit_as_task_messages_to_tasks(
         .await
         .unwrap();
     let json = response_json(response).await;
-    assert_eq!(json["outcome"]["action"], "coordinator_pending");
-    complete_coordinator_run(
-        &state,
-        json["outcome"]["coordinatorRunId"].as_str().unwrap(),
-        reply_decision_json("agent_coda", "explicit asTask mention should assign coda"),
-    )
-    .await;
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/channels/dev/messages")
-                .header("authorization", token.authorization_header())
-                .header("content-type", "application/json")
-                .header("idempotency-key", "explicit-as-task-with-mention")
-                .body(Body::from(
-                    serde_json::json!({
-                        "authorId": "human_lei",
-                        "body": "@agent_coda 这也要收敛成任务",
-                        "asTask": true
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let json = response_json(response).await;
     assert_eq!(json["outcome"]["action"], "create_task_and_assign");
     assert_eq!(json["outcome"]["assigneeAgentId"], "agent_coda");
-    assert!(json["outcome"]["taskId"].as_str().is_some());
+    assert_eq!(json["outcome"]["assigneeAgentIds"], json!(["agent_coda"]));
+    assert!(json["outcome"]["coordinatorRunId"].is_null());
+    let mentioned_task_id = json["outcome"]["taskId"].as_str().unwrap();
+    assert!(!mentioned_task_id.is_empty());
+    let inbox = state.agent_inbox().events_for_agent("agent_coda").await;
+    assert!(inbox.iter().any(|event| {
+        event.event_type == "task_assigned"
+            && event.message_id == json["outcome"]["messageId"]
+            && event.task_id.as_deref() == Some(mentioned_task_id)
+    }));
 }
 
 #[tokio::test]

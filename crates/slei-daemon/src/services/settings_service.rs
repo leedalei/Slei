@@ -63,19 +63,7 @@ impl Default for SettingsState {
     fn default() -> Self {
         Self {
             profile: None,
-            preferences: UserPreferences {
-                locale: LocalePreference::ZhCn,
-                time_zone: "Asia/Shanghai".to_string(),
-                appearance: AppearancePreferences {
-                    theme: "system".to_string(),
-                    font_size: "md".to_string(),
-                },
-                notifications: NotificationPreferences {
-                    mentions: true,
-                    human_replies: true,
-                    approvals: true,
-                },
-            },
+            preferences: system_default_preferences(),
         }
     }
 }
@@ -239,20 +227,80 @@ fn validate_handle(handle: &str) -> Result<(), SettingsError> {
 
 impl Default for UserPreferences {
     fn default() -> Self {
-        Self {
-            locale: LocalePreference::ZhCn,
-            time_zone: "Asia/Shanghai".to_string(),
-            appearance: AppearancePreferences {
-                theme: "system".to_string(),
-                font_size: "md".to_string(),
-            },
-            notifications: NotificationPreferences {
-                mentions: true,
-                human_replies: true,
-                approvals: true,
-            },
+        system_default_preferences()
+    }
+}
+
+fn system_default_preferences() -> UserPreferences {
+    UserPreferences {
+        locale: system_locale_preference(),
+        time_zone: system_time_zone(),
+        appearance: AppearancePreferences {
+            theme: "system".to_string(),
+            font_size: "md".to_string(),
+        },
+        notifications: NotificationPreferences {
+            mentions: true,
+            human_replies: true,
+            approvals: true,
+        },
+    }
+}
+
+fn system_locale_preference() -> LocalePreference {
+    locale_preference_from_env(
+        std::env::var("LC_ALL").ok().as_deref(),
+        std::env::var("LC_MESSAGES").ok().as_deref(),
+        std::env::var("LANG").ok().as_deref(),
+    )
+}
+
+fn locale_preference_from_env(
+    lc_all: Option<&str>,
+    lc_messages: Option<&str>,
+    lang: Option<&str>,
+) -> LocalePreference {
+    for value in [lc_all, lc_messages, lang].into_iter().flatten() {
+        let normalized = value.trim().to_ascii_lowercase().replace('_', "-");
+        if normalized.starts_with("zh") {
+            return LocalePreference::ZhCn;
+        }
+        if normalized.starts_with("en") {
+            return LocalePreference::EnUs;
         }
     }
+    LocalePreference::ZhCn
+}
+
+fn system_time_zone() -> String {
+    if let Ok(time_zone) = std::env::var("TZ") {
+        let trimmed = time_zone.trim();
+        if is_supported_time_zone(trimmed) {
+            return trimmed.to_string();
+        }
+    }
+    if let Some(time_zone) = system_time_zone_from_localtime_path("/etc/localtime") {
+        return time_zone;
+    }
+    "Asia/Shanghai".to_string()
+}
+
+fn system_time_zone_from_localtime_path(path: &str) -> Option<String> {
+    let target = std::fs::read_link(path).ok()?;
+    let target = target.to_string_lossy();
+    let marker = "zoneinfo/";
+    let index = target.find(marker)?;
+    let time_zone = &target[index + marker.len()..];
+    is_supported_time_zone(time_zone).then(|| time_zone.to_string())
+}
+
+fn is_supported_time_zone(time_zone: &str) -> bool {
+    !time_zone.is_empty()
+        && time_zone.chars().count() <= 64
+        && time_zone.contains('/')
+        && time_zone.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '/' | '_' | '-' | '+')
+        })
 }
 
 fn preferences_to_row(preferences: &UserPreferences) -> UserPreferencesRow {
@@ -287,6 +335,40 @@ fn preferences_from_row(row: UserPreferencesRow) -> UserPreferences {
             human_replies: row.notify_human_replies,
             approvals: row.notify_approvals,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_supported_time_zone, locale_preference_from_env, LocalePreference};
+
+    #[test]
+    fn locale_preference_uses_system_locale_environment_order() {
+        assert_eq!(
+            locale_preference_from_env(Some("en_US.UTF-8"), Some("zh_CN.UTF-8"), None),
+            LocalePreference::EnUs
+        );
+        assert_eq!(
+            locale_preference_from_env(None, Some("zh_CN.UTF-8"), Some("en_US.UTF-8")),
+            LocalePreference::ZhCn
+        );
+        assert_eq!(
+            locale_preference_from_env(None, None, Some("en_GB.UTF-8")),
+            LocalePreference::EnUs
+        );
+        assert_eq!(
+            locale_preference_from_env(None, None, None),
+            LocalePreference::ZhCn
+        );
+    }
+
+    #[test]
+    fn time_zone_defaults_accept_iana_names_only() {
+        assert!(is_supported_time_zone("Asia/Shanghai"));
+        assert!(is_supported_time_zone("America/Los_Angeles"));
+        assert!(!is_supported_time_zone(""));
+        assert!(!is_supported_time_zone("UTC"));
+        assert!(!is_supported_time_zone("../Asia/Shanghai"));
     }
 }
 

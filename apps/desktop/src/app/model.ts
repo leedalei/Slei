@@ -1,4 +1,4 @@
-import type { AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
+import type { AppLocale, AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./types";
 
@@ -71,7 +71,38 @@ export const defaultAppearance: AppearancePreferences = {
   fontSize: "md",
 };
 
-export const defaultTimeZone = "Asia/Shanghai";
+export function localeFromSystemLanguages(languages: readonly string[]): AppLocale {
+  for (const language of languages) {
+    const normalized = language.trim().toLowerCase();
+    if (normalized.startsWith("zh")) {
+      return "zh-CN";
+    }
+    if (normalized.startsWith("en")) {
+      return "en-US";
+    }
+  }
+  return "zh-CN";
+}
+
+export function timeZoneFromSystemValue(timeZone: string | undefined): string {
+  const normalized = timeZone?.trim();
+  return normalized && normalized.includes("/") ? normalized : "Asia/Shanghai";
+}
+
+export function systemDefaultLocale(): AppLocale {
+  const languages = typeof navigator === "undefined"
+    ? []
+    : [navigator.language, ...Array.from(navigator.languages ?? [])];
+  return localeFromSystemLanguages(languages);
+}
+
+export function systemDefaultTimeZone(): string {
+  const timeZone = typeof Intl === "undefined" ? undefined : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return timeZoneFromSystemValue(timeZone);
+}
+
+export const defaultLocale = systemDefaultLocale();
+export const defaultTimeZone = systemDefaultTimeZone();
 export const desktopVersion = "0.1.0";
 
 export const profileAvatarPresets = [
@@ -182,14 +213,16 @@ export function createLocalChatMessage(input: {
   if (!body) {
     return null;
   }
+  const now = new Date();
 
   return {
-    id: `local-${Date.now()}`,
+    id: `local-${now.getTime()}`,
     author: input.profile.displayName.trim() || input.profile.handle || input.messages?.common.you || createDesktopMessages("zh-CN").common.you,
     handle: input.profile.handle.startsWith("@") ? input.profile.handle : `@${input.profile.handle}`,
     avatar: input.profile.avatar.trim() || input.profile.displayName.slice(0, 2),
     role: "human",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    time: formatMessageTime(now.toISOString()),
+    sentAt: formatMessageDateTime(now.toISOString()),
     body,
     channelId: input.channelId,
     sessionId: input.sessionId,
@@ -288,7 +321,7 @@ export function shouldRefreshChannelMessages(messages: SleiMessage[], channelId?
   return messages.some((message) => message.channelId === channelId && (message.status === "running" || message.status === "pending"));
 }
 
-export function formatMessageTime(value: string): string {
+function dateFromMessageTimeValue(value: string): Date | null {
   const raw = value.trim();
   let date: Date;
   if (/^\d+$/.test(raw)) {
@@ -303,8 +336,29 @@ export function formatMessageTime(value: string): string {
   } else {
     date = new Date(raw);
   }
-  if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function twoDigit(value: number): string {
+  return value.toString().padStart(2, "0");
+}
+
+export function formatMessageDateTime(value: string): string {
+  const raw = value.trim();
+  const date = dateFromMessageTimeValue(raw);
+  if (!date) return raw;
+  return [
+    `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())}`,
+    `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`,
+  ].join(" ");
+}
+
+export function formatMessageTime(value: string): string {
+  const raw = value.trim();
+  const date = dateFromMessageTimeValue(raw);
+  if (!date) return raw;
+  return `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
 }
 
 export function filterConversationMessages(messages: SleiMessage[], filters: ChatSearchFilters): SleiMessage[] {

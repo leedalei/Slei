@@ -273,6 +273,7 @@ export type ChannelMessageView = {
   kind: "human" | "agent" | "task_card" | "tombstone" | string;
   deleted?: boolean;
   edited?: boolean;
+  createdAt?: string;
   task?: TaskSummaryView;
 };
 
@@ -522,10 +523,32 @@ export type DaemonBridge = {
   subscribeEvents(after: number): Promise<void>;
 };
 
+function defaultAppLocale(): AppLocale {
+  const languages = typeof navigator === "undefined"
+    ? []
+    : [navigator.language, ...Array.from(navigator.languages ?? [])];
+  for (const language of languages) {
+    const normalized = language.trim().toLowerCase();
+    if (normalized.startsWith("zh")) {
+      return "zh-CN";
+    }
+    if (normalized.startsWith("en")) {
+      return "en-US";
+    }
+  }
+  return "zh-CN";
+}
+
+function defaultAppTimeZone(): string {
+  const timeZone = typeof Intl === "undefined" ? undefined : Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const normalized = timeZone?.trim();
+  return normalized && normalized.includes("/") ? normalized : "Asia/Shanghai";
+}
+
 function defaultUserPreferences(): UserPreferences {
   return {
-    locale: "zh-CN",
-    timeZone: "Asia/Shanghai",
+    locale: defaultAppLocale(),
+    timeZone: defaultAppTimeZone(),
     appearance: {
       theme: "light",
       fontSize: "md",
