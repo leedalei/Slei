@@ -1683,7 +1683,13 @@ impl ChannelOrchestratorService {
                 return Err(error.into());
             }
         };
-        if let Err(error) = self.worker.start_run(run_id, &session, prompt, Vec::new()) {
+        if let Err(error) = self.worker.start_run(
+            run_id,
+            &session,
+            prompt,
+            "Slei runtime system prompt pending daemon builder.",
+            Vec::new(),
+        ) {
             self.channel_agent_runs.lock().await.remove(run_id);
             return Err(error.into());
         }

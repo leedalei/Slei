@@ -57,6 +57,7 @@ impl ClaudeWorkerAdapter {
         run_id: &str,
         session: &RuntimeSession,
         prompt: &str,
+        system_prompt: &str,
         context: Vec<Value>,
     ) -> Result<(), ClaudeWorkerError> {
         self.transport.send(json!({
@@ -72,6 +73,7 @@ impl ClaudeWorkerAdapter {
             },
             "input": {
                 "prompt": prompt,
+                "system_prompt": system_prompt,
                 "context": context,
             }
         }))?;

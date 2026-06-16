@@ -216,7 +216,13 @@ impl CoordinatorService {
             })
             .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
         self.worker
-            .start_run(&input.run_id, &session, &prompt, Vec::new())
+            .start_run(
+                &input.run_id,
+                &session,
+                &prompt,
+                "Slei runtime system prompt pending daemon builder.",
+                Vec::new(),
+            )
             .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
         Ok(CoordinatorRuntimeRun {
             run_id: input.run_id,

@@ -19,6 +19,7 @@
       },
       "input": {
         "prompt": "Implement the task",
+        "system_prompt": "Slei system prompt: use slei CLI and claim rules.",
         "context": [{ "role": "user", "content": "Previous undeleted message" }]
       }
     },

@@ -67,6 +67,7 @@ export type WorkspaceMount = {
 
 export type RunInput = {
   prompt: string;
+  system_prompt?: string;
   context: Array<{ role: "user" | "assistant" | "system"; content: string }>;
 };
 

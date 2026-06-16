@@ -125,7 +125,13 @@ impl AgentDmService {
                 .await?
         };
         let prompt = ConversationService::prompt_with_attachments(message);
-        self.worker.start_run(&run_id, &session, &prompt, context)?;
+        self.worker.start_run(
+            &run_id,
+            &session,
+            &prompt,
+            "Slei runtime system prompt pending daemon builder.",
+            context,
+        )?;
         self.runs.inner.lock().await.runs.insert(
             run_id.clone(),
             AgentDmRunRecord {

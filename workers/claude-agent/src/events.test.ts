@@ -38,6 +38,7 @@ describe("worker RPC contract", () => {
     expect(hello.launch_secret).toBeTruthy();
     expect(startRun.session.persist_session).toBe(true);
     expect(startRun.session.resume_session).toBe(false);
+    expect(startRun.input.system_prompt).toContain("Slei system prompt");
   });
 
   it("maps Claude SDK output and tool events before crossing into daemon code", () => {

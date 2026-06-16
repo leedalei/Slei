@@ -40,6 +40,7 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
             "run_1",
             &session,
             "Implement the task",
+            "Slei system prompt: claim with slei message claim.",
             vec![json!({"role": "user", "content": "Previous undeleted message"})],
         )
         .unwrap();
@@ -50,6 +51,10 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
     assert_eq!(commands[0]["type"], "start_run");
     assert_eq!(commands[0]["session"]["persist_session"], true);
     assert_eq!(commands[0]["session"]["resume_session"], true);
+    assert_eq!(
+        commands[0]["input"]["system_prompt"],
+        "Slei system prompt: claim with slei message claim."
+    );
     assert_eq!(commands[1], json!({"type": "cancel", "run_id": "run_1"}));
     assert_eq!(commands[2]["type"], "clear_session");
     assert_eq!(commands[2]["session"]["session_id"], session.session_id);
