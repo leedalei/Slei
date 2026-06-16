@@ -1377,6 +1377,11 @@ async fn guide_dm_without_card_shortcut_starts_runtime() {
         .expect("guide chat should start runtime");
     assert_eq!(start_run["session"]["agent_id"], "agent_guide_local_node");
     assert_eq!(start_run["input"]["prompt"], "你好");
+    let system_prompt = start_run["input"]["system_prompt"].as_str().unwrap();
+    assert!(system_prompt.contains("Agent ID: agent_guide_local_node"));
+    assert!(system_prompt.contains("slei message claim"));
+    assert!(system_prompt.contains("slei task thread"));
+    assert!(system_prompt.contains("Active Context"));
 }
 
 #[tokio::test]

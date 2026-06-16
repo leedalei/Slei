@@ -9,6 +9,7 @@ use crate::adapters::claude_worker::{
     ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest, RuntimeSession,
 };
 use crate::adapters::worker_rpc::{WorkerEvent, WorkerRpcError};
+use crate::services::agent_prompt_service::{build_agent_system_prompt, AgentSystemPromptInput};
 use crate::services::card_service::{CardError, CardService, InteractiveCardView};
 use crate::services::conversation_service::{
     ConversationError, ConversationMessageRecord, ConversationService,
@@ -125,13 +126,26 @@ impl AgentDmService {
                 .await?
         };
         let prompt = ConversationService::prompt_with_attachments(message);
-        self.worker.start_run(
-            &run_id,
-            &session,
-            &prompt,
-            "Slei runtime system prompt pending daemon builder.",
-            context,
-        )?;
+        let system_prompt = build_agent_system_prompt(AgentSystemPromptInput {
+            agent_id: &agent.id,
+            handle: &agent.handle,
+            name: &agent.name,
+            role: &agent.description,
+            node_id: &agent.node_id,
+            cwd: &agent.workspace_path,
+            session_id: &session.session_id,
+            model: &agent.model,
+            channel_id: None,
+            channel_name: None,
+            message_id: Some(&message.id),
+            task_id: None,
+            runtime_kind: &agent.runtime_kind,
+            legacy_mode: false,
+            source_message_id: None,
+            notes: None,
+        });
+        self.worker
+            .start_run(&run_id, &session, &prompt, &system_prompt, context)?;
         self.runs.inner.lock().await.runs.insert(
             run_id.clone(),
             AgentDmRunRecord {

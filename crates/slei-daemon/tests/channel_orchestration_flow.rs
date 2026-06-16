@@ -1213,6 +1213,24 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         .as_deref()
         .unwrap()
         .contains("@coda-win"));
+    let commands = state.worker_commands();
+    let handoff_start_run = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["session"]["agent_id"] == "agent_coda"
+                && command["input"]["prompt"].as_str().is_some_and(|prompt| {
+                    prompt.contains("架构方案完成。@coda-win 请根据方案实现。")
+                })
+        })
+        .expect("task handoff should start coda runtime");
+    assert_eq!(handoff_start_run["input"]["context"], json!([]));
+    let system_prompt = handoff_start_run["input"]["system_prompt"]
+        .as_str()
+        .unwrap();
+    assert!(system_prompt.contains("task id: task_"));
+    assert!(system_prompt.contains("source message id"));
+    assert!(system_prompt.contains("visible @mention handoff"));
     complete_channel_agent_run(&state, "agent_coda", "Coda 已在任务线程继续实现。").await;
     let thread = state.tasks().thread_view(&task.id).await.unwrap();
     assert!(thread.replies.iter().any(|reply| {
@@ -3393,6 +3411,26 @@ fn assert_broadcast_runs_started(
                 "prompt should not include unrelated prior history {fragment:?}: {prompt}"
             );
         }
+        assert_eq!(command["input"]["context"], json!([]));
+        assert!(
+            prompt.contains("Triggering message:") && prompt.contains("[target=#"),
+            "prompt should preserve current trigger header only: {prompt}"
+        );
+        let system_prompt = command["input"]["system_prompt"].as_str().unwrap();
+        assert!(
+            system_prompt.contains("## Claim Rules"),
+            "system prompt missing claim rules: {system_prompt}"
+        );
+        assert!(
+            system_prompt.contains(&format!(
+                "slei message read --channel \"#channel\" --around <msgId>"
+            )),
+            "system prompt missing around-history command: {system_prompt}"
+        );
+        assert!(
+            system_prompt.contains(&format!("Agent ID: {agent_id}")),
+            "system prompt missing agent identity: {system_prompt}"
+        );
     }
 }
 

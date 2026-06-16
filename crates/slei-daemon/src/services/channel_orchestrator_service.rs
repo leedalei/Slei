@@ -10,6 +10,7 @@ use crate::adapters::claude_worker::{
     ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest,
 };
 use crate::services::agent_inbox_service::AgentInboxService;
+use crate::services::agent_prompt_service::{build_agent_system_prompt, AgentSystemPromptInput};
 use crate::services::card_service::{CardError, CardService};
 use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
@@ -1666,7 +1667,7 @@ impl ChannelOrchestratorService {
                 session_id,
                 agent_id: agent_id.to_string(),
                 source_message_id: source_message_id.to_string(),
-                task_id,
+                task_id: task_id.clone(),
                 suppress_visible_output,
                 output: String::new(),
             },
@@ -1683,13 +1684,34 @@ impl ChannelOrchestratorService {
                 return Err(error.into());
             }
         };
-        if let Err(error) = self.worker.start_run(
-            run_id,
-            &session,
-            prompt,
-            "Slei runtime system prompt pending daemon builder.",
-            Vec::new(),
-        ) {
+        let channel_name = format!("#{channel_id}");
+        let task_notes = task_id.as_ref().map(|task_id| {
+            format!(
+                "visible @mention handoff; source message id: {source_message_id}; task id: {task_id}"
+            )
+        });
+        let system_prompt = build_agent_system_prompt(AgentSystemPromptInput {
+            agent_id: &agent.id,
+            handle: &agent.handle,
+            name: &agent.name,
+            role: &agent.description,
+            node_id: &agent.node_id,
+            cwd: &agent.workspace_path,
+            session_id: &session.session_id,
+            model: &agent.model,
+            channel_id: Some(channel_id),
+            channel_name: Some(&channel_name),
+            message_id: Some(source_message_id),
+            task_id: task_id.as_deref(),
+            runtime_kind: &agent.runtime_kind,
+            legacy_mode: false,
+            source_message_id: Some(source_message_id),
+            notes: task_notes.as_deref(),
+        });
+        if let Err(error) =
+            self.worker
+                .start_run(run_id, &session, prompt, &system_prompt, Vec::new())
+        {
             self.channel_agent_runs.lock().await.remove(run_id);
             return Err(error.into());
         }

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::adapters::claude_worker::{ClaudeWorkerAdapter, CreateSessionRequest};
 use crate::adapters::worker_rpc::WorkerTransport;
+use crate::services::agent_prompt_service::build_legacy_coordinator_system_prompt;
 use crate::services::member_service::{is_internal_coordinator_id, GLOBAL_COORDINATOR_AGENT_ID};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeState};
@@ -215,14 +216,9 @@ impl CoordinatorService {
                 resume_session: false,
             })
             .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
+        let system_prompt = build_legacy_coordinator_system_prompt();
         self.worker
-            .start_run(
-                &input.run_id,
-                &session,
-                &prompt,
-                "Slei runtime system prompt pending daemon builder.",
-                Vec::new(),
-            )
+            .start_run(&input.run_id, &session, &prompt, &system_prompt, Vec::new())
             .map_err(|error| CoordinatorDecisionError::Worker(error.to_string()))?;
         Ok(CoordinatorRuntimeRun {
             run_id: input.run_id,
