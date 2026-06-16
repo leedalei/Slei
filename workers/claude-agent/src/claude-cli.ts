@@ -22,6 +22,7 @@ const SETTING_SOURCES = ["user", "project", "local"];
 export type ClaudeCliRunOptions = {
   mcpConfigPath: string;
   forceFreshSession?: boolean;
+  additionalDirectories?: readonly string[];
 };
 
 export type ClaudeCliSpawner = (
@@ -77,7 +78,7 @@ export function buildClaudeCliArgs(
     args.push("--model", model);
   }
 
-  for (const directory of command.session.additional_directories ?? []) {
+  for (const directory of options.additionalDirectories ?? command.session.additional_directories ?? []) {
     args.push("--add-dir", directory);
   }
 
@@ -90,7 +91,7 @@ export function buildClaudeCliArgs(
     args.push("--no-session-persistence");
   }
 
-  args.push(command.input.prompt);
+  args.push(promptForRun(command));
   return args;
 }
 
@@ -102,32 +103,38 @@ export async function* runClaudeCodeCli(
     if (forceFreshSession && !command.session.resume_session) {
       break;
     }
-    const result = await runClaudeCodeCliAttempt(command, {
+    const attempt = runClaudeCodeCliAttempt(command, {
       ...options,
       forceFreshSession,
     });
+    let result: CliAttemptResult | undefined;
 
-    if (shouldRetryResumeAsFreshSession(command, forceFreshSession, result)) {
+    for await (const item of attempt) {
+      if (isAttemptResult(item)) {
+        result = item;
+      } else {
+        yield item;
+      }
+    }
+
+    if (result && shouldRetryResumeAsFreshSession(command, forceFreshSession, result)) {
       continue;
     }
 
-    for (const event of result.events) {
-      yield event;
-    }
     return;
   }
 }
 
-async function runClaudeCodeCliAttempt(
+async function* runClaudeCodeCliAttempt(
   command: StartRunCommand,
   options: RunClaudeCodeCliOptions & { forceFreshSession: boolean },
-): Promise<CliAttemptResult> {
+): AsyncIterable<RuntimeEvent | CliAttemptResult> {
   const workspace = prepareWorkspace(command.session);
   const spawner = options.spawner ?? spawn;
   const tempDir = await mkdtemp(join(tmpdir(), "slei-claude-mcp-"));
   const mcpConfigPath = join(tempDir, "mcp-config.json");
-  const events: RuntimeEvent[] = [];
-  let emittedTerminalEvent = false;
+  let emittedAnyEvent = false;
+  let terminalEvent: RuntimeEvent | null = null;
   let stderr = "";
 
   try {
@@ -150,6 +157,7 @@ async function runClaudeCodeCliAttempt(
       buildClaudeCliArgs(command, {
         mcpConfigPath,
         forceFreshSession: options.forceFreshSession,
+        additionalDirectories: workspace.additionalDirectories,
       }),
       {
         cwd: workspace.cwd,
@@ -163,65 +171,74 @@ async function runClaudeCodeCliAttempt(
       stderr += chunk;
     });
 
-    const lineEvents = collectStdoutEvents(command, child);
+    const lineEvents = streamStdoutEvents(command, child);
     const exit = waitForChildExit(child);
-    const [stdoutResult, exitResult] = await Promise.allSettled([lineEvents, exit]);
 
-    if (stdoutResult.status === "fulfilled") {
-      for (const event of stdoutResult.value) {
-        events.push(event);
+    try {
+      for await (const event of lineEvents) {
+        emittedAnyEvent = true;
         if (isTerminalEvent(event)) {
-          emittedTerminalEvent = true;
+          terminalEvent = event;
+        } else {
+          yield event;
         }
       }
-    } else {
-      return {
-        events: [
-          {
-            type: "failed",
-            runId: command.run_id,
-            message: cliErrorMessage(stdoutResult.reason, stderr),
-          },
-        ],
-        failedBeforeAnyEvent: events.length === 0,
+    } catch (error) {
+      await exit.catch(() => undefined);
+      const failed: RuntimeEvent = {
+        type: "failed",
+        runId: command.run_id,
+        message: cliErrorMessage(error, stderr),
       };
+      yield failed;
+      yield { failedBeforeAnyEvent: !emittedAnyEvent, retryableResumeFailure: false };
+      return;
     }
 
-    if (exitResult.status === "rejected") {
-      return {
-        events: [
-          {
-            type: "failed",
-            runId: command.run_id,
-            message: cliErrorMessage(exitResult.reason, stderr),
-          },
-        ],
-        failedBeforeAnyEvent: events.length === 0,
+    let exitCode: number | null;
+    try {
+      exitCode = await exit;
+    } catch (error) {
+      const failed: RuntimeEvent = {
+        type: "failed",
+        runId: command.run_id,
+        message: cliErrorMessage(error, stderr),
       };
+      yield failed;
+      yield { failedBeforeAnyEvent: !emittedAnyEvent, retryableResumeFailure: false };
+      return;
     }
 
-    if (exitResult.value !== 0 && !emittedTerminalEvent) {
-      return {
-        events: [
-          {
-            type: "failed",
-            runId: command.run_id,
-            message: cliErrorMessage(new Error(`Claude CLI exited with code ${exitResult.value}`), stderr),
-          },
-        ],
-        failedBeforeAnyEvent: events.length === 0,
+    if (exitCode !== 0) {
+      if (terminalEvent?.type === "failed") {
+        yield terminalEvent;
+        yield { failedBeforeAnyEvent: false, retryableResumeFailure: false };
+        return;
+      }
+      const retryableResumeFailure =
+        command.session.resume_session &&
+        !options.forceFreshSession &&
+        !emittedAnyEvent &&
+        isRetryableResumeFailure(stderr);
+      if (retryableResumeFailure) {
+        yield { failedBeforeAnyEvent: true, retryableResumeFailure: true };
+        return;
+      }
+      const failed: RuntimeEvent = {
+        type: "failed",
+        runId: command.run_id,
+        message: cliErrorMessage(new Error(`Claude CLI exited with code ${exitCode}`), stderr),
       };
+      yield failed;
+      yield {
+        failedBeforeAnyEvent: !emittedAnyEvent,
+        retryableResumeFailure: false,
+      };
+      return;
     }
 
-    if (!emittedTerminalEvent) {
-      events.push({ type: "completed", runId: command.run_id });
-      emittedTerminalEvent = true;
-    }
-
-    return {
-      events,
-      failedBeforeAnyEvent: false,
-    };
+    yield terminalEvent ?? { type: "completed", runId: command.run_id };
+    yield { failedBeforeAnyEvent: false, retryableResumeFailure: false };
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -399,19 +416,19 @@ function resultEventToRuntimeEvents(runId: string, event: Record<string, unknown
   return [];
 }
 
-async function collectStdoutEvents(
+async function* streamStdoutEvents(
   command: StartRunCommand,
   child: ChildProcessWithoutNullStreams,
-): Promise<RuntimeEvent[]> {
-  const events: RuntimeEvent[] = [];
+): AsyncIterable<RuntimeEvent> {
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   for await (const line of lines) {
     if (!line.trim()) {
       continue;
     }
-    events.push(...cliJsonLineToRuntimeEvents(command.run_id, command.session.agent_id, line));
+    for (const event of cliJsonLineToRuntimeEvents(command.run_id, command.session.agent_id, line)) {
+      yield event;
+    }
   }
-  return events;
 }
 
 function waitForChildExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
@@ -439,8 +456,36 @@ function shouldRetryResumeAsFreshSession(
   return (
     command.session.resume_session &&
     !forceFreshSession &&
-    result.failedBeforeAnyEvent
+    result.failedBeforeAnyEvent &&
+    result.retryableResumeFailure
   );
+}
+
+function isRetryableResumeFailure(stderr: string): boolean {
+  const normalized = stderr.toLowerCase();
+  return (
+    normalized.includes("no conversation found") ||
+    normalized.includes("not found for session") ||
+    normalized.includes("invalid session") ||
+    normalized.includes("resume")
+  );
+}
+
+function promptForRun(command: StartRunCommand): string {
+  if (command.session.resume_session || command.input.context.length === 0) {
+    return command.input.prompt;
+  }
+
+  const context = command.input.context
+    .map((message) => `${roleLabel(message.role)}: ${message.content}`)
+    .join("\n\n");
+  return `Previous conversation context:\n\n${context}\n\nCurrent user message:\n${command.input.prompt}`;
+}
+
+function roleLabel(role: "user" | "assistant" | "system") {
+  if (role === "user") return "User";
+  if (role === "assistant") return "Assistant";
+  return "System";
 }
 
 function isTerminalEvent(event: RuntimeEvent): boolean {
@@ -465,6 +510,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 type CliAttemptResult = {
-  events: RuntimeEvent[];
   failedBeforeAnyEvent: boolean;
+  retryableResumeFailure: boolean;
 };
+
+function isAttemptResult(value: RuntimeEvent | CliAttemptResult): value is CliAttemptResult {
+  return "failedBeforeAnyEvent" in value;
+}

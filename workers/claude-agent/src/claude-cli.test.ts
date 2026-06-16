@@ -93,6 +93,34 @@ describe("Claude CLI runtime helpers", () => {
     expect(nonPersistentArgs).not.toContain("--resume");
   });
 
+  it("folds non-resume context into the CLI prompt", () => {
+    const args = buildClaudeCliArgs(
+      startRunCommand({
+        context: [
+          { role: "user", content: "old question" },
+          { role: "assistant", content: "old answer" },
+        ],
+      }),
+      { mcpConfigPath: "/tmp/slei-mcp.json" },
+    );
+
+    expect(args.at(-1)).toBe(
+      "Previous conversation context:\n\nUser: old question\n\nAssistant: old answer\n\nCurrent user message:\nhello",
+    );
+  });
+
+  it("does not duplicate context for resumed CLI prompts", () => {
+    const args = buildClaudeCliArgs(
+      startRunCommand({
+        resume_session: true,
+        context: [{ role: "user", content: "old question" }],
+      }),
+      { mcpConfigPath: "/tmp/slei-mcp.json" },
+    );
+
+    expect(args.at(-1)).toBe("hello");
+  });
+
   it("builds MCP config for the Slei stdio server", () => {
     expect(
       buildSleiMcpConfig({
@@ -214,6 +242,8 @@ describe("Claude CLI runtime helpers", () => {
     expect(call.options.cwd).toMatch(new RegExp(`^${escapeRegExp(join(overlayHome, "runs"))}`));
     expect(call.args).toContain("--append-system-prompt");
     expect(call.args[call.args.indexOf("--append-system-prompt") + 1]).toBe("Slei system prompt");
+    expect(call.args).toContain("--add-dir");
+    expect(valuesForFlag(call.args, "--add-dir").some((value) => value.includes("/runs/"))).toBe(true);
     const mcpConfigPath = call.args[call.args.indexOf("--mcp-config") + 1];
     expect(existsSync(mcpConfigPath)).toBe(false);
   });
@@ -245,6 +275,37 @@ describe("Claude CLI runtime helpers", () => {
       },
       { type: "completed", runId: "run_1" },
     ]);
+  });
+
+  it("yields stdout events before the spawned process closes", async () => {
+    const child = fakeChild();
+    const spawner: ClaudeCliSpawner = () => child.process;
+    const iterator = runClaudeCodeCli(
+      startRunCommand({ cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")) }),
+      { spawner },
+    )[Symbol.asyncIterator]();
+
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "streaming" }] },
+      })}\n`,
+    );
+
+    await expect(nextWithTimeout(iterator)).resolves.toEqual({
+      done: false,
+      value: {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "streaming" }] },
+      },
+    });
+
+    child.stdout.end(`${JSON.stringify({ type: "result", is_error: false })}\n`);
+    child.stderr.end();
+    child.process.emit("close", 0);
+
+    await iterator.return?.();
   });
 
   it("fails with stderr when claude exits nonzero before a terminal event", async () => {
@@ -322,11 +383,82 @@ describe("Claude CLI runtime helpers", () => {
       { type: "completed", runId: "run_1" },
     ]);
   });
+
+  it("does not retry resumed runs after stdout has produced an event", async () => {
+    const spawner = fakeSpawner([
+      {
+        stdout: [
+          JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "text", text: "partial" }] },
+          }),
+          "{bad json",
+        ],
+        code: 1,
+      },
+      {
+        stdout: [JSON.stringify({ type: "result", is_error: false })],
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(
+        startRunCommand({
+          cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")),
+          persist_session: true,
+          resume_session: true,
+        }),
+        { spawner: spawner.spawn },
+      ),
+    );
+
+    expect(spawner.calls).toHaveLength(1);
+    expect(events).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "partial" }] },
+      },
+      {
+        type: "failed",
+        runId: "run_1",
+        message: expect.stringContaining("invalid Claude CLI JSON"),
+      },
+    ]);
+  });
+
+  it("does not treat a successful result as completed when the CLI exits nonzero", async () => {
+    const spawner = fakeSpawner([
+      {
+        stdout: [JSON.stringify({ type: "result", is_error: false })],
+        stderr: ["late failure\n"],
+        code: 1,
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(startRunCommand({ cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")) }), {
+        spawner: spawner.spawn,
+      }),
+    );
+
+    expect(events).toEqual([
+      {
+        type: "failed",
+        runId: "run_1",
+        message: "Claude CLI exited with code 1\nlate failure",
+      },
+    ]);
+  });
 });
 
 function followsFlag(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
   return index === -1 ? undefined : args[index + 1];
+}
+
+function valuesForFlag(args: string[], flag: string): string[] {
+  return args.flatMap((arg, index) => (arg === flag && args[index + 1] ? [args[index + 1]] : []));
 }
 
 function fixtureLines(name: string): string[] {
@@ -338,6 +470,7 @@ function fixtureLines(name: string): string[] {
 function startRunCommand(
   overrides: Partial<
     Pick<StartRunCommand["input"], "system_prompt"> &
+      Pick<StartRunCommand["input"], "context"> &
       Pick<
         StartRunCommand["session"],
         | "session_id"
@@ -373,7 +506,7 @@ function startRunCommand(
     input: {
       prompt: "hello",
       system_prompt: overrides.system_prompt,
-      context: [],
+      context: overrides.context ?? [],
     },
   };
 }
@@ -419,6 +552,25 @@ function fakeSpawner(scripts: FakeSpawnScript[]) {
     return child;
   };
   return { spawn, calls };
+}
+
+function fakeChild() {
+  const process = new EventEmitter() as ReturnType<ClaudeCliSpawner>;
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  process.stdin = new PassThrough();
+  process.stdout = stdout;
+  process.stderr = stderr;
+  return { process, stdout, stderr };
+}
+
+async function nextWithTimeout<T>(iterator: AsyncIterator<T>): Promise<IteratorResult<T>> {
+  return Promise.race([
+    iterator.next(),
+    new Promise<IteratorResult<T>>((_, reject) =>
+      setTimeout(() => reject(new Error("timed out waiting for streamed event")), 250),
+    ),
+  ]);
 }
 
 type FakeSpawnScript = {
