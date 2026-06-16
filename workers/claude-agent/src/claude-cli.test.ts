@@ -1,11 +1,31 @@
-import { readFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PassThrough } from "node:stream";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { StartRunCommand } from "./protocol.js";
-import { buildClaudeCliArgs, buildSleiMcpConfig, cliJsonLineToRuntimeEvents } from "./claude-cli.js";
+import {
+  buildClaudeCliArgs,
+  buildSleiMcpConfig,
+  cliJsonLineToRuntimeEvents,
+  runClaudeCodeCli,
+  type ClaudeCliSpawner,
+} from "./claude-cli.js";
 
 describe("Claude CLI runtime helpers", () => {
+  const originalOverlayHome = process.env.SLEI_OVERLAY_HOME;
+
+  afterEach(() => {
+    if (originalOverlayHome === undefined) {
+      delete process.env.SLEI_OVERLAY_HOME;
+    } else {
+      process.env.SLEI_OVERLAY_HOME = originalOverlayHome;
+    }
+  });
+
   it("builds Claude CLI args with system prompt, MCP config, model and session", () => {
     const command = startRunCommand({
       system_prompt: "Slei system prompt",
@@ -158,6 +178,150 @@ describe("Claude CLI runtime helpers", () => {
       /invalid Claude CLI JSON/,
     );
   });
+
+  it("spawns claude in the prepared workspace with the generated MCP config and system prompt", async () => {
+    const projectPath = mkdtempSync(join(tmpdir(), "slei-cli-project-"));
+    const agentPath = mkdtempSync(join(tmpdir(), "slei-cli-agent-"));
+    const overlayHome = mkdtempSync(join(tmpdir(), "slei-cli-overlay-"));
+    process.env.SLEI_OVERLAY_HOME = overlayHome;
+    const spawner = fakeSpawner([
+      {
+        stdout: [
+          JSON.stringify({
+            type: "result",
+            is_error: false,
+          }),
+        ],
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(
+        startRunCommand({
+          cwd: projectPath,
+          agent_workspace_path: agentPath,
+          workspace_mounts: [{ path: projectPath, label: "Project" }],
+          system_prompt: "Slei system prompt",
+        }),
+        { spawner: spawner.spawn },
+      ),
+    );
+
+    expect(events).toEqual([{ type: "completed", runId: "run_1" }]);
+    expect(spawner.calls).toHaveLength(1);
+    const call = spawner.calls[0];
+    expect(call.command).toBe("claude");
+    expect(call.options.cwd).toMatch(new RegExp(`^${escapeRegExp(join(overlayHome, "runs"))}`));
+    expect(call.args).toContain("--append-system-prompt");
+    expect(call.args[call.args.indexOf("--append-system-prompt") + 1]).toBe("Slei system prompt");
+    const mcpConfigPath = call.args[call.args.indexOf("--mcp-config") + 1];
+    expect(existsSync(mcpConfigPath)).toBe(false);
+  });
+
+  it("maps successful stdout stream-json to assistant and completed runtime events", async () => {
+    const spawner = fakeSpawner([
+      {
+        stdout: [
+          JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "text", text: "hello" }] },
+          }),
+          JSON.stringify({ type: "result", is_error: false }),
+        ],
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(startRunCommand({ cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")) }), {
+        spawner: spawner.spawn,
+      }),
+    );
+
+    expect(events).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "hello" }] },
+      },
+      { type: "completed", runId: "run_1" },
+    ]);
+  });
+
+  it("fails with stderr when claude exits nonzero before a terminal event", async () => {
+    const spawner = fakeSpawner([
+      {
+        stderr: ["No conversation found for session bad-session\n"],
+        code: 1,
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(
+        startRunCommand({
+          cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")),
+          session_id: "bad-session",
+          persist_session: true,
+          resume_session: false,
+        }),
+        { spawner: spawner.spawn },
+      ),
+    );
+
+    expect(events).toEqual([
+      {
+        type: "failed",
+        runId: "run_1",
+        message: "Claude CLI exited with code 1\nNo conversation found for session bad-session",
+      },
+    ]);
+  });
+
+  it("retries resumed runs as a fresh session when claude fails before producing events", async () => {
+    const spawner = fakeSpawner([
+      {
+        stderr: ["No conversation found for session 11111111-1111-4111-8111-111111111111\n"],
+        code: 1,
+      },
+      {
+        stdout: [
+          JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "text", text: "fresh hello" }] },
+          }),
+          JSON.stringify({ type: "result", is_error: false }),
+        ],
+      },
+    ]);
+
+    const events = await collectRuntimeEvents(
+      runClaudeCodeCli(
+        startRunCommand({
+          cwd: mkdtempSync(join(tmpdir(), "slei-cli-cwd-")),
+          persist_session: true,
+          resume_session: true,
+        }),
+        { spawner: spawner.spawn },
+      ),
+    );
+
+    expect(spawner.calls).toHaveLength(2);
+    expect(followsFlag(spawner.calls[0].args, "--resume")).toBe(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(spawner.calls[0].args).not.toContain("--session-id");
+    expect(followsFlag(spawner.calls[1].args, "--session-id")).toBe(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(spawner.calls[1].args).not.toContain("--resume");
+    expect(events).toEqual([
+      {
+        type: "assistant",
+        runId: "run_1",
+        message: { content: [{ type: "text", text: "fresh hello" }] },
+      },
+      { type: "completed", runId: "run_1" },
+    ]);
+  });
 });
 
 function followsFlag(args: string[], flag: string): string | undefined {
@@ -176,19 +340,32 @@ function startRunCommand(
     Pick<StartRunCommand["input"], "system_prompt"> &
       Pick<
         StartRunCommand["session"],
-        "model" | "additional_directories" | "persist_session" | "resume_session"
+        | "session_id"
+        | "cwd"
+        | "agent_workspace_path"
+        | "model"
+        | "additional_directories"
+        | "workspace_mounts"
+        | "persist_session"
+        | "resume_session"
       >
   > = {},
 ): StartRunCommand {
+  const cwd = overrides.cwd ?? "/workspace/project";
+  if (!cwd.startsWith("/workspace")) {
+    mkdirSync(cwd, { recursive: true });
+  }
   return {
     type: "start_run",
     run_id: "run_1",
     session: {
-      session_id: "11111111-1111-4111-8111-111111111111",
+      session_id: overrides.session_id ?? "11111111-1111-4111-8111-111111111111",
       agent_id: "agent_guide",
       runtime: "ClaudeCode",
-      cwd: "/workspace/project",
+      cwd,
+      agent_workspace_path: overrides.agent_workspace_path,
       additional_directories: overrides.additional_directories,
+      workspace_mounts: overrides.workspace_mounts,
       model: overrides.model,
       persist_session: overrides.persist_session ?? true,
       resume_session: overrides.resume_session ?? false,
@@ -199,4 +376,58 @@ function startRunCommand(
       context: [],
     },
   };
+}
+
+async function collectRuntimeEvents(events: AsyncIterable<unknown>): Promise<unknown[]> {
+  const collected: unknown[] = [];
+  for await (const event of events) {
+    collected.push(event);
+  }
+  return collected;
+}
+
+function fakeSpawner(scripts: FakeSpawnScript[]) {
+  const calls: Array<{
+    command: string;
+    args: string[];
+    options: { cwd?: string | URL };
+  }> = [];
+  const spawn: ClaudeCliSpawner = (command, args, options) => {
+    calls.push({ command, args, options });
+    const script = scripts.shift() ?? {};
+    const child = new EventEmitter() as ReturnType<ClaudeCliSpawner>;
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    child.stdin = new PassThrough();
+    child.stdout = stdout;
+    child.stderr = stderr;
+    setImmediate(() => {
+      if (script.error) {
+        child.emit("error", script.error);
+        return;
+      }
+      for (const chunk of script.stdout ?? []) {
+        stdout.write(`${chunk}\n`);
+      }
+      for (const chunk of script.stderr ?? []) {
+        stderr.write(chunk);
+      }
+      stdout.end();
+      stderr.end();
+      child.emit("close", script.code ?? 0);
+    });
+    return child;
+  };
+  return { spawn, calls };
+}
+
+type FakeSpawnScript = {
+  stdout?: string[];
+  stderr?: string[];
+  code?: number;
+  error?: Error;
+};
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

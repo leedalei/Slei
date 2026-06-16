@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { mapClaudeSdkEvent } from "./events.js";
+import { mapRuntimeEvent } from "./events.js";
 import type { StartRunCommand } from "./protocol.js";
 import { runClaudeCode } from "./worker.js";
 
@@ -9,7 +9,7 @@ const command = JSON.parse(raw) as StartRunCommand;
 
 try {
   for await (const event of runClaudeCode(command)) {
-    process.stdout.write(`${JSON.stringify(mapClaudeSdkEvent(event))}\n`);
+    process.stdout.write(`${JSON.stringify(mapRuntimeEvent(event))}\n`);
   }
 } catch (error) {
   process.stdout.write(

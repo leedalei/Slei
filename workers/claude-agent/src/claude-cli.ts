@@ -1,4 +1,12 @@
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
+
 import type { RuntimeEvent } from "./events.js";
+import { prepareWorkspace } from "./overlay.js";
 import type { StartRunCommand } from "./protocol.js";
 import {
   fromSleiMcpToolName,
@@ -13,6 +21,18 @@ const SETTING_SOURCES = ["user", "project", "local"];
 
 export type ClaudeCliRunOptions = {
   mcpConfigPath: string;
+  forceFreshSession?: boolean;
+};
+
+export type ClaudeCliSpawner = (
+  command: string,
+  args: string[],
+  options: SpawnOptionsWithoutStdio,
+) => ChildProcessWithoutNullStreams;
+
+export type RunClaudeCodeCliOptions = {
+  spawner?: ClaudeCliSpawner;
+  commandName?: string;
 };
 
 export type SleiMcpConfigInput = {
@@ -63,7 +83,7 @@ export function buildClaudeCliArgs(
 
   if (command.session.persist_session) {
     args.push(
-      command.session.resume_session ? "--resume" : "--session-id",
+      command.session.resume_session && options.forceFreshSession !== true ? "--resume" : "--session-id",
       command.session.session_id,
     );
   } else {
@@ -72,6 +92,139 @@ export function buildClaudeCliArgs(
 
   args.push(command.input.prompt);
   return args;
+}
+
+export async function* runClaudeCodeCli(
+  command: StartRunCommand,
+  options: RunClaudeCodeCliOptions = {},
+): AsyncIterable<RuntimeEvent> {
+  for (const forceFreshSession of [false, true]) {
+    if (forceFreshSession && !command.session.resume_session) {
+      break;
+    }
+    const result = await runClaudeCodeCliAttempt(command, {
+      ...options,
+      forceFreshSession,
+    });
+
+    if (shouldRetryResumeAsFreshSession(command, forceFreshSession, result)) {
+      continue;
+    }
+
+    for (const event of result.events) {
+      yield event;
+    }
+    return;
+  }
+}
+
+async function runClaudeCodeCliAttempt(
+  command: StartRunCommand,
+  options: RunClaudeCodeCliOptions & { forceFreshSession: boolean },
+): Promise<CliAttemptResult> {
+  const workspace = prepareWorkspace(command.session);
+  const spawner = options.spawner ?? spawn;
+  const tempDir = await mkdtemp(join(tmpdir(), "slei-claude-mcp-"));
+  const mcpConfigPath = join(tempDir, "mcp-config.json");
+  const events: RuntimeEvent[] = [];
+  let emittedTerminalEvent = false;
+  let stderr = "";
+
+  try {
+    await writeFile(
+      mcpConfigPath,
+      JSON.stringify(
+        buildSleiMcpConfig({
+          runId: command.run_id,
+          agentId: command.session.agent_id,
+          serverPath: sleiMcpServerPath(),
+        }),
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const child = spawner(
+      options.commandName ?? "claude",
+      buildClaudeCliArgs(command, {
+        mcpConfigPath,
+        forceFreshSession: options.forceFreshSession,
+      }),
+      {
+        cwd: workspace.cwd,
+        env: process.env,
+      },
+    );
+
+    child.stdin.end();
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    const lineEvents = collectStdoutEvents(command, child);
+    const exit = waitForChildExit(child);
+    const [stdoutResult, exitResult] = await Promise.allSettled([lineEvents, exit]);
+
+    if (stdoutResult.status === "fulfilled") {
+      for (const event of stdoutResult.value) {
+        events.push(event);
+        if (isTerminalEvent(event)) {
+          emittedTerminalEvent = true;
+        }
+      }
+    } else {
+      return {
+        events: [
+          {
+            type: "failed",
+            runId: command.run_id,
+            message: cliErrorMessage(stdoutResult.reason, stderr),
+          },
+        ],
+        failedBeforeAnyEvent: events.length === 0,
+      };
+    }
+
+    if (exitResult.status === "rejected") {
+      return {
+        events: [
+          {
+            type: "failed",
+            runId: command.run_id,
+            message: cliErrorMessage(exitResult.reason, stderr),
+          },
+        ],
+        failedBeforeAnyEvent: events.length === 0,
+      };
+    }
+
+    if (exitResult.value !== 0 && !emittedTerminalEvent) {
+      return {
+        events: [
+          {
+            type: "failed",
+            runId: command.run_id,
+            message: cliErrorMessage(new Error(`Claude CLI exited with code ${exitResult.value}`), stderr),
+          },
+        ],
+        failedBeforeAnyEvent: events.length === 0,
+      };
+    }
+
+    if (!emittedTerminalEvent) {
+      events.push({ type: "completed", runId: command.run_id });
+      emittedTerminalEvent = true;
+    }
+
+    return {
+      events,
+      failedBeforeAnyEvent: false,
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 export function buildSleiMcpConfig(input: SleiMcpConfigInput) {
@@ -246,6 +399,58 @@ function resultEventToRuntimeEvents(runId: string, event: Record<string, unknown
   return [];
 }
 
+async function collectStdoutEvents(
+  command: StartRunCommand,
+  child: ChildProcessWithoutNullStreams,
+): Promise<RuntimeEvent[]> {
+  const events: RuntimeEvent[] = [];
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  for await (const line of lines) {
+    if (!line.trim()) {
+      continue;
+    }
+    events.push(...cliJsonLineToRuntimeEvents(command.run_id, command.session.agent_id, line));
+  }
+  return events;
+}
+
+function waitForChildExit(child: ChildProcessWithoutNullStreams): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    child.once("error", (error) => {
+      child.stdout.destroy(error);
+      child.stderr.destroy();
+      reject(error);
+    });
+    child.once("close", resolve);
+  });
+}
+
+function cliErrorMessage(error: unknown, stderr: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const details = stderr.trim();
+  return details ? `${message}\n${details}` : message;
+}
+
+function shouldRetryResumeAsFreshSession(
+  command: StartRunCommand,
+  forceFreshSession: boolean,
+  result: CliAttemptResult,
+): boolean {
+  return (
+    command.session.resume_session &&
+    !forceFreshSession &&
+    result.failedBeforeAnyEvent
+  );
+}
+
+function isTerminalEvent(event: RuntimeEvent): boolean {
+  return event.type === "completed" || event.type === "failed";
+}
+
+function sleiMcpServerPath(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "mcp-server.js");
+}
+
 function failedResultMessage(event: Record<string, unknown>): string {
   const errors = Array.isArray(event.errors)
     ? event.errors.filter((entry): entry is string => typeof entry === "string")
@@ -258,3 +463,8 @@ function failedResultMessage(event: Record<string, unknown>): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+type CliAttemptResult = {
+  events: RuntimeEvent[];
+  failedBeforeAnyEvent: boolean;
+};
