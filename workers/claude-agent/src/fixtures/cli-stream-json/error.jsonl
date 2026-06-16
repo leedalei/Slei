@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"content":[{"type":"text","text":"准备失败。"}]}}
+{"type":"result","is_error":true,"subtype":"error_during_execution","errors":["tool failed"]}

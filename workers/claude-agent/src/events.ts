@@ -58,6 +58,9 @@ export type ClaudeSdkEvent =
       message: string;
     };
 
+export type RuntimeEvent = ClaudeSdkEvent;
+export const mapRuntimeEvent = mapClaudeSdkEvent;
+
 export function mapClaudeSdkEvent(event: ClaudeSdkEvent): WorkerEvent {
   switch (event.type) {
     case "assistant":
