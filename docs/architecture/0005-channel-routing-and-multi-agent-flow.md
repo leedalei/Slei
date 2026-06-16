@@ -53,6 +53,26 @@ flowchart LR
 - Agent runtime 只处理一次唤醒中的工作。产品状态变更必须通过 `slei` CLI 回到 daemon。
 - 当前 cwd 选择逻辑不因 runtime 从 SDK 迁移到 spawn CLI 而改变。
 
+## Runtime Contract
+
+daemon 负责为每次 Agent run 生成完整 Slei system prompt，并通过 worker RPC 的 `input.system_prompt` 传给 Claude worker。worker 不自行拼装产品规则，也不读取 UI 状态来决定 claim、任务或路由。
+
+worker 当前通过 spawn Claude CLI 执行：
+
+```text
+claude --print --output-format stream-json --include-partial-messages
+```
+
+执行约束：
+
+- `input.prompt` 只包含当前触发消息及其统一 header，不注入完整频道历史。
+- `input.context` 在频道 broadcast/task handoff 路径保持为空；需要历史时由 Agent 主动调用 `slei message read/search` 或 `slei task thread/list`。
+- `input.system_prompt` 承载 Slei 合同：身份、角色、CLI 用法、header 规范、claim 规则、任务规则、MEMORY/Active Context 约定和运行时元数据。
+- worker 使用 `--append-system-prompt` 注入 daemon 生成的 prompt。
+- worker 为本次 run 生成临时 MCP config，把 Slei product tools 暴露给 Claude CLI；tool 调用再回到 daemon API。
+- worker 解析 CLI `stream-json` 输出，并归一化为 daemon 稳定 runtime event；daemon 不依赖 CLI 原始事件结构。
+- 当前权限模型是静态 CLI 权限：允许读取/搜索/编辑类基础工具和 Slei MCP product tools，禁用 `Task`、插件通配和高风险网络命令；除非未来实现 CLI permission bridge，否则不要恢复 SDK permission controller 作为生产路径。
+
 ## 消息格式
 
 Agent 看到的频道消息必须带统一 header，便于判断 target、claim id、时间和类型：
