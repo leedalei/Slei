@@ -1,5 +1,6 @@
 pub mod agent_dm_service;
 pub mod agent_inbox_service;
+pub mod agent_prompt_service;
 pub mod approval_service;
 pub mod artifact_service;
 pub mod capability_service;
