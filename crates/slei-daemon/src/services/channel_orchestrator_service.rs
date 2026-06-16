@@ -608,6 +608,7 @@ impl ChannelOrchestratorService {
                         &reply.id,
                         &task.id,
                         &reply.body,
+                        Some("visible @mention handoff"),
                     )
                     .await?;
                     self.update_status_for_created_handoff(&task.id, task.status)
@@ -644,6 +645,7 @@ impl ChannelOrchestratorService {
             &format!("channel_join:{channel_id}:{agent_id}"),
             &prompt,
             Some(agent),
+            None,
             None,
         )
         .await
@@ -1576,6 +1578,7 @@ impl ChannelOrchestratorService {
             prompt,
             None,
             None,
+            None,
         )
         .await
     }
@@ -1587,6 +1590,7 @@ impl ChannelOrchestratorService {
         source_message_id: &str,
         task_id: &str,
         prompt: &str,
+        note_kind: Option<&str>,
     ) -> Result<(), ChannelOrchestratorError> {
         self.start_channel_agent_run_once(
             agent_id,
@@ -1595,6 +1599,7 @@ impl ChannelOrchestratorService {
             prompt,
             None,
             Some(task_id.to_string()),
+            note_kind.map(str::to_string),
         )
         .await
     }
@@ -1607,6 +1612,7 @@ impl ChannelOrchestratorService {
         prompt: &str,
         agent: Option<crate::services::member_service::ProductAgentRecord>,
         task_id: Option<String>,
+        note_kind: Option<String>,
     ) -> Result<(), ChannelOrchestratorError> {
         let run_id = format!("run_{}", Uuid::new_v4().simple());
         self.start_channel_agent_run_once_with_run_id(
@@ -1617,6 +1623,7 @@ impl ChannelOrchestratorService {
             prompt,
             agent,
             task_id,
+            note_kind,
             false,
         )
         .await
@@ -1631,6 +1638,7 @@ impl ChannelOrchestratorService {
         prompt: &str,
         agent: Option<crate::services::member_service::ProductAgentRecord>,
         task_id: Option<String>,
+        note_kind: Option<String>,
         suppress_visible_output: bool,
     ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
@@ -1687,7 +1695,8 @@ impl ChannelOrchestratorService {
         let channel_name = format!("#{channel_id}");
         let task_notes = task_id.as_ref().map(|task_id| {
             format!(
-                "visible @mention handoff; source message id: {source_message_id}; task id: {task_id}"
+                "{}; source message id: {source_message_id}; task id: {task_id}",
+                note_kind.as_deref().unwrap_or("task assignment")
             )
         });
         let system_prompt = build_agent_system_prompt(AgentSystemPromptInput {
@@ -1783,6 +1792,7 @@ impl ChannelOrchestratorService {
                         &prompt,
                         Some(agent.clone()),
                         None,
+                        None,
                         true,
                     )
                     .await
@@ -1839,7 +1849,12 @@ impl ChannelOrchestratorService {
             .await
         {
             self.start_channel_agent_task_reply_once(
-                agent_id, channel_id, message_id, task_id, prompt,
+                agent_id,
+                channel_id,
+                message_id,
+                task_id,
+                prompt,
+                Some("task assignment"),
             )
             .await?;
         }

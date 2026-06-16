@@ -353,6 +353,38 @@ async fn command_message_creates_task_assignment_inbox_decision_and_links_source
             Value::String("notes/relationships.md".to_string()),
         ]
     );
+
+    let commands = state.worker_commands();
+    let assignment_start_run = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["session"]["agent_id"] == "agent_alice"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains(command_body))
+        })
+        .expect("task assignment should start alice runtime");
+    assert_eq!(assignment_start_run["input"]["context"], json!([]));
+    let system_prompt = assignment_start_run["input"]["system_prompt"]
+        .as_str()
+        .unwrap();
+    assert!(
+        system_prompt.contains(&format!("task id: {task_id}")),
+        "system prompt missing task id: {system_prompt}"
+    );
+    assert!(
+        system_prompt.contains(&format!("source message id: {}", outcome.message_id)),
+        "system prompt missing source message id: {system_prompt}"
+    );
+    assert!(
+        system_prompt.contains("task assignment"),
+        "system prompt should identify task assignment: {system_prompt}"
+    );
+    assert!(
+        !system_prompt.contains("visible @mention handoff"),
+        "task assignment prompt should not be labeled as handoff: {system_prompt}"
+    );
 }
 
 #[tokio::test]
@@ -1228,9 +1260,22 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
     let system_prompt = handoff_start_run["input"]["system_prompt"]
         .as_str()
         .unwrap();
-    assert!(system_prompt.contains("task id: task_"));
-    assert!(system_prompt.contains("source message id"));
-    assert!(system_prompt.contains("visible @mention handoff"));
+    assert!(
+        system_prompt.contains(&format!("task id: {}", task.id)),
+        "system prompt missing exact task id: {system_prompt}"
+    );
+    assert!(
+        system_prompt.contains(&format!("source message id: {}", reply.reply.id)),
+        "system prompt missing exact source reply id: {system_prompt}"
+    );
+    assert!(
+        system_prompt.contains("visible @mention handoff"),
+        "system prompt should identify visible handoff: {system_prompt}"
+    );
+    assert!(
+        !system_prompt.contains("task assignment"),
+        "handoff prompt should not be labeled as task assignment: {system_prompt}"
+    );
     complete_channel_agent_run(&state, "agent_coda", "Coda 已在任务线程继续实现。").await;
     let thread = state.tasks().thread_view(&task.id).await.unwrap();
     assert!(thread.replies.iter().any(|reply| {
@@ -3422,9 +3467,7 @@ fn assert_broadcast_runs_started(
             "system prompt missing claim rules: {system_prompt}"
         );
         assert!(
-            system_prompt.contains(&format!(
-                "slei message read --channel \"#channel\" --around <msgId>"
-            )),
+            system_prompt.contains("slei message read --channel \"#channel\" --around <msgId>"),
             "system prompt missing around-history command: {system_prompt}"
         );
         assert!(
