@@ -90,6 +90,22 @@ describe("ClaudeAgentWorker start_run", () => {
     expect(events).toEqual([{ type: "failed", run_id: "run_1", message: "claude auth missing" }]);
   });
 
+  it("rejects resolve_permission before hello authorization", async () => {
+    const events: WorkerEvent[] = [];
+    const runner: RuntimeRunner = async function* () {
+      yield { type: "completed", runId: "run_1" };
+    };
+    const worker = new ClaudeAgentWorker("secret", { writeEvent: (event) => events.push(event) }, runner);
+
+    await worker.handleCommand({
+      type: "resolve_permission",
+      request_id: "perm_missing",
+      decision: "approve_once",
+    });
+
+    expect(events).toEqual([{ type: "failed", run_id: "unknown", message: "worker command rejected before hello" }]);
+  });
+
   it("ignores resolve_permission commands for missing requests after authorization", async () => {
     const events: WorkerEvent[] = [];
     const runner: RuntimeRunner = async function* () {
