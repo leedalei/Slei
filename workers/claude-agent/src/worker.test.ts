@@ -241,7 +241,13 @@ describe("ClaudeAgentWorker start_run", () => {
       tools: ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"],
       settingSources: ["user", "project", "local"],
       skills: "all",
-      mcpServers: { slei: expect.any(Object) },
+      mcpServers: {
+        slei: {
+          type: "sdk",
+          name: "slei",
+          instance: expect.any(Object),
+        },
+      },
     });
     expect(seenOptions[0]).not.toHaveProperty("strictMcpConfig");
     expect(events).toEqual([

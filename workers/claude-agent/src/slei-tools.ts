@@ -80,17 +80,6 @@ export function createSleiTools(): SleiTool[] {
   return SLEI_PRODUCT_TOOL_NAMES.map(productTool);
 }
 
-export function createSleiMcpServer(): Record<string, unknown> {
-  return {
-    name: SLEI_MCP_SERVER_NAME,
-    version: "0.1.0",
-    instructions:
-      "Use these Slei product tools for app-visible actions. Do not replace them with natural language, JSON text, or file writes.",
-    alwaysLoad: true,
-    tools: SLEI_PRODUCT_TOOL_DEFINITIONS,
-  };
-}
-
 export function toSleiMcpToolName(name: ProductToolRequestedEvent["tool_name"]): string {
   return `mcp__${SLEI_MCP_SERVER_NAME}__${name}`;
 }

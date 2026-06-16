@@ -6,8 +6,8 @@ import { mapClaudeSdkEvent, type ClaudeSdkEvent } from "./events.js";
 import { prepareWorkspace, type PreparedWorkspace } from "./overlay.js";
 import { buildIsolatedSdkOptions, createRunPermissionController, type RunPermissionController } from "./permissions.js";
 import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol.js";
+import { createSleiSdkMcpServer } from "./sdk-mcp-server.js";
 import {
-  createSleiMcpServer,
   fromSleiMcpToolName,
   type SleiToolInvocation,
 } from "./slei-tools.js";
@@ -264,7 +264,7 @@ export function buildClaudeSdkOptions(
     canUseTool: isolatedOptions.canUseTool,
     systemPrompt: buildSleiSystemPrompt(workspace.runtimeContext),
     mcpServers: {
-      slei: createSleiMcpServer(),
+      slei: createSleiSdkMcpServer(),
     },
   };
   const model = claudeModelName(command.session.model);
