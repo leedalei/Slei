@@ -2,21 +2,19 @@ import { spawn } from "node:child_process";
 
 import { mapRuntimeEvent, type RuntimeEvent } from "./events.js";
 import { runClaudeCodeCli } from "./claude-cli.js";
-import { createRunPermissionController, type RunPermissionController } from "./permissions.js";
 import type { ClearSessionCommand, StartRunCommand, WorkerCommand, WorkerEvent } from "./protocol.js";
 
 export type WorkerIO = {
   writeEvent(event: WorkerEvent): void;
 };
 
-export type RuntimeRunner = (command: StartRunCommand, controller?: RunPermissionController) => AsyncIterable<RuntimeEvent>;
+export type RuntimeRunner = (command: StartRunCommand) => AsyncIterable<RuntimeEvent>;
 export type RuntimeClearer = (command: ClearSessionCommand) => Promise<void>;
 
 const defaultRuntimeRunner: RuntimeRunner = (command) => runClaudeCode(command);
 
 export class ClaudeAgentWorker {
   #authorized = false;
-  #permissionControllers = new Map<string, RunPermissionController>();
 
   constructor(
     private readonly launchSecret: string,
@@ -58,24 +56,13 @@ export class ClaudeAgentWorker {
     }
 
     if (command.type === "resolve_permission") {
-      for (const controller of this.#permissionControllers.values()) {
-        if (controller.resolvePermission({ requestId: command.request_id, decision: command.decision })) {
-          return;
-        }
-      }
+      return;
     }
   }
 
   private async startRun(command: StartRunCommand): Promise<void> {
-    const controller = createRunPermissionController({
-      runId: command.run_id,
-      agentId: command.session.agent_id,
-      cwd: command.session.cwd,
-      sessionId: command.session.session_id,
-    });
-    this.#permissionControllers.set(command.run_id, controller);
     try {
-      for await (const event of this.runner(command, controller)) {
+      for await (const event of this.runner(command)) {
         this.io.writeEvent(mapRuntimeEvent(event));
       }
     } catch (error) {
@@ -84,8 +71,6 @@ export class ClaudeAgentWorker {
         run_id: command.run_id,
         message: error instanceof Error ? error.message : String(error),
       });
-    } finally {
-      this.#permissionControllers.delete(command.run_id);
     }
   }
 
@@ -102,10 +87,7 @@ export class ClaudeAgentWorker {
   }
 }
 
-export async function* runClaudeCode(
-  command: StartRunCommand,
-  _controller?: RunPermissionController,
-): AsyncIterable<RuntimeEvent> {
+export async function* runClaudeCode(command: StartRunCommand): AsyncIterable<RuntimeEvent> {
   yield* runClaudeCodeCli(command);
 }
 

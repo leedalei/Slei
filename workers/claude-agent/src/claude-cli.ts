@@ -14,10 +14,21 @@ import {
   toSleiMcpToolName,
 } from "./slei-tools.js";
 
-const CLI_TOOLS = ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"];
-const READ_ONLY_ALLOWED_TOOLS = ["Skill", "Read", "Grep", "Glob", "LS"];
-const DISALLOWED_TOOLS = ["Task", "Plugin:*", "Bash:curl", "Bash:wget"];
-const SETTING_SOURCES = ["user", "project", "local"];
+export const CLAUDE_CLI_TOOLS = ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"] as const;
+export const CLAUDE_ALLOWED_TOOLS = [
+  "Skill",
+  "Read",
+  "Grep",
+  "Glob",
+  "LS",
+  ...SLEI_PRODUCT_TOOL_NAMES.map((name) => toSleiMcpToolName(name)),
+] as const;
+export const CLAUDE_DISALLOWED_TOOLS = ["Task", "Plugin:*", "Bash:curl", "Bash:wget"] as const;
+export const CLAUDE_SETTING_SOURCES = ["user", "project", "local"] as const;
+
+export function permissionModeForCli(): "default" {
+  return "default";
+}
 
 export type ClaudeCliRunOptions = {
   mcpConfigPath: string;
@@ -62,15 +73,15 @@ export function buildClaudeCliArgs(
     "--mcp-config",
     options.mcpConfigPath,
     "--tools",
-    CLI_TOOLS.join(","),
+    CLAUDE_CLI_TOOLS.join(","),
     "--allowedTools",
-    allowedTools().join(","),
+    CLAUDE_ALLOWED_TOOLS.join(","),
     "--disallowedTools",
-    DISALLOWED_TOOLS.join(","),
+    CLAUDE_DISALLOWED_TOOLS.join(","),
     "--setting-sources",
-    SETTING_SOURCES.join(","),
+    CLAUDE_SETTING_SOURCES.join(","),
     "--permission-mode",
-    "default",
+    permissionModeForCli(),
   );
 
   const model = claudeModelName(command.session.model);
@@ -285,13 +296,6 @@ export function cliJsonLineToRuntimeEvents(
   }
 
   return message.content.flatMap((part) => contentPartToRuntimeEvents(runId, agentId, part));
-}
-
-function allowedTools(): string[] {
-  return [
-    ...READ_ONLY_ALLOWED_TOOLS,
-    ...SLEI_PRODUCT_TOOL_NAMES.map((name) => toSleiMcpToolName(name)),
-  ];
 }
 
 function claudeModelName(model: string | undefined): string | undefined {

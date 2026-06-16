@@ -35,7 +35,8 @@ describe("ClaudeAgentWorker start_run", () => {
   it("runs Claude runtime for start_run and maps output to worker events", async () => {
     const events: WorkerEvent[] = [];
     const prompts: Array<{ prompt: string; cwd: string }> = [];
-    const runner: RuntimeRunner = async function* (command) {
+    const runner: RuntimeRunner = async function* (command, ...unexpectedArgs) {
+      expect(unexpectedArgs).toEqual([]);
       prompts.push({ prompt: command.input.prompt, cwd: command.session.cwd });
       yield { type: "assistant", runId: command.run_id, message: { content: [{ type: "text", text: "hello" }] } };
       yield { type: "completed", runId: command.run_id };
@@ -87,6 +88,23 @@ describe("ClaudeAgentWorker start_run", () => {
     });
 
     expect(events).toEqual([{ type: "failed", run_id: "run_1", message: "claude auth missing" }]);
+  });
+
+  it("ignores resolve_permission commands for missing requests after authorization", async () => {
+    const events: WorkerEvent[] = [];
+    const runner: RuntimeRunner = async function* () {
+      yield { type: "completed", runId: "run_1" };
+    };
+    const worker = new ClaudeAgentWorker("secret", { writeEvent: (event) => events.push(event) }, runner);
+
+    await worker.handleCommand({ type: "hello", protocol_version: "v1", launch_secret: "secret" });
+    await worker.handleCommand({
+      type: "resolve_permission",
+      request_id: "perm_missing",
+      decision: "approve_once",
+    });
+
+    expect(events).toEqual([]);
   });
 
   it("uses Claude slash clear against the active persisted session", () => {
