@@ -1,8 +1,36 @@
 import { describe, expect, it } from "vitest";
 
-import { createSleiTools, parseFreeformAssistantText } from "./slei-tools.js";
+import {
+  createSleiTools,
+  createSleiToolAliases,
+  fromSleiMcpToolName,
+  isSleiProductToolName,
+  parseFreeformAssistantText,
+  SLEI_PRODUCT_TOOL_DEFINITIONS,
+  toSleiMcpToolName,
+} from "./slei-tools.js";
 
 describe("Slei product MCP tools", () => {
+  it("defines SDK-free MCP tool schemas", () => {
+    expect(SLEI_PRODUCT_TOOL_DEFINITIONS.map((tool) => tool.name).sort()).toEqual([
+      "slei_propose_interactive_card",
+      "slei_request_human_reply",
+      "slei_request_visible_delegation",
+    ]);
+    expect(toSleiMcpToolName("slei_propose_interactive_card")).toBe(
+      "mcp__slei__slei_propose_interactive_card",
+    );
+    expect(fromSleiMcpToolName("mcp__slei__slei_request_visible_delegation")).toBe(
+      "slei_request_visible_delegation",
+    );
+    expect(createSleiToolAliases()).toMatchObject({
+      slei_request_human_reply: "mcp__slei__slei_request_human_reply",
+    });
+    expect(SLEI_PRODUCT_TOOL_DEFINITIONS[0].inputSchema).toHaveProperty("type", "object");
+    expect(isSleiProductToolName("slei_request_human_reply")).toBe(true);
+    expect(isSleiProductToolName("unknown_tool")).toBe(false);
+  });
+
   it("registers only typed in-process product tools", () => {
     const tools = createSleiTools();
 
