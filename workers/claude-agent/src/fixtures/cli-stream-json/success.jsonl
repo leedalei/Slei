@@ -1,3 +1,4 @@
+{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"实"}}}
 {"type":"assistant","message":{"content":[{"type":"text","text":"准"}]}}
 {"type":"assistant","message":{"content":[{"type":"text","text":"备完成。"}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tool_read","name":"Read","input":{"file_path":"MEMORY.md"}}]}}

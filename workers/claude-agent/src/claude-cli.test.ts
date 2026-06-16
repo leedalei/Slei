@@ -20,6 +20,7 @@ describe("Claude CLI runtime helpers", () => {
       "--print",
       "--output-format",
       "stream-json",
+      "--verbose",
       "--include-partial-messages",
       "--append-system-prompt",
       "Slei system prompt",
@@ -98,6 +99,11 @@ describe("Claude CLI runtime helpers", () => {
     const lines = fixtureLines("success.jsonl");
     const events = lines.flatMap((line) => cliJsonLineToRuntimeEvents("run_1", "agent_guide", line));
 
+    expect(events).toContainEqual({
+      type: "assistant",
+      runId: "run_1",
+      message: { content: [{ type: "text", text: "实" }] },
+    });
     expect(events).toContainEqual({
       type: "assistant",
       runId: "run_1",
