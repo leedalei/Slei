@@ -175,6 +175,28 @@ describe("settings preferences", () => {
     expect(html).toMatch(/<button(?=[^>]*aria-label="时区")(?=[^>]*disabled="")[^>]*>/);
   });
 
+  it("renders notification pending and save error state", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="notifications"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={createDesktopMessages("zh-CN")}
+        nodes={data.nodes}
+        notifications={{ mentions: true, humanReplies: false, approvals: true }}
+        pendingPreference="notifications"
+        preferenceError="保存失败"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(html).toContain('data-preference-pending="notifications"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("保存失败");
+    expect(html.match(/<button(?=[^>]*role="switch")(?=[^>]*disabled="")[^>]*>/g)).toHaveLength(3);
+  });
+
   it("disables account avatar choices while any profile field is pending", () => {
     const html = renderToStaticMarkup(
       <SettingsPage

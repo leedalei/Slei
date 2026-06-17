@@ -30,6 +30,7 @@ import {
   type TaskSummaryView,
   type TaskThreadReceipt,
   type TaskThreadMessageView,
+  type UserPreferences,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ToastType } from "../components";
@@ -649,6 +650,26 @@ export function hasPendingAgentActivity(messages: SleiMessage[], channelId?: str
   );
 }
 
+export async function applyPreferenceMutation<TPreferences>(input: {
+  current: TPreferences;
+  optimistic: TPreferences;
+  applyOptimistic: (value: TPreferences) => void;
+  persist: () => Promise<TPreferences>;
+  applyConfirmed: (value: TPreferences) => void;
+  onError: (error: unknown) => void;
+}) {
+  input.applyOptimistic(input.optimistic);
+  try {
+    const confirmed = await input.persist();
+    input.applyConfirmed(confirmed);
+    return confirmed;
+  } catch (error) {
+    input.applyOptimistic(input.current);
+    input.onError(error);
+    throw error;
+  }
+}
+
 function formatAppErrorToast(prefix: string, error: unknown) {
   const detail = formatLogError(error).trim();
   return detail ? `${prefix}：${detail}` : prefix;
@@ -987,10 +1008,7 @@ export function SleiApp() {
       ]);
       if (!mounted) return;
       setRuntimeSetup(next);
-      setLocale(preferencesReceipt.preferences.locale);
-      setTimeZone(preferencesReceipt.preferences.timeZone);
-      setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
-      setNotifications(preferencesReceipt.preferences.notifications);
+      applyPreferencesReceipt(preferencesReceipt.preferences);
       setSavedMessages(savedReceipt.savedMessages);
       setProfile(profileReceipt.profile);
       let activeConversation: string | undefined;
@@ -1176,10 +1194,7 @@ export function SleiApp() {
     }
     const [agentReceipt, conversationReceipt, channelReceipt] = await Promise.all([bridge.listAgents(), bridge.listConversations(), bridge.listChannels()]);
     setRuntimeSetup(next);
-    setLocale(preferencesReceipt.preferences.locale);
-    setTimeZone(preferencesReceipt.preferences.timeZone);
-    setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
-    setNotifications(preferencesReceipt.preferences.notifications);
+    applyPreferencesReceipt(preferencesReceipt.preferences);
     setSavedMessages(savedReceipt.savedMessages);
     setProfile(profileReceipt.profile);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
@@ -1732,112 +1747,72 @@ export function SleiApp() {
   }
 
   async function handleLocaleChange(nextLocale: AppLocale) {
-    if (pendingPreferenceRef.current) return;
-    const previous = { locale, timeZone, appearance, notifications };
-    pendingPreferenceRef.current = "locale";
-    setPendingPreference("locale");
-    setPreferenceError(undefined);
-    setLocale(nextLocale);
-    try {
-      const receipt = await bridge.updatePreferences({ locale: nextLocale });
-      applyPreferencesReceipt(receipt.preferences);
-    } catch (error) {
-      setLocale(previous.locale);
-      setTimeZone(previous.timeZone);
-      setAppearance(previous.appearance);
-      setNotifications(previous.notifications);
-      const message = formatAppErrorToast(messages.settings.saveFailed, error);
-      setPreferenceError(message);
-      showAppToast(message, "error");
-      throw error;
-    } finally {
-      pendingPreferenceRef.current = undefined;
-      setPendingPreference(undefined);
-    }
+    await handlePreferenceMutation("locale", (current) => ({ ...current, locale: nextLocale }), () =>
+      bridge.updatePreferences({ locale: nextLocale }),
+    );
   }
 
   async function handleTimeZoneChange(nextTimeZone: string) {
-    if (pendingPreferenceRef.current) return;
-    const previous = { locale, timeZone, appearance, notifications };
-    pendingPreferenceRef.current = "timeZone";
-    setPendingPreference("timeZone");
-    setPreferenceError(undefined);
-    setTimeZone(nextTimeZone);
-    try {
-      const receipt = await bridge.updatePreferences({ timeZone: nextTimeZone });
-      applyPreferencesReceipt(receipt.preferences);
-    } catch (error) {
-      setLocale(previous.locale);
-      setTimeZone(previous.timeZone);
-      setAppearance(previous.appearance);
-      setNotifications(previous.notifications);
-      const message = formatAppErrorToast(messages.settings.saveFailed, error);
-      setPreferenceError(message);
-      showAppToast(message, "error");
-      throw error;
-    } finally {
-      pendingPreferenceRef.current = undefined;
-      setPendingPreference(undefined);
-    }
+    await handlePreferenceMutation("timeZone", (current) => ({ ...current, timeZone: nextTimeZone }), () =>
+      bridge.updatePreferences({ timeZone: nextTimeZone }),
+    );
   }
 
   async function handleAppearanceChange(nextAppearance: AppearancePreferences) {
-    if (pendingPreferenceRef.current) return;
-    const previous = { locale, timeZone, appearance, notifications };
-    pendingPreferenceRef.current = "appearance";
-    setPendingPreference("appearance");
-    setPreferenceError(undefined);
     const normalizedAppearance = normalizeAppearance(nextAppearance);
-    setAppearance(normalizedAppearance);
-    try {
-      const receipt = await bridge.updatePreferences({ appearance: normalizedAppearance });
-      applyPreferencesReceipt(receipt.preferences);
-    } catch (error) {
-      setLocale(previous.locale);
-      setTimeZone(previous.timeZone);
-      setAppearance(previous.appearance);
-      setNotifications(previous.notifications);
-      const message = formatAppErrorToast(messages.settings.saveFailed, error);
-      setPreferenceError(message);
-      showAppToast(message, "error");
-      throw error;
-    } finally {
-      pendingPreferenceRef.current = undefined;
-      setPendingPreference(undefined);
-    }
+    await handlePreferenceMutation("appearance", (current) => ({ ...current, appearance: normalizedAppearance }), () =>
+      bridge.updatePreferences({ appearance: normalizedAppearance }),
+    );
   }
 
   async function handleNotificationsChange(nextNotifications: NotificationPreferences) {
+    await handlePreferenceMutation("notifications", (current) => ({ ...current, notifications: nextNotifications }), () =>
+      bridge.updatePreferences({ notifications: nextNotifications }),
+    );
+  }
+
+  async function handlePreferenceMutation(
+    pendingKey: NonNullable<typeof pendingPreference>,
+    buildOptimistic: (current: UserPreferences) => UserPreferences,
+    persist: () => Promise<{ preferences: UserPreferences }>,
+  ) {
     if (pendingPreferenceRef.current) return;
-    const previous = { locale, timeZone, appearance, notifications };
-    pendingPreferenceRef.current = "notifications";
-    setPendingPreference("notifications");
+    const current = currentPreferences();
+    pendingPreferenceRef.current = pendingKey;
+    setPendingPreference(pendingKey);
     setPreferenceError(undefined);
-    setNotifications(nextNotifications);
     try {
-      const receipt = await bridge.updatePreferences({ notifications: nextNotifications });
-      applyPreferencesReceipt(receipt.preferences);
-    } catch (error) {
-      setLocale(previous.locale);
-      setTimeZone(previous.timeZone);
-      setAppearance(previous.appearance);
-      setNotifications(previous.notifications);
-      const message = formatAppErrorToast(messages.settings.saveFailed, error);
-      setPreferenceError(message);
-      showAppToast(message, "error");
-      throw error;
+      await applyPreferenceMutation({
+        current,
+        optimistic: buildOptimistic(current),
+        applyOptimistic: applyPreferencesReceipt,
+        persist: async () => {
+          const receipt = await persist();
+          return receipt.preferences;
+        },
+        applyConfirmed: applyPreferencesReceipt,
+        onError: (error) => {
+          const message = formatAppErrorToast(messages.settings.saveFailed, error);
+          setPreferenceError(message);
+          showAppToast(message, "error");
+        },
+      });
     } finally {
       pendingPreferenceRef.current = undefined;
       setPendingPreference(undefined);
     }
   }
 
-  function applyPreferencesReceipt(preferences: {
-    locale: AppLocale;
-    timeZone: string;
-    appearance: AppearancePreferences;
-    notifications: NotificationPreferences;
-  }) {
+  function currentPreferences(): UserPreferences {
+    return {
+      locale,
+      timeZone,
+      appearance,
+      notifications,
+    };
+  }
+
+  function applyPreferencesReceipt(preferences: UserPreferences) {
     setLocale(preferences.locale);
     setTimeZone(preferences.timeZone);
     setAppearance(normalizeAppearance(preferences.appearance));

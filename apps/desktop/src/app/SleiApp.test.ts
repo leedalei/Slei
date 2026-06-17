@@ -13,6 +13,7 @@ import {
   hasUnsettledChannelMemberReadiness,
   keepOnlyClaimedAgentActivityByDiagnostic,
   markCoordinatorActivityFailedByDiagnostic,
+  applyPreferenceMutation,
   shouldToastBackendServiceError,
   updateAgentActivityByDiagnostic,
   replaceChannelMessages,
@@ -29,6 +30,24 @@ import type { ChannelMessageView, ConversationMessageView, SendChannelMessageOut
 import type { SleiMember, SleiMessage } from "./types";
 
 describe("createChannelAgentReplyMessage", () => {
+  it("rolls back optimistic preference changes when persistence fails", async () => {
+    const applied: string[] = [];
+    await expect(
+      applyPreferenceMutation({
+        current: "zh-CN",
+        optimistic: "en-US",
+        applyOptimistic: (value) => applied.push(value),
+        persist: async () => {
+          throw new Error("daemon offline");
+        },
+        applyConfirmed: (value) => applied.push(`confirmed:${value}`),
+        onError: () => applied.push("error"),
+      }),
+    ).rejects.toThrow("daemon offline");
+
+    expect(applied).toEqual(["en-US", "zh-CN", "error"]);
+  });
+
   it("shows coordinator pending work in the chat sidebar agent activity area", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_route_1",
