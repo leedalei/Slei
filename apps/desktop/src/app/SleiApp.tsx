@@ -1168,15 +1168,21 @@ export function SleiApp() {
     return bridge.readAgentWorkspaceFile(agentId, relativePath);
   }
 
+  function applyComputerNodeReceipt(node: DesktopNodeView) {
+    setData((current) => createEmptySleiData({ ...current, nodes: upsertComputerNode(current.nodes, node) }));
+    setRuntimeSetup((current) => {
+      const nextNodes = upsertComputerNode(current.nodes, node);
+      return {
+        ...current,
+        nodes: nextNodes,
+        hasClaudeRuntimeReady: hasReadyClaudeRuntime(nextNodes),
+      };
+    });
+  }
+
   async function handleRenameLocalNode(name: string) {
     const receipt = await bridge.renameLocalNode(name);
-    const nextNodes = data.nodes.map((node) => (node.id === receipt.node.id ? receipt.node : node));
-    setData((current) => createEmptySleiData({ ...current, nodes: nextNodes }));
-    setRuntimeSetup((current) => ({
-      ...current,
-      nodes: nextNodes,
-      hasClaudeRuntimeReady: hasReadyClaudeRuntime(nextNodes),
-    }));
+    applyComputerNodeReceipt(receipt.node);
   }
 
   async function handleRefreshRuntime() {
@@ -1335,7 +1341,13 @@ export function SleiApp() {
     });
   }
 
-  function handleRenameComputer(nodeId: string, name: string) {
+  async function handleRenameComputer(nodeId: string, name: string) {
+    if (nodeId === "local-node") {
+      const receipt = await bridge.renameLocalNode(name);
+      applyComputerNodeReceipt(receipt.node);
+      return;
+    }
+
     setData((current) => createEmptySleiData({ ...current, nodes: renameComputerNode(current.nodes, nodeId, name) }));
     setRuntimeSetup((current) => {
       const nextNodes = renameComputerNode(current.nodes, nodeId, name);
@@ -1987,6 +1999,13 @@ async function refreshRuntime(bridge: DaemonBridge): Promise<RuntimeSetupState> 
     hasClaudeRuntimeReady: hasReadyClaudeRuntime(receipt.nodes),
     nodes: receipt.nodes,
   };
+}
+
+function upsertComputerNode(nodes: DesktopNodeView[], node: DesktopNodeView) {
+  if (nodes.some((candidate) => candidate.id === node.id)) {
+    return nodes.map((candidate) => (candidate.id === node.id ? node : candidate));
+  }
+  return [...nodes, node];
 }
 
 function hasReadyClaudeRuntime(nodes: DesktopNodeView[]) {

@@ -125,9 +125,13 @@ export type SleiAppFrameProps = {
   preferenceError?: string;
   pendingProfileField?: "displayName" | "avatar";
   profileErrors?: Partial<Record<"displayName" | "avatar", string>>;
+  memberFieldErrors?: Record<string, string>;
+  savingMemberField?: string;
   runtimeSetup: RuntimeSetupState;
   runtimeErrorToastMessage?: string;
   runtimeToastType?: ToastType;
+  computerRenameError?: string;
+  renamingComputerId?: string;
   searchOpen?: boolean;
   sessionDrawerOpen?: boolean;
   sendingConversationIds?: string[];
@@ -155,7 +159,7 @@ export type SleiAppFrameProps = {
   onConversationSelect?: (conversationId: string) => void;
   onComputerCreate?: (name: string, osLabel: string) => void;
   onComputerDelete?: (nodeId: string) => void;
-  onComputerRename?: (nodeId: string, name: string) => void;
+  onComputerRename?: (nodeId: string, name: string) => Promise<void> | void;
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void;
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void;
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
@@ -330,7 +334,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         });
         if (!result.created) return;
         if (cardId) await input.onInteractiveCardComplete?.(cardId);
-      }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors)}</main>
+      }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
 
       {computerCreateOpen ? (
         <ComputerCreateModal
@@ -1184,7 +1188,7 @@ function renderWorkspace(
   onSearchResultSelect?: (channelId: string, messageId: string) => void,
   activeComputerId?: string,
   onComputerCreateRequest?: () => void,
-  onComputerRename?: (nodeId: string, name: string) => void,
+  onComputerRename?: (nodeId: string, name: string) => Promise<void> | void,
   activeMemberId?: string,
   activeTaskId?: string,
   onTaskReply?: (taskId: string, body: string) => Promise<void> | void,
@@ -1216,19 +1220,25 @@ function renderWorkspace(
   preferenceError?: string,
   pendingProfileField?: "displayName" | "avatar",
   profileErrors?: Partial<Record<"displayName" | "avatar", string>>,
+  memberFieldErrors?: Record<string, string>,
+  savingMemberField?: string,
+  computerRenameError?: string,
+  renamingComputerId?: string,
 ) {
   if (activeView === "search") return <SearchRoute data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
   if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} />;
-  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} />;
+  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} memberFieldErrors={memberFieldErrors} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} savingMemberField={savingMemberField} />;
   if (activeView === "computers") {
     return (
       <ComputersRoute
         activeNodeId={activeComputerId}
+        computerRenameError={computerRenameError}
         members={data.members}
         messages={messages}
         nodes={runtimeSetup.nodes}
         onComputerCreateRequest={onComputerCreateRequest}
         onComputerRename={onComputerRename}
+        renamingComputerId={renamingComputerId}
       />
     );
   }
