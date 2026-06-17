@@ -544,7 +544,7 @@ mod tests {
     }
 
     #[test]
-    fn default_all_channel_message_falls_back_locally_when_daemon_connection_fails() {
+    fn default_all_channel_message_without_as_task_fails_when_daemon_connection_fails() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         drop(listener);
@@ -556,7 +556,7 @@ mod tests {
             protocol_version: "v1".to_string(),
         });
 
-        let receipt = send_channel_message(
+        let error = send_channel_message(
             &broker,
             "all",
             SendChannelMessageRequest {
@@ -565,20 +565,11 @@ mod tests {
                 as_task: false,
             },
         )
-        .unwrap();
+        .unwrap_err()
+        .to_string();
 
-        assert!(receipt.outcome.message_id.starts_with("msg_channel_all_"));
-        assert_eq!(receipt.outcome.action, "local_archive_only");
-        assert_eq!(receipt.outcome.task_id, None);
-        assert_eq!(receipt.outcome.assignee_agent_id, None);
-        let diagnostics = broker.diagnostic_events_for_tests();
-        assert!(diagnostics.iter().any(|event| {
-            event.contains("desktop_channel_message.fallback")
-                && event.contains("channel_id=all")
-                && event.contains("reason=daemon_unavailable")
-                && event.contains("body=[redacted-body]")
-                && !event.contains("大家先同步")
-        }));
+        assert!(error.contains("daemon request failed"));
+        assert!(error.contains("daemon connection failed"));
     }
 
     #[test]
