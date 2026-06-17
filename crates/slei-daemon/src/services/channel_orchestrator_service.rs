@@ -994,10 +994,7 @@ impl ChannelOrchestratorService {
             Some("tool_started") => {
                 let record = record.clone();
                 drop(runs);
-                let tool_name = event
-                    .get("tool_name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("tool");
+                let tool_name = worker_tool_name(&event);
                 self.record_channel_agent_activity(
                     &record,
                     run_id,
@@ -1014,10 +1011,7 @@ impl ChannelOrchestratorService {
             Some("tool_completed") => {
                 let record = record.clone();
                 drop(runs);
-                let tool_name = event
-                    .get("tool_name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("tool");
+                let tool_name = worker_tool_name(&event);
                 let ok = event.get("ok").and_then(Value::as_bool).unwrap_or(true);
                 self.record_channel_agent_activity(
                     &record,
@@ -2332,6 +2326,14 @@ fn activity_summary_message(value: &str) -> String {
     const MAX_CHARS: usize = 120;
     let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
     sanitize_activity_payload_preview(&normalized, MAX_CHARS)
+}
+
+fn worker_tool_name(event: &Value) -> &str {
+    event
+        .get("tool_name")
+        .and_then(Value::as_str)
+        .or_else(|| event.get("name").and_then(Value::as_str))
+        .unwrap_or("tool")
 }
 
 fn enum_storage_str<T>(value: &T) -> String

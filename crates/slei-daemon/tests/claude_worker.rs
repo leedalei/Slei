@@ -203,6 +203,25 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .expect("second DM runtime should have started");
     state
         .handle_worker_event(json!({
+            "type": "tool_started",
+            "run_id": failed_run_id,
+            "tool_use_id": "tool-dm-read-1",
+            "name": "Read"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "tool_completed",
+            "run_id": failed_run_id,
+            "tool_use_id": "tool-dm-read-1",
+            "name": "Read",
+            "ok": true
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
             "type": "product_tool_requested",
             "run_id": failed_run_id,
             "agent_id": agent_id,
@@ -284,6 +303,26 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
     assert!(!preview.contains("abc"));
     assert!(preview.contains("[redacted]"));
     assert!(preview.contains("[truncated]"));
+
+    let read_started = logs
+        .iter()
+        .find(|log| {
+            log["eventKind"] == "tool.started"
+                && log["runId"] == failed_run_id
+                && log["toolName"] == "Read"
+        })
+        .expect("ordinary tool_started name should be preserved");
+    assert!(read_started["summary"].as_str().unwrap().contains("Read"));
+
+    let read_completed = logs
+        .iter()
+        .find(|log| {
+            log["eventKind"] == "tool.completed"
+                && log["runId"] == failed_run_id
+                && log["toolName"] == "Read"
+        })
+        .expect("ordinary tool_completed name should be preserved");
+    assert!(read_completed["summary"].as_str().unwrap().contains("Read"));
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
