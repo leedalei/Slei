@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 axum.workspace = true
+chrono = "0.4"
+chrono-tz = "0.10"
 serde.workspace = true
 serde_json.workspace = true
 slei-default-agent-assets = { path = "../slei-default-agent-assets" }

@@ -13,8 +13,9 @@ mod tests {
 
     use super::db::SleiDb;
     use super::repositories::{
-        sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow, MessageReadQueryRow,
-        NewAgentActivityEventRow, NewChannelMessageRow, Repositories, TaskRootRow, UserProfileRow,
+        sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow,
+        ConversationMessageRow, ConversationRow, MessageReadQueryRow, NewAgentActivityEventRow,
+        NewChannelMessageRow, Repositories, TaskRootRow, UserProfileRow,
         RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
@@ -962,6 +963,391 @@ mod tests {
         let matches = repos.search_channel_messages("needle", 1).await.unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].id, "msg_visible");
+    }
+
+    #[tokio::test]
+    async fn global_search_channel_messages_excludes_deleted_and_clamps_limit() {
+        let (url, _path) = sqlite_file_url("global-search-channel-messages");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_channel("all", "All", Some("Global room"), true, "Controlled")
+            .await
+            .unwrap();
+
+        for index in 0..85 {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: format!("msg_{index:03}"),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: if index % 2 == 0 {
+                        "human:local".to_string()
+                    } else {
+                        "agent_coda".to_string()
+                    },
+                    body: Some(format!("needle visible body {index:03}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        for (id, kind, deleted) in [
+            ("msg_deleted", "human", 1),
+            ("msg_tombstone", "tombstone", 0),
+            ("msg_task_root", "task_root", 0),
+            ("msg_task_reply", "task_reply", 0),
+            ("msg_task_card", "task_card", 0),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human:local".to_string(),
+                    body: Some(format!("needle hidden {id}")),
+                    as_task: false,
+                    kind: kind.to_string(),
+                })
+                .await
+                .unwrap();
+            if deleted != 0 {
+                sqlx::query("UPDATE messages SET deleted = 1 WHERE id = ?")
+                    .bind(id)
+                    .execute(db.pool())
+                    .await
+                    .unwrap();
+            }
+        }
+
+        let matches = repos
+            .search_channel_messages_for_global_search("needle", None, None, None, None, 500)
+            .await
+            .unwrap();
+        let ids = matches
+            .iter()
+            .map(|row| row.id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(matches.len(), 80);
+        assert_eq!(matches[0].id, "msg_084");
+        assert_eq!(matches[79].id, "msg_005");
+        for hidden_id in [
+            "msg_deleted",
+            "msg_tombstone",
+            "msg_task_root",
+            "msg_task_reply",
+            "msg_task_card",
+        ] {
+            assert!(!ids.contains(&hidden_id), "{hidden_id} should be hidden");
+        }
+    }
+
+    #[tokio::test]
+    async fn global_search_channel_messages_supports_from_channel_and_time_filters() {
+        let (url, _path) = sqlite_file_url("global-search-channel-message-filters");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for channel_id in ["all", "ops"] {
+            repos
+                .upsert_channel(
+                    channel_id,
+                    channel_id,
+                    None,
+                    channel_id == "all",
+                    "Controlled",
+                )
+                .await
+                .unwrap();
+        }
+
+        for (id, channel_id, author_id, body, created_at) in [
+            (
+                "msg_all_human_old",
+                "all",
+                "human:local",
+                "needle old human all",
+                "2026-06-01 09:00:00",
+            ),
+            (
+                "msg_all_human_mid",
+                "all",
+                "human:local",
+                "needle selected human all",
+                "2026-06-02 10:00:00",
+            ),
+            (
+                "msg_all_agent_mid",
+                "all",
+                "agent_coda",
+                "needle agent all",
+                "2026-06-02 11:00:00",
+            ),
+            (
+                "msg_ops_human_mid",
+                "ops",
+                "human:local",
+                "needle human ops",
+                "2026-06-02 12:00:00",
+            ),
+            (
+                "msg_all_human_late",
+                "all",
+                "human:local",
+                "needle late human all",
+                "2026-06-03 10:00:00",
+            ),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: channel_id.to_string(),
+                    session_id: None,
+                    author_id: author_id.to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            sqlx::query("UPDATE messages SET created_at = ? WHERE id = ?")
+                .bind(created_at)
+                .bind(id)
+                .execute(db.pool())
+                .await
+                .unwrap();
+        }
+
+        let matches = repos
+            .search_channel_messages_for_global_search(
+                "needle",
+                Some("human:local"),
+                Some("all"),
+                Some("2026-06-02T00:00:00Z"),
+                Some("2026-06-02T23:59:59Z"),
+                80,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_all_human_mid"]
+        );
+    }
+
+    #[tokio::test]
+    async fn global_search_conversation_messages_supports_from_and_time_filters() {
+        let (url, _path) = sqlite_file_url("global-search-dm-messages");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_conversation(ConversationRow {
+                id: "conv_1".to_string(),
+                kind: "agent".to_string(),
+                agent_id: "agent_coda".to_string(),
+                active_session_id: Some("session_1".to_string()),
+                runtime_status: Some("ready".to_string()),
+                created_at: "2026-06-01T00:00:00Z".to_string(),
+                updated_at: "2026-06-01T00:00:00Z".to_string(),
+            })
+            .await
+            .unwrap();
+
+        for (id, author_id, body, created_at) in [
+            (
+                "dm_human_old",
+                "human:local",
+                "body-only needle from human old",
+                "1780304400",
+            ),
+            (
+                "dm_agent_old",
+                "agent_coda",
+                "body-only needle from agent old",
+                "1780308000",
+            ),
+            (
+                "dm_human_new",
+                "human:local",
+                "body-only needle from human new",
+                "1780390800",
+            ),
+            (
+                "dm_agent_new",
+                "agent_coda",
+                "body-only needle from agent new",
+                "1780394400",
+            ),
+            (
+                "dm_subject_only",
+                "agent_coda",
+                "does not contain the target term",
+                "1780398000",
+            ),
+        ] {
+            repos
+                .insert_conversation_message(ConversationMessageRow {
+                    id: id.to_string(),
+                    conversation_id: "conv_1".to_string(),
+                    session_id: Some("session_1".to_string()),
+                    author_id: author_id.to_string(),
+                    body: body.to_string(),
+                    status: Some("complete".to_string()),
+                    run_id: None,
+                    attachment_ids: "[]".to_string(),
+                    cards_payload: "[]".to_string(),
+                    created_at: created_at.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let body_matches = repos
+            .search_conversation_messages_for_global_search(
+                "body-only needle",
+                None,
+                None,
+                None,
+                80,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            body_matches
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "dm_agent_new",
+                "dm_human_new",
+                "dm_agent_old",
+                "dm_human_old"
+            ]
+        );
+
+        let human_matches = repos
+            .search_conversation_messages_for_global_search(
+                "body-only needle",
+                Some("human:local"),
+                None,
+                None,
+                80,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            human_matches
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["dm_human_new", "dm_human_old"]
+        );
+
+        let filtered_by_time = repos
+            .search_conversation_messages_for_global_search(
+                "body-only needle",
+                None,
+                Some("2026-06-02T00:00:00Z"),
+                Some("2026-06-02T23:59:59Z"),
+                80,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            filtered_by_time
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["dm_agent_new", "dm_human_new"]
+        );
+    }
+
+    #[tokio::test]
+    async fn global_search_agents_and_channels_clamp_to_twenty() {
+        let (url, _path) = sqlite_file_url("global-search-agents-channels");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..25 {
+            repos
+                .upsert_agent(
+                    &format!("agent_visible_{index:02}"),
+                    &format!("Needle Agent {index:02}"),
+                    &format!("@needle-agent-{index:02}"),
+                    "agent",
+                    false,
+                    "Codex",
+                    "GPT-5",
+                    "local-node",
+                    &format!("needle visible agent {index:02}"),
+                    &format!("needle-agent-{index:02}"),
+                )
+                .await
+                .unwrap();
+            repos
+                .upsert_channel(
+                    &format!("channel_visible_{index:02}"),
+                    &format!("needle-channel-{index:02}"),
+                    Some(&format!("needle visible channel {index:02}")),
+                    index == 0,
+                    "Controlled",
+                )
+                .await
+                .unwrap();
+        }
+
+        repos
+            .upsert_agent(
+                "agent_system",
+                "Needle System",
+                "@needle-system",
+                "agent",
+                true,
+                "Codex",
+                "GPT-5",
+                "local-node",
+                "needle hidden system agent",
+                "needle-system",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_agent(
+                "agent_internal",
+                "Needle Internal",
+                "@needle-internal",
+                "internal",
+                false,
+                "Codex",
+                "GPT-5",
+                "local-node",
+                "needle hidden internal agent",
+                "needle-internal",
+            )
+            .await
+            .unwrap();
+
+        let agents = repos.search_agents("needle", 500).await.unwrap();
+        let channels = repos.search_channels("needle", 500).await.unwrap();
+        let agent_ids = agents.iter().map(|row| row.id.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(agents.len(), 20);
+        assert_eq!(channels.len(), 20);
+        assert!(!agent_ids.contains(&"agent_system"));
+        assert!(!agent_ids.contains(&"agent_internal"));
     }
 
     #[tokio::test]

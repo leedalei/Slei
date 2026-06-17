@@ -32,7 +32,7 @@ export type DesktopMessages = {
   };
   shell: {
     mainNavigation: string;
-    nav: Record<Exclude<AppView, "search">, string>;
+    nav: Record<AppView, string>;
     sidebarTitle: Record<AppView, string>;
     sidebarSubtitle: Record<AppView, string>;
     sectionLabel: Record<AppView, string>;
@@ -120,11 +120,41 @@ export type DesktopMessages = {
   };
   search: {
     channel: string;
+    clearFilters: string;
+    categories: Record<"agent" | "channel" | "message", string>;
     description: string;
+    filters: {
+      title: string;
+      from: string;
+      channel: string;
+      allChannels: string;
+      anyone: string;
+      timeRangeLabel: string;
+      timeRange: Record<"any" | "today" | "last7Days" | "last30Days", string>;
+      timeZone: string;
+    };
+    errorDescription: string;
+    errorTitle: string;
+    loading: string;
+    navigation: {
+      clearQuery: string;
+      nextResult: string;
+      openAgent: (name: string) => string;
+      openChannel: (name: string) => string;
+      openMessage: (id: string) => string;
+      previousResult: string;
+      results: string;
+      searchInput: string;
+    };
     noResultDescription: string;
     noResultTitle: string;
     openConversation: (id: string) => string;
+    placeholderDescription: string;
+    placeholderTitle: string;
     query: string;
+    resultCount: (count: number) => string;
+    sections: Record<"agents" | "channels" | "messages", string>;
+    submit: string;
     time: string;
     title: string;
     user: string;

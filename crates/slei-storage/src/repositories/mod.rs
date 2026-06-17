@@ -86,6 +86,17 @@ pub struct AgentRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSearchRow {
+    pub id: String,
+    pub name: String,
+    pub handle: String,
+    pub description: String,
+    pub avatar_seed: String,
+    pub system_owned: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentUpdateRow {
     pub id: String,
     pub name: String,
@@ -152,6 +163,16 @@ pub struct ConversationMessageRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationMessageSearchRow {
+    pub id: String,
+    pub conversation_id: String,
+    pub session_id: Option<String>,
+    pub author_id: String,
+    pub body: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationAttachmentRow {
     pub id: String,
     pub name: String,
@@ -209,6 +230,14 @@ pub struct ChannelRow {
     pub is_default: bool,
     pub permission: String,
     pub active_session_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelSearchRow {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -833,6 +862,36 @@ impl Repositories {
         row.map(agent_row_from_sql).transpose()
     }
 
+    pub async fn search_agents(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<AgentSearchRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit)).min(20);
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        let rows = sqlx::query(
+            "SELECT id, name, handle, description, avatar_seed, system_owned, updated_at
+             FROM agents
+             WHERE system_owned = 0
+               AND agent_kind != 'internal'
+               AND (
+                    name LIKE ? ESCAPE '\\'
+                    OR handle LIKE ? ESCAPE '\\'
+                    OR description LIKE ? ESCAPE '\\'
+               )
+             ORDER BY updated_at DESC, id ASC
+             LIMIT ?",
+        )
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(agent_search_row_from_sql).collect()
+    }
+
     pub async fn delete_agent(&self, id: &str) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("DELETE FROM channel_members WHERE agent_id = ?")
@@ -993,6 +1052,30 @@ impl Repositories {
                 })
             })
             .collect()
+    }
+
+    pub async fn search_channels(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<ChannelSearchRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit)).min(20);
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        let rows = sqlx::query(
+            "SELECT id, name, description, updated_at
+             FROM channels
+             WHERE name LIKE ? ESCAPE '\\'
+                OR description LIKE ? ESCAPE '\\'
+             ORDER BY updated_at DESC, id ASC
+             LIMIT ?",
+        )
+        .bind(&pattern)
+        .bind(&pattern)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(channel_search_row_from_sql).collect()
     }
 
     pub async fn upsert_channel_session(&self, row: ChannelSessionRow) -> Result<(), sqlx::Error> {
@@ -1472,6 +1555,65 @@ impl Repositories {
              LIMIT ?",
         )
         .bind(pattern)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter().map(channel_message_row_from_sql).collect()
+    }
+
+    pub async fn search_channel_messages_for_global_search(
+        &self,
+        query: &str,
+        from_id: Option<&str>,
+        channel_id: Option<&str>,
+        start_at: Option<&str>,
+        end_at: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit)).min(80);
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        // Global search time bounds accept Unix epoch seconds, SQLite CURRENT_TIMESTAMP
+        // strings, or RFC3339 UTC strings. Normalize before comparison so source-specific
+        // storage formats cannot silently exclude one result class.
+        let rows = sqlx::query(
+            "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+             FROM (
+                SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at,
+                       unixepoch(created_at) AS created_at_epoch
+                FROM messages
+                WHERE content LIKE ? ESCAPE '\\'
+                  AND (? IS NULL OR author_id = ?)
+                  AND (? IS NULL OR channel_id = ?)
+                  AND deleted = 0
+                  AND kind NOT IN ('tombstone', 'task_root', 'task_reply', 'task_card')
+             )
+             WHERE (? IS NULL OR created_at_epoch >= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+               AND (? IS NULL OR created_at_epoch <= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+             ORDER BY created_at_epoch DESC, sequence DESC
+             LIMIT ?",
+        )
+        .bind(pattern)
+        .bind(from_id)
+        .bind(from_id)
+        .bind(channel_id)
+        .bind(channel_id)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;
@@ -3044,6 +3186,64 @@ impl Repositories {
             .collect()
     }
 
+    pub async fn search_conversation_messages_for_global_search(
+        &self,
+        query: &str,
+        from_id: Option<&str>,
+        start_at: Option<&str>,
+        end_at: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<ConversationMessageSearchRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit)).min(80);
+        let pattern = format!("%{}%", escape_like_pattern(query));
+        // Conversation messages are currently daemon-stamped with Unix epoch seconds,
+        // while callers may pass global search bounds as RFC3339 or SQLite datetimes.
+        // Normalize both sides to Unix seconds before applying time filters.
+        let rows = sqlx::query(
+            "SELECT id, conversation_id, session_id, author_id, body, created_at
+             FROM (
+                SELECT rowid AS sequence, id, conversation_id, session_id, author_id, body, created_at,
+                       CASE
+                         WHEN created_at GLOB '[0-9][0-9]*' AND created_at NOT GLOB '*[^0-9]*' THEN CAST(created_at AS INTEGER)
+                         ELSE unixepoch(created_at)
+                       END AS created_at_epoch
+                FROM conversation_messages
+                WHERE body LIKE ? ESCAPE '\\'
+                  AND (? IS NULL OR author_id = ?)
+             )
+             WHERE (? IS NULL OR created_at_epoch >= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+               AND (? IS NULL OR created_at_epoch <= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+             ORDER BY created_at_epoch DESC, sequence DESC
+             LIMIT ?",
+        )
+        .bind(pattern)
+        .bind(from_id)
+        .bind(from_id)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(conversation_message_search_row_from_sql)
+            .collect()
+    }
+
     pub async fn delete_conversation_messages_for_session(
         &self,
         conversation_id: &str,
@@ -3868,6 +4068,19 @@ fn agent_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentRow, sqlx::Er
     })
 }
 
+fn agent_search_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentSearchRow, sqlx::Error> {
+    let system_owned: i64 = row.try_get("system_owned")?;
+    Ok(AgentSearchRow {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        handle: row.try_get("handle")?,
+        description: row.try_get("description")?,
+        avatar_seed: row.try_get("avatar_seed")?,
+        system_owned: system_owned != 0,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
 fn task_root_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskRootRow, sqlx::Error> {
     let needs_assignment: i64 = row.try_get("needs_assignment")?;
     let attention_required: i64 = row.try_get("attention_required")?;
@@ -4006,6 +4219,17 @@ fn channel_session_row_from_sql(
     })
 }
 
+fn channel_search_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ChannelSearchRow, sqlx::Error> {
+    Ok(ChannelSearchRow {
+        id: row.try_get("id")?,
+        name: row.try_get("name")?,
+        description: row.try_get("description")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
 fn conversation_message_row_from_sql(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<ConversationMessageRow, sqlx::Error> {
@@ -4019,6 +4243,19 @@ fn conversation_message_row_from_sql(
         run_id: row.try_get("run_id")?,
         attachment_ids: row.try_get("attachment_ids")?,
         cards_payload: row.try_get("cards_payload")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn conversation_message_search_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<ConversationMessageSearchRow, sqlx::Error> {
+    Ok(ConversationMessageSearchRow {
+        id: row.try_get("id")?,
+        conversation_id: row.try_get("conversation_id")?,
+        session_id: row.try_get("session_id")?,
+        author_id: row.try_get("author_id")?,
+        body: row.try_get("body")?,
         created_at: row.try_get("created_at")?,
     })
 }

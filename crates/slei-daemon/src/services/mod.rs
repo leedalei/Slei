@@ -25,6 +25,7 @@ pub mod notification_service;
 pub mod orchestration_store;
 pub mod reset_service;
 pub mod run_orchestrator;
+pub mod search_service;
 pub mod settings_service;
 pub mod task_service;
 pub mod worker_launch;

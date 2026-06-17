@@ -61,6 +61,9 @@ import {
   type AgentActivityListReceipt,
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
+  type GlobalMessageSearchResult,
+  type GlobalSearchQuery,
+  type GlobalSearchReceipt,
   type RuntimeSetupState,
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
@@ -90,7 +93,8 @@ import {
   type UserProfile,
 } from "./model";
 
-const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [
+const navItems: Array<{ id: AppView; icon: LucideIcon }> = [
+  { id: "search", icon: Search },
   { id: "chat", icon: MessageCircle },
   { id: "tasks", icon: CheckSquare },
   { id: "members", icon: CircleUserRound },
@@ -133,7 +137,6 @@ export type SleiAppFrameProps = {
   runtimeToastType?: ToastType;
   computerRenameError?: string;
   renamingComputerId?: string;
-  searchOpen?: boolean;
   sessionDrawerOpen?: boolean;
   sendingConversationIds?: string[];
   sidebarWidth?: number;
@@ -161,14 +164,17 @@ export type SleiAppFrameProps = {
   onComputerCreate?: (name: string, osLabel: string) => void;
   onComputerDelete?: (nodeId: string) => void;
   onComputerRename?: (nodeId: string, name: string) => Promise<void> | void;
+  onGlobalSearch?: (query: GlobalSearchQuery) => Promise<GlobalSearchReceipt> | GlobalSearchReceipt;
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void;
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void;
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void;
   onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void;
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onAgentResultSelect?: (agentId: string) => void;
+  onChannelResultSelect?: (channelId: string) => void;
+  onMessageResultSelect?: (result: GlobalMessageSearchResult) => void;
   onSearchResultSelect?: (channelId: string, messageId: string) => void;
-  onSearchToggle?: () => void;
   onSavedMessageSelect?: (savedMessage: SavedMessageView) => void;
   onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void;
   onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void;
@@ -207,7 +213,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
   const profile = input.profile ?? null;
-  const sidebarTitle = input.activeView === "search" ? messages.common.search : messages.shell.nav[input.activeView];
+  const sidebarTitle = messages.shell.nav[input.activeView];
   const activeAgentActivities = input.activeView === "chat" || input.activeView === "search"
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
     : [];
@@ -276,9 +282,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
               onChannelSelect={input.onChannelSelect}
               onConversationSelect={input.onConversationSelect}
               onSavedMessageSelect={input.onSavedMessageSelect}
-              onSearchToggle={input.onSearchToggle}
               savedMessages={input.savedMessages ?? []}
-              searchOpen={input.activeView === "search"}
               messages={messages}
             />
           ) : input.activeView === "members" ? (
@@ -313,7 +317,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         type="button"
       />
 
-      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onChannelNewSession, input.onChannelSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onOlderMessagesLoad, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onChannelNewSession, input.onChannelSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onOlderMessagesLoad, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -620,7 +624,6 @@ function ChannelList(input: {
   initialSavedPanelOpen?: boolean;
   messages: DesktopMessages;
   savedMessages: SavedMessageView[];
-  searchOpen?: boolean;
   onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
   onChannelCreateFailure?: (message: string) => void;
   onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
@@ -629,7 +632,6 @@ function ChannelList(input: {
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
   onSavedMessageSelect?: (savedMessage: SavedMessageView) => void;
-  onSearchToggle?: () => void;
 }) {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
@@ -689,10 +691,6 @@ function ChannelList(input: {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="grid gap-2">
-        <Button aria-pressed={input.searchOpen ? "true" : "false"} className="w-full justify-between" onClick={input.onSearchToggle} type="button" variant={input.searchOpen ? "secondary" : "outline"}>
-          <span className="inline-flex items-center gap-2"><Search aria-hidden="true" size={14} />{input.messages.common.search}</span>
-          <span className="text-[10px] text-muted-foreground">Command K</span>
-        </Button>
         <Button aria-pressed={activePanel === "saved" ? "true" : "false"} className="w-full justify-start" onClick={() => setActivePanel("saved")} type="button" variant={activePanel === "saved" ? "secondary" : "ghost"}>
           <Bookmark aria-hidden="true" size={14} />{input.messages.common.saved}
         </Button>
@@ -1189,6 +1187,10 @@ function renderWorkspace(
   initialChannelView?: ChannelEmbeddedView,
   initialComposerAttachments?: ConversationAttachmentView[],
   initialSearchFilters?: ChatSearchFilters,
+  onGlobalSearch?: (query: GlobalSearchQuery) => Promise<GlobalSearchReceipt> | GlobalSearchReceipt,
+  onAgentResultSelect?: (agentId: string) => void,
+  onChannelResultSelect?: (channelId: string) => void,
+  onMessageResultSelect?: (result: GlobalMessageSearchResult) => void,
   onSearchResultSelect?: (channelId: string, messageId: string) => void,
   activeComputerId?: string,
   onComputerCreateRequest?: () => void,
@@ -1233,7 +1235,21 @@ function renderWorkspace(
   computerRenameError?: string,
   renamingComputerId?: string,
 ) {
-  if (activeView === "search") return <SearchRoute data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
+  if (activeView === "search") {
+    return (
+      <SearchRoute
+        data={data}
+        messages={messages}
+        onAgentResultSelect={onAgentResultSelect}
+        onChannelResultSelect={onChannelResultSelect}
+        onGlobalSearch={onGlobalSearch}
+        onMessageResultSelect={onMessageResultSelect}
+        onResultSelect={onSearchResultSelect}
+        profile={profile}
+        timeZone={timeZone}
+      />
+    );
+  }
   if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} />;
   if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} memberFieldErrors={memberFieldErrors} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentActivity={onListAgentActivity} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} savingMemberField={savingMemberField} />;
   if (activeView === "computers") {

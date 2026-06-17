@@ -719,9 +719,10 @@ describe("createChannelAgentReplyMessage", () => {
 
   it("keeps the current chat view after a member is created from an interactive card", () => {
     const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+    const handlerSource = source.slice(source.indexOf("async function handleCreateAgent"), source.indexOf("async function handleUpdateAgent"));
 
-    expect(source).toContain("messages.agentCreate.createdSuccess");
-    expect(source).not.toContain('navigateToView("members");');
+    expect(handlerSource).toContain("messages.agentCreate.createdSuccess");
+    expect(handlerSource).not.toContain('navigateToView("members");');
   });
 
   it("surfaces agent creation failures from the modal", () => {
@@ -1037,5 +1038,48 @@ describe("createChannelAgentReplyMessage", () => {
     expect(message.id).toBe("agent-activity-msg_123");
     expect(message.status).toBe("done");
     expect(message.cards?.map((card) => card.id)).toEqual(["card_1", "card_2"]);
+  });
+});
+
+describe("global search result navigation", () => {
+  it("uses message result sessions when navigating to channel and DM messages", () => {
+    const source = readFileSync("src/app/SleiApp.tsx", "utf8");
+    const handlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));
+
+    expect(handlerSource).toContain("const targetSessionId = result.sessionId ?? undefined");
+    expect(handlerSource).toContain("bridge.activateConversationSession(conversationId, targetSessionId)");
+    expect(handlerSource).toContain("bridge.activateChannelSession(channelId, targetSessionId)");
+    expect(handlerSource).toContain("loadChannelMessagesForState(channelId, data.members, targetSessionId)");
+    expect(handlerSource).toContain("replaceChannelMessages(current.messages, channelMessages, [channelId])");
+    expect(handlerSource).not.toContain("handleChannelSearchResultSelect(channelId)");
+  });
+
+  it("guards async search and saved message navigation with latest-selection-wins", () => {
+    const source = readFileSync("src/app/SleiApp.tsx", "utf8");
+    const searchHandlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));
+    const savedHandlerSource = source.slice(source.indexOf("async function handleSavedMessageSelect"), source.indexOf("async function handleLocaleChange"));
+
+    expect(source).toContain("const messageNavigationSequenceRef = useRef(0)");
+    expect(source).toContain("function beginMessageNavigationSelection()");
+    expect(source).toContain("function isCurrentMessageNavigationSelection(sequence: number)");
+    expect(searchHandlerSource).toContain("const selectionSequence = beginMessageNavigationSelection()");
+    expect(savedHandlerSource).toContain("const selectionSequence = beginMessageNavigationSelection()");
+    expect(searchHandlerSource).toContain("if (!isCurrentMessageNavigationSelection(selectionSequence)) return");
+    expect(savedHandlerSource).toContain("if (!isCurrentMessageNavigationSelection(selectionSequence)) return");
+    expect(searchHandlerSource).toContain("focusMessageFromNavigation(result.messageId, selectionSequence)");
+    expect(savedHandlerSource).toContain("focusMessageFromNavigation(savedMessage.messageId, selectionSequence)");
+  });
+
+  it("logs raw navigation failures but shows localized search failure copy", () => {
+    const source = readFileSync("src/app/SleiApp.tsx", "utf8");
+    const searchHandlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));
+    const savedHandlerSource = source.slice(source.indexOf("async function handleSavedMessageSelect"), source.indexOf("async function handleLocaleChange"));
+
+    expect(searchHandlerSource).toContain("catch (error)");
+    expect(savedHandlerSource).toContain("catch (error)");
+    expect(searchHandlerSource).toContain("showMessageNavigationFailure(selectionSequence, error");
+    expect(savedHandlerSource).toContain("showMessageNavigationFailure(selectionSequence, error");
+    expect(source).toContain('logAppEvent(bridge, "message-navigation", "selection-failed"');
+    expect(source).toContain("showAppToast(messages.search.errorDescription, \"error\")");
   });
 });

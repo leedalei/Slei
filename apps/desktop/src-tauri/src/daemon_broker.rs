@@ -895,6 +895,100 @@ pub struct SaveMessageRequest {
     pub session_id: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchQuery {
+    #[serde(alias = "query")]
+    pub q: String,
+    pub from_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub time_range: Option<String>,
+    pub time_zone: Option<String>,
+    pub include_agents: Option<bool>,
+    pub include_channels: Option<bool>,
+    pub include_messages: Option<bool>,
+    pub agent_limit: Option<i64>,
+    pub channel_limit: Option<i64>,
+    pub message_limit: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchReceipt {
+    pub query: String,
+    pub totals: GlobalSearchTotals,
+    pub agents: Vec<GlobalAgentSearchResult>,
+    pub channels: Vec<GlobalChannelSearchResult>,
+    pub messages: Vec<GlobalMessageSearchResult>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalSearchTotals {
+    pub agents: usize,
+    pub channels: usize,
+    pub messages: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalAgentSearchResult {
+    pub kind: String,
+    pub agent_id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub avatar_seed: String,
+    pub matched_fields: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalChannelSearchResult {
+    pub kind: String,
+    pub channel_id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub matched_fields: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalMessageSearchResult {
+    pub kind: String,
+    pub source_kind: String,
+    pub message_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversation_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_handle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_label: Option<String>,
+    pub snippet: String,
+    pub created_at: String,
+    #[serde(default)]
+    pub matched_fields: Vec<String>,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GlobalSearchError {
+    #[error("daemon request failed: {0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
+}
+
 impl DaemonBroker {
     pub fn default_local() -> Self {
         Self::new(
@@ -1448,6 +1542,13 @@ impl DaemonBroker {
             return TaskListReceipt { tasks: Vec::new() };
         }
         self.list_tasks_locally(&query)
+    }
+
+    pub fn global_search(
+        &self,
+        query: GlobalSearchQuery,
+    ) -> Result<GlobalSearchReceipt, GlobalSearchError> {
+        self.fetch_global_search_from_daemon(&query)
     }
 
     pub fn get_task_thread(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -2841,6 +2942,17 @@ impl DaemonBroker {
     fn fetch_tasks_from_daemon(&self, query: &TaskListQuery) -> Option<TaskListReceipt> {
         let response = self.send_daemon_request("GET", &task_list_path(query), None, &[])?;
         serde_json::from_str::<TaskListReceipt>(&response).ok()
+    }
+
+    fn fetch_global_search_from_daemon(
+        &self,
+        query: &GlobalSearchQuery,
+    ) -> Result<GlobalSearchReceipt, GlobalSearchError> {
+        let response = self
+            .send_daemon_request_checked("GET", &global_search_path(query), None, &[])
+            .map_err(GlobalSearchError::DaemonRequest)?;
+        serde_json::from_str::<GlobalSearchReceipt>(&response)
+            .map_err(|error| GlobalSearchError::DaemonResponse(error.to_string()))
     }
 
     fn fetch_task_thread_from_daemon(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -4438,6 +4550,49 @@ fn task_list_path(query: &TaskListQuery) -> String {
     } else {
         format!("/v1/tasks?{}", pairs.join("&"))
     }
+}
+
+fn global_search_path(query: &GlobalSearchQuery) -> String {
+    let mut pairs = vec![format!("query={}", query_component(query.q.trim()))];
+    if let Some(from_id) = query.from_id.as_deref().filter(|value| !value.is_empty()) {
+        pairs.push(format!("fromId={}", query_component(from_id)));
+    }
+    if let Some(channel_id) = query
+        .channel_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        pairs.push(format!("channelId={}", query_component(channel_id)));
+    }
+    if let Some(time_range) = query
+        .time_range
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        pairs.push(format!("timeRange={}", query_component(time_range)));
+    }
+    if let Some(time_zone) = query.time_zone.as_deref().filter(|value| !value.is_empty()) {
+        pairs.push(format!("timeZone={}", query_component(time_zone)));
+    }
+    if let Some(include_agents) = query.include_agents {
+        pairs.push(format!("includeAgents={include_agents}"));
+    }
+    if let Some(include_channels) = query.include_channels {
+        pairs.push(format!("includeChannels={include_channels}"));
+    }
+    if let Some(include_messages) = query.include_messages {
+        pairs.push(format!("includeMessages={include_messages}"));
+    }
+    if let Some(agent_limit) = query.agent_limit {
+        pairs.push(format!("agentLimit={agent_limit}"));
+    }
+    if let Some(channel_limit) = query.channel_limit {
+        pairs.push(format!("channelLimit={channel_limit}"));
+    }
+    if let Some(message_limit) = query.message_limit {
+        pairs.push(format!("messageLimit={message_limit}"));
+    }
+    format!("/v1/search/global?{}", pairs.join("&"))
 }
 
 fn query_component(value: &str) -> String {

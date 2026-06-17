@@ -18,6 +18,8 @@ import type {
   DiagnosticsSnapshotView,
   DesktopAgentView,
   DesktopNodeView,
+  GlobalSearchQuery,
+  GlobalSearchReceipt,
   InteractiveCardView,
   MessageThreadReplyView,
   MessageThreadSummaryView,
@@ -735,6 +737,9 @@ export function createDaemonBridgeMock(input: {
     async unsaveMessage(messageId) {
       savedMessages = savedMessages.filter((saved) => saved.messageId !== messageId);
     },
+    async globalSearch(query) {
+      return globalSearchMockReceipt(query, { agents, channels, channelMessages, conversations, messages });
+    },
     async listPreferences() {
       return { preferences };
     },
@@ -846,4 +851,141 @@ function testMockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath
 
 function containsAny(body: string, markers: string[]) {
   return markers.some((marker) => body.includes(marker));
+}
+
+function globalSearchMockReceipt(
+  query: GlobalSearchQuery,
+  source: {
+    agents: DesktopAgentView[];
+    channels: ChannelView[];
+    channelMessages: ChannelMessageView[];
+    conversations: ConversationView[];
+    messages: ConversationMessageView[];
+  },
+): GlobalSearchReceipt {
+  const q = query.q.trim();
+  const needle = q.toLowerCase();
+  if (!needle) {
+    return emptyGlobalSearchReceipt(q);
+  }
+  const agentLimit = clampSearchLimit(query.agentLimit, 20);
+  const channelLimit = clampSearchLimit(query.channelLimit, 20);
+  const messageLimit = clampSearchLimit(query.messageLimit, 80);
+  const includeAgents = query.includeAgents ?? true;
+  const includeChannels = query.includeChannels ?? true;
+  const includeMessages = query.includeMessages ?? true;
+  const agents = includeAgents
+    ? source.agents
+      .filter((agent) => searchMatches(needle, [agent.name, agent.handle, agent.description]))
+      .slice(0, agentLimit)
+      .map((agent) => ({
+        kind: "agent",
+        agentId: agent.id,
+        title: agent.name,
+        subtitle: agent.handle,
+        avatarSeed: agent.avatarSeed,
+        matchedFields: ["name", "handle", "description"].filter((field) => {
+          const value = field === "name" ? agent.name : field === "handle" ? agent.handle : agent.description;
+          return searchMatches(needle, [value]);
+        }),
+      }))
+    : [];
+  const channels = includeChannels
+    ? source.channels
+      .filter((channel) => searchMatches(needle, [channel.name, channel.description ?? ""]))
+      .slice(0, channelLimit)
+      .map((channel) => ({
+        kind: "channel",
+        channelId: channel.id,
+        title: `#${channel.name}`,
+        subtitle: channel.description ?? "",
+        matchedFields: ["name", "description"].filter((field) => searchMatches(needle, [field === "name" ? channel.name : channel.description ?? ""])),
+      }))
+    : [];
+  const agentById = new Map(source.agents.map((agent) => [agent.id, agent]));
+  const channelById = new Map(source.channels.map((channel) => [channel.id, channel]));
+  const channelResults = source.channelMessages
+    .filter((message) => includeMessages && !message.deleted)
+    .filter((message) => !query.channelId || message.channelId === query.channelId)
+    .filter((message) => !query.fromId || message.authorId === query.fromId)
+    .filter((message) => searchMatches(needle, [message.body ?? ""]))
+    .map((message) => {
+      const channel = channelById.get(message.channelId);
+      const author = agentById.get(message.authorId);
+      return {
+        kind: "message",
+        sourceKind: "channel",
+        messageId: message.id,
+        channelId: message.channelId,
+        conversationId: null,
+        sessionId: message.sessionId ?? null,
+        authorId: message.authorId,
+        authorName: author?.name ?? message.authorId,
+        authorHandle: author?.handle ?? "",
+        authorLabel: author ? `${author.name} ${author.handle}`.trim() : message.authorId,
+        title: channel ? `#${channel.name}` : `#${message.channelId}`,
+        sourceLabel: channel ? `#${channel.name}` : `#${message.channelId}`,
+        snippet: message.body ?? "",
+        createdAt: message.createdAt ?? "",
+        matchedFields: ["body"],
+      };
+    });
+  const dmResults = query.channelId
+    ? []
+    : source.messages
+      .filter((message) => includeMessages)
+      .filter((message) => !query.fromId || message.authorId === query.fromId)
+      .filter((message) => searchMatches(needle, [message.body]))
+      .map((message) => {
+        const conversation = source.conversations.find((candidate) => candidate.id === message.conversationId);
+        const dmAgent = conversation ? agentById.get(conversation.agentId) : undefined;
+        const author = agentById.get(message.authorId);
+        return {
+          kind: "message",
+          sourceKind: "dm",
+          messageId: message.id,
+          channelId: null,
+          conversationId: message.conversationId,
+          sessionId: message.sessionId ?? null,
+          authorId: message.authorId,
+          authorName: author?.name ?? message.authorId,
+          authorHandle: author?.handle ?? "",
+          authorLabel: author ? `${author.name} ${author.handle}`.trim() : message.authorId,
+          title: dmAgent?.name ?? message.conversationId,
+          sourceLabel: dmAgent?.name ?? message.conversationId,
+          snippet: message.body,
+          createdAt: message.createdAt,
+          matchedFields: ["body"],
+        };
+      });
+  const messages = [...channelResults, ...dmResults]
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+    .slice(0, messageLimit);
+
+  return {
+    query: q,
+    totals: { agents: agents.length, channels: channels.length, messages: messages.length },
+    agents,
+    channels,
+    messages,
+  };
+}
+
+function emptyGlobalSearchReceipt(query: string): GlobalSearchReceipt {
+  return {
+    query,
+    totals: { agents: 0, channels: 0, messages: 0 },
+    agents: [],
+    channels: [],
+    messages: [],
+  };
+}
+
+function clampSearchLimit(value: number | undefined, max: number) {
+  if (!value || value <= 0) return max;
+  return Math.min(value, max);
+}
+
+function searchMatches(needle: string, values: string[]) {
+  return values.some((value) => value.toLowerCase().includes(needle));
 }

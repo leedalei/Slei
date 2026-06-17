@@ -15,6 +15,7 @@ pub mod messages;
 pub mod nodes;
 pub mod notifications;
 pub mod runs;
+pub mod search;
 pub mod settings;
 pub mod tasks;
 pub mod workspaces;

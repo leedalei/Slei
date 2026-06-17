@@ -795,7 +795,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                       >
                         <article
-                          className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
+                          className={cn(
+                            "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
+                            highlightedMessageId === message.id && "slei-message--blink-border",
+                          )}
                           data-focused={highlightedMessageId === message.id ? "true" : undefined}
                           data-message-id={message.id}
                           tabIndex={focusedMessageId === message.id ? -1 : undefined}
