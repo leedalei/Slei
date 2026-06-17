@@ -50,6 +50,45 @@ describe("detail page editing pattern", () => {
     expect(html).toContain("取消");
   });
 
+  it("renders saving and error state for edit mode", () => {
+    const html = renderToStaticMarkup(
+      <EditableDetailField
+        ariaLabel="编辑显示名称"
+        error="保存失败"
+        initialEditing
+        label="显示名称"
+        saving
+        onSave={() => undefined}
+        value="Lei"
+      />,
+    );
+
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('aria-invalid="true"');
+    expect(html).toContain("aria-describedby=");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("保存失败");
+    expect(html).toContain('data-editable-saving="true"');
+  });
+
+  it("renders allow-empty edit mode without validation alert", () => {
+    const html = renderToStaticMarkup(
+      <EditableDetailField
+        allowEmpty
+        ariaLabel="编辑描述"
+        initialEditing
+        label="描述"
+        onSave={() => undefined}
+        value=""
+      />,
+    );
+
+    expect(html).toContain("<input");
+    expect(html).toContain('aria-label="描述输入"');
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain("text-destructive");
+  });
+
   it("keeps compact editable field compatibility hooks", () => {
     const html = renderToStaticMarkup(
       <EditableDetailField
