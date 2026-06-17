@@ -439,7 +439,7 @@ fn time_bounds(range: TimeRange, time_zone: Option<&str>) -> (Option<String>, Op
     };
     let end_date = today + Duration::days(1);
     let start = local_midnight_utc(tz, start_date.and_hms_opt(0, 0, 0).unwrap());
-    let end = local_midnight_utc(tz, end_date.and_hms_opt(0, 0, 0).unwrap());
+    let end = local_midnight_utc(tz, end_date.and_hms_opt(0, 0, 0).unwrap()) - Duration::seconds(1);
     (
         Some(start.timestamp().to_string()),
         Some(end.timestamp().to_string()),
@@ -472,4 +472,95 @@ fn created_at_epoch(value: &str) -> i64 {
 
 pub fn default_time_zone() -> &'static str {
     DEFAULT_TIME_ZONE
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slei_storage::db::SleiDb;
+    use slei_storage::repositories::NewChannelMessageRow;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn today_search_excludes_message_at_next_day_midnight() {
+        let (url, _path) = sqlite_file_url("search-service-today-boundary");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+        repos
+            .upsert_channel("dev-team", "dev-team", None, false, "Controlled")
+            .await
+            .unwrap();
+
+        for (id, body) in [
+            ("msg_inside_today", "needle inside today"),
+            ("msg_next_midnight", "needle next midnight"),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: "dev-team".to_string(),
+                    session_id: Some("session_dev_today".to_string()),
+                    author_id: "human:local".to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let today = Utc::now().date_naive();
+        let inside_today = today
+            .and_hms_opt(12, 0, 0)
+            .unwrap()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        let next_midnight = (today + Duration::days(1))
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        sqlx::query("UPDATE messages SET created_at = ? WHERE id = ?")
+            .bind(inside_today)
+            .bind("msg_inside_today")
+            .execute(db.pool())
+            .await
+            .unwrap();
+        sqlx::query("UPDATE messages SET created_at = ? WHERE id = ?")
+            .bind(next_midnight)
+            .bind("msg_next_midnight")
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        let result = SearchService::new(repos)
+            .global_search(GlobalSearchInput {
+                query: "needle".to_string(),
+                from_id: None,
+                channel_id: Some("dev-team".to_string()),
+                time_range: TimeRange::Today,
+                time_zone: Some("UTC".to_string()),
+                include_agents: false,
+                include_channels: false,
+                include_messages: true,
+                agent_limit: 20,
+                channel_limit: 20,
+                message_limit: 80,
+            })
+            .await
+            .unwrap();
+
+        let message_ids = result
+            .messages
+            .iter()
+            .map(|message| message.message_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(message_ids, vec!["msg_inside_today"]);
+    }
+
+    fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
+        let path = std::env::temp_dir().join(format!("slei-{name}-{}.sqlite", Uuid::new_v4()));
+        (format!("sqlite://{}", path.display()), path)
+    }
 }
