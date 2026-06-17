@@ -14,7 +14,7 @@ mod tests {
     use super::db::SleiDb;
     use super::repositories::{
         AgentStatusRow, ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
-        TaskRootRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        TaskRootRow, UserProfileRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
@@ -48,6 +48,7 @@ mod tests {
             "task_claims",
             "agent_statuses",
             "agent_activity_logs",
+            "user_profiles",
         ] {
             assert!(db.table_exists(table).await.unwrap(), "missing {table}");
         }
@@ -67,7 +68,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
     }
 
     #[tokio::test]
@@ -84,7 +85,37 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn user_profile_round_trips_single_local_profile() {
+        let (url, _path) = sqlite_file_url("user-profile");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_user_profile(UserProfileRow {
+                display_name: "Lei".to_string(),
+                handle: "lei".to_string(),
+                avatar: "pixel-sun".to_string(),
+            })
+            .await
+            .unwrap();
+        repos
+            .upsert_user_profile(UserProfileRow {
+                display_name: "Lei Lee".to_string(),
+                handle: "lei".to_string(),
+                avatar: "pixel-moon".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let profile = repos.user_profile().await.unwrap().unwrap();
+        assert_eq!(profile.display_name, "Lei Lee");
+        assert_eq!(profile.handle, "lei");
+        assert_eq!(profile.avatar, "pixel-moon");
     }
 
     #[tokio::test]
@@ -1094,6 +1125,17 @@ mod tests {
         .await
         .unwrap();
         sqlx::query(
+            "INSERT INTO user_profiles(profile_id, display_name, handle, avatar)
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind("local")
+        .bind("Lei")
+        .bind("lei")
+        .bind("pixel-sun")
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
             "INSERT INTO nodes(id, name, platform, arch, hostname, status, daemon_version)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
@@ -1153,7 +1195,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 4);
+        assert_eq!(migration_count, 5);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

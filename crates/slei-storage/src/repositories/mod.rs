@@ -31,6 +31,7 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "channel_members",
     "channels",
     "agents",
+    "user_profiles",
     "user_preferences",
     "nodes",
     "app_metadata",
@@ -164,6 +165,13 @@ pub struct UserPreferencesRow {
     pub notify_mentions: bool,
     pub notify_human_replies: bool,
     pub notify_approvals: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserProfileRow {
+    pub display_name: String,
+    pub handle: String,
+    pub avatar: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3044,6 +3052,36 @@ impl Repositories {
         row.map(user_preferences_row_from_sql).transpose()
     }
 
+    pub async fn upsert_user_profile(&self, row: UserProfileRow) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO user_profiles(profile_id, display_name, handle, avatar)
+             VALUES ('local', ?, ?, ?)
+             ON CONFLICT(profile_id) DO UPDATE SET
+                display_name = excluded.display_name,
+                handle = excluded.handle,
+                avatar = excluded.avatar,
+                updated_at = CURRENT_TIMESTAMP",
+        )
+        .bind(row.display_name)
+        .bind(row.handle)
+        .bind(row.avatar)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn user_profile(&self) -> Result<Option<UserProfileRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT display_name, handle, avatar
+             FROM user_profiles
+             WHERE profile_id = 'local'",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(user_profile_row_from_sql).transpose()
+    }
+
     pub async fn upsert_node(&self, row: NodeRow) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO nodes(id, name, platform, arch, hostname, status, daemon_version)
@@ -3595,6 +3633,14 @@ fn user_preferences_row_from_sql(
         notify_mentions: notify_mentions != 0,
         notify_human_replies: notify_human_replies != 0,
         notify_approvals: notify_approvals != 0,
+    })
+}
+
+fn user_profile_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<UserProfileRow, sqlx::Error> {
+    Ok(UserProfileRow {
+        display_name: row.try_get("display_name")?,
+        handle: row.try_get("handle")?,
+        avatar: row.try_get("avatar")?,
     })
 }
 
