@@ -737,8 +737,18 @@ describe("createChannelAgentReplyMessage", () => {
 
     expect(source).toContain("aria-label={messages.shell.nav[item.id]}");
     expect(source).toContain("title={messages.shell.nav[item.id]}");
-    expect(source).toContain("size={24}");
+    expect(source).toContain("size={28}");
     expect(source).not.toContain("<span className=\"text-[11px] leading-none\">{messages.shell.nav[item.id]}</span>");
+  });
+
+  it("renders a thin sidebar resize handle with resize cursor", () => {
+    const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("aria-label={messages.common.resizeSidebar}");
+    expect(source).toContain("role=\"separator\"");
+    expect(source).toContain("w-1");
+    expect(source).toContain("!cursor-col-resize");
+    expect(source).not.toContain("w-2 cursor-col-resize border-x");
   });
 
   it("surfaces global and daemon diagnostic failures through the app toast", () => {

@@ -337,7 +337,7 @@ describe("ChatPage mention panel", () => {
     expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).toContain("lucide-panel-right-open");
     expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).not.toContain("lucide-users");
     expect(headerHtml).not.toContain('role="tablist"');
-    expect(source).toContain('className="border-b px-4 py-3"');
+    expect(source).toContain('className="border-b px-4 py-2"');
     expect(source).toContain('variant="line"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
   });
@@ -392,12 +392,46 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain('data-testid="slei-channel-member-panel"');
+    expect(html).toContain('data-testid="slei-channel-member-panel-shell"');
     expect(html).toContain('data-testid="slei-channel-main-region"');
     expect(html).toContain('data-testid="slei-channel-workspace"');
     expect(html).toContain('data-testid="slei-channel-chat-column"');
     expect(html).toContain("grid-cols-[minmax(0,1fr)_20rem]");
+    expect(html).toContain("transition-[grid-template-columns]");
+    expect(html).toContain("transition-[opacity,transform]");
+    expect(html).toContain("translate-x-0 opacity-100");
     expect(html).toContain("grid-rows-[minmax(0,1fr)_auto]");
     expect(html).not.toContain("pointer-events-none translate-x-full");
+  });
+
+  it("keeps the channel member panel mounted offscreen while collapsed for slide animation", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-channel-member-panel-shell"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain("grid-cols-[minmax(0,1fr)_0rem]");
+    expect(html).toContain("pointer-events-none translate-x-full opacity-0");
   });
 
   it("hides the channel member panel while task or file tabs are active", () => {
@@ -486,7 +520,11 @@ describe("ChatPage mention panel", () => {
         />,
       );
 
-      expect(host.querySelector('[data-testid="slei-channel-member-panel"]')).toBeNull();
+      const panelShell = host.querySelector('[data-testid="slei-channel-member-panel-shell"]');
+      expect(panelShell).not.toBeNull();
+      expect(panelShell?.getAttribute("aria-hidden")).toBe("true");
+      expect(host.innerHTML).toContain("grid-cols-[minmax(0,1fr)_0rem]");
+      expect(host.innerHTML).toContain("pointer-events-none translate-x-full opacity-0");
       expect(host.querySelector('[data-testid="slei-channel-members-header-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
     } finally {
       window.matchMedia = originalMatchMedia;

@@ -253,7 +253,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             type="button"
             variant={input.activeView === item.id ? "default" : "ghost"}
           >
-            <item.icon aria-hidden="true" size={24} strokeWidth={2.8} />
+            <item.icon aria-hidden="true" size={28} strokeWidth={2.8} />
           </Button>
         ))}
       </nav>
@@ -307,7 +307,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       <button
         aria-label={messages.common.resizeSidebar}
         aria-orientation="vertical"
-        className="w-2 cursor-col-resize border-x bg-border/40 outline-none transition-colors hover:bg-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
+        className="w-1 !cursor-col-resize bg-border/50 outline-none transition-colors hover:bg-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
         onPointerDown={input.onResizeStart}
         role="separator"
         type="button"

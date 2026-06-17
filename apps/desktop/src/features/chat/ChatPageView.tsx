@@ -550,6 +550,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
   const showChannelMembersPanel = !dmMember && channelMembersOpen && effectiveChannelView === "chat";
+  const renderChannelMemberPanelRegion = !dmMember && effectiveChannelView === "chat";
 
   useEffect(() => {
     setChannelView(initialChannelView ?? "chat");
@@ -720,7 +721,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       </header>
       {!dmMember ? (
         <Tabs className="gap-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
-          <div className="border-b px-4 py-3" data-testid="slei-channel-view-tabs">
+          <div className="border-b px-4 py-2" data-testid="slei-channel-view-tabs">
             <TabsList aria-label={messages.chat.channelView} variant="line">
               <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</TabsTrigger>
               <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</TabsTrigger>
@@ -730,7 +731,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         </Tabs>
       ) : null}
       <section
-        className={cn("grid min-h-0", showChannelMembersPanel ? "grid-cols-[minmax(0,1fr)_20rem]" : "grid-cols-1")}
+        className={cn(
+          "grid min-h-0 transition-[grid-template-columns] duration-200 ease-out",
+          renderChannelMemberPanelRegion
+            ? showChannelMembersPanel
+              ? "grid-cols-[minmax(0,1fr)_20rem]"
+              : "grid-cols-[minmax(0,1fr)_0rem]"
+            : "grid-cols-1",
+        )}
         data-testid="slei-channel-main-region"
       >
         <div className="grid min-h-0" data-testid="slei-channel-workspace">
@@ -932,15 +940,28 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
             <ChannelFileList files={channelFiles} messages={messages} />
           )}
         </div>
-        {showChannelMembersPanel ? (
-          <ChannelMemberPanel
-            availableMembers={availableChannelMembers}
-            channelId={activeChannel.id}
-            members={channelMembers}
-            messages={messages}
-            onAdd={onChannelMemberAdd}
-            onRemove={onChannelMemberRemove}
-          />
+        {renderChannelMemberPanelRegion ? (
+          <div
+            aria-hidden={showChannelMembersPanel ? "false" : "true"}
+            className="min-h-0 overflow-hidden"
+            data-testid="slei-channel-member-panel-shell"
+          >
+            <div
+              className={cn(
+                "h-full w-80 transform-gpu transition-[opacity,transform] duration-200 ease-out",
+                showChannelMembersPanel ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0",
+              )}
+            >
+              <ChannelMemberPanel
+                availableMembers={availableChannelMembers}
+                channelId={activeChannel.id}
+                members={channelMembers}
+                messages={messages}
+                onAdd={onChannelMemberAdd}
+                onRemove={onChannelMemberRemove}
+              />
+            </div>
+          </div>
         ) : null}
       </section>
       <TaskThreadDrawer

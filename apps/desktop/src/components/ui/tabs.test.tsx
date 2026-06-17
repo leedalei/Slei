@@ -24,7 +24,7 @@ describe("Tabs", () => {
     expect(html).toContain("group-data-[variant=line]/tabs-list:data-active:font-bold");
     expect(html).toContain("group-data-[variant=line]/tabs-list:data-active:text-primary");
     expect(html).toContain("after:bg-primary");
-    expect(html).toContain("group-data-[orientation=horizontal]/tabs:after:bottom-[-10px]");
+    expect(html).toContain("group-data-[orientation=horizontal]/tabs:after:bottom-[-8px]");
     expect(html).toContain("group-data-[orientation=horizontal]/tabs:after:h-[3px]");
     expect(html).not.toContain(["data", "horizontal:flex-col"].join("-"));
     expect(html).not.toContain(["group", "data", "horizontal/tabs:h-6"].join("-"));
