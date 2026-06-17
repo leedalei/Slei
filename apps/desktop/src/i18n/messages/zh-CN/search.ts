@@ -11,6 +11,9 @@ export const search = {
     title: "筛选",
     from: "发言人",
     channel: "频道",
+    allChannels: "全部频道",
+    anyone: "任何人",
+    timeRangeLabel: "时间",
     timeRange: {
       any: "不限时间",
       today: "今天",
@@ -19,6 +22,9 @@ export const search = {
     },
     timeZone: "时区",
   },
+  errorDescription: "搜索暂时不可用，请稍后再试。",
+  errorTitle: "搜索失败",
+  loading: "正在搜索",
   navigation: {
     clearQuery: "清空搜索词",
     nextResult: "下一个结果",

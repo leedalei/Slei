@@ -1,6 +1,7 @@
 export const shell = {
   mainNavigation: "Main navigation",
   nav: {
+    search: "Search",
     chat: "Chat",
     tasks: "Tasks",
     members: "Members",

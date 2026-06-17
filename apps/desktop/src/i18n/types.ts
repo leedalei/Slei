@@ -32,7 +32,7 @@ export type DesktopMessages = {
   };
   shell: {
     mainNavigation: string;
-    nav: Record<Exclude<AppView, "search">, string>;
+    nav: Record<AppView, string>;
     sidebarTitle: Record<AppView, string>;
     sidebarSubtitle: Record<AppView, string>;
     sectionLabel: Record<AppView, string>;
@@ -127,9 +127,15 @@ export type DesktopMessages = {
       title: string;
       from: string;
       channel: string;
+      allChannels: string;
+      anyone: string;
+      timeRangeLabel: string;
       timeRange: Record<"any" | "today" | "last7Days" | "last30Days", string>;
       timeZone: string;
     };
+    errorDescription: string;
+    errorTitle: string;
+    loading: string;
     navigation: {
       clearQuery: string;
       nextResult: string;

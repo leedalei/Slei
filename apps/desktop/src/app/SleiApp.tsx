@@ -19,6 +19,7 @@ import {
   type DesktopNodeView,
   type NotificationPreferences,
   type PermissionDecision,
+  type GlobalMessageSearchResult,
   type SaveMessageRequest,
   type SavedMessageView,
   type AgentActivityListReceipt,
@@ -1739,11 +1740,40 @@ export function SleiApp() {
     setActiveChannelId((current) => (current === channelId ? "all" : current));
   }
 
-  function handleSearchResultSelect(channelId: string) {
+  function handleAgentSearchResultSelect(agentId: string) {
+    setActiveMemberId(agentId);
+    navigateToView("members");
+  }
+
+  function handleChannelSearchResultSelect(channelId: string) {
     setActiveChannelId(channelId);
     setActiveConversationId(undefined);
     setActiveSessionId(undefined);
     navigateToView("chat");
+  }
+
+  function handleMessageSearchResultSelect(result: GlobalMessageSearchResult) {
+    if (result.sourceKind === "dm" || result.conversationId?.startsWith("dm:")) {
+      const conversationId = result.conversationId;
+      if (conversationId) {
+        const conversation = data.conversations.find((candidate) => candidate.id === conversationId);
+        setActiveConversationId(conversationId);
+        setActiveSessionId(result.sessionId ?? conversation?.activeSessionId);
+      }
+      setActiveChannelId("all");
+    } else {
+      setActiveChannelId(result.channelId ?? "all");
+      setActiveConversationId(undefined);
+      setActiveSessionId(result.sessionId ?? undefined);
+    }
+    setSessionDrawerOpen(false);
+    setFocusedMessageId(undefined);
+    window.setTimeout(() => setFocusedMessageId(result.messageId), 0);
+    navigateToView("chat");
+  }
+
+  function handleSearchResultSelect(channelId: string) {
+    handleChannelSearchResultSelect(channelId);
   }
 
   async function handleMessageSaveToggle(message: SleiMessage) {
@@ -1951,6 +1981,7 @@ export function SleiApp() {
       onComputerCreate={handleCreateComputer}
       onComputerDelete={handleDeleteComputer}
       onComputerRename={handleRenameComputer}
+      onGlobalSearch={(query) => bridge.globalSearch(query)}
       onProfileChange={handleProfileChange}
       onLocaleChange={handleLocaleChange}
       onTimeZoneChange={handleTimeZoneChange}
@@ -1963,8 +1994,10 @@ export function SleiApp() {
       onRefreshRuntime={handleRefreshRuntime}
       onRenameLocalNode={handleRenameLocalNode}
       onResizeStart={handleResizeStart}
+      onAgentResultSelect={handleAgentSearchResultSelect}
+      onChannelResultSelect={handleChannelSearchResultSelect}
+      onMessageResultSelect={handleMessageSearchResultSelect}
       onSearchResultSelect={handleSearchResultSelect}
-      onSearchToggle={() => navigateToView("search")}
       onSavedMessageSelect={handleSavedMessageSelect}
       onMessageSaveToggle={handleMessageSaveToggle}
       onSendMessage={handleSendMessage}

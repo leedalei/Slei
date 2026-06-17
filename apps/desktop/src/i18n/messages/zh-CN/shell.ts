@@ -1,6 +1,7 @@
 export const shell = {
   mainNavigation: "主导航",
   nav: {
+    search: "搜索",
     chat: "聊天",
     tasks: "任务",
     members: "成员",

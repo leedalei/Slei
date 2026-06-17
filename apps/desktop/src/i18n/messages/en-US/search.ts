@@ -11,6 +11,9 @@ export const search = {
     title: "Filters",
     from: "From",
     channel: "Channel",
+    allChannels: "All channels",
+    anyone: "Anyone",
+    timeRangeLabel: "Time",
     timeRange: {
       any: "Any time",
       today: "Today",
@@ -19,6 +22,9 @@ export const search = {
     },
     timeZone: "Time zone",
   },
+  errorDescription: "Search is unavailable. Please try again.",
+  errorTitle: "Search failed",
+  loading: "Searching",
   navigation: {
     clearQuery: "Clear search query",
     nextResult: "Next result",
