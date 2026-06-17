@@ -1,11 +1,22 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
 import { defaultProfile } from "../../app/model";
 import { createDesktopMessages } from "../../i18n";
 import { ChatPage } from "./ChatPageView";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver ??= class ResizeObserver {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+};
 
 function memberWithLongMentionText(): SleiMember {
   return {
@@ -30,6 +41,31 @@ function memberWithLongMentionText(): SleiMember {
     capabilities: ["architecture"],
   };
 }
+
+let mountedRoot: Root | undefined;
+let mountedContainer: HTMLDivElement | undefined;
+
+async function mountChatPage(element: React.ReactElement) {
+  mountedContainer = document.createElement("div");
+  document.body.appendChild(mountedContainer);
+  mountedRoot = createRoot(mountedContainer);
+  await act(async () => {
+    mountedRoot?.render(element);
+  });
+  await act(async () => undefined);
+  return mountedContainer;
+}
+
+afterEach(async () => {
+  if (mountedRoot) {
+    await act(async () => {
+      mountedRoot?.unmount();
+    });
+  }
+  mountedContainer?.remove();
+  mountedRoot = undefined;
+  mountedContainer = undefined;
+});
 
 describe("ChatPage mention panel", () => {
   it("renders channel titles at a size close to the hash icon", () => {
@@ -186,6 +222,13 @@ describe("ChatPage mention panel", () => {
           handle: "@coda",
           channelReadiness: { all: "ready" },
         },
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_nova",
+          name: "Nova",
+          handle: "@nova",
+          channelReadiness: { all: "memory_syncing" },
+        },
       ],
     });
 
@@ -200,19 +243,32 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain('data-testid="slei-channel-member-panel"');
-    expect(html).toContain("top-[calc(4rem+1px)]");
-    expect(html).toContain("w-[min(20rem,calc(100%-2rem))]");
-    expect(html).toContain("transition-transform duration-200 ease-out");
-    expect(html).toContain("translate-x-0");
+    const panelStart = html.lastIndexOf("<aside", html.indexOf('data-testid="slei-channel-member-panel"'));
+    const panelHtml = html.slice(panelStart, html.indexOf("</aside>", panelStart));
+    const panelOpenTag = panelHtml.slice(0, panelHtml.indexOf(">"));
+    expect(panelOpenTag).not.toContain("absolute");
+    expect(panelOpenTag).not.toContain("translate-x");
+    expect(panelOpenTag).not.toContain("shadow-lg");
+    expect(panelOpenTag).not.toContain("top-16");
+    expect(html).not.toContain("top-[calc(4rem+1px)]");
+    expect(panelHtml).toContain("w-80");
     expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-menu"');
     expect(html).toContain("lucide-plus");
     expect(html).toContain("Coda");
-    expect(html).toContain("已就位");
+    expect(html).toContain("Nova");
+    expect(panelHtml).not.toContain("已就位");
+    expect(panelHtml).not.toContain("搜索群成员");
     expect(html).toContain("添加成员");
-    expect(html).not.toContain("lucide-x");
+    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain("频道成员(2)");
+    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).not.toContain('data-slot="badge"');
+    expect(panelHtml).toContain('data-testid="slei-channel-member-status-dot"');
+    expect(panelHtml).toContain("bg-emerald-500");
+    expect(panelHtml).toContain("bg-muted-foreground/40");
+    expect(panelHtml).toContain("lucide-trash-2");
+    expect(panelHtml).toContain("text-destructive");
   });
 
-  it("moves channel member controls from the header to a right edge toggle", () => {
+  it("renders channel view tabs below the header and member toggle in the header actions", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -227,19 +283,24 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const source = readChatPageSource();
+    const headerHtml = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    const tabsIndex = html.indexOf('data-testid="slei-channel-view-tabs"');
+    const headerEndIndex = html.indexOf("</header>");
 
-    expect(html).toContain('data-testid="slei-channel-members-edge-toggle"');
-    expect(html).toContain("top-[20%]");
-    expect(html).toContain("active:!translate-y-0");
-    expect(html).toContain("transition-[right,background-color,color] duration-200 ease-out");
-    expect(html).toContain("right-0 bg-popover text-popover-foreground");
-    expect(source).not.toContain("top-1/2");
-    expect(source).not.toContain("-translate-y-1/2");
-    expect(source).toContain('variant={channelMembersOpen ? "outline" : "secondary"}');
+    expect(html).not.toContain('data-testid="slei-channel-members-edge-toggle"');
+    expect(html).toContain('data-testid="slei-channel-members-header-toggle"');
+    expect(html).toContain('data-testid="slei-channel-view-tabs"');
+    expect(tabsIndex).toBeGreaterThan(headerEndIndex);
+    expect(headerHtml).toContain(messages.chat.newSession);
+    expect(headerHtml).toContain(messages.chat.history);
+    expect(headerHtml).toContain('data-testid="slei-channel-header-action-separator"');
+    expect(headerHtml).toContain('data-testid="slei-channel-members-header-toggle"');
+    expect(headerHtml).not.toContain('role="tablist"');
+    expect(source).toContain('variant="line"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
   });
 
-  it("uses the lighter edge toggle background while the channel member drawer is expanded", () => {
+  it("uses active color on the header member toggle while the member panel is expanded", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -256,30 +317,43 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("right-[min(20rem,calc(100%-2rem))]");
-    const toggleHtml = html.slice(html.indexOf('data-testid="slei-channel-members-edge-toggle"'));
-    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).not.toContain("bg-popover text-popover-foreground");
+    const toggleTestIdIndex = html.indexOf('data-testid="slei-channel-members-header-toggle"');
+    const toggleHtml = html.slice(html.lastIndexOf("<button", toggleTestIdIndex));
+    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).toContain("bg-primary/10 text-primary");
   });
 
-  it("keeps the channel member panel mounted as an animated right drawer", () => {
+  it("embeds the channel member panel beside a shrinkable channel workspace", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
     });
 
     const html = renderToStaticMarkup(
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
+        initialChannelMembersOpen
         messages={messages}
         profile={defaultProfile}
       />,
     );
 
     expect(html).toContain('data-testid="slei-channel-member-panel"');
-    expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain("translate-x-full");
-    expect(html).toContain("pointer-events-none");
+    expect(html).toContain('data-testid="slei-channel-main-region"');
+    expect(html).toContain('data-testid="slei-channel-workspace"');
+    expect(html).toContain('data-testid="slei-channel-chat-column"');
+    expect(html).toContain("grid-cols-[minmax(0,1fr)_20rem]");
+    expect(html).toContain("grid-rows-[minmax(0,1fr)_auto]");
+    expect(html).not.toContain("pointer-events-none translate-x-full");
   });
 
   it("keeps channel member add and remove mutations behind confirmation UI", () => {
@@ -291,7 +365,91 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("confirmingRemoveId");
     expect(source).toContain("setConfirmingRemoveId(member.id)");
     expect(source).toContain("mutate(member.id, \"remove\")");
-    expect(source).toContain("group-hover/member:opacity-100");
+    expect(source).toContain("text-destructive");
+  });
+
+  it("automatically collapses the inline member panel below the compact breakpoint", async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = (() => ({
+      matches: true,
+      media: "(max-width: 899px)",
+      onchange: null,
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialChannelMembersOpen
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      expect(host.querySelector('[data-testid="slei-channel-member-panel"]')).toBeNull();
+      expect(host.querySelector('[data-testid="slei-channel-members-header-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
+
+  it("closes the channel member add menu when the user clicks outside the panel", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        memberWithLongMentionText(),
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelMembersOpen
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const addButton = host.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.addChannelMember}"]`);
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-testid="slei-channel-member-add-menu"]')).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-testid="slei-channel-member-add-menu"]')).toBeNull();
   });
 
   it("renders channel tabs followed by new-session and history buttons", () => {
@@ -351,5 +509,5 @@ describe("ChatPage mention panel", () => {
 });
 
 function readChatPageSource() {
-  return readFileSync(new URL("./ChatPageView.tsx", import.meta.url), "utf8");
+  return readFileSync(join(process.cwd(), "src/features/chat/ChatPageView.tsx"), "utf8");
 }

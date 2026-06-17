@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -326,7 +326,6 @@ function ChannelMemberPanel(input: {
   channelId: string;
   members: SleiMember[];
   messages: DesktopMessages;
-  open: boolean;
   onAdd?: (agentId: string) => Promise<void> | void;
   onRemove?: (agentId: string) => Promise<void> | void;
 }) {
@@ -334,6 +333,25 @@ function ChannelMemberPanel(input: {
   const [confirmingAddId, setConfirmingAddId] = useState<string | undefined>(undefined);
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!addMenuOpen || typeof document === "undefined") return;
+
+    function closeAddMenuOnOutsideInteraction(event: PointerEvent | FocusEvent) {
+      const target = event.target;
+      if (target instanceof Node && panelRef.current?.contains(target)) return;
+      setAddMenuOpen(false);
+      setConfirmingAddId(undefined);
+    }
+
+    document.addEventListener("pointerdown", closeAddMenuOnOutsideInteraction);
+    document.addEventListener("focusin", closeAddMenuOnOutsideInteraction);
+    return () => {
+      document.removeEventListener("pointerdown", closeAddMenuOnOutsideInteraction);
+      document.removeEventListener("focusin", closeAddMenuOnOutsideInteraction);
+    };
+  }, [addMenuOpen]);
 
   async function mutate(memberId: string, action: "add" | "remove") {
     setMutatingMemberId(memberId);
@@ -353,26 +371,23 @@ function ChannelMemberPanel(input: {
 
   return (
     <aside
-      aria-hidden={input.open ? undefined : "true"}
       aria-label={input.messages.chat.channelMembers}
-      className={cn(
-        "absolute bottom-0 right-0 top-[calc(4rem+1px)] z-20 grid w-[min(20rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-popover p-3 text-popover-foreground shadow-lg transition-transform duration-200 ease-out",
-        input.open ? "translate-x-0" : "pointer-events-none translate-x-full",
-      )}
+      className="grid h-full min-h-0 w-80 grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-background p-4"
       data-testid="slei-channel-member-panel"
-      inert={input.open ? undefined : true}
+      ref={panelRef}
     >
       <div className="relative flex items-center justify-between gap-2">
-        <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
-          <Users aria-hidden="true" size={16} />
-          <span className="truncate">{input.messages.chat.channelMembers}</span>
-          <Badge variant="secondary">{input.members.length}</Badge>
-        </h2>
-        <Button aria-expanded={addMenuOpen ? "true" : "false"} aria-label={input.messages.chat.addChannelMember} onClick={() => setAddMenuOpen((current) => !current)} size="icon-xs" title={input.messages.chat.addChannelMember} type="button" variant="ghost">
-          <Plus aria-hidden="true" size={14} />
-        </Button>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
+            <Users aria-hidden="true" size={16} />
+            <span className="truncate">{input.messages.chat.channelMembers}({input.members.length})</span>
+          </h2>
+          <Button aria-expanded={addMenuOpen ? "true" : "false"} aria-label={input.messages.chat.addChannelMember} onClick={() => setAddMenuOpen((current) => !current)} size="icon-xs" title={input.messages.chat.addChannelMember} type="button" variant="ghost">
+            <Plus aria-hidden="true" size={14} />
+          </Button>
+        </div>
         {addMenuOpen ? (
-          <div className="absolute right-0 top-8 z-30 grid w-64 gap-1 rounded-lg border bg-popover p-2 shadow-lg" data-testid="slei-channel-member-add-menu">
+          <div className="absolute left-0 top-8 z-30 grid w-64 gap-1 rounded-lg border bg-popover p-2 shadow-lg" data-testid="slei-channel-member-add-menu">
             {input.availableMembers.length > 0 ? input.availableMembers.map((member) => {
               const confirming = confirmingAddId === member.id;
               return (
@@ -399,20 +414,24 @@ function ChannelMemberPanel(input: {
         ) : null}
       </div>
       <ScrollArea className="min-h-0 pr-2">
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           {input.members.length > 0 ? input.members.map((member) => {
             const readiness = member.channelReadiness?.[input.channelId];
             const confirming = confirmingRemoveId === member.id;
             return (
-              <div className="group/member grid gap-1 rounded-md border bg-background px-2 py-2" key={member.id}>
+              <div className="group/member grid gap-1 rounded-md px-1.5 py-2 hover:bg-muted/50" key={member.id}>
                 <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={cn("size-2 shrink-0 rounded-full", readiness === "ready" ? "bg-emerald-500" : "bg-muted-foreground/40")}
+                    data-testid="slei-channel-member-status-dot"
+                  />
                   <MemberAvatar identity={member} />
                   <span className="grid min-w-0 flex-1">
                     <strong className="truncate text-sm">{member.name}</strong>
                     <small className="truncate text-xs text-muted-foreground">{member.handle}</small>
                   </span>
-                  <Badge variant={readiness === "ready" ? "secondary" : "outline"}>{channelReadinessLabel(readiness, input.messages)}</Badge>
-                  <Button aria-label={input.messages.chat.removeChannelMember(member.name)} className="opacity-0 transition-opacity group-hover/member:opacity-100 group-focus-within/member:opacity-100 focus-visible:opacity-100" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingRemoveId(member.id)} size="icon-xs" type="button" variant="ghost">
+                  <Button aria-label={input.messages.chat.removeChannelMember(member.name)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingRemoveId(member.id)} size="icon-xs" type="button" variant="ghost">
                     <Trash2 aria-hidden="true" size={14} />
                   </Button>
                 </div>
@@ -514,10 +533,22 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
+  const showChannelMembersPanel = !dmMember && channelMembersOpen;
 
   useEffect(() => {
     setChannelView(initialChannelView ?? "chat");
   }, [activeChannel.id, activeConversation?.id, initialChannelView]);
+
+  useEffect(() => {
+    if (dmMember || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 899px)");
+    const collapseIfCompact = () => {
+      if (media.matches) setChannelMembersOpen(false);
+    };
+    collapseIfCompact();
+    media.addEventListener?.("change", collapseIfCompact);
+    return () => media.removeEventListener?.("change", collapseIfCompact);
+  }, [activeChannel.id, dmMember]);
 
   useEffect(() => {
     if (!focusedMessageId || typeof document === "undefined") return;
@@ -614,7 +645,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   }
 
   return (
-    <section className="relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] bg-background" data-slot="chat-page">
+    <section className={cn("relative grid h-full min-h-0 bg-background", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
       <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
         <div className="min-w-0">
@@ -643,50 +674,40 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             </Button>
           </div>
         ) : (
-          <div className="flex shrink-0 items-center gap-2">
-            <Tabs className="shrink-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
-              <TabsList aria-label={messages.chat.channelView}>
-                <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</TabsTrigger>
-                <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</TabsTrigger>
-                <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><FileText aria-hidden="true" size={14} />{messages.chat.files}</TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <div className="flex shrink-0 items-center gap-2" data-testid="slei-channel-header-actions">
             <Button onClick={() => onChannelNewSession?.(activeChannel.id)} size="sm" type="button" variant="outline">
               <Plus aria-hidden="true" size={14} />{messages.chat.newSession}
             </Button>
             <Button onClick={onConversationHistoryToggle} size="sm" type="button" variant="outline">
               <History aria-hidden="true" size={14} />{messages.chat.history}
             </Button>
+            <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" data-testid="slei-channel-header-action-separator" />
+            <Button
+              aria-expanded={channelMembersOpen ? "true" : "false"}
+              aria-label={messages.chat.channelMembers}
+              className={cn(channelMembersOpen && "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
+              data-testid="slei-channel-members-header-toggle"
+              onClick={() => setChannelMembersOpen((current) => !current)}
+              title={messages.chat.channelMembers}
+              type="button"
+              variant="outline"
+              size="icon-sm"
+            >
+              <Users aria-hidden="true" size={15} />
+            </Button>
           </div>
         )}
       </header>
       {!dmMember ? (
-        <Button
-          aria-expanded={channelMembersOpen ? "true" : "false"}
-          aria-label={messages.chat.channelMembers}
-          className={cn(
-            "absolute top-[20%] z-30 h-12 w-8 rounded-r-none rounded-l-md border-r-0 shadow-sm transition-[right,background-color,color] duration-200 ease-out active:!translate-y-0",
-            channelMembersOpen ? "right-[min(20rem,calc(100%-2rem))]" : "right-0 bg-popover text-popover-foreground",
-          )}
-          data-testid="slei-channel-members-edge-toggle"
-          onClick={() => setChannelMembersOpen((current) => !current)}
-          title={messages.chat.channelMembers}
-          type="button"
-          variant={channelMembersOpen ? "outline" : "secondary"}
-        >
-          <Users aria-hidden="true" size={15} />
-        </Button>
-      ) : null}
-      {!dmMember ? (
-        <ChannelMemberPanel
-          availableMembers={availableChannelMembers}
-          channelId={activeChannel.id}
-          members={channelMembers}
-          messages={messages}
-          open={channelMembersOpen}
-          onAdd={onChannelMemberAdd}
-          onRemove={onChannelMemberRemove}
-        />
+        <Tabs className="gap-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
+          <div className="border-b px-4 py-3" data-testid="slei-channel-view-tabs">
+            <TabsList aria-label={messages.chat.channelView} variant="line">
+              <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><MessageCircle aria-hidden="true" size={14} />{messages.shell.nav.chat}</TabsTrigger>
+              <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><CheckSquare aria-hidden="true" size={14} />{messages.chat.tasks}</TabsTrigger>
+              <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><FileText aria-hidden="true" size={14} />{messages.chat.files}</TabsTrigger>
+            </TabsList>
+          </div>
+        </Tabs>
       ) : null}
       <Sheet
         onOpenChange={(open) => {
@@ -741,101 +762,199 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           ))}
         </aside>
       ) : null}
-      {effectiveChannelView === "chat" ? (
-        <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
-          <div className="grid gap-1 px-4 py-3">
-            {timelineMessages.map((message) => {
-              const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
-                ? message.task
-                : taskBySourceMessageId.get(message.id);
-              if (sourceTask) {
-                const saved = savedMessageIds.includes(message.id);
-                const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
-                const timestamp = messageTimestampLabel(message);
-                return (
-                  <TaskRootEntry
-                    copyLabel={messages.chat.copyMessage}
-                    key={message.id}
-                    messages={messages}
-                    onCopy={() => copyMessage(message)}
-                    onOpen={() => openTaskThread(sourceTask.id)}
-                    onSaveToggle={() => onMessageSaveToggle?.(message)}
-                    avatarIdentity={memberFromMessage(message, data.members)}
-                    roleDescription={messageRoleDescription(message, data.members, messages)}
-                    saved={saved}
-                    saveLabel={saveLabel}
-                    sourceMessage={message}
-                    task={sourceTask}
-                    timestamp={timestamp}
-                  />
-                );
-              }
-              const saved = savedMessageIds.includes(message.id);
-              const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
-              const timestamp = messageTimestampLabel(message);
-              return (
-                <article
-                  className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
-                  data-focused={highlightedMessageId === message.id ? "true" : undefined}
-                  data-message-id={message.id}
-                  key={message.id}
-                  tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                >
-                  <MemberAvatar identity={memberFromMessage(message, data.members)} />
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                        <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
-                        {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
-                        <span aria-hidden="true">｜</span>
-                        <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                        <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
-                          <Copy aria-hidden="true" size={14} />
-                        </Button>
-                        <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
-                          <Bookmark aria-hidden="true" size={14} />
-                        </Button>
-                        <span aria-hidden="true">｜</span>
-                        <span className="inline-flex items-center gap-1">
-                          <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
-                            {timestamp}
-                          </time>
-                          <MessageStatusSquare status={message.status} />
-                        </span>
-                      </div>
-                    </div>
-                    <MarkdownMessage markdown={message.body} />
-                    <AttachmentList attachments={message.attachments ?? []} messageAttachments />
-                    {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
-                    {message.cards?.map((card) => (
-                      <InteractiveCard
-                        card={card}
-                        key={card.id}
-                        messages={messages}
-                        onCreate={() => {
-                          if (card.kind === "createAgent") {
-                            onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
-                          } else if (card.kind === "createChannel") {
-                            onChannelDraftCreate?.(card.draft, card.id);
-                          }
-                        }}
-                        onPermissionResolve={onPermissionResolve}
-                      />
-                    ))}
+      <section
+        className={cn("grid min-h-0", showChannelMembersPanel ? "grid-cols-[minmax(0,1fr)_20rem]" : "grid-cols-1")}
+        data-testid="slei-channel-main-region"
+      >
+        <div className="grid min-h-0" data-testid="slei-channel-workspace">
+          {effectiveChannelView === "chat" ? (
+            <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
+              <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
+                <div className="grid gap-1 px-4 py-3">
+                  {timelineMessages.map((message) => {
+                    const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
+                      ? message.task
+                      : taskBySourceMessageId.get(message.id);
+                    if (sourceTask) {
+                      const saved = savedMessageIds.includes(message.id);
+                      const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+                      const timestamp = messageTimestampLabel(message);
+                      return (
+                        <TaskRootEntry
+                          copyLabel={messages.chat.copyMessage}
+                          key={message.id}
+                          messages={messages}
+                          onCopy={() => copyMessage(message)}
+                          onOpen={() => openTaskThread(sourceTask.id)}
+                          onSaveToggle={() => onMessageSaveToggle?.(message)}
+                          avatarIdentity={memberFromMessage(message, data.members)}
+                          roleDescription={messageRoleDescription(message, data.members, messages)}
+                          saved={saved}
+                          saveLabel={saveLabel}
+                          sourceMessage={message}
+                          task={sourceTask}
+                          timestamp={timestamp}
+                        />
+                      );
+                    }
+                    const saved = savedMessageIds.includes(message.id);
+                    const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+                    const timestamp = messageTimestampLabel(message);
+                    return (
+                      <article
+                        className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
+                        data-focused={highlightedMessageId === message.id ? "true" : undefined}
+                        data-message-id={message.id}
+                        key={message.id}
+                        tabIndex={focusedMessageId === message.id ? -1 : undefined}
+                      >
+                        <MemberAvatar identity={memberFromMessage(message, data.members)} />
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                              <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
+                              {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
+                              <span aria-hidden="true">｜</span>
+                              <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
+                              <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                                <Copy aria-hidden="true" size={14} />
+                              </Button>
+                              <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
+                                <Bookmark aria-hidden="true" size={14} />
+                              </Button>
+                              <span aria-hidden="true">｜</span>
+                              <span className="inline-flex items-center gap-1">
+                                <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
+                                  {timestamp}
+                                </time>
+                                <MessageStatusSquare status={message.status} />
+                              </span>
+                            </div>
+                          </div>
+                          <MarkdownMessage markdown={message.body} />
+                          <AttachmentList attachments={message.attachments ?? []} messageAttachments />
+                          {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
+                          {message.cards?.map((card) => (
+                            <InteractiveCard
+                              card={card}
+                              key={card.id}
+                              messages={messages}
+                              onCreate={() => {
+                                if (card.kind === "createAgent") {
+                                  onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
+                                } else if (card.kind === "createChannel") {
+                                  onChannelDraftCreate?.(card.draft, card.id);
+                                }
+                              }}
+                              onPermissionResolve={onPermissionResolve}
+                            />
+                          ))}
+                        </div>
+                      </article>
+                    );
+                  })}
+                  <div ref={timelineEndRef} />
+                </div>
+              </ScrollArea>
+              <footer className="border-t bg-background/95">
+                {mention && mentionTargets.length > 0 ? (
+                  <div className="px-4 pt-3">
+                    <MentionPicker
+                      members={mentionTargets}
+                      messages={messages}
+                      onSelect={selectMention}
+                      optionRef={(index, node) => {
+                        mentionOptionRefs.current[index] = node;
+                      }}
+                      selectedIndex={selectedMentionIndex}
+                    />
                   </div>
-                </article>
-              );
-            })}
-            <div ref={timelineEndRef} />
-          </div>
-        </ScrollArea>
-      ) : effectiveChannelView === "tasks" ? (
-        <ChannelTaskList messages={messages} onTaskThreadOpen={onTaskThreadOpen} tasks={channelTasks} />
-      ) : (
-        <ChannelFileList files={channelFiles} messages={messages} />
-      )}
+                ) : null}
+                <form className="grid gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
+                  {attachments.length > 0 ? (
+                    <AttachmentList
+                      attachments={attachments}
+                      onRemove={(attachmentId) => setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
+                    />
+                  ) : null}
+                  <Textarea
+                    aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
+                    className="min-h-20 resize-none"
+                    data-testid="slei-composer-input"
+                    onChange={(event) => setDraft(event.currentTarget.value)}
+                    onCompositionEnd={() => setIsComposing(false)}
+                    onCompositionStart={() => setIsComposing(true)}
+                    onKeyDown={(event) => {
+                      const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
+                      const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
+                      if (!composing && mention && mentionTargets.length > 0) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setDraft(draft.slice(0, mention.start));
+                          return;
+                        }
+                      }
+                      const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
+                      if (action === "selectMention") {
+                        event.preventDefault();
+                        selectMention();
+                        return;
+                      }
+                      if (action === "submit") {
+                        event.preventDefault();
+                        void submitMessage();
+                      }
+                    }}
+                    placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
+                    value={draft}
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    {allowAsTask ? (
+                      <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                        <Checkbox checked={asTask} onCheckedChange={(checked) => setAsTask(checked === true)} />
+                        <span>{messages.chat.asTask}</span>
+                      </label>
+                    ) : <span />}
+                    <div className="flex items-center gap-2">
+                      <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
+                      <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
+                      <Button aria-label={messages.common.addImage} onClick={() => imageInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><ImageIcon aria-hidden="true" size={15} /></Button>
+                      <Button aria-label={messages.common.addAttachment} onClick={() => fileInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><Paperclip aria-hidden="true" size={15} /></Button>
+                      <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</Button>
+                    </div>
+                  </div>
+                </form>
+              </footer>
+            </div>
+          ) : effectiveChannelView === "tasks" ? (
+            <ChannelTaskList messages={messages} onTaskThreadOpen={onTaskThreadOpen} tasks={channelTasks} />
+          ) : (
+            <ChannelFileList files={channelFiles} messages={messages} />
+          )}
+        </div>
+        {showChannelMembersPanel ? (
+          <ChannelMemberPanel
+            availableMembers={availableChannelMembers}
+            channelId={activeChannel.id}
+            members={channelMembers}
+            messages={messages}
+            onAdd={onChannelMemberAdd}
+            onRemove={onChannelMemberRemove}
+          />
+        ) : null}
+      </section>
       <TaskThreadDrawer
         messages={messages}
         onClose={() => setSelectedTaskId(undefined)}
@@ -845,87 +964,6 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         open={Boolean(selectedTask)}
         task={selectedTask}
       />
-      {effectiveChannelView === "chat" ? (
-        <footer className="border-t bg-background/95">
-          {mention && mentionTargets.length > 0 ? (
-            <div className="px-4 pt-3">
-              <MentionPicker
-                members={mentionTargets}
-                messages={messages}
-                onSelect={selectMention}
-                optionRef={(index, node) => {
-                  mentionOptionRefs.current[index] = node;
-                }}
-                selectedIndex={selectedMentionIndex}
-              />
-            </div>
-          ) : null}
-          <form className="grid gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-            {attachments.length > 0 ? (
-              <AttachmentList
-                attachments={attachments}
-                onRemove={(attachmentId) => setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
-              />
-            ) : null}
-            <Textarea
-              aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-              className="min-h-20 resize-none"
-              data-testid="slei-composer-input"
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              onCompositionEnd={() => setIsComposing(false)}
-              onCompositionStart={() => setIsComposing(true)}
-              onKeyDown={(event) => {
-                const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
-                const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                if (!composing && mention && mentionTargets.length > 0) {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
-                    return;
-                  }
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
-                    return;
-                  }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setDraft(draft.slice(0, mention.start));
-                    return;
-                  }
-                }
-                const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
-                if (action === "selectMention") {
-                  event.preventDefault();
-                  selectMention();
-                  return;
-                }
-                if (action === "submit") {
-                  event.preventDefault();
-                  void submitMessage();
-                }
-              }}
-              placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-              value={draft}
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {allowAsTask ? (
-                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                  <Checkbox checked={asTask} onCheckedChange={(checked) => setAsTask(checked === true)} />
-                  <span>{messages.chat.asTask}</span>
-                </label>
-              ) : <span />}
-              <div className="flex items-center gap-2">
-                <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
-                <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                <Button aria-label={messages.common.addImage} onClick={() => imageInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><ImageIcon aria-hidden="true" size={15} /></Button>
-                <Button aria-label={messages.common.addAttachment} onClick={() => fileInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><Paperclip aria-hidden="true" size={15} /></Button>
-                <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><Send aria-hidden="true" size={15} />{messages.common.send}</Button>
-              </div>
-            </div>
-          </form>
-        </footer>
-      ) : null}
     </section>
   );
 }

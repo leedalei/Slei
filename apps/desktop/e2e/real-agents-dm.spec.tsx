@@ -501,7 +501,7 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html).toContain("Coda ｜");
-    expect(html).toContain("2026-05-29 09:00:00");
+    expect(html).toContain("2026-05-29 17:00:00");
     expect(html).not.toContain("@coda · 私聊");
   });
 
