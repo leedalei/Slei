@@ -546,6 +546,44 @@ async fn message_claim_api_returns_owner_for_losing_agents() {
 }
 
 #[tokio::test]
+async fn message_claim_api_records_claim_diagnostic_for_desktop_activity() {
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    let claim = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/claims/messages/msg_claimed_123",
+            json!({ "agentId": "agent_coda" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(claim.status(), StatusCode::OK);
+    let claim_json = response_json(claim).await;
+    assert_eq!(claim_json["claimed"], true);
+
+    let diagnostics = app
+        .oneshot(authed_empty_request(&token, "/v1/diagnostics"))
+        .await
+        .unwrap();
+    assert_eq!(diagnostics.status(), StatusCode::OK);
+    let diagnostics_json = response_json(diagnostics).await;
+    let events = diagnostics_json["recentEvents"].as_array().unwrap();
+    assert!(
+        events.iter().any(|event| {
+            event["eventType"] == "message_claimed"
+                && event["payload"].as_str().is_some_and(|payload| {
+                    payload.contains("message_id=msg_claimed_123")
+                        && payload.contains("agent_id=agent_coda")
+                })
+        }),
+        "missing message_claimed diagnostic event: {events:?}"
+    );
+}
+
+#[tokio::test]
 async fn task_claim_api_returns_owner_for_losing_agents() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));

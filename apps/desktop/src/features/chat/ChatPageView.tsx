@@ -470,6 +470,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
+  const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -524,6 +525,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
   const allowAsTask = !dmMember;
   const effectiveChannelView: ChannelEmbeddedView = dmMember ? "chat" : channelView;
+  const timelineScrollTarget = `${activeTargetId}:${currentSessionId ?? "default"}`;
   const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
   const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
   const detailSubtitle = dmMember
@@ -553,13 +555,21 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   useEffect(() => {
+    if (effectiveChannelView !== "chat" || focusedMessageId) return;
+    if (initialTimelineScrollTargetRef.current === timelineScrollTarget) return;
+    initialTimelineScrollTargetRef.current = timelineScrollTarget;
+    pendingScrollToBottomRef.current = true;
+  }, [timelineScrollTarget, effectiveChannelView, focusedMessageId]);
+
+  useEffect(() => {
     if (!pendingScrollToBottomRef.current) return;
+    if (timelineMessages.length === 0) return;
     pendingScrollToBottomRef.current = false;
     const frame = window.requestAnimationFrame(() => {
       timelineEndRef.current?.scrollIntoView({ block: "end" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [timelineMessages.length]);
+  }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
 
   async function submitMessage() {
     if (sendDisabled) return;

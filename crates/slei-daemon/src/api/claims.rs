@@ -73,7 +73,22 @@ pub async fn claim_message(
         .claim_message(&message_id, &payload.agent_id)
         .await
     {
-        Ok(response) => Json(response).into_response(),
+        Ok(response) => {
+            if response.claimed {
+                let _ = state
+                    .orchestration()
+                    .record_diagnostic_event(
+                        "message_claimed",
+                        &format!(
+                            "message_id={} agent_id={}",
+                            message_id,
+                            response.agent_id.as_deref().unwrap_or(&payload.agent_id)
+                        ),
+                    )
+                    .await;
+            }
+            Json(response).into_response()
+        }
         Err(error) => claim_error_response(error),
     }
 }

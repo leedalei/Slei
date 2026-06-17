@@ -710,6 +710,90 @@ async fn broadcast_start_failure_rolls_delivery_back_for_retry() {
 }
 
 #[tokio::test]
+async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostics() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-broadcast-completed",
+        )
+        .await
+        .unwrap();
+    state
+        .channels()
+        .add_agent_to_channel("dev", "agent_alice")
+        .await
+        .unwrap();
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "看一下这条广播".to_string(),
+            idempotency_key: "send-broadcast-completed".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let run_id = state
+        .claims()
+        .message_deliveries_for_message(&outcome.message_id)
+        .await
+        .unwrap()[0]
+        .run_id
+        .clone()
+        .unwrap();
+
+    state
+        .handle_worker_event(serde_json::json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "我不能直接回复，因为 CLI 不可用",
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(serde_json::json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+
+    let delivery = state
+        .claims()
+        .message_deliveries_for_message(&outcome.message_id)
+        .await
+        .unwrap()
+        .pop()
+        .unwrap();
+    assert_eq!(delivery.delivery_state, "completed");
+
+    let events = state
+        .orchestration()
+        .recent_diagnostic_events(20)
+        .await
+        .unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_type == "channel_agent_runtime.delivery_completed"
+            && event.payload.contains(&format!("run_id={run_id}"))
+            && event.payload.contains("marked=true")
+    }));
+    assert!(events.iter().any(|event| {
+        event.event_type == "channel_agent_runtime.broadcast_stdout_suppressed"
+            && event
+                .payload
+                .contains("visible_replies_require_slei_cli_claim_send")
+    }));
+}
+
+#[tokio::test]
 async fn pure_consultation_broadcasts_without_creating_task() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state

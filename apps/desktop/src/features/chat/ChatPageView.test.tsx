@@ -139,6 +139,15 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("scrollIntoView({ block: \"end\" })");
   });
 
+  it("defaults channel and conversation entries without stored scroll to the latest message", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("initialTimelineScrollTargetRef");
+    expect(source).toContain("const timelineScrollTarget =");
+    expect(source).toContain("pendingScrollToBottomRef.current = true");
+    expect(source).toContain("[timelineScrollTarget, effectiveChannelView, focusedMessageId]");
+  });
+
   it("keeps mention suggestions constrained to the composer width", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({

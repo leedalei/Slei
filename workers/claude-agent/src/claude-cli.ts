@@ -14,8 +14,9 @@ import {
   toSleiMcpToolName,
 } from "./slei-tools.js";
 
-export const CLAUDE_CLI_TOOLS = ["Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"] as const;
+export const CLAUDE_CLI_TOOLS = ["Bash", "Skill", "Read", "Grep", "Glob", "LS", "Write", "Edit", "MultiEdit"] as const;
 export const CLAUDE_ALLOWED_TOOLS = [
+  "Bash",
   "Skill",
   "Read",
   "Grep",
@@ -256,16 +257,24 @@ async function* runClaudeCodeCliAttempt(
 }
 
 export function buildSleiMcpConfig(input: SleiMcpConfigInput) {
+  const env: Record<string, string> = {
+    SLEI_RUN_ID: input.runId,
+    SLEI_AGENT_ID: input.agentId,
+  };
+  for (const name of ["SLEI_DAEMON_URL", "SLEI_DAEMON_TOKEN", "SLEI_DATA_ROOT", "PATH"]) {
+    const value = process.env[name];
+    if (value) {
+      env[name] = value;
+    }
+  }
+
   return {
     mcpServers: {
       slei: {
         type: "stdio",
         command: "node",
         args: [input.serverPath],
-        env: {
-          SLEI_RUN_ID: input.runId,
-          SLEI_AGENT_ID: input.agentId,
-        },
+        env,
       },
     },
   };

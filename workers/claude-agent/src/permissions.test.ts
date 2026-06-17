@@ -11,6 +11,7 @@ import {
 describe("Slei Claude CLI static permission profile", () => {
   it("allows read tools and Slei product MCP tools", () => {
     expect(CLAUDE_CLI_TOOLS).toEqual([
+      "Bash",
       "Skill",
       "Read",
       "Grep",
@@ -21,6 +22,7 @@ describe("Slei Claude CLI static permission profile", () => {
       "MultiEdit",
     ]);
     expect(CLAUDE_ALLOWED_TOOLS).toEqual([
+      "Bash",
       "Skill",
       "Read",
       "Grep",

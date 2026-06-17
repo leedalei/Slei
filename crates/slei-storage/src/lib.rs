@@ -454,6 +454,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn message_delivery_terminal_transition_is_guarded_by_run_id() {
+        let (url, _path) = sqlite_file_url("delivery-terminal");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .create_message_delivery("msg_1", "all", "agent_a")
+            .await
+            .unwrap();
+        assert!(repos
+            .mark_message_delivery_running("msg_1", "agent_a", "run_1")
+            .await
+            .unwrap());
+        assert!(!repos
+            .mark_message_delivery_completed_for_run("msg_1", "agent_a", "run_2")
+            .await
+            .unwrap());
+        assert!(repos
+            .mark_message_delivery_completed_for_run("msg_1", "agent_a", "run_1")
+            .await
+            .unwrap());
+
+        let delivery = repos
+            .message_deliveries_for_message("msg_1")
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        assert_eq!(delivery.delivery_state, "completed");
+        assert_eq!(delivery.run_id.as_deref(), Some("run_1"));
+    }
+
+    #[tokio::test]
     async fn read_channel_messages_returns_usable_sequence_cursors() {
         let (url, _path) = sqlite_file_url("message-read-cursors");
         let db = SleiDb::connect(&url).await.unwrap();

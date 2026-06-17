@@ -1497,6 +1497,48 @@ impl Repositories {
         Ok(result.rows_affected() == 1)
     }
 
+    pub async fn mark_message_delivery_completed_for_run(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        self.mark_message_delivery_terminal_for_run(message_id, agent_id, run_id, "completed")
+            .await
+    }
+
+    pub async fn mark_message_delivery_failed_for_run(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        self.mark_message_delivery_terminal_for_run(message_id, agent_id, run_id, "failed")
+            .await
+    }
+
+    async fn mark_message_delivery_terminal_for_run(
+        &self,
+        message_id: &str,
+        agent_id: &str,
+        run_id: &str,
+        delivery_state: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE message_deliveries
+             SET delivery_state = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE message_id = ? AND agent_id = ? AND run_id = ? AND delivery_state = 'running'",
+        )
+        .bind(delivery_state)
+        .bind(message_id)
+        .bind(agent_id)
+        .bind(run_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     pub async fn upsert_agent_status(&self, row: AgentStatusRow) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO agent_statuses(

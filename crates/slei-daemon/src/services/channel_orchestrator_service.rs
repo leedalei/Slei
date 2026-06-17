@@ -810,6 +810,47 @@ impl ChannelOrchestratorService {
                                 ),
                             )
                             .await;
+                    } else {
+                        let _ = self
+                            .orchestration
+                            .record_diagnostic_event(
+                                "channel_agent_runtime.broadcast_stdout_suppressed",
+                                &format!(
+                                    "run_id={} agent_id={} channel_id={} source_message_id={} output_len={} note=visible_replies_require_slei_cli_claim_send",
+                                    run_id,
+                                    record.agent_id,
+                                    record.channel_id,
+                                    record.source_message_id,
+                                    body.len()
+                                ),
+                            )
+                            .await;
+                    }
+                }
+                if record.suppress_visible_output && record.task_id.is_none() {
+                    if let Ok(marked) = self
+                        .claims
+                        .mark_message_delivery_completed_for_run(
+                            &record.source_message_id,
+                            &record.agent_id,
+                            run_id,
+                        )
+                        .await
+                    {
+                        let _ = self
+                            .orchestration
+                            .record_diagnostic_event(
+                                "channel_agent_runtime.delivery_completed",
+                                &format!(
+                                    "run_id={} agent_id={} channel_id={} source_message_id={} marked={}",
+                                    run_id,
+                                    record.agent_id,
+                                    record.channel_id,
+                                    record.source_message_id,
+                                    marked
+                                ),
+                            )
+                            .await;
                     }
                 }
                 let _ = self
@@ -825,8 +866,8 @@ impl ChannelOrchestratorService {
                             body.len(),
                             visible_output_created
                         ),
-                    )
-                    .await;
+                        )
+                        .await;
                 Ok(true)
             }
             Some("failed") => {
@@ -871,13 +912,44 @@ impl ChannelOrchestratorService {
                         )
                         .await;
                 }
+                if record.suppress_visible_output && record.task_id.is_none() {
+                    if let Ok(marked) = self
+                        .claims
+                        .mark_message_delivery_failed_for_run(
+                            &record.source_message_id,
+                            &record.agent_id,
+                            run_id,
+                        )
+                        .await
+                    {
+                        let _ = self
+                            .orchestration
+                            .record_diagnostic_event(
+                                "channel_agent_runtime.delivery_failed",
+                                &format!(
+                                    "run_id={} agent_id={} channel_id={} source_message_id={} marked={} message={}",
+                                    run_id,
+                                    record.agent_id,
+                                    record.channel_id,
+                                    record.source_message_id,
+                                    marked,
+                                    diagnostic_token(message)
+                                ),
+                            )
+                            .await;
+                    }
+                }
                 let _ = self
                     .orchestration
                     .record_diagnostic_event(
                         "channel_agent_runtime.failed",
                         &format!(
-                            "run_id={} agent_id={} channel_id={} source_message_id={}",
-                            run_id, record.agent_id, record.channel_id, record.source_message_id
+                            "run_id={} agent_id={} channel_id={} source_message_id={} message={}",
+                            run_id,
+                            record.agent_id,
+                            record.channel_id,
+                            record.source_message_id,
+                            diagnostic_token(message)
                         ),
                     )
                     .await;
@@ -2094,6 +2166,10 @@ fn reply_requires_work(body: &str) -> bool {
     ]
     .iter()
     .any(|marker| body.contains(marker))
+}
+
+fn diagnostic_token(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join("_")
 }
 
 fn enum_storage_str<T>(value: &T) -> String

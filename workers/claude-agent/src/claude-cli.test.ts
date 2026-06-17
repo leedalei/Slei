@@ -47,7 +47,7 @@ describe("Claude CLI runtime helpers", () => {
       "--mcp-config",
       "/tmp/slei-mcp.json",
       "--tools",
-      "Skill,Read,Grep,Glob,LS,Write,Edit,MultiEdit",
+      "Bash,Skill,Read,Grep,Glob,LS,Write,Edit,MultiEdit",
       "--allowedTools",
       expect.stringContaining("mcp__slei__slei_propose_interactive_card"),
       "--disallowedTools",
@@ -65,6 +65,7 @@ describe("Claude CLI runtime helpers", () => {
       "hello",
     ]);
     expect(args[args.indexOf("--allowedTools") + 1].split(",")).toEqual([
+      "Bash",
       "Skill",
       "Read",
       "Grep",
@@ -134,13 +135,43 @@ describe("Claude CLI runtime helpers", () => {
           type: "stdio",
           command: "node",
           args: ["/abs/dist/mcp-server.js"],
-          env: {
-            SLEI_RUN_ID: "run_1",
-            SLEI_AGENT_ID: "agent_guide",
+            env: {
+              SLEI_RUN_ID: "run_1",
+              SLEI_AGENT_ID: "agent_guide",
+              PATH: expect.any(String),
+            },
           },
         },
-      },
     });
+  });
+
+  it("forwards daemon CLI environment to the Slei MCP server", () => {
+    const originalUrl = process.env.SLEI_DAEMON_URL;
+    const originalToken = process.env.SLEI_DAEMON_TOKEN;
+    const originalPath = process.env.PATH;
+    process.env.SLEI_DAEMON_URL = "http://127.0.0.1:4319";
+    process.env.SLEI_DAEMON_TOKEN = "desktop-session-token";
+    process.env.PATH = "/repo/target/debug:/usr/bin";
+
+    try {
+      expect(
+        buildSleiMcpConfig({
+          runId: "run_1",
+          agentId: "agent_guide",
+          serverPath: "/abs/dist/mcp-server.js",
+        }).mcpServers.slei.env,
+      ).toEqual({
+        SLEI_RUN_ID: "run_1",
+        SLEI_AGENT_ID: "agent_guide",
+        SLEI_DAEMON_URL: "http://127.0.0.1:4319",
+        SLEI_DAEMON_TOKEN: "desktop-session-token",
+        PATH: "/repo/target/debug:/usr/bin",
+      });
+    } finally {
+      restoreEnv("SLEI_DAEMON_URL", originalUrl);
+      restoreEnv("SLEI_DAEMON_TOKEN", originalToken);
+      restoreEnv("PATH", originalPath);
+    }
   });
 
   it("normalizes Claude CLI stream-json into runtime events", () => {
@@ -582,4 +613,12 @@ type FakeSpawnScript = {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }

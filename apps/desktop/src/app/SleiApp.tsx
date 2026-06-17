@@ -457,7 +457,7 @@ function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
 }
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
-  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign") return [];
+  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
   const now = new Date().toISOString();
   return channelReplyTargetIds(outcome).flatMap((agentId) => {
     const member = members.find((candidate) => candidate.id === agentId);
@@ -528,6 +528,22 @@ export function markCoordinatorActivityFailedByDiagnostic(messages: SleiMessage[
     }
     changed = true;
     return { ...message, status: "failed" as const };
+  });
+  return changed ? nextMessages : messages;
+}
+
+export function keepOnlyClaimedAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+  if (event.eventType !== "message_claimed") return messages;
+  const messageId = diagnosticPayloadValue(event, "message_id");
+  const agentId = diagnosticPayloadValue(event, "agent_id");
+  if (!messageId || !agentId) return messages;
+  const claimedActivityId = `agent-activity-${messageId}-${agentId}`;
+  let changed = false;
+  const nextMessages = messages.filter((message) => {
+    const matchesSameSource = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
+    if (!matchesSameSource || message.id === claimedActivityId) return true;
+    changed = true;
+    return false;
   });
   return changed ? nextMessages : messages;
 }
@@ -812,6 +828,7 @@ export function SleiApp() {
         .sort((left, right) => left.sequence - right.sequence);
       for (const event of events) {
         lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
+        setData((current) => createEmptySleiData({ ...current, messages: keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event) }));
         if (diagnosticEventNeedsToast(event)) {
           setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
           showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");

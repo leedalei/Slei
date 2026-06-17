@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SleiAppFrame } from "../src/app/SleiApp";
+import { createChannelAgentActivityMessages, SleiAppFrame } from "../src/app/SleiApp";
 import { createDemoMembers, createSleiFixtures } from "../src/test/fixtures";
 
 function sendButtonMarkup(html: string) {
@@ -210,6 +210,37 @@ describe("Slei React desktop shell", () => {
     expect(sendButton).toContain('data-testid="slei-send-button"');
     expect(sendButton).not.toContain(' disabled=""');
     expect(html).toContain(">发送</button>");
+  });
+
+  it("renders broadcast-delivered agent activity feedback in the shell", () => {
+    const data = createSleiFixtures({ members: createDemoMembers() });
+    const messages = createChannelAgentActivityMessages(
+      {
+        messageId: "msg_broadcast_1",
+        action: "broadcast_delivered",
+        assigneeAgentIds: ["a1"],
+      },
+      "all",
+      data.members,
+    );
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        activeChannelId="all"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: true,
+          nodes: data.nodes,
+        }}
+        data={{ ...data, messages }}
+      />,
+    );
+
+    expect(html).toContain('data-slot="agent-activity"');
+    expect(html).toContain("Coda");
+    expect(html).toContain("正在思考");
   });
 
   it("renders all primary destinations from the single shell", () => {
