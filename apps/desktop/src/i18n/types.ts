@@ -120,11 +120,35 @@ export type DesktopMessages = {
   };
   search: {
     channel: string;
+    clearFilters: string;
+    categories: Record<"agent" | "channel" | "message", string>;
     description: string;
+    filters: {
+      title: string;
+      from: string;
+      channel: string;
+      timeRange: Record<"any" | "today" | "last7Days" | "last30Days", string>;
+      timeZone: string;
+    };
+    navigation: {
+      clearQuery: string;
+      nextResult: string;
+      openAgent: (name: string) => string;
+      openChannel: (name: string) => string;
+      openMessage: (id: string) => string;
+      previousResult: string;
+      results: string;
+      searchInput: string;
+    };
     noResultDescription: string;
     noResultTitle: string;
     openConversation: (id: string) => string;
+    placeholderDescription: string;
+    placeholderTitle: string;
     query: string;
+    resultCount: (count: number) => string;
+    sections: Record<"agents" | "channels" | "messages", string>;
+    submit: string;
     time: string;
     title: string;
     user: string;
