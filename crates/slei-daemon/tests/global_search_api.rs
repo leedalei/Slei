@@ -181,6 +181,65 @@ async fn global_search_query_timezone_overrides_saved_preference() {
 }
 
 #[tokio::test]
+async fn global_search_uses_saved_timezone_when_query_timezone_is_omitted() {
+    let token = AuthToken::from_static("search-token");
+    let root = make_temp_dir("global-search-saved-timezone");
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    state
+        .settings()
+        .set_time_zone("Pacific/Kiritimati".to_string())
+        .await
+        .unwrap();
+    let repos = state.orchestration().repos();
+    repos
+        .upsert_channel("dev-team", "dev-team", None, false, "Controlled")
+        .await
+        .unwrap();
+    let saved_today = Utc::now()
+        .with_timezone(&chrono_tz::Pacific::Kiritimati)
+        .date_naive();
+    let saved_start = local_midnight_utc(chrono_tz::Pacific::Kiritimati, saved_today);
+    let saved_end = saved_start + Duration::days(1) - Duration::seconds(1);
+    let default_today = Utc::now()
+        .with_timezone(&chrono_tz::Asia::Shanghai)
+        .date_naive();
+    let default_start = local_midnight_utc(chrono_tz::Asia::Shanghai, default_today);
+    let default_end = default_start + Duration::days(1) - Duration::seconds(1);
+    let created_at = if saved_start < default_start {
+        saved_start + Duration::hours(1)
+    } else {
+        saved_end - Duration::hours(1)
+    };
+    assert!(
+        created_at >= saved_start && created_at <= saved_end,
+        "fixture should be inside saved preference today"
+    );
+    assert!(
+        created_at < default_start || created_at > default_end,
+        "fixture should be outside default timezone today"
+    );
+    insert_channel_message_at(
+        &repos,
+        &pool,
+        "msg_saved_timezone",
+        "dev-team",
+        "needle saved timezone",
+        created_at,
+    )
+    .await;
+    let app = build_router(state);
+
+    let response = get_json(&app, &token, "/v1/search/global?query=needle&timeRange=today").await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let ids = message_ids(&body);
+    assert_eq!(ids, vec!["msg_saved_timezone"]);
+}
+
+#[tokio::test]
 async fn global_search_clamps_result_limits() {
     let token = AuthToken::from_static("search-token");
     let root = make_temp_dir("global-search-limits");
