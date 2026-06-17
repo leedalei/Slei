@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use slei_storage::repositories::{Repositories, UserPreferencesRow};
+use slei_storage::repositories::{Repositories, UserPreferencesRow, UserProfileRow};
 use tokio::sync::Mutex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -86,19 +86,64 @@ impl SettingsService {
     }
 
     pub async fn create_profile(&self, draft: ProfileDraft) -> Result<UserProfile, SettingsError> {
+        let _gate = self.mutation_gate.lock().await;
         validate_handle(&draft.handle)?;
-        let mut state = self.inner.lock().await;
-        if state.profile.is_some() {
+        let nickname = validate_display_name(draft.nickname)?;
+        let avatar_url = validate_avatar(draft.avatar_url)?;
+        if let Some(repos) = &self.repos {
+            match repos.user_profile().await {
+                Ok(Some(_)) => return Err(SettingsError::ProfileAlreadyExists),
+                Ok(None) => {}
+                Err(error) => return Err(settings_storage_error(error)),
+            }
+        } else if self.inner.lock().await.profile.is_some() {
             return Err(SettingsError::ProfileAlreadyExists);
         }
 
         let profile = UserProfile {
-            nickname: draft.nickname,
+            nickname,
             handle: draft.handle,
             bio: draft.bio,
-            avatar_url: draft.avatar_url,
+            avatar_url,
         };
-        state.profile = Some(profile.clone());
+        self.persist_profile(&profile).await?;
+        self.inner.lock().await.profile = Some(profile.clone());
+        Ok(profile)
+    }
+
+    pub async fn profile(&self) -> Result<Option<UserProfile>, SettingsError> {
+        if let Some(repos) = &self.repos {
+            return match repos.user_profile().await {
+                Ok(Some(row)) => {
+                    let profile = profile_from_row(row);
+                    self.inner.lock().await.profile = Some(profile.clone());
+                    Ok(Some(profile))
+                }
+                Ok(None) => {
+                    self.inner.lock().await.profile = None;
+                    Ok(None)
+                }
+                Err(error) => Err(settings_storage_error(error)),
+            };
+        }
+        Ok(self.inner.lock().await.profile.clone())
+    }
+
+    pub async fn update_profile(
+        &self,
+        nickname: Option<String>,
+        avatar: Option<String>,
+    ) -> Result<UserProfile, SettingsError> {
+        let _gate = self.mutation_gate.lock().await;
+        let mut profile = self.profile_for_update().await?;
+        if let Some(nickname) = nickname {
+            profile.nickname = validate_display_name(nickname)?;
+        }
+        if let Some(avatar) = avatar {
+            profile.avatar_url = validate_avatar(Some(avatar))?;
+        }
+        self.persist_profile(&profile).await?;
+        self.inner.lock().await.profile = Some(profile.clone());
         Ok(profile)
     }
 
@@ -181,6 +226,33 @@ impl SettingsService {
         Ok(self.inner.lock().await.preferences.clone())
     }
 
+    async fn profile_for_update(&self) -> Result<UserProfile, SettingsError> {
+        if let Some(repos) = &self.repos {
+            match repos.user_profile().await {
+                Ok(Some(row)) => return Ok(profile_from_row(row)),
+                Ok(None) => return Err(SettingsError::ProfileUnavailable),
+                Err(error) => return Err(settings_storage_error(error)),
+            }
+        }
+        self.inner
+            .lock()
+            .await
+            .profile
+            .clone()
+            .ok_or(SettingsError::ProfileUnavailable)
+    }
+
+    async fn persist_profile(&self, profile: &UserProfile) -> Result<(), SettingsError> {
+        let Some(repos) = &self.repos else {
+            return Ok(());
+        };
+        repos
+            .upsert_user_profile(profile_to_row(profile))
+            .await
+            .map_err(settings_storage_error)?;
+        Ok(())
+    }
+
     async fn persist_preferences(
         &self,
         preferences: &UserPreferences,
@@ -200,10 +272,14 @@ impl SettingsService {
 pub enum SettingsError {
     #[error("profile already exists")]
     ProfileAlreadyExists,
+    #[error("profile unavailable")]
+    ProfileUnavailable,
     #[error("handle is immutable after onboarding")]
     HandleImmutable,
     #[error("invalid handle")]
     InvalidHandle,
+    #[error("invalid profile field: {0}")]
+    InvalidProfileField(&'static str),
     #[error("invalid time zone")]
     InvalidTimeZone,
     #[error("invalid appearance")]
@@ -223,6 +299,25 @@ fn validate_handle(handle: &str) -> Result<(), SettingsError> {
     } else {
         Err(SettingsError::InvalidHandle)
     }
+}
+
+fn validate_display_name(display_name: String) -> Result<String, SettingsError> {
+    let trimmed = display_name.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 80 {
+        return Err(SettingsError::InvalidProfileField("displayName"));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn validate_avatar(avatar: Option<String>) -> Result<Option<String>, SettingsError> {
+    let Some(avatar) = avatar else {
+        return Ok(None);
+    };
+    let trimmed = avatar.trim();
+    if !is_supported_avatar(trimmed) {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    }
+    Ok(Some(trimmed.to_string()))
 }
 
 impl Default for UserPreferences {
@@ -301,6 +396,30 @@ fn is_supported_time_zone(time_zone: &str) -> bool {
         && time_zone.chars().all(|character| {
             character.is_ascii_alphanumeric() || matches!(character, '/' | '_' | '-' | '+')
         })
+}
+
+fn is_supported_avatar(avatar: &str) -> bool {
+    matches!(
+        avatar,
+        "pixel-sun" | "pixel-moon" | "pixel-cube" | "pixel-spark"
+    )
+}
+
+fn profile_to_row(profile: &UserProfile) -> UserProfileRow {
+    UserProfileRow {
+        display_name: profile.nickname.clone(),
+        handle: profile.handle.clone(),
+        avatar: profile.avatar_url.clone().unwrap_or_default(),
+    }
+}
+
+fn profile_from_row(row: UserProfileRow) -> UserProfile {
+    UserProfile {
+        nickname: row.display_name,
+        handle: row.handle,
+        bio: None,
+        avatar_url: (!row.avatar.is_empty()).then_some(row.avatar),
+    }
 }
 
 fn preferences_to_row(preferences: &UserPreferences) -> UserPreferencesRow {

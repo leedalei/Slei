@@ -136,6 +136,401 @@ async fn settings_preferences_api_requires_auth_and_round_trips_locale_notificat
 }
 
 #[tokio::test]
+async fn settings_profile_create_survives_app_state_reload_without_update() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-profile-reload-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token, root.clone()).await;
+    let profile = reloaded.settings().profile().await.unwrap().unwrap();
+    assert_eq!(profile.nickname, "Lei");
+    assert_eq!(profile.handle, "lei");
+    assert_eq!(profile.avatar_url.as_deref(), Some("pixel-sun"));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_read_does_not_return_stale_memory_after_repository_clear() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-profile-clear-token");
+    let state = AppState::for_tests_with_agent_root_async(token, root.clone()).await;
+
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+    assert!(state.settings().profile().await.unwrap().is_some());
+
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::query("DELETE FROM user_profiles")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    assert!(state.settings().profile().await.unwrap().is_none());
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_read_surfaces_repository_errors() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-profile-storage-error-token");
+    let state = AppState::for_tests_with_agent_root_async(token, root.clone()).await;
+
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::query("DROP TABLE user_profiles")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let error = state.settings().profile().await.unwrap_err();
+    assert!(error.to_string().contains("settings storage error"));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_api_requires_auth_round_trips_and_rejects_handle_patch() {
+    let token = AuthToken::from_static("settings-profile-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let unauthorized = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+
+    let unauthorized_patch = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/profile")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"displayName":"Lei Lee"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(unauthorized_patch.status(), StatusCode::UNAUTHORIZED);
+
+    let updated = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"displayName":"Lei Lee","avatar":"pixel-moon"}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), StatusCode::OK);
+
+    let body = to_bytes(updated.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["profile"]["displayName"], "Lei Lee");
+    assert_eq!(json["profile"]["avatar"], "pixel-moon");
+    assert_eq!(json["profile"]["handle"], "lei");
+
+    let fetched = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), StatusCode::OK);
+    let body = to_bytes(fetched.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["profile"]["displayName"], "Lei Lee");
+    assert_eq!(json["profile"]["avatar"], "pixel-moon");
+    assert_eq!(json["profile"]["handle"], "lei");
+
+    let handle_patch = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"handle":"other"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(handle_patch.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn settings_profile_api_returns_null_and_rejects_patch_when_profile_missing() {
+    let token = AuthToken::from_static("settings-profile-missing-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    let fetched = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), StatusCode::OK);
+    let body = to_bytes(fetched.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["profile"].is_null());
+
+    let patched = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"displayName":"Lei"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), StatusCode::NOT_FOUND);
+    let body = to_bytes(patched.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["error"]
+        .as_str()
+        .unwrap()
+        .contains("profile unavailable"));
+
+    let fetched_after_patch = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fetched_after_patch.status(), StatusCode::OK);
+    let body = to_bytes(fetched_after_patch.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["profile"].is_null());
+}
+
+#[tokio::test]
+async fn settings_profile_api_get_returns_error_on_profile_storage_failure() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-profile-api-storage-error-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::query("DROP TABLE user_profiles")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let app = build_router(state);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["error"]
+        .as_str()
+        .unwrap()
+        .contains("settings storage error"));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_api_patch_returns_error_on_profile_storage_failure() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("settings-profile-api-patch-storage-error-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::query("DROP TABLE user_profiles")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let app = build_router(state);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"displayName":"Lei Lee"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["error"]
+        .as_str()
+        .unwrap()
+        .contains("settings storage error"));
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_rejects_invalid_display_name_and_avatar_field_errors() {
+    let service = SettingsService::for_tests();
+    service
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+
+    let display_name_error = service
+        .update_profile(Some("   ".to_string()), None)
+        .await
+        .unwrap_err();
+    assert!(display_name_error.to_string().contains("displayName"));
+
+    let avatar_error = service
+        .update_profile(None, Some("not-a-preset".to_string()))
+        .await
+        .unwrap_err();
+    assert!(avatar_error.to_string().contains("avatar"));
+}
+
+#[tokio::test]
+async fn settings_profile_create_rejects_invalid_display_name_and_avatar_field_errors() {
+    let service = SettingsService::for_tests();
+
+    let display_name_error = service
+        .create_profile(ProfileDraft {
+            nickname: "   ".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap_err();
+    assert!(display_name_error.to_string().contains("displayName"));
+
+    let avatar_error = service
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("not-a-preset".to_string()),
+        })
+        .await
+        .unwrap_err();
+    assert!(avatar_error.to_string().contains("avatar"));
+}
+
+#[tokio::test]
 async fn notification_preferences_gate_notification_service_categories() {
     let settings = SettingsService::for_tests();
     let notifications = NotificationService::for_tests_with_settings(settings.clone());
