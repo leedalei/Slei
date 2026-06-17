@@ -779,8 +779,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     const timestamp = messageTimestampLabel(message);
                     return (
                       <div
-                        className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                        className={cn("pt-3", virtualItem && "absolute left-0 top-0 w-full px-4")}
                         data-index={virtualItem?.index}
+                        data-slot="timeline-message-frame"
                         key={key}
                         ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                         style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}

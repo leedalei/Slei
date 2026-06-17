@@ -632,6 +632,44 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.tasks.commentThread);
   });
 
+  it("adds breathing room above normal timeline message cards", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-spaced",
+          author: "Yeal",
+          handle: "@yeal",
+          role: "agent",
+          time: "14:20",
+          sentAt: "2026-06-11 14:20:53",
+          body: "已准备好，可以帮助你创建成员、频道并了解 Slei 的使用方式。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const frameStart = html.indexOf('data-slot="timeline-message-frame"');
+    const articleStart = html.indexOf('data-message-id="msg-spaced"', frameStart);
+    const frameOpenStart = html.lastIndexOf("<div", frameStart);
+    const frameHtml = html.slice(frameOpenStart, articleStart);
+
+    expect(frameStart).toBeGreaterThanOrEqual(0);
+    expect(frameOpenStart).toBeGreaterThanOrEqual(0);
+    expect(articleStart).toBeGreaterThan(frameStart);
+    expect(frameHtml).toContain("pt-3");
+  });
+
   it("keeps task root entries visually aligned with normal messages without a border", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
 

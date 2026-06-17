@@ -732,6 +732,15 @@ describe("createChannelAgentReplyMessage", () => {
     expect(source).toContain("input.onChannelCreateFailure?.");
   });
 
+  it("keeps the primary navigation icon-only with accessible labels", () => {
+    const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("aria-label={messages.shell.nav[item.id]}");
+    expect(source).toContain("title={messages.shell.nav[item.id]}");
+    expect(source).toContain("size={24}");
+    expect(source).not.toContain("<span className=\"text-[11px] leading-none\">{messages.shell.nav[item.id]}</span>");
+  });
+
   it("surfaces global and daemon diagnostic failures through the app toast", () => {
     const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
 

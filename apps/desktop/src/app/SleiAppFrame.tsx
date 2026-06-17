@@ -242,7 +242,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             aria-label={messages.shell.nav[item.id]}
             aria-current={input.activeView === item.id ? "page" : undefined}
             className={cn(
-              "grid h-16 w-16 grid-rows-[1fr_auto] justify-items-center gap-1 rounded-lg px-1 py-2 text-[11px] leading-none",
+              "grid h-16 w-16 place-items-center rounded-lg p-0",
               input.activeView === item.id && "shadow-sm",
             )}
             data-nav-icon={item.id}
@@ -253,8 +253,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             type="button"
             variant={input.activeView === item.id ? "default" : "ghost"}
           >
-            <item.icon aria-hidden="true" size={20} strokeWidth={2.8} />
-            <span className="text-[11px] leading-none">{messages.shell.nav[item.id]}</span>
+            <item.icon aria-hidden="true" size={24} strokeWidth={2.8} />
           </Button>
         ))}
       </nav>
