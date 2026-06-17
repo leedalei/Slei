@@ -39,6 +39,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/messages/read", get(api::messages::read_messages))
         .route("/v1/messages/search", get(api::messages::search_messages))
         .route("/v1/messages/send", post(api::messages::send_agent_message))
+        .route("/v1/search/global", get(api::search::global))
         .route(
             "/v1/claims/messages/{message_id}",
             post(api::claims::claim_message),
