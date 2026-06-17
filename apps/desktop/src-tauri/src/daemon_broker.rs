@@ -1427,7 +1427,7 @@ impl DaemonBroker {
             Err(ChannelError::DaemonRequest(error))
                 if channel_id == "all" && is_daemon_unavailable_error(&error) =>
             {
-                if self.offline_fallback == OfflineFallback::Empty {
+                if self.offline_fallback == OfflineFallback::Empty || !request.as_task {
                     return Err(ChannelError::DaemonRequest(error));
                 }
                 self.record_local_diagnostic(
