@@ -790,6 +790,7 @@ export function SleiApp() {
   const pendingProfileFieldRef = useRef<typeof pendingProfileField>(undefined);
   const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastDiagnosticToastSequenceRef = useRef(0);
+  const messageNavigationSequenceRef = useRef(0);
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
 
@@ -803,12 +804,16 @@ export function SleiApp() {
     );
   }
 
-  async function refreshChannelMessagesIntoState(channelId: string, members: SleiMember[] = data.members, sessionIdOverride?: string) {
+  async function loadChannelMessagesForState(channelId: string, members: SleiMember[] = data.members, sessionIdOverride?: string) {
     const sessionId = sessionIdOverride ?? data.channels.find((channel) => channel.id === channelId)?.activeSessionId;
     const receipt = await bridge.listChannelMessages(channelId, sessionId);
-    const channelMessages = receipt.messages
+    return receipt.messages
       .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
+  }
+
+  async function refreshChannelMessagesIntoState(channelId: string, members: SleiMember[] = data.members, sessionIdOverride?: string) {
+    const channelMessages = await loadChannelMessagesForState(channelId, members, sessionIdOverride);
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -817,9 +822,13 @@ export function SleiApp() {
     );
   }
 
-  async function refreshConversationMessagesIntoState(conversationId: string) {
+  async function loadConversationMessagesForState(conversationId: string) {
     const receipt = await bridge.listConversationMessages(conversationId);
-    const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
+    return receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
+  }
+
+  async function refreshConversationMessagesIntoState(conversationId: string) {
+    const conversationMessages = await loadConversationMessagesForState(conversationId);
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -1764,63 +1773,100 @@ export function SleiApp() {
   }
 
   function handleAgentSearchResultSelect(agentId: string) {
+    beginMessageNavigationSelection();
     setActiveMemberId(agentId);
     navigateToView("members");
   }
 
   function handleChannelSearchResultSelect(channelId: string) {
+    beginMessageNavigationSelection();
     setActiveChannelId(channelId);
     setActiveConversationId(undefined);
     setActiveSessionId(undefined);
     navigateToView("chat");
   }
 
-  function focusMessageFromNavigation(messageId: string) {
+  function beginMessageNavigationSelection() {
+    messageNavigationSequenceRef.current += 1;
+    return messageNavigationSequenceRef.current;
+  }
+
+  function isCurrentMessageNavigationSelection(sequence: number) {
+    return messageNavigationSequenceRef.current === sequence;
+  }
+
+  function showMessageNavigationFailure(selectionSequence: number, error: unknown, context: Record<string, unknown>) {
+    if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
+    logAppEvent(bridge, "message-navigation", "selection-failed", { ...context, error: formatLogError(error) });
+    showAppToast(messages.search.errorDescription, "error");
+  }
+
+  function focusMessageFromNavigation(messageId: string, selectionSequence: number) {
     setFocusedMessageId(undefined);
-    window.setTimeout(() => setFocusedMessageId(messageId), 0);
+    window.setTimeout(() => {
+      if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
+      setFocusedMessageId(messageId);
+    }, 0);
   }
 
   async function handleMessageSearchResultSelect(result: GlobalMessageSearchResult) {
+    const selectionSequence = beginMessageNavigationSelection();
     const targetSessionId = result.sessionId ?? undefined;
-    if (result.sourceKind === "dm" || result.conversationId?.startsWith("dm:")) {
-      const conversationId = result.conversationId;
-      if (conversationId) {
-        const conversation = data.conversations.find((candidate) => candidate.id === conversationId);
-        if (targetSessionId) {
-          const receipt = await bridge.activateConversationSession(conversationId, targetSessionId);
+    try {
+      if (result.sourceKind === "dm" || result.conversationId?.startsWith("dm:")) {
+        const conversationId = result.conversationId;
+        if (conversationId) {
+          const conversation = data.conversations.find((candidate) => candidate.id === conversationId);
+          const receipt = targetSessionId
+            ? await bridge.activateConversationSession(conversationId, targetSessionId)
+            : undefined;
+          const conversationMessages = await loadConversationMessagesForState(conversationId);
+          if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
           setData((current) =>
             createEmptySleiData({
               ...current,
-              conversations: upsertConversation(current.conversations, receipt.conversation),
-              conversationSessions: upsertConversationSession(current.conversationSessions, receipt.session),
+              conversations: receipt ? upsertConversation(current.conversations, receipt.conversation) : current.conversations,
+              conversationSessions: receipt ? upsertConversationSession(current.conversationSessions, receipt.session) : current.conversationSessions,
+              messages: replaceConversationMessages(current.messages, conversationMessages, [conversationId]),
             }),
           );
+          setActiveConversationId(conversationId);
+          setActiveSessionId(targetSessionId ?? conversation?.activeSessionId);
         }
-        await refreshConversationMessagesIntoState(conversationId);
-        setActiveConversationId(conversationId);
-        setActiveSessionId(targetSessionId ?? conversation?.activeSessionId);
-      }
-      setActiveChannelId("all");
-    } else {
-      const channelId = result.channelId ?? "all";
-      if (targetSessionId) {
-        const receipt = await bridge.activateChannelSession(channelId, targetSessionId);
+        setActiveChannelId("all");
+      } else {
+        const channelId = result.channelId ?? "all";
+        const receipt = targetSessionId
+          ? await bridge.activateChannelSession(channelId, targetSessionId)
+          : undefined;
+        const channelMessages = await loadChannelMessagesForState(channelId, data.members, targetSessionId);
+        if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
         setData((current) =>
           createEmptySleiData({
             ...current,
-            channels: current.channels.map((channel) => (channel.id === receipt.channel.id ? channelFromView(receipt.channel, messages) : channel)),
-            channelSessions: upsertChannelSession(current.channelSessions, receipt.session),
+            channels: receipt
+              ? current.channels.map((channel) => (channel.id === receipt.channel.id ? channelFromView(receipt.channel, messages) : channel))
+              : current.channels,
+            channelSessions: receipt ? upsertChannelSession(current.channelSessions, receipt.session) : current.channelSessions,
+            messages: replaceChannelMessages(current.messages, channelMessages, [channelId]),
           }),
         );
+        setActiveChannelId(channelId);
+        setActiveConversationId(undefined);
+        setActiveSessionId(targetSessionId);
       }
-      await refreshChannelMessagesIntoState(channelId, data.members, targetSessionId);
-      setActiveChannelId(channelId);
-      setActiveConversationId(undefined);
-      setActiveSessionId(targetSessionId);
+      setSessionDrawerOpen(false);
+      focusMessageFromNavigation(result.messageId, selectionSequence);
+      navigateToView("chat");
+    } catch (error) {
+      showMessageNavigationFailure(selectionSequence, error, {
+        source: "search",
+        messageId: result.messageId,
+        channelId: result.channelId,
+        conversationId: result.conversationId,
+        sessionId: targetSessionId,
+      });
     }
-    setSessionDrawerOpen(false);
-    focusMessageFromNavigation(result.messageId);
-    navigateToView("chat");
   }
 
   function handleSearchResultSelect(channelId: string) {
@@ -1851,42 +1897,59 @@ export function SleiApp() {
   }
 
   async function handleSavedMessageSelect(savedMessage: SavedMessageView) {
+    const selectionSequence = beginMessageNavigationSelection();
     const targetSessionId = savedMessage.sessionId ?? undefined;
-    if (savedMessage.sourceKind === "dm" || savedMessage.sourceId.startsWith("dm:")) {
-      const conversation = data.conversations.find((candidate) => candidate.id === savedMessage.sourceId);
-      if (targetSessionId) {
-        const receipt = await bridge.activateConversationSession(savedMessage.sourceId, targetSessionId);
+    try {
+      if (savedMessage.sourceKind === "dm" || savedMessage.sourceId.startsWith("dm:")) {
+        const conversation = data.conversations.find((candidate) => candidate.id === savedMessage.sourceId);
+        const receipt = targetSessionId
+          ? await bridge.activateConversationSession(savedMessage.sourceId, targetSessionId)
+          : undefined;
+        const conversationMessages = await loadConversationMessagesForState(savedMessage.sourceId);
+        if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
         setData((current) =>
           createEmptySleiData({
             ...current,
-            conversations: upsertConversation(current.conversations, receipt.conversation),
-            conversationSessions: upsertConversationSession(current.conversationSessions, receipt.session),
+            conversations: receipt ? upsertConversation(current.conversations, receipt.conversation) : current.conversations,
+            conversationSessions: receipt ? upsertConversationSession(current.conversationSessions, receipt.session) : current.conversationSessions,
+            messages: replaceConversationMessages(current.messages, conversationMessages, [savedMessage.sourceId]),
           }),
         );
-      }
-      await refreshConversationMessagesIntoState(savedMessage.sourceId);
-      setActiveConversationId(savedMessage.sourceId);
-      setActiveSessionId(targetSessionId ?? conversation?.activeSessionId);
-      setActiveChannelId("all");
-    } else {
-      if (targetSessionId) {
-        const receipt = await bridge.activateChannelSession(savedMessage.sourceId, targetSessionId);
+        setActiveConversationId(savedMessage.sourceId);
+        setActiveSessionId(targetSessionId ?? conversation?.activeSessionId);
+        setActiveChannelId("all");
+      } else {
+        const receipt = targetSessionId
+          ? await bridge.activateChannelSession(savedMessage.sourceId, targetSessionId)
+          : undefined;
+        const channelMessages = await loadChannelMessagesForState(savedMessage.sourceId, data.members, targetSessionId);
+        if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
         setData((current) =>
           createEmptySleiData({
             ...current,
-            channels: current.channels.map((channel) => (channel.id === receipt.channel.id ? channelFromView(receipt.channel, messages) : channel)),
-            channelSessions: upsertChannelSession(current.channelSessions, receipt.session),
+            channels: receipt
+              ? current.channels.map((channel) => (channel.id === receipt.channel.id ? channelFromView(receipt.channel, messages) : channel))
+              : current.channels,
+            channelSessions: receipt ? upsertChannelSession(current.channelSessions, receipt.session) : current.channelSessions,
+            messages: replaceChannelMessages(current.messages, channelMessages, [savedMessage.sourceId]),
           }),
         );
+        setActiveChannelId(savedMessage.sourceId);
+        setActiveConversationId(undefined);
+        setActiveSessionId(targetSessionId);
       }
-      await refreshChannelMessagesIntoState(savedMessage.sourceId, data.members, targetSessionId);
-      setActiveChannelId(savedMessage.sourceId);
-      setActiveConversationId(undefined);
-      setActiveSessionId(targetSessionId);
+      setSessionDrawerOpen(false);
+      focusMessageFromNavigation(savedMessage.messageId, selectionSequence);
+      navigateToView("chat");
+    } catch (error) {
+      showMessageNavigationFailure(selectionSequence, error, {
+        source: "saved-message",
+        messageId: savedMessage.messageId,
+        sourceId: savedMessage.sourceId,
+        sourceKind: savedMessage.sourceKind,
+        sessionId: targetSessionId,
+      });
     }
-    setSessionDrawerOpen(false);
-    focusMessageFromNavigation(savedMessage.messageId);
-    navigateToView("chat");
   }
 
   async function handleLocaleChange(nextLocale: AppLocale) {
