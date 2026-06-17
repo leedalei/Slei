@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SleiMember } from "./types";
-import { isInternalCoordinatorMember, localeFromSystemLanguages, mentionSuggestions, shouldRefreshChannelMessages, timeZoneFromSystemValue } from "./model";
+import { formatLocalRecordDateTime, formatMessageDateTime, formatMessageTime, isInternalCoordinatorMember, localeFromSystemLanguages, mentionSuggestions, shouldRefreshChannelMessages, timeZoneFromSystemValue } from "./model";
 
 function agent(overrides: Partial<SleiMember> = {}): SleiMember {
   return {
@@ -116,5 +116,13 @@ describe("system preference defaults", () => {
     expect(timeZoneFromSystemValue("Asia/Shanghai")).toBe("Asia/Shanghai");
     expect(timeZoneFromSystemValue("UTC")).toBe("Asia/Shanghai");
     expect(timeZoneFromSystemValue(undefined)).toBe("Asia/Shanghai");
+  });
+});
+
+describe("message timestamp formatting", () => {
+  it("renders timezone-less daemon UTC timestamps in the target device timezone", () => {
+    expect(formatMessageTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("14:57");
+    expect(formatMessageDateTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("06-17 14:57");
+    expect(formatLocalRecordDateTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("2026-06-17 14:57:00");
   });
 });

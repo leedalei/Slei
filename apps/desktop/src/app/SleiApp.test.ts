@@ -30,6 +30,22 @@ import { defaultProfile } from "./model";
 import type { ChannelMessageView, ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
 import type { SleiMember, SleiMessage } from "./types";
 
+function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt: string } {
+  const date = new Date(`${utcValue.replace(" ", "T")}Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const valueFor = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+  return {
+    time: `${valueFor("hour")}:${valueFor("minute")}`,
+    sentAt: `${valueFor("month")}-${valueFor("day")} ${valueFor("hour")}:${valueFor("minute")}`,
+  };
+}
+
 describe("createChannelAgentReplyMessage", () => {
   it("rolls back optimistic preference changes when persistence fails", async () => {
     const applied: string[] = [];
@@ -835,6 +851,7 @@ describe("createChannelAgentReplyMessage", () => {
   });
 
   it("maps channel message created time for chat message headers", () => {
+    const expected = expectedLocalMessageDateTime("2026-06-16 09:08:07");
     const message: ChannelMessageView = {
       id: "channel_msg_1",
       channelId: "all",
@@ -852,8 +869,8 @@ describe("createChannelAgentReplyMessage", () => {
       createDesktopMessages("zh-CN"),
     );
 
-    expect(converted?.time).toBe("09:08");
-    expect(converted?.sentAt).toBe("06-16 09:08");
+    expect(converted?.time).toBe(expected.time);
+    expect(converted?.sentAt).toBe(expected.sentAt);
   });
 
   it("renders local human messages with a presentation fallback when profile is unavailable", () => {

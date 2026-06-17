@@ -345,6 +345,8 @@ function dateFromMessageTimeValue(value: string): Date | null {
           ? numeric
           : numeric * 1_000n;
     date = new Date(Number(milliseconds));
+  } else if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?$/.test(raw)) {
+    date = new Date(`${raw.replace(" ", "T")}Z`);
   } else {
     date = new Date(raw);
   }
@@ -356,21 +358,65 @@ function twoDigit(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
-export function formatMessageDateTime(value: string): string {
+function datePartsInTimeZone(date: Date, timeZone?: string): { year: string; month: string; day: string; hour: string; minute: string; second: string } {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const valueFor = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+    return {
+      year: valueFor("year"),
+      month: valueFor("month"),
+      day: valueFor("day"),
+      hour: valueFor("hour"),
+      minute: valueFor("minute"),
+      second: valueFor("second"),
+    };
+  } catch {
+    return {
+      year: date.getFullYear().toString(),
+      month: twoDigit(date.getMonth() + 1),
+      day: twoDigit(date.getDate()),
+      hour: twoDigit(date.getHours()),
+      minute: twoDigit(date.getMinutes()),
+      second: twoDigit(date.getSeconds()),
+    };
+  }
+}
+
+export function formatMessageDateTime(value: string, timeZone?: string): string {
   const raw = value.trim();
   const date = dateFromMessageTimeValue(raw);
   if (!date) return raw;
+  const parts = datePartsInTimeZone(date, timeZone);
   return [
-    `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())}`,
-    `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`,
+    `${parts.month}-${parts.day}`,
+    `${parts.hour}:${parts.minute}`,
   ].join(" ");
 }
 
-export function formatMessageTime(value: string): string {
+export function formatMessageTime(value: string, timeZone?: string): string {
   const raw = value.trim();
   const date = dateFromMessageTimeValue(raw);
   if (!date) return raw;
-  return `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
+  const parts = datePartsInTimeZone(date, timeZone);
+  return `${parts.hour}:${parts.minute}`;
+}
+
+export function formatLocalRecordDateTime(value: string, timeZone?: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  const date = dateFromMessageTimeValue(raw);
+  if (!date) return raw;
+  const parts = datePartsInTimeZone(date, timeZone);
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 export function filterConversationMessages(messages: SleiMessage[], filters: ChatSearchFilters): SleiMessage[] {

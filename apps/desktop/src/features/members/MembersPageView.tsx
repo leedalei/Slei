@@ -27,7 +27,7 @@ import type {
   DesktopNodeView,
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
-import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
+import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -788,7 +788,5 @@ function pathTargetForWorkspaceFile(file: AgentWorkspaceFileReceipt | undefined,
 }
 
 function formatActivityLogTime(createdAt: string) {
-  const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return createdAt;
-  return date.toLocaleString();
+  return formatLocalRecordDateTime(createdAt);
 }

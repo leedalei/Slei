@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, channelReadinessLabel, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -284,26 +284,7 @@ async function copyMessageBody(body: string) {
 }
 
 function formatConversationDateTime(value: string): string {
-  const raw = value.trim();
-  if (!raw) return "";
-  const direct = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
-  if (direct) return `${direct[1]} ${direct[2]}`;
-
-  let date: Date;
-  if (/^\d+$/.test(raw)) {
-    const numeric = BigInt(raw);
-    const milliseconds =
-      raw.length >= 16
-        ? numeric / 1_000_000n
-        : raw.length >= 13
-          ? numeric
-          : numeric * 1_000n;
-    date = new Date(Number(milliseconds));
-  } else {
-    date = new Date(raw);
-  }
-  if (Number.isNaN(date.getTime())) return raw;
-  return date.toISOString().slice(0, 19).replace("T", " ");
+  return formatLocalRecordDateTime(value);
 }
 
 function sessionCreatedTime(session: { createdAt: string }) {
