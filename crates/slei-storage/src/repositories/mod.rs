@@ -292,7 +292,7 @@ pub struct AgentActivityLogRow {
     pub channel_id: Option<String>,
     pub message_id: Option<String>,
     pub task_id: Option<String>,
-    pub state: Option<String>,
+    pub state: String,
     pub phase: Option<String>,
     pub reason: Option<String>,
     pub event_kind: String,

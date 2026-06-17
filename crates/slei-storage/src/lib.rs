@@ -294,6 +294,7 @@ mod tests {
 
         let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
         assert_eq!(logs[0].event_kind, "tool.completed");
+        assert_eq!(logs[0].state, "tool.completed");
         assert_eq!(logs[0].severity, "info");
         assert_eq!(logs[0].summary, "工具完成：Bash ok=true");
         assert_eq!(logs[0].tool_name.as_deref(), Some("Bash"));
