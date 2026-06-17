@@ -495,8 +495,11 @@ describe("MembersPage coordinator agents", () => {
     const row = container.querySelector(`[data-activity-log-row="${log.id}"]`);
     expect(row).toBeTruthy();
     expect(row?.closest('[data-slot="card"]')).toBeNull();
+    expect(row?.className).toContain("rounded-lg");
+    expect(row?.className).toContain("border");
     expect(row?.querySelector('[data-activity-log-line="meta"]')?.textContent).toBe("info | run.started | 成功 | #内容营销开发");
     expect(row?.querySelector('[data-activity-log-line="summary"]')?.textContent).toBe("运行开始：run=run_2a5ee1b7a27c41feab974274dd238dee");
+    expect(row?.querySelector('[data-activity-log-line="time"]')?.textContent).toBe("2026-06-17 16:00:00");
     expect(row?.textContent).not.toContain("runId");
     expect(row?.textContent).not.toContain("message");
     expect(row?.textContent).not.toContain("state");
@@ -676,6 +679,8 @@ describe("MembersPage coordinator agents", () => {
     expect(container.textContent).not.toContain(payload);
     const expandButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.members.expandPayload));
     expect(expandButton).toBeTruthy();
+    expect(expandButton?.getAttribute("data-activity-log-payload-toggle")).toBe("");
+    expect(expandButton?.className).toContain("px-0");
 
     await act(async () => {
       expandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

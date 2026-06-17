@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
+import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
@@ -376,18 +376,18 @@ function ChannelMemberPanel(input: {
       data-testid="slei-channel-member-panel"
       ref={panelRef}
     >
-      <div className="relative flex items-center justify-between gap-2">
+      <div className="relative flex items-center justify-between gap-2 pr-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
             <Users aria-hidden="true" size={16} />
             <span className="truncate">{input.messages.chat.channelMembers}({input.members.length})</span>
           </h2>
-          <Button aria-expanded={addMenuOpen ? "true" : "false"} aria-label={input.messages.chat.addChannelMember} onClick={() => setAddMenuOpen((current) => !current)} size="icon-xs" title={input.messages.chat.addChannelMember} type="button" variant="ghost">
-            <Plus aria-hidden="true" size={14} />
-          </Button>
         </div>
+        <Button aria-expanded={addMenuOpen ? "true" : "false"} aria-label={input.messages.chat.addChannelMember} onClick={() => setAddMenuOpen((current) => !current)} size="icon-xs" title={input.messages.chat.addChannelMember} type="button" variant="ghost">
+          <Plus aria-hidden="true" size={18} />
+        </Button>
         {addMenuOpen ? (
-          <div className="absolute left-0 top-8 z-30 grid w-64 gap-1 rounded-lg border bg-popover p-2 shadow-lg" data-testid="slei-channel-member-add-menu">
+          <div className="absolute right-2 top-8 z-30 grid w-64 gap-1 rounded-lg border bg-popover p-2 shadow-lg" data-testid="slei-channel-member-add-menu">
             {input.availableMembers.length > 0 ? input.availableMembers.map((member) => {
               const confirming = confirmingAddId === member.id;
               return (
@@ -533,7 +533,7 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
-  const showChannelMembersPanel = !dmMember && channelMembersOpen;
+  const showChannelMembersPanel = !dmMember && channelMembersOpen && effectiveChannelView === "chat";
 
   useEffect(() => {
     setChannelView(initialChannelView ?? "chat");
@@ -648,20 +648,22 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     <section className={cn("relative grid h-full min-h-0 bg-background", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
       <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-              <h1 aria-label={detailAriaLabel} className="flex min-w-0 items-center gap-2 text-xl font-semibold">
+        <div className="min-w-0" data-slot="workspace-titlebar">
+          <div className="min-w-0">
+            <h1 aria-label={detailAriaLabel} className="inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold">
+              <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
                 {dmMember ? <MessageCircle aria-hidden="true" size={20} /> : <Hash aria-hidden="true" size={20} />}
+              </span>
+              <span className="min-w-0" data-tauri-drag-region="deep">
                 <span className={cn("truncate", !dmMember && "select-none")}>{detailTitle}</span>
-              </h1>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
-            </div>
-            {!dmMember ? (
-              <Button aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
-                <Copy aria-hidden="true" size={14} />
-              </Button>
-            ) : null}
+              </span>
+              {!dmMember ? (
+                <Button aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                  <Copy aria-hidden="true" size={14} />
+                </Button>
+              ) : null}
+            </h1>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
           </div>
         </div>
         {dmMember && activeConversation ? (
@@ -683,17 +685,24 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             </Button>
             <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" data-testid="slei-channel-header-action-separator" />
             <Button
-              aria-expanded={channelMembersOpen ? "true" : "false"}
+              aria-expanded={showChannelMembersPanel ? "true" : "false"}
               aria-label={messages.chat.channelMembers}
-              className={cn(channelMembersOpen && "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
+              className={cn(showChannelMembersPanel && "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
               data-testid="slei-channel-members-header-toggle"
-              onClick={() => setChannelMembersOpen((current) => !current)}
+              onClick={() => {
+                if (effectiveChannelView !== "chat") {
+                  setChannelView("chat");
+                  setChannelMembersOpen(true);
+                  return;
+                }
+                setChannelMembersOpen((current) => !current);
+              }}
               title={messages.chat.channelMembers}
               type="button"
               variant="outline"
               size="icon-sm"
             >
-              <Users aria-hidden="true" size={15} />
+              {showChannelMembersPanel ? <PanelRightClose aria-hidden="true" size={15} /> : <PanelRightOpen aria-hidden="true" size={15} />}
             </Button>
           </div>
         )}

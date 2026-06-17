@@ -87,6 +87,32 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain('aria-label="# all"');
   });
 
+  it("places the channel title copy button on the title row", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const titleStart = html.indexOf('aria-label="# all"');
+    const titleEnd = html.indexOf("</h1>", titleStart);
+    const titleTextIndex = html.indexOf(">all</span>", titleStart);
+    const copyButtonIndex = html.indexOf(`aria-label="${messages.chat.copyMessage}"`, titleStart);
+
+    expect(titleStart).toBeGreaterThanOrEqual(0);
+    expect(titleTextIndex).toBeGreaterThan(titleStart);
+    expect(copyButtonIndex).toBeGreaterThan(titleTextIndex);
+    expect(copyButtonIndex).toBeLessThan(titleEnd);
+  });
+
   it("keeps long message role descriptions on one truncated header row", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
@@ -253,6 +279,10 @@ describe("ChatPage mention panel", () => {
     expect(html).not.toContain("top-[calc(4rem+1px)]");
     expect(panelHtml).toContain("w-80");
     expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-menu"');
+    expect(readChatPageSource()).toContain("relative flex items-center justify-between gap-2 pr-2");
+    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('width="18"');
+    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('height="18"');
+    expect(readChatPageSource()).toContain("absolute right-2 top-8");
     expect(html).toContain("lucide-plus");
     expect(html).toContain("Coda");
     expect(html).toContain("Nova");
@@ -295,7 +325,11 @@ describe("ChatPage mention panel", () => {
     expect(headerHtml).toContain(messages.chat.history);
     expect(headerHtml).toContain('data-testid="slei-channel-header-action-separator"');
     expect(headerHtml).toContain('data-testid="slei-channel-members-header-toggle"');
+    const closedToggleHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"')));
+    expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).toContain("lucide-panel-right-open");
+    expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).not.toContain("lucide-users");
     expect(headerHtml).not.toContain('role="tablist"');
+    expect(source).toContain('className="border-b px-4 py-3"');
     expect(source).toContain('variant="line"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
   });
@@ -320,6 +354,8 @@ describe("ChatPage mention panel", () => {
     const toggleTestIdIndex = html.indexOf('data-testid="slei-channel-members-header-toggle"');
     const toggleHtml = html.slice(html.lastIndexOf("<button", toggleTestIdIndex));
     expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).toContain("bg-primary/10 text-primary");
+    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).toContain("lucide-panel-right-close");
+    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).not.toContain("lucide-users");
   });
 
   it("embeds the channel member panel beside a shrinkable channel workspace", () => {
@@ -354,6 +390,43 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("grid-cols-[minmax(0,1fr)_20rem]");
     expect(html).toContain("grid-rows-[minmax(0,1fr)_auto]");
     expect(html).not.toContain("pointer-events-none translate-x-full");
+  });
+
+  it("hides the channel member panel while task or file tabs are active", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    for (const initialChannelView of ["tasks", "files"] as const) {
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialChannelMembersOpen
+          initialChannelView={initialChannelView}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const toggleTestIdIndex = html.indexOf('data-testid="slei-channel-members-header-toggle"');
+      const toggleHtml = html.slice(html.lastIndexOf("<button", toggleTestIdIndex), html.indexOf("</button>", toggleTestIdIndex));
+
+      expect(html).not.toContain('data-testid="slei-channel-member-panel"');
+      expect(html).toContain("grid-cols-1");
+      expect(html).not.toContain("grid-cols-[minmax(0,1fr)_20rem]");
+      expect(toggleHtml).toContain('aria-expanded="false"');
+      expect(toggleHtml).not.toContain("bg-primary/10 text-primary");
+    }
   });
 
   it("keeps channel member add and remove mutations behind confirmation UI", () => {

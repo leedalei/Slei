@@ -116,6 +116,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(deleteButtonMarkup).not.toContain("mt-1");
     expect(deleteButtonMarkup).not.toContain("mt-2");
     expect(appFrameSource()).toContain("group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto]");
+    expect(appFrameSource()).toContain('className="space-y-4"');
+    expect(appFrameSource()).not.toContain('className="space-y-4 pr-2"');
   });
 
   it("renders a dedicated search page with filters and result links back to conversations", () => {

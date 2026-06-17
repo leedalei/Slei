@@ -27,7 +27,7 @@ import type {
   DesktopNodeView,
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
-import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
+import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -614,7 +614,7 @@ export function MembersPage(input: {
                   <AlertDescription>{activityError}</AlertDescription>
                 </Alert>
               ) : activityLogs.length ? (
-                <div aria-label={input.messages.members.activity} className="grid" role="list">
+                <div aria-label={input.messages.members.activity} className="grid gap-3" role="list">
                   {activityLogs.map((log) => (
                     <ActivityLogRow
                       expanded={expandedPayloadIds.has(log.id)}
@@ -654,14 +654,27 @@ function ActivityLogRow(input: {
   const PayloadIcon = input.expanded ? ChevronDown : ChevronRight;
 
   return (
-    <article className="grid gap-1 border-b py-3 first:border-t" data-activity-log-row={input.log.id} role="listitem">
-      <p className="break-words text-xs font-medium text-muted-foreground" data-activity-log-line="meta">
-        {meta.join(" | ")}
-      </p>
-      <p className="break-words text-sm font-medium" data-activity-log-line="summary">{input.log.summary}</p>
+    <article className="grid gap-2 rounded-lg border bg-muted/20 p-3" data-activity-log-row={input.log.id} role="listitem">
+      <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="grid min-w-0 gap-1">
+          <p className="break-words text-xs font-medium text-muted-foreground" data-activity-log-line="meta">
+            {meta.join(" | ")}
+          </p>
+          <p className="break-words text-sm font-medium" data-activity-log-line="summary">{input.log.summary}</p>
+        </div>
+        <time className="text-xs text-muted-foreground sm:justify-self-end" data-activity-log-line="time" dateTime={input.log.createdAt}>
+          {formatActivityLogTime(input.log.createdAt)}
+        </time>
+      </div>
       {input.log.payloadPreview ? (
         <div className="grid gap-2">
-          <Button className="w-fit" onClick={input.onTogglePayload} type="button" variant="ghost">
+          <Button
+            className="h-auto w-fit justify-start px-0 py-1 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            data-activity-log-payload-toggle=""
+            onClick={input.onTogglePayload}
+            type="button"
+            variant="ghost"
+          >
             <PayloadIcon aria-hidden="true" className="size-4" />
             {input.expanded ? input.messages.members.collapsePayload : input.messages.members.expandPayload}
           </Button>
@@ -684,6 +697,10 @@ function activityResultLabel(log: AgentActivityLogView, messages: DesktopMessage
 
 function channelActivityLabel(channelId: string) {
   return channelId.startsWith("#") ? channelId : `#${channelId}`;
+}
+
+function formatActivityLogTime(value: string) {
+  return formatLocalRecordDateTime(value);
 }
 
 function memberDetailErrorMessage(error: unknown) {

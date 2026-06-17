@@ -705,7 +705,7 @@ function ChannelList(input: {
         />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-4 pr-2">
+          <div className="space-y-4">
             <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <span>{input.messages.chat.channels} {input.data.channels.length}</span>
               <div className="flex items-center gap-1">
