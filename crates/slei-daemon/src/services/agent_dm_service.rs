@@ -42,6 +42,7 @@ struct AgentDmRunRecord {
     agent_id: String,
     message_id: String,
     generation: u64,
+    output: String,
 }
 
 #[derive(Clone, Debug)]
@@ -158,6 +159,7 @@ impl AgentDmService {
             agent_id: agent.id,
             message_id: message.id.clone(),
             generation,
+            output: String::new(),
         };
         self.runs
             .inner
@@ -273,6 +275,9 @@ impl AgentDmService {
                     .get("delta")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
+                if let Some(record) = self.runs.inner.lock().await.runs.get_mut(run_id) {
+                    record.output.push_str(delta);
+                }
                 self.conversations
                     .upsert_run_message(
                         &record.conversation_id,
@@ -282,17 +287,6 @@ impl AgentDmService {
                         Some("running"),
                     )
                     .await?;
-                self.record_activity(
-                    &record,
-                    run_id,
-                    "output.delta",
-                    "info",
-                    format!("输出片段：{} 字符", delta.chars().count()),
-                    Some(event.to_string()),
-                    None,
-                    None,
-                )
-                .await;
             }
             Some("completed") => {
                 self.record_activity(
@@ -300,10 +294,17 @@ impl AgentDmService {
                     run_id,
                     "run.completed",
                     "info",
-                    format!("运行完成：run={run_id}"),
+                    format!(
+                        "运行完成：run={run_id} output_chars={}",
+                        record.output.chars().count()
+                    ),
                     Some(format!(
-                        "conversation_id={} message_id={} event={}",
-                        record.conversation_id, record.message_id, event
+                        "conversation_id={} message_id={} output_chars={} output={} event={}",
+                        record.conversation_id,
+                        record.message_id,
+                        record.output.chars().count(),
+                        record.output,
+                        event
                     )),
                     None,
                     Some(true),
@@ -332,7 +333,11 @@ impl AgentDmService {
                     run_id,
                     "run.failed",
                     "error",
-                    format!("运行失败：{}", activity_summary_message(message)),
+                    format!(
+                        "运行失败：{} output_chars={}",
+                        activity_summary_message(message),
+                        record.output.chars().count()
+                    ),
                     Some(event.to_string()),
                     None,
                     Some(false),

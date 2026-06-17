@@ -1151,7 +1151,15 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
         .handle_worker_event(json!({
             "type": "output_delta",
             "run_id": completed_run_id,
-            "delta": "发布风险较低。",
+            "delta": "发布风险较低，",
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": completed_run_id,
+            "delta": "请关注回滚。",
         }))
         .await
         .unwrap();
@@ -1180,7 +1188,6 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
     for expected in [
         "run.started",
         "input.received",
-        "output.delta",
         "tool.started",
         "tool.completed",
         "run.completed",
@@ -1191,6 +1198,10 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
             "missing {expected} in {event_kinds:?}"
         );
     }
+    assert!(
+        !event_kinds.contains(&"output.delta"),
+        "output_delta fragments should be aggregated into the terminal activity event"
+    );
 
     let failed = logs
         .iter()
@@ -1230,6 +1241,9 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
         .find(|log| log["eventKind"] == "run.completed")
         .expect("completed activity event");
     assert_eq!(completed["runId"], completed_run_id);
+    let completed_preview = completed["payloadPreview"].as_str().unwrap();
+    assert!(completed_preview.contains("output_chars=13"));
+    assert!(completed_preview.contains("发布风险较低，请关注回滚。"));
 }
 
 #[tokio::test]

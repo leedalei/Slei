@@ -175,6 +175,14 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .unwrap();
     state
         .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "我来处理。"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
             "type": "completed",
             "run_id": run_id
         }))
@@ -324,21 +332,24 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .collect::<Vec<_>>();
     assert!(event_kinds.contains(&"run.started"));
     assert!(event_kinds.contains(&"input.received"));
-    assert!(event_kinds.contains(&"output.delta"));
     assert!(event_kinds.contains(&"tool.started"));
     assert!(event_kinds.contains(&"tool.completed"));
     assert!(event_kinds.contains(&"run.completed"));
     assert!(event_kinds.contains(&"run.failed"));
+    assert!(
+        !event_kinds.contains(&"output.delta"),
+        "output_delta fragments should be aggregated into the terminal activity event"
+    );
 
     let completed = logs
         .iter()
         .find(|log| log["eventKind"] == "run.completed" && log["runId"] == run_id)
         .expect("run completed activity event");
     assert_eq!(completed["runId"], run_id);
-    assert!(completed["payloadPreview"]
-        .as_str()
-        .unwrap()
-        .contains(&conversation_id));
+    let completed_preview = completed["payloadPreview"].as_str().unwrap();
+    assert!(completed_preview.contains(&conversation_id));
+    assert!(completed_preview.contains("output_chars=8"));
+    assert!(completed_preview.contains("收到，我来处理。"));
 
     let failed = logs
         .iter()

@@ -762,19 +762,7 @@ impl ChannelOrchestratorService {
                     .and_then(Value::as_str)
                     .unwrap_or_default();
                 record.output.push_str(delta);
-                let record = record.clone();
                 drop(runs);
-                self.record_channel_agent_activity(
-                    &record,
-                    run_id,
-                    "output.delta",
-                    "info",
-                    format!("输出片段：{} 字符", delta.chars().count()),
-                    Some(event.to_string()),
-                    None,
-                    None,
-                )
-                .await;
                 Ok(true)
             }
             Some("completed") => {
@@ -786,8 +774,16 @@ impl ChannelOrchestratorService {
                     run_id,
                     "run.completed",
                     "info",
-                    format!("运行完成：run={run_id}"),
-                    Some(event.to_string()),
+                    format!(
+                        "运行完成：run={run_id} output_chars={}",
+                        body.chars().count()
+                    ),
+                    Some(format!(
+                        "output_chars={} output={} event={}",
+                        body.chars().count(),
+                        body,
+                        event
+                    )),
                     None,
                     Some(true),
                 )
@@ -907,7 +903,11 @@ impl ChannelOrchestratorService {
                     run_id,
                     "run.failed",
                     "error",
-                    format!("运行失败：{}", activity_summary_message(message)),
+                    format!(
+                        "运行失败：{} output_chars={}",
+                        activity_summary_message(message),
+                        record.output.trim().chars().count()
+                    ),
                     Some(event.to_string()),
                     None,
                     Some(false),
