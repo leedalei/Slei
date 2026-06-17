@@ -27,7 +27,7 @@ import type {
   DesktopNodeView,
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
-import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
+import { formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -603,42 +603,34 @@ export function MembersPage(input: {
               ) : null}
             </TabsContent>
 
-            <TabsContent forceMount value="activity" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{input.messages.members.activity}</CardTitle>
-                  <CardDescription>{input.messages.members.readOnly}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {activityLoading ? (
-                    <InlineEmpty
-                      description={input.messages.members.activityLoading}
-                      title={input.messages.members.activity}
+            <TabsContent forceMount value="activity" className="grid gap-2 data-[state=inactive]:hidden">
+              {activityLoading ? (
+                <InlineEmpty
+                  description={input.messages.members.activityLoading}
+                  title={input.messages.members.activity}
+                />
+              ) : activityError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{activityError}</AlertDescription>
+                </Alert>
+              ) : activityLogs.length ? (
+                <div aria-label={input.messages.members.activity} className="grid" role="list">
+                  {activityLogs.map((log) => (
+                    <ActivityLogRow
+                      expanded={expandedPayloadIds.has(log.id)}
+                      key={log.id}
+                      log={log}
+                      messages={input.messages}
+                      onTogglePayload={() => toggleActivityPayload(log.id)}
                     />
-                  ) : activityError ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>{activityError}</AlertDescription>
-                    </Alert>
-                  ) : activityLogs.length ? (
-                    <div className="grid gap-2">
-                      {activityLogs.map((log) => (
-                        <ActivityLogRow
-                          expanded={expandedPayloadIds.has(log.id)}
-                          key={log.id}
-                          log={log}
-                          messages={input.messages}
-                          onTogglePayload={() => toggleActivityPayload(log.id)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <InlineEmpty
-                      description={input.messages.members.noActivity}
-                      title={input.messages.members.activity}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+                  ))}
+                </div>
+              ) : (
+                <InlineEmpty
+                  description={input.messages.members.noActivity}
+                  title={input.messages.members.activity}
+                />
+              )}
             </TabsContent>
           </div>
         </ScrollArea>
@@ -654,41 +646,19 @@ function ActivityLogRow(input: {
   onTogglePayload: () => void;
 }) {
   const meta = [
-    input.log.runId ? `runId ${input.log.runId}` : undefined,
-    input.log.toolName ? `tool ${input.log.toolName}` : undefined,
-    typeof input.log.ok === "boolean" ? (input.log.ok ? input.messages.members.activityOk : input.messages.members.activityFailed) : undefined,
-    input.log.state ? `state ${input.log.state}` : undefined,
-    input.log.phase ? `phase ${input.log.phase}` : undefined,
-    input.log.reason ? `reason ${input.log.reason}` : undefined,
-    input.log.channelId ? `channel ${input.log.channelId}` : undefined,
-    input.log.messageId ? `message ${input.log.messageId}` : undefined,
-    input.log.taskId ? `task ${input.log.taskId}` : undefined,
+    input.log.severity,
+    input.log.eventKind,
+    activityResultLabel(input.log, input.messages),
+    input.log.channelId ? channelActivityLabel(input.log.channelId) : undefined,
   ].filter((item): item is string => Boolean(item));
   const PayloadIcon = input.expanded ? ChevronDown : ChevronRight;
 
   return (
-    <article className="grid gap-2 rounded-lg border bg-muted/20 p-3">
-      <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
-        <time className="text-xs text-muted-foreground" dateTime={input.log.createdAt}>
-          {formatActivityLogTime(input.log.createdAt)}
-        </time>
-        <div className="min-w-0 space-y-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Badge variant="outline">{input.log.eventKind}</Badge>
-            <Badge variant={input.log.severity === "error" ? "destructive" : "secondary"}>{input.log.severity}</Badge>
-          </div>
-          <p className="break-words text-sm font-medium">{input.log.summary}</p>
-          {meta.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {meta.map((item) => (
-                <span className="rounded-md border bg-background px-2 py-0.5 text-xs text-muted-foreground" key={item}>
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </div>
+    <article className="grid gap-1 border-b py-3 first:border-t" data-activity-log-row={input.log.id} role="listitem">
+      <p className="break-words text-xs font-medium text-muted-foreground" data-activity-log-line="meta">
+        {meta.join(" | ")}
+      </p>
+      <p className="break-words text-sm font-medium" data-activity-log-line="summary">{input.log.summary}</p>
       {input.log.payloadPreview ? (
         <div className="grid gap-2">
           <Button className="w-fit" onClick={input.onTogglePayload} type="button" variant="ghost">
@@ -704,6 +674,16 @@ function ActivityLogRow(input: {
       ) : null}
     </article>
   );
+}
+
+function activityResultLabel(log: AgentActivityLogView, messages: DesktopMessages) {
+  if (typeof log.ok === "boolean") return log.ok ? messages.members.activityOk : messages.members.activityFailed;
+  if (log.state && log.state !== log.eventKind) return log.state;
+  return undefined;
+}
+
+function channelActivityLabel(channelId: string) {
+  return channelId.startsWith("#") ? channelId : `#${channelId}`;
 }
 
 function memberDetailErrorMessage(error: unknown) {
@@ -785,8 +765,4 @@ function pathTargetForWorkspaceFile(file: AgentWorkspaceFileReceipt | undefined,
   if (file.relativePath === "MEMORY.md" || file.relativePath === memoryPath) return "memory";
   if (file.relativePath === "docs" || file.relativePath.startsWith("docs/") || file.relativePath === docsPath) return "docs";
   return "workspace";
-}
-
-function formatActivityLogTime(createdAt: string) {
-  return formatLocalRecordDateTime(createdAt);
 }

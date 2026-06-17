@@ -474,18 +474,33 @@ describe("MembersPage coordinator agents", () => {
 
     expect(html).toContain("活动日志");
 
+    const log = activityLog({
+      channelId: "内容营销开发",
+      eventKind: "run.started",
+      messageId: "msg_51999709e5f243388faaf416608793c4",
+      ok: true,
+      runId: "run_2a5ee1b7a27c41feab974274dd238dee",
+      state: "run.started",
+      summary: "运行开始：run=run_2a5ee1b7a27c41feab974274dd238dee",
+    });
     const container = await mount(
       renderMembersPage({
         messages,
         onListAgentActivity: async () => ({
-          logs: [activityLog({ eventKind: "agent_run.completed", runId: "run_agent_42", summary: "Agent finished replying" })],
+          logs: [log],
         }),
       }),
     );
 
-    expect(container.textContent).toContain("Agent finished replying");
-    expect(container.textContent).toContain("agent_run.completed");
-    expect(container.textContent).toContain("run_agent_42");
+    const row = container.querySelector(`[data-activity-log-row="${log.id}"]`);
+    expect(row).toBeTruthy();
+    expect(row?.closest('[data-slot="card"]')).toBeNull();
+    expect(row?.querySelector('[data-activity-log-line="meta"]')?.textContent).toBe("info | run.started | 成功 | #内容营销开发");
+    expect(row?.querySelector('[data-activity-log-line="summary"]')?.textContent).toBe("运行开始：run=run_2a5ee1b7a27c41feab974274dd238dee");
+    expect(row?.textContent).not.toContain("runId");
+    expect(row?.textContent).not.toContain("message");
+    expect(row?.textContent).not.toContain("state");
+    expect(row?.textContent).not.toContain("msg_51999709e5f243388faaf416608793c4");
   });
 
   it("renders an empty activity state when daemon has no rows", async () => {
@@ -640,7 +655,9 @@ describe("MembersPage coordinator agents", () => {
     );
 
     expect(container.textContent).toContain("Completed with empty metadata");
-    expect(container.textContent).toContain("state completed");
+    expect(container.textContent).toContain("agent_run.completed");
+    expect(container.textContent).toContain("info");
+    expect(container.textContent).not.toContain("state completed");
     expect(container.textContent).not.toContain("null");
   });
 
