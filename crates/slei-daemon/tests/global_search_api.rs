@@ -104,6 +104,26 @@ async fn global_search_returns_agents_channels_and_messages() {
     assert_eq!(body["agents"][0]["agentId"], coda_id);
     assert_eq!(body["channels"][0]["channelId"], channel_id);
     let messages = body["messages"].as_array().unwrap();
+    let channel_message = messages
+        .iter()
+        .find(|message| {
+            message["sourceKind"] == "channel"
+                && message["messageId"] == channel_message_id
+                && message["channelId"] == channel_id
+        })
+        .expect("channel message should be returned");
+    assert_eq!(channel_message["sourceLabel"], "#dev-team");
+    assert_eq!(channel_message["authorLabel"], "Coda @coda");
+    let dm_message = messages
+        .iter()
+        .find(|message| {
+            message["sourceKind"] == "dm"
+                && message["messageId"] == dm_message_id
+                && message["conversationId"] == conversation_id
+        })
+        .expect("dm message should be returned");
+    assert_eq!(dm_message["sourceLabel"], "Coda");
+    assert_eq!(dm_message["authorLabel"], "Coda @coda");
     assert!(messages.iter().any(|message| {
         message["sourceKind"] == "channel"
             && message["messageId"] == channel_message_id
@@ -231,7 +251,12 @@ async fn global_search_uses_saved_timezone_when_query_timezone_is_omitted() {
     .await;
     let app = build_router(state);
 
-    let response = get_json(&app, &token, "/v1/search/global?query=needle&timeRange=today").await;
+    let response = get_json(
+        &app,
+        &token,
+        "/v1/search/global?query=needle&timeRange=today",
+    )
+    .await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = response_json(response).await;

@@ -98,6 +98,8 @@ pub struct GlobalMessageSearchResult {
     pub author_name: String,
     pub author_handle: String,
     pub title: String,
+    pub source_label: String,
+    pub author_label: String,
     pub snippet: String,
     pub created_at: String,
     pub matched_fields: Vec<String>,
@@ -277,6 +279,10 @@ fn channel_message_result(
 ) -> GlobalMessageSearchResult {
     let body = row.body.unwrap_or_default();
     let author = author_label(author_labels, &row.author_id);
+    let source_label = channel_titles
+        .get(&row.channel_id)
+        .cloned()
+        .unwrap_or_else(|| format!("#{}", row.channel_id));
     GlobalMessageSearchResult {
         kind: "message".to_string(),
         source_kind: "channel".to_string(),
@@ -285,12 +291,11 @@ fn channel_message_result(
         conversation_id: None,
         session_id: row.session_id,
         author_id: row.author_id,
-        author_name: author.name,
-        author_handle: author.handle,
-        title: channel_titles
-            .get(&row.channel_id)
-            .cloned()
-            .unwrap_or_else(|| format!("#{}", row.channel_id)),
+        author_name: author.name.clone(),
+        author_handle: author.handle.clone(),
+        title: source_label.clone(),
+        source_label,
+        author_label: author_display_label(&author),
         snippet: snippet(&body, query),
         created_at: row.created_at,
         matched_fields: vec!["body".to_string()],
@@ -309,6 +314,7 @@ fn dm_message_result(
         .and_then(|agent_id| author_labels.get(agent_id))
         .map(|label| label.name.clone())
         .unwrap_or_else(|| row.conversation_id.clone());
+    let source_label = title.clone();
     GlobalMessageSearchResult {
         kind: "message".to_string(),
         source_kind: "dm".to_string(),
@@ -317,9 +323,11 @@ fn dm_message_result(
         conversation_id: Some(row.conversation_id),
         session_id: row.session_id,
         author_id: row.author_id,
-        author_name: author.name,
-        author_handle: author.handle,
+        author_name: author.name.clone(),
+        author_handle: author.handle.clone(),
         title,
+        source_label,
+        author_label: author_display_label(&author),
         snippet: snippet(&row.body, query),
         created_at: row.created_at,
         matched_fields: vec!["body".to_string()],
@@ -357,6 +365,14 @@ fn author_label(author_labels: &HashMap<String, AuthorLabel>, author_id: &str) -
             name: author_id.to_string(),
             handle: String::new(),
         })
+}
+
+fn author_display_label(author: &AuthorLabel) -> String {
+    if author.handle.trim().is_empty() {
+        author.name.clone()
+    } else {
+        format!("{} {}", author.name, author.handle)
+    }
 }
 
 fn channel_titles(channel_rows: &[ChannelRow]) -> HashMap<String, String> {
