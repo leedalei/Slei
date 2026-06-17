@@ -74,6 +74,33 @@ const receipt: GlobalSearchReceipt = {
   ],
 };
 
+function searchReceipt(query: string, title: string): GlobalSearchReceipt {
+  return {
+    query,
+    totals: { agents: 1, channels: 0, messages: 0 },
+    agents: [
+      {
+        kind: "agent",
+        agentId: `agent_${query}`,
+        title,
+        subtitle: `@${query}`,
+        avatarSeed: `agent_${query}`,
+        matchedFields: ["title"],
+      },
+    ],
+    channels: [],
+    messages: [],
+  };
+}
+
+function deferredReceipt() {
+  let resolve!: (receipt: GlobalSearchReceipt) => void;
+  const promise = new Promise<GlobalSearchReceipt>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
+
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
@@ -159,6 +186,15 @@ async function clickButtonWithExactText(rootElement: HTMLElement, text: string) 
   return button as HTMLButtonElement;
 }
 
+async function submitSearchForm(rootElement: HTMLElement) {
+  const form = rootElement.querySelector("form");
+  expect(form).toBeInstanceOf(HTMLFormElement);
+  await act(async () => {
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+  });
+  await act(async () => undefined);
+}
+
 describe("SearchPage global search UI", () => {
   it("renders the empty query placeholder and does not call daemon search", async () => {
     const onGlobalSearch = vi.fn();
@@ -199,6 +235,68 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).toContain("Messages");
     expect(rootElement.textContent).toContain("Coda");
     expect(rootElement.querySelectorAll("mark").length).toBeGreaterThan(0);
+  });
+
+  it("ignores stale search results after clearing the query before the request resolves", async () => {
+    const pending = deferredReceipt();
+    const onGlobalSearch = vi.fn(() => pending.promise);
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
+    await clickButton(rootElement, "Search");
+    await clickButton(rootElement, "Clear search query");
+
+    await act(async () => {
+      pending.resolve(searchReceipt("coda", "Stale Coda"));
+      await pending.promise;
+    });
+    await act(async () => undefined);
+
+    expect(rootElement.textContent).toContain("Search agents, channels, and messages");
+    expect(rootElement.textContent).not.toContain("Stale Coda");
+  });
+
+  it("does not duplicate the same in-flight search through the form submit path", async () => {
+    const pending = deferredReceipt();
+    const onGlobalSearch = vi.fn(() => pending.promise);
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
+    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
+
+    expect(onGlobalSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the latest search results when an older request resolves last", async () => {
+    const first = deferredReceipt();
+    const second = deferredReceipt();
+    const onGlobalSearch = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), "alpha");
+    await clickButton(rootElement, "Search");
+    await changeInput(inputByLabel(rootElement, "Global search input"), "beta");
+    await clickButton(rootElement, "Search");
+
+    await act(async () => {
+      second.resolve(searchReceipt("beta", "Fresh Beta"));
+      await second.promise;
+    });
+    await act(async () => undefined);
+    expect(rootElement.textContent).toContain("Fresh Beta");
+
+    await act(async () => {
+      first.resolve(searchReceipt("alpha", "Stale Alpha"));
+      await first.promise;
+    });
+    await act(async () => undefined);
+
+    expect(rootElement.textContent).toContain("Fresh Beta");
+    expect(rootElement.textContent).not.toContain("Stale Alpha");
   });
 
   it("renders real From, Channel, and Time dropdown data and sends selected filters", async () => {
@@ -258,11 +356,13 @@ describe("SearchPage global search UI", () => {
     const onAgentResultSelect = vi.fn();
     const onChannelResultSelect = vi.fn();
     const onMessageResultSelect = vi.fn();
+    const onResultSelect = vi.fn();
     const rootElement = await renderSearchPage({
       onGlobalSearch: async () => receipt,
       onAgentResultSelect,
       onChannelResultSelect,
       onMessageResultSelect,
+      onResultSelect,
     });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
@@ -274,5 +374,6 @@ describe("SearchPage global search UI", () => {
     expect(onAgentResultSelect).toHaveBeenCalledWith("agent_coda");
     expect(onChannelResultSelect).toHaveBeenCalledWith("channel_release");
     expect(onMessageResultSelect).toHaveBeenCalledWith(receipt.messages[0]);
+    expect(onResultSelect).not.toHaveBeenCalled();
   });
 });

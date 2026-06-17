@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
 import { Calendar, Check, Hash, LoaderCircle, Search, UserRound, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
@@ -66,6 +66,8 @@ export function SearchPage({
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [receipt, setReceipt] = useState<GlobalSearchReceipt | undefined>();
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [activeRequestKey, setActiveRequestKey] = useState("");
+  const requestSequenceRef = useRef(0);
 
   const fromOptions = useMemo(() => createFromOptions(data, profile ?? null, messages), [data, messages, profile]);
   const channelOptions = useMemo(() => data.channels.map((channel) => ({
@@ -85,41 +87,62 @@ export function SearchPage({
   const selectedTime = timeOptions.find((option) => option.id === timeRange) ?? timeOptions[0];
   const sections = receipt ? createGlobalSearchSections(receipt) : [];
   const hasResults = sections.some((section) => section.items.length > 0);
+  const currentRequest = buildCurrentSearchRequest();
+  const currentRequestKey = currentRequest ? stableGlobalSearchRequestKey(currentRequest) : "";
+  const submitDisabled = status === "loading" && currentRequestKey === activeRequestKey;
 
-  async function submitSearch(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    const request = buildGlobalSearchRequest({
+  function buildCurrentSearchRequest() {
+    return buildGlobalSearchRequest({
       q: query,
       fromId,
       channelId,
       timeRange: timeRange === "any" ? undefined : timeRange,
       timeZone,
     });
+  }
+
+  async function submitSearch(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const request = buildCurrentSearchRequest();
     setOpenFilter(undefined);
     if (!request) {
+      requestSequenceRef.current += 1;
+      setActiveRequestKey("");
       setStatus("idle");
       setReceipt(undefined);
       setSubmittedQuery("");
       return;
     }
 
+    const requestKey = stableGlobalSearchRequestKey(request);
+    if (status === "loading" && requestKey === activeRequestKey) return;
+
+    const requestSequence = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestSequence;
+    setActiveRequestKey(requestKey);
     setStatus("loading");
     setSubmittedQuery(request.q);
     try {
       const nextReceipt = await onGlobalSearch?.(request);
+      if (requestSequenceRef.current !== requestSequence) return;
       setReceipt(nextReceipt ?? emptyGlobalSearchReceipt(request.q));
       setStatus("success");
+      setActiveRequestKey("");
     } catch {
+      if (requestSequenceRef.current !== requestSequence) return;
       setReceipt(undefined);
       setStatus("error");
+      setActiveRequestKey("");
     }
   }
 
   function clearQuery() {
+    requestSequenceRef.current += 1;
     setQuery("");
     setReceipt(undefined);
     setSubmittedQuery("");
     setStatus("idle");
+    setActiveRequestKey("");
   }
 
   return (
@@ -140,7 +163,7 @@ export function SearchPage({
                 <X aria-hidden="true" className="size-4" />
               </Button>
             ) : null}
-            <Button className="min-w-20" disabled={status === "loading"} type="submit">
+            <Button className="min-w-20" disabled={submitDisabled} type="submit">
               {status === "loading" ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Search aria-hidden="true" className="size-4" />}
               {messages.search.submit}
             </Button>
@@ -406,8 +429,11 @@ function MessageResultButton(input: {
       aria-label={input.messages.search.navigation.openMessage(input.result.messageId)}
       className="h-auto min-h-20 w-full justify-start whitespace-normal px-3 py-3 text-left"
       onClick={() => {
-        input.onSelect?.(input.result);
-        if (input.result.channelId) input.onLegacySelect?.(input.result.channelId, input.result.messageId);
+        if (input.onSelect) {
+          input.onSelect(input.result);
+        } else if (input.result.channelId) {
+          input.onLegacySelect?.(input.result.channelId, input.result.messageId);
+        }
       }}
       type="button"
       variant="ghost"
@@ -456,6 +482,22 @@ function emptyGlobalSearchReceipt(query: string): GlobalSearchReceipt {
     channels: [],
     messages: [],
   };
+}
+
+function stableGlobalSearchRequestKey(request: GlobalSearchQuery): string {
+  return JSON.stringify({
+    q: request.q,
+    fromId: request.fromId ?? "",
+    channelId: request.channelId ?? "",
+    timeRange: request.timeRange ?? "",
+    timeZone: request.timeZone ?? "",
+    includeAgents: request.includeAgents ?? "",
+    includeChannels: request.includeChannels ?? "",
+    includeMessages: request.includeMessages ?? "",
+    agentLimit: request.agentLimit ?? "",
+    channelLimit: request.channelLimit ?? "",
+    messageLimit: request.messageLimit ?? "",
+  });
 }
 
 function formatResultDate(value: string) {
