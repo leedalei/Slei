@@ -1,19 +1,20 @@
 use crate::daemon_broker::{
-    AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError, AgentPathOpenReceipt,
-    AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt, AgentWorkspaceListReceipt,
-    AppRuntimeFlagsView, ArtifactOpenError, ArtifactOpenReceipt, CardError, ChannelCreateRequest,
-    ChannelError, ChannelListReceipt, ChannelMemberAddRequest, ChannelMemberListReceipt,
-    ChannelMemberReceipt, ChannelMemberRemoveReceipt, ChannelMessageListReceipt, ChannelReceipt,
-    ChannelSessionListReceipt, ChannelSessionReceipt, ConversationAttachmentReceipt,
-    ConversationAttachmentUploadRequest, ConversationError, ConversationListReceipt,
-    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
-    ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
-    DiagnosticsSnapshotView, EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt,
-    NodeListReceipt, NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
-    PreferencesReceipt, PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest,
-    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
-    SendChannelMessageRequest, SkillListReceipt, TaskError, TaskListQuery, TaskListReceipt,
-    TaskReceipt, TaskReplyReceipt, TaskReplyRequest, TaskStatusUpdateRequest, TaskThreadReceipt,
+    AgentActivityListReceipt, AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError,
+    AgentPathOpenReceipt, AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt,
+    AgentWorkspaceListReceipt, AppRuntimeFlagsView, ArtifactOpenError, ArtifactOpenReceipt,
+    CardError, ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberAddRequest,
+    ChannelMemberListReceipt, ChannelMemberReceipt, ChannelMemberRemoveReceipt,
+    ChannelMessageListReceipt, ChannelReceipt, ChannelSessionListReceipt, ChannelSessionReceipt,
+    ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
+    ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
+    ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
+    ConversationSessionReceipt, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
+    GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt, NodeNameError,
+    NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
+    PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
+    SavedMessageReceipt, SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
+    TaskError, TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
+    TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
 
@@ -222,6 +223,14 @@ pub fn update_preferences(
 
 pub fn list_agents(broker: &DaemonBroker) -> AgentListReceipt {
     broker.list_agents()
+}
+
+pub fn list_agent_activity(
+    broker: &DaemonBroker,
+    agent_id: &str,
+    limit: Option<u32>,
+) -> Result<AgentActivityListReceipt, AgentError> {
+    broker.list_agent_activity(agent_id, limit)
 }
 
 pub fn create_agent(
@@ -565,6 +574,15 @@ pub fn complete_interactive_card_command(
 #[tauri::command]
 pub fn list_agents_command(state: tauri::State<'_, DaemonBroker>) -> AgentListReceipt {
     list_agents(state.inner())
+}
+
+#[tauri::command]
+pub fn list_agent_activity_command(
+    state: tauri::State<'_, DaemonBroker>,
+    agent_id: String,
+    limit: Option<u32>,
+) -> Result<AgentActivityListReceipt, String> {
+    list_agent_activity(state.inner(), &agent_id, limit).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -21,6 +21,7 @@ import {
   type PermissionDecision,
   type SaveMessageRequest,
   type SavedMessageView,
+  type AgentActivityListReceipt,
   type AgentPathTarget,
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
@@ -1130,6 +1131,10 @@ export function SleiApp() {
     await bridge.openAgentPath(agentId, target);
   }
 
+  async function handleListAgentActivity(agentId: string, limit = 200): Promise<AgentActivityListReceipt> {
+    return bridge.listAgentActivity(agentId, limit);
+  }
+
   async function handleListAgentWorkspace(agentId: string, relativePath?: string): Promise<AgentWorkspaceListReceipt> {
     return bridge.listAgentWorkspace(agentId, relativePath);
   }
@@ -1827,6 +1832,7 @@ export function SleiApp() {
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}
       onOpenAgentPath={handleOpenAgentPath}
+      onListAgentActivity={handleListAgentActivity}
       onListAgentWorkspace={handleListAgentWorkspace}
       onReadAgentWorkspaceFile={handleReadAgentWorkspaceFile}
       onConversationNewSession={handleCreateConversationSession}

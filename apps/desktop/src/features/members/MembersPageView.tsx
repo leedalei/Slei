@@ -18,6 +18,8 @@ import {
 
 import type { DesktopMessages } from "../../i18n";
 import type {
+  AgentActivityListReceipt,
+  AgentActivityLogView,
   AgentPathTarget,
   AgentWorkspaceEntry,
   AgentWorkspaceFileReceipt,
@@ -52,7 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type MemberTab = "profile" | "workspace" | "capabilities";
+type MemberTab = "profile" | "workspace" | "capabilities" | "activity";
 
 type ClipboardWriter = {
   writeText?: (text: string) => Promise<void>;
@@ -87,6 +89,7 @@ export function MembersPage(input: {
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
+  onListAgentActivity?: (agentId: string, limit?: number) => Promise<AgentActivityListReceipt> | AgentActivityListReceipt;
   onMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
@@ -101,10 +104,16 @@ export function MembersPage(input: {
     runtime: selectedMember?.runtime ?? "",
   });
   const [workspaceOpenError, setWorkspaceOpenError] = useState<string | undefined>(undefined);
+  const [activityLogs, setActivityLogs] = useState<AgentActivityLogView[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState<string | undefined>(undefined);
+  const [expandedPayloadIds, setExpandedPayloadIds] = useState<Set<string>>(() => new Set());
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const listAgentActivityRef = useRef(input.onListAgentActivity);
+  const hasActivityLoader = Boolean(input.onListAgentActivity);
   const [workspaceEntriesByDirectory, setWorkspaceEntriesByDirectory] = useState<Record<string, AgentWorkspaceEntry[]>>(() => ({
     "": selectedMember ? initialWorkspaceEntries(selectedMember) : [],
   }));
@@ -133,6 +142,40 @@ export function MembersPage(input: {
       void loadWorkspaceDirectory("");
     }
   }, [selectedMember?.id]);
+
+  useEffect(() => {
+    listAgentActivityRef.current = input.onListAgentActivity;
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    setExpandedPayloadIds(new Set());
+    setActivityLogs([]);
+    setActivityError(undefined);
+    if (!selectedMember || selectedMember.type !== "agent" || !hasActivityLoader) {
+      setActivityLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+    setActivityLoading(true);
+    void (async () => {
+      try {
+        const receipt = await listAgentActivityRef.current?.(selectedMember.id, 200);
+        if (!mounted) return;
+        setActivityLogs(receipt?.logs ?? []);
+      } catch {
+        if (!mounted) return;
+        setActivityError(input.messages.members.activityLoadFailed);
+      } finally {
+        if (!mounted) return;
+        setActivityLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [hasActivityLoader, input.messages.members.activityLoadFailed, selectedMember?.id, selectedMember?.type]);
 
   function updateMemberDetail(key: keyof typeof memberDetails, value: string) {
     setMemberDetails((current) => ({ ...current, [key]: value }));
@@ -233,6 +276,18 @@ export function MembersPage(input: {
     }
   }
 
+  function toggleActivityPayload(logId: string) {
+    setExpandedPayloadIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
+  }
+
   if (!selectedMember) {
     return (
       <section className="grid min-h-full place-items-center p-6">
@@ -330,6 +385,7 @@ export function MembersPage(input: {
             <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
             <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
             <TabsTrigger value="capabilities">{input.messages.members.capabilities}</TabsTrigger>
+            <TabsTrigger value="activity">{input.messages.members.activity}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -507,10 +563,107 @@ export function MembersPage(input: {
                 </Card>
               ) : null}
             </TabsContent>
+
+            <TabsContent forceMount value="activity" className="grid gap-4 data-[state=inactive]:hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{input.messages.members.activity}</CardTitle>
+                  <CardDescription>{input.messages.members.readOnly}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {activityLoading ? (
+                    <InlineEmpty
+                      description={input.messages.members.activityLoading}
+                      title={input.messages.members.activity}
+                    />
+                  ) : activityError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{activityError}</AlertDescription>
+                    </Alert>
+                  ) : activityLogs.length ? (
+                    <div className="grid gap-2">
+                      {activityLogs.map((log) => (
+                        <ActivityLogRow
+                          expanded={expandedPayloadIds.has(log.id)}
+                          key={log.id}
+                          log={log}
+                          messages={input.messages}
+                          onTogglePayload={() => toggleActivityPayload(log.id)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <InlineEmpty
+                      description={input.messages.members.noActivity}
+                      title={input.messages.members.activity}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </div>
         </ScrollArea>
       </Tabs>
     </section>
+  );
+}
+
+function ActivityLogRow(input: {
+  expanded: boolean;
+  log: AgentActivityLogView;
+  messages: DesktopMessages;
+  onTogglePayload: () => void;
+}) {
+  const meta = [
+    input.log.runId ? `runId ${input.log.runId}` : undefined,
+    input.log.toolName ? `tool ${input.log.toolName}` : undefined,
+    typeof input.log.ok === "boolean" ? (input.log.ok ? input.messages.members.activityOk : input.messages.members.activityFailed) : undefined,
+    input.log.state ? `state ${input.log.state}` : undefined,
+    input.log.phase ? `phase ${input.log.phase}` : undefined,
+    input.log.reason ? `reason ${input.log.reason}` : undefined,
+    input.log.channelId ? `channel ${input.log.channelId}` : undefined,
+    input.log.messageId ? `message ${input.log.messageId}` : undefined,
+    input.log.taskId ? `task ${input.log.taskId}` : undefined,
+  ].filter((item): item is string => Boolean(item));
+  const PayloadIcon = input.expanded ? ChevronDown : ChevronRight;
+
+  return (
+    <article className="grid gap-2 rounded-lg border bg-muted/20 p-3">
+      <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
+        <time className="text-xs text-muted-foreground" dateTime={input.log.createdAt}>
+          {formatActivityLogTime(input.log.createdAt)}
+        </time>
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Badge variant="outline">{input.log.eventKind}</Badge>
+            <Badge variant={input.log.severity === "error" ? "destructive" : "secondary"}>{input.log.severity}</Badge>
+          </div>
+          <p className="break-words text-sm font-medium">{input.log.summary}</p>
+          {meta.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {meta.map((item) => (
+                <span className="rounded-md border bg-background px-2 py-0.5 text-xs text-muted-foreground" key={item}>
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {input.log.payloadPreview ? (
+        <div className="grid gap-2">
+          <Button className="w-fit" onClick={input.onTogglePayload} type="button" variant="ghost">
+            <PayloadIcon aria-hidden="true" className="size-4" />
+            {input.expanded ? input.messages.members.collapsePayload : input.messages.members.expandPayload}
+          </Button>
+          {input.expanded ? (
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg border bg-background p-3 font-mono text-xs leading-5">
+              {input.log.payloadPreview}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -580,4 +733,10 @@ function pathTargetForWorkspaceFile(file: AgentWorkspaceFileReceipt | undefined,
   if (file.relativePath === "MEMORY.md" || file.relativePath === memoryPath) return "memory";
   if (file.relativePath === "docs" || file.relativePath.startsWith("docs/") || file.relativePath === docsPath) return "docs";
   return "workspace";
+}
+
+function formatActivityLogTime(createdAt: string) {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return createdAt;
+  return date.toLocaleString();
 }

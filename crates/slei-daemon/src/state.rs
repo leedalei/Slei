@@ -375,6 +375,7 @@ impl AppState {
             self.worker.clone(),
             self.agent_dm_runs.clone(),
             self.reset_runtime.clone(),
+            self.orchestration_store.repos(),
         )
     }
 

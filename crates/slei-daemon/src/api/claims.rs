@@ -33,6 +33,12 @@ struct AgentActivityLogView {
     state: String,
     phase: Option<String>,
     reason: Option<String>,
+    event_kind: String,
+    severity: String,
+    summary: String,
+    payload_preview: Option<String>,
+    tool_name: Option<String>,
+    ok: Option<bool>,
     created_at: String,
 }
 
@@ -48,6 +54,12 @@ impl From<AgentActivityLogRow> for AgentActivityLogView {
             state: row.state,
             phase: row.phase,
             reason: row.reason,
+            event_kind: row.event_kind,
+            severity: row.severity,
+            summary: row.summary,
+            payload_preview: row.payload_preview,
+            tool_name: row.tool_name,
+            ok: row.ok,
             created_at: row.created_at,
         }
     }
@@ -187,7 +199,7 @@ pub async fn agent_activity(
 
     match state
         .claims()
-        .activity_logs(&agent_id, query.limit.unwrap_or(20))
+        .activity_logs(&agent_id, query.limit.unwrap_or(200))
         .await
     {
         Ok(logs) => {
