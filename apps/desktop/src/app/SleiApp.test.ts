@@ -13,6 +13,7 @@ import {
   keepOnlyClaimedAgentActivityByDiagnostic,
   markCoordinatorActivityFailedByDiagnostic,
   shouldToastBackendServiceError,
+  updateAgentActivityByDiagnostic,
   replaceChannelMessages,
 } from "./SleiApp";
 import {
@@ -315,7 +316,7 @@ describe("createChannelAgentReplyMessage", () => {
     expect(shouldToastBackendServiceError(false)).toBe(false);
   });
 
-  it("builds stable activity messages for every routed channel target", () => {
+  it("builds a stable activity message only for the first spawned channel target", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
       action: "request_agent_reply",
@@ -369,10 +370,10 @@ describe("createChannelAgentReplyMessage", () => {
           capabilities: [],
         },
       ]).map((message) => message.id),
-    ).toEqual(["agent-activity-msg_123-agent_alice", "agent-activity-msg_123-agent_coda"]);
+    ).toEqual(["agent-activity-msg_123-agent_alice"]);
   });
 
-  it("builds pending activity for broadcast-delivered channel targets", () => {
+  it("builds pending activity for the first broadcast-delivered channel target", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_broadcast_123",
       action: "broadcast_delivered",
@@ -425,10 +426,7 @@ describe("createChannelAgentReplyMessage", () => {
 
     const activities = createChannelAgentActivityMessages(outcome, "all", members);
 
-    expect(activities.map((message) => message.id)).toEqual([
-      "agent-activity-msg_broadcast_123-agent_alice",
-      "agent-activity-msg_broadcast_123-agent_coda",
-    ]);
+    expect(activities.map((message) => message.id)).toEqual(["agent-activity-msg_broadcast_123-agent_alice"]);
     expect(activities.every((message) => message.toolCall === "channel_agent_reply" && message.status === "pending")).toBe(true);
     expect(hasPendingAgentActivity(activities, "all")).toBe(true);
   });
@@ -475,7 +473,62 @@ describe("createChannelAgentReplyMessage", () => {
     });
 
     expect(nextMessages.map((message) => message.id)).toEqual(["agent-activity-msg_broadcast_123-agent_coda"]);
+    expect(nextMessages[0]).toMatchObject({
+      author: "agent_coda",
+      channelId: "all",
+      sourceMessageId: "msg_broadcast_123",
+      toolCall: "channel_agent_reply",
+      status: "pending",
+    });
     expect(hasPendingAgentActivity(nextMessages, "all")).toBe(true);
+  });
+
+  it("updates the single channel activity from daemon agent status diagnostics", () => {
+    const activities = createChannelAgentActivityMessages(
+      {
+        messageId: "msg_broadcast_123",
+        action: "broadcast_delivered",
+        assigneeAgentIds: ["agent_alice", "agent_coda"],
+      },
+      "all",
+      [{
+        id: "agent_alice",
+        name: "Alice",
+        handle: "@alice",
+        avatar: "AL",
+        type: "agent",
+        runtimeStatus: "idle",
+        role: "工程师",
+        description: "",
+        computer: "本机设备",
+        created: "2026-06-04",
+        creator: "system",
+        runtime: "ClaudeCode",
+        model: "Sonnet",
+        instructions: "",
+        permissions: [],
+        environmentVariables: [],
+        createdAgents: [],
+        activity: "",
+        capabilities: [],
+      }],
+    );
+
+    const nextMessages = updateAgentActivityByDiagnostic(activities, {
+      sequence: 13,
+      eventType: "agent_activity.updated",
+      entityId: "event_activity_13",
+      payload: "message_id=msg_broadcast_123 agent_id=agent_coda state=working phase=正在_阅读历史",
+      createdAt: "2026-06-17T00:00:00.000Z",
+    });
+
+    expect(nextMessages.map((message) => message.id)).toEqual(["agent-activity-msg_broadcast_123-agent_coda"]);
+    expect(nextMessages[0]).toMatchObject({
+      author: "agent_coda",
+      body: "正在 阅读历史",
+      status: "running",
+      toolCall: "channel_agent_reply",
+    });
   });
 
   it("shows task-assigned agent activity until the task thread has replies", () => {

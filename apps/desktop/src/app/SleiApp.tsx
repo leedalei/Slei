@@ -459,25 +459,66 @@ function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
   if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
   const now = new Date().toISOString();
-  return channelReplyTargetIds(outcome).flatMap((agentId) => {
-    const member = members.find((candidate) => candidate.id === agentId);
-    if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];
-    if (member?.directMessageEnabled === false) return [];
-    return [{
-      id: `agent-activity-${outcome.messageId}-${agentId}`,
-      author: member?.name ?? agentId,
-      handle: member?.handle,
-      avatar: member?.avatar,
-      role: "agent" as const,
-      time: formatMessageTime(now),
-      sentAt: formatMessageDateTime(now),
-      body: "",
-      channelId,
-      status: "pending" as const,
-      sourceMessageId: outcome.messageId,
-      toolCall: "channel_agent_reply",
-    }];
+  const agentId = channelReplyTargetIds(outcome).find((targetId) => {
+    const member = members.find((candidate) => candidate.id === targetId);
+    return !isInternalCoordinatorMember(member ?? { id: targetId }) && member?.directMessageEnabled !== false;
   });
+  if (!agentId) return [];
+  const member = members.find((candidate) => candidate.id === agentId);
+  return [{
+    id: `agent-activity-${outcome.messageId}-${agentId}`,
+    author: member?.name ?? agentId,
+    handle: member?.handle,
+    avatar: member?.avatar,
+    role: "agent" as const,
+    time: formatMessageTime(now),
+    sentAt: formatMessageDateTime(now),
+    body: "",
+    channelId,
+    status: "pending" as const,
+    sourceMessageId: outcome.messageId,
+    toolCall: "channel_agent_reply",
+  }];
+}
+
+function createClaimedAgentActivityMessage(messageId: string, agentId: string, source: SleiMessage): SleiMessage {
+  const now = new Date().toISOString();
+  return {
+    id: `agent-activity-${messageId}-${agentId}`,
+    author: agentId,
+    role: "agent",
+    time: source.time || formatMessageTime(now),
+    sentAt: source.sentAt || formatMessageDateTime(now),
+    body: "",
+    channelId: source.channelId,
+    status: "pending",
+    sourceMessageId: messageId,
+    toolCall: "channel_agent_reply",
+  };
+}
+
+function replaceChannelAgentActivityForClaim(messages: SleiMessage[], messageId: string, agentId: string): SleiMessage[] {
+  const claimedActivityId = `agent-activity-${messageId}-${agentId}`;
+  const existingClaimedActivity = messages.find((message) => message.id === claimedActivityId && message.toolCall === "channel_agent_reply");
+  const sourceActivity = messages.find((message) => message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId);
+  const sourceMessage = sourceActivity ?? messages.find((message) => message.id === messageId);
+  if (!sourceMessage) return messages;
+  const claimedActivity = existingClaimedActivity ?? createClaimedAgentActivityMessage(messageId, agentId, sourceMessage);
+  let changed = false;
+  const nextMessages = messages.flatMap((message) => {
+    const matchesSameSource = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
+    if (!matchesSameSource) return [message];
+    if (message.id === claimedActivityId) return [message];
+    changed = true;
+    return [];
+  });
+  if (!nextMessages.some((message) => message.id === claimedActivityId)) {
+    const insertAt = messages.findIndex((message) => message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId);
+    const boundedInsertAt = insertAt >= 0 ? insertAt : nextMessages.length;
+    nextMessages.splice(boundedInsertAt, 0, claimedActivity);
+    changed = true;
+  }
+  return changed ? nextMessages : messages;
 }
 
 function logAppEvent(bridge: DaemonBridge, scope: string, message: string, context?: Record<string, unknown>) {
@@ -537,13 +578,27 @@ export function keepOnlyClaimedAgentActivityByDiagnostic(messages: SleiMessage[]
   const messageId = diagnosticPayloadValue(event, "message_id");
   const agentId = diagnosticPayloadValue(event, "agent_id");
   if (!messageId || !agentId) return messages;
-  const claimedActivityId = `agent-activity-${messageId}-${agentId}`;
-  let changed = false;
-  const nextMessages = messages.filter((message) => {
-    const matchesSameSource = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
-    if (!matchesSameSource || message.id === claimedActivityId) return true;
+  return replaceChannelAgentActivityForClaim(messages, messageId, agentId);
+}
+
+export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+  if (event.eventType !== "agent_activity.updated") return messages;
+  const messageId = diagnosticPayloadValue(event, "message_id");
+  const agentId = diagnosticPayloadValue(event, "agent_id");
+  if (!messageId || messageId === "none" || !agentId) return messages;
+  const state = diagnosticPayloadValue(event, "state");
+  const phase = diagnosticPayloadValue(event, "phase")?.replaceAll("_", " ") ?? "";
+  const replacedMessages = replaceChannelAgentActivityForClaim(messages, messageId, agentId);
+  let changed = replacedMessages !== messages;
+  const nextMessages = replacedMessages.map((message) => {
+    const matchesActivity = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
+    if (!matchesActivity) return message;
     changed = true;
-    return false;
+    return {
+      ...message,
+      body: phase,
+      status: state === "failed" ? "failed" as const : "running" as const,
+    };
   });
   return changed ? nextMessages : messages;
 }
@@ -828,7 +883,10 @@ export function SleiApp() {
         .sort((left, right) => left.sequence - right.sequence);
       for (const event of events) {
         lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
-        setData((current) => createEmptySleiData({ ...current, messages: keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event) }));
+        setData((current) => {
+          const claimedMessages = keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event);
+          return createEmptySleiData({ ...current, messages: updateAgentActivityByDiagnostic(claimedMessages, event) });
+        });
         if (diagnosticEventNeedsToast(event)) {
           setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
           showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
@@ -1818,7 +1876,6 @@ function hasReadyClaudeRuntime(nodes: DesktopNodeView[]) {
 }
 
 export {
-  AGENT_ACTIVITY_ROTATION_MS,
   channelDraftCreateInput,
   findActiveAgentActivities,
   resetChannelDraft,

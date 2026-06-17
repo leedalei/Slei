@@ -276,7 +276,7 @@ describe("real agent members and direct messages", () => {
     expect(html).not.toContain('aria-label="pending"');
   });
 
-  it("rotates active agent activity by tick when multiple agents are running", () => {
+  it("keeps the first spawned active agent activity instead of rotating", () => {
     const cindy: SleiMember = { ...agent, id: "agent_cindy", name: "Cindy", handle: "@cindy", avatar: "CI" };
     const data = createSleiFixtures({
       conversations: [codaDm],
@@ -311,7 +311,7 @@ describe("real agent members and direct messages", () => {
 
     expect(activities.map((activity) => activity.message.author)).toEqual(["Coda", "Cindy"]);
     expect(selectAgentActivityForTick(activities, 0)?.message.author).toBe("Coda");
-    expect(selectAgentActivityForTick(activities, 1)?.message.author).toBe("Cindy");
+    expect(selectAgentActivityForTick(activities, 1)?.message.author).toBe("Coda");
     expect(selectAgentActivityForTick(activities, 2)?.message.author).toBe("Coda");
   });
 

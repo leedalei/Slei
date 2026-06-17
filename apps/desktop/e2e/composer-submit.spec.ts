@@ -218,7 +218,6 @@ describe("chat composer submit behavior", () => {
 
     expect(activities.map((activity) => activity.id)).toEqual([
       "agent-activity-msg_channel_all_multi-agent_alice",
-      "agent-activity-msg_channel_all_multi-agent_coda",
     ]);
   });
 

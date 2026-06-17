@@ -97,8 +97,6 @@ const navItems: Array<{ id: Exclude<AppView, "search">; icon: LucideIcon }> = [
   { id: "settings", icon: Settings },
 ];
 
-export const AGENT_ACTIVITY_ROTATION_MS = 2_000;
-
 export type SleiAppFrameProps = {
   activeView: AppView;
   activeChannelId?: string;
@@ -191,7 +189,6 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
-  const [agentActivityTick, setAgentActivityTick] = useState(0);
   const profile = input.profile ?? defaultProfile;
   const appearance = input.appearance ?? defaultAppearance;
   const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
@@ -201,7 +198,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const activeAgentActivities = input.activeView === "chat" || input.activeView === "search"
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
     : [];
-  const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, agentActivityTick);
+  const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, 0);
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
@@ -212,18 +209,6 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     if (input.runtimeSetup.nodes.some((node) => node.id === activeComputerId)) return;
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
-
-  useEffect(() => {
-    setAgentActivityTick(0);
-  }, [activeTargetId, activeConversation?.id, activeSessionId]);
-
-  useEffect(() => {
-    if (activeAgentActivities.length <= 1) return;
-    const timer = window.setInterval(() => {
-      setAgentActivityTick((current) => current + 1);
-    }, AGENT_ACTIVITY_ROTATION_MS);
-    return () => window.clearInterval(timer);
-  }, [activeAgentActivities.length, activeTargetId, activeConversation?.id, activeSessionId]);
 
   return (
     <div
@@ -583,9 +568,9 @@ export function findActiveAgentActivities(
   });
 }
 
-export function selectAgentActivityForTick(activities: AgentActivityView[], tick: number): AgentActivityView | undefined {
+export function selectAgentActivityForTick(activities: AgentActivityView[], _tick: number): AgentActivityView | undefined {
   if (activities.length === 0) return undefined;
-  return activities[Math.abs(tick) % activities.length];
+  return activities[0];
 }
 
 function AgentActivityPanel(input: { activity?: AgentActivityView; messages: DesktopMessages }) {

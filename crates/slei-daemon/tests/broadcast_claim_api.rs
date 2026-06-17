@@ -953,6 +953,7 @@ async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
     assert_eq!(duplicate.status(), StatusCode::OK);
 
     let activity = app
+        .clone()
         .oneshot(authed_empty_request(
             &token,
             "/v1/agents/agent_cindy/activity?limit=200",
@@ -969,6 +970,29 @@ async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
     assert_eq!(logs[0]["runId"], "run_123");
     assert_eq!(logs[0]["channelId"], "all");
     assert_eq!(logs[0]["messageId"], "msg_123");
+
+    let diagnostics = app
+        .oneshot(authed_empty_request(&token, "/v1/diagnostics"))
+        .await
+        .unwrap();
+    assert_eq!(diagnostics.status(), StatusCode::OK);
+    let diagnostics_json = response_json(diagnostics).await;
+    let events = diagnostics_json["recentEvents"].as_array().unwrap();
+    assert!(events.iter().any(|event| {
+        event["eventType"] == "agent_activity.updated"
+            && event["payload"]
+                .as_str()
+                .unwrap()
+                .contains("agent_id=agent_cindy")
+            && event["payload"]
+                .as_str()
+                .unwrap()
+                .contains("message_id=msg_123")
+            && event["payload"]
+                .as_str()
+                .unwrap()
+                .contains("phase=reading_history")
+    }));
 }
 
 #[tokio::test]

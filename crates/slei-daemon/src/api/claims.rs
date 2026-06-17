@@ -144,10 +144,28 @@ pub async fn update_agent_status(
 
     match state
         .claims()
-        .update_agent_status_idempotent(&agent_id, payload, idempotency_key)
+        .update_agent_status_idempotent(&agent_id, payload.clone(), idempotency_key)
         .await
     {
-        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Ok(()) => {
+            let _ = state
+                .orchestration()
+                .record_diagnostic_event(
+                    "agent_activity.updated",
+                    &format!(
+                        "agent_id={} run_id={} channel_id={} message_id={} task_id={} state={} phase={}",
+                        agent_id,
+                        payload.run_id.as_deref().unwrap_or("none"),
+                        payload.channel_id.as_deref().unwrap_or("none"),
+                        payload.message_id.as_deref().unwrap_or("none"),
+                        payload.task_id.as_deref().unwrap_or("none"),
+                        payload.state,
+                        diagnostic_token(payload.phase.as_deref().unwrap_or(""))
+                    ),
+                )
+                .await;
+            Json(json!({ "ok": true })).into_response()
+        }
         Err(error) => claim_error_response(error),
     }
 }
@@ -187,4 +205,8 @@ fn claim_error_response(error: ClaimError) -> Response {
         ClaimError::Json(_) | ClaimError::Storage(_) => StatusCode::INTERNAL_SERVER_ERROR,
     };
     (status, Json(json!({ "error": error.to_string() }))).into_response()
+}
+
+fn diagnostic_token(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join("_")
 }

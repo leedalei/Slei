@@ -94,23 +94,24 @@ export function createChannelAgentActivityMessage(outcome: SendChannelMessageOut
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
   if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
-  return channelReplyTargetIds(outcome).flatMap((agentId) => {
-    const member = members.find((candidate) => candidate.id === agentId);
-    if (isInternalCoordinatorMember(member ?? { id: agentId })) return [];
-    if (member?.directMessageEnabled === false) return [];
-    const author = member?.name ?? agentId;
-    return [{
-      id: channelAgentActivityId(outcome, agentId),
-      author,
-      handle: member?.handle,
-      avatar: member?.avatar,
-      role: "agent" as const,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      body: "",
-      channelId,
-      status: "pending" as const,
-    }];
+  const agentId = channelReplyTargetIds(outcome).find((targetId) => {
+    const member = members.find((candidate) => candidate.id === targetId);
+    return !isInternalCoordinatorMember(member ?? { id: targetId }) && member?.directMessageEnabled !== false;
   });
+  if (!agentId) return [];
+  const member = members.find((candidate) => candidate.id === agentId);
+  const author = member?.name ?? agentId;
+  return [{
+    id: channelAgentActivityId(outcome, agentId),
+    author,
+    handle: member?.handle,
+    avatar: member?.avatar,
+    role: "agent" as const,
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    body: "",
+    channelId,
+    status: "pending" as const,
+  }];
 }
 
 export function createChannelAgentReplyMessage(
