@@ -1202,7 +1202,7 @@ async fn claim_and_status_apis_reject_blank_required_ids() {
 }
 
 #[tokio::test]
-async fn agent_activity_api_returns_latest_200_logs() {
+async fn agent_activity_api_defaults_to_latest_200_logs() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));
 
@@ -1238,7 +1238,7 @@ async fn agent_activity_api_returns_latest_200_logs() {
     let activity = app
         .oneshot(authed_empty_request(
             &token,
-            "/v1/agents/agent_cindy/activity?limit=200",
+            "/v1/agents/agent_cindy/activity",
         ))
         .await
         .unwrap();
