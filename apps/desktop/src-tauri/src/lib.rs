@@ -30,6 +30,7 @@ pub fn run() {
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
             commands::list_agents_command,
+            commands::list_agent_activity_command,
             commands::list_agent_skills_command,
             commands::list_conversations_command,
             commands::create_agent_command,
@@ -65,8 +66,8 @@ mod tests {
         activate_conversation_session, add_channel_member, app_runtime_flags,
         bootstrap_guide_agent, complete_interactive_card, create_agent, create_channel,
         create_conversation_session, create_dm_conversation, daemon_status, delete_agent,
-        format_frontend_crash_log, list_agent_skills, list_agent_workspace, list_agents,
-        list_channel_members, list_channel_messages, list_conversation_messages,
+        format_frontend_crash_log, list_agent_activity, list_agent_skills, list_agent_workspace,
+        list_agents, list_channel_members, list_channel_messages, list_conversation_messages,
         list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
         list_preferences, list_saved_messages, list_tasks, open_agent_path,
         read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
@@ -83,7 +84,7 @@ mod tests {
     };
     use std::fs;
     use std::io::{Read, Write};
-    use std::net::TcpListener;
+    use std::net::{TcpListener, TcpStream};
     use std::sync::{Mutex, MutexGuard};
     use std::thread;
 
@@ -93,6 +94,31 @@ mod tests {
         TEST_ENV_LOCK
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn read_http_request(stream: &mut TcpStream) -> String {
+        let mut bytes = Vec::new();
+        let mut buffer = [0_u8; 512];
+        loop {
+            let count = stream.read(&mut buffer).unwrap();
+            if count == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buffer[..count]);
+            let request = String::from_utf8_lossy(&bytes);
+            let Some(header_end) = request.find("\r\n\r\n") else {
+                continue;
+            };
+            let content_length = request
+                .lines()
+                .find_map(|line| line.strip_prefix("Content-Length: "))
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(0);
+            if bytes.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        String::from_utf8(bytes).unwrap()
     }
 
     #[test]
@@ -785,6 +811,127 @@ mod tests {
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-agent-create-"));
         assert!(request.contains(r#""handle":"@nova""#));
+    }
+
+    #[test]
+    fn broker_fetches_agent_activity_with_token() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = serde_json::json!({
+                "logs": [{
+                    "id": "log_1",
+                    "agentId": "agent_nova",
+                    "runId": "run_1",
+                    "channelId": "all",
+                    "messageId": "msg_1",
+                    "taskId": "task_1",
+                    "state": "running",
+                    "phase": "tool_call",
+                    "reason": "command_started",
+                    "eventKind": "tool",
+                    "severity": "info",
+                    "summary": "Running cargo test",
+                    "payloadPreview": "{\"cmd\":\"cargo test\"}",
+                    "toolName": "exec_command",
+                    "ok": true,
+                    "createdAt": "2026-06-17T09:00:00Z"
+                }]
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = list_agent_activity(&broker, "agent_nova", None).unwrap();
+        let request = handle.join().unwrap();
+        let serialized = serde_json::to_string(&receipt).unwrap();
+
+        assert_eq!(receipt.logs.len(), 1);
+        assert_eq!(receipt.logs[0].id, "log_1");
+        assert_eq!(receipt.logs[0].agent_id, "agent_nova");
+        assert_eq!(receipt.logs[0].tool_name.as_deref(), Some("exec_command"));
+        assert_eq!(receipt.logs[0].ok, Some(true));
+        assert!(request.contains("GET /v1/agents/agent_nova/activity?limit=200 HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(!serialized.contains("secret-token"));
+    }
+
+    #[test]
+    fn broker_agent_activity_offline_memory_fallback_returns_empty_logs() {
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            event_socket: "ws://127.0.0.1:1/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = list_agent_activity(&broker, "agent_nova", Some(50)).unwrap();
+
+        assert!(receipt.logs.is_empty());
+    }
+
+    #[test]
+    fn broker_agent_activity_daemon_error_is_returned() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"error":"storage failed"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = list_agent_activity(&broker, "agent_nova", Some(500)).unwrap_err();
+        let request = handle.join().unwrap();
+
+        assert!(error.to_string().contains("500 Internal Server Error"));
+        assert!(request.contains("GET /v1/agents/agent_nova/activity?limit=200 HTTP/1.1"));
+    }
+
+    #[test]
+    fn broker_agent_activity_offline_empty_fallback_returns_err() {
+        let broker = DaemonBroker::for_tests_empty_fallback(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            event_socket: "ws://127.0.0.1:1/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = list_agent_activity(&broker, "agent_nova", None).unwrap_err();
+
+        assert_eq!(error.to_string(), "daemon unavailable");
     }
 
     #[test]

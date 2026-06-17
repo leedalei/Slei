@@ -235,6 +235,33 @@ pub struct AgentListReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentActivityLogView {
+    pub id: String,
+    pub agent_id: String,
+    pub run_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub message_id: Option<String>,
+    pub task_id: Option<String>,
+    pub state: String,
+    pub phase: Option<String>,
+    pub reason: Option<String>,
+    pub event_kind: String,
+    pub severity: String,
+    pub summary: String,
+    pub payload_preview: Option<String>,
+    pub tool_name: Option<String>,
+    pub ok: Option<bool>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentActivityListReceipt {
+    pub logs: Vec<AgentActivityLogView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentReceipt {
     pub agent: DesktopAgentView,
 }
@@ -767,6 +794,11 @@ impl DaemonBroker {
 
     pub fn for_tests(descriptor: RuntimeDescriptor) -> Self {
         Self::new(descriptor, OfflineFallback::MemoryOnly)
+    }
+
+    #[cfg(test)]
+    pub fn for_tests_empty_fallback(descriptor: RuntimeDescriptor) -> Self {
+        Self::new(descriptor, OfflineFallback::Empty)
     }
 
     fn new(descriptor: RuntimeDescriptor, offline_fallback: OfflineFallback) -> Self {
@@ -1474,6 +1506,27 @@ impl DaemonBroker {
             AgentListReceipt {
                 agents: self.agents.lock().expect("agents mutex poisoned").clone(),
             }
+        }
+    }
+
+    pub fn list_agent_activity(
+        &self,
+        agent_id: &str,
+        limit: Option<u16>,
+    ) -> Result<AgentActivityListReceipt, AgentError> {
+        let limit = limit.unwrap_or(200).min(200);
+        let path = format!("/v1/agents/{agent_id}/activity?limit={limit}");
+        match self.send_daemon_request_checked("GET", &path, None, &[]) {
+            Ok(response) => serde_json::from_str::<AgentActivityListReceipt>(&response)
+                .map_err(|error| AgentError::DaemonResponse(error.to_string())),
+            Err(error) if is_daemon_unavailable_error(&error) => {
+                if self.offline_fallback == OfflineFallback::Empty {
+                    Err(AgentError::DaemonUnavailable)
+                } else {
+                    Ok(AgentActivityListReceipt { logs: Vec::new() })
+                }
+            }
+            Err(error) => Err(AgentError::DaemonRequest(error)),
         }
     }
 
@@ -4977,6 +5030,10 @@ pub enum PreferencesError {
 pub enum AgentError {
     #[error("daemon unavailable")]
     DaemonUnavailable,
+    #[error("{0}")]
+    DaemonRequest(String),
+    #[error("daemon response error: {0}")]
+    DaemonResponse(String),
     #[error("agent not found")]
     AgentNotFound,
     #[error("agent name, runtime, and node are required")]
