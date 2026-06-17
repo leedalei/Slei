@@ -9,6 +9,7 @@ use slei_daemon::services::channel_service::{
 use slei_daemon::services::member_service::{ProductAgentRecord, RuntimeThreadRecord};
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::state::AppState;
+use slei_storage::db::SleiDb;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -1232,6 +1233,91 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
 }
 
 #[tokio::test]
+async fn channel_agent_terminal_activity_survives_completed_side_effect_failure() {
+    let token = AuthToken::from_static("test-token");
+    let root = std::env::temp_dir().join(format!(
+        "slei-broadcast-api-terminal-failure-{}",
+        Uuid::new_v4()
+    ));
+    let state = app_state_with_agent_handle_at_root("agent_cindy", "@cindy", root.clone()).await;
+    state
+        .channels()
+        .set_member_readiness("all", "agent_cindy", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sent = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/channels/all/messages",
+            "channel-agent-terminal-failure",
+            json!({
+                "authorId": "human_lei",
+                "body": "@cindy 请处理会丢失任务的消息",
+                "asTask": true
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent_json = response_json(sent).await;
+    let task_id = sent_json["outcome"]["taskId"].as_str().unwrap().to_string();
+    let run_id = state
+        .worker_commands()
+        .into_iter()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_cindy"
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("channel agent runtime should have started");
+
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "我会尝试写入任务回复。",
+        }))
+        .await
+        .unwrap();
+
+    let db_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&db_url).await.unwrap();
+    sqlx::query("DELETE FROM tasks WHERE id = ?")
+        .bind(&task_id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let error = state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .expect_err("completed side effect should still return the task error");
+    assert!(error.contains("task not found"), "{error}");
+
+    let activity = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agents/agent_cindy/activity?limit=200",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(activity.status(), StatusCode::OK);
+    let activity_json = response_json(activity).await;
+    let logs = activity_json["logs"].as_array().unwrap();
+    assert!(logs.iter().any(|log| {
+        log["eventKind"] == "run.completed"
+            && log["runId"] == run_id
+            && log["toolName"] == serde_json::Value::Null
+    }));
+}
+
+#[tokio::test]
 async fn agent_status_idempotency_key_is_scoped_per_agent() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));
@@ -1532,6 +1618,14 @@ async fn agent_activity_api_clamps_limit_to_200() {
 
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-broadcast-api-{}", Uuid::new_v4()));
+    app_state_with_agent_handle_at_root(agent_id, handle, root).await
+}
+
+async fn app_state_with_agent_handle_at_root(
+    agent_id: &str,
+    handle: &str,
+    root: std::path::PathBuf,
+) -> AppState {
     std::fs::create_dir_all(root.join("agents")).unwrap();
     let workspace_path = root.join("agents").join(agent_id);
     std::fs::create_dir_all(workspace_path.join("docs")).unwrap();

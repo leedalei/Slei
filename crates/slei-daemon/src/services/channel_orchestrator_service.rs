@@ -781,6 +781,17 @@ impl ChannelOrchestratorService {
                 let record = runs.remove(run_id).expect("channel agent run exists");
                 drop(runs);
                 let body = record.output.trim();
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "run.completed",
+                    "info",
+                    format!("运行完成：run={run_id}"),
+                    Some(event.to_string()),
+                    None,
+                    Some(true),
+                )
+                .await;
                 let mut visible_output_created = false;
                 if !body.is_empty() {
                     if is_channel_join_run(&record.source_message_id) {
@@ -882,17 +893,6 @@ impl ChannelOrchestratorService {
                         ),
                     )
                     .await;
-                self.record_channel_agent_activity(
-                    &record,
-                    run_id,
-                    "run.completed",
-                    "info",
-                    format!("运行完成：run={run_id}"),
-                    Some(event.to_string()),
-                    None,
-                    Some(true),
-                )
-                .await;
                 Ok(true)
             }
             Some("failed") => {
@@ -902,6 +902,17 @@ impl ChannelOrchestratorService {
                     .get("message")
                     .and_then(Value::as_str)
                     .unwrap_or("Agent runtime failed");
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "run.failed",
+                    "error",
+                    format!("运行失败：{}", activity_summary_message(message)),
+                    Some(event.to_string()),
+                    None,
+                    Some(false),
+                )
+                .await;
                 if is_channel_join_run(&record.source_message_id) {
                     let _ = self
                         .orchestration
@@ -978,17 +989,6 @@ impl ChannelOrchestratorService {
                         ),
                     )
                     .await;
-                self.record_channel_agent_activity(
-                    &record,
-                    run_id,
-                    "run.failed",
-                    "error",
-                    format!("运行失败：{}", activity_summary_message(message)),
-                    Some(event.to_string()),
-                    None,
-                    Some(false),
-                )
-                .await;
                 Ok(true)
             }
             Some("tool_started") => {
