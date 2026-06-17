@@ -1,6 +1,11 @@
 export const tasks = {
   attentionRequired: "Needs human attention",
+  allAssignees: "All assignees",
+  allChannels: "All channels",
+  assigneeFilter: "Assignee",
   board: "Board",
+  channelFilter: "Channel",
+  channelTasksCount: (count: number) => `${count} channel tasks`,
   closeThread: "Close task thread",
   commentThread: "Open task thread",
   description: "Board and list views share the same delegated task model.",
@@ -18,6 +23,9 @@ export const tasks = {
     in_review: "In review",
     done: "Done",
   },
+  taskAssigneeLabel: (name: string) => `Assigned to ${name}`,
+  taskChannelLabel: (name: string) => `From #${name}`,
   thread: "Task thread",
   title: "Tasks",
+  unknownChannel: "Unknown channel",
 };

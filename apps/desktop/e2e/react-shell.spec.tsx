@@ -35,11 +35,16 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain('aria-label="主导航"');
     expect(html).toContain("pt-10");
     expect(html).toContain('data-slot="button"');
-    expect(html).toContain(">聊天<");
-    expect(html).toContain(">任务<");
-    expect(html).toContain(">成员<");
-    expect(html).toContain(">运行设备<");
-    expect(html).toContain(">设置<");
+    expect(html).toContain('data-nav-icon="chat"');
+    expect(html).toContain('aria-label="聊天"');
+    expect(html).toContain('data-nav-icon="tasks"');
+    expect(html).toContain('aria-label="任务"');
+    expect(html).toContain('data-nav-icon="members"');
+    expect(html).toContain('aria-label="成员"');
+    expect(html).toContain('data-nav-icon="computers"');
+    expect(html).toContain('aria-label="运行设备"');
+    expect(html).toContain('data-nav-icon="settings"');
+    expect(html).toContain('aria-label="设置"');
     expect(html).not.toContain("Slei 协作中枢");
     expect(html).toContain(">聊天</h2>");
     expect(html).toContain("# all");
@@ -248,7 +253,6 @@ describe("Slei React desktop shell", () => {
     const views = ["chat", "tasks", "members", "computers", "settings"] as const;
     const sidebarTitles = {
       chat: "聊天",
-      tasks: "任务",
       members: "成员",
       computers: "运行设备",
       settings: "设置",
@@ -270,7 +274,16 @@ describe("Slei React desktop shell", () => {
       );
 
       expect(html).toContain(`data-active-view="${activeView}"`);
-      expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
+      if (activeView === "tasks") {
+        expect(html).not.toContain('class="slei-context-sidebar');
+        expect(html).not.toContain('aria-label="调整侧栏宽度"');
+        expect(html).toContain('grid-template-columns:5.5rem minmax(0, 1fr)');
+      } else {
+        expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
+        expect(html).toContain('class="slei-context-sidebar');
+        expect(html).toContain('aria-label="调整侧栏宽度"');
+        expect(html).toContain('grid-template-columns:5.5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+      }
     }
   });
 });

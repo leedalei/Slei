@@ -164,7 +164,7 @@ describe("channel embedded views", () => {
     expect(html).not.toContain('data-testid="slei-send-button"');
   });
 
-  it("keeps direct message session actions instead of channel tabs", () => {
+  it("keeps direct messages on the chat surface instead of channel tabs", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -176,8 +176,9 @@ describe("channel embedded views", () => {
       />,
     );
 
-    expect(html).toContain("新会话");
-    expect(html).toContain("历史对话");
+    expect(html).toContain('aria-label="Coda"');
+    expect(html).not.toContain("新会话");
+    expect(html).not.toContain("历史对话");
     expect(html).not.toContain('aria-label="频道视图"');
   });
 });

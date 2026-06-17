@@ -1,6 +1,11 @@
 export const tasks = {
   attentionRequired: "需要用户关注",
+  allAssignees: "全部负责人",
+  allChannels: "全部频道",
+  assigneeFilter: "负责人",
   board: "看板",
+  channelFilter: "频道",
+  channelTasksCount: (count: number) => `${count} 个频道任务`,
   closeThread: "关闭任务讨论",
   commentThread: "打开任务讨论",
   description: "看板和列表共享同一套委派任务模型。",
@@ -18,6 +23,9 @@ export const tasks = {
     in_review: "待评审",
     done: "已完成",
   },
+  taskAssigneeLabel: (name: string) => `交给 ${name}`,
+  taskChannelLabel: (name: string) => `来自 #${name}`,
   thread: "任务讨论",
   title: "任务",
+  unknownChannel: "未知频道",
 };

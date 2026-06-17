@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { findActiveAgentActivities, selectAgentActivityForTick, shouldRefreshConversationMessages, SleiAppFrame } from "../src/app/SleiApp";
+import { formatLocalRecordDateTime } from "../src/app/model";
 import { createSleiFixtures, type SleiMember } from "../src/test/fixtures";
 
 const nodes = createSleiFixtures().nodes;
@@ -350,7 +351,7 @@ describe("real agent members and direct messages", () => {
     ).toBe(false);
   });
 
-  it("renders only new session and history actions for active direct messages", () => {
+  it("does not render removed session controls in chat headers", () => {
     const dmHtml = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -374,17 +375,17 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(dmHtml).toContain("新会话");
+    expect(dmHtml).not.toContain("新会话");
     expect(dmHtml).not.toContain("重置会话");
-    expect(dmHtml).toContain("历史对话");
+    expect(dmHtml).not.toContain("历史对话");
     expect(dmHtml).not.toContain("Runtime 已检测");
     expect(dmHtml).not.toContain('aria-label="频道视图"');
     expect(channelHtml).not.toContain("重置会话");
-    expect(channelHtml).toContain("新会话");
-    expect(channelHtml).toContain("历史对话");
+    expect(channelHtml).not.toContain("新会话");
+    expect(channelHtml).not.toContain("历史对话");
   });
 
-  it("hides the as-task composer toggle in direct messages", () => {
+  it("shows the as-task composer toggle in direct messages and channels", () => {
     const dmHtml = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -399,7 +400,7 @@ describe("real agent members and direct messages", () => {
       <SleiAppFrame activeView="chat" data={createSleiFixtures({ members: [agent] })} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(dmHtml).not.toContain("转为任务");
+    expect(dmHtml).toContain("转为任务");
     expect(channelHtml).toContain("转为任务");
   });
 
@@ -473,7 +474,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("用户");
   });
 
-  it("uses the active session title as the direct message detail title", () => {
+  it("uses the member name as the direct message detail title", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -485,10 +486,11 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("帮我检查历史会话");
+    expect(html).toContain('aria-label="Coda"');
+    expect(html).not.toContain("帮我检查历史会话");
   });
 
-  it("renders the member name and created time under direct message session titles", () => {
+  it("renders the member conversation created time under direct message titles", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -500,12 +502,11 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("Coda ｜");
-    expect(html).toContain("2026-05-29 17:00:00");
+    expect(html).toContain(formatLocalRecordDateTime("2026-05-29T10:00:00Z"));
     expect(html).not.toContain("@coda · 私聊");
   });
 
-  it("falls back to the new session title for unnamed direct message sessions", () => {
+  it("keeps unnamed direct message sessions on the member title", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -530,10 +531,11 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("新会话");
+    expect(html).toContain('aria-label="Coda"');
+    expect(html).not.toContain("新会话");
   });
 
-  it("renders direct message history drawer with sessions newest first and filters messages by active session", () => {
+  it("renders direct messages without a session history drawer", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -570,16 +572,11 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain('aria-label="历史对话"');
-    expect(html).toContain("历史对话");
-    expect(html).toContain("帮我检查历史会话");
-    expect(html).toContain("新会话");
-    const sessionListHtml = html.slice(html.indexOf('aria-label="历史对话"'));
-    expect(sessionListHtml).toContain("overflow-hidden");
-    expect(sessionListHtml).toContain("truncate");
-    expect(sessionListHtml.indexOf("新会话")).toBeLessThan(sessionListHtml.indexOf("帮我检查历史会话"));
+    expect(html).not.toContain('aria-label="历史对话"');
+    expect(html).not.toContain("历史对话");
+    expect(html).not.toContain("帮我检查历史会话");
     expect(html).toContain("当前消息");
-    expect(html).not.toContain("旧消息");
+    expect(html).toContain("旧消息");
   });
 
   it("disables direct message send while current session is running", () => {
@@ -616,7 +613,7 @@ describe("real agent members and direct messages", () => {
     expect(sendButton).toContain(' disabled=""');
   });
 
-  it("does not disable send for stale running messages from another session", () => {
+  it("disables send while any direct message run is still active", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -647,11 +644,10 @@ describe("real agent members and direct messages", () => {
 
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
-    expect(sendButton).not.toContain(' disabled=""');
-    expect(html).not.toContain("旧会话仍在处理中");
+    expect(sendButton).toContain(' disabled=""');
   });
 
-  it("does not show sessionless direct messages in a fresh active session", () => {
+  it("shows sessionless direct messages after session UI is removed", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -677,6 +673,6 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).not.toContain("缺少 session 的旧消息");
+    expect(html).toContain("缺少 session 的旧消息");
   });
 });

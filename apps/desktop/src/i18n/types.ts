@@ -161,7 +161,12 @@ export type DesktopMessages = {
   };
   tasks: {
     attentionRequired: string;
+    allAssignees: string;
+    allChannels: string;
+    assigneeFilter: string;
     board: string;
+    channelFilter: string;
+    channelTasksCount: (count: number) => string;
     closeThread: string;
     commentThread: string;
     description: string;
@@ -174,8 +179,11 @@ export type DesktopMessages = {
     markDone: string;
     pendingAssignment: string;
     status: Record<SleiTaskStatus, string>;
+    taskAssigneeLabel: (name: string) => string;
+    taskChannelLabel: (name: string) => string;
     thread: string;
     title: string;
+    unknownChannel: string;
   };
   members: {
     activity: string;

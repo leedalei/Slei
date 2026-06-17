@@ -120,7 +120,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(appFrameSource()).not.toContain('className="space-y-4 pr-2"');
   });
 
-  it("renders a dedicated search page with filters and result links back to conversations", () => {
+  it("renders a dedicated global search page with filters", () => {
     const data = createSleiFixtures({
       channels: [
         { id: "all", name: "all", description: "所有成员的默认频道", unread: 0 },
@@ -142,19 +142,19 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain('aria-label="搜索会话"');
-    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('aria-label="全局搜索"');
     expect(html).toContain('data-slot="input"');
-    expect(html).toContain("搜索会话");
-    expect(html).toContain("用户");
+    expect(html).toContain("搜索成员、频道和消息");
+    expect(html).toContain("发言人");
+    expect(html).toContain("任何人");
     expect(html).toContain("频道");
+    expect(html).toContain("全部频道");
     expect(html).toContain("时间");
-    expect(html).toContain("dev channel result");
-    expect(html).toContain("打开会话 m2");
-    expect(html).toContain("# dev-team");
+    expect(html).toContain("不限时间");
+    expect(html).not.toContain("dev channel result");
     expect(html).not.toContain("默认频道消息");
-    expect(searchPageSource()).toContain("stableSearchFiltersKey");
-    expect(searchPageSource()).toContain("normalizeSearchFilters");
+    expect(searchPageSource()).toContain("buildGlobalSearchRequest");
+    expect(searchPageSource()).toContain("stableGlobalSearchRequestKey");
   });
 
   it("renders channel creation as a modal dialog instead of an inline form", () => {
@@ -456,7 +456,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('data-nav-icon="chat"');
     expect(html).toContain('data-slot="button"');
     expect(html).toContain("grid h-16 w-16");
-    expect(html).toContain("text-[11px]");
+    expect(html).toContain('aria-label="聊天"');
+    expect(html).not.toContain("text-[11px]");
     expect(html).not.toContain("slei-rail__button");
   });
 });

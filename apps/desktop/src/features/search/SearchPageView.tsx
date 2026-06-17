@@ -152,7 +152,7 @@ export function SearchPage({
 
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
-      <form className="border-b px-6 py-5" data-tauri-drag-region="deep" onSubmit={submitSearch}>
+      <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
           <div className="flex min-h-12 items-center gap-3 rounded-xl border bg-background px-3 shadow-sm focus-within:ring-2 focus-within:ring-ring">
             <Search aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />

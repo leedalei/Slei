@@ -117,7 +117,7 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-task-root-entry-replies");
     expect(html).toContain("data-avatar-size");
     expect(html).toContain("用户");
-    expect(html).toContain("border-primary/30");
+    expect(html).toContain("hover:bg-muted/20");
     expect(html).toContain("10:00");
     const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
     const taskEntryClose = taskEntryHtml.indexOf("</article>");
