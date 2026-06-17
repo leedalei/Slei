@@ -887,6 +887,14 @@ pub struct GlobalMessageSearchResult {
     pub matched_fields: Vec<String>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum GlobalSearchError {
+    #[error("daemon request failed: {0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
+}
+
 impl DaemonBroker {
     pub fn default_local() -> Self {
         Self::new(
@@ -1446,9 +1454,11 @@ impl DaemonBroker {
         self.list_tasks_locally(&query)
     }
 
-    pub fn global_search(&self, query: GlobalSearchQuery) -> GlobalSearchReceipt {
+    pub fn global_search(
+        &self,
+        query: GlobalSearchQuery,
+    ) -> Result<GlobalSearchReceipt, GlobalSearchError> {
         self.fetch_global_search_from_daemon(&query)
-            .unwrap_or_else(|| empty_global_search_receipt(&query))
     }
 
     pub fn get_task_thread(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -2823,9 +2833,12 @@ impl DaemonBroker {
     fn fetch_global_search_from_daemon(
         &self,
         query: &GlobalSearchQuery,
-    ) -> Option<GlobalSearchReceipt> {
-        let response = self.send_daemon_request("GET", &global_search_path(query), None, &[])?;
-        serde_json::from_str::<GlobalSearchReceipt>(&response).ok()
+    ) -> Result<GlobalSearchReceipt, GlobalSearchError> {
+        let response = self
+            .send_daemon_request_checked("GET", &global_search_path(query), None, &[])
+            .map_err(GlobalSearchError::DaemonRequest)?;
+        serde_json::from_str::<GlobalSearchReceipt>(&response)
+            .map_err(|error| GlobalSearchError::DaemonResponse(error.to_string()))
     }
 
     fn fetch_task_thread_from_daemon(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -4409,16 +4422,6 @@ fn global_search_path(query: &GlobalSearchQuery) -> String {
         pairs.push(format!("messageLimit={message_limit}"));
     }
     format!("/v1/search/global?{}", pairs.join("&"))
-}
-
-fn empty_global_search_receipt(query: &GlobalSearchQuery) -> GlobalSearchReceipt {
-    GlobalSearchReceipt {
-        query: query.q.trim().to_string(),
-        totals: GlobalSearchTotals::default(),
-        agents: Vec::new(),
-        channels: Vec::new(),
-        messages: Vec::new(),
-    }
 }
 
 fn query_component(value: &str) -> String {

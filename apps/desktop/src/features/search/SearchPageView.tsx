@@ -10,7 +10,12 @@ import type {
   GlobalSearchReceipt,
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures } from "../../app/types";
-import { localHumanPresentation, stripChannelHash, type UserProfile } from "../../app/model";
+import {
+  formatMessageDateTime,
+  localHumanPresentation,
+  stripChannelHash,
+  type UserProfile,
+} from "../../app/model";
 import { Empty, MemberAvatar } from "../../components";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +23,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   buildGlobalSearchRequest,
   createGlobalSearchSections,
-  getGlobalMessageDisplayLabels,
   highlightSearchTokens,
   type GlobalSearchTimeRangeFilter,
+  type GlobalMessageDisplayLabels,
 } from "./globalSearch";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
@@ -263,6 +268,7 @@ export function SearchPage({
                     )) : null}
                     {section.category === "channels" ? section.items.map((result) => (
                       <ChannelResultButton
+                        data={data}
                         key={result.channelId}
                         messages={messages}
                         query={submittedQuery}
@@ -272,10 +278,13 @@ export function SearchPage({
                     )) : null}
                     {section.category === "messages" ? section.items.map((result) => (
                       <MessageResultButton
+                        data={data}
                         key={`${result.sourceKind}:${result.messageId}`}
                         messages={messages}
+                        profile={profile ?? null}
                         query={submittedQuery}
                         result={result}
+                        timeZone={timeZone}
                         onLegacySelect={onResultSelect}
                         onSelect={onMessageResultSelect}
                       />
@@ -391,12 +400,15 @@ function AgentResultButton(input: {
 }
 
 function ChannelResultButton(input: {
+  data: SleiFixtures;
   messages: DesktopMessages;
   query: string;
   result: GlobalChannelSearchResult;
   onSelect?: (channelId: string) => void;
 }) {
   const title = input.result.title || input.result.channelId;
+  const channel = input.data.channels.find((candidate) => candidate.id === input.result.channelId);
+  const subtitle = channelResultSubtitle(input.result, channel?.description, input.messages);
   return (
     <Button
       aria-label={input.messages.search.navigation.openChannel(title)}
@@ -410,20 +422,27 @@ function ChannelResultButton(input: {
           <Hash aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <strong className="truncate text-sm">{highlighted(title, input.query)}</strong>
         </span>
-        <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(input.result.subtitle, input.query)}</span>
+        <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(subtitle, input.query)}</span>
       </span>
     </Button>
   );
 }
 
 function MessageResultButton(input: {
+  data: SleiFixtures;
   messages: DesktopMessages;
+  profile: UserProfile | null;
   query: string;
   result: GlobalMessageSearchResult;
+  timeZone?: string;
   onLegacySelect?: (channelId: string, messageId: string) => void;
   onSelect?: (result: GlobalMessageSearchResult) => void;
 }) {
-  const labels = getGlobalMessageDisplayLabels(input.result);
+  const labels = localizedGlobalMessageDisplayLabels(input.result, {
+    data: input.data,
+    messages: input.messages,
+    profile: input.profile,
+  });
   return (
     <Button
       aria-label={input.messages.search.navigation.openMessage(input.result.messageId)}
@@ -441,7 +460,7 @@ function MessageResultButton(input: {
       <span className="grid min-w-0 gap-1">
         <span className="flex min-w-0 items-center gap-2 text-xs font-normal text-muted-foreground">
           <span className="truncate">{labels.subtitle}</span>
-          <span className="shrink-0">{formatResultDate(input.result.createdAt)}</span>
+          <span className="shrink-0">{formatResultDate(input.result.createdAt, input.timeZone)}</span>
         </span>
         <strong className="truncate text-sm">{highlighted(labels.title, input.query)}</strong>
         <span className="line-clamp-2 text-sm font-normal text-muted-foreground">{highlighted(input.result.snippet, input.query)}</span>
@@ -474,6 +493,119 @@ function createFromOptions(data: SleiFixtures, profile: UserProfile | null, mess
   ];
 }
 
+function channelResultSubtitle(
+  result: GlobalChannelSearchResult,
+  localDescription: string | undefined,
+  messages: DesktopMessages,
+) {
+  const description = trimText(localDescription);
+  if (description) return description;
+  const subtitle = trimText(result.subtitle);
+  if (isRawCategoryLabel(subtitle, "channel")) return messages.search.categories.channel;
+  return subtitle;
+}
+
+function localizedGlobalMessageDisplayLabels(
+  result: GlobalMessageSearchResult,
+  context: {
+    data: SleiFixtures;
+    messages: DesktopMessages;
+    profile: UserProfile | null;
+  },
+): GlobalMessageDisplayLabels {
+  const authorLabel = messageAuthorLabel(result, context);
+  const sourceLabel = messageSourceLabel(result, context);
+  const title = firstVisibleText(cleanDaemonVisibleLabel(result.title, context), sourceLabel, result.snippet);
+  return {
+    title,
+    subtitle: [authorLabel, sourceLabel].filter(Boolean).join(" - "),
+    sourceLabel,
+    authorLabel,
+  };
+}
+
+function messageAuthorLabel(
+  result: GlobalMessageSearchResult,
+  context: {
+    data: SleiFixtures;
+    messages: DesktopMessages;
+    profile: UserProfile | null;
+  },
+) {
+  const human = localHumanPresentation(context.profile, context.messages);
+  if (isLocalHumanId(result.authorId)) return human.displayName;
+  const member = result.authorId ? context.data.members.find((candidate) => candidate.id === result.authorId) : undefined;
+  if (member) return [member.name, member.handle].filter(Boolean).join(" ");
+  const daemonLabel = cleanDaemonVisibleLabel(result.authorLabel, context);
+  if (daemonLabel) return daemonLabel;
+  return firstVisibleText(result.authorName, result.authorHandle, result.authorId);
+}
+
+function messageSourceLabel(
+  result: GlobalMessageSearchResult,
+  context: {
+    data: SleiFixtures;
+    messages: DesktopMessages;
+    profile: UserProfile | null;
+  },
+) {
+  if (result.sourceKind === "channel") {
+    const channel = result.channelId ? context.data.channels.find((candidate) => candidate.id === result.channelId) : undefined;
+    if (channel) return `#${stripChannelHash(channel.name)}`;
+    const sourceLabel = trimText(result.sourceLabel);
+    if (sourceLabel && !isRawCategoryLabel(sourceLabel, "channel")) return sourceLabel;
+    return firstVisibleText(result.channelId, context.messages.search.categories.channel);
+  }
+
+  const member = context.data.members.find((candidate) => (
+    Boolean(result.conversationId?.includes(candidate.id))
+  ));
+  if (member) return member.name;
+  const sourceLabel = cleanDaemonVisibleLabel(result.sourceLabel, context);
+  if (sourceLabel) return sourceLabel;
+  return firstVisibleText(result.conversationId, result.sessionId);
+}
+
+function cleanDaemonVisibleLabel(
+  value: string | null | undefined,
+  context: {
+    messages: DesktopMessages;
+    profile: UserProfile | null;
+  },
+) {
+  const label = trimText(value);
+  if (!label) return "";
+  if (isRawHumanLabel(label)) return localHumanPresentation(context.profile, context.messages).displayName;
+  if (isRawCategoryLabel(label, "channel")) return context.messages.search.categories.channel;
+  if (isRawCategoryLabel(label, "message")) return context.messages.search.categories.message;
+  if (isRawCategoryLabel(label, "agent")) return context.messages.search.categories.agent;
+  return label;
+}
+
+function isLocalHumanId(value: string | null | undefined) {
+  return trimText(value) === "human:local";
+}
+
+function isRawHumanLabel(value: string) {
+  return ["me", "@me", "human:local", "local"].includes(value.trim().toLocaleLowerCase());
+}
+
+function isRawCategoryLabel(value: string, category: "agent" | "channel" | "message") {
+  return value.trim().toLocaleLowerCase() === category;
+}
+
+function firstVisibleText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = trimText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function trimText(value: string | null | undefined) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function emptyGlobalSearchReceipt(query: string): GlobalSearchReceipt {
   return {
     query,
@@ -500,13 +632,8 @@ function stableGlobalSearchRequestKey(request: GlobalSearchQuery): string {
   });
 }
 
-function formatResultDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+function formatResultDate(value: string, timeZone?: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  return formatMessageDateTime(raw, timeZone);
 }

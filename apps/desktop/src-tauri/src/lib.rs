@@ -439,7 +439,8 @@ mod tests {
                 channel_limit: Some(20),
                 message_limit: Some(12),
             },
-        );
+        )
+        .unwrap();
         let request = handle.join().unwrap();
 
         assert_eq!(receipt.query, "needle phrase");
@@ -458,6 +459,70 @@ mod tests {
         );
         assert!(request.contains("GET /v1/search/global?query=needle%20phrase&fromId=msg%2042&channelId=dev-team&timeRange=today&timeZone=America%2FLos_Angeles&includeAgents=false&includeMessages=true&channelLimit=20&messageLimit=12 HTTP/1.1"));
         assert!(request.contains("Authorization: Bearer secret-token"));
+    }
+
+    #[test]
+    fn global_search_command_returns_error_when_daemon_unreachable() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = global_search(
+            &broker,
+            GlobalSearchQuery {
+                q: "needle".to_string(),
+                ..GlobalSearchQuery::default()
+            },
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("daemon request failed"));
+    }
+
+    #[test]
+    fn global_search_command_returns_error_when_daemon_response_is_invalid() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"query":"needle","totals":{"agents":0}}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = global_search(
+            &broker,
+            GlobalSearchQuery {
+                q: "needle".to_string(),
+                ..GlobalSearchQuery::default()
+            },
+        )
+        .unwrap_err();
+        let request = handle.join().unwrap();
+
+        assert!(error.to_string().contains("daemon response invalid"));
+        assert!(request.contains("GET /v1/search/global?query=needle HTTP/1.1"));
     }
 
     #[test]

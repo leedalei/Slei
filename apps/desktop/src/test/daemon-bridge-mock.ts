@@ -852,7 +852,7 @@ function globalSearchMockReceipt(
   const channelResults = source.channelMessages
     .filter((message) => includeMessages && !message.deleted)
     .filter((message) => !query.channelId || message.channelId === query.channelId)
-    .filter((message) => !query.fromId || message.id < query.fromId)
+    .filter((message) => !query.fromId || message.authorId === query.fromId)
     .filter((message) => searchMatches(needle, [message.body ?? ""]))
     .map((message) => {
       const channel = channelById.get(message.channelId);
@@ -879,7 +879,7 @@ function globalSearchMockReceipt(
     ? []
     : source.messages
       .filter((message) => includeMessages)
-      .filter((message) => !query.fromId || message.id < query.fromId)
+      .filter((message) => !query.fromId || message.authorId === query.fromId)
       .filter((message) => searchMatches(needle, [message.body]))
       .map((message) => {
         const conversation = source.conversations.find((candidate) => candidate.id === message.conversationId);

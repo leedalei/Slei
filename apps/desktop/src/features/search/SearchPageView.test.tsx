@@ -352,6 +352,91 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).not.toContain("backend timeout in English");
   });
 
+  it("renders zh-CN channel and human message labels without leaking daemon English copy", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const localizedReceipt: GlobalSearchReceipt = {
+      query: "发布",
+      totals: { agents: 0, channels: 1, messages: 1 },
+      agents: [],
+      channels: [
+        {
+          kind: "channel",
+          channelId: "channel_release",
+          title: "#release",
+          subtitle: "Channel",
+          matchedFields: ["title"],
+        },
+      ],
+      messages: [
+        {
+          kind: "message",
+          sourceKind: "channel",
+          messageId: "msg_human_release",
+          channelId: "channel_release",
+          sessionId: "session_release",
+          authorId: "human:local",
+          authorLabel: "Me",
+          sourceLabel: "Channel",
+          snippet: "发布检查已经完成",
+          createdAt: "2026-06-17T08:00:00.000Z",
+          matchedFields: ["snippet"],
+        },
+      ],
+    };
+    const rootElement = await renderSearchPage({
+      messages,
+      profile: { displayName: "李雷", handle: "@leelei", avatar: "李" },
+      data: createSleiFixtures({
+        channels: [
+          { id: "channel_release", name: "release", description: "发布频道", unread: 0 },
+        ],
+        members: [agentMember("agent_coda", "Coda")],
+      }),
+      onGlobalSearch: async () => localizedReceipt,
+    });
+
+    await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "发布");
+    await clickButtonWithExactText(rootElement, "搜索");
+
+    expect(rootElement.textContent).toContain("发布频道");
+    expect(rootElement.textContent).toContain("李雷");
+    expect(rootElement.textContent).not.toContain("Channel");
+    expect(rootElement.textContent).not.toContain("Me");
+    expect(rootElement.textContent).not.toContain("@me");
+  });
+
+  it("renders a non-empty date for DM message results with epoch-second createdAt values", async () => {
+    const dmReceipt: GlobalSearchReceipt = {
+      query: "hello",
+      totals: { agents: 0, channels: 0, messages: 1 },
+      agents: [],
+      channels: [],
+      messages: [
+        {
+          kind: "message",
+          sourceKind: "dm",
+          messageId: "msg_epoch",
+          conversationId: "dm:agent_coda",
+          sessionId: "session:dm:agent_coda",
+          authorId: "agent_coda",
+          authorName: "Coda",
+          authorHandle: "@coda",
+          sourceLabel: "Coda",
+          snippet: "hello from epoch seconds",
+          createdAt: "1780390800",
+          matchedFields: ["snippet"],
+        },
+      ],
+    };
+    const rootElement = await renderSearchPage({ onGlobalSearch: async () => dmReceipt });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), "hello");
+    await clickButton(rootElement, "Search");
+
+    const resultButton = Array.from(rootElement.querySelectorAll("button")).find((button) => button.textContent?.includes("hello from epoch seconds"));
+    expect(resultButton?.textContent).toMatch(/\d{2}[-/]\d{2}/);
+  });
+
   it("calls result selection callbacks with the selected result ids", async () => {
     const onAgentResultSelect = vi.fn();
     const onChannelResultSelect = vi.fn();
