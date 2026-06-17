@@ -2254,7 +2254,46 @@ fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
         message.channel_id, message.id, message.created_at, message_type, message.author_id, body
     );
     format!(
-        "agent_id={agent_id}\nchannel_id={channel_id}\nmessage_id={message_id}\nauthor_id={author_id}\ncreated_at={created_at}\n\nTriggering message:\n{visible_message}\n\nDecide whether this message needs your response. If you should handle it, first run exactly:\nslei message claim {message_id} --agent {agent_id}\n\nIf the claim succeeds, use the Slei CLI for all follow-up work: pull history with `slei message read --channel #{channel_id}`, update status with `slei agent status --agent {agent_id} --state ... --phase ...`, send channel replies by piping the body from stdin, for example `printf \"...\" | slei message send --target \"#{channel_id}\" --agent {agent_id}`, and create/read/update tasks with `slei task` commands. Do not rely on this prompt for channel history; fetch history with CLI only when needed.",
+        r##"# Slei Channel Run Packet
+
+## Runtime Context
+- Agent ID: `{agent_id}`
+- Channel ID: `{channel_id}`
+- Message ID: `{message_id}`
+- Author ID: `{author_id}`
+- Created At: `{created_at}`
+
+## Triggering Message
+```text
+{visible_message}
+```
+
+## Required First Action
+Decide whether this message needs your response according to the system Claim Intent Classes.
+
+If you should respond, first run exactly:
+
+```bash
+slei message claim {message_id} --agent {agent_id}
+```
+
+If the claim fails, exit silently.
+
+## Optional Context Lookup
+Do not rely on this packet for full channel history. Read nearby previous messages only when needed to classify group flow, order, prior participants, or topic continuity.
+
+```bash
+slei message read --channel "#{channel_id}" --around {message_id}
+```
+
+## Visible Reply
+If the claim succeeds, use Slei CLI for all visible follow-up work. Send channel replies by piping the body through stdin:
+
+```bash
+printf "..." | slei message send --target "#{channel_id}" --agent {agent_id}
+```
+
+Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful progress, and use `slei task` commands for task operations when needed."##,
         channel_id = message.channel_id,
         message_id = message.id,
         author_id = message.author_id,
@@ -2377,4 +2416,44 @@ pub enum ChannelOrchestratorError {
     InactiveIdempotentMessage { message_id: String },
     #[error("orchestration persistence error: {0}")]
     Sql(#[from] sqlx::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::message_service::{MessageKind, MessageRecord};
+
+    #[test]
+    fn broadcast_message_prompt_is_a_markdown_run_packet() {
+        let prompt = broadcast_message_prompt(
+            "agent_nova",
+            &MessageRecord {
+                id: "msg_group_1".to_string(),
+                channel_id: "all".to_string(),
+                session_id: Some("session_all".to_string()),
+                author_id: "human_lei".to_string(),
+                body: Some("@all 早上好".to_string()),
+                as_task: false,
+                kind: MessageKind::Human,
+                deleted: false,
+                edited: false,
+                created_at: "2026-06-17T06:28:04Z".to_string(),
+                cards: Vec::new(),
+            },
+        );
+
+        assert!(prompt.contains("# Slei Channel Run Packet"));
+        assert!(prompt.contains("## Runtime Context"));
+        assert!(prompt.contains("- Agent ID: `agent_nova`"));
+        assert!(prompt.contains("- Channel ID: `all`"));
+        assert!(prompt.contains("## Triggering Message"));
+        assert!(prompt.contains("```text\n[target=#all msg=msg_group_1 time=2026-06-17T06:28:04Z type=human] human_lei: @all 早上好\n```"));
+        assert!(prompt.contains("## Required First Action"));
+        assert!(prompt.contains("```bash\nslei message claim msg_group_1 --agent agent_nova\n```"));
+        assert!(prompt.contains("## Optional Context Lookup"));
+        assert!(prompt.contains("slei message read --channel \"#all\" --around msg_group_1"));
+        assert!(prompt.contains("## Visible Reply"));
+        assert!(prompt
+            .contains("printf \"...\" | slei message send --target \"#all\" --agent agent_nova"));
+    }
 }

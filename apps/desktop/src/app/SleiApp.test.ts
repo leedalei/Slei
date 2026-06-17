@@ -14,6 +14,7 @@ import {
   keepOnlyClaimedAgentActivityByDiagnostic,
   markCoordinatorActivityFailedByDiagnostic,
   applyPreferenceMutation,
+  removeCompletedAgentActivityByDiagnostic,
   shouldToastBackendServiceError,
   updateAgentActivityByDiagnostic,
   replaceChannelMessages,
@@ -263,6 +264,32 @@ describe("createChannelAgentReplyMessage", () => {
       status: "failed",
       toolCall: "channel_agent_reply",
     });
+  });
+
+  it("removes pending agent activity when daemon reports delivery completed without a visible reply", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "content",
+      status: "pending",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+
+    const messages = removeCompletedAgentActivityByDiagnostic([pending], {
+      sequence: 68,
+      eventType: "channel_agent_runtime.delivery_completed",
+      entityId: "event_68",
+      payload: "run_id=run_1 agent_id=agent_nova channel_id=content source_message_id=msg_route_1 marked=true",
+      createdAt: "2026-06-11 09:59:39",
+    });
+
+    expect(messages).toEqual([]);
   });
 
   it("marks stale pending agent activity failed so the sidebar stops thinking", () => {

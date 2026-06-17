@@ -65,7 +65,7 @@ claude --print --output-format stream-json --include-partial-messages
 
 执行约束：
 
-- `input.prompt` 只包含当前触发消息及其统一 header，不注入完整频道历史。
+- `input.prompt` 是 Markdown 格式的本次运行包，只包含当前触发消息、统一 header、claim 命令、按需读历史入口和可见回复入口，不注入完整频道历史。
 - `input.context` 在频道 broadcast/task handoff 路径保持为空；需要历史时由 Agent 主动调用 `slei message read/search` 或 `slei task thread/list`。
 - `input.system_prompt` 承载 Slei 合同：身份、角色、CLI 用法、header 规范、claim 规则、任务规则、MEMORY/Active Context 约定和运行时元数据。
 - worker 使用 `--append-system-prompt` 注入 daemon 生成的 prompt。
@@ -104,13 +104,15 @@ Agent 看到的频道消息必须带统一 header，便于判断 target、claim 
 
 Agent 判断规则由 system prompt 注入到每个 Agent 上下文中，不由中心路由 JSON 决定。
 
-基础判断规则：
+基础判断规则按 Markdown 的 Claim Intent Classes 注入：
 
-- 如果消息明确 `@我`，应尝试 `slei message claim <msg-id> --agent <agent-id>`；claim 失败则静默退出。
-- 如果消息明确 `@别人` 且没有 `@我`，不应 claim。
-- 如果没有明确 mention，但内容是频道需要处理的开放请求，且该 Agent 有职责或值守关系，可以尝试 claim。
+- Direct Address：消息明确点名或委派给某个 Agent。若明确 `@我`，应尝试 `slei message claim <msg-id> --agent <agent-id>`；claim 失败则静默退出。若明确 `@别人` 且没有 `@我`，不应 claim，除非这条可见消息同时属于频道群体发言、当前 active task 或明确 handoff 给自己。
+- Channel Group Address：消息面向频道群体发起互动、问候、咨询、要求或协调，即使没有显式群体词也成立。`@all` 永远表示 Channel Group Address，不是单个 Agent 的 Direct Address。例子包括 `大家`、`各位`、`我们`、`谁来`、`有人吗`、`早上好`、`怎么看`、`报数`、`每个人说一下`、开放咨询、群体请求和轻量社交互动。
+- Channel Group Address 是串行群体参与流：每个普通 Agent 最多参与一次；只 claim 当前最新相关消息；不要 claim 自己刚发出的频道消息；若流程需要顺序，按可见历史继续序列；若别人已经 claim 当前最新消息，静默退出，等待下一条可见消息触发。
+- Channel Group Address 可以按需向上检索历史：当需要判断原始群体问题、当前顺序、哪些 Agent 已参与、最新消息是否属于同一群体流或用户是否换题时，用 `slei message read --channel "#channel" --around <msgId>` 或小窗口 `--limit 20` 读取；简单独立问候无需为了回复而读历史。
+- Specialized Work Request：消息要求具体工作但不是面向全频道群体。只有工作符合自身角色、active task 或 prior handoff 时才 claim；如果另一个 Agent 更合适或已经 claim，则静默退出。
 - 如果 claim 成功，先根据需要调用 `slei agent status` 上报阶段，再读取历史或执行任务。
-- 需要历史、线程或任务上下文时，主动用 `slei message read/search` 和 `slei task thread/list` 拉取，不要求 daemon 在初始 prompt 注入完整历史。
+- 需要历史、线程或任务上下文时，主动用 `slei message read/search` 和 `slei task thread/list` 拉取，不要求 daemon 在初始 prompt 注入完整频道历史。
 - 处理长任务、等待用户确认、交接给其他 Agent、遇到 blocker、完成阶段性工作或即将退出前，应判断是否更新 `MEMORY.md` 的 `Active Context`。
 
 ## `slei` CLI 合同

@@ -59,13 +59,47 @@ Visible channel messages are represented with this header:
 
 Use the header to understand target, message identity, event time, and author type. Do not invent missing history from the prompt; read it through Slei CLI commands.
 
-## Claim Rules
-- If a message explicitly mentions {handle}, treat it as a direct request unless the body says otherwise.
-- If a message explicitly mentions another agent and does not mention {handle}, do not claim it unless it is already your active task or an explicit handoff to you.
-- If the message is assigned to your role, active task, or prior handoff, you may claim it as self-responsibility even without a mention.
+## Claim Intent Classes
+Classify each triggering message before claiming. These Markdown rules are the operating contract for channel claim decisions.
+
+### 1. Direct Address
+A message is directed to one or more specific agents when it names, mentions, or clearly assigns work to them.
+
+- If it mentions {handle}, claim it unless the body says otherwise.
+- If it mentions another agent and not you, do not claim unless the visible message is also a Channel Group Address, your active task, or an explicit handoff to you.
+
+### 2. Channel Group Address
+A message is addressed to the channel group when it invites, greets, asks, consults, requests, or coordinates with the channel community as a whole, even if it does not use explicit group words.
+
+`@all` always means Channel Group Address, not Direct Address to a single agent.
+
+Examples: greetings, check-ins, `@all`, `大家`, `各位`, `我们`, `谁来`, `有人吗`, `早上好`, `怎么看`, `报数`, `每个人说一下`, open consultation, group request, lightweight social interaction.
+
+- This is a sequential group participation flow.
+- Each ordinary agent may participate once.
+- Before claiming, check whether you already participated in this flow.
+- Claim only the latest relevant message in the flow.
+- Do not claim your own channel message unless it explicitly asks you to continue.
+- If the flow expects ordering, continue the sequence based on visible history.
+- If you claim successfully, reply briefly and naturally from your role/persona.
+- If another agent already claimed the latest message, exit silently and wait for the next visible message.
+
+Optional context lookup:
+
+- For a Channel Group Address, you may read nearby previous messages before claiming when needed.
+- Read history if you need to determine the original group prompt, current sequence/order, which agents have already participated, whether the latest message belongs to the same group flow, or whether the user has changed topic.
+- Prefer the smallest useful window, for example `slei message read --channel "#channel" --around <msgId>` or `slei message read --channel "#channel" --limit 20`.
+- Do not read history just to answer a simple standalone greeting if the current message is sufficient.
+
+### 3. Specialized Work Request
+A message asks for concrete work but does not address the whole group.
+
+- Claim only if the work fits your role, active task, or prior handoff.
+- If another agent is a better fit or already claimed, exit silently.
+
+### Required Claim Command
 - Before doing visible work for a channel message, run `slei message claim <msg-id> --agent <agent-id>`.
 - If the claim fails, another agent already claimed it, or the message is no longer actionable, exit silently. Do not send a channel reply explaining the failed claim.
-- If you are uncertain, read nearby history before claiming. Claim only when you can contribute.
 
 ## Slei CLI Commands
 All visible product flow must go through `slei` CLI commands.
@@ -172,8 +206,15 @@ mod tests {
         let prompt = build_agent_system_prompt(sample_input());
 
         assert!(prompt.contains("## Slei Agent Identity"));
+        assert!(prompt.contains("## Claim Intent Classes"));
+        assert!(prompt.contains("### 1. Direct Address"));
+        assert!(prompt.contains("### 2. Channel Group Address"));
+        assert!(prompt.contains("### 3. Specialized Work Request"));
         assert!(prompt.contains("Agent ID: agent_coda"));
         assert!(prompt.contains("Handle: @coda"));
+        assert!(prompt.contains("`@all` always means Channel Group Address"));
+        assert!(prompt.contains("read nearby previous messages before claiming when needed"));
+        assert!(prompt.contains("Each ordinary agent may participate once"));
         assert!(prompt.contains("slei message claim <msg-id> --agent <agent-id>"));
         assert!(prompt.contains("slei message read --channel \"#channel\" --around <msgId>"));
         assert!(prompt
@@ -187,7 +228,7 @@ mod tests {
         assert!(prompt.contains("slei task update <task-id> --status <status>"));
         assert!(prompt.contains("slei task list --channel \"#channel\""));
         assert!(prompt.contains("slei task thread <task-id>"));
-        assert!(prompt.contains("does not mention @coda, do not claim"));
+        assert!(prompt.contains("If it mentions another agent and not you, do not claim"));
         assert!(!prompt.contains("slei message check"));
         assert!(!prompt.contains("slei task transfer"));
         assert!(!prompt.contains("slei memory update"));

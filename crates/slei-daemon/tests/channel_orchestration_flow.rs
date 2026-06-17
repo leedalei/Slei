@@ -3495,11 +3495,11 @@ fn assert_broadcast_runs_started(
             .unwrap_or_else(|| panic!("missing start_run for {agent_id}; commands={commands:?}"));
         let prompt = command["input"]["prompt"].as_str().unwrap();
         assert!(
-            prompt.contains(&format!("agent_id={agent_id}")),
+            prompt.contains(&format!("- Agent ID: `{agent_id}`")),
             "prompt missing agent metadata: {prompt}"
         );
         assert!(
-            prompt.contains(&format!("message_id={message_id}")),
+            prompt.contains(&format!("- Message ID: `{message_id}`")),
             "prompt missing message metadata: {prompt}"
         );
         assert!(
@@ -3542,13 +3542,26 @@ fn assert_broadcast_runs_started(
         }
         assert_eq!(command["input"]["context"], json!([]));
         assert!(
-            prompt.contains("Triggering message:") && prompt.contains("[target=#"),
-            "prompt should preserve current trigger header only: {prompt}"
+            prompt.contains("# Slei Channel Run Packet")
+                && prompt.contains("## Runtime Context")
+                && prompt.contains("## Triggering Message")
+                && prompt.contains("```text\n[target=#")
+                && prompt.contains("## Required First Action")
+                && prompt.contains("```bash")
+                && prompt.contains(&format!(
+                    "slei message claim {message_id} --agent {agent_id}"
+                ))
+                && prompt.contains("## Optional Context Lookup"),
+            "prompt should be a Markdown run packet with fenced trigger and claim command: {prompt}"
         );
         let system_prompt = command["input"]["system_prompt"].as_str().unwrap();
         assert!(
-            system_prompt.contains("## Claim Rules"),
-            "system prompt missing claim rules: {system_prompt}"
+            system_prompt.contains("## Claim Intent Classes")
+                && system_prompt.contains("### 2. Channel Group Address")
+                && system_prompt.contains("`@all` always means Channel Group Address")
+                && system_prompt
+                    .contains("read nearby previous messages before claiming when needed"),
+            "system prompt missing markdown claim intent classes: {system_prompt}"
         );
         assert!(
             system_prompt.contains("slei message read --channel \"#channel\" --around <msgId>"),

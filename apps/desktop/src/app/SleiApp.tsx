@@ -624,6 +624,18 @@ export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: 
   return changed ? nextMessages : messages;
 }
 
+export function removeCompletedAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+  if (event.eventType !== "channel_agent_runtime.delivery_completed") return messages;
+  const messageId = diagnosticPayloadValue(event, "source_message_id") ?? diagnosticPayloadValue(event, "message_id");
+  const agentId = diagnosticPayloadValue(event, "agent_id");
+  if (!messageId || !agentId) return messages;
+  const activityId = `agent-activity-${messageId}-${agentId}`;
+  const nextMessages = messages.filter((message) =>
+    !(message.id === activityId && message.toolCall === "channel_agent_reply")
+  );
+  return nextMessages.length === messages.length ? messages : nextMessages;
+}
+
 export const CHANNEL_AGENT_ACTIVITY_STALE_MS = 120_000;
 
 export function failStaleAgentActivities(
@@ -933,7 +945,8 @@ export function SleiApp() {
         lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
         setData((current) => {
           const claimedMessages = keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event, current.members);
-          return createEmptySleiData({ ...current, messages: updateAgentActivityByDiagnostic(claimedMessages, event, current.members) });
+          const updatedMessages = updateAgentActivityByDiagnostic(claimedMessages, event, current.members);
+          return createEmptySleiData({ ...current, messages: removeCompletedAgentActivityByDiagnostic(updatedMessages, event) });
         });
         if (diagnosticEventNeedsToast(event)) {
           setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
