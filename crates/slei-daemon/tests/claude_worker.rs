@@ -1,6 +1,14 @@
+use axum::body::{to_bytes, Body};
+use axum::http::{Request, StatusCode};
 use serde_json::json;
+use serde_json::Value;
 use slei_daemon::adapters::claude_worker::{ClaudeWorkerAdapter, CreateSessionRequest};
 use slei_daemon::adapters::worker_rpc::{WorkerEvent, WorkerTransport};
+use slei_daemon::app::build_router;
+use slei_daemon::auth::AuthToken;
+use slei_daemon::state::AppState;
+use tower::ServiceExt;
+use uuid::Uuid;
 
 #[test]
 fn claude_worker_create_session_reports_claude_mvp_capabilities() {
@@ -90,4 +98,152 @@ fn claude_worker_events_map_to_daemon_events_with_correlation() {
     assert_eq!(mapped["request_id"], "perm_1");
     assert_eq!(mapped["tool_use_id"], "tool_1");
     assert_eq!(mapped["agent_id"], "agent_coda");
+}
+
+#[tokio::test]
+async fn dm_runtime_records_output_delta_and_completed_activity_events() {
+    let token = AuthToken::from_static("test-token");
+    let root = std::env::temp_dir().join(format!("slei-claude-worker-dm-{}", Uuid::new_v4()));
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let app = build_router(state.clone());
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("dm-activity-agent"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda-dm-activity",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let agent_id = response_json(created).await["agent"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let conversation = post_json(
+        &app,
+        &token,
+        "/v1/conversations/dm",
+        Some("dm-activity-conversation"),
+        json!({ "agentId": agent_id }),
+    )
+    .await;
+    assert_eq!(conversation.status(), StatusCode::CREATED);
+    let conversation_id = response_json(conversation).await["conversation"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let sent = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("dm-activity-message"),
+        json!({ "body": "请给我一个方案", "authorId": "human:local" }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::CREATED);
+    let commands = state.worker_commands();
+    let run_id = commands
+        .iter()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains("请给我一个方案"))
+        })
+        .and_then(|command| command["run_id"].as_str())
+        .expect("DM runtime should have started")
+        .to_string();
+
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": run_id,
+            "delta": "收到，"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id
+        }))
+        .await
+        .unwrap();
+
+    let activity = get_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{agent_id}/activity?limit=200"),
+    )
+    .await;
+    assert_eq!(activity.status(), StatusCode::OK);
+    let activity_json = response_json(activity).await;
+    let logs = activity_json["logs"].as_array().unwrap();
+    let event_kinds = logs
+        .iter()
+        .map(|log| log["eventKind"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(event_kinds.contains(&"output.delta"));
+    assert!(event_kinds.contains(&"run.completed"));
+
+    let completed = logs
+        .iter()
+        .find(|log| log["eventKind"] == "run.completed")
+        .expect("run completed activity event");
+    assert_eq!(completed["runId"], run_id);
+    assert!(completed["payloadPreview"]
+        .as_str()
+        .unwrap()
+        .contains(&conversation_id));
+}
+
+async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+async fn post_json(
+    app: &axum::Router,
+    token: &AuthToken,
+    uri: &str,
+    idempotency_key: Option<&str>,
+    body: Value,
+) -> axum::response::Response {
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("authorization", token.authorization_header())
+        .header("content-type", "application/json");
+    if let Some(idempotency_key) = idempotency_key {
+        builder = builder.header("idempotency-key", idempotency_key);
+    }
+
+    app.clone()
+        .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn response_json(response: axum::response::Response) -> Value {
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    serde_json::from_slice(&body).unwrap()
 }

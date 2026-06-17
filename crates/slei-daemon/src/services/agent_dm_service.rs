@@ -16,6 +16,9 @@ use crate::services::conversation_service::{
 };
 use crate::services::member_service::{MemberError, MemberService};
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
+use slei_storage::repositories::{
+    sanitize_activity_payload_preview, NewAgentActivityEventRow, Repositories,
+};
 
 #[derive(Clone, Debug)]
 pub struct AgentDmService {
@@ -25,6 +28,7 @@ pub struct AgentDmService {
     worker: ClaudeWorkerAdapter,
     runs: AgentDmRunStore,
     reset_runtime: ResetRuntimeState,
+    repos: Repositories,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -36,6 +40,7 @@ pub struct AgentDmRunStore {
 struct AgentDmRunRecord {
     conversation_id: String,
     agent_id: String,
+    message_id: String,
     generation: u64,
 }
 
@@ -67,6 +72,7 @@ impl AgentDmService {
         worker: ClaudeWorkerAdapter,
         runs: AgentDmRunStore,
         reset_runtime: ResetRuntimeState,
+        repos: Repositories,
     ) -> Self {
         Self {
             conversations,
@@ -75,6 +81,7 @@ impl AgentDmService {
             worker,
             runs,
             reset_runtime,
+            repos,
         }
     }
 
@@ -146,14 +153,18 @@ impl AgentDmService {
         });
         self.worker
             .start_run(&run_id, &session, &prompt, &system_prompt, context)?;
-        self.runs.inner.lock().await.runs.insert(
-            run_id.clone(),
-            AgentDmRunRecord {
-                conversation_id: conversation_id.to_string(),
-                agent_id: agent.id,
-                generation,
-            },
-        );
+        let record = AgentDmRunRecord {
+            conversation_id: conversation_id.to_string(),
+            agent_id: agent.id,
+            message_id: message.id.clone(),
+            generation,
+        };
+        self.runs
+            .inner
+            .lock()
+            .await
+            .runs
+            .insert(run_id.clone(), record.clone());
         self.conversations
             .upsert_run_message(
                 conversation_id,
@@ -163,6 +174,34 @@ impl AgentDmService {
                 Some("running"),
             )
             .await?;
+        self.record_activity(
+            &record,
+            &run_id,
+            "run.started",
+            "info",
+            format!("运行开始：run={run_id}"),
+            Some(format!(
+                "run_id={run_id} conversation_id={conversation_id} message_id={}",
+                message.id
+            )),
+            None,
+            None,
+        )
+        .await;
+        self.record_activity(
+            &record,
+            &run_id,
+            "input.received",
+            "info",
+            format!("收到 DM {} 消息 {}", conversation_id, message.id),
+            Some(format!(
+                "conversation_id={conversation_id} message_id={} prompt={prompt}",
+                message.id
+            )),
+            None,
+            None,
+        )
+        .await;
         Ok(Some(run_id))
     }
 
@@ -243,6 +282,17 @@ impl AgentDmService {
                         Some("running"),
                     )
                     .await?;
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "output.delta",
+                    "info",
+                    format!("输出片段：{} 字符", delta.chars().count()),
+                    Some(event.to_string()),
+                    None,
+                    None,
+                )
+                .await;
             }
             Some("completed") => {
                 self.conversations
@@ -257,6 +307,20 @@ impl AgentDmService {
                 self.conversations
                     .mark_runtime_session_ready(&record.conversation_id)
                     .await?;
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "run.completed",
+                    "info",
+                    format!("运行完成：run={run_id}"),
+                    Some(format!(
+                        "conversation_id={} message_id={} event={}",
+                        record.conversation_id, record.message_id, event
+                    )),
+                    None,
+                    Some(true),
+                )
+                .await;
             }
             Some("failed") => {
                 let message = event
@@ -272,12 +336,69 @@ impl AgentDmService {
                         Some("failed"),
                     )
                     .await?;
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "run.failed",
+                    "error",
+                    format!("运行失败：{}", activity_summary_message(message)),
+                    Some(event.to_string()),
+                    None,
+                    Some(false),
+                )
+                .await;
+            }
+            Some("tool_started") => {
+                let tool_name = event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool");
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    "info",
+                    format!("开始执行工具：{tool_name}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    None,
+                )
+                .await;
+            }
+            Some("tool_completed") => {
+                let tool_name = event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool");
+                let ok = event.get("ok").and_then(Value::as_bool).unwrap_or(true);
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "tool.completed",
+                    if ok { "info" } else { "error" },
+                    format!("工具完成：{tool_name} ok={ok}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    Some(ok),
+                )
+                .await;
             }
             Some("product_tool_requested") => {
                 let tool_name = event
                     .get("tool_name")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
+                self.record_activity(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    "info",
+                    format!("开始执行工具：{tool_name}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    None,
+                )
+                .await;
                 if tool_name != "slei_propose_interactive_card" {
                     return Ok(());
                 }
@@ -395,6 +516,38 @@ impl AgentDmService {
         Ok(())
     }
 
+    async fn record_activity(
+        &self,
+        record: &AgentDmRunRecord,
+        run_id: &str,
+        event_kind: &str,
+        severity: &str,
+        summary: String,
+        payload_preview: Option<String>,
+        tool_name: Option<String>,
+        ok: Option<bool>,
+    ) {
+        let _ = self
+            .repos
+            .record_agent_activity_event(NewAgentActivityEventRow {
+                agent_id: record.agent_id.clone(),
+                run_id: Some(run_id.to_string()),
+                channel_id: None,
+                message_id: Some(record.message_id.clone()),
+                task_id: None,
+                event_kind: event_kind.to_string(),
+                severity: severity.to_string(),
+                summary,
+                payload_preview,
+                tool_name,
+                ok,
+                state: None,
+                phase: None,
+                reason: None,
+            })
+            .await;
+    }
+
     pub async fn resolve_permission(
         &self,
         request_id: &str,
@@ -510,6 +663,12 @@ fn permission_approval_card(
         action_label: "允许一次".to_string(),
         done_label: "已处理".to_string(),
     }
+}
+
+fn activity_summary_message(value: &str) -> String {
+    const MAX_CHARS: usize = 120;
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    sanitize_activity_payload_preview(&normalized, MAX_CHARS)
 }
 
 #[derive(Debug, thiserror::Error)]

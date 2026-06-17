@@ -28,6 +28,7 @@ use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetR
 use crate::services::task_service::{
     thread_message_for_reply, TaskError, TaskRecord, TaskService, TaskStatus, TaskThreadMessage,
 };
+use slei_storage::repositories::{sanitize_activity_payload_preview, NewAgentActivityEventRow};
 
 #[derive(Clone, Debug)]
 pub struct SendChannelMessageInput {
@@ -761,6 +762,19 @@ impl ChannelOrchestratorService {
                     .and_then(Value::as_str)
                     .unwrap_or_default();
                 record.output.push_str(delta);
+                let record = record.clone();
+                drop(runs);
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "output.delta",
+                    "info",
+                    format!("输出片段：{} 字符", delta.chars().count()),
+                    Some(event.to_string()),
+                    None,
+                    None,
+                )
+                .await;
                 Ok(true)
             }
             Some("completed") => {
@@ -866,8 +880,19 @@ impl ChannelOrchestratorService {
                             body.len(),
                             visible_output_created
                         ),
-                        )
-                        .await;
+                    )
+                    .await;
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "run.completed",
+                    "info",
+                    format!("运行完成：run={run_id}"),
+                    Some(event.to_string()),
+                    None,
+                    Some(true),
+                )
+                .await;
                 Ok(true)
             }
             Some("failed") => {
@@ -953,6 +978,58 @@ impl ChannelOrchestratorService {
                         ),
                     )
                     .await;
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "run.failed",
+                    "error",
+                    format!("运行失败：{}", activity_summary_message(message)),
+                    Some(event.to_string()),
+                    None,
+                    Some(false),
+                )
+                .await;
+                Ok(true)
+            }
+            Some("tool_started") => {
+                let record = record.clone();
+                drop(runs);
+                let tool_name = event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool");
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    "info",
+                    format!("开始执行工具：{tool_name}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    None,
+                )
+                .await;
+                Ok(true)
+            }
+            Some("tool_completed") => {
+                let record = record.clone();
+                drop(runs);
+                let tool_name = event
+                    .get("tool_name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("tool");
+                let ok = event.get("ok").and_then(Value::as_bool).unwrap_or(true);
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "tool.completed",
+                    if ok { "info" } else { "error" },
+                    format!("工具完成：{tool_name} ok={ok}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    Some(ok),
+                )
+                .await;
                 Ok(true)
             }
             Some("product_tool_requested") => {
@@ -962,6 +1039,17 @@ impl ChannelOrchestratorService {
                     .get("tool_name")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
+                self.record_channel_agent_activity(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    "info",
+                    format!("开始执行工具：{tool_name}"),
+                    Some(event.to_string()),
+                    Some(tool_name.to_string()),
+                    None,
+                )
+                .await;
                 if tool_name != "slei_propose_interactive_card" {
                     return Ok(true);
                 }
@@ -1806,7 +1894,75 @@ impl ChannelOrchestratorService {
                 ),
             )
             .await;
+        let record = ChannelAgentRunRecord {
+            channel_id: channel_id.to_string(),
+            session_id: None,
+            agent_id: agent_id.to_string(),
+            source_message_id: source_message_id.to_string(),
+            task_id,
+            suppress_visible_output,
+            output: String::new(),
+        };
+        self.record_channel_agent_activity(
+            &record,
+            run_id,
+            "run.started",
+            "info",
+            format!("运行开始：run={run_id}"),
+            Some(format!(
+                "run_id={run_id} agent_id={agent_id} channel_id={channel_id} message_id={source_message_id}"
+            )),
+            None,
+            None,
+        )
+        .await;
+        self.record_channel_agent_activity(
+            &record,
+            run_id,
+            "input.received",
+            "info",
+            format!("收到频道 #{channel_id} 消息 {source_message_id}"),
+            Some(format!(
+                "channel_id={channel_id} message_id={source_message_id} prompt={prompt}"
+            )),
+            None,
+            None,
+        )
+        .await;
         Ok(())
+    }
+
+    async fn record_channel_agent_activity(
+        &self,
+        record: &ChannelAgentRunRecord,
+        run_id: &str,
+        event_kind: &str,
+        severity: &str,
+        summary: String,
+        payload_preview: Option<String>,
+        tool_name: Option<String>,
+        ok: Option<bool>,
+    ) {
+        let _ = self
+            .orchestration
+            .repos()
+            .record_agent_activity_event(NewAgentActivityEventRow {
+                agent_id: record.agent_id.clone(),
+                run_id: Some(run_id.to_string()),
+                channel_id: Some(record.channel_id.clone()),
+                message_id: Some(record.source_message_id.clone()),
+                task_id: record.task_id.clone(),
+                event_kind: event_kind.to_string(),
+                severity: severity.to_string(),
+                summary,
+                payload_preview,
+                tool_name,
+                ok,
+                state: None,
+                phase: None,
+                reason: None,
+            })
+            .await;
     }
 
     async fn sync_declared_channel_members(
@@ -2170,6 +2326,12 @@ fn reply_requires_work(body: &str) -> bool {
 
 fn diagnostic_token(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join("_")
+}
+
+fn activity_summary_message(value: &str) -> String {
+    const MAX_CHARS: usize = 120;
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    sanitize_activity_payload_preview(&normalized, MAX_CHARS)
 }
 
 fn enum_storage_str<T>(value: &T) -> String

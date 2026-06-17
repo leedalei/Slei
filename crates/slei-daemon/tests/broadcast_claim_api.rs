@@ -1000,6 +1000,143 @@ async fn agent_activity_api_records_status_update_fields_and_is_idempotent() {
 }
 
 #[tokio::test]
+async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_preview() {
+    let token = AuthToken::from_static("test-token");
+    let state = app_state_with_agent_handle("agent_cindy", "@cindy").await;
+    state
+        .channels()
+        .set_member_readiness("all", "agent_cindy", ChannelMemberReadiness::Ready)
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let sent = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/channels/all/messages",
+            "channel-agent-runtime-activity",
+            json!({
+                "authorId": "human_lei",
+                "body": "@cindy 请检查发布风险",
+                "asTask": true
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent_json = response_json(sent).await;
+    assert_eq!(sent_json["outcome"]["action"], "create_task_and_assign");
+    let message_id = sent_json["outcome"]["messageId"].as_str().unwrap();
+
+    let run_id = state
+        .worker_commands()
+        .into_iter()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_cindy"
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("channel agent runtime should have started");
+
+    state
+        .handle_worker_event(json!({
+            "type": "product_tool_requested",
+            "run_id": run_id,
+            "agent_id": "agent_cindy",
+            "tool_name": "slei_propose_interactive_card",
+            "tool_use_id": "tool-activity-1",
+            "payload": {
+                "kind": "createAgent",
+                "title": "检查项",
+                "summary": "记录工具开始",
+                "actionLabel": "创建",
+                "doneLabel": "完成",
+                "draft": {
+                    "name": "Temp",
+                    "handle": "@temp-activity",
+                    "runtimeKind": "ClaudeCode",
+                    "model": "Sonnet",
+                    "nodeId": "local-node",
+                    "description": "临时测试 Agent"
+                }
+            }
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "tool_completed",
+            "run_id": run_id,
+            "agent_id": "agent_cindy",
+            "tool_name": "slei_propose_interactive_card",
+            "tool_use_id": "tool-activity-1",
+            "ok": true,
+            "payload": { "result": "ok" }
+        }))
+        .await
+        .unwrap();
+
+    let long_sensitive_tail = "x".repeat(2300);
+    state
+        .handle_worker_event(json!({
+            "type": "failed",
+            "run_id": run_id,
+            "agent_id": "agent_cindy",
+            "message": format!(
+                "工具失败 Authorization: Bearer secret-token password=abc {long_sensitive_tail}"
+            ),
+            "payload": {
+                "authorization": "Bearer secret-token",
+                "password": "abc",
+                "notes": long_sensitive_tail
+            }
+        }))
+        .await
+        .unwrap();
+
+    let activity = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agents/agent_cindy/activity?limit=200",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(activity.status(), StatusCode::OK);
+    let activity_json = response_json(activity).await;
+    let logs = activity_json["logs"].as_array().unwrap();
+    let event_kinds = logs
+        .iter()
+        .map(|log| log["eventKind"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    for expected in [
+        "run.started",
+        "input.received",
+        "tool.started",
+        "tool.completed",
+        "run.failed",
+    ] {
+        assert!(
+            event_kinds.contains(&expected),
+            "missing {expected} in {event_kinds:?}"
+        );
+    }
+
+    let failed = logs
+        .iter()
+        .find(|log| log["eventKind"] == "run.failed")
+        .expect("failed activity event");
+    assert_eq!(failed["runId"], run_id);
+    assert_eq!(failed["channelId"], "all");
+    assert_eq!(failed["messageId"], message_id);
+    let preview = failed["payloadPreview"].as_str().unwrap();
+    assert!(!preview.contains("secret-token"));
+    assert!(!preview.contains("abc"));
+    assert!(preview.contains("[redacted]"));
+    assert!(preview.contains("[truncated]"));
+}
+
+#[tokio::test]
 async fn agent_status_idempotency_key_is_scoped_per_agent() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));
