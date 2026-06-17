@@ -87,6 +87,7 @@ mod tests {
     use std::net::{TcpListener, TcpStream};
     use std::sync::{Mutex, MutexGuard};
     use std::thread;
+    use std::time::Duration;
 
     static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -97,6 +98,9 @@ mod tests {
     }
 
     fn read_http_request(stream: &mut TcpStream) -> String {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
         let mut bytes = Vec::new();
         let mut buffer = [0_u8; 512];
         loop {
@@ -820,6 +824,7 @@ mod tests {
         let handle = thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
             let request = read_http_request(&mut stream);
+            assert_eq!(stream.read_timeout().unwrap(), Some(Duration::from_secs(2)));
             let response = serde_json::json!({
                 "logs": [{
                     "id": "log_1",
@@ -912,7 +917,7 @@ mod tests {
             protocol_version: "v1".to_string(),
         });
 
-        let error = list_agent_activity(&broker, "agent_nova", Some(500)).unwrap_err();
+        let error = list_agent_activity(&broker, "agent_nova", Some(999_999)).unwrap_err();
         let request = handle.join().unwrap();
 
         assert!(error.to_string().contains("500 Internal Server Error"));

@@ -228,7 +228,7 @@ pub fn list_agents(broker: &DaemonBroker) -> AgentListReceipt {
 pub fn list_agent_activity(
     broker: &DaemonBroker,
     agent_id: &str,
-    limit: Option<u16>,
+    limit: Option<u32>,
 ) -> Result<AgentActivityListReceipt, AgentError> {
     broker.list_agent_activity(agent_id, limit)
 }
@@ -580,7 +580,7 @@ pub fn list_agents_command(state: tauri::State<'_, DaemonBroker>) -> AgentListRe
 pub fn list_agent_activity_command(
     state: tauri::State<'_, DaemonBroker>,
     agent_id: String,
-    limit: Option<u16>,
+    limit: Option<u32>,
 ) -> Result<AgentActivityListReceipt, String> {
     list_agent_activity(state.inner(), &agent_id, limit).map_err(|error| error.to_string())
 }

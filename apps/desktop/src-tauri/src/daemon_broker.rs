@@ -1512,7 +1512,7 @@ impl DaemonBroker {
     pub fn list_agent_activity(
         &self,
         agent_id: &str,
-        limit: Option<u16>,
+        limit: Option<u32>,
     ) -> Result<AgentActivityListReceipt, AgentError> {
         let limit = limit.unwrap_or(200).min(200);
         let path = format!("/v1/agents/{agent_id}/activity?limit={limit}");
