@@ -162,6 +162,29 @@ export type AgentWorkspaceFileReceipt = {
   relativePath: string;
 };
 
+export type AgentActivityLogView = {
+  id: string;
+  agentId: string;
+  runId?: string;
+  channelId?: string;
+  messageId?: string;
+  taskId?: string;
+  state?: string;
+  phase?: string;
+  reason?: string;
+  eventKind: string;
+  severity: string;
+  summary: string;
+  payloadPreview?: string;
+  toolName?: string;
+  ok?: boolean;
+  createdAt: string;
+};
+
+export type AgentActivityListReceipt = {
+  logs: AgentActivityLogView[];
+};
+
 export type ConversationView = {
   id: string;
   kind: "dm" | string;
@@ -503,6 +526,7 @@ export type DaemonBridge = {
   openAgentPath(agentId: string, target: AgentPathTarget): Promise<AgentPathOpenReceipt>;
   listAgentWorkspace(agentId: string, relativePath?: string): Promise<AgentWorkspaceListReceipt>;
   readAgentWorkspaceFile(agentId: string, relativePath: string): Promise<AgentWorkspaceFileReceipt>;
+  listAgentActivity(agentId: string, limit?: number): Promise<AgentActivityListReceipt>;
   listConversations(): Promise<ConversationListReceipt>;
   createDmConversation(agentId: string): Promise<ConversationReceipt>;
   resetConversationRuntimeSession(conversationId: string): Promise<ConversationReceipt>;
@@ -640,6 +664,9 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     openAgentPath: rejectDaemonOffline,
     listAgentWorkspace: rejectDaemonOffline,
     readAgentWorkspaceFile: rejectDaemonOffline,
+    async listAgentActivity() {
+      return { logs: [] };
+    },
     async listConversations() {
       return { conversations: [] };
     },
@@ -708,6 +735,7 @@ export function createDaemonBridge(): DaemonBridge {
       openAgentPath: (agentId: string, target: AgentPathTarget) => invoke<AgentPathOpenReceipt>("open_agent_path_command", { agentId, target }),
       listAgentWorkspace: (agentId: string, relativePath?: string) => invoke<AgentWorkspaceListReceipt>("list_agent_workspace_command", { agentId, relativePath }),
       readAgentWorkspaceFile: (agentId: string, relativePath: string) => invoke<AgentWorkspaceFileReceipt>("read_agent_workspace_file_command", { agentId, relativePath }),
+      listAgentActivity: (agentId: string, limit = 200) => invoke<AgentActivityListReceipt>("list_agent_activity_command", { agentId, limit }),
       listConversations: () => invoke<ConversationListReceipt>("list_conversations_command"),
       createDmConversation: (agentId: string) => invoke<ConversationReceipt>("create_dm_conversation_command", { agentId }),
       resetConversationRuntimeSession: (conversationId: string) => invoke<ConversationReceipt>("reset_conversation_runtime_session_command", { conversationId }),

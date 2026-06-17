@@ -149,6 +149,11 @@ export type DesktopMessages = {
   };
   members: {
     activity: string;
+    activityLoadFailed: string;
+    activityLoading: string;
+    activityOk: string;
+    activityFailed: string;
+    collapsePayload: string;
     agents: string;
     capabilities: string;
     capabilityScanUnavailable: string;
@@ -168,6 +173,7 @@ export type DesktopMessages = {
     editRuntime: string;
     emptyDescription: string;
     emptyTitle: string;
+    expandPayload: string;
     info: string;
     fileList: string;
     filePreview: string;
@@ -181,6 +187,7 @@ export type DesktopMessages = {
     newAgent: string;
     noAgents: string;
     online: string;
+    payloadPreview: string;
     docsFolder: string;
     memoryFile: string;
     openWorkspaceFailed: string;

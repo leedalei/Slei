@@ -58,6 +58,7 @@ import {
   type PermissionDecision,
   type SavedMessageView,
   type AgentPathTarget,
+  type AgentActivityListReceipt,
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
   type RuntimeSetupState,
@@ -165,6 +166,7 @@ export type SleiAppFrameProps = {
   onMemberSelect?: (memberId: string) => void;
   onMemberMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
+  onListAgentActivity?: (agentId: string, limit?: number) => Promise<AgentActivityListReceipt> | AgentActivityListReceipt;
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
   onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
@@ -301,7 +303,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         type="button"
       />
 
-      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onChannelNewSession, input.onChannelSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onChannelNewSession, input.onChannelSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -1190,6 +1192,7 @@ function renderWorkspace(
   onAgentDelete?: (agentId: string) => Promise<void> | void,
   onMemberMessage?: (memberId: string) => void,
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void,
+  onListAgentActivity?: (agentId: string, limit?: number) => Promise<AgentActivityListReceipt> | AgentActivityListReceipt,
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt,
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt,
   onConversationNewSession?: (conversationId: string) => Promise<void> | void,
@@ -1211,7 +1214,7 @@ function renderWorkspace(
 ) {
   if (activeView === "search") return <SearchRoute data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
   if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} />;
-  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} />;
+  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentActivity={onListAgentActivity} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} />;
   if (activeView === "computers") {
     return (
       <ComputersRoute

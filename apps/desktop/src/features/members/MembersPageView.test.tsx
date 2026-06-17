@@ -1,9 +1,113 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import { createSleiFixtures } from "../../test/fixtures";
+import type { AgentActivityLogView, DesktopNodeView } from "../../lib/daemon-bridge";
 import { buildWorkspaceTreeRows, MembersPage } from "./MembersPageView";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const baseNode: DesktopNodeView = {
+  id: "local-node",
+  name: "Local",
+  status: "connected",
+  daemonVersion: "0.1.0",
+  device: { platform: "darwin", arch: "arm64", hostname: "local" },
+  runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+};
+
+function agentMember(id: string, name = "Coda") {
+  return {
+    id,
+    name,
+    handle: `@${name.toLowerCase()}`,
+    avatar: name.slice(0, 2).toUpperCase(),
+    avatarSeed: id,
+    type: "agent" as const,
+    runtimeStatus: "idle" as const,
+    role: "Developer",
+    runtime: "ClaudeCode",
+    model: "Sonnet",
+    computer: "Local",
+    nodeId: "local-node",
+    created: "2026-06-04",
+    creator: "user",
+    instructions: "Builds features.",
+    description: "Builds features.",
+    permissions: [],
+    environmentVariables: [],
+    activity: "Idle",
+    skills: [],
+    capabilities: ["ClaudeCode"],
+    createdAgents: [],
+    directMessageEnabled: true,
+  };
+}
+
+function activityLog(input: Partial<AgentActivityLogView> = {}): AgentActivityLogView {
+  return {
+    id: input.id ?? "activity_1",
+    agentId: input.agentId ?? "agent_coda",
+    runId: input.runId ?? "run_123",
+    channelId: input.channelId,
+    messageId: input.messageId,
+    taskId: input.taskId,
+    state: input.state,
+    phase: input.phase,
+    reason: input.reason,
+    eventKind: input.eventKind ?? "tool_call",
+    severity: input.severity ?? "info",
+    summary: input.summary ?? "Ran shell command",
+    payloadPreview: input.payloadPreview,
+    toolName: input.toolName ?? "shell",
+    ok: input.ok ?? true,
+    createdAt: input.createdAt ?? "2026-06-17T08:00:00.000Z",
+  };
+}
+
+function renderMembersPage(input: Partial<Parameters<typeof MembersPage>[0]> = {}) {
+  const messages = input.messages ?? createDesktopMessages("zh-CN");
+  return (
+    <MembersPage
+      activeMemberId="agent_coda"
+      data={createSleiFixtures({ members: [agentMember("agent_coda")] })}
+      messages={messages}
+      nodes={[baseNode]}
+      onAgentUpdate={() => undefined}
+      onMessage={() => undefined}
+      {...input}
+    />
+  );
+}
+
+let mountedRoot: Root | undefined;
+let mountedContainer: HTMLDivElement | undefined;
+
+async function mount(element: React.ReactElement) {
+  mountedContainer = document.createElement("div");
+  document.body.appendChild(mountedContainer);
+  mountedRoot = createRoot(mountedContainer);
+  await act(async () => {
+    mountedRoot?.render(element);
+  });
+  await act(async () => undefined);
+  return mountedContainer;
+}
+
+afterEach(async () => {
+  if (mountedRoot) {
+    await act(async () => {
+      mountedRoot?.unmount();
+    });
+  }
+  mountedContainer?.remove();
+  mountedRoot = undefined;
+  mountedContainer = undefined;
+});
 
 describe("MembersPage coordinator agents", () => {
   it("shows channel coordinator runtime configuration without a direct message action", () => {
@@ -355,5 +459,130 @@ describe("MembersPage coordinator agents", () => {
       "3:.claude/skills/memory/SKILL.md",
       "0:MEMORY.md",
     ]);
+  });
+
+  it("renders the activity tab with daemon activity rows", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => ({
+          logs: [activityLog({ eventKind: "agent_run.completed", runId: "run_agent_42", summary: "Agent finished replying" })],
+        }),
+      }),
+    );
+
+    expect(html).toContain("活动日志");
+
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => ({
+          logs: [activityLog({ eventKind: "agent_run.completed", runId: "run_agent_42", summary: "Agent finished replying" })],
+        }),
+      }),
+    );
+
+    expect(container.textContent).toContain("Agent finished replying");
+    expect(container.textContent).toContain("agent_run.completed");
+    expect(container.textContent).toContain("run_agent_42");
+  });
+
+  it("renders an empty activity state when daemon has no rows", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => ({ logs: [] }),
+      }),
+    );
+
+    expect(container.textContent).toContain(messages.members.noActivity);
+  });
+
+  it("renders an activity error state when daemon activity loading fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => {
+          throw new Error("daemon down");
+        },
+      }),
+    );
+
+    expect(container.textContent).toContain(messages.members.activityLoadFailed);
+  });
+
+  it("reloads activity when the selected member changes", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const calls: string[] = [];
+    const data = createSleiFixtures({ members: [agentMember("agent_a", "Ava"), agentMember("agent_b", "Bea")] });
+
+    await mount(
+      <MembersPage
+        activeMemberId="agent_a"
+        data={data}
+        messages={messages}
+        nodes={[baseNode]}
+        onAgentUpdate={() => undefined}
+        onListAgentActivity={async (agentId) => {
+          calls.push(agentId);
+          return { logs: [] };
+        }}
+        onMessage={() => undefined}
+      />,
+    );
+
+    await act(async () => {
+      mountedRoot?.render(
+        <MembersPage
+          activeMemberId="agent_b"
+          data={data}
+          messages={messages}
+          nodes={[baseNode]}
+          onAgentUpdate={() => undefined}
+          onListAgentActivity={async (agentId) => {
+            calls.push(agentId);
+            return { logs: [] };
+          }}
+          onMessage={() => undefined}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(calls).toContain("agent_a");
+    expect(calls).toContain("agent_b");
+  });
+
+  it("expands and collapses payload previews", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const payload = "{\"cmd\":\"pnpm test\"}";
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => ({
+          logs: [activityLog({ payloadPreview: payload })],
+        }),
+      }),
+    );
+
+    expect(container.textContent).not.toContain(payload);
+    const expandButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.members.expandPayload));
+    expect(expandButton).toBeTruthy();
+
+    await act(async () => {
+      expandButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain(payload);
+
+    const collapseButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.members.collapsePayload));
+    await act(async () => {
+      collapseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain(payload);
   });
 });

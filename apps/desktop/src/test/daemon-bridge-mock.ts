@@ -4,6 +4,7 @@ import {
   renderInitialMemory,
 } from "../lib/default-agent-assets";
 import type {
+  AgentActivityLogView,
   AgentWorkspaceEntry,
   ChannelMemberView,
   ChannelMessageView,
@@ -75,6 +76,7 @@ export function createDaemonBridgeMock(input: {
   channelSessions?: ChannelSessionView[];
   channelMembers?: ChannelMemberView[];
   channelMessages?: ChannelMessageView[];
+  activityLogs?: AgentActivityLogView[];
 }): DaemonBridgeMock {
   let connected = input.connected;
   let nodes = input.nodes ?? [
@@ -96,6 +98,7 @@ export function createDaemonBridgeMock(input: {
   let channelSessions: ChannelSessionView[] = input.channelSessions ?? [{ id: "session:channel:all:default", channelId: "all", title: "新会话", status: "ready", createdAt: "0", updatedAt: "0" }];
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
+  let activityLogs: AgentActivityLogView[] = input.activityLogs ?? [];
   let tasks: TaskSummaryView[] = [];
   const taskThreads = new Map<string, TaskThreadView>();
   let channelMessageCounter = 0;
@@ -538,6 +541,9 @@ export function createDaemonBridgeMock(input: {
         name,
         relativePath,
       };
+    },
+    async listAgentActivity(agentId, limit = 200) {
+      return { logs: activityLogs.filter((log) => log.agentId === agentId).slice(0, limit) };
     },
     async listConversations() {
       return { conversations };
