@@ -13,8 +13,9 @@ mod tests {
 
     use super::db::SleiDb;
     use super::repositories::{
-        AgentStatusRow, ChannelSessionRow, MessageReadQueryRow, NewChannelMessageRow, Repositories,
-        TaskRootRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow, MessageReadQueryRow,
+        NewAgentActivityEventRow, NewChannelMessageRow, Repositories, TaskRootRow,
+        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
@@ -67,7 +68,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
     }
 
     #[tokio::test]
@@ -84,7 +85,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
     }
 
     #[tokio::test]
@@ -265,13 +266,133 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn agent_activity_logs_keep_latest_100_per_agent() {
+    async fn agent_activity_events_store_summary_payload_and_result() {
+        let (url, _path) = sqlite_file_url("activity-event-fields");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .record_agent_activity_event(NewAgentActivityEventRow {
+                agent_id: "agent_a".to_string(),
+                run_id: Some("run_1".to_string()),
+                channel_id: Some("all".to_string()),
+                message_id: Some("msg_1".to_string()),
+                task_id: None,
+                event_kind: "tool.completed".to_string(),
+                severity: "info".to_string(),
+                summary: "工具完成：Bash ok=true".to_string(),
+                payload_preview: Some(r#"{"tool":"Bash","ok":true}"#.to_string()),
+                tool_name: Some("Bash".to_string()),
+                ok: Some(true),
+                state: None,
+                phase: None,
+                reason: None,
+            })
+            .await
+            .unwrap();
+
+        let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
+        assert_eq!(logs[0].event_kind, "tool.completed");
+        assert_eq!(logs[0].severity, "info");
+        assert_eq!(logs[0].summary, "工具完成：Bash ok=true");
+        assert_eq!(logs[0].tool_name.as_deref(), Some("Bash"));
+        assert_eq!(logs[0].ok, Some(true));
+    }
+
+    #[tokio::test]
+    async fn agent_activity_event_payload_preview_is_sanitized_before_storage() {
+        let (url, _path) = sqlite_file_url("activity-event-sanitize");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .record_agent_activity_event(NewAgentActivityEventRow {
+                agent_id: "agent_a".to_string(),
+                run_id: Some("run_1".to_string()),
+                channel_id: None,
+                message_id: None,
+                task_id: None,
+                event_kind: "run.failed".to_string(),
+                severity: "error".to_string(),
+                summary: "运行失败".to_string(),
+                payload_preview: Some(format!(
+                    "Authorization: Bearer secret-token password=abc {}",
+                    "x".repeat(5000)
+                )),
+                tool_name: None,
+                ok: Some(false),
+                state: None,
+                phase: None,
+                reason: None,
+            })
+            .await
+            .unwrap();
+
+        let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
+        let preview = logs[0].payload_preview.as_deref().unwrap();
+        assert!(!preview.contains("secret-token"));
+        assert!(!preview.contains("abc"));
+        assert!(preview.contains("[redacted]"));
+        assert!(preview.contains("[truncated]"));
+    }
+
+    #[tokio::test]
+    async fn agent_activity_logs_keep_latest_200_per_agent() {
+        let (url, _path) = sqlite_file_url("activity-log-retention-200");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..205 {
+            repos
+                .record_agent_activity_event(NewAgentActivityEventRow {
+                    agent_id: "agent_a".to_string(),
+                    run_id: Some(format!("run_{index}")),
+                    channel_id: None,
+                    message_id: None,
+                    task_id: None,
+                    event_kind: "run.started".to_string(),
+                    severity: "info".to_string(),
+                    summary: format!("run started {index}"),
+                    payload_preview: None,
+                    tool_name: None,
+                    ok: None,
+                    state: None,
+                    phase: None,
+                    reason: None,
+                })
+                .await
+                .unwrap();
+        }
+
+        let logs = repos.agent_activity_logs("agent_a", 500).await.unwrap();
+        assert_eq!(logs.len(), 200);
+        assert_eq!(logs.first().unwrap().run_id.as_deref(), Some("run_204"));
+        assert_eq!(logs.last().unwrap().run_id.as_deref(), Some("run_5"));
+    }
+
+    #[test]
+    fn activity_payload_preview_redacts_and_truncates_sensitive_text() {
+        let preview = sanitize_activity_payload_preview(
+            r#"Authorization: Bearer secret-token password="abc" xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"#,
+            48,
+        );
+        assert!(!preview.contains("secret-token"));
+        assert!(!preview.contains("abc"));
+        assert!(preview.contains("[redacted]"));
+        assert!(preview.contains("[truncated]"));
+    }
+
+    #[tokio::test]
+    async fn legacy_agent_activity_logs_keep_latest_200_per_agent() {
         let (url, _path) = sqlite_file_url("activity-log-retention");
         let db = SleiDb::connect(&url).await.unwrap();
         db.migrate().await.unwrap();
         let repos = Repositories::new(db.pool().clone());
 
-        for index in 0..105 {
+        for index in 0..205 {
             repos
                 .record_agent_activity(
                     "agent_a",
@@ -288,8 +409,8 @@ mod tests {
         }
 
         let logs = repos.agent_activity_logs("agent_a", 200).await.unwrap();
-        assert_eq!(logs.len(), 100);
-        assert_eq!(logs.first().unwrap().run_id.as_deref(), Some("run_104"));
+        assert_eq!(logs.len(), 200);
+        assert_eq!(logs.first().unwrap().run_id.as_deref(), Some("run_204"));
         assert_eq!(logs.last().unwrap().run_id.as_deref(), Some("run_5"));
     }
 
@@ -1153,7 +1274,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 4);
+        assert_eq!(migration_count, 5);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

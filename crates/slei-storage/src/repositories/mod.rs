@@ -48,6 +48,19 @@ pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
     "routing_context_packages",
 ];
 
+const AGENT_ACTIVITY_RETENTION_LIMIT: i64 = 200;
+const MAX_ACTIVITY_PAYLOAD_PREVIEW_CHARS: usize = 2048;
+const SENSITIVE_ACTIVITY_MARKERS: &[&str] = &[
+    "authorization",
+    "bearer",
+    "token",
+    "api_key",
+    "apikey",
+    "secret",
+    "password",
+    "private_key",
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentRow {
     pub id: String,
@@ -278,10 +291,37 @@ pub struct AgentActivityLogRow {
     pub channel_id: Option<String>,
     pub message_id: Option<String>,
     pub task_id: Option<String>,
-    pub state: String,
+    pub state: Option<String>,
     pub phase: Option<String>,
     pub reason: Option<String>,
+    pub event_kind: String,
+    pub severity: String,
+    pub summary: String,
+    pub payload_preview: Option<String>,
+    pub tool_name: Option<String>,
+    pub ok: Option<bool>,
     pub created_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewAgentActivityEventRow {
+    pub agent_id: String,
+    pub run_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub message_id: Option<String>,
+    pub task_id: Option<String>,
+    pub event_kind: String,
+    pub severity: String,
+    pub summary: String,
+    pub payload_preview: Option<String>,
+    pub tool_name: Option<String>,
+    pub ok: Option<bool>,
+    /// Optional semantic status. For non-status events this can be None;
+    /// repository insertion must store event_kind into the legacy NOT NULL
+    /// state column so older schema assumptions keep working.
+    pub state: Option<String>,
+    pub phase: Option<String>,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1581,39 +1621,36 @@ impl Repositories {
         reason: Option<&str>,
     ) -> Result<(), sqlx::Error> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query(
-            "INSERT INTO agent_activity_logs(
-                id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        insert_agent_activity_event_tx(
+            &mut tx,
+            NewAgentActivityEventRow {
+                agent_id: agent_id.to_string(),
+                run_id: run_id.map(str::to_string),
+                channel_id: channel_id.map(str::to_string),
+                message_id: message_id.map(str::to_string),
+                task_id: task_id.map(str::to_string),
+                event_kind: "status.updated".to_string(),
+                severity: "info".to_string(),
+                summary: state.to_string(),
+                payload_preview: None,
+                tool_name: None,
+                ok: None,
+                state: Some(state.to_string()),
+                phase: phase.map(str::to_string),
+                reason: reason.map(str::to_string),
+            },
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(agent_id)
-        .bind(run_id)
-        .bind(channel_id)
-        .bind(message_id)
-        .bind(task_id)
-        .bind(state)
-        .bind(phase)
-        .bind(reason)
-        .execute(&mut *tx)
         .await?;
+        tx.commit().await?;
+        Ok(())
+    }
 
-        sqlx::query(
-            "DELETE FROM agent_activity_logs
-             WHERE agent_id = ?
-               AND sequence NOT IN (
-                 SELECT sequence FROM agent_activity_logs
-                 WHERE agent_id = ?
-                 ORDER BY sequence DESC
-                 LIMIT 100
-               )",
-        )
-        .bind(agent_id)
-        .bind(agent_id)
-        .execute(&mut *tx)
-        .await?;
-
+    pub async fn record_agent_activity_event(
+        &self,
+        row: NewAgentActivityEventRow,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        insert_agent_activity_event_tx(&mut tx, row).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -1666,37 +1703,25 @@ impl Repositories {
         .execute(&mut *tx)
         .await?;
 
-        sqlx::query(
-            "INSERT INTO agent_activity_logs(
-                id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        insert_agent_activity_event_tx(
+            &mut tx,
+            NewAgentActivityEventRow {
+                agent_id: row.agent_id.clone(),
+                run_id: row.run_id.clone(),
+                channel_id: row.channel_id.clone(),
+                message_id: row.message_id.clone(),
+                task_id: row.task_id.clone(),
+                event_kind: "status.updated".to_string(),
+                severity: "info".to_string(),
+                summary: row.state.clone(),
+                payload_preview: None,
+                tool_name: None,
+                ok: None,
+                state: Some(row.state),
+                phase: row.phase,
+                reason: row.reason,
+            },
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(&row.agent_id)
-        .bind(&row.run_id)
-        .bind(&row.channel_id)
-        .bind(&row.message_id)
-        .bind(&row.task_id)
-        .bind(&row.state)
-        .bind(&row.phase)
-        .bind(&row.reason)
-        .execute(&mut *tx)
-        .await?;
-
-        sqlx::query(
-            "DELETE FROM agent_activity_logs
-             WHERE agent_id = ?
-               AND sequence NOT IN (
-                 SELECT sequence FROM agent_activity_logs
-                 WHERE agent_id = ?
-                 ORDER BY sequence DESC
-                 LIMIT 100
-               )",
-        )
-        .bind(&row.agent_id)
-        .bind(&row.agent_id)
-        .execute(&mut *tx)
         .await?;
 
         tx.commit().await?;
@@ -1708,9 +1733,10 @@ impl Repositories {
         agent_id: &str,
         limit: i64,
     ) -> Result<Vec<AgentActivityLogRow>, sqlx::Error> {
-        let limit = normalize_repository_limit(Some(limit));
+        let limit = normalize_repository_limit(Some(limit)).min(200);
         let rows = sqlx::query(
-            "SELECT id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason, created_at
+            "SELECT id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason,
+                    event_kind, severity, summary, payload_preview, tool_name, ok, created_at
              FROM agent_activity_logs
              WHERE agent_id = ?
              ORDER BY sequence DESC
@@ -3102,6 +3128,124 @@ impl Repositories {
     }
 }
 
+async fn insert_agent_activity_event_tx(
+    tx: &mut sqlx::Transaction<'_, Sqlite>,
+    row: NewAgentActivityEventRow,
+) -> Result<(), sqlx::Error> {
+    let legacy_state = row.state.as_deref().unwrap_or(row.event_kind.as_str());
+    let payload_preview = row.payload_preview.as_deref().map(|preview| {
+        sanitize_activity_payload_preview(preview, MAX_ACTIVITY_PAYLOAD_PREVIEW_CHARS)
+    });
+    let ok = row.ok.map(|value| if value { 1_i64 } else { 0_i64 });
+
+    sqlx::query(
+        "INSERT INTO agent_activity_logs(
+            id, agent_id, run_id, channel_id, message_id, task_id, state, phase, reason,
+            event_kind, severity, summary, payload_preview, tool_name, ok
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(&row.agent_id)
+    .bind(&row.run_id)
+    .bind(&row.channel_id)
+    .bind(&row.message_id)
+    .bind(&row.task_id)
+    .bind(legacy_state)
+    .bind(&row.phase)
+    .bind(&row.reason)
+    .bind(&row.event_kind)
+    .bind(&row.severity)
+    .bind(&row.summary)
+    .bind(&payload_preview)
+    .bind(&row.tool_name)
+    .bind(ok)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "DELETE FROM agent_activity_logs
+         WHERE agent_id = ?
+           AND sequence NOT IN (
+             SELECT sequence FROM agent_activity_logs
+             WHERE agent_id = ?
+             ORDER BY sequence DESC
+             LIMIT ?
+           )",
+    )
+    .bind(&row.agent_id)
+    .bind(&row.agent_id)
+    .bind(AGENT_ACTIVITY_RETENTION_LIMIT)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub fn sanitize_activity_payload_preview(input: &str, max_chars: usize) -> String {
+    let redacted = redact_sensitive_activity_text(input);
+    truncate_activity_payload_preview(&redacted, max_chars)
+}
+
+fn redact_sensitive_activity_text(input: &str) -> String {
+    let mut redacted = String::new();
+    let mut redact_next = false;
+
+    for (index, token) in input.split_whitespace().enumerate() {
+        if index > 0 {
+            redacted.push(' ');
+        }
+
+        let lower = token.to_ascii_lowercase();
+        let is_sensitive = SENSITIVE_ACTIVITY_MARKERS
+            .iter()
+            .any(|marker| lower.contains(marker));
+
+        if redact_next && !is_sensitive {
+            redacted.push_str("[redacted]");
+            redact_next = false;
+            continue;
+        }
+
+        if is_sensitive {
+            redacted.push_str(redact_sensitive_token(token).as_str());
+            redact_next = token.ends_with(':') || token.eq_ignore_ascii_case("bearer");
+        } else {
+            redacted.push_str(token);
+            redact_next = false;
+        }
+    }
+
+    redacted
+}
+
+fn redact_sensitive_token(token: &str) -> String {
+    if let Some((key, value)) = token.split_once('=') {
+        if !value.is_empty() {
+            return format!("{key}=[redacted]");
+        }
+    }
+
+    if let Some((key, value)) = token.split_once(':') {
+        if !value.is_empty() {
+            return format!("{key}:[redacted]");
+        }
+        return token.to_string();
+    }
+
+    "[redacted]".to_string()
+}
+
+fn truncate_activity_payload_preview(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+
+    let mut truncated = input.chars().take(max_chars).collect::<String>();
+    truncated.push_str(" [truncated]");
+    truncated
+}
+
 async fn record_idempotent_response_tx(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     key: &str,
@@ -3380,6 +3524,8 @@ fn message_delivery_row_from_sql(
 fn agent_activity_log_row_from_sql(
     row: sqlx::sqlite::SqliteRow,
 ) -> Result<AgentActivityLogRow, sqlx::Error> {
+    let ok = row.try_get::<Option<i64>, _>("ok")?.map(|value| value != 0);
+
     Ok(AgentActivityLogRow {
         id: row.try_get("id")?,
         agent_id: row.try_get("agent_id")?,
@@ -3390,6 +3536,12 @@ fn agent_activity_log_row_from_sql(
         state: row.try_get("state")?,
         phase: row.try_get("phase")?,
         reason: row.try_get("reason")?,
+        event_kind: row.try_get("event_kind")?,
+        severity: row.try_get("severity")?,
+        summary: row.try_get("summary")?,
+        payload_preview: row.try_get("payload_preview")?,
+        tool_name: row.try_get("tool_name")?,
+        ok,
         created_at: row.try_get("created_at")?,
     })
 }
