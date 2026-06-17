@@ -894,7 +894,7 @@ async fn task_cli_reply_preserves_role_and_routes_visible_handoff_mentions() {
 }
 
 #[tokio::test]
-async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
+async fn agent_activity_api_records_status_update_fields_and_is_idempotent() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));
 
@@ -970,6 +970,10 @@ async fn agent_status_api_updates_status_and_is_idempotent_for_activity_logs() {
     assert_eq!(logs[0]["runId"], "run_123");
     assert_eq!(logs[0]["channelId"], "all");
     assert_eq!(logs[0]["messageId"], "msg_123");
+    assert_eq!(logs[0]["eventKind"], "status.updated");
+    assert_eq!(logs[0]["severity"], "info");
+    assert!(logs[0]["summary"].as_str().unwrap().contains("working"));
+    assert_eq!(logs[0]["payloadPreview"], serde_json::Value::Null);
 
     let diagnostics = app
         .oneshot(authed_empty_request(&token, "/v1/diagnostics"))
@@ -1198,11 +1202,11 @@ async fn claim_and_status_apis_reject_blank_required_ids() {
 }
 
 #[tokio::test]
-async fn agent_activity_api_returns_latest_100_logs() {
+async fn agent_activity_api_returns_latest_200_logs() {
     let token = AuthToken::from_static("test-token");
     let app = build_router(AppState::for_tests(token.clone()));
 
-    for index in 0..105 {
+    for index in 0..205 {
         let response = app
             .clone()
             .oneshot(
@@ -1241,9 +1245,57 @@ async fn agent_activity_api_returns_latest_100_logs() {
     assert_eq!(activity.status(), StatusCode::OK);
     let activity_json = response_json(activity).await;
     let logs = activity_json["logs"].as_array().unwrap();
-    assert_eq!(logs.len(), 100);
-    assert_eq!(logs.first().unwrap()["runId"], "run_104");
+    assert_eq!(logs.len(), 200);
+    assert_eq!(logs.first().unwrap()["runId"], "run_204");
     assert_eq!(logs.last().unwrap()["runId"], "run_5");
+}
+
+#[tokio::test]
+async fn agent_activity_api_clamps_limit_to_200() {
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(AppState::for_tests(token.clone()));
+
+    for index in 0..205 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/agents/agent_cindy/status")
+                    .header("authorization", token.authorization_header())
+                    .header("content-type", "application/json")
+                    .header("idempotency-key", format!("status-{index}"))
+                    .body(Body::from(
+                        json!({
+                            "state": "working",
+                            "phase": "reading_history",
+                            "reason": null,
+                            "runId": format!("run_{index}"),
+                            "channelId": "all",
+                            "messageId": format!("msg_{index}"),
+                            "taskId": null
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    let activity = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agents/agent_cindy/activity?limit=999",
+        ))
+        .await
+        .unwrap();
+    let logs = response_json(activity).await["logs"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(logs.len(), 200);
 }
 
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
