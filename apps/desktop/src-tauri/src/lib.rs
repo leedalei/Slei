@@ -2627,7 +2627,16 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         std::env::set_var("SLEI_DATA_ROOT", &root);
-        let broker = DaemonBroker::default_local();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests_empty_fallback(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "desktop-session-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
 
         let _ = update_preferences(
             &broker,
@@ -2688,7 +2697,16 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         std::env::set_var("SLEI_DATA_ROOT", &root);
-        let broker = DaemonBroker::default_local();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests_empty_fallback(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "desktop-session-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
 
         for as_task in [false, true] {
             let result = send_channel_message(
@@ -2729,7 +2747,16 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         std::env::set_var("SLEI_DATA_ROOT", &root);
-        let broker = DaemonBroker::default_local();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests_empty_fallback(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "desktop-session-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
 
         let original_preferences = list_preferences(&broker).preferences;
         let original_node_name = list_nodes(&broker).nodes[0].name.clone();
