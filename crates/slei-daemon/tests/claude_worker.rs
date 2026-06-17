@@ -180,6 +180,70 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .await
         .unwrap();
 
+    let failed_sent = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("dm-activity-failed-message"),
+        json!({ "body": "请运行一个会失败的工具", "authorId": "human:local" }),
+    )
+    .await;
+    assert_eq!(failed_sent.status(), StatusCode::CREATED);
+    let failed_run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains("请运行一个会失败的工具"))
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("second DM runtime should have started");
+    state
+        .handle_worker_event(json!({
+            "type": "product_tool_requested",
+            "run_id": failed_run_id,
+            "agent_id": agent_id,
+            "tool_name": "Bash",
+            "tool_use_id": "tool-dm-activity-1",
+            "payload": {
+                "command": "echo preparing"
+            }
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "tool_completed",
+            "run_id": failed_run_id,
+            "agent_id": agent_id,
+            "tool_name": "Bash",
+            "tool_use_id": "tool-dm-activity-1",
+            "ok": false,
+            "payload": { "exitCode": 1 }
+        }))
+        .await
+        .unwrap();
+    let long_sensitive_tail = "x".repeat(2300);
+    state
+        .handle_worker_event(json!({
+            "type": "failed",
+            "run_id": failed_run_id,
+            "agent_id": agent_id,
+            "message": format!(
+                "DM 工具失败 Authorization: Bearer secret-token password=abc {long_sensitive_tail}"
+            ),
+            "payload": {
+                "authorization": "Bearer secret-token",
+                "password": "abc",
+                "notes": long_sensitive_tail
+            }
+        }))
+        .await
+        .unwrap();
+
     let activity = get_json(
         &app,
         &token,
@@ -193,8 +257,13 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .iter()
         .map(|log| log["eventKind"].as_str().unwrap())
         .collect::<Vec<_>>();
+    assert!(event_kinds.contains(&"run.started"));
+    assert!(event_kinds.contains(&"input.received"));
     assert!(event_kinds.contains(&"output.delta"));
+    assert!(event_kinds.contains(&"tool.started"));
+    assert!(event_kinds.contains(&"tool.completed"));
     assert!(event_kinds.contains(&"run.completed"));
+    assert!(event_kinds.contains(&"run.failed"));
 
     let completed = logs
         .iter()
@@ -205,6 +274,16 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .as_str()
         .unwrap()
         .contains(&conversation_id));
+
+    let failed = logs
+        .iter()
+        .find(|log| log["eventKind"] == "run.failed" && log["runId"] == failed_run_id)
+        .expect("failed activity event");
+    let preview = failed["payloadPreview"].as_str().unwrap();
+    assert!(!preview.contains("secret-token"));
+    assert!(!preview.contains("abc"));
+    assert!(preview.contains("[redacted]"));
+    assert!(preview.contains("[truncated]"));
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {

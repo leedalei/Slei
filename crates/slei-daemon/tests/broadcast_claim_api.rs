@@ -1095,6 +1095,54 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
         .await
         .unwrap();
 
+    let completed_sent = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/channels/all/messages",
+            "channel-agent-runtime-completed-activity",
+            json!({
+                "authorId": "human_lei",
+                "body": "@cindy 请总结发布风险",
+                "asTask": true
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(completed_sent.status(), StatusCode::OK);
+    let completed_json = response_json(completed_sent).await;
+    assert_eq!(
+        completed_json["outcome"]["action"],
+        "create_task_and_assign"
+    );
+    let completed_run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["session"]["agent_id"] == "agent_cindy"
+                && command["run_id"] != run_id
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("second channel agent runtime should have started");
+    state
+        .handle_worker_event(json!({
+            "type": "output_delta",
+            "run_id": completed_run_id,
+            "delta": "发布风险较低。",
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": completed_run_id,
+        }))
+        .await
+        .unwrap();
+
     let activity = app
         .oneshot(authed_empty_request(
             &token,
@@ -1112,8 +1160,10 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
     for expected in [
         "run.started",
         "input.received",
+        "output.delta",
         "tool.started",
         "tool.completed",
+        "run.completed",
         "run.failed",
     ] {
         assert!(
@@ -1134,6 +1184,12 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
     assert!(!preview.contains("abc"));
     assert!(preview.contains("[redacted]"));
     assert!(preview.contains("[truncated]"));
+
+    let completed = logs
+        .iter()
+        .find(|log| log["eventKind"] == "run.completed")
+        .expect("completed activity event");
+    assert_eq!(completed["runId"], completed_run_id);
 }
 
 #[tokio::test]
