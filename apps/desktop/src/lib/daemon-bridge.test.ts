@@ -28,6 +28,13 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     await expect(bridge.listNodes()).resolves.toEqual({ nodes: [] });
     await expect(bridge.listChannels()).resolves.toEqual({ channels: [] });
     await expect(bridge.listAgentActivity("agent_alice")).resolves.toEqual({ logs: [] });
+    await expect(bridge.globalSearch({ q: "needle" })).resolves.toEqual({
+      query: "needle",
+      totals: { agents: 0, channels: 0, messages: 0 },
+      agents: [],
+      channels: [],
+      messages: [],
+    });
   });
 
   it("rejects mutations and workspace access while offline", async () => {
@@ -60,6 +67,41 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     expect(invokeMock).toHaveBeenCalledWith("list_agent_activity_command", {
       agentId: "agent_coda",
       limit: 200,
+    });
+  });
+
+  it("invokes global search with the expected command shape", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { __TAURI_INTERNALS__: {} },
+    });
+    invokeMock.mockResolvedValueOnce({
+      query: "needle",
+      totals: { agents: 0, channels: 0, messages: 0 },
+      agents: [],
+      channels: [],
+      messages: [],
+    });
+
+    const bridge = createDaemonBridge();
+    await expect(
+      bridge.globalSearch({
+        q: "needle",
+        fromId: "msg_42",
+        channelId: "dev-team",
+        timeRange: "today",
+        timeZone: "UTC",
+      }),
+    ).resolves.toMatchObject({ query: "needle" });
+
+    expect(invokeMock).toHaveBeenCalledWith("global_search_command", {
+      query: {
+        q: "needle",
+        fromId: "msg_42",
+        channelId: "dev-team",
+        timeRange: "today",
+        timeZone: "UTC",
+      },
     });
   });
 });

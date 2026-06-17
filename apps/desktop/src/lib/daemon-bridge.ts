@@ -473,6 +473,71 @@ export type SaveMessageRequest = {
   sessionId?: string;
 };
 
+export type GlobalSearchTimeRange = "any" | "today" | "last7Days" | "last30Days";
+
+export type GlobalSearchQuery = {
+  q: string;
+  fromId?: string;
+  channelId?: string;
+  timeRange?: GlobalSearchTimeRange;
+  timeZone?: string;
+  includeAgents?: boolean;
+  includeChannels?: boolean;
+  includeMessages?: boolean;
+  agentLimit?: number;
+  channelLimit?: number;
+  messageLimit?: number;
+};
+
+export type GlobalSearchTotals = {
+  agents: number;
+  channels: number;
+  messages: number;
+};
+
+export type GlobalAgentSearchResult = {
+  kind: "agent" | string;
+  agentId: string;
+  title: string;
+  subtitle: string;
+  avatarSeed: string;
+  matchedFields: string[];
+};
+
+export type GlobalChannelSearchResult = {
+  kind: "channel" | string;
+  channelId: string;
+  title: string;
+  subtitle: string;
+  matchedFields: string[];
+};
+
+export type GlobalMessageSearchResult = {
+  kind: "message" | string;
+  sourceKind: "channel" | "dm" | string;
+  messageId: string;
+  channelId?: string | null;
+  conversationId?: string | null;
+  sessionId?: string | null;
+  authorId?: string;
+  authorName?: string;
+  authorHandle?: string;
+  authorLabel?: string;
+  title?: string;
+  sourceLabel?: string;
+  snippet: string;
+  createdAt: string;
+  matchedFields?: string[];
+};
+
+export type GlobalSearchReceipt = {
+  query: string;
+  totals: GlobalSearchTotals;
+  agents: GlobalAgentSearchResult[];
+  channels: GlobalChannelSearchResult[];
+  messages: GlobalMessageSearchResult[];
+};
+
 export type RuntimeSetupState = {
   loading: boolean;
   error?: string;
@@ -556,6 +621,7 @@ export type DaemonBridge = {
   listSavedMessages(): Promise<SavedMessageListReceipt>;
   saveMessage(request: SaveMessageRequest): Promise<SavedMessageReceipt>;
   unsaveMessage(messageId: string): Promise<void>;
+  globalSearch(query: GlobalSearchQuery): Promise<GlobalSearchReceipt>;
   listPreferences(): Promise<PreferencesReceipt>;
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
   listProfile(): Promise<ProfileReceipt>;
@@ -706,6 +772,15 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     },
     saveMessage: rejectDaemonOffline,
     unsaveMessage: rejectDaemonOffline,
+    async globalSearch(query) {
+      return {
+        query: query.q.trim(),
+        totals: { agents: 0, channels: 0, messages: 0 },
+        agents: [],
+        channels: [],
+        messages: [],
+      };
+    },
     async listPreferences() {
       return { preferences };
     },
@@ -771,6 +846,7 @@ export function createDaemonBridge(): DaemonBridge {
       listSavedMessages: () => invoke<SavedMessageListReceipt>("list_saved_messages_command"),
       saveMessage: (request: SaveMessageRequest) => invoke<SavedMessageReceipt>("save_message_command", { request }),
       unsaveMessage: (messageId: string) => invoke<void>("unsave_message_command", { messageId }),
+      globalSearch: (query: GlobalSearchQuery) => invoke<GlobalSearchReceipt>("global_search_command", { query }),
       listPreferences: () => invoke<PreferencesReceipt>("list_preferences_command"),
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),
       listProfile: () => invoke<ProfileReceipt>("list_profile_command"),

@@ -9,12 +9,12 @@ use crate::daemon_broker::{
     ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
     ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
     ConversationSessionReceipt, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
-    GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt, NodeNameError,
-    NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
-    PreferencesUpdateRequest, ProfileError, ProfileReceipt, ProfileUpdateRequest,
-    SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt,
-    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt, TaskError,
-    TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
+    GlobalSearchQuery, GlobalSearchReceipt, GuideBootstrapReceipt, InteractiveCardReceipt,
+    NodeListReceipt, NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
+    PreferencesReceipt, PreferencesUpdateRequest, ProfileError, ProfileReceipt,
+    ProfileUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
+    SavedMessageReceipt, SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
+    TaskError, TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
     TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
@@ -183,6 +183,10 @@ pub fn send_channel_message(
 
 pub fn list_tasks(broker: &DaemonBroker, query: TaskListQuery) -> TaskListReceipt {
     broker.list_tasks(query)
+}
+
+pub fn global_search(broker: &DaemonBroker, query: GlobalSearchQuery) -> GlobalSearchReceipt {
+    broker.global_search(query)
 }
 
 pub fn get_task_thread(
@@ -560,6 +564,14 @@ pub fn list_tasks_command(
     query: TaskListQuery,
 ) -> TaskListReceipt {
     list_tasks(state.inner(), query)
+}
+
+#[tauri::command]
+pub fn global_search_command(
+    state: tauri::State<'_, DaemonBroker>,
+    query: GlobalSearchQuery,
+) -> GlobalSearchReceipt {
+    global_search(state.inner(), query)
 }
 
 #[tauri::command]

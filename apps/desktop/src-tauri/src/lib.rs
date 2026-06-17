@@ -24,6 +24,7 @@ pub fn run() {
             commands::activate_channel_session_command,
             commands::send_channel_message_command,
             commands::list_tasks_command,
+            commands::global_search_command,
             commands::get_task_thread_command,
             commands::reply_to_task_command,
             commands::update_task_status_command,
@@ -68,22 +69,22 @@ mod tests {
         activate_conversation_session, add_channel_member, app_runtime_flags,
         bootstrap_guide_agent, complete_interactive_card, create_agent, create_channel,
         create_conversation_session, create_dm_conversation, daemon_status, delete_agent,
-        format_frontend_crash_log, list_agent_activity, list_agent_skills, list_agent_workspace,
-        list_agents, list_channel_members, list_channel_messages, list_conversation_messages,
-        list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
-        list_preferences, list_profile, list_saved_messages, list_tasks, open_agent_path,
-        read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
-        rename_local_node, reply_to_task, request_artifact_open,
-        reset_conversation_runtime_session, save_message, send_channel_message,
-        send_conversation_message, unsave_message, update_agent, update_preferences,
-        update_profile, upload_conversation_attachment, FrontendCrashReport,
+        format_frontend_crash_log, global_search, list_agent_activity, list_agent_skills,
+        list_agent_workspace, list_agents, list_channel_members, list_channel_messages,
+        list_conversation_messages, list_conversation_sessions, list_conversations,
+        list_diagnostics, list_nodes, list_preferences, list_profile, list_saved_messages,
+        list_tasks, open_agent_path, read_agent_workspace_file, reconnect_events,
+        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_task,
+        request_artifact_open, reset_conversation_runtime_session, save_message,
+        send_channel_message, send_conversation_message, unsave_message, update_agent,
+        update_preferences, update_profile, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
-        NotificationPreferencesView, PreferencesUpdateRequest, ProfileUpdateRequest,
-        RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest, TaskListQuery,
-        TaskReplyRequest,
+        GlobalSearchQuery, NotificationPreferencesView, PreferencesUpdateRequest,
+        ProfileUpdateRequest, RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest,
+        TaskListQuery, TaskReplyRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -364,6 +365,99 @@ mod tests {
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-channel-message-"));
         assert!(request.contains(r#""asTask":true"#));
+    }
+
+    #[test]
+    fn global_search_command_uses_daemon_route_with_auth_and_query() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = serde_json::json!({
+                "query": "needle phrase",
+                "totals": { "agents": 1, "channels": 1, "messages": 1 },
+                "agents": [{
+                    "kind": "agent",
+                    "agentId": "agent_coda",
+                    "title": "Coda",
+                    "subtitle": "@coda",
+                    "avatarSeed": "agent_coda",
+                    "matchedFields": ["name"]
+                }],
+                "channels": [{
+                    "kind": "channel",
+                    "channelId": "dev-team",
+                    "title": "#dev-team",
+                    "subtitle": "Development",
+                    "matchedFields": ["name"]
+                }],
+                "messages": [{
+                    "kind": "message",
+                    "sourceKind": "channel",
+                    "messageId": "msg_42",
+                    "channelId": "dev-team",
+                    "conversationId": null,
+                    "sessionId": "session:channel:dev-team:default",
+                    "sourceLabel": "#dev-team",
+                    "authorLabel": "Coda @coda",
+                    "snippet": "needle phrase in channel",
+                    "createdAt": "2026-06-17T09:00:00Z",
+                    "matchedFields": ["body"]
+                }]
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = global_search(
+            &broker,
+            GlobalSearchQuery {
+                q: "needle phrase".to_string(),
+                from_id: Some("msg 42".to_string()),
+                channel_id: Some("dev-team".to_string()),
+                time_range: Some("today".to_string()),
+                time_zone: Some("America/Los_Angeles".to_string()),
+                include_agents: Some(false),
+                include_channels: None,
+                include_messages: Some(true),
+                agent_limit: None,
+                channel_limit: Some(20),
+                message_limit: Some(12),
+            },
+        );
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.query, "needle phrase");
+        assert_eq!(receipt.totals.messages, 1);
+        assert_eq!(
+            receipt.messages[0].session_id.as_deref(),
+            Some("session:channel:dev-team:default")
+        );
+        assert_eq!(
+            receipt.messages[0].source_label.as_deref(),
+            Some("#dev-team")
+        );
+        assert_eq!(
+            receipt.messages[0].author_label.as_deref(),
+            Some("Coda @coda")
+        );
+        assert!(request.contains("GET /v1/search/global?query=needle%20phrase&fromId=msg%2042&channelId=dev-team&timeRange=today&timeZone=America%2FLos_Angeles&includeAgents=false&includeMessages=true&channelLimit=20&messageLimit=12 HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
     }
 
     #[test]
