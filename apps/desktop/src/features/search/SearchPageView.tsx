@@ -66,7 +66,6 @@ export function SearchPage({
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [receipt, setReceipt] = useState<GlobalSearchReceipt | undefined>();
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
 
   const fromOptions = useMemo(() => createFromOptions(data, profile ?? null, messages), [data, messages, profile]);
   const channelOptions = useMemo(() => data.channels.map((channel) => ({
@@ -101,21 +100,18 @@ export function SearchPage({
       setStatus("idle");
       setReceipt(undefined);
       setSubmittedQuery("");
-      setErrorMessage("");
       return;
     }
 
     setStatus("loading");
     setSubmittedQuery(request.q);
-    setErrorMessage("");
     try {
       const nextReceipt = await onGlobalSearch?.(request);
       setReceipt(nextReceipt ?? emptyGlobalSearchReceipt(request.q));
       setStatus("success");
-    } catch (error) {
+    } catch {
       setReceipt(undefined);
       setStatus("error");
-      setErrorMessage(formatSearchError(error));
     }
   }
 
@@ -124,7 +120,6 @@ export function SearchPage({
     setReceipt(undefined);
     setSubmittedQuery("");
     setStatus("idle");
-    setErrorMessage("");
   }
 
   return (
@@ -208,7 +203,7 @@ export function SearchPage({
 
           {status === "error" ? (
             <Empty
-              description={errorMessage || messages.search.errorDescription}
+              description={messages.search.errorDescription}
               size="md"
               title={messages.search.errorTitle}
               variant="noresult"
@@ -461,10 +456,6 @@ function emptyGlobalSearchReceipt(query: string): GlobalSearchReceipt {
     channels: [],
     messages: [],
   };
-}
-
-function formatSearchError(error: unknown) {
-  return error instanceof Error ? error.message : typeof error === "string" ? error : "";
 }
 
 function formatResultDate(value: string) {

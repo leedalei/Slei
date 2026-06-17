@@ -149,6 +149,16 @@ async function clickButton(rootElement: HTMLElement, label: string | RegExp) {
   return button as HTMLButtonElement;
 }
 
+async function clickButtonWithExactText(rootElement: HTMLElement, text: string) {
+  const button = Array.from(rootElement.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === text);
+  expect(button).toBeInstanceOf(HTMLButtonElement);
+  await act(async () => {
+    button?.click();
+  });
+  await act(async () => undefined);
+  return button as HTMLButtonElement;
+}
+
 describe("SearchPage global search UI", () => {
   it("renders the empty query placeholder and does not call daemon search", async () => {
     const onGlobalSearch = vi.fn();
@@ -156,6 +166,18 @@ describe("SearchPage global search UI", () => {
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(onGlobalSearch).not.toHaveBeenCalled();
+  });
+
+  it("does not call daemon search when submitting a whitespace query and keeps the placeholder state", async () => {
+    const onGlobalSearch = vi.fn();
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), "   ");
+    await clickButton(rootElement, "Search");
+
+    expect(onGlobalSearch).not.toHaveBeenCalled();
+    expect(rootElement.textContent).toContain("Search agents, channels, and messages");
+    expect(rootElement.textContent).toContain("Enter a keyword to search.");
   });
 
   it("submits daemon-backed search requests and renders grouped highlighted results", async () => {
@@ -214,6 +236,22 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage();
 
     expect(rootElement.textContent).not.toContain("Relevant");
+  });
+
+  it("renders localized generic error copy without visible raw thrown details", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const rootElement = await renderSearchPage({
+      messages,
+      onGlobalSearch: async () => {
+        throw new Error("backend timeout in English");
+      },
+    });
+
+    await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "coda");
+    await clickButtonWithExactText(rootElement, "搜索");
+
+    expect(rootElement.textContent).toContain(messages.search.errorDescription);
+    expect(rootElement.textContent).not.toContain("backend timeout in English");
   });
 
   it("calls result selection callbacks with the selected result ids", async () => {
