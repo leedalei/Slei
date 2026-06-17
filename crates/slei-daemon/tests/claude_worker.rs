@@ -7,6 +7,7 @@ use slei_daemon::adapters::worker_rpc::{WorkerEvent, WorkerTransport};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::state::AppState;
+use slei_storage::db::SleiDb;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -104,7 +105,7 @@ fn claude_worker_events_map_to_daemon_events_with_correlation() {
 async fn dm_runtime_records_output_delta_and_completed_activity_events() {
     let token = AuthToken::from_static("test-token");
     let root = std::env::temp_dir().join(format!("slei-claude-worker-dm-{}", Uuid::new_v4()));
-    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
     let app = build_router(state.clone());
 
     let created = post_json(
@@ -263,6 +264,51 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .await
         .unwrap();
 
+    let terminal_failure_sent = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("dm-activity-terminal-failure-message"),
+        json!({ "body": "请触发完成持久化失败", "authorId": "human:local" }),
+    )
+    .await;
+    assert_eq!(terminal_failure_sent.status(), StatusCode::CREATED);
+    let terminal_failure_run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains("请触发完成持久化失败"))
+        })
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .expect("third DM runtime should have started");
+    let db_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&db_url).await.unwrap();
+    sqlx::query(
+        "CREATE TRIGGER fail_conversation_message_update
+         BEFORE UPDATE ON conversation_messages
+         BEGIN
+             SELECT RAISE(FAIL, 'forced conversation message failure');
+         END",
+    )
+    .execute(db.pool())
+    .await
+    .unwrap();
+    let terminal_error = state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": terminal_failure_run_id,
+        }))
+        .await
+        .expect_err("completed side effect should still return the persistence error");
+    assert!(
+        terminal_error.contains("forced conversation message failure"),
+        "{terminal_error}"
+    );
+
     let activity = get_json(
         &app,
         &token,
@@ -286,7 +332,7 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
 
     let completed = logs
         .iter()
-        .find(|log| log["eventKind"] == "run.completed")
+        .find(|log| log["eventKind"] == "run.completed" && log["runId"] == run_id)
         .expect("run completed activity event");
     assert_eq!(completed["runId"], run_id);
     assert!(completed["payloadPreview"]
@@ -323,6 +369,10 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         })
         .expect("ordinary tool_completed name should be preserved");
     assert!(read_completed["summary"].as_str().unwrap().contains("Read"));
+
+    assert!(logs.iter().any(|log| {
+        log["eventKind"] == "run.completed" && log["runId"] == terminal_failure_run_id
+    }));
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {

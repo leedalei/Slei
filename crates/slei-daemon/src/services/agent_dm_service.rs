@@ -295,18 +295,6 @@ impl AgentDmService {
                 .await;
             }
             Some("completed") => {
-                self.conversations
-                    .upsert_run_message(
-                        &record.conversation_id,
-                        &record.agent_id,
-                        run_id,
-                        None,
-                        Some("done"),
-                    )
-                    .await?;
-                self.conversations
-                    .mark_runtime_session_ready(&record.conversation_id)
-                    .await?;
                 self.record_activity(
                     &record,
                     run_id,
@@ -321,21 +309,24 @@ impl AgentDmService {
                     Some(true),
                 )
                 .await;
+                self.conversations
+                    .upsert_run_message(
+                        &record.conversation_id,
+                        &record.agent_id,
+                        run_id,
+                        None,
+                        Some("done"),
+                    )
+                    .await?;
+                self.conversations
+                    .mark_runtime_session_ready(&record.conversation_id)
+                    .await?;
             }
             Some("failed") => {
                 let message = event
                     .get("message")
                     .and_then(Value::as_str)
                     .unwrap_or("Agent runtime failed");
-                self.conversations
-                    .upsert_run_message(
-                        &record.conversation_id,
-                        &record.agent_id,
-                        run_id,
-                        Some(message),
-                        Some("failed"),
-                    )
-                    .await?;
                 self.record_activity(
                     &record,
                     run_id,
@@ -347,6 +338,15 @@ impl AgentDmService {
                     Some(false),
                 )
                 .await;
+                self.conversations
+                    .upsert_run_message(
+                        &record.conversation_id,
+                        &record.agent_id,
+                        run_id,
+                        Some(message),
+                        Some("failed"),
+                    )
+                    .await?;
             }
             Some("tool_started") => {
                 let tool_name = worker_tool_name(&event);
