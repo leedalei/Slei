@@ -134,9 +134,12 @@ mod tests {
 
     #[test]
     fn broker_sanitizes_status_for_webview() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -169,9 +172,12 @@ mod tests {
 
     #[test]
     fn broker_reconnect_uses_token_internally_and_returns_only_sequence() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -235,7 +241,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -272,9 +278,12 @@ mod tests {
 
     #[test]
     fn artifact_open_accepts_daemon_ids_only_and_hides_paths() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -345,7 +354,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -582,7 +591,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -645,7 +654,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -678,7 +687,7 @@ mod tests {
         drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -709,7 +718,7 @@ mod tests {
         drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -738,7 +747,7 @@ mod tests {
         drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -809,7 +818,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -882,7 +891,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -946,7 +955,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1013,7 +1022,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1067,7 +1076,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1134,7 +1143,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1188,7 +1197,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1274,7 +1283,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1311,7 +1320,7 @@ mod tests {
         drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1373,7 +1382,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1401,9 +1410,12 @@ mod tests {
     fn node_commands_sanitize_runtime_status_and_support_device_name() {
         let _env_guard = test_env_lock();
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1437,9 +1449,12 @@ mod tests {
         let agent_root =
             std::env::temp_dir().join(format!("slei-desktop-agent-test-{}", std::process::id()));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1549,9 +1564,12 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&agent_root);
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1597,9 +1615,12 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&agent_root);
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1630,9 +1651,12 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&agent_root);
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1671,9 +1695,12 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&agent_root);
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let descriptor = RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1723,9 +1750,12 @@ mod tests {
         )
         .unwrap();
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let descriptor = RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1759,9 +1789,12 @@ mod tests {
         let _ = fs::remove_dir_all(&agent_root);
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let descriptor = RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1792,9 +1825,12 @@ mod tests {
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
         std::env::set_var("SLEI_DISABLE_SYSTEM_OPEN", "1");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1872,9 +1908,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &first_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -1954,9 +1993,12 @@ mod tests {
         .unwrap();
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
 
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2034,9 +2076,12 @@ mod tests {
         .unwrap();
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
 
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2063,9 +2108,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2128,9 +2176,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2224,9 +2275,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2293,9 +2347,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2379,9 +2436,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2456,9 +2516,12 @@ mod tests {
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2547,9 +2610,12 @@ mod tests {
         ));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
         std::env::set_var("SLEI_CLAUDE_VERSION_OVERRIDE", "claude 1.2.3");
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2632,9 +2698,12 @@ mod tests {
             std::process::id()
         ));
         std::env::set_var("SLEI_DATA_ROOT", &root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2721,7 +2790,7 @@ mod tests {
         });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
@@ -2951,9 +3020,12 @@ mod tests {
         ));
         let _ = fs::remove_dir_all(&root);
         std::env::set_var("SLEI_DATA_ROOT", &root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
         let descriptor = RuntimeDescriptor {
-            endpoint: "http://127.0.0.1:4319".to_string(),
-            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
             token: "secret-token".to_string(),
             daemon_version: "0.1.0".to_string(),
             protocol_version: "v1".to_string(),
