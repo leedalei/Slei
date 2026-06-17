@@ -1378,17 +1378,30 @@ impl Repositories {
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
         let limit = normalize_repository_limit(Some(limit)).min(80);
         let pattern = format!("%{}%", escape_like_pattern(query));
+        // Global search time bounds accept Unix epoch seconds, SQLite CURRENT_TIMESTAMP
+        // strings, or RFC3339 UTC strings. Normalize before comparison so source-specific
+        // storage formats cannot silently exclude one result class.
         let rows = sqlx::query(
-            "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
-             FROM messages
-             WHERE content LIKE ? ESCAPE '\\'
-               AND (? IS NULL OR author_id = ?)
-               AND (? IS NULL OR channel_id = ?)
-               AND (? IS NULL OR created_at >= ?)
-               AND (? IS NULL OR created_at <= ?)
-               AND deleted = 0
-               AND kind NOT IN ('tombstone', 'task_root', 'task_reply', 'task_card')
-             ORDER BY created_at DESC, rowid DESC
+            "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+             FROM (
+                SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at,
+                       unixepoch(created_at) AS created_at_epoch
+                FROM messages
+                WHERE content LIKE ? ESCAPE '\\'
+                  AND (? IS NULL OR author_id = ?)
+                  AND (? IS NULL OR channel_id = ?)
+                  AND deleted = 0
+                  AND kind NOT IN ('tombstone', 'task_root', 'task_reply', 'task_card')
+             )
+             WHERE (? IS NULL OR created_at_epoch >= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+               AND (? IS NULL OR created_at_epoch <= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+             ORDER BY created_at_epoch DESC, sequence DESC
              LIMIT ?",
         )
         .bind(pattern)
@@ -1398,6 +1411,12 @@ impl Repositories {
         .bind(channel_id)
         .bind(start_at)
         .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
         .bind(end_at)
         .bind(end_at)
         .bind(limit)
@@ -2964,14 +2983,30 @@ impl Repositories {
     ) -> Result<Vec<ConversationMessageSearchRow>, sqlx::Error> {
         let limit = normalize_repository_limit(Some(limit)).min(80);
         let pattern = format!("%{}%", escape_like_pattern(query));
+        // Conversation messages are currently daemon-stamped with Unix epoch seconds,
+        // while callers may pass global search bounds as RFC3339 or SQLite datetimes.
+        // Normalize both sides to Unix seconds before applying time filters.
         let rows = sqlx::query(
             "SELECT id, conversation_id, session_id, author_id, body, created_at
-             FROM conversation_messages
-             WHERE body LIKE ? ESCAPE '\\'
-               AND (? IS NULL OR author_id = ?)
-               AND (? IS NULL OR created_at >= ?)
-               AND (? IS NULL OR created_at <= ?)
-             ORDER BY created_at DESC, rowid DESC
+             FROM (
+                SELECT rowid AS sequence, id, conversation_id, session_id, author_id, body, created_at,
+                       CASE
+                         WHEN created_at GLOB '[0-9][0-9]*' AND created_at NOT GLOB '*[^0-9]*' THEN CAST(created_at AS INTEGER)
+                         ELSE unixepoch(created_at)
+                       END AS created_at_epoch
+                FROM conversation_messages
+                WHERE body LIKE ? ESCAPE '\\'
+                  AND (? IS NULL OR author_id = ?)
+             )
+             WHERE (? IS NULL OR created_at_epoch >= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+               AND (? IS NULL OR created_at_epoch <= CASE
+                    WHEN ? GLOB '[0-9][0-9]*' AND ? NOT GLOB '*[^0-9]*' THEN CAST(? AS INTEGER)
+                    ELSE unixepoch(?)
+                  END)
+             ORDER BY created_at_epoch DESC, sequence DESC
              LIMIT ?",
         )
         .bind(pattern)
@@ -2979,6 +3014,12 @@ impl Repositories {
         .bind(from_id)
         .bind(start_at)
         .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(start_at)
+        .bind(end_at)
+        .bind(end_at)
+        .bind(end_at)
         .bind(end_at)
         .bind(end_at)
         .bind(limit)

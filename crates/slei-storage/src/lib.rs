@@ -1045,6 +1045,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn global_search_channel_messages_supports_from_channel_and_time_filters() {
+        let (url, _path) = sqlite_file_url("global-search-channel-message-filters");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for channel_id in ["all", "ops"] {
+            repos
+                .upsert_channel(
+                    channel_id,
+                    channel_id,
+                    None,
+                    channel_id == "all",
+                    "Controlled",
+                )
+                .await
+                .unwrap();
+        }
+
+        for (id, channel_id, author_id, body, created_at) in [
+            (
+                "msg_all_human_old",
+                "all",
+                "human:local",
+                "needle old human all",
+                "2026-06-01 09:00:00",
+            ),
+            (
+                "msg_all_human_mid",
+                "all",
+                "human:local",
+                "needle selected human all",
+                "2026-06-02 10:00:00",
+            ),
+            (
+                "msg_all_agent_mid",
+                "all",
+                "agent_coda",
+                "needle agent all",
+                "2026-06-02 11:00:00",
+            ),
+            (
+                "msg_ops_human_mid",
+                "ops",
+                "human:local",
+                "needle human ops",
+                "2026-06-02 12:00:00",
+            ),
+            (
+                "msg_all_human_late",
+                "all",
+                "human:local",
+                "needle late human all",
+                "2026-06-03 10:00:00",
+            ),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: channel_id.to_string(),
+                    session_id: None,
+                    author_id: author_id.to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            sqlx::query("UPDATE messages SET created_at = ? WHERE id = ?")
+                .bind(created_at)
+                .bind(id)
+                .execute(db.pool())
+                .await
+                .unwrap();
+        }
+
+        let matches = repos
+            .search_channel_messages_for_global_search(
+                "needle",
+                Some("human:local"),
+                Some("all"),
+                Some("2026-06-02T00:00:00Z"),
+                Some("2026-06-02T23:59:59Z"),
+                80,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|row| row.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_all_human_mid"]
+        );
+    }
+
+    #[tokio::test]
     async fn global_search_conversation_messages_supports_from_and_time_filters() {
         let (url, _path) = sqlite_file_url("global-search-dm-messages");
         let db = SleiDb::connect(&url).await.unwrap();
@@ -1069,31 +1167,31 @@ mod tests {
                 "dm_human_old",
                 "human:local",
                 "body-only needle from human old",
-                "2026-06-01T09:00:00Z",
+                "1780304400",
             ),
             (
                 "dm_agent_old",
                 "agent_coda",
                 "body-only needle from agent old",
-                "2026-06-01T10:00:00Z",
+                "1780308000",
             ),
             (
                 "dm_human_new",
                 "human:local",
                 "body-only needle from human new",
-                "2026-06-02T09:00:00Z",
+                "1780390800",
             ),
             (
                 "dm_agent_new",
                 "agent_coda",
                 "body-only needle from agent new",
-                "2026-06-02T10:00:00Z",
+                "1780394400",
             ),
             (
                 "dm_subject_only",
                 "agent_coda",
                 "does not contain the target term",
-                "2026-06-02T11:00:00Z",
+                "1780398000",
             ),
         ] {
             repos
