@@ -3133,7 +3133,11 @@ async fn insert_agent_activity_event_tx(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     row: NewAgentActivityEventRow,
 ) -> Result<(), sqlx::Error> {
-    let legacy_state = row.state.as_deref().unwrap_or(row.event_kind.as_str());
+    let legacy_state = if row.event_kind == "status.updated" {
+        row.state.as_deref().unwrap_or(row.event_kind.as_str())
+    } else {
+        row.event_kind.as_str()
+    };
     let payload_preview = row.payload_preview.as_deref().map(|preview| {
         sanitize_activity_payload_preview(preview, MAX_ACTIVITY_PAYLOAD_PREVIEW_CHARS)
     });
@@ -3210,7 +3214,7 @@ fn redact_sensitive_activity_text(input: &str) -> String {
 
         if is_sensitive {
             redacted.push_str(redact_sensitive_token(token).as_str());
-            redact_next = token.ends_with(':') || token.eq_ignore_ascii_case("bearer");
+            redact_next = sensitive_token_redacts_following_value(token);
         } else {
             redacted.push_str(token);
             redact_next = false;
@@ -3235,6 +3239,19 @@ fn redact_sensitive_token(token: &str) -> String {
     }
 
     "[redacted]".to_string()
+}
+
+fn sensitive_token_redacts_following_value(token: &str) -> bool {
+    if token.eq_ignore_ascii_case("bearer") {
+        return true;
+    }
+    if let Some((_, value)) = token.split_once('=') {
+        return value.is_empty();
+    }
+    if let Some((_, value)) = token.split_once(':') {
+        return value.is_empty();
+    }
+    true
 }
 
 fn truncate_activity_payload_preview(input: &str, max_chars: usize) -> String {

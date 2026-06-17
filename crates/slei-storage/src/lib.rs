@@ -285,7 +285,7 @@ mod tests {
                 payload_preview: Some(r#"{"tool":"Bash","ok":true}"#.to_string()),
                 tool_name: Some("Bash".to_string()),
                 ok: Some(true),
-                state: None,
+                state: Some("working".to_string()),
                 phase: None,
                 reason: None,
             })
@@ -476,6 +476,16 @@ mod tests {
         assert!(preview.contains("[redacted]"));
         assert!(preview.contains("[truncated]"));
         assert!(preview.chars().count() <= 48);
+    }
+
+    #[test]
+    fn agent_activity_payload_preview_redacts_whitespace_sensitive_values() {
+        for marker in ["token", "api_key", "password", "private_key"] {
+            let preview = sanitize_activity_payload_preview(&format!("{marker} abc123 safe"), 200);
+            assert!(!preview.contains("abc123"), "leaked value for {marker}");
+            assert!(preview.contains("[redacted]"));
+            assert!(preview.contains("safe"));
+        }
     }
 
     #[tokio::test]
