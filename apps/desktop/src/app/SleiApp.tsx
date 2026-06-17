@@ -481,11 +481,13 @@ export function createChannelAgentActivityMessages(outcome: SendChannelMessageOu
   }];
 }
 
-function createClaimedAgentActivityMessage(messageId: string, agentId: string, source: SleiMessage): SleiMessage {
+function createClaimedAgentActivityMessage(messageId: string, agentId: string, source: SleiMessage, member?: SleiMember): SleiMessage {
   const now = new Date().toISOString();
   return {
     id: `agent-activity-${messageId}-${agentId}`,
-    author: agentId,
+    author: member?.name ?? source.author,
+    handle: member?.handle,
+    avatar: member?.avatar,
     role: "agent",
     time: source.time || formatMessageTime(now),
     sentAt: source.sentAt || formatMessageDateTime(now),
@@ -497,13 +499,21 @@ function createClaimedAgentActivityMessage(messageId: string, agentId: string, s
   };
 }
 
-function replaceChannelAgentActivityForClaim(messages: SleiMessage[], messageId: string, agentId: string): SleiMessage[] {
+function replaceChannelAgentActivityForClaim(messages: SleiMessage[], messageId: string, agentId: string, members: SleiMember[] = []): SleiMessage[] {
   const claimedActivityId = `agent-activity-${messageId}-${agentId}`;
   const existingClaimedActivity = messages.find((message) => message.id === claimedActivityId && message.toolCall === "channel_agent_reply");
   const sourceActivity = messages.find((message) => message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId);
   const sourceMessage = sourceActivity ?? messages.find((message) => message.id === messageId);
   if (!sourceMessage) return messages;
-  const claimedActivity = existingClaimedActivity ?? createClaimedAgentActivityMessage(messageId, agentId, sourceMessage);
+  const member = members.find((candidate) => candidate.id === agentId);
+  const claimedActivity = existingClaimedActivity
+    ? {
+        ...existingClaimedActivity,
+        author: member?.name ?? existingClaimedActivity.author,
+        handle: member?.handle ?? existingClaimedActivity.handle,
+        avatar: member?.avatar ?? existingClaimedActivity.avatar,
+      }
+    : createClaimedAgentActivityMessage(messageId, agentId, sourceMessage, member);
   let changed = false;
   const nextMessages = messages.flatMap((message) => {
     const matchesSameSource = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
@@ -573,22 +583,22 @@ export function markCoordinatorActivityFailedByDiagnostic(messages: SleiMessage[
   return changed ? nextMessages : messages;
 }
 
-export function keepOnlyClaimedAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+export function keepOnlyClaimedAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView, members: SleiMember[] = []): SleiMessage[] {
   if (event.eventType !== "message_claimed") return messages;
   const messageId = diagnosticPayloadValue(event, "message_id");
   const agentId = diagnosticPayloadValue(event, "agent_id");
   if (!messageId || !agentId) return messages;
-  return replaceChannelAgentActivityForClaim(messages, messageId, agentId);
+  return replaceChannelAgentActivityForClaim(messages, messageId, agentId, members);
 }
 
-export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView, members: SleiMember[] = []): SleiMessage[] {
   if (event.eventType !== "agent_activity.updated") return messages;
   const messageId = diagnosticPayloadValue(event, "message_id");
   const agentId = diagnosticPayloadValue(event, "agent_id");
   if (!messageId || messageId === "none" || !agentId) return messages;
   const state = diagnosticPayloadValue(event, "state");
   const phase = diagnosticPayloadValue(event, "phase")?.replaceAll("_", " ") ?? "";
-  const replacedMessages = replaceChannelAgentActivityForClaim(messages, messageId, agentId);
+  const replacedMessages = replaceChannelAgentActivityForClaim(messages, messageId, agentId, members);
   let changed = replacedMessages !== messages;
   const nextMessages = replacedMessages.map((message) => {
     const matchesActivity = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
@@ -884,8 +894,8 @@ export function SleiApp() {
       for (const event of events) {
         lastDiagnosticToastSequenceRef.current = Math.max(lastDiagnosticToastSequenceRef.current, event.sequence);
         setData((current) => {
-          const claimedMessages = keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event);
-          return createEmptySleiData({ ...current, messages: updateAgentActivityByDiagnostic(claimedMessages, event) });
+          const claimedMessages = keepOnlyClaimedAgentActivityByDiagnostic(current.messages, event, current.members);
+          return createEmptySleiData({ ...current, messages: updateAgentActivityByDiagnostic(claimedMessages, event, current.members) });
         });
         if (diagnosticEventNeedsToast(event)) {
           setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));

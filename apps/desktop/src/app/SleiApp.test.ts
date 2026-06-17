@@ -464,17 +464,23 @@ describe("createChannelAgentReplyMessage", () => {
       [alice, coda],
     );
 
-    const nextMessages = keepOnlyClaimedAgentActivityByDiagnostic(activities, {
-      sequence: 12,
-      eventType: "message_claimed",
-      entityId: "event_claimed_12",
-      payload: "message_id=msg_broadcast_123 agent_id=agent_coda",
-      createdAt: "2026-06-17T00:00:00.000Z",
-    });
+    const nextMessages = keepOnlyClaimedAgentActivityByDiagnostic(
+      activities,
+      {
+        sequence: 12,
+        eventType: "message_claimed",
+        entityId: "event_claimed_12",
+        payload: "message_id=msg_broadcast_123 agent_id=agent_coda",
+        createdAt: "2026-06-17T00:00:00.000Z",
+      },
+      [alice, coda],
+    );
 
     expect(nextMessages.map((message) => message.id)).toEqual(["agent-activity-msg_broadcast_123-agent_coda"]);
     expect(nextMessages[0]).toMatchObject({
-      author: "agent_coda",
+      author: "Coda",
+      handle: "@coda",
+      avatar: "CO",
       channelId: "all",
       sourceMessageId: "msg_broadcast_123",
       toolCall: "channel_agent_reply",
@@ -514,17 +520,44 @@ describe("createChannelAgentReplyMessage", () => {
       }],
     );
 
-    const nextMessages = updateAgentActivityByDiagnostic(activities, {
-      sequence: 13,
-      eventType: "agent_activity.updated",
-      entityId: "event_activity_13",
-      payload: "message_id=msg_broadcast_123 agent_id=agent_coda state=working phase=正在_阅读历史",
-      createdAt: "2026-06-17T00:00:00.000Z",
-    });
+    const coda = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      avatar: "CO",
+      type: "agent" as const,
+      runtimeStatus: "idle" as const,
+      role: "工程师",
+      description: "",
+      computer: "本机设备",
+      created: "2026-06-04",
+      creator: "system",
+      runtime: "ClaudeCode",
+      model: "Sonnet",
+      instructions: "",
+      permissions: [],
+      environmentVariables: [],
+      createdAgents: [],
+      activity: "",
+      capabilities: [],
+    };
+    const nextMessages = updateAgentActivityByDiagnostic(
+      activities,
+      {
+        sequence: 13,
+        eventType: "agent_activity.updated",
+        entityId: "event_activity_13",
+        payload: "message_id=msg_broadcast_123 agent_id=agent_coda state=working phase=正在_阅读历史",
+        createdAt: "2026-06-17T00:00:00.000Z",
+      },
+      [coda],
+    );
 
     expect(nextMessages.map((message) => message.id)).toEqual(["agent-activity-msg_broadcast_123-agent_coda"]);
     expect(nextMessages[0]).toMatchObject({
-      author: "agent_coda",
+      author: "Coda",
+      handle: "@coda",
+      avatar: "CO",
       body: "正在 阅读历史",
       status: "running",
       toolCall: "channel_agent_reply",
