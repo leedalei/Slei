@@ -50,7 +50,6 @@ import {
   defaultAppearance,
   defaultLocale,
   defaultNotifications,
-  defaultProfile,
   defaultTimeZone,
   deleteComputerNode,
   detectAgentMemoryRequest,
@@ -58,6 +57,7 @@ import {
   formatMessageTime,
   formatMemberCreatedDate,
   isInternalCoordinatorMember,
+  localHumanPresentation,
   normalizeAppearance,
   parseTaskCardBody,
   renameComputerNode,
@@ -107,14 +107,15 @@ export {
 } from "./model";
 export { EditableDetailField, Empty } from "../components";
 
-function conversationMessageToSleiMessage(message: ConversationMessageView, members: SleiMember[], profile: UserProfile): SleiMessage {
+export function conversationMessageToSleiMessage(message: ConversationMessageView, members: SleiMember[], profile: UserProfile | null, messages: DesktopMessages): SleiMessage {
   const member = members.find((candidate) => candidate.id === message.authorId);
   const isHuman = message.authorId.startsWith("human:");
+  const humanProfile = localHumanPresentation(profile, messages);
   return {
     id: message.id,
-    author: member?.name ?? (isHuman ? profile.displayName : message.authorId),
-    handle: member?.handle ?? (isHuman ? profile.handle : undefined),
-    avatar: member?.avatar ?? (isHuman ? profile.avatar : undefined),
+    author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
+    handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
+    avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
     role: member?.type ?? (isHuman ? "human" : "agent"),
     time: formatMessageTime(message.createdAt),
     sentAt: formatMessageDateTime(message.createdAt),
@@ -145,7 +146,7 @@ function replaceConversationMessages(current: SleiMessage[], conversationMessage
   ];
 }
 
-export function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiMessage | null {
+export function channelMessageToSleiMessage(message: ChannelMessageView, members: SleiMember[], profile: UserProfile | null, messages: DesktopMessages): SleiMessage | null {
   if (message.deleted || message.kind === "tombstone") return null;
   const time = message.createdAt ? formatMessageTime(message.createdAt) : "";
   const sentAt = message.createdAt ? formatMessageDateTime(message.createdAt) : undefined;
@@ -166,11 +167,12 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
   }
   const member = members.find((candidate) => candidate.id === message.authorId);
   const isHuman = message.authorId.startsWith("human:");
+  const humanProfile = localHumanPresentation(profile, messages);
   return {
     id: message.id,
-    author: member?.name ?? (isHuman ? profile.displayName : message.authorId),
-    handle: member?.handle ?? (isHuman ? profile.handle : undefined),
-    avatar: member?.avatar ?? (isHuman ? profile.avatar : undefined),
+    author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
+    handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
+    avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
     role: member?.type ?? (isHuman ? "human" : message.kind === "agent" ? "agent" : "system"),
     time,
     sentAt,
@@ -181,6 +183,12 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     status: message.kind === "agent" ? "done" : undefined,
     task: message.task ? taskSummaryToSleiTask(message.task, members) : undefined,
   };
+}
+
+function displayUserHandle(handle: string) {
+  const trimmed = handle.trim();
+  if (!trimmed) return "@local";
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 }
 
 function coordinatorRoutingActivitySourceId(message: SleiMessage): string | undefined {
@@ -389,15 +397,16 @@ function mergeTaskSummariesIntoTasks(currentTasks: SleiTask[], summaries: TaskSu
   return [...mergedSummaries, ...retained];
 }
 
-function taskThreadMessageToReply(message: TaskThreadMessageView, members: SleiMember[], profile: UserProfile, messages: DesktopMessages): SleiTaskReply {
+function taskThreadMessageToReply(message: TaskThreadMessageView, members: SleiMember[], profile: UserProfile | null, messages: DesktopMessages): SleiTaskReply {
   const member = members.find((candidate) => candidate.id === message.senderId);
   const role = taskThreadMessageRole(message);
-  const isLocalHuman = message.senderId === "human:local" || message.senderId === `human:${profile.handle.replace(/^@/, "")}`;
+  const humanProfile = localHumanPresentation(profile, messages);
+  const isLocalHuman = message.senderId === "human:local" || message.senderId === `human:${humanProfile.handle.replace(/^@/, "")}`;
   const sender = member?.name
     ?? (role === "system"
       ? messages.common.system
       : isLocalHuman
-        ? profile.displayName
+        ? humanProfile.displayName
         : message.senderId);
   return {
     id: message.id,
@@ -654,17 +663,18 @@ async function loadSleiConversationMessages(
   bridge: DaemonBridge,
   conversations: ConversationView[],
   members: SleiMember[],
-  profile: UserProfile,
+  profile: UserProfile | null,
+  messages: DesktopMessages,
 ) {
   const receipts = await Promise.all(conversations.map((conversation) => bridge.listConversationMessages(conversation.id)));
-  return receipts.flatMap((receipt) => receipt.messages.map((message) => conversationMessageToSleiMessage(message, members, profile)));
+  return receipts.flatMap((receipt) => receipt.messages.map((message) => conversationMessageToSleiMessage(message, members, profile, messages)));
 }
 
 async function loadSleiChannelMessages(
   bridge: DaemonBridge,
   channels: ChannelView[],
   members: SleiMember[],
-  profile: UserProfile,
+  profile: UserProfile | null,
   messages: DesktopMessages,
 ) {
   const receipts = await Promise.all(
@@ -700,11 +710,15 @@ export function SleiApp() {
   const [focusedMessageId, setFocusedMessageId] = useState<string | undefined>(undefined);
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
   const [sendingConversationIds, setSendingConversationIds] = useState<string[]>([]);
-  const [profile, setProfile] = useState<UserProfile>(defaultProfile);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [locale, setLocale] = useState<AppLocale>(defaultLocale);
   const [timeZone, setTimeZone] = useState(defaultTimeZone);
   const [appearance, setAppearance] = useState<AppearancePreferences>(defaultAppearance);
   const [notifications, setNotifications] = useState<NotificationPreferences>(defaultNotifications);
+  const [pendingPreference, setPendingPreference] = useState<"locale" | "timeZone" | "appearance" | "notifications" | undefined>();
+  const [preferenceError, setPreferenceError] = useState<string | undefined>();
+  const [pendingProfileField, setPendingProfileField] = useState<"displayName" | "avatar" | undefined>();
+  const [profileErrors, setProfileErrors] = useState<Partial<Record<"displayName" | "avatar", string>>>({});
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [guideBootstrapping, setGuideBootstrapping] = useState(false);
   const [appToast, setAppToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
@@ -715,6 +729,8 @@ export function SleiApp() {
     hasClaudeRuntimeReady: true,
     nodes: data.nodes,
   });
+  const pendingPreferenceRef = useRef<typeof pendingPreference>(undefined);
+  const pendingProfileFieldRef = useRef<typeof pendingProfileField>(undefined);
   const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastDiagnosticToastSequenceRef = useRef(0);
   const bridge = useMemo(() => createDaemonBridge(), []);
@@ -963,7 +979,12 @@ export function SleiApp() {
   useEffect(() => {
     let mounted = true;
     async function loadInitialState() {
-      const [next, preferencesReceipt, savedReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences(), bridge.listSavedMessages()]);
+      const [next, preferencesReceipt, savedReceipt, profileReceipt] = await Promise.all([
+        refreshRuntime(bridge),
+        bridge.listPreferences(),
+        bridge.listSavedMessages(),
+        bridge.listProfile(),
+      ]);
       if (!mounted) return;
       setRuntimeSetup(next);
       setLocale(preferencesReceipt.preferences.locale);
@@ -971,6 +992,7 @@ export function SleiApp() {
       setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
       setNotifications(preferencesReceipt.preferences.notifications);
       setSavedMessages(savedReceipt.savedMessages);
+      setProfile(profileReceipt.profile);
       let activeConversation: string | undefined;
       if (hasReadyClaudeRuntime(next.nodes)) {
         setGuideBootstrapping(true);
@@ -992,8 +1014,8 @@ export function SleiApp() {
       members = await loadSleiChannelMemberReadiness(bridge, channelReceipt.channels, members);
       const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const channelSessions = await loadSleiChannelSessions(bridge, channelReceipt.channels);
-      const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
-      const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
+      const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profileReceipt.profile, messagesForLocale);
+      const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profileReceipt.profile, messagesForLocale);
       const taskReceipt = await bridge.listTasks(activeChannelId ? { channelId: activeChannelId } : {}).catch(() => ({ tasks: [] }));
       if (!mounted) return;
       setData((current) =>
@@ -1066,7 +1088,7 @@ export function SleiApp() {
     if (!shouldRefreshConversationMessages(data.messages, activeConversationId)) return;
     const refreshConversation = async () => {
       const receipt = await bridge.listConversationMessages(activeConversationId);
-      const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+      const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
       setData((current) =>
         createEmptySleiData({
           ...current,
@@ -1141,7 +1163,12 @@ export function SleiApp() {
 
   async function handleRefreshRuntime() {
     setRuntimeSetup((current) => ({ ...current, loading: true, error: undefined }));
-    const [next, preferencesReceipt, savedReceipt] = await Promise.all([refreshRuntime(bridge), bridge.listPreferences(), bridge.listSavedMessages()]);
+    const [next, preferencesReceipt, savedReceipt, profileReceipt] = await Promise.all([
+      refreshRuntime(bridge),
+      bridge.listPreferences(),
+      bridge.listSavedMessages(),
+      bridge.listProfile(),
+    ]);
     if (hasReadyClaudeRuntime(next.nodes)) {
       setGuideBootstrapping(true);
       await bridge.bootstrapGuideAgent();
@@ -1154,6 +1181,7 @@ export function SleiApp() {
     setAppearance(normalizeAppearance(preferencesReceipt.preferences.appearance));
     setNotifications(preferencesReceipt.preferences.notifications);
     setSavedMessages(savedReceipt.savedMessages);
+    setProfile(profileReceipt.profile);
     const messagesForLocale = createDesktopMessages(preferencesReceipt.preferences.locale);
     let members = await loadGuideSkillsForMembers(
       bridge,
@@ -1162,8 +1190,8 @@ export function SleiApp() {
     members = await loadSleiChannelMemberReadiness(bridge, channelReceipt.channels, members);
     const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
     const channelSessions = await loadSleiChannelSessions(bridge, channelReceipt.channels);
-    const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profile);
-    const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profile, messages);
+    const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profileReceipt.profile, messagesForLocale);
+    const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profileReceipt.profile, messagesForLocale);
     const taskReceipt = await bridge.listTasks(activeChannelId ? { channelId: activeChannelId } : {}).catch(() => ({ tasks: [] }));
     setData((current) =>
       createEmptySleiData({
@@ -1226,7 +1254,7 @@ export function SleiApp() {
 
   async function handlePermissionResolve(requestId: string, decision: PermissionDecision) {
     const receipt = await bridge.resolvePermission({ requestId, decision });
-    const message = conversationMessageToSleiMessage(receipt.message, data.members, profile);
+    const message = conversationMessageToSleiMessage(receipt.message, data.members, profile, messages);
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -1322,7 +1350,7 @@ export function SleiApp() {
     const receipt = await bridge.createDmConversation(memberId);
     const sessionsReceipt = await bridge.listConversationSessions(receipt.conversation.id);
     const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id);
-    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -1360,7 +1388,7 @@ export function SleiApp() {
   async function handleConversationSessionSelect(conversationId: string, sessionId: string) {
     const receipt = await bridge.activateConversationSession(conversationId, sessionId);
     const messagesReceipt = await bridge.listConversationMessages(conversationId);
-    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+    const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -1434,11 +1462,12 @@ export function SleiApp() {
           asTask: options?.asTask,
           body,
           bridge,
+          messages,
           profile,
         });
         if (result.kind !== "conversation") return;
         const receipt = result.receipt;
-        const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile);
+        const conversationMessage = conversationMessageToSleiMessage(receipt.message, data.members, profile, messages);
         if (memoryRequest) {
           void bridge.rememberAgentFact(memoryRequest.agentId, memoryRequest.fact);
           const agent = data.members.find((member) => member.id === memoryRequest.agentId);
@@ -1463,7 +1492,7 @@ export function SleiApp() {
           return createEmptySleiData({ ...current, messages: [...current.messages, conversationMessage], tasks: nextTasks });
         });
         const messagesReceipt = await bridge.listConversationMessages(activeConversationId);
-        const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile));
+        const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
         setData((current) =>
           createEmptySleiData({
             ...current,
@@ -1483,6 +1512,7 @@ export function SleiApp() {
       asTask: options?.asTask,
       body,
       bridge,
+      messages,
       profile,
     });
     if (result.kind !== "channel") return;
@@ -1702,40 +1732,151 @@ export function SleiApp() {
   }
 
   async function handleLocaleChange(nextLocale: AppLocale) {
+    if (pendingPreferenceRef.current) return;
+    const previous = { locale, timeZone, appearance, notifications };
+    pendingPreferenceRef.current = "locale";
+    setPendingPreference("locale");
+    setPreferenceError(undefined);
     setLocale(nextLocale);
-    const receipt = await bridge.updatePreferences({ locale: nextLocale });
-    setLocale(receipt.preferences.locale);
-    setTimeZone(receipt.preferences.timeZone);
-    setAppearance(normalizeAppearance(receipt.preferences.appearance));
-    setNotifications(receipt.preferences.notifications);
+    try {
+      const receipt = await bridge.updatePreferences({ locale: nextLocale });
+      applyPreferencesReceipt(receipt.preferences);
+    } catch (error) {
+      setLocale(previous.locale);
+      setTimeZone(previous.timeZone);
+      setAppearance(previous.appearance);
+      setNotifications(previous.notifications);
+      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      setPreferenceError(message);
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingPreferenceRef.current = undefined;
+      setPendingPreference(undefined);
+    }
   }
 
   async function handleTimeZoneChange(nextTimeZone: string) {
+    if (pendingPreferenceRef.current) return;
+    const previous = { locale, timeZone, appearance, notifications };
+    pendingPreferenceRef.current = "timeZone";
+    setPendingPreference("timeZone");
+    setPreferenceError(undefined);
     setTimeZone(nextTimeZone);
-    const receipt = await bridge.updatePreferences({ timeZone: nextTimeZone });
-    setLocale(receipt.preferences.locale);
-    setTimeZone(receipt.preferences.timeZone);
-    setAppearance(normalizeAppearance(receipt.preferences.appearance));
-    setNotifications(receipt.preferences.notifications);
+    try {
+      const receipt = await bridge.updatePreferences({ timeZone: nextTimeZone });
+      applyPreferencesReceipt(receipt.preferences);
+    } catch (error) {
+      setLocale(previous.locale);
+      setTimeZone(previous.timeZone);
+      setAppearance(previous.appearance);
+      setNotifications(previous.notifications);
+      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      setPreferenceError(message);
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingPreferenceRef.current = undefined;
+      setPendingPreference(undefined);
+    }
   }
 
   async function handleAppearanceChange(nextAppearance: AppearancePreferences) {
+    if (pendingPreferenceRef.current) return;
+    const previous = { locale, timeZone, appearance, notifications };
+    pendingPreferenceRef.current = "appearance";
+    setPendingPreference("appearance");
+    setPreferenceError(undefined);
     const normalizedAppearance = normalizeAppearance(nextAppearance);
     setAppearance(normalizedAppearance);
-    const receipt = await bridge.updatePreferences({ appearance: normalizedAppearance });
-    setLocale(receipt.preferences.locale);
-    setTimeZone(receipt.preferences.timeZone);
-    setAppearance(normalizeAppearance(receipt.preferences.appearance));
-    setNotifications(receipt.preferences.notifications);
+    try {
+      const receipt = await bridge.updatePreferences({ appearance: normalizedAppearance });
+      applyPreferencesReceipt(receipt.preferences);
+    } catch (error) {
+      setLocale(previous.locale);
+      setTimeZone(previous.timeZone);
+      setAppearance(previous.appearance);
+      setNotifications(previous.notifications);
+      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      setPreferenceError(message);
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingPreferenceRef.current = undefined;
+      setPendingPreference(undefined);
+    }
   }
 
   async function handleNotificationsChange(nextNotifications: NotificationPreferences) {
+    if (pendingPreferenceRef.current) return;
+    const previous = { locale, timeZone, appearance, notifications };
+    pendingPreferenceRef.current = "notifications";
+    setPendingPreference("notifications");
+    setPreferenceError(undefined);
     setNotifications(nextNotifications);
-    const receipt = await bridge.updatePreferences({ notifications: nextNotifications });
-    setLocale(receipt.preferences.locale);
-    setTimeZone(receipt.preferences.timeZone);
-    setAppearance(normalizeAppearance(receipt.preferences.appearance));
-    setNotifications(receipt.preferences.notifications);
+    try {
+      const receipt = await bridge.updatePreferences({ notifications: nextNotifications });
+      applyPreferencesReceipt(receipt.preferences);
+    } catch (error) {
+      setLocale(previous.locale);
+      setTimeZone(previous.timeZone);
+      setAppearance(previous.appearance);
+      setNotifications(previous.notifications);
+      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      setPreferenceError(message);
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingPreferenceRef.current = undefined;
+      setPendingPreference(undefined);
+    }
+  }
+
+  function applyPreferencesReceipt(preferences: {
+    locale: AppLocale;
+    timeZone: string;
+    appearance: AppearancePreferences;
+    notifications: NotificationPreferences;
+  }) {
+    setLocale(preferences.locale);
+    setTimeZone(preferences.timeZone);
+    setAppearance(normalizeAppearance(preferences.appearance));
+    setNotifications(preferences.notifications);
+  }
+
+  async function handleProfileChange(patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) {
+    const field = patch.displayName !== undefined ? "displayName" : patch.avatar !== undefined ? "avatar" : undefined;
+    if (!field) return;
+    if (pendingProfileFieldRef.current) return;
+    if (!profile) {
+      const message = messages.settings.profileUnavailable;
+      setProfileErrors((current) => ({ ...current, [field]: message }));
+      showAppToast(message, "error");
+      throw new Error(message);
+    }
+
+    const previous = profile;
+    pendingProfileFieldRef.current = field;
+    setPendingProfileField(field);
+    setProfileErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+    setProfile({ ...profile, ...patch });
+    try {
+      const receipt = await bridge.updateProfile(patch);
+      setProfile(receipt.profile);
+    } catch (error) {
+      setProfile(previous);
+      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      setProfileErrors((current) => ({ ...current, [field]: message }));
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingProfileFieldRef.current = undefined;
+      setPendingProfileField(undefined);
+    }
   }
 
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1795,11 +1936,15 @@ export function SleiApp() {
       onComputerCreate={handleCreateComputer}
       onComputerDelete={handleDeleteComputer}
       onComputerRename={handleRenameComputer}
-      onProfileChange={setProfile}
+      onProfileChange={handleProfileChange}
       onLocaleChange={handleLocaleChange}
       onTimeZoneChange={handleTimeZoneChange}
       onAppearanceChange={handleAppearanceChange}
       onNotificationsChange={handleNotificationsChange}
+      pendingPreference={pendingPreference}
+      preferenceError={preferenceError}
+      pendingProfileField={pendingProfileField}
+      profileErrors={profileErrors}
       onRefreshRuntime={handleRefreshRuntime}
       onRenameLocalNode={handleRenameLocalNode}
       onResizeStart={handleResizeStart}

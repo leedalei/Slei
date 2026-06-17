@@ -76,10 +76,10 @@ import {
   channelReadinessLabel,
   defaultAppearance,
   defaultNotifications,
-  defaultProfile,
   defaultTimeZone,
   deviceOsLabel,
   isInternalCoordinatorMember,
+  localHumanPresentation,
   normalizeAppearanceTheme,
   stripChannelHash,
   type AgentDraftInput,
@@ -120,7 +120,11 @@ export type SleiAppFrameProps = {
   timeZone?: string;
   appearance?: AppearancePreferences;
   notifications?: NotificationPreferences;
-  profile?: UserProfile;
+  profile?: UserProfile | null;
+  pendingPreference?: "locale" | "timeZone" | "appearance" | "notifications";
+  preferenceError?: string;
+  pendingProfileField?: "displayName" | "avatar";
+  profileErrors?: Partial<Record<"displayName" | "avatar", string>>;
   runtimeSetup: RuntimeSetupState;
   runtimeErrorToastMessage?: string;
   runtimeToastType?: ToastType;
@@ -156,7 +160,7 @@ export type SleiAppFrameProps = {
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void;
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void;
-  onProfileChange?: (profile: UserProfile) => void;
+  onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void;
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onSearchResultSelect?: (channelId: string, messageId: string) => void;
   onSearchToggle?: () => void;
@@ -189,11 +193,11 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
-  const profile = input.profile ?? defaultProfile;
   const appearance = input.appearance ?? defaultAppearance;
   const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
+  const profile = input.profile ?? null;
   const sidebarTitle = input.activeView === "search" ? messages.common.search : messages.shell.nav[input.activeView];
   const activeAgentActivities = input.activeView === "chat" || input.activeView === "search"
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
@@ -326,7 +330,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         });
         if (!result.created) return;
         if (cardId) await input.onInteractiveCardComplete?.(cardId);
-      })}</main>
+      }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors)}</main>
 
       {computerCreateOpen ? (
         <ComputerCreateModal
@@ -1159,14 +1163,14 @@ function renderWorkspace(
   activeConversation: ConversationView | undefined,
   activeSessionId: string | undefined,
   runtimeSetup: RuntimeSetupState,
-  profile: UserProfile,
+  profile: UserProfile | null,
   locale: AppLocale,
   messages: DesktopMessages,
   timeZone: string,
   appearance: AppearancePreferences,
   notifications: NotificationPreferences,
   activeSettingsPanel: SettingsPanel,
-  onProfileChange?: (profile: UserProfile) => void,
+  onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void,
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void,
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void,
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void,
@@ -1208,6 +1212,10 @@ function renderWorkspace(
   onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void,
   onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void,
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
+  pendingPreference?: "locale" | "timeZone" | "appearance" | "notifications",
+  preferenceError?: string,
+  pendingProfileField?: "displayName" | "avatar",
+  profileErrors?: Partial<Record<"displayName" | "avatar", string>>,
 ) {
   if (activeView === "search") return <SearchRoute data={data} initialFilters={initialSearchFilters} messages={messages} onResultSelect={onSearchResultSelect} />;
   if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} />;
@@ -1238,7 +1246,11 @@ function renderWorkspace(
         onNotificationsChange={onNotificationsChange}
         onProfileChange={onProfileChange}
         onTimeZoneChange={onTimeZoneChange}
+        pendingPreference={pendingPreference}
+        preferenceError={preferenceError}
         profile={profile}
+        pendingProfileField={pendingProfileField}
+        profileErrors={profileErrors}
         timeZone={timeZone}
       />
     );
@@ -1250,7 +1262,7 @@ function renderWorkspace(
       </div>
     );
   }
-  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onChannelNewSession={onChannelNewSession} onChannelSessionSelect={onChannelSessionSelect} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={profile} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onChannelNewSession={onChannelNewSession} onChannelSessionSelect={onChannelSessionSelect} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={localHumanPresentation(profile, messages)} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   channelMessageToSleiMessage,
+  conversationMessageToSleiMessage,
   createChannelAgentActivityMessages,
   createCoordinatorRoutingActivityMessage,
   debugLaunchEnabledFromSearch,
@@ -774,6 +775,25 @@ describe("createChannelAgentReplyMessage", () => {
 
     expect(converted?.time).toBe("09:08");
     expect(converted?.sentAt).toBe("06-16 09:08");
+  });
+
+  it("renders local human messages with a presentation fallback when profile is unavailable", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const message = conversationMessageToSleiMessage(
+      {
+        id: "msg_1",
+        conversationId: "dm:agent_1",
+        authorId: "human:local",
+        body: "hello",
+        createdAt: "2026-06-17T00:00:00Z",
+      },
+      [],
+      null,
+      messages,
+    );
+
+    expect(message.author).toBe(messages.common.you);
+    expect(message.handle).toBe("@local");
   });
 
   it("collects multiple completed card messages from one runtime run", async () => {
