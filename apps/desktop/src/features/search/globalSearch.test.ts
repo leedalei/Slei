@@ -5,6 +5,7 @@ import {
   GLOBAL_SEARCH_LIMITS,
   buildGlobalSearchRequest,
   createGlobalSearchSections,
+  getGlobalMessageDisplayLabels,
   highlightSearchTokens,
   normalizeGlobalSearchTimeRange,
 } from "./globalSearch";
@@ -124,8 +125,42 @@ describe("global search helpers", () => {
     ]);
   });
 
+  it("highlights length-changing lowercase matches without empty tokens", () => {
+    const tokens = highlightSearchTokens("İi", "i");
+
+    expect(tokens).toEqual([
+      { text: "İ", match: true },
+      { text: "i", match: true },
+    ]);
+    expect(tokens.every((token) => token.text.length > 0)).toBe(true);
+  });
+
   it("returns one unmatched part when query is empty or absent from text", () => {
     expect(highlightSearchTokens("No highlight", "")).toEqual([{ text: "No highlight", match: false }]);
     expect(highlightSearchTokens("No highlight", "missing")).toEqual([{ text: "No highlight", match: false }]);
+  });
+
+  it("trims and falls back when preparing message display labels", () => {
+    expect(
+      getGlobalMessageDisplayLabels({
+        kind: "message",
+        sourceKind: "channel",
+        messageId: "message_1",
+        channelId: "  channel_1  ",
+        conversationId: "conversation_1",
+        sessionId: "session_1",
+        authorName: "  Coda  ",
+        authorHandle: " @coda ",
+        title: " ",
+        sourceLabel: "",
+        snippet: "  fallback snippet  ",
+        createdAt: "2026-06-17T09:00:00.000Z",
+      }),
+    ).toEqual({
+      title: "fallback snippet",
+      subtitle: "Coda - channel_1",
+      sourceLabel: "channel_1",
+      authorLabel: "Coda",
+    });
   });
 });

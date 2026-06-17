@@ -115,26 +115,33 @@ export function createGlobalSearchSections(receipt: GlobalSearchReceipt): Global
 export function highlightSearchTokens(text: string, query: string): HighlightToken[] {
   if (!query) return [{ text, match: false }];
 
-  const normalizedText = text.toLocaleLowerCase();
-  const normalizedQuery = query.toLocaleLowerCase();
+  const normalizedText = createNormalizedIndex(text);
+  const normalizedQuery = normalizeSearchText(query);
   if (!normalizedQuery) return [{ text, match: false }];
 
   const tokens: HighlightToken[] = [];
-  let cursor = 0;
+  let normalizedCursor = 0;
+  let originalCursor = 0;
 
-  while (cursor < text.length) {
-    const index = normalizedText.indexOf(normalizedQuery, cursor);
+  while (normalizedCursor < normalizedText.text.length) {
+    const index = normalizedText.text.indexOf(normalizedQuery, normalizedCursor);
     if (index === -1) break;
-    if (index > cursor) {
-      tokens.push({ text: text.slice(cursor, index), match: false });
+    const start = normalizedText.indexes[index]?.start;
+    const end = normalizedText.indexes[index + normalizedQuery.length - 1]?.end;
+    if (start === undefined || end === undefined || end <= originalCursor) {
+      normalizedCursor = index + Math.max(1, normalizedQuery.length);
+      continue;
     }
-    const end = index + query.length;
-    tokens.push({ text: text.slice(index, end), match: true });
-    cursor = end;
+    if (start > originalCursor) {
+      tokens.push({ text: text.slice(originalCursor, start), match: false });
+    }
+    tokens.push({ text: text.slice(start, end), match: true });
+    originalCursor = end;
+    normalizedCursor = index + Math.max(1, normalizedQuery.length);
   }
 
-  if (cursor < text.length) {
-    tokens.push({ text: text.slice(cursor), match: false });
+  if (originalCursor < text.length) {
+    tokens.push({ text: text.slice(originalCursor), match: false });
   }
 
   return tokens.length > 0 ? tokens : [{ text, match: false }];
@@ -169,10 +176,36 @@ function clampSearchLimit(value: number | null | undefined, max: number): number
   return Math.max(1, Math.min(max, Math.trunc(value)));
 }
 
+function createNormalizedIndex(value: string): {
+  text: string;
+  indexes: Array<{ start: number; end: number }>;
+} {
+  let text = "";
+  const indexes: Array<{ start: number; end: number }> = [];
+  let cursor = 0;
+
+  for (const part of Array.from(value)) {
+    const start = cursor;
+    const end = start + part.length;
+    const normalizedPart = normalizeSearchText(part);
+    text += normalizedPart;
+    for (let index = 0; index < normalizedPart.length; index += 1) {
+      indexes.push({ start, end });
+    }
+    cursor = end;
+  }
+
+  return { text, indexes };
+}
+
 function firstText(...values: Array<string | null | undefined>): string {
   for (const value of values) {
     const trimmed = trimFilter(value);
     if (trimmed) return trimmed;
   }
   return "";
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLocaleLowerCase();
 }
