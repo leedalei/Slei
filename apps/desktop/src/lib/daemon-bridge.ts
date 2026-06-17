@@ -165,19 +165,19 @@ export type AgentWorkspaceFileReceipt = {
 export type AgentActivityLogView = {
   id: string;
   agentId: string;
-  runId?: string;
-  channelId?: string;
-  messageId?: string;
-  taskId?: string;
-  state?: string;
-  phase?: string;
-  reason?: string;
+  runId?: string | null;
+  channelId?: string | null;
+  messageId?: string | null;
+  taskId?: string | null;
+  state: string;
+  phase?: string | null;
+  reason?: string | null;
   eventKind: string;
   severity: string;
   summary: string;
-  payloadPreview?: string;
-  toolName?: string;
-  ok?: boolean;
+  payloadPreview?: string | null;
+  toolName?: string | null;
+  ok?: boolean | null;
   createdAt: string;
 };
 

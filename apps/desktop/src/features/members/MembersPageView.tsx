@@ -112,6 +112,8 @@ export function MembersPage(input: {
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const listAgentActivityRef = useRef(input.onListAgentActivity);
+  const hasActivityLoader = Boolean(input.onListAgentActivity);
   const [workspaceEntriesByDirectory, setWorkspaceEntriesByDirectory] = useState<Record<string, AgentWorkspaceEntry[]>>(() => ({
     "": selectedMember ? initialWorkspaceEntries(selectedMember) : [],
   }));
@@ -142,34 +144,38 @@ export function MembersPage(input: {
   }, [selectedMember?.id]);
 
   useEffect(() => {
+    listAgentActivityRef.current = input.onListAgentActivity;
+  });
+
+  useEffect(() => {
     let mounted = true;
     setExpandedPayloadIds(new Set());
     setActivityLogs([]);
     setActivityError(undefined);
-    if (!selectedMember || selectedMember.type !== "agent" || !input.onListAgentActivity) {
+    if (!selectedMember || selectedMember.type !== "agent" || !hasActivityLoader) {
       setActivityLoading(false);
       return () => {
         mounted = false;
       };
     }
     setActivityLoading(true);
-    void Promise.resolve(input.onListAgentActivity(selectedMember.id, 200))
-      .then((receipt) => {
+    void (async () => {
+      try {
+        const receipt = await listAgentActivityRef.current?.(selectedMember.id, 200);
         if (!mounted) return;
-        setActivityLogs(receipt.logs);
-      })
-      .catch(() => {
+        setActivityLogs(receipt?.logs ?? []);
+      } catch {
         if (!mounted) return;
         setActivityError(input.messages.members.activityLoadFailed);
-      })
-      .finally(() => {
+      } finally {
         if (!mounted) return;
         setActivityLoading(false);
-      });
+      }
+    })();
     return () => {
       mounted = false;
     };
-  }, [input.onListAgentActivity, input.messages.members.activityLoadFailed, selectedMember?.id, selectedMember?.type]);
+  }, [hasActivityLoader, input.messages.members.activityLoadFailed, selectedMember?.id, selectedMember?.type]);
 
   function updateMemberDetail(key: keyof typeof memberDetails, value: string) {
     setMemberDetails((current) => ({ ...current, [key]: value }));

@@ -56,7 +56,7 @@ function activityLog(input: Partial<AgentActivityLogView> = {}): AgentActivityLo
     channelId: input.channelId,
     messageId: input.messageId,
     taskId: input.taskId,
-    state: input.state,
+    state: input.state ?? "completed",
     phase: input.phase,
     reason: input.reason,
     eventKind: input.eventKind ?? "tool_call",
@@ -554,6 +554,94 @@ describe("MembersPage coordinator agents", () => {
 
     expect(calls).toContain("agent_a");
     expect(calls).toContain("agent_b");
+  });
+
+  it("does not reload activity when the same selected member rerenders", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const calls: string[] = [];
+    const data = createSleiFixtures({ members: [agentMember("agent_a", "Ava")] });
+
+    await mount(
+      <MembersPage
+        activeMemberId="agent_a"
+        data={data}
+        messages={messages}
+        nodes={[baseNode]}
+        onAgentUpdate={() => undefined}
+        onListAgentActivity={async (agentId) => {
+          calls.push(agentId);
+          return { logs: [] };
+        }}
+        onMessage={() => undefined}
+      />,
+    );
+
+    await act(async () => {
+      mountedRoot?.render(
+        <MembersPage
+          activeMemberId="agent_a"
+          data={data}
+          messages={messages}
+          nodes={[baseNode]}
+          onAgentUpdate={() => undefined}
+          onListAgentActivity={async (agentId) => {
+            calls.push(agentId);
+            return { logs: [] };
+          }}
+          onMessage={() => undefined}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(calls).toEqual(["agent_a"]);
+  });
+
+  it("renders activity error state when the list callback throws synchronously", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: () => {
+          throw new Error("boom");
+        },
+      }),
+    );
+
+    expect(container.textContent).toContain(messages.members.activityLoadFailed);
+    expect(container.textContent).not.toContain(messages.members.activityLoading);
+  });
+
+  it("renders activity rows with nullable daemon fields", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const nullableLog: AgentActivityLogView = {
+      id: "activity_nullable",
+      agentId: "agent_coda",
+      runId: null,
+      channelId: null,
+      messageId: null,
+      taskId: null,
+      state: "completed",
+      phase: null,
+      reason: null,
+      eventKind: "agent_run.completed",
+      severity: "info",
+      summary: "Completed with empty metadata",
+      payloadPreview: null,
+      toolName: null,
+      ok: null,
+      createdAt: "2026-06-17T08:00:00.000Z",
+    };
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        onListAgentActivity: async () => ({ logs: [nullableLog] }),
+      }),
+    );
+
+    expect(container.textContent).toContain("Completed with empty metadata");
+    expect(container.textContent).toContain("state completed");
+    expect(container.textContent).not.toContain("null");
   });
 
   it("expands and collapses payload previews", async () => {
