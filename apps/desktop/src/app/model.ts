@@ -47,6 +47,14 @@ export const defaultProfile: UserProfile = {
   avatar: "LL",
 };
 
+export function localHumanPresentation(profile: UserProfile | null, messages: DesktopMessages): UserProfile {
+  return profile ?? {
+    displayName: messages.common.you,
+    handle: "local",
+    avatar: messages.common.you.slice(0, 2),
+  };
+}
+
 export const defaultNotifications: NotificationPreferences = {
   mentions: true,
   humanReplies: true,
@@ -176,7 +184,8 @@ export async function sendChatComposerMessage(input: {
   asTask?: boolean;
   body: string;
   bridge: Pick<DaemonBridge, "sendChannelMessage" | "sendConversationMessage">;
-  profile: UserProfile;
+  profile: UserProfile | null;
+  messages?: DesktopMessages;
 }) {
   const body = input.body.trim();
   if (input.activeConversationId) {
@@ -191,7 +200,8 @@ export async function sendChatComposerMessage(input: {
     };
   }
 
-  const handle = input.profile.handle.replace(/^@/, "").trim() || "local";
+  const profile = localHumanPresentation(input.profile, input.messages ?? createDesktopMessages("zh-CN"));
+  const handle = profile.handle.replace(/^@/, "").trim() || "local";
   return {
     kind: "channel" as const,
     receipt: await input.bridge.sendChannelMessage(input.activeChannelId, {
@@ -205,7 +215,7 @@ export async function sendChatComposerMessage(input: {
 export function createLocalChatMessage(input: {
   body: string;
   messages?: DesktopMessages;
-  profile: UserProfile;
+  profile: UserProfile | null;
   channelId?: string;
   sessionId?: string;
 }): (SleiMessage & { handle: string; avatar: string }) | null {
@@ -214,12 +224,14 @@ export function createLocalChatMessage(input: {
     return null;
   }
   const now = new Date();
+  const messages = input.messages ?? createDesktopMessages("zh-CN");
+  const profile = localHumanPresentation(input.profile, messages);
 
   return {
     id: `local-${now.getTime()}`,
-    author: input.profile.displayName.trim() || input.profile.handle || input.messages?.common.you || createDesktopMessages("zh-CN").common.you,
-    handle: input.profile.handle.startsWith("@") ? input.profile.handle : `@${input.profile.handle}`,
-    avatar: input.profile.avatar.trim() || input.profile.displayName.slice(0, 2),
+    author: profile.displayName.trim() || profile.handle || messages.common.you,
+    handle: profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`,
+    avatar: profile.avatar.trim() || profile.displayName.slice(0, 2),
     role: "human",
     time: formatMessageTime(now.toISOString()),
     sentAt: formatMessageDateTime(now.toISOString()),

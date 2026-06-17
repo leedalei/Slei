@@ -1,11 +1,10 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { MemberAvatar } from "../../components/MemberAvatar";
+import { EditableDetailField, MemberAvatar } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,9 +23,13 @@ type SettingsPageInput = {
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void;
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void;
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void;
-  onProfileChange?: (profile: UserProfile) => void;
+  onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void;
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
-  profile: UserProfile;
+  pendingPreference?: "locale" | "timeZone" | "appearance" | "notifications";
+  preferenceError?: string;
+  pendingProfileField?: "displayName" | "avatar";
+  profile: UserProfile | null;
+  profileErrors?: Partial<Record<"displayName" | "avatar", string>>;
   timeZone: string;
 };
 
@@ -38,23 +41,22 @@ type SelectOption<TValue extends string> = {
 export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
   const activeTheme = normalizeAppearanceTheme(input.appearance.theme);
-
-  function updateProfile(patch: Partial<UserProfile>) {
-    input.onProfileChange?.({ ...input.profile, ...patch });
-  }
+  const profile = input.profile;
+  const preferencePending = Boolean(input.pendingPreference);
+  const profilePending = Boolean(input.pendingProfileField);
 
   function updateNotification(field: keyof NotificationPreferences, value: boolean) {
-    input.onNotificationsChange?.({
+    runSettingsFireAndForgetAction(() => input.onNotificationsChange?.({
       ...input.notifications,
       [field]: value,
-    });
+    }));
   }
 
   function updateAppearance(patch: Partial<AppearancePreferences>) {
-    input.onAppearanceChange?.({
+    runSettingsFireAndForgetAction(() => input.onAppearanceChange?.({
       ...input.appearance,
       ...patch,
-    });
+    }));
   }
 
   return (
@@ -67,7 +69,16 @@ export function SettingsPage(input: SettingsPageInput) {
             <p className="max-w-2xl text-sm text-muted-foreground">{labels.panelSubtitle[input.activePanel]}</p>
           </header>
 
-          {input.activePanel === "account" ? (
+          {input.activePanel === "account" && !profile ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{labels.profile}</CardTitle>
+                <CardDescription>{labels.profileUnavailable}</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : null}
+
+          {input.activePanel === "account" && profile ? (
             <Card>
               <CardHeader>
                 <CardTitle>{labels.profile}</CardTitle>
@@ -75,21 +86,21 @@ export function SettingsPage(input: SettingsPageInput) {
               </CardHeader>
               <CardContent className="grid gap-5">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label htmlFor="settings-display-name">{labels.displayName}</Label>
-                    <Input
-                      id="settings-display-name"
-                      onChange={(event) => updateProfile({ displayName: event.currentTarget.value })}
-                      value={input.profile.displayName}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="settings-handle">{labels.handle}</Label>
-                    <Input
-                      id="settings-handle"
-                      onChange={(event) => updateProfile({ handle: event.currentTarget.value })}
-                      value={input.profile.handle}
-                    />
+                  <EditableDetailField
+                    ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
+                    error={input.profileErrors?.displayName}
+                    label={labels.displayName}
+                    messages={input.messages}
+                    onSave={(value) => input.onProfileChange?.({ displayName: value })}
+                    saving={profilePending}
+                    value={profile.displayName}
+                  />
+                  <div className="grid gap-2 slei-detail-section">
+                    <h3 className="text-base font-semibold">{labels.handle}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{labels.handleReadOnly}</p>
                   </div>
                 </div>
 
@@ -104,12 +115,14 @@ export function SettingsPage(input: SettingsPageInput) {
                     {profileAvatarPresets.map((preset) => (
                       <Button
                         aria-label={preset.name}
-                        aria-pressed={input.profile.avatar === preset.id ? "true" : "false"}
-                        className={cn("h-auto justify-start gap-3 px-3 py-2", input.profile.avatar === preset.id && "ring-2 ring-ring")}
+                        aria-pressed={profile.avatar === preset.id ? "true" : "false"}
+                        className={cn("h-auto justify-start gap-3 px-3 py-2", profile.avatar === preset.id && "ring-2 ring-ring")}
+                        data-settings-avatar-option={preset.id}
+                        disabled={profilePending}
                         key={preset.id}
-                        onClick={() => updateProfile({ avatar: preset.id })}
+                        onClick={() => runSettingsFireAndForgetAction(() => input.onProfileChange?.({ avatar: preset.id }))}
                         type="button"
-                        variant={input.profile.avatar === preset.id ? "secondary" : "outline"}
+                        variant={profile.avatar === preset.id ? "secondary" : "outline"}
                       >
                         <MemberAvatar
                           identity={{
@@ -124,6 +137,11 @@ export function SettingsPage(input: SettingsPageInput) {
                       </Button>
                     ))}
                   </div>
+                  {input.profileErrors?.avatar ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {input.profileErrors.avatar}
+                    </p>
+                  ) : null}
                 </section>
               </CardContent>
             </Card>
@@ -136,31 +154,42 @@ export function SettingsPage(input: SettingsPageInput) {
                 <CardDescription>{labels.languageRegionSubtitle}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
-                <SettingsSelect
-                  ariaLabel={labels.language}
-                  id="language"
-                  label={labels.language}
-                  onValueChange={(value) => input.onLocaleChange?.(value)}
-                  options={[
-                    { label: labels.languageNames["zh-CN"], value: "zh-CN" },
-                    { label: labels.languageNames["en-US"], value: "en-US" },
-                  ]}
-                  value={input.locale}
-                />
-                <SettingsSelect
-                  ariaLabel={labels.timeZone}
-                  id="timezone"
-                  label={labels.timeZone}
-                  onValueChange={(value) => input.onTimeZoneChange?.(value)}
-                  options={timeZoneOptions}
-                  value={input.timeZone || defaultTimeZone}
-                />
+                <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
+                  <SettingsSelect
+                    ariaLabel={labels.language}
+                    disabled={preferencePending}
+                    id="language"
+                    label={labels.language}
+                    onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onLocaleChange?.(value))}
+                    options={[
+                      { label: labels.languageNames["zh-CN"], value: "zh-CN" },
+                      { label: labels.languageNames["en-US"], value: "en-US" },
+                    ]}
+                    value={input.locale}
+                  />
+                </div>
+                <div data-preference-pending={input.pendingPreference === "timeZone" ? "timeZone" : undefined}>
+                  <SettingsSelect
+                    ariaLabel={labels.timeZone}
+                    disabled={preferencePending}
+                    id="timezone"
+                    label={labels.timeZone}
+                    onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onTimeZoneChange?.(value))}
+                    options={timeZoneOptions}
+                    value={input.timeZone || defaultTimeZone}
+                  />
+                </div>
+                {input.preferenceError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {input.preferenceError}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <Card>
+            <Card data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined}>
               <CardHeader>
                 <CardTitle>{labels.appearance}</CardTitle>
                 <CardDescription>{labels.appearanceSubtitle}</CardDescription>
@@ -174,6 +203,7 @@ export function SettingsPage(input: SettingsPageInput) {
                         aria-pressed={activeTheme === option.value ? "true" : "false"}
                         className={cn("justify-start", activeTheme === option.value && "ring-2 ring-ring")}
                         data-settings-theme-option={option.value}
+                        disabled={preferencePending}
                         key={option.value}
                         onClick={() => updateAppearance({ theme: option.value })}
                         type="button"
@@ -193,6 +223,7 @@ export function SettingsPage(input: SettingsPageInput) {
                     {(["sm", "md", "lg"] as const).map((size) => (
                       <Button
                         aria-pressed={input.appearance.fontSize === size ? "true" : "false"}
+                        disabled={preferencePending}
                         key={size}
                         onClick={() => updateAppearance({ fontSize: size })}
                         type="button"
@@ -203,12 +234,17 @@ export function SettingsPage(input: SettingsPageInput) {
                     ))}
                   </div>
                 </div>
+                {input.preferenceError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {input.preferenceError}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <Card>
+            <Card data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined}>
               <CardHeader>
                 <CardTitle>{labels.notifications}</CardTitle>
                 <CardDescription>{labels.notificationsSubtitle}</CardDescription>
@@ -216,22 +252,30 @@ export function SettingsPage(input: SettingsPageInput) {
               <CardContent className="grid gap-2">
                 <NotificationSwitch
                   checked={input.notifications.mentions}
+                  disabled={preferencePending}
                   label={labels.mentionNotifications}
                   name="mentions"
                   onCheckedChange={(checked) => updateNotification("mentions", checked)}
                 />
                 <NotificationSwitch
                   checked={input.notifications.humanReplies}
+                  disabled={preferencePending}
                   label={labels.humanReplyNotifications}
                   name="humanReplies"
                   onCheckedChange={(checked) => updateNotification("humanReplies", checked)}
                 />
                 <NotificationSwitch
                   checked={input.notifications.approvals}
+                  disabled={preferencePending}
                   label={labels.approvalNotifications}
                   name="approvals"
                   onCheckedChange={(checked) => updateNotification("approvals", checked)}
                 />
+                {input.preferenceError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {input.preferenceError}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
@@ -257,8 +301,15 @@ export function SettingsPage(input: SettingsPageInput) {
   );
 }
 
+export function runSettingsFireAndForgetAction(action: () => Promise<void> | void) {
+  void Promise.resolve()
+    .then(action)
+    .catch(() => undefined);
+}
+
 function SettingsSelect<TValue extends string>(input: {
   ariaLabel: string;
+  disabled?: boolean;
   id: string;
   label: string;
   onValueChange: (value: TValue) => void;
@@ -272,8 +323,8 @@ function SettingsSelect<TValue extends string>(input: {
   return (
     <div className="grid gap-2">
       <Label id={labelId}>{input.label}</Label>
-      <Select {...(renderStaticItems ? { open: true } : {})} onValueChange={input.onValueChange} value={input.value}>
-        <SelectTrigger aria-label={input.ariaLabel} aria-labelledby={labelId} className="w-full sm:max-w-sm">
+      <Select {...(renderStaticItems ? { open: true } : {})} disabled={input.disabled} onValueChange={input.onValueChange} value={input.value}>
+        <SelectTrigger aria-label={input.ariaLabel} aria-labelledby={labelId} className="w-full sm:max-w-sm" disabled={input.disabled}>
           <SelectValue placeholder={selectedLabel} />
         </SelectTrigger>
         {renderStaticItems ? (
@@ -301,6 +352,7 @@ function SettingsSelect<TValue extends string>(input: {
 
 function NotificationSwitch(input: {
   checked: boolean;
+  disabled?: boolean;
   label: string;
   name: keyof NotificationPreferences;
   onCheckedChange: (checked: boolean) => void;
@@ -311,6 +363,7 @@ function NotificationSwitch(input: {
       <Switch
         aria-label={input.label}
         checked={input.checked}
+        disabled={input.disabled}
         id={`settings-notification-${input.name}`}
         onCheckedChange={input.onCheckedChange}
       />

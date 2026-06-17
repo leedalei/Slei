@@ -6,9 +6,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::services::settings_service::{
-    AppearancePreferences, LocalePreference, NotificationPreferences, UserPreferences,
+    AppearancePreferences, LocalePreference, NotificationPreferences, SettingsError,
+    UserPreferences, UserProfile,
 };
 use crate::state::AppState;
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UserProfileView {
+    display_name: String,
+    handle: String,
+    avatar: String,
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +50,59 @@ pub struct PreferencesUpdateRequest {
     time_zone: Option<String>,
     appearance: Option<AppearancePreferencesView>,
     notifications: Option<NotificationPreferencesView>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileUpdateRequest {
+    display_name: Option<String>,
+    avatar: Option<String>,
+    handle: Option<String>,
+}
+
+pub async fn get_profile(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let profile = match state.settings().profile().await {
+        Ok(profile) => profile,
+        Err(error) => return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string()),
+    };
+    let Some(profile) = profile else {
+        return Json(json!({ "profile": null })).into_response();
+    };
+    Json(json!({ "profile": UserProfileView::from(profile) })).into_response()
+}
+
+pub async fn update_profile(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ProfileUpdateRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if payload.handle.is_some() {
+        return error_response(StatusCode::BAD_REQUEST, "handle is immutable");
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+    match state
+        .settings()
+        .update_profile(payload.display_name, payload.avatar)
+        .await
+    {
+        Ok(profile) => Json(json!({ "profile": UserProfileView::from(profile) })).into_response(),
+        Err(SettingsError::ProfileUnavailable) => {
+            error_response(StatusCode::NOT_FOUND, "profile unavailable")
+        }
+        Err(error @ SettingsError::Storage(_)) => {
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+        }
+        Err(error) => error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    }
 }
 
 pub async fn get_preferences(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -116,6 +178,16 @@ fn locale_string(locale: LocalePreference) -> String {
     match locale {
         LocalePreference::ZhCn => "zh-CN".to_string(),
         LocalePreference::EnUs => "en-US".to_string(),
+    }
+}
+
+impl From<UserProfile> for UserProfileView {
+    fn from(profile: UserProfile) -> Self {
+        Self {
+            display_name: profile.nickname,
+            handle: profile.handle,
+            avatar: profile.avatar_url.unwrap_or_default(),
+        }
     }
 }
 

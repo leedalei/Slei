@@ -253,6 +253,8 @@ export type DesktopMessages = {
     displayName: string;
     fontSize: string;
     fontSizes: Record<AppearancePreferences["fontSize"], string>;
+    saveFailed: string;
+    saving: string;
     bio: string;
     groups: {
       about: string;
@@ -260,6 +262,7 @@ export type DesktopMessages = {
       server: string;
     };
     handle: string;
+    handleReadOnly: string;
     humanReplyNotifications: string;
     language: string;
     languageName: string;
@@ -271,6 +274,7 @@ export type DesktopMessages = {
     notificationsSubtitle: string;
     nickname: string;
     profile: string;
+    profileUnavailable: string;
     serverReserved: string;
     theme: string;
     themeDark: string;

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Bot, Calendar, Cpu, Monitor, Plus, Server, type LucideIcon } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
@@ -23,11 +23,34 @@ export function ComputersPage(input: {
   members: SleiMember[];
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
+  computerRenameError?: string;
   onComputerCreateRequest?: () => void;
-  onComputerRename?: (nodeId: string, name: string) => void;
+  onComputerRename?: (nodeId: string, name: string) => Promise<void> | void;
+  renamingComputerId?: string;
 }) {
   const firstNode = input.nodes[0];
   const selectedNode = input.nodes.find((node) => node.id === input.activeNodeId) ?? firstNode;
+  const [renamingNodeId, setRenamingNodeId] = useState<string | undefined>();
+  const [renameError, setRenameError] = useState<string | undefined>();
+
+  useEffect(() => {
+    setRenameError(undefined);
+  }, [selectedNode?.id]);
+
+  async function renameSelectedComputer(name: string) {
+    if (!selectedNode) return;
+    setRenamingNodeId(selectedNode.id);
+    setRenameError(undefined);
+    try {
+      await input.onComputerRename?.(selectedNode.id, name);
+    } catch (error) {
+      setRenameError(computerRenameErrorMessage(error));
+      throw error;
+    } finally {
+      setRenamingNodeId((current) => (current === selectedNode.id ? undefined : current));
+    }
+  }
+
   if (!selectedNode) {
     return (
       <section className="grid min-h-full place-items-center p-6">
@@ -49,6 +72,7 @@ export function ComputersPage(input: {
   }
 
   const hostedAgents = agentsForComputerNode(selectedNode, input.members);
+  const effectiveRenamingNodeId = input.renamingComputerId ?? renamingNodeId;
 
   return (
     <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
@@ -78,13 +102,17 @@ export function ComputersPage(input: {
             <CardContent className="p-4">
               <EditableDetailField
                 ariaLabel={input.messages.computers.editDeviceName}
+                error={renameError}
+                key={selectedNode.id}
                 label={input.messages.computers.deviceName}
                 messages={input.messages}
-                onSave={(value) => input.onComputerRename?.(selectedNode.id, value)}
+                onSave={renameSelectedComputer}
+                saving={effectiveRenamingNodeId === selectedNode.id}
                 sectionClassName="grid gap-2"
                 titleTag="h2"
                 value={selectedNode.name}
               />
+              <ControlledFieldAlert message={input.computerRenameError} />
             </CardContent>
           </Card>
 
@@ -162,6 +190,19 @@ export function ComputersPage(input: {
         </div>
       </ScrollArea>
     </section>
+  );
+}
+
+function computerRenameErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function ControlledFieldAlert(input: { message?: string }) {
+  if (!input.message) return null;
+  return (
+    <p className="text-sm text-destructive" role="alert">
+      {input.message}
+    </p>
   );
 }
 

@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
+import { SettingsPage, runSettingsFireAndForgetAction } from "../src/features/settings/SettingsPageView";
+import { createDesktopMessages } from "../src/i18n";
 import { createSleiFixtures } from "../src/test/fixtures";
 import { createDaemonBridgeMock } from "../src/test/daemon-bridge-mock";
 
@@ -113,6 +115,126 @@ describe("settings preferences", () => {
     expect(html).not.toContain("个人资料");
   });
 
+  it("renders account profile controls from the explicit profile contract", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={data}
+        initialSettingsPanel="account"
+        locale="zh-CN"
+        notifications={{ mentions: true, humanReplies: false, approvals: true }}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain('aria-label="编辑显示名称"');
+    expect(html).toContain("Lei");
+    expect(html).toContain("@lei");
+    expect(html).not.toContain('aria-label="编辑@"');
+    expect(html).toContain('data-settings-avatar-option="pixel-sun"');
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  it("renders account profile unavailable when profile is null", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={data}
+        initialSettingsPanel="account"
+        locale="zh-CN"
+        profile={null}
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain("账户资料暂不可用");
+    expect(html).not.toContain("data-settings-avatar-option");
+  });
+
+  it("renders pending preference and save error state without preference save buttons", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="language-region"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={createDesktopMessages("zh-CN")}
+        nodes={data.nodes}
+        notifications={{ mentions: true, humanReplies: false, approvals: true }}
+        pendingPreference="locale"
+        preferenceError="保存失败"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(html).toContain('data-preference-pending="locale"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("保存失败");
+    expect(html).toMatch(/<button(?=[^>]*aria-label="语言")(?=[^>]*disabled="")[^>]*>/);
+    expect(html).toMatch(/<button(?=[^>]*aria-label="时区")(?=[^>]*disabled="")[^>]*>/);
+  });
+
+  it("renders notification pending and save error state", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="notifications"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={createDesktopMessages("zh-CN")}
+        nodes={data.nodes}
+        notifications={{ mentions: true, humanReplies: false, approvals: true }}
+        pendingPreference="notifications"
+        preferenceError="保存失败"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(html).toContain('data-preference-pending="notifications"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("保存失败");
+    expect(html.match(/<button(?=[^>]*role="switch")(?=[^>]*disabled="")[^>]*>/g)).toHaveLength(3);
+  });
+
+  it("disables account avatar choices while any profile field is pending", () => {
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={createDesktopMessages("zh-CN")}
+        nodes={data.nodes}
+        notifications={{ mentions: true, humanReplies: false, approvals: true }}
+        pendingProfileField="displayName"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(html).toContain('data-editable-saving="true"');
+    expect(html.match(/<button(?=[^>]*data-settings-avatar-option="pixel-[^"]+")(?=[^>]*disabled="")[^>]*>/g)).toHaveLength(4);
+  });
+
+  it("consumes rejected fire-and-forget settings callbacks", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      runSettingsFireAndForgetAction(async () => {
+        throw new Error("保存失败");
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   it("renders appearance controls and about metadata", () => {
     const appearanceHtml = renderToStaticMarkup(
       <SleiAppFrame
@@ -180,5 +302,27 @@ describe("settings preferences", () => {
     expect(receipt.preferences.timeZone).toBe("America/Los_Angeles");
     expect(receipt.preferences.appearance.theme).toBe("dark");
     expect(receipt.preferences.notifications.humanReplies).toBe(false);
+  });
+
+  it("bridge mock persists profile like the native bridge contract", async () => {
+    expect((await createDaemonBridgeMock({ connected: true }).listProfile()).profile).toBeNull();
+    expect((await createDaemonBridgeMock({ connected: true, profile: null }).listProfile()).profile).toBeNull();
+
+    const bridge = createDaemonBridgeMock({
+      connected: true,
+      profile: { displayName: "Lei", handle: "lei", avatar: "pixel-sun" },
+    });
+
+    expect((await bridge.listProfile()).profile?.displayName).toBe("Lei");
+    expect((await bridge.listProfile()).profile?.handle).toBe("lei");
+    await expect(bridge.updateProfile({ displayName: "   " })).rejects.toThrow("display name is required");
+    await bridge.updateProfile({ displayName: "Lei Lee", avatar: "pixel-moon" });
+
+    const receipt = await bridge.listProfile();
+    expect(receipt.profile?.displayName).toBe("Lei Lee");
+    expect(receipt.profile?.handle).toBe("lei");
+    expect(receipt.profile?.avatar).toBe("pixel-moon");
+    await expect(bridge.updateProfile({ handle: "other" })).rejects.toThrow("handle is immutable");
+    await expect(bridge.updateProfile({ handle: "" })).rejects.toThrow("handle is immutable");
   });
 });

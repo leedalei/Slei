@@ -172,6 +172,7 @@ pub const MIGRATION_0002: &str = include_str!("../migrations/0002_app_state.sql"
 pub const MIGRATION_0003: &str = include_str!("../migrations/0003_broadcast_claim.sql");
 pub const MIGRATION_0004: &str = include_str!("../migrations/0004_task_source_uniqueness.sql");
 pub const MIGRATION_0005: &str = include_str!("../migrations/0005_agent_activity_event_fields.sql");
+pub const MIGRATION_0006: &str = include_str!("../migrations/0006_user_profile.sql");
 
 pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, MIGRATION_0001),
@@ -179,4 +180,5 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (3, MIGRATION_0003),
     (4, MIGRATION_0004),
     (5, MIGRATION_0005),
+    (6, MIGRATION_0006),
 ];

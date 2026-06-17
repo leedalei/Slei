@@ -36,7 +36,13 @@ describe("desktop interaction fixes", () => {
 
   it("adds editable profile settings for display name handle and avatar", () => {
     const html = renderToStaticMarkup(
-      <SleiAppFrame activeView="settings" data={createSleiFixtures()} locale="zh-CN" runtimeSetup={readyRuntime} />,
+      <SleiAppFrame
+        activeView="settings"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        runtimeSetup={readyRuntime}
+      />,
     );
 
     expect(html).toContain('data-settings-panel="account"');

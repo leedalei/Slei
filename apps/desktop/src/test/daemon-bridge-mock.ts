@@ -23,6 +23,7 @@ import type {
   SkillView,
   TaskSummaryView,
   TaskThreadView,
+  UserProfileView,
   UserPreferences,
 } from "../lib/daemon-bridge";
 
@@ -77,6 +78,7 @@ export function createDaemonBridgeMock(input: {
   channelMembers?: ChannelMemberView[];
   channelMessages?: ChannelMessageView[];
   activityLogs?: AgentActivityLogView[];
+  profile?: UserProfileView | null;
 }): DaemonBridgeMock {
   let connected = input.connected;
   let nodes = input.nodes ?? [
@@ -109,6 +111,7 @@ export function createDaemonBridgeMock(input: {
   let savedMessages: SavedMessageView[] = [];
   let cards: InteractiveCardView[] = [];
   let preferences = defaultUserPreferences();
+  let profile: UserProfileView | null = input.profile ?? null;
   const eventSubscriptions: Array<{ after: number }> = [];
 
   return {
@@ -688,6 +691,26 @@ export function createDaemonBridgeMock(input: {
         notifications: request.notifications ?? preferences.notifications,
       };
       return { preferences };
+    },
+    async listProfile() {
+      return { profile };
+    },
+    async updateProfile(request) {
+      if (!profile) {
+        throw new Error("profile unavailable");
+      }
+      if (request.handle !== undefined && request.handle !== profile.handle) {
+        throw new Error("handle is immutable");
+      }
+      if (request.displayName !== undefined && !request.displayName.trim()) {
+        throw new Error("display name is required");
+      }
+      profile = {
+        ...profile,
+        displayName: request.displayName?.trim() ?? profile.displayName,
+        avatar: request.avatar ?? profile.avatar,
+      };
+      return { profile };
     },
     async renameLocalNode(name) {
       const trimmed = name.trim();

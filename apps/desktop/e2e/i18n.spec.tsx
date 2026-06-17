@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SleiAppFrame } from "../src/app/SleiApp";
+import { applyPreferenceMutation, SleiAppFrame } from "../src/app/SleiApp";
+import { createDesktopMessages } from "../src/i18n";
 import { createSleiFixtures } from "../src/test/fixtures";
 
 const data = createSleiFixtures({
@@ -19,6 +20,46 @@ const readyRuntime = {
 };
 
 describe("desktop i18n", () => {
+  it("rolls back failed language saves and exposes error copy in the restored locale", async () => {
+    let activeLocale: "zh-CN" | "en-US" = "zh-CN";
+    let preferenceError = "";
+
+    await expect(
+      applyPreferenceMutation({
+        current: "zh-CN" as const,
+        optimistic: "en-US" as const,
+        applyOptimistic: (value) => {
+          activeLocale = value;
+        },
+        persist: async () => {
+          throw new Error("daemon offline");
+        },
+        applyConfirmed: (value) => {
+          activeLocale = value;
+        },
+        onError: (error) => {
+          const detail = error instanceof Error ? error.message : String(error);
+          preferenceError = `${createDesktopMessages(activeLocale).settings.saveFailed}：${detail}`;
+        },
+      }),
+    ).rejects.toThrow("daemon offline");
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={data}
+        initialSettingsPanel="language-region"
+        locale={activeLocale}
+        preferenceError={preferenceError}
+        runtimeSetup={readyRuntime}
+      />,
+    );
+    expect(activeLocale).toBe("zh-CN");
+    expect(html).toContain('aria-label="主导航"');
+    expect(html).toContain("保存失败：daemon offline");
+    expect(html).not.toContain("Save failed");
+  });
+
   it("switches the whole shell and active page copy when locale changes", () => {
     const english = renderToStaticMarkup(
       <SleiAppFrame activeView="chat" data={data} locale="en-US" runtimeSetup={readyRuntime} />,

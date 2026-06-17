@@ -55,6 +55,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MemberTab = "profile" | "workspace" | "capabilities" | "activity";
+type MemberEditableField = "description" | "model" | "name" | "runtime";
 
 type ClipboardWriter = {
   writeText?: (text: string) => Promise<void>;
@@ -86,6 +87,7 @@ export function MembersPage(input: {
   data: SleiFixtures;
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
+  memberFieldErrors?: Record<string, string>;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
@@ -93,6 +95,7 @@ export function MembersPage(input: {
   onMessage?: (memberId: string) => void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
+  savingMemberField?: string;
 }) {
   const selectedMember = input.data.members.find((member) => member.id === input.activeMemberId) ?? input.data.members[0];
   const selectedNode = input.nodes.find((node) => node.id === selectedMember?.nodeId);
@@ -108,6 +111,8 @@ export function MembersPage(input: {
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityError, setActivityError] = useState<string | undefined>(undefined);
   const [expandedPayloadIds, setExpandedPayloadIds] = useState<Set<string>>(() => new Set());
+  const [savingField, setSavingField] = useState<MemberEditableField | undefined>();
+  const [fieldError, setFieldError] = useState<Record<string, string>>({});
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
@@ -132,6 +137,8 @@ export function MembersPage(input: {
       name: selectedMember?.name ?? "",
       runtime: selectedMember?.runtime ?? "",
     });
+    setSavingField(undefined);
+    setFieldError({});
   }, [selectedMember?.id]);
 
   useEffect(() => {
@@ -177,11 +184,29 @@ export function MembersPage(input: {
     };
   }, [hasActivityLoader, input.messages.members.activityLoadFailed, selectedMember?.id, selectedMember?.type]);
 
-  function updateMemberDetail(key: keyof typeof memberDetails, value: string) {
+  async function updateMemberDetail(key: MemberEditableField, value: string) {
+    if (!selectedMember || selectedMember.type !== "agent") {
+      setMemberDetails((current) => ({ ...current, [key]: value }));
+      return;
+    }
+
+    setSavingField(key);
+    setFieldError((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    const previousValue = memberDetails[key];
     setMemberDetails((current) => ({ ...current, [key]: value }));
     const updateKey = key === "runtime" ? "runtimeKind" : key;
-    if (selectedMember?.type === "agent") {
-      input.onAgentUpdate?.(selectedMember.id, { [updateKey]: value });
+    try {
+      await input.onAgentUpdate?.(selectedMember.id, { [updateKey]: value } as Partial<AgentDraftInput>);
+    } catch (error) {
+      setMemberDetails((current) => ({ ...current, [key]: previousValue }));
+      setFieldError((current) => ({ ...current, [key]: memberDetailErrorMessage(error) }));
+      throw error;
+    } finally {
+      setSavingField((current) => (current === key ? undefined : current));
     }
   }
 
@@ -311,6 +336,7 @@ export function MembersPage(input: {
     entriesByDirectory: workspaceEntriesByDirectory,
     expandedDirectories: expandedWorkspaceDirectories,
   });
+  const effectiveSavingField = input.savingMemberField ?? savingField;
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
@@ -400,21 +426,28 @@ export function MembersPage(input: {
                   <div className="grid gap-4 md:grid-cols-2">
                     <EditableDetailField
                       ariaLabel={input.messages.members.editDisplayName}
+                      error={fieldError.name}
                       label={input.messages.members.displayName}
                       messages={input.messages}
                       onSave={(value) => updateMemberDetail("name", value)}
+                      saving={effectiveSavingField === "name"}
                       sectionClassName="grid gap-2"
                       value={memberDetails.name}
                     />
+                    <ControlledFieldAlert message={input.memberFieldErrors?.name} />
                     <EditableDetailField
+                      allowEmpty
                       ariaLabel={input.messages.members.editDescription}
+                      error={fieldError.description}
                       label={input.messages.members.description}
                       messages={input.messages}
                       multiline
                       onSave={(value) => updateMemberDetail("description", value)}
+                      saving={effectiveSavingField === "description"}
                       sectionClassName="grid gap-2"
                       value={memberDetails.description}
                     />
+                    <ControlledFieldAlert message={input.memberFieldErrors?.description} />
                   </div>
                   <Separator />
                   <h2 className="text-base font-semibold">{input.messages.members.info}</h2>
@@ -444,22 +477,28 @@ export function MembersPage(input: {
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   <EditableDetailField
                     ariaLabel={input.messages.members.editRuntime}
+                    error={fieldError.runtime}
                     label="Runtime"
                     messages={input.messages}
                     onSave={(value) => updateMemberDetail("runtime", value)}
                     readClassName="w-fit rounded-4xl border border-border px-2 py-0.5 text-xs font-medium text-foreground"
+                    saving={effectiveSavingField === "runtime"}
                     sectionClassName="grid gap-2"
                     value={memberDetails.runtime}
                   />
+                  <ControlledFieldAlert message={input.memberFieldErrors?.runtime} />
                   <EditableDetailField
                     ariaLabel={input.messages.members.editModel}
+                    error={fieldError.model}
                     label={input.messages.members.model}
                     messages={input.messages}
                     onSave={(value) => updateMemberDetail("model", value)}
                     readClassName="w-fit rounded-4xl border border-border px-2 py-0.5 text-xs font-medium text-foreground"
+                    saving={effectiveSavingField === "model"}
                     sectionClassName="grid gap-2"
                     value={memberDetails.model}
                   />
+                  <ControlledFieldAlert message={input.memberFieldErrors?.model} />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -664,6 +703,19 @@ function ActivityLogRow(input: {
         </div>
       ) : null}
     </article>
+  );
+}
+
+function memberDetailErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function ControlledFieldAlert(input: { message?: string }) {
+  if (!input.message) return null;
+  return (
+    <p className="text-sm text-destructive" role="alert">
+      {input.message}
+    </p>
   );
 }
 

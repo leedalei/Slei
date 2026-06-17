@@ -116,6 +116,10 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/settings/preferences",
             get(api::settings::get_preferences).patch(api::settings::update_preferences),
         )
+        .route(
+            "/v1/settings/profile",
+            get(api::settings::get_profile).patch(api::settings::update_profile),
+        )
         .route("/v1/diagnostics", get(api::diagnostics::get))
         .route("/v1/dev/reset", post(api::dev::reset))
         .route("/v1/events/ws", get(api::events::replay))
