@@ -20,7 +20,7 @@ Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 
 - `slei task claim` 是任务维度的原子锁，独立于 message claim。
 - 可见频道发言、任务回复、任务创建、任务状态更新和 Agent 状态上报都必须通过 `slei` CLI 进入 daemon API。
 - Agent runtime 的普通 stdout 不会自动变成可见频道消息；可见产品动作必须来自 `slei message send` 或任务相关 API/CLI。
-- 每次 `slei agent status` 上报都写入最新状态，并追加 Agent 操作日志。每个 Agent 只保留最近 100 条，超过后删除最旧记录。
+- 每次 `slei agent status` 上报都写入最新状态，并追加 Agent 操作日志；daemon 观察到的 `run` / `input` / `output` / `tool` / `completed` / `failed` 诊断事件也追加到同一张活动日志。每个 Agent 只保留最近 200 条，超过后删除最旧记录。
 - 所有可变生产状态使用 SQLite repository，不用 JSON、前端 fixture、localStorage 或 mock 数据作为生产状态来源。
 
 ## 总体架构
@@ -227,7 +227,7 @@ Agent 应在耗时或用户可感知阶段调用 `slei agent status`，例如：
 - `updating_memory`：正在更新记忆。
 - `working` / `blocked` / `idle`：当前运行状态。
 
-daemon 必须持久化最新状态，并把每次上报追加到 `agent_activity_logs`。该日志用于 debug 和最近活动展示，不参与路由决策或 claim 判断。每个 Agent 只保留最近 100 条，超过后删除最旧记录。
+daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_activity_logs`。同一张活动日志还记录 daemon 观察到的 runtime 诊断事件，包括 `run`、`input`、`output`、`tool`、`completed` 和 `failed`。该日志用于 debug 和最近活动展示，不参与路由决策、claim 判断或任务调度。每个 Agent 只保留最近 200 条，超过后删除最旧记录。
 
 ## MEMORY 与 Active Context
 
@@ -251,7 +251,7 @@ daemon 必须持久化最新状态，并把每次上报追加到 `agent_activity
 | `task_claims` | 任务 claim 锁、owner、状态 |
 | `tasks` / `task_replies` | 任务和任务线程 |
 | `agent_statuses` | Agent 最新状态 |
-| `agent_activity_logs` | Agent 最近 100 条操作日志 |
+| `agent_activity_logs` | Agent 最近 200 条状态上报和 daemon 观察到的 runtime 诊断事件 |
 | `interactive_cards` | product tool 产生的交互卡片 |
 | `diagnostic_events` | runtime started/completed/failed、reset、失败诊断 |
 
@@ -277,7 +277,7 @@ daemon 必须持久化最新状态，并把每次上报追加到 `agent_activity
 - 普通新消息是否仍走 broadcast + claim，而不是中心化 JSON、关键词或第一个 ready Agent。
 - `slei message claim` 是否仍是唯一消息独占入口。
 - Agent stdout 是否仍不会自动生成可见频道消息；可见动作是否来自 `slei` CLI/API。
-- `slei agent status` 是否仍写最新状态并追加最近 100 条操作日志。
+- `slei agent status` 是否仍写最新状态并追加最近 200 条操作日志；daemon 观察到的 `run` / `input` / `output` / `tool` / `completed` / `failed` 事件是否仍追加到同一张活动日志，且不参与路由、claim 或任务调度决策。
 - 任务消息是否仍遵守 `docs/architecture/0006-task-source-message-card.md`：源消息原地升级，新增路径不写 `task_card` 消息。
 - 任务线程回复是否仍只有可见 `@agent` 才创建 handoff；不能因为 task 有兼容 assignee 字段就隐式转给该 Agent。
 - reset 期间是否阻止旧 run 写入状态。
