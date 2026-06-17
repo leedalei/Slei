@@ -729,6 +729,23 @@ select:focus-visible {
   box-shadow: var(--shadow-md);
 }
 
+.slei-message--blink-border {
+  animation: slei-message-blink-border 720ms ease-in-out 3;
+}
+
+@keyframes slei-message-blink-border {
+  0%,
+  100% {
+    border-color: color-mix(in srgb, var(--primary) 25%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+  }
+
+  50% {
+    border-color: color-mix(in srgb, var(--primary) 85%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+}
+
 .slei-message__meta {
   align-items: start;
   display: flex;

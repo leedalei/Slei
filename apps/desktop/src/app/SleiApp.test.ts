@@ -719,9 +719,10 @@ describe("createChannelAgentReplyMessage", () => {
 
   it("keeps the current chat view after a member is created from an interactive card", () => {
     const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+    const handlerSource = source.slice(source.indexOf("async function handleCreateAgent"), source.indexOf("async function handleUpdateAgent"));
 
-    expect(source).toContain("messages.agentCreate.createdSuccess");
-    expect(source).not.toContain('navigateToView("members");');
+    expect(handlerSource).toContain("messages.agentCreate.createdSuccess");
+    expect(handlerSource).not.toContain('navigateToView("members");');
   });
 
   it("surfaces agent creation failures from the modal", () => {
@@ -1018,5 +1019,18 @@ describe("createChannelAgentReplyMessage", () => {
     expect(message.id).toBe("agent-activity-msg_123");
     expect(message.status).toBe("done");
     expect(message.cards?.map((card) => card.id)).toEqual(["card_1", "card_2"]);
+  });
+});
+
+describe("global search result navigation", () => {
+  it("uses message result sessions when navigating to channel and DM messages", () => {
+    const source = readFileSync("src/app/SleiApp.tsx", "utf8");
+    const handlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));
+
+    expect(handlerSource).toContain("const targetSessionId = result.sessionId ?? undefined");
+    expect(handlerSource).toContain("bridge.activateConversationSession(conversationId, targetSessionId)");
+    expect(handlerSource).toContain("bridge.activateChannelSession(channelId, targetSessionId)");
+    expect(handlerSource).toContain("refreshChannelMessagesIntoState(channelId, data.members, targetSessionId)");
+    expect(handlerSource).not.toContain("handleChannelSearchResultSelect(channelId)");
   });
 });

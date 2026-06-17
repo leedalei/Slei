@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
 import { defaultProfile } from "../../app/model";
@@ -182,6 +182,62 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("const timelineScrollTarget =");
     expect(source).toContain("pendingScrollToBottomRef.current = true");
     expect(source).toContain("[timelineScrollTarget, effectiveChannelView, focusedMessageId]");
+  });
+
+  it("scrolls a focused message into view and removes its blink border after the timer", async () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    const focus = vi.fn();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const originalFocus = HTMLElement.prototype.focus;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    HTMLElement.prototype.focus = focus;
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0, activeSessionId: "session-search" }],
+      channelSessions: [{ id: "session-search", channelId: "all", title: "搜索会话", status: "ready", createdAt: "0", updatedAt: "0" }],
+      messages: [
+        {
+          id: "msg-search-target",
+          author: "Lei",
+          role: "human",
+          time: "10:24",
+          body: "来自搜索结果的目标消息。",
+          channelId: "all",
+          sessionId: "session-search",
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          activeSessionId="session-search"
+          data={data}
+          focusedMessageId="msg-search-target"
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      const target = host.querySelector<HTMLElement>('[data-message-id="msg-search-target"]');
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "center" });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+      expect(target?.dataset.focused).toBe("true");
+      expect(target?.classList.contains("slei-message--blink-border")).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2300);
+      });
+
+      expect(target?.dataset.focused).toBeUndefined();
+      expect(target?.classList.contains("slei-message--blink-border")).toBe(false);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      HTMLElement.prototype.focus = originalFocus;
+      vi.useRealTimers();
+    }
   });
 
   it("keeps mention suggestions constrained to the composer width", () => {
