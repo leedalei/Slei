@@ -181,4 +181,26 @@ describe("settings preferences", () => {
     expect(receipt.preferences.appearance.theme).toBe("dark");
     expect(receipt.preferences.notifications.humanReplies).toBe(false);
   });
+
+  it("bridge mock persists profile like the native bridge contract", async () => {
+    expect((await createDaemonBridgeMock({ connected: true }).listProfile()).profile).toBeNull();
+    expect((await createDaemonBridgeMock({ connected: true, profile: null }).listProfile()).profile).toBeNull();
+
+    const bridge = createDaemonBridgeMock({
+      connected: true,
+      profile: { displayName: "Lei", handle: "lei", avatar: "pixel-sun" },
+    });
+
+    expect((await bridge.listProfile()).profile?.displayName).toBe("Lei");
+    expect((await bridge.listProfile()).profile?.handle).toBe("lei");
+    await expect(bridge.updateProfile({ displayName: "   " })).rejects.toThrow("display name is required");
+    await bridge.updateProfile({ displayName: "Lei Lee", avatar: "pixel-moon" });
+
+    const receipt = await bridge.listProfile();
+    expect(receipt.profile?.displayName).toBe("Lei Lee");
+    expect(receipt.profile?.handle).toBe("lei");
+    expect(receipt.profile?.avatar).toBe("pixel-moon");
+    await expect(bridge.updateProfile({ handle: "other" })).rejects.toThrow("handle is immutable");
+    await expect(bridge.updateProfile({ handle: "" })).rejects.toThrow("handle is immutable");
+  });
 });

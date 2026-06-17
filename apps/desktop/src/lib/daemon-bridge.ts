@@ -79,6 +79,22 @@ export type PreferencesUpdateRequest = {
   notifications?: NotificationPreferences;
 };
 
+export type UserProfileView = {
+  displayName: string;
+  handle: string;
+  avatar: string;
+};
+
+export type ProfileReceipt = {
+  profile: UserProfileView | null;
+};
+
+export type ProfileUpdateRequest = {
+  displayName?: string;
+  avatar?: string;
+  handle?: string;
+};
+
 export type DesktopAgentView = {
   id: string;
   name: string;
@@ -518,6 +534,8 @@ export type DaemonBridge = {
   unsaveMessage(messageId: string): Promise<void>;
   listPreferences(): Promise<PreferencesReceipt>;
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
+  listProfile(): Promise<ProfileReceipt>;
+  updateProfile(request: ProfileUpdateRequest): Promise<ProfileReceipt>;
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
   refreshRuntimeStatus(): Promise<NodeListReceipt>;
   subscribeEvents(after: number): Promise<void>;
@@ -665,6 +683,10 @@ export function createOfflineDaemonBridge(): DaemonBridge {
       return { preferences };
     },
     updatePreferences: rejectDaemonOffline,
+    async listProfile() {
+      return { profile: null };
+    },
+    updateProfile: rejectDaemonOffline,
     renameLocalNode: rejectDaemonOffline,
     async refreshRuntimeStatus() {
       return { nodes: [] };
@@ -723,6 +745,8 @@ export function createDaemonBridge(): DaemonBridge {
       unsaveMessage: (messageId: string) => invoke<void>("unsave_message_command", { messageId }),
       listPreferences: () => invoke<PreferencesReceipt>("list_preferences_command"),
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),
+      listProfile: () => invoke<ProfileReceipt>("list_profile_command"),
+      updateProfile: (request: ProfileUpdateRequest) => invoke<ProfileReceipt>("update_profile_command", { request }),
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),
       refreshRuntimeStatus: () => invoke<NodeListReceipt>("refresh_runtime_status_command"),
       subscribeEvents: (after: number) => invoke<void>("reconnect_events_command", { after }),

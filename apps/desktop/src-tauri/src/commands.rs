@@ -10,10 +10,11 @@ use crate::daemon_broker::{
     ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt, DaemonBroker,
     DiagnosticsSnapshotView, EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt,
     NodeListReceipt, NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
-    PreferencesReceipt, PreferencesUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest,
-    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
-    SendChannelMessageRequest, SkillListReceipt, TaskError, TaskListQuery, TaskListReceipt,
-    TaskReceipt, TaskReplyReceipt, TaskReplyRequest, TaskStatusUpdateRequest, TaskThreadReceipt,
+    PreferencesReceipt, PreferencesUpdateRequest, ProfileError, ProfileReceipt,
+    ProfileUpdateRequest, SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt,
+    SavedMessageReceipt, SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt,
+    TaskError, TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
+    TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
 
@@ -218,6 +219,17 @@ pub fn update_preferences(
     request: PreferencesUpdateRequest,
 ) -> Result<PreferencesReceipt, PreferencesError> {
     broker.update_preferences(request)
+}
+
+pub fn list_profile(broker: &DaemonBroker) -> ProfileReceipt {
+    broker.list_profile()
+}
+
+pub fn update_profile(
+    broker: &DaemonBroker,
+    request: ProfileUpdateRequest,
+) -> Result<ProfileReceipt, ProfileError> {
+    broker.update_profile(request)
 }
 
 pub fn list_agents(broker: &DaemonBroker) -> AgentListReceipt {
@@ -428,6 +440,19 @@ pub fn update_preferences_command(
     request: PreferencesUpdateRequest,
 ) -> Result<PreferencesReceipt, String> {
     update_preferences(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn list_profile_command(state: tauri::State<'_, DaemonBroker>) -> ProfileReceipt {
+    list_profile(state.inner())
+}
+
+#[tauri::command]
+pub fn update_profile_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: ProfileUpdateRequest,
+) -> Result<ProfileReceipt, String> {
+    update_profile(state.inner(), request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

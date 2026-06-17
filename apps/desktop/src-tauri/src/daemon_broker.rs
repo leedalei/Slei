@@ -47,6 +47,7 @@ pub struct DaemonBroker {
     conversation_attachments: Mutex<Vec<ConversationAttachmentView>>,
     saved_messages: Mutex<Vec<SavedMessageView>>,
     preferences: Mutex<UserPreferencesView>,
+    profile: Mutex<Option<UserProfileView>>,
     diagnostic_events: Mutex<Vec<String>>,
 }
 
@@ -185,6 +186,28 @@ pub struct PreferencesUpdateRequest {
     pub time_zone: Option<String>,
     pub appearance: Option<AppearancePreferencesView>,
     pub notifications: Option<NotificationPreferencesView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserProfileView {
+    pub display_name: String,
+    pub handle: String,
+    pub avatar: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileReceipt {
+    pub profile: Option<UserProfileView>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileUpdateRequest {
+    pub display_name: Option<String>,
+    pub avatar: Option<String>,
+    pub handle: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -805,6 +828,7 @@ impl DaemonBroker {
             conversation_attachments: Mutex::new(Vec::new()),
             saved_messages: Mutex::new(Vec::new()),
             preferences: Mutex::new(default_preferences()),
+            profile: Mutex::new(None),
             diagnostic_events: Mutex::new(Vec::new()),
         }
     }
@@ -954,6 +978,26 @@ impl DaemonBroker {
         Ok(PreferencesReceipt {
             preferences: preferences.clone(),
         })
+    }
+
+    pub fn list_profile(&self) -> ProfileReceipt {
+        if let Some(receipt) = self.fetch_profile_from_daemon() {
+            self.replace_local_profile(receipt.profile.clone());
+            return receipt;
+        }
+
+        ProfileReceipt {
+            profile: self.profile.lock().expect("profile mutex poisoned").clone(),
+        }
+    }
+
+    pub fn update_profile(
+        &self,
+        request: ProfileUpdateRequest,
+    ) -> Result<ProfileReceipt, ProfileError> {
+        let receipt = self.update_profile_in_daemon(&request)?;
+        self.replace_local_profile(receipt.profile.clone());
+        Ok(receipt)
     }
 
     pub fn rename_local_node(&self, name: &str) -> Result<NodeRenameReceipt, NodeNameError> {
@@ -2430,6 +2474,11 @@ impl DaemonBroker {
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
     }
 
+    fn fetch_profile_from_daemon(&self) -> Option<ProfileReceipt> {
+        let response = self.send_daemon_request("GET", "/v1/settings/profile", None, &[])?;
+        serde_json::from_str::<ProfileReceipt>(&response).ok()
+    }
+
     fn bootstrap_guide_agent_in_daemon(&self) -> Option<GuideBootstrapReceipt> {
         let response =
             self.send_daemon_request("POST", "/v1/agents/guide/bootstrap", Some("{}"), &[])?;
@@ -2707,6 +2756,19 @@ impl DaemonBroker {
         let response =
             self.send_daemon_request("PATCH", "/v1/settings/preferences", Some(&payload), &[])?;
         serde_json::from_str::<PreferencesReceipt>(&response).ok()
+    }
+
+    fn update_profile_in_daemon(
+        &self,
+        request: &ProfileUpdateRequest,
+    ) -> Result<ProfileReceipt, ProfileError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ProfileError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked("PATCH", "/v1/settings/profile", Some(&payload), &[])
+            .map_err(profile_daemon_request_error)?;
+        serde_json::from_str::<ProfileReceipt>(&response)
+            .map_err(|error| ProfileError::DaemonResponse(error.to_string()))
     }
 
     fn fetch_agents_from_daemon(&self) -> Option<AgentListReceipt> {
@@ -3546,6 +3608,10 @@ impl DaemonBroker {
         *self.preferences.lock().expect("preferences mutex poisoned") = preferences;
     }
 
+    fn replace_local_profile(&self, profile: Option<UserProfileView>) {
+        *self.profile.lock().expect("profile mutex poisoned") = profile;
+    }
+
     fn record_local_diagnostic(&self, event: String) {
         eprintln!("[slei-desktop] {event}");
         self.diagnostic_events
@@ -3664,6 +3730,28 @@ fn normalize_handle(handle: &str) -> Result<String, AgentError> {
     } else {
         Err(AgentError::InvalidHandle)
     }
+}
+
+fn profile_daemon_request_error(error: String) -> ProfileError {
+    if error.starts_with("HTTP/") {
+        return ProfileError::DaemonRequest(extract_daemon_error_message(&error));
+    }
+    if error.contains("daemon response missing body separator") {
+        return ProfileError::DaemonResponse(error);
+    }
+    ProfileError::DaemonUnavailable
+}
+
+fn extract_daemon_error_message(error: &str) -> String {
+    let body = error.split_once(": ").map(|(_, body)| body.trim());
+    body.and_then(|body| serde_json::from_str::<serde_json::Value>(body).ok())
+        .and_then(|value| {
+            value
+                .get("error")
+                .and_then(|error| error.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| error.to_string())
 }
 
 fn local_data_root() -> String {
@@ -4971,6 +5059,16 @@ pub enum PreferencesError {
     Io(std::io::Error),
     #[error("preferences json error: {0}")]
     Json(serde_json::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProfileError {
+    #[error("daemon unavailable")]
+    DaemonUnavailable,
+    #[error("{0}")]
+    DaemonRequest(String),
+    #[error("daemon response invalid: {0}")]
+    DaemonResponse(String),
 }
 
 #[derive(Debug, thiserror::Error)]

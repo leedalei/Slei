@@ -29,6 +29,7 @@ pub fn run() {
             commands::update_task_status_command,
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
+            commands::list_profile_command,
             commands::list_agents_command,
             commands::list_agent_skills_command,
             commands::list_conversations_command,
@@ -41,6 +42,7 @@ pub fn run() {
             commands::update_agent_command,
             commands::delete_agent_command,
             commands::update_preferences_command,
+            commands::update_profile_command,
             commands::remember_agent_fact_command,
             commands::open_agent_path_command,
             commands::list_agent_workspace_command,
@@ -68,18 +70,19 @@ mod tests {
         format_frontend_crash_log, list_agent_skills, list_agent_workspace, list_agents,
         list_channel_members, list_channel_messages, list_conversation_messages,
         list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
-        list_preferences, list_saved_messages, list_tasks, open_agent_path,
+        list_preferences, list_profile, list_saved_messages, list_tasks, open_agent_path,
         read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
         rename_local_node, reply_to_task, request_artifact_open,
         reset_conversation_runtime_session, save_message, send_channel_message,
         send_conversation_message, unsave_message, update_agent, update_preferences,
-        upload_conversation_attachment, FrontendCrashReport,
+        update_profile, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
-        NotificationPreferencesView, PreferencesUpdateRequest, RuntimeDescriptor,
-        SaveMessageRequest, SendChannelMessageRequest, TaskListQuery, TaskReplyRequest,
+        NotificationPreferencesView, PreferencesUpdateRequest, ProfileUpdateRequest,
+        RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest, TaskListQuery,
+        TaskReplyRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -2355,6 +2358,109 @@ mod tests {
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         std::env::remove_var("SLEI_DATA_ROOT");
+    }
+
+    #[test]
+    fn profile_commands_round_trip_without_handle_mutation() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let responses = [
+                (
+                    "200 OK",
+                    r#"{"profile":{"displayName":"Lei","handle":"lei","avatar":"pixel-sun"}}"#,
+                ),
+                (
+                    "200 OK",
+                    r#"{"profile":{"displayName":"Lei Lee","handle":"lei","avatar":"pixel-moon"}}"#,
+                ),
+                ("400 Bad Request", r#"{"error":"handle is immutable"}"#),
+            ];
+            let mut requests = Vec::new();
+            for (status, body) in responses {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0_u8; 512];
+                loop {
+                    let count = std::io::Read::read(&mut stream, &mut buffer).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    bytes.extend_from_slice(&buffer[..count]);
+                    let request = String::from_utf8_lossy(&bytes);
+                    let Some(header_end) = request.find("\r\n\r\n") else {
+                        continue;
+                    };
+                    let content_length = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                requests.push(String::from_utf8(bytes).unwrap());
+                std::io::Write::write_all(
+                    &mut stream,
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            }
+            requests
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: "ws://127.0.0.1:4319/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let profile = list_profile(&broker).profile.unwrap();
+        assert_eq!(profile.handle, "lei");
+
+        let updated = update_profile(
+            &broker,
+            ProfileUpdateRequest {
+                display_name: Some("Lei Lee".to_string()),
+                avatar: Some("pixel-moon".to_string()),
+                handle: None,
+            },
+        )
+        .unwrap();
+        let updated_profile = updated.profile.unwrap();
+        assert_eq!(updated_profile.display_name, "Lei Lee");
+        assert_eq!(updated_profile.avatar, "pixel-moon");
+        let error = update_profile(
+            &broker,
+            ProfileUpdateRequest {
+                display_name: None,
+                avatar: None,
+                handle: Some("other".to_string()),
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("handle is immutable"));
+        assert!(!error.contains("daemon unavailable"));
+        let requests = handle.join().unwrap();
+        assert_eq!(requests.len(), 3);
+        assert!(requests[0].contains("GET /v1/settings/profile HTTP/1.1"));
+        assert!(requests[0].contains("Authorization: Bearer secret-token"));
+        assert!(requests[1].contains("PATCH /v1/settings/profile HTTP/1.1"));
+        assert!(requests[1].contains("Authorization: Bearer secret-token"));
+        assert!(requests[1].contains(r#""displayName":"Lei Lee""#));
+        assert!(requests[1].contains(r#""avatar":"pixel-moon""#));
+        assert!(requests[1].contains(r#""handle":null"#));
+        assert!(requests[2].contains("PATCH /v1/settings/profile HTTP/1.1"));
+        assert!(requests[2].contains("Authorization: Bearer secret-token"));
+        assert!(requests[2].contains(r#""handle":"other""#));
     }
 
     #[test]
