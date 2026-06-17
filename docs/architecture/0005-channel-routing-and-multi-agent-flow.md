@@ -112,7 +112,7 @@ Agent 判断规则由 system prompt 注入到每个 Agent 上下文中，不由�
 - Channel Group Address 可以按需向上检索历史：当需要判断原始群体问题、当前顺序、哪些 Agent 已参与、最新消息是否属于同一群体流或用户是否换题时，用 `slei message read --channel "#channel" --around <msgId>` 或小窗口 `--limit 20` 读取；简单独立问候无需为了回复而读历史。
 - Specialized Work Request：消息要求具体工作但不是面向全频道群体。只有工作符合自身角色、active task 或 prior handoff 时才 claim；如果另一个 Agent 更合适或已经 claim，则静默退出。
 - 如果 claim 成功，先根据需要调用 `slei agent status` 上报阶段，再读取历史或执行任务。
-- 需要历史、线程或任务上下文时，主动用 `slei message read/search` 和 `slei task thread/list` 拉取，不要求 daemon 在初始 prompt 注入完整频道历史。
+- 需要历史、普通消息子线程或任务上下文时，主动用 `slei message read/search`、消息线程 API 和 `slei task thread/list` 拉取，不要求 daemon 在初始 prompt 注入完整频道历史。
 - 处理长任务、等待用户确认、交接给其他 Agent、遇到 blocker、完成阶段性工作或即将退出前，应判断是否更新 `MEMORY.md` 的 `Active Context`。
 
 ## `slei` CLI 合同
@@ -214,6 +214,7 @@ sequenceDiagram
 
 - 多条新消息短时间到达时，每条消息都有独立 delivery、run 和 claim。
 - 普通消息逐条独立 claim 和回复。
+- 普通消息可手动打开子线程；子线程回复写入 `message_thread_replies` 并聚合展示，不写入主 timeline。子线程回复中的可见 `@agent` 仍由 daemon 创建对应 Agent run，但回复本身不允许继续嵌套开启子线程。
 - 同一任务的多条消息应在同一任务线程里回复，天然去重。
 - 任务 claim 竞争由 SQLite 原子操作保证只有第一个成功。
 - 长任务跨多轮时，Agent 处理完当前一步后退出；下一次用户或 Agent 回复到达时，通过线程历史和 `MEMORY.md` 的 `Active Context` 恢复上下文。
@@ -251,6 +252,7 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 | `message_deliveries` | 每条消息投递给哪些 Agent、delivery state、run id |
 | `message_claims` | 消息 claim 锁、owner、状态 |
 | `task_claims` | 任务 claim 锁、owner、状态 |
+| `message_threads` / `message_thread_replies` | 普通消息子线程与聚合回复；任务可通过 `tasks.thread_id` 复用同一源消息 thread |
 | `tasks` / `task_replies` | 任务和任务线程 |
 | `agent_statuses` | Agent 最新状态 |
 | `agent_activity_logs` | Agent 最近 200 条状态上报和 daemon 观察到的 runtime 诊断事件 |
@@ -282,6 +284,8 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 - `slei agent status` 是否仍写最新状态并追加最近 200 条操作日志；daemon 观察到的 `run` / `input` / `output` / `tool` / `completed` / `failed` 事件是否仍追加到同一张活动日志，且不参与路由、claim 或任务调度决策。
 - 任务消息是否仍遵守 `docs/architecture/0006-task-source-message-card.md`：源消息原地升级，新增路径不写 `task_card` 消息。
 - 任务线程回复是否仍只有可见 `@agent` 才创建 handoff；不能因为 task 有兼容 assignee 字段就隐式转给该 Agent。
+- 普通消息子线程回复是否仍聚合在 thread 中，不进入主 timeline，且不可嵌套继续开子线程。
+- 频道/私聊消息列表是否默认加载最新 50 条，并通过 `before` cursor 每次向上加载 30 条；UI 可用虚拟列表渲染大消息量，但分页、顺序和 source of truth 仍由 daemon DTO 决定。
 - reset 期间是否阻止旧 run 写入状态。
 - 新增生产状态是否写 SQLite repository，而不是 JSON/mock/localStorage。
 

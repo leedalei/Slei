@@ -193,6 +193,7 @@ export async function sendChatComposerMessage(input: {
       kind: "conversation" as const,
       receipt: await input.bridge.sendConversationMessage(input.activeConversationId, {
         authorId: "human:local",
+        asTask: Boolean(input.asTask),
         body,
         sessionId: input.activeSessionId,
         attachmentIds: input.attachmentIds,
@@ -210,6 +211,35 @@ export async function sendChatComposerMessage(input: {
       body,
     }),
   };
+}
+
+export function mergeMessagePage(
+  current: SleiMessage[],
+  incoming: SleiMessage[],
+  mode: "replace" | "prepend" | "append",
+  sourceIds: string[],
+): SleiMessage[] {
+  const sourceIdSet = new Set(sourceIds);
+  const belongsToSource = (message: SleiMessage) => sourceIdSet.has(message.channelId ?? "");
+  const dedupe = (messages: SleiMessage[]) => {
+    const seen = new Set<string>();
+    return messages.filter((message) => {
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return true;
+    });
+  };
+
+  if (mode === "replace") {
+    return dedupe([...current.filter((message) => !belongsToSource(message)), ...incoming]);
+  }
+
+  const existingForOtherSources = current.filter((message) => !belongsToSource(message));
+  const existingForSources = current.filter((message) => belongsToSource(message));
+  if (mode === "prepend") {
+    return dedupe([...existingForOtherSources, ...incoming, ...existingForSources]);
+  }
+  return dedupe([...existingForOtherSources, ...existingForSources, ...incoming]);
 }
 
 export function createLocalChatMessage(input: {

@@ -406,6 +406,8 @@ pub struct ConversationAttachmentView {
 #[serde(rename_all = "camelCase")]
 pub struct ConversationMessageView {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<i64>,
     pub conversation_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -413,8 +415,13 @@ pub struct ConversationMessageView {
     pub body: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<ConversationAttachmentView>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cards: Option<Vec<InteractiveCardView>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread: Option<MessageThreadSummaryView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
     pub created_at: String,
 }
@@ -516,6 +523,8 @@ pub struct ChannelMemberRemoveReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessageView {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<i64>,
     pub channel_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -531,12 +540,38 @@ pub struct ChannelMessageView {
     pub edited: bool,
     #[serde(default)]
     pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread: Option<MessageThreadSummaryView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<TaskSummaryView>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessageListReceipt {
     pub messages: Vec<ChannelMessageView>,
+    pub page_info: MessagePageInfo,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagePageQuery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub around_message_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<i64>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessagePageInfo {
+    pub has_more_before: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oldest_cursor: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newest_cursor: Option<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -579,6 +614,8 @@ pub struct TaskSummaryView {
     pub creator_id: String,
     pub assignee_id: Option<String>,
     pub source_message_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
     pub title: String,
     pub status: String,
     pub attention_required: bool,
@@ -715,6 +752,63 @@ pub struct ConversationSessionReceipt {
 #[serde(rename_all = "camelCase")]
 pub struct ConversationMessageListReceipt {
     pub messages: Vec<ConversationMessageView>,
+    pub page_info: MessagePageInfo,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageThreadSummaryView {
+    pub id: String,
+    pub source_message_id: String,
+    pub source_kind: String,
+    pub source_id: String,
+    pub reply_count: usize,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageThreadReplyView {
+    pub id: String,
+    pub thread_id: String,
+    pub sender_id: String,
+    pub role: String,
+    pub body: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageThreadReceipt {
+    pub thread: MessageThreadSummaryView,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replies: Option<Vec<MessageThreadReplyView>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageThreadReplyReceipt {
+    pub reply: MessageThreadReplyView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMessageThreadRequest {
+    pub source_message_id: String,
+    pub created_by: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplyToMessageThreadRequest {
+    pub sender_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    pub body: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1239,14 +1333,15 @@ impl DaemonBroker {
     pub fn list_channel_messages(
         &self,
         channel_id: &str,
-        session_id: Option<&str>,
+        query: Option<&MessagePageQuery>,
     ) -> ChannelMessageListReceipt {
-        if let Some(receipt) = self.fetch_channel_messages_from_daemon(channel_id, session_id) {
+        if let Some(receipt) = self.fetch_channel_messages_from_daemon(channel_id, query) {
             return receipt;
         }
         if self.offline_fallback == OfflineFallback::Empty {
             return ChannelMessageListReceipt {
                 messages: Vec::new(),
+                page_info: MessagePageInfo::default(),
             };
         }
         ChannelMessageListReceipt {
@@ -1255,15 +1350,10 @@ impl DaemonBroker {
                 .lock()
                 .expect("channel messages mutex poisoned")
                 .iter()
-                .filter(|message| {
-                    message.channel_id == channel_id
-                        && session_id
-                            .map(|session_id| message.session_id.as_deref() == Some(session_id))
-                            .unwrap_or(true)
-                        && !message.deleted
-                })
+                .filter(|message| message.channel_id == channel_id && !message.deleted)
                 .cloned()
                 .collect(),
+            page_info: MessagePageInfo::default(),
         }
     }
 
@@ -1398,6 +1488,28 @@ impl DaemonBroker {
             }
             Err(error) => Err(error),
         }
+    }
+
+    pub fn create_message_thread_from_source(
+        &self,
+        request: CreateMessageThreadRequest,
+    ) -> Result<MessageThreadReceipt, ChannelError> {
+        self.create_message_thread_from_source_in_daemon(&request)
+    }
+
+    pub fn get_message_thread(
+        &self,
+        thread_id: &str,
+    ) -> Result<MessageThreadReceipt, ChannelError> {
+        self.get_message_thread_from_daemon(thread_id)
+    }
+
+    pub fn reply_to_message_thread(
+        &self,
+        thread_id: &str,
+        request: ReplyToMessageThreadRequest,
+    ) -> Result<MessageThreadReplyReceipt, ChannelError> {
+        self.reply_to_message_thread_in_daemon(thread_id, &request)
     }
 
     pub fn update_task_status(
@@ -2142,18 +2254,20 @@ impl DaemonBroker {
     pub fn list_conversation_messages(
         &self,
         conversation_id: &str,
+        query: Option<&MessagePageQuery>,
     ) -> ConversationMessageListReceipt {
         if self.offline_fallback == OfflineFallback::Empty {
             return self
-                .list_conversation_messages_from_daemon(conversation_id)
+                .list_conversation_messages_from_daemon(conversation_id, query)
                 .unwrap_or_else(|| ConversationMessageListReceipt {
                     messages: Vec::new(),
+                    page_info: MessagePageInfo::default(),
                 });
         }
         if self.has_local_conversation_messages(conversation_id) {
             return self.list_local_conversation_messages(conversation_id);
         }
-        if let Some(receipt) = self.list_conversation_messages_from_daemon(conversation_id) {
+        if let Some(receipt) = self.list_conversation_messages_from_daemon(conversation_id, query) {
             return receipt;
         }
 
@@ -2174,6 +2288,7 @@ impl DaemonBroker {
                     .cloned()
                     .collect()
             },
+            page_info: MessagePageInfo::default(),
         }
     }
 
@@ -2279,12 +2394,14 @@ impl DaemonBroker {
         }
         let message = ConversationMessageView {
             id: format!("msg_{now}"),
+            sequence: None,
             conversation_id: conversation_id.to_string(),
             session_id: Some(session_id.clone()),
             author_id: request.author_id.trim().to_string(),
             body: body.to_string(),
             attachments: (!selected_attachments.is_empty()).then_some(selected_attachments.clone()),
             cards: None,
+            thread: None,
             run_id: None,
             status: None,
             created_at: now,
@@ -2305,12 +2422,14 @@ impl DaemonBroker {
             let run_id = format!("run_{}", monotonic_id());
             let run_message = ConversationMessageView {
                 id: format!("run_message_{run_id}"),
+                sequence: None,
                 conversation_id: conversation_id.to_string(),
                 session_id: Some(session_id.clone()),
                 author_id: agent_id.clone(),
                 body: String::new(),
                 attachments: None,
                 cards: None,
+                thread: None,
                 run_id: Some(run_id.clone()),
                 status: Some("running".to_string()),
                 created_at: monotonic_id(),
@@ -2651,14 +2770,9 @@ impl DaemonBroker {
     fn fetch_channel_messages_from_daemon(
         &self,
         channel_id: &str,
-        session_id: Option<&str>,
+        query: Option<&MessagePageQuery>,
     ) -> Option<ChannelMessageListReceipt> {
-        let path = match session_id {
-            Some(session_id) if !session_id.trim().is_empty() => {
-                format!("/v1/channels/{channel_id}/messages?sessionId={session_id}")
-            }
-            _ => format!("/v1/channels/{channel_id}/messages"),
-        };
+        let path = message_page_path(&format!("/v1/channels/{channel_id}/messages"), query);
         let response = self.send_daemon_request("GET", &path, None, &[])?;
         serde_json::from_str::<ChannelMessageListReceipt>(&response).ok()
     }
@@ -2774,6 +2888,59 @@ impl DaemonBroker {
             .map_err(TaskError::DaemonRequest)?;
         serde_json::from_str::<TaskReceipt>(&response)
             .map_err(|error| TaskError::DaemonResponse(error.to_string()))
+    }
+
+    fn create_message_thread_from_source_in_daemon(
+        &self,
+        request: &CreateMessageThreadRequest,
+    ) -> Result<MessageThreadReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                "/v1/message-threads/from-source-message",
+                Some(&payload),
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<MessageThreadReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
+    fn get_message_thread_from_daemon(
+        &self,
+        thread_id: &str,
+    ) -> Result<MessageThreadReceipt, ChannelError> {
+        let response = self
+            .send_daemon_request_checked(
+                "GET",
+                &format!("/v1/message-threads/{thread_id}"),
+                None,
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<MessageThreadReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
+    fn reply_to_message_thread_in_daemon(
+        &self,
+        thread_id: &str,
+        request: &ReplyToMessageThreadRequest,
+    ) -> Result<MessageThreadReplyReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                &format!("/v1/message-threads/{thread_id}/replies"),
+                Some(&payload),
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<MessageThreadReplyReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
     }
 
     fn complete_interactive_card_in_daemon(&self, card_id: &str) -> Option<InteractiveCardReceipt> {
@@ -2921,13 +3088,13 @@ impl DaemonBroker {
     fn list_conversation_messages_from_daemon(
         &self,
         conversation_id: &str,
+        query: Option<&MessagePageQuery>,
     ) -> Option<ConversationMessageListReceipt> {
-        let response = self.send_daemon_request(
-            "GET",
+        let path = message_page_path(
             &format!("/v1/conversations/{conversation_id}/messages"),
-            None,
-            &[],
-        )?;
+            query,
+        );
+        let response = self.send_daemon_request("GET", &path, None, &[])?;
         serde_json::from_str::<ConversationMessageListReceipt>(&response).ok()
     }
 
@@ -3164,6 +3331,7 @@ impl DaemonBroker {
             .expect("channel messages mutex poisoned")
             .push(ChannelMessageView {
                 id: message_id.clone(),
+                sequence: None,
                 channel_id: "all".to_string(),
                 session_id,
                 author_id: request.author_id.clone(),
@@ -3173,6 +3341,8 @@ impl DaemonBroker {
                 deleted: false,
                 edited: false,
                 created_at: created_at.clone(),
+                thread: None,
+                task: None,
             });
         let should_create_task = request.as_task || is_task_command(&request.body);
         if should_create_task {
@@ -3185,6 +3355,7 @@ impl DaemonBroker {
                 creator_id: request.author_id.clone(),
                 assignee_id: None,
                 source_message_id: Some(message_id.clone()),
+                thread_id: None,
                 title: body.chars().take(40).collect(),
                 status: "pending_assignment".to_string(),
                 attention_required: true,
@@ -4649,12 +4820,14 @@ fn complete_local_agent_run(
             for card in output.cards {
                 card_messages.push(ConversationMessageView {
                     id: format!("card_message_{}", card.id),
+                    sequence: None,
                     conversation_id: conversation_id.to_string(),
                     session_id: reply_session_id.clone(),
                     author_id: reply_author_id.clone(),
                     body: String::new(),
                     attachments: None,
                     cards: Some(vec![card]),
+                    thread: None,
                     run_id: None,
                     status: Some("done".to_string()),
                     created_at: monotonic_id(),
@@ -5150,6 +5323,29 @@ pub enum AgentError {
     Io(std::io::Error),
     #[error("agent workspace json error: {0}")]
     Json(serde_json::Error),
+}
+
+fn message_page_path(base: &str, query: Option<&MessagePageQuery>) -> String {
+    let Some(query) = query else {
+        return base.to_string();
+    };
+    let mut params = Vec::new();
+    if let Some(before) = query.before {
+        params.push(format!("before={before}"));
+    }
+    if let Some(around_message_id) = query.around_message_id.as_deref() {
+        if !around_message_id.trim().is_empty() {
+            params.push(format!("aroundMessageId={around_message_id}"));
+        }
+    }
+    if let Some(limit) = query.limit {
+        params.push(format!("limit={limit}"));
+    }
+    if params.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base}?{}", params.join("&"))
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

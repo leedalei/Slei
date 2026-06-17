@@ -24,6 +24,7 @@ export type SleiChannelMemberReadiness = "joining" | "memory_syncing" | "ready" 
 
 export type SleiMessage = {
   id: string;
+  sequence?: number;
   author: string;
   handle?: string;
   avatar?: string;
@@ -38,8 +39,19 @@ export type SleiMessage = {
   status?: "running" | "approval" | "done" | "failed" | "pending" | "undecided";
   sourceMessageId?: string;
   task?: SleiTask;
+  thread?: SleiMessageThread;
   taskCard?: { taskId: string; sourceMessageId?: string };
   toolCall?: string;
+};
+
+export type SleiMessageThread = {
+  id: string;
+  sourceMessageId: string;
+  sourceKind: string;
+  sourceId: string;
+  replyCount: number;
+  updatedAt?: string;
+  replies?: SleiTaskReply[];
 };
 
 export type SleiTaskStatus = "pending_assignment" | "in_progress" | "in_review" | "done";
@@ -55,6 +67,7 @@ export type SleiTask = {
   attentionRequired?: boolean;
   channelId?: string;
   sourceMessageId?: string;
+  threadId?: string;
   replyCount?: number;
   updatedAt?: string;
   replies?: SleiTaskReply[];

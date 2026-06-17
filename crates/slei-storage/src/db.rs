@@ -73,6 +73,9 @@ impl SleiDb {
         if version >= 5 {
             self.repair_agent_activity_event_columns().await?;
         }
+        if version >= 7 {
+            self.repair_message_thread_columns().await?;
+        }
         Ok(())
     }
 
@@ -186,6 +189,17 @@ impl SleiDb {
             )
             .execute(&self.pool)
             .await?;
+        }
+        Ok(())
+    }
+
+    async fn repair_message_thread_columns(&self) -> Result<(), sqlx::Error> {
+        self.add_column_if_missing("tasks", "thread_id", "TEXT")
+            .await?;
+        if self.table_exists("tasks").await? && self.column_exists("tasks", "thread_id").await? {
+            sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_thread_id ON tasks(thread_id)")
+                .execute(&self.pool)
+                .await?;
         }
         Ok(())
     }

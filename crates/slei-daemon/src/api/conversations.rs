@@ -10,6 +10,9 @@ use crate::services::conversation_service::ConversationError;
 use crate::services::reset_service::ResetRuntimeError;
 use crate::state::AppState;
 
+const INITIAL_MESSAGE_LIMIT: i64 = 50;
+const BEFORE_MESSAGE_LIMIT: i64 = 30;
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDmRequest {
@@ -38,6 +41,9 @@ pub struct UploadAttachmentRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ListMessagesQuery {
     session_id: Option<String>,
+    before: Option<i64>,
+    around_message_id: Option<String>,
+    limit: Option<i64>,
 }
 
 pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -111,21 +117,41 @@ pub async fn messages(
         Err(response) => return response,
     };
 
-    match state.conversations().list_messages(&id).await {
+    let limit = message_page_limit(
+        query.before,
+        query.around_message_id.as_deref(),
+        query.limit,
+    );
+    match state
+        .conversations()
+        .list_messages_page(&id, query.before, query.around_message_id.as_deref(), limit)
+        .await
+    {
         Ok(messages) => {
-            let messages = match query
-                .session_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                Some(session_id) => messages
-                    .into_iter()
-                    .filter(|message| message.session_id.as_deref() == Some(session_id))
-                    .collect::<Vec<_>>(),
-                None => messages,
-            };
-            Json(json!({ "messages": messages })).into_response()
+            let mut rendered = Vec::with_capacity(messages.len());
+            for message in messages {
+                if let Some(session_id) = query
+                    .session_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    if message.session_id.as_deref() != Some(session_id) {
+                        continue;
+                    }
+                }
+                let mut value = serde_json::to_value(&message).unwrap_or_else(|_| json!({}));
+                if let Some(thread) = state
+                    .message_threads()
+                    .thread_summary_for_source_message(&message.id)
+                    .await
+                {
+                    value["thread"] = serde_json::to_value(thread).unwrap_or_else(|_| json!(null));
+                }
+                rendered.push(value);
+            }
+            let page_info = conversation_page_info(&rendered);
+            Json(json!({ "messages": rendered, "pageInfo": page_info })).into_response()
         }
         Err(error) => conversation_error_response(error),
     }
@@ -289,6 +315,37 @@ pub async fn reset_runtime_session(
         Ok(conversation) => Json(json!({ "conversation": conversation })).into_response(),
         Err(error) => agent_dm_error_response(error),
     }
+}
+
+fn message_page_limit(
+    before: Option<i64>,
+    around_message_id: Option<&str>,
+    limit: Option<i64>,
+) -> i64 {
+    let default = if around_message_id.is_some() {
+        INITIAL_MESSAGE_LIMIT
+    } else if before.is_some() {
+        BEFORE_MESSAGE_LIMIT
+    } else {
+        INITIAL_MESSAGE_LIMIT
+    };
+    limit.unwrap_or(default).clamp(1, 200)
+}
+
+fn conversation_page_info(messages: &[serde_json::Value]) -> serde_json::Value {
+    let oldest_cursor = messages
+        .iter()
+        .filter_map(|message| message["sequence"].as_i64())
+        .min();
+    let newest_cursor = messages
+        .iter()
+        .filter_map(|message| message["sequence"].as_i64())
+        .max();
+    json!({
+        "hasMoreBefore": oldest_cursor.is_some_and(|cursor| cursor > 1),
+        "oldestCursor": oldest_cursor,
+        "newestCursor": newest_cursor,
+    })
 }
 
 fn agent_dm_error_response(error: AgentDmError) -> Response {

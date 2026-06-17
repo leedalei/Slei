@@ -954,7 +954,7 @@ describe("createChannelAgentReplyMessage", () => {
     ];
 
     const replies = await waitForChannelAgentReplies(
-      { listConversationMessages: async () => ({ messages }) },
+      { listConversationMessages: async () => ({ messages, pageInfo: { hasMoreBefore: false } }) },
       "dm:agent_guide_local_node",
       "agent_guide_local_node",
       new Set(["old_message"]),

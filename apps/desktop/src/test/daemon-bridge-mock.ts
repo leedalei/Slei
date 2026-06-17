@@ -19,6 +19,8 @@ import type {
   DesktopAgentView,
   DesktopNodeView,
   InteractiveCardView,
+  MessageThreadReplyView,
+  MessageThreadSummaryView,
   SavedMessageView,
   SkillView,
   TaskSummaryView,
@@ -110,6 +112,8 @@ export function createDaemonBridgeMock(input: {
   let attachments: ConversationAttachmentView[] = [];
   let savedMessages: SavedMessageView[] = [];
   let cards: InteractiveCardView[] = [];
+  const messageThreads = new Map<string, MessageThreadSummaryView>();
+  const messageThreadReplies = new Map<string, MessageThreadReplyView[]>();
   let preferences = defaultUserPreferences();
   let profile: UserProfileView | null = input.profile ?? null;
   const eventSubscriptions: Array<{ after: number }> = [];
@@ -271,8 +275,11 @@ export function createDaemonBridgeMock(input: {
       channelMembers = channelMembers.filter((member) => member.channelId !== channelId || member.agentId !== agentId);
       return { removedMember };
     },
-    async listChannelMessages(channelId, sessionId) {
-      return { messages: channelMessages.filter((message) => message.channelId === channelId && (!sessionId || message.sessionId === sessionId) && !message.deleted) };
+    async listChannelMessages(channelId) {
+      return {
+        messages: channelMessages.filter((message) => message.channelId === channelId && !message.deleted),
+        pageInfo: { hasMoreBefore: false },
+      };
     },
     async listChannelSessions(channelId) {
       return { sessions: channelSessions.filter((session) => session.channelId === channelId) };
@@ -621,7 +628,55 @@ export function createDaemonBridgeMock(input: {
       return { conversation, session };
     },
     async listConversationMessages(conversationId) {
-      return { messages: messages.filter((message) => message.conversationId === conversationId) };
+      return {
+        messages: messages.filter((message) => message.conversationId === conversationId),
+        pageInfo: { hasMoreBefore: false },
+      };
+    },
+    async createMessageThreadFromSource(request) {
+      const existing = [...messageThreads.values()].find((thread) => thread.sourceMessageId === request.sourceMessageId);
+      if (existing) return { thread: existing };
+      const sourceChannelMessage = channelMessages.find((message) => message.id === request.sourceMessageId);
+      const sourceConversationMessage = messages.find((message) => message.id === request.sourceMessageId);
+      const now = new Date().toISOString();
+      const thread: MessageThreadSummaryView = {
+        id: `thread-${request.sourceMessageId}`,
+        sourceMessageId: request.sourceMessageId,
+        sourceKind: sourceConversationMessage ? "dm" : "channel",
+        sourceId: sourceConversationMessage?.conversationId ?? sourceChannelMessage?.channelId ?? "all",
+        replyCount: 0,
+        updatedAt: now,
+      };
+      messageThreads.set(thread.id, thread);
+      messageThreadReplies.set(thread.id, []);
+      channelMessages = channelMessages.map((message) => message.id === request.sourceMessageId ? { ...message, thread } : message);
+      messages = messages.map((message) => message.id === request.sourceMessageId ? { ...message, thread } : message);
+      return { thread };
+    },
+    async getMessageThread(threadId) {
+      const thread = messageThreads.get(threadId);
+      if (!thread) throw new Error("message thread not found");
+      return { thread, replies: messageThreadReplies.get(threadId) ?? [] };
+    },
+    async replyToMessageThread(threadId, request) {
+      const thread = messageThreads.get(threadId);
+      if (!thread) throw new Error("message thread not found");
+      const replies = messageThreadReplies.get(threadId) ?? [];
+      const reply: MessageThreadReplyView = {
+        id: `reply-${threadId}-${replies.length + 1}`,
+        threadId,
+        senderId: request.senderId,
+        role: request.role ?? "human",
+        body: request.body,
+        createdAt: new Date().toISOString(),
+      };
+      const nextReplies = [...replies, reply];
+      const nextThread = { ...thread, replyCount: nextReplies.length, updatedAt: reply.createdAt };
+      messageThreads.set(threadId, nextThread);
+      messageThreadReplies.set(threadId, nextReplies);
+      channelMessages = channelMessages.map((message) => message.id === nextThread.sourceMessageId ? { ...message, thread: nextThread } : message);
+      messages = messages.map((message) => message.id === nextThread.sourceMessageId ? { ...message, thread: nextThread } : message);
+      return { reply };
     },
     async sendConversationMessage(conversationId, request) {
       const conversation = conversations.find((candidate) => candidate.id === conversationId);

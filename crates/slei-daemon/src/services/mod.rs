@@ -19,6 +19,7 @@ pub mod member_service;
 pub mod memory_event_service;
 pub mod memory_maintainer_service;
 pub mod message_service;
+pub mod message_thread_service;
 pub mod node_service;
 pub mod notification_service;
 pub mod orchestration_store;

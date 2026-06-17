@@ -17,6 +17,9 @@ import {
   type DiagnosticEventView,
   type DesktopAgentView,
   type DesktopNodeView,
+  type MessageThreadReceipt,
+  type MessageThreadReplyView,
+  type MessageThreadSummaryView,
   type NotificationPreferences,
   type PermissionDecision,
   type SaveMessageRequest,
@@ -60,6 +63,7 @@ import {
   formatMemberCreatedDate,
   isInternalCoordinatorMember,
   localHumanPresentation,
+  mergeMessagePage,
   normalizeAppearance,
   parseTaskCardBody,
   renameComputerNode,
@@ -115,6 +119,7 @@ export function conversationMessageToSleiMessage(message: ConversationMessageVie
   const humanProfile = localHumanPresentation(profile, messages);
   return {
     id: message.id,
+    sequence: message.sequence,
     author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
     handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
@@ -127,6 +132,7 @@ export function conversationMessageToSleiMessage(message: ConversationMessageVie
     cards: message.cards,
     channelId: message.conversationId,
     status: conversationMessageStatus(message.status),
+    thread: message.thread ? messageThreadSummaryToSleiThread(message.thread) : undefined,
   };
 }
 
@@ -157,6 +163,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     if (!taskCard) return null;
     return {
       id: message.id,
+      sequence: message.sequence,
       author: messages.common.system,
       role: "system",
       time,
@@ -172,6 +179,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
   const humanProfile = localHumanPresentation(profile, messages);
   return {
     id: message.id,
+    sequence: message.sequence,
     author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
     handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
@@ -184,6 +192,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     sessionId: message.sessionId,
     status: message.kind === "agent" ? "done" : undefined,
     task: message.task ? taskSummaryToSleiTask(message.task, members) : undefined,
+    thread: message.thread ? messageThreadSummaryToSleiThread(message.thread) : undefined,
   };
 }
 
@@ -378,7 +387,20 @@ function taskSummaryToSleiTask(task: TaskSummaryView, members: SleiMember[]): Sl
     channelId: task.channelId,
     sourceMessageId: task.sourceMessageId,
     replyCount: task.replyCount,
+    threadId: task.threadId,
     updatedAt: task.updatedAt,
+  };
+}
+
+function messageThreadSummaryToSleiThread(thread: MessageThreadSummaryView, replies?: SleiTaskReply[]) {
+  return {
+    id: thread.id,
+    sourceMessageId: thread.sourceMessageId,
+    sourceKind: thread.sourceKind,
+    sourceId: thread.sourceId,
+    replyCount: thread.replyCount,
+    updatedAt: thread.updatedAt,
+    replies,
   };
 }
 
@@ -413,6 +435,19 @@ function taskThreadMessageToReply(message: TaskThreadMessageView, members: SleiM
   return {
     id: message.id,
     sender,
+    role,
+    body: message.body,
+  };
+}
+
+function messageThreadReplyToReply(message: MessageThreadReplyView, members: SleiMember[], profile: UserProfile | null, messages: DesktopMessages): SleiTaskReply {
+  const member = members.find((candidate) => candidate.id === message.senderId);
+  const role = message.role === "system" || message.role === "agent" || message.role === "human" ? message.role : "human";
+  const humanProfile = localHumanPresentation(profile, messages);
+  const isLocalHuman = message.senderId === "human:local" || message.senderId === `human:${humanProfile.handle.replace(/^@/, "")}`;
+  return {
+    id: message.id,
+    sender: member?.name ?? (role === "system" ? messages.common.system : isLocalHuman ? humanProfile.displayName : message.senderId),
     role,
     body: message.body,
   };
@@ -722,7 +757,7 @@ async function loadSleiChannelMessages(
   messages: DesktopMessages,
 ) {
   const receipts = await Promise.all(
-    channels.map((channel) => bridge.listChannelMessages(channel.id, channel.activeSessionId).catch(() => ({ messages: [] }))),
+    channels.map((channel) => bridge.listChannelMessages(channel.id).catch(() => ({ messages: [], pageInfo: { hasMoreBefore: false } }))),
   );
   return receipts.flatMap((receipt) =>
     receipt.messages
@@ -777,6 +812,8 @@ export function SleiApp() {
   const pendingProfileFieldRef = useRef<typeof pendingProfileField>(undefined);
   const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastDiagnosticToastSequenceRef = useRef(0);
+  const olderMessagesLoadingRef = useRef(false);
+  const exhaustedOlderMessageTargetsRef = useRef(new Set<string>());
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
 
@@ -790,9 +827,8 @@ export function SleiApp() {
     );
   }
 
-  async function refreshChannelMessagesIntoState(channelId: string, members: SleiMember[] = data.members, sessionIdOverride?: string) {
-    const sessionId = sessionIdOverride ?? data.channels.find((channel) => channel.id === channelId)?.activeSessionId;
-    const receipt = await bridge.listChannelMessages(channelId, sessionId);
+  async function refreshChannelMessagesIntoState(channelId: string, members: SleiMember[] = data.members, _sessionIdOverride?: string) {
+    const receipt = await bridge.listChannelMessages(channelId);
     const channelMessages = receipt.messages
       .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
@@ -861,6 +897,46 @@ export function SleiApp() {
             taskThreadMessageToReply(reply, current.members, profile, messages),
           ];
           return { ...task, replies, replyCount: Math.max(task.replyCount ?? 0, replies.length) };
+        }),
+      }),
+    );
+  }
+
+  function applyMessageThreadReceiptToState(receipt: MessageThreadReceipt) {
+    setData((current) => {
+      const replies = (receipt.replies ?? []).map((reply) => messageThreadReplyToReply(reply, current.members, profile, messages));
+      const nextThread = messageThreadSummaryToSleiThread(receipt.thread, replies);
+      return createEmptySleiData({
+        ...current,
+        messages: current.messages.map((message) =>
+          message.id === receipt.thread.sourceMessageId
+            ? { ...message, thread: nextThread }
+            : message,
+        ),
+      });
+    });
+  }
+
+  function appendMessageThreadReplyToState(threadId: string, reply: MessageThreadReplyView) {
+    setData((current) =>
+      createEmptySleiData({
+        ...current,
+        messages: current.messages.map((message) => {
+          if (message.thread?.id !== threadId) return message;
+          const existingReplies = message.thread.replies ?? [];
+          if (existingReplies.some((candidate) => candidate.id === reply.id)) return message;
+          const replies = [
+            ...existingReplies,
+            messageThreadReplyToReply(reply, current.members, profile, messages),
+          ];
+          return {
+            ...message,
+            thread: {
+              ...message.thread,
+              replyCount: Math.max(message.thread.replyCount, replies.length),
+              replies,
+            },
+          };
         }),
       }),
     );
@@ -1148,8 +1224,7 @@ export function SleiApp() {
     if (activeConversationId || !activeChannelId) return;
     if (!shouldRefreshChannelMessages(data.messages, activeChannelId)) return;
     const refreshChannel = async () => {
-      const activeSessionId = data.channels.find((channel) => channel.id === activeChannelId)?.activeSessionId;
-      const receipt = await bridge.listChannelMessages(activeChannelId, activeSessionId);
+      const receipt = await bridge.listChannelMessages(activeChannelId);
       const channelMessages = receipt.messages
         .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
         .filter((message): message is SleiMessage => Boolean(message));
@@ -1477,7 +1552,7 @@ export function SleiApp() {
 
   async function handleChannelSessionSelect(channelId: string, sessionId: string) {
     const receipt = await bridge.activateChannelSession(channelId, sessionId);
-    const messagesReceipt = await bridge.listChannelMessages(channelId, sessionId);
+    const messagesReceipt = await bridge.listChannelMessages(channelId);
     const channelMessages = messagesReceipt.messages
       .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
@@ -1656,6 +1731,64 @@ export function SleiApp() {
         taskId,
         handoffAgentIds: receipt.route.handoffAgentIds,
       });
+    }
+  }
+
+  async function handleMessageThreadOpen(message: SleiMessage) {
+    const created = await bridge.createMessageThreadFromSource({
+      sourceMessageId: message.id,
+      createdBy: "human:local",
+    });
+    const receipt = await bridge.getMessageThread(created.thread.id);
+    applyMessageThreadReceiptToState(receipt);
+  }
+
+  async function handleMessageThreadReply(threadId: string, body: string) {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    const receipt = await bridge.replyToMessageThread(threadId, {
+      senderId: "human:local",
+      role: "human",
+      body: trimmed,
+    });
+    appendMessageThreadReplyToState(threadId, receipt.reply);
+  }
+
+  async function handleLoadOlderMessages() {
+    const targetId = activeConversationId ?? activeChannelId;
+    if (!targetId || olderMessagesLoadingRef.current || exhaustedOlderMessageTargetsRef.current.has(targetId)) return;
+    const targetMessages = data.messages
+      .filter((message) => message.channelId === targetId && typeof message.sequence === "number")
+      .sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0));
+    const oldestSequence = targetMessages[0]?.sequence;
+    if (oldestSequence === undefined) return;
+    olderMessagesLoadingRef.current = true;
+    try {
+      let hasMoreBefore = false;
+      let olderMessages: SleiMessage[] = [];
+      if (activeConversationId) {
+        const receipt = await bridge.listConversationMessages(activeConversationId, { before: oldestSequence, limit: 30 });
+        hasMoreBefore = receipt.pageInfo.hasMoreBefore;
+        olderMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
+      } else {
+        const receipt = await bridge.listChannelMessages(activeChannelId, { before: oldestSequence, limit: 30 });
+        hasMoreBefore = receipt.pageInfo.hasMoreBefore;
+        olderMessages = receipt.messages
+          .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
+          .filter((message): message is SleiMessage => Boolean(message));
+      }
+      if (!hasMoreBefore) {
+        exhaustedOlderMessageTargetsRef.current.add(targetId);
+      }
+      if (olderMessages.length === 0) return;
+      setData((current) =>
+        createEmptySleiData({
+          ...current,
+          messages: mergeMessagePage(current.messages, olderMessages, "prepend", [targetId]),
+        }),
+      );
+    } finally {
+      olderMessagesLoadingRef.current = false;
     }
   }
 
@@ -1967,6 +2100,9 @@ export function SleiApp() {
       onSearchToggle={() => navigateToView("search")}
       onSavedMessageSelect={handleSavedMessageSelect}
       onMessageSaveToggle={handleMessageSaveToggle}
+      onMessageThreadOpen={handleMessageThreadOpen}
+      onMessageThreadReply={handleMessageThreadReply}
+      onOlderMessagesLoad={handleLoadOlderMessages}
       onSendMessage={handleSendMessage}
       onMessageSendFailure={showAppToast}
       onAttachmentUpload={handleUploadConversationAttachment}

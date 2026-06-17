@@ -1,7 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SleiMember } from "./types";
-import { formatLocalRecordDateTime, formatMessageDateTime, formatMessageTime, isInternalCoordinatorMember, localeFromSystemLanguages, mentionSuggestions, shouldRefreshChannelMessages, timeZoneFromSystemValue } from "./model";
+import {
+  formatLocalRecordDateTime,
+  formatMessageDateTime,
+  formatMessageTime,
+  isInternalCoordinatorMember,
+  localeFromSystemLanguages,
+  mentionSuggestions,
+  mergeMessagePage,
+  sendChatComposerMessage,
+  shouldRefreshChannelMessages,
+  timeZoneFromSystemValue,
+} from "./model";
+import type { SleiMessage } from "./types";
 
 function agent(overrides: Partial<SleiMember> = {}): SleiMember {
   return {
@@ -124,5 +136,58 @@ describe("message timestamp formatting", () => {
     expect(formatMessageTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("14:57");
     expect(formatMessageDateTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("06-17 14:57");
     expect(formatLocalRecordDateTime("2026-06-17 06:57:00", "Asia/Shanghai")).toBe("2026-06-17 14:57:00");
+  });
+});
+
+describe("message page merging", () => {
+  function message(id: string, channelId = "all"): SleiMessage {
+    return {
+      id,
+      author: "Lei",
+      role: "human",
+      time: "",
+      body: id,
+      channelId,
+    };
+  }
+
+  it("merges older message pages before existing messages without duplicates", () => {
+    expect(mergeMessagePage([message("m3"), message("m4")], [message("m1"), message("m2"), message("m3")], "prepend", ["all"]).map((item) => item.id)).toEqual([
+      "m1",
+      "m2",
+      "m3",
+      "m4",
+    ]);
+  });
+
+  it("replaces around-message windows for the target source", () => {
+    expect(mergeMessagePage([message("m1"), message("dm1", "dm:agent")], [message("m10"), message("m11")], "replace", ["all"]).map((item) => item.id)).toEqual([
+      "dm1",
+      "m10",
+      "m11",
+    ]);
+  });
+});
+
+describe("chat composer bridge requests", () => {
+  it("forwards asTask for direct messages", async () => {
+    const bridge = {
+      sendConversationMessage: vi.fn().mockResolvedValue({ message: { id: "msg_1" } }),
+      sendChannelMessage: vi.fn(),
+    };
+
+    await sendChatComposerMessage({
+      activeChannelId: "all",
+      activeConversationId: "dm:agent",
+      asTask: true,
+      body: "turn this into task",
+      bridge,
+      profile: null,
+    });
+
+    expect(bridge.sendConversationMessage).toHaveBeenCalledWith(
+      "dm:agent",
+      expect.objectContaining({ asTask: true }),
+    );
   });
 });

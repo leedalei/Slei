@@ -14,9 +14,13 @@ use crate::services::channel_service::ChannelError;
 use crate::services::claim_service::ClaimError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord};
+use crate::services::message_thread_service::{MessageThreadError, MessageThreadSummaryView};
 use crate::services::task_service::TaskError;
 use crate::services::task_service::TaskSummaryView;
 use crate::state::AppState;
+
+const INITIAL_MESSAGE_LIMIT: i64 = 50;
+const BEFORE_MESSAGE_LIMIT: i64 = 30;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +67,8 @@ struct SendAgentMessageResponse {
 #[serde(rename_all = "camelCase")]
 struct ChannelMessageView {
     id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sequence: Option<i64>,
     channel_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     session_id: Option<String>,
@@ -77,13 +83,20 @@ struct ChannelMessageView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     cards: Vec<InteractiveCardView>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    thread: Option<MessageThreadSummaryView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     task: Option<TaskSummaryView>,
 }
 
 impl ChannelMessageView {
-    fn from_record(record: MessageRecord, task: Option<TaskSummaryView>) -> Self {
+    fn from_record(
+        record: MessageRecord,
+        thread: Option<MessageThreadSummaryView>,
+        task: Option<TaskSummaryView>,
+    ) -> Self {
         Self {
             id: record.id,
+            sequence: record.sequence,
             channel_id: record.channel_id,
             session_id: record.session_id,
             author_id: record.author_id,
@@ -94,6 +107,7 @@ impl ChannelMessageView {
             edited: record.edited,
             created_at: record.created_at,
             cards: record.cards,
+            thread,
             task,
         }
     }
@@ -102,7 +116,19 @@ impl ChannelMessageView {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessagesQuery {
-    session_id: Option<String>,
+    before: Option<i64>,
+    around_message_id: Option<String>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PageInfo {
+    has_more_before: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    oldest_cursor: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    newest_cursor: Option<i64>,
 }
 
 pub async fn list_channel_messages(
@@ -115,29 +141,35 @@ pub async fn list_channel_messages(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let session_id = match query
-        .session_id
-        .as_deref()
-        .filter(|session_id| !session_id.trim().is_empty())
-    {
-        Some(session_id) => session_id.to_string(),
-        None => match state.channels().active_session(&channel_id).await {
-            Ok(session) => session.id,
-            Err(error) => return channel_message_error_response(error.into()),
-        },
-    };
+    let limit = message_page_limit(
+        query.before,
+        query.around_message_id.as_deref(),
+        query.limit,
+    );
 
     let mut messages = Vec::new();
-    for mut message in state
+    for mut message in match state
         .messages()
-        .channel_messages_for_session(&channel_id, &session_id)
+        .channel_messages_page(
+            &channel_id,
+            query.before,
+            query.around_message_id.as_deref(),
+            Some(limit),
+        )
         .await
     {
+        Ok(messages) => messages,
+        Err(error) => return message_error_response(error),
+    } {
         message.cards = state
             .cards()
             .cards_for_message(&message.id)
             .await
             .unwrap_or_default();
+        let thread = state
+            .message_threads()
+            .thread_summary_for_source_message(&message.id)
+            .await;
         let task = if message.kind == MessageKind::Human {
             state
                 .tasks()
@@ -146,9 +178,10 @@ pub async fn list_channel_messages(
         } else {
             None
         };
-        messages.push(ChannelMessageView::from_record(message, task));
+        messages.push(ChannelMessageView::from_record(message, thread, task));
     }
-    Json(json!({ "messages": messages })).into_response()
+    let page_info = channel_page_info(&state, &channel_id, &messages).await;
+    Json(json!({ "messages": messages, "pageInfo": page_info })).into_response()
 }
 
 pub async fn read_messages(
@@ -256,7 +289,7 @@ pub async fn send_agent_message(
             let message_id = message.id.clone();
             Json(SendAgentMessageResponse {
                 message_id,
-                message: ChannelMessageView::from_record(message, None),
+                message: ChannelMessageView::from_record(message, None, None),
             })
             .into_response()
         }
@@ -343,6 +376,45 @@ pub async fn send_channel_message(
     }
 }
 
+fn message_page_limit(
+    before: Option<i64>,
+    around_message_id: Option<&str>,
+    limit: Option<i64>,
+) -> i64 {
+    let default = if around_message_id.is_some() {
+        INITIAL_MESSAGE_LIMIT
+    } else if before.is_some() {
+        BEFORE_MESSAGE_LIMIT
+    } else {
+        INITIAL_MESSAGE_LIMIT
+    };
+    limit.unwrap_or(default).clamp(1, 200)
+}
+
+async fn channel_page_info(
+    state: &AppState,
+    channel_id: &str,
+    messages: &[ChannelMessageView],
+) -> PageInfo {
+    let oldest_cursor = messages.iter().filter_map(|message| message.sequence).min();
+    let newest_cursor = messages.iter().filter_map(|message| message.sequence).max();
+    let has_more_before = match oldest_cursor {
+        Some(cursor) => state
+            .messages()
+            .channel_messages_page(channel_id, Some(cursor), None, Some(1))
+            .await
+            .map(|messages| !messages.is_empty())
+            .unwrap_or(false),
+        None => false,
+    };
+
+    PageInfo {
+        has_more_before,
+        oldest_cursor,
+        newest_cursor,
+    }
+}
+
 fn message_error_response(error: MessageError) -> Response {
     let status = match error {
         MessageError::MessageNotFound => StatusCode::NOT_FOUND,
@@ -360,7 +432,11 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
         | ChannelOrchestratorError::Member(MemberError::AgentNotFound)
         | ChannelOrchestratorError::Message(MessageError::MessageNotFound)
-        | ChannelOrchestratorError::Task(TaskError::TaskNotFound) => StatusCode::NOT_FOUND,
+        | ChannelOrchestratorError::Task(TaskError::TaskNotFound)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::ThreadNotFound)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::SourceMessageNotFound) => {
+            StatusCode::NOT_FOUND
+        }
         ChannelOrchestratorError::Message(MessageError::InvalidMessage)
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
@@ -377,6 +453,9 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::InvalidThreadInput)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::NestedThreadNotAllowed)
         | ChannelOrchestratorError::Claim(ClaimError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Claim(ClaimError::InvalidInput(_))
         | ChannelOrchestratorError::InvalidWorkerEvent(_)
@@ -389,6 +468,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Message(MessageError::Storage(_))
         | ChannelOrchestratorError::Task(TaskError::Storage(_))
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::Storage(_))
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))

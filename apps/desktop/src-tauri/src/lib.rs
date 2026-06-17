@@ -27,6 +27,9 @@ pub fn run() {
             commands::get_task_thread_command,
             commands::reply_to_task_command,
             commands::update_task_status_command,
+            commands::create_message_thread_from_source_command,
+            commands::get_message_thread_command,
+            commands::reply_to_message_thread_command,
             commands::complete_interactive_card_command,
             commands::list_preferences_command,
             commands::list_profile_command,
@@ -1959,7 +1962,7 @@ mod tests {
         .unwrap();
         let conversations = list_conversations(&broker);
         assert_eq!(conversations.conversations.len(), 1);
-        let messages = list_conversation_messages(&broker, &dm.id);
+        let messages = list_conversation_messages(&broker, &dm.id, None);
         assert_eq!(messages.messages[0].body, "你好 Coda");
         let serialized = serde_json::to_string(&messages).unwrap();
         assert!(!serialized.contains("secret-token"));
@@ -2036,7 +2039,7 @@ mod tests {
             },
         )
         .unwrap();
-        let messages = list_conversation_messages(&broker, &dm.id);
+        let messages = list_conversation_messages(&broker, &dm.id, None);
         assert_eq!(
             messages.messages[0].session_id.as_deref(),
             Some(sessions[0].id.as_str())
@@ -2110,7 +2113,7 @@ mod tests {
         )
         .unwrap();
 
-        let messages = list_conversation_messages(&broker, &dm.id);
+        let messages = list_conversation_messages(&broker, &dm.id, None);
         assert_eq!(messages.messages.len(), 2);
         assert_eq!(messages.messages[1].author_id, agent.id);
         assert_eq!(messages.messages[1].status.as_deref(), Some("running"));
@@ -2181,7 +2184,7 @@ mod tests {
 
         let mut saw_streaming_chunk = false;
         for _ in 0..20 {
-            let messages = list_conversation_messages(&broker, &dm.id).messages;
+            let messages = list_conversation_messages(&broker, &dm.id, None).messages;
             if messages.iter().any(|message| {
                 message.author_id == agent.id
                     && message.status.as_deref() == Some("running")
@@ -2199,7 +2202,7 @@ mod tests {
 
         let mut completed = false;
         for _ in 0..40 {
-            let messages = list_conversation_messages(&broker, &dm.id).messages;
+            let messages = list_conversation_messages(&broker, &dm.id, None).messages;
             if messages.iter().any(|message| {
                 message.author_id == agent.id
                     && message.status.as_deref() == Some("done")
@@ -2375,7 +2378,7 @@ mod tests {
         )
         .unwrap();
 
-        let messages = list_conversation_messages(&broker, &dm.id);
+        let messages = list_conversation_messages(&broker, &dm.id, None);
         assert!(messages.messages.iter().any(|message| {
             message.author_id == "agent_guide_local_node"
                 && message.run_id.is_some()
@@ -2420,7 +2423,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut messages = list_conversation_messages(&broker, &dm.id).messages;
+        let mut messages = list_conversation_messages(&broker, &dm.id, None).messages;
         for _ in 0..10 {
             if messages.iter().any(|message| {
                 message.author_id == "agent_guide_local_node"
@@ -2432,7 +2435,7 @@ mod tests {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
-            messages = list_conversation_messages(&broker, &dm.id).messages;
+            messages = list_conversation_messages(&broker, &dm.id, None).messages;
         }
 
         let card_message = messages
@@ -2456,7 +2459,7 @@ mod tests {
 
         let completed = complete_interactive_card(&broker, &card.id).unwrap();
         assert_eq!(completed.card.state, "done");
-        let reloaded_messages = list_conversation_messages(&broker, &dm.id).messages;
+        let reloaded_messages = list_conversation_messages(&broker, &dm.id, None).messages;
         let reloaded_card = reloaded_messages
             .iter()
             .find_map(|message| {

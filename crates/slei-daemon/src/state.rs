@@ -15,6 +15,7 @@ use crate::services::member_service::MemberService;
 use crate::services::memory_event_service::MemoryEventService;
 use crate::services::memory_maintainer_service::{MemoryMaintainerError, MemoryMaintainerService};
 use crate::services::message_service::MessageService;
+use crate::services::message_thread_service::MessageThreadService;
 use crate::services::node_service::NodeService;
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetRuntimeState, ResetService};
@@ -48,6 +49,7 @@ pub struct AppState {
     memory_maintainer_service: MemoryMaintainerService,
     channel_join_report_service: ChannelJoinReportService,
     message_service: MessageService,
+    message_thread_service: MessageThreadService,
     channel_orchestrator_service: ChannelOrchestratorService,
     reset_service: ResetService,
     reset_runtime: ResetRuntimeState,
@@ -167,6 +169,11 @@ impl AppState {
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let task_service = TaskService::new(repos.clone());
+        let message_thread_service = MessageThreadService::new(
+            repos.clone(),
+            message_service.clone(),
+            conversation_service.clone(),
+        );
         let claims = ClaimService::new(repos.clone());
         let memory_maintainer_service = MemoryMaintainerService::new(
             member_service.clone(),
@@ -181,6 +188,7 @@ impl AppState {
             coordinator_service.clone(),
             card_service.clone(),
             task_service.clone(),
+            message_thread_service.clone(),
             claims.clone(),
             agent_inbox_service.clone(),
             orchestration_store.clone(),
@@ -229,6 +237,7 @@ impl AppState {
             memory_maintainer_service,
             channel_join_report_service,
             message_service,
+            message_thread_service,
             channel_orchestrator_service,
             reset_service,
             reset_runtime,
@@ -304,6 +313,10 @@ impl AppState {
 
     pub fn messages(&self) -> &MessageService {
         &self.message_service
+    }
+
+    pub fn message_threads(&self) -> &MessageThreadService {
+        &self.message_thread_service
     }
 
     pub fn channel_orchestrator(&self) -> &ChannelOrchestratorService {

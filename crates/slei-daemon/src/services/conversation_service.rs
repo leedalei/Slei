@@ -68,6 +68,8 @@ pub struct RuntimeSessionRecord {
 #[serde(rename_all = "camelCase")]
 pub struct ConversationMessageRecord {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<i64>,
     pub conversation_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -208,6 +210,65 @@ impl ConversationService {
             .get(conversation_id)
             .cloned()
             .unwrap_or_default())
+    }
+
+    pub async fn list_messages_page(
+        &self,
+        conversation_id: &str,
+        before_sequence: Option<i64>,
+        around_message_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<ConversationMessageRecord>, ConversationError> {
+        let all = self.list_messages(conversation_id).await?;
+        let limit = limit.clamp(1, 200) as usize;
+        let mut indexed = all
+            .into_iter()
+            .enumerate()
+            .map(|(index, mut message)| {
+                message.sequence = Some(index as i64 + 1);
+                message
+            })
+            .collect::<Vec<_>>();
+
+        if let Some(around_message_id) =
+            around_message_id.map(str::trim).filter(|id| !id.is_empty())
+        {
+            let Some(center) = indexed
+                .iter()
+                .position(|message| message.id == around_message_id)
+            else {
+                return Ok(Vec::new());
+            };
+            let before = limit / 2;
+            let start = center.saturating_sub(before);
+            let end = (start + limit).min(indexed.len());
+            return Ok(indexed.drain(start..end).collect());
+        }
+
+        if let Some(before_sequence) = before_sequence {
+            indexed.retain(|message| message.sequence.unwrap_or_default() < before_sequence);
+            let start = indexed.len().saturating_sub(limit);
+            return Ok(indexed.drain(start..).collect());
+        }
+
+        let start = indexed.len().saturating_sub(limit);
+        Ok(indexed.drain(start..).collect())
+    }
+
+    pub async fn message(
+        &self,
+        message_id: &str,
+    ) -> Result<ConversationMessageRecord, ConversationError> {
+        self.ensure_loaded().await?;
+        self.inner
+            .lock()
+            .await
+            .messages
+            .values()
+            .flat_map(|messages| messages.iter())
+            .find(|message| message.id == message_id)
+            .cloned()
+            .ok_or(ConversationError::ConversationNotFound)
     }
 
     pub async fn get_conversation(
@@ -525,6 +586,7 @@ impl ConversationService {
             id: idempotency_key
                 .map(|key| message_id_for_idempotency_key(&state, conversation_id, key))
                 .unwrap_or_else(|| format!("msg_{}", Uuid::new_v4().simple())),
+            sequence: None,
             conversation_id: conversation_id.to_string(),
             session_id: resolved_session_id.clone(),
             author_id: author_id.trim().to_string(),
@@ -606,6 +668,7 @@ impl ConversationService {
         } else {
             let message = ConversationMessageRecord {
                 id: format!("run_message_{run_id}"),
+                sequence: None,
                 conversation_id: conversation_id.to_string(),
                 session_id: active_session_id.clone(),
                 author_id: author_id.trim().to_string(),
@@ -678,6 +741,7 @@ impl ConversationService {
             } else {
                 let message = ConversationMessageRecord {
                     id: message_id.to_string(),
+                    sequence: None,
                     conversation_id: conversation_id.to_string(),
                     session_id: active_session_id.clone(),
                     author_id: author_id.trim().to_string(),
@@ -1246,6 +1310,7 @@ async fn message_from_row(
     }
     Ok(ConversationMessageRecord {
         id: row.id,
+        sequence: None,
         conversation_id: row.conversation_id,
         session_id: row.session_id,
         author_id: row.author_id,

@@ -23,6 +23,8 @@ use crate::services::coordinator_service::{
 };
 use crate::services::member_service::{is_internal_coordinator_id, MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
+use crate::services::message_thread_service::MessageThreadReplyView;
+use crate::services::message_thread_service::{MessageThreadError, MessageThreadService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
 use crate::services::task_service::{
@@ -81,6 +83,7 @@ pub struct ChannelOrchestratorService {
     coordinator: CoordinatorService,
     cards: CardService,
     tasks: TaskService,
+    message_threads: MessageThreadService,
     claims: ClaimService,
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
@@ -110,6 +113,7 @@ impl ChannelOrchestratorService {
         coordinator: CoordinatorService,
         cards: CardService,
         tasks: TaskService,
+        message_threads: MessageThreadService,
         claims: ClaimService,
         agent_inbox: AgentInboxService,
         orchestration: OrchestrationStore,
@@ -123,6 +127,7 @@ impl ChannelOrchestratorService {
             coordinator,
             cards,
             tasks,
+            message_threads,
             claims,
             agent_inbox,
             orchestration,
@@ -629,6 +634,79 @@ impl ChannelOrchestratorService {
                 needs_assignment,
             },
         })
+    }
+
+    pub async fn add_message_thread_reply_with_launch_guard(
+        &self,
+        thread_id: &str,
+        sender_id: &str,
+        role: Option<&str>,
+        body: &str,
+        idempotency_key: &str,
+        _activity_guard: &ResetLaunchGuard,
+    ) -> Result<MessageThreadReplyView, ChannelOrchestratorError> {
+        let _send_guard = self.send_lock.lock().await;
+        let reply = self
+            .message_threads
+            .add_reply(thread_id, sender_id, role, body, idempotency_key)
+            .await?;
+        let thread = self.message_threads.get_thread(thread_id).await?.thread;
+        if thread.source_kind != "channel" {
+            return Ok(reply);
+        }
+        if explicit_handles(&reply.body).is_empty() {
+            return Ok(reply);
+        }
+
+        let channel_members = self.channels.channel_members(&thread.source_id).await?;
+        let readiness_by_agent = channel_members
+            .iter()
+            .map(|member| (member.agent_id.clone(), member.readiness.clone()))
+            .collect::<HashMap<_, _>>();
+        let member_ids = readiness_by_agent.keys().cloned().collect::<HashSet<_>>();
+        let explicit_agent_ids = self
+            .resolve_explicit_mentions(&reply.body, &member_ids)
+            .await;
+
+        for agent_id in explicit_agent_ids {
+            if readiness_by_agent.contains_key(&agent_id) {
+                self.claims
+                    .create_message_delivery(&reply.id, &thread.source_id, &agent_id)
+                    .await?;
+                let run_id = format!("run_{}", Uuid::new_v4().simple());
+                if !self
+                    .claims
+                    .mark_message_delivery_running(&reply.id, &agent_id, &run_id)
+                    .await?
+                {
+                    continue;
+                }
+                if let Err(error) = self
+                    .start_channel_agent_run_once_with_run_id(
+                        &run_id,
+                        &agent_id,
+                        &thread.source_id,
+                        &reply.id,
+                        &thread_reply_prompt(&thread.id, &thread.source_message_id, &reply),
+                        None,
+                        None,
+                        Some(format!(
+                            "message thread reply; thread id: {}; source message id: {}",
+                            thread.id, thread.source_message_id
+                        )),
+                        false,
+                    )
+                    .await
+                {
+                    let _ = self
+                        .claims
+                        .mark_message_delivery_pending_for_run(&reply.id, &agent_id, &run_id)
+                        .await;
+                    return Err(error);
+                }
+            }
+        }
+        Ok(reply)
     }
 
     pub async fn start_channel_agent_join_report(
@@ -1704,9 +1782,13 @@ impl ChannelOrchestratorService {
             }
             return Ok(task);
         }
+        let thread = self
+            .message_threads
+            .ensure_thread_for_source_message(&message.id, &message.author_id, idempotency_key)
+            .await?;
         Ok(self
             .tasks
-            .create_from_coordinator(
+            .create_from_coordinator_with_thread(
                 &message.channel_id,
                 &message.author_id,
                 &message.id,
@@ -1714,6 +1796,7 @@ impl ChannelOrchestratorService {
                 assignee_id,
                 assignment_reason,
                 idempotency_key,
+                Some(thread.thread.id),
             )
             .await?)
     }
@@ -2301,6 +2384,31 @@ Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful 
     )
 }
 
+fn thread_reply_prompt(
+    thread_id: &str,
+    source_message_id: &str,
+    reply: &MessageThreadReplyView,
+) -> String {
+    format!(
+        r#"# Slei Message Thread Reply
+
+- Thread ID: `{thread_id}`
+- Source Message ID: `{source_message_id}`
+- Reply ID: `{reply_id}`
+- Sender ID: `{sender_id}`
+
+## Thread Reply
+```text
+{body}
+```
+
+This reply belongs to a message thread. Keep follow-up work scoped to the thread context; do not create a new nested thread."#,
+        reply_id = reply.id,
+        sender_id = reply.sender_id,
+        body = reply.body,
+    )
+}
+
 fn readiness_label(readiness: &ChannelMemberReadiness) -> &'static str {
     match readiness {
         ChannelMemberReadiness::Joining => "joining",
@@ -2395,6 +2503,8 @@ pub enum ChannelOrchestratorError {
     #[error(transparent)]
     Task(#[from] TaskError),
     #[error(transparent)]
+    MessageThread(#[from] MessageThreadError),
+    #[error(transparent)]
     Member(#[from] MemberError),
     #[error(transparent)]
     Card(#[from] CardError),
@@ -2429,6 +2539,7 @@ mod tests {
             "agent_nova",
             &MessageRecord {
                 id: "msg_group_1".to_string(),
+                sequence: None,
                 channel_id: "all".to_string(),
                 session_id: Some("session_all".to_string()),
                 author_id: "human_lei".to_string(),
