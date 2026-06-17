@@ -301,6 +301,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn agent_activity_migration_is_repeatable() {
+        let (url, _path) = sqlite_file_url("activity-migration-repeatable");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate().await.unwrap();
+        db.migrate().await.unwrap();
+
+        let versions = sqlx::query_scalar::<_, i64>(
+            "SELECT version FROM schema_migrations ORDER BY version ASC",
+        )
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(versions, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn agent_activity_migration_backfills_legacy_summary_from_state() {
+        let (url, _path) = sqlite_file_url("activity-migration-summary-backfill");
+        let db = SleiDb::connect(&url).await.unwrap();
+
+        db.migrate_for_test(&[
+            (
+                1,
+                r#"
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS messages (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL,
+                    author_kind TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    content TEXT,
+                    deleted INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    channel_id TEXT NOT NULL,
+                    root_message_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'todo',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS thread_replies (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    author_message_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS agent_activity_logs (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id TEXT NOT NULL UNIQUE,
+                    agent_id TEXT NOT NULL,
+                    run_id TEXT,
+                    channel_id TEXT,
+                    message_id TEXT,
+                    task_id TEXT,
+                    state TEXT NOT NULL,
+                    phase TEXT,
+                    reason TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO agent_activity_logs(id, agent_id, state)
+                VALUES ('activity_1', 'agent_a', 'working');
+                INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);
+                "#,
+            ),
+            (
+                5,
+                r#"
+                INSERT OR IGNORE INTO schema_migrations(version) VALUES (5);
+                "#,
+            ),
+        ])
+        .await
+        .unwrap();
+
+        let summary: String =
+            sqlx::query_scalar("SELECT summary FROM agent_activity_logs WHERE id = 'activity_1'")
+                .fetch_one(db.pool())
+                .await
+                .unwrap();
+        assert_eq!(summary, "working");
+    }
+
+    #[tokio::test]
     async fn agent_activity_event_payload_preview_is_sanitized_before_storage() {
         let (url, _path) = sqlite_file_url("activity-event-sanitize");
         let db = SleiDb::connect(&url).await.unwrap();
@@ -336,6 +426,7 @@ mod tests {
         assert!(!preview.contains("abc"));
         assert!(preview.contains("[redacted]"));
         assert!(preview.contains("[truncated]"));
+        assert!(preview.chars().count() <= 2048);
     }
 
     #[tokio::test]
@@ -383,6 +474,7 @@ mod tests {
         assert!(!preview.contains("abc"));
         assert!(preview.contains("[redacted]"));
         assert!(preview.contains("[truncated]"));
+        assert!(preview.chars().count() <= 48);
     }
 
     #[tokio::test]

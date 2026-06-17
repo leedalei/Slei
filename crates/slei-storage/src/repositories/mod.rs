@@ -50,6 +50,7 @@ pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
 
 const AGENT_ACTIVITY_RETENTION_LIMIT: i64 = 200;
 const MAX_ACTIVITY_PAYLOAD_PREVIEW_CHARS: usize = 2048;
+const ACTIVITY_PAYLOAD_TRUNCATED_SUFFIX: &str = " [truncated]";
 const SENSITIVE_ACTIVITY_MARKERS: &[&str] = &[
     "authorization",
     "bearer",
@@ -3241,8 +3242,23 @@ fn truncate_activity_payload_preview(input: &str, max_chars: usize) -> String {
         return input.to_string();
     }
 
-    let mut truncated = input.chars().take(max_chars).collect::<String>();
-    truncated.push_str(" [truncated]");
+    if max_chars == 0 {
+        return String::new();
+    }
+
+    let suffix_len = ACTIVITY_PAYLOAD_TRUNCATED_SUFFIX.chars().count();
+    if max_chars <= suffix_len {
+        return ACTIVITY_PAYLOAD_TRUNCATED_SUFFIX
+            .chars()
+            .take(max_chars)
+            .collect();
+    }
+
+    let mut truncated = input
+        .chars()
+        .take(max_chars - suffix_len)
+        .collect::<String>();
+    truncated.push_str(ACTIVITY_PAYLOAD_TRUNCATED_SUFFIX);
     truncated
 }
 

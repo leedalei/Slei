@@ -70,6 +70,9 @@ impl SleiDb {
             self.repair_legacy_coordinator_columns().await?;
             self.repair_legacy_app_state_columns().await?;
         }
+        if version >= 5 {
+            self.repair_agent_activity_event_columns().await?;
+        }
         Ok(())
     }
 
@@ -147,6 +150,43 @@ impl SleiDb {
             .execute(&self.pool)
             .await?;
         self.backfill_channel_sessions().await?;
+        Ok(())
+    }
+
+    async fn repair_agent_activity_event_columns(&self) -> Result<(), sqlx::Error> {
+        self.add_column_if_missing(
+            "agent_activity_logs",
+            "event_kind",
+            "TEXT NOT NULL DEFAULT 'status.updated'",
+        )
+        .await?;
+        self.add_column_if_missing(
+            "agent_activity_logs",
+            "severity",
+            "TEXT NOT NULL DEFAULT 'info'",
+        )
+        .await?;
+        self.add_column_if_missing("agent_activity_logs", "summary", "TEXT NOT NULL DEFAULT ''")
+            .await?;
+        self.add_column_if_missing("agent_activity_logs", "payload_preview", "TEXT")
+            .await?;
+        self.add_column_if_missing("agent_activity_logs", "tool_name", "TEXT")
+            .await?;
+        self.add_column_if_missing("agent_activity_logs", "ok", "INTEGER")
+            .await?;
+
+        if self.table_exists("agent_activity_logs").await?
+            && self.column_exists("agent_activity_logs", "summary").await?
+            && self.column_exists("agent_activity_logs", "state").await?
+        {
+            sqlx::query(
+                "UPDATE agent_activity_logs
+                 SET summary = state
+                 WHERE summary = ''",
+            )
+            .execute(&self.pool)
+            .await?;
+        }
         Ok(())
     }
 
