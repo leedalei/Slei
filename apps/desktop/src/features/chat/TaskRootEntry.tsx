@@ -56,7 +56,7 @@ export function TaskRootEntry(input: {
   };
   return (
     <article
-      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-primary/30 px-2 py-2 text-sm transition-colors hover:border-primary/45 hover:bg-muted/20"
+      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/20"
       data-source-message-id={input.sourceMessage?.id}
       data-task-root-entry={input.task.id}
     >

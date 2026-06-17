@@ -240,12 +240,14 @@ export type RuntimeSessionView = {
 
 export type ConversationMessageView = {
   id: string;
+  sequence?: number;
   conversationId: string;
   sessionId?: string;
   authorId: string;
   body: string;
   attachments?: ConversationAttachmentView[];
   cards?: InteractiveCardView[];
+  thread?: MessageThreadSummaryView;
   runId?: string;
   status?: "running" | "done" | "failed" | string;
   createdAt: string;
@@ -304,6 +306,7 @@ export type ChannelMemberRemoveReceipt = ProtocolChannelMemberRemoveReceipt;
 
 export type ChannelMessageView = {
   id: string;
+  sequence?: number;
   channelId: string;
   sessionId?: string;
   authorId: string;
@@ -313,11 +316,25 @@ export type ChannelMessageView = {
   deleted?: boolean;
   edited?: boolean;
   createdAt?: string;
+  thread?: MessageThreadSummaryView;
   task?: TaskSummaryView;
+};
+
+export type MessagePageQuery = {
+  before?: number;
+  aroundMessageId?: string;
+  limit?: number;
+};
+
+export type MessagePageInfo = {
+  hasMoreBefore: boolean;
+  oldestCursor?: number;
+  newestCursor?: number;
 };
 
 export type ChannelMessageListReceipt = {
   messages: ChannelMessageView[];
+  pageInfo: MessagePageInfo;
 };
 
 export type SendChannelMessageRequest = ProtocolSendChannelMessageRequest;
@@ -334,6 +351,7 @@ export type TaskSummaryView = {
   creatorId: string;
   assigneeId?: string;
   sourceMessageId?: string;
+  threadId?: string;
   title: string;
   status: TaskStatusView;
   attentionRequired: boolean;
@@ -418,6 +436,47 @@ export type ConversationSessionReceipt = {
 
 export type ConversationMessageListReceipt = {
   messages: ConversationMessageView[];
+  pageInfo: MessagePageInfo;
+};
+
+export type MessageThreadSummaryView = {
+  id: string;
+  sourceMessageId: string;
+  sourceKind: "channel" | "dm" | string;
+  sourceId: string;
+  replyCount: number;
+  updatedAt: string;
+};
+
+export type MessageThreadReplyView = {
+  id: string;
+  threadId: string;
+  senderId: string;
+  role: "human" | "agent" | "system" | string;
+  body: string;
+  status?: string;
+  runId?: string;
+  createdAt: string;
+};
+
+export type MessageThreadReceipt = {
+  thread: MessageThreadSummaryView;
+  replies?: MessageThreadReplyView[];
+};
+
+export type MessageThreadReplyReceipt = {
+  reply: MessageThreadReplyView;
+};
+
+export type CreateMessageThreadRequest = {
+  sourceMessageId: string;
+  createdBy: string;
+};
+
+export type ReplyToMessageThreadRequest = {
+  senderId: string;
+  role?: string;
+  body: string;
 };
 
 export type ConversationMessageReceipt = {
@@ -432,6 +491,7 @@ export type WorkspaceMountView = {
 export type ConversationMessageRequest = {
   authorId: string;
   body: string;
+  asTask?: boolean;
   sessionId?: string;
   attachmentIds?: string[];
   workspaceMounts?: WorkspaceMountView[];
@@ -523,7 +583,7 @@ export type DaemonBridge = {
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
   addChannelMember(channelId: string, request: ChannelMemberAddRequest): Promise<ChannelMemberReceipt>;
   removeChannelMember(channelId: string, agentId: string): Promise<ChannelMemberRemoveReceipt>;
-  listChannelMessages(channelId: string, sessionId?: string): Promise<ChannelMessageListReceipt>;
+  listChannelMessages(channelId: string, query?: MessagePageQuery): Promise<ChannelMessageListReceipt>;
   listChannelSessions(channelId: string): Promise<ChannelSessionListReceipt>;
   createChannelSession(channelId: string): Promise<ChannelSessionReceipt>;
   activateChannelSession(channelId: string, sessionId: string): Promise<ChannelSessionReceipt>;
@@ -549,7 +609,10 @@ export type DaemonBridge = {
   listConversationSessions(conversationId: string): Promise<ConversationSessionListReceipt>;
   createConversationSession(conversationId: string): Promise<ConversationSessionReceipt>;
   activateConversationSession(conversationId: string, sessionId: string): Promise<ConversationSessionReceipt>;
-  listConversationMessages(conversationId: string): Promise<ConversationMessageListReceipt>;
+  listConversationMessages(conversationId: string, query?: MessagePageQuery): Promise<ConversationMessageListReceipt>;
+  createMessageThreadFromSource(request: CreateMessageThreadRequest): Promise<MessageThreadReceipt>;
+  getMessageThread(threadId: string): Promise<MessageThreadReceipt>;
+  replyToMessageThread(threadId: string, request: ReplyToMessageThreadRequest): Promise<MessageThreadReplyReceipt>;
   sendConversationMessage(conversationId: string, request: ConversationMessageRequest, sessionId?: string): Promise<ConversationMessageReceipt>;
   resolvePermission(request: PermissionResolveRequest): Promise<ConversationMessageReceipt>;
   uploadConversationAttachment(request: ConversationAttachmentUploadRequest): Promise<ConversationAttachmentReceipt>;
@@ -654,7 +717,7 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     addChannelMember: rejectDaemonOffline,
     removeChannelMember: rejectDaemonOffline,
     async listChannelMessages() {
-      return { messages: [] };
+      return { messages: [], pageInfo: { hasMoreBefore: false } };
     },
     async listChannelSessions() {
       return { sessions: [] };
@@ -696,8 +759,11 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     createConversationSession: rejectDaemonOffline,
     activateConversationSession: rejectDaemonOffline,
     async listConversationMessages() {
-      return { messages: [] };
+      return { messages: [], pageInfo: { hasMoreBefore: false } };
     },
+    createMessageThreadFromSource: rejectDaemonOffline,
+    getMessageThread: rejectDaemonOffline,
+    replyToMessageThread: rejectDaemonOffline,
     sendConversationMessage: rejectDaemonOffline,
     resolvePermission: rejectDaemonOffline,
     uploadConversationAttachment: rejectDaemonOffline,
@@ -738,7 +804,7 @@ export function createDaemonBridge(): DaemonBridge {
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
       addChannelMember: (channelId: string, request: ChannelMemberAddRequest) => invoke<ChannelMemberReceipt>("add_channel_member_command", { channelId, request }),
       removeChannelMember: (channelId: string, agentId: string) => invoke<ChannelMemberRemoveReceipt>("remove_channel_member_command", { channelId, agentId }),
-      listChannelMessages: (channelId: string, sessionId?: string) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId, sessionId }),
+      listChannelMessages: (channelId: string, query?: MessagePageQuery) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId, query }),
       listChannelSessions: (channelId: string) => invoke<ChannelSessionListReceipt>("list_channel_sessions_command", { channelId }),
       createChannelSession: (channelId: string) => invoke<ChannelSessionReceipt>("create_channel_session_command", { channelId }),
       activateChannelSession: (channelId: string, sessionId: string) => invoke<ChannelSessionReceipt>("activate_channel_session_command", { channelId, sessionId }),
@@ -764,7 +830,10 @@ export function createDaemonBridge(): DaemonBridge {
       listConversationSessions: (conversationId: string) => invoke<ConversationSessionListReceipt>("list_conversation_sessions_command", { conversationId }),
       createConversationSession: (conversationId: string) => invoke<ConversationSessionReceipt>("create_conversation_session_command", { conversationId }),
       activateConversationSession: (conversationId: string, sessionId: string) => invoke<ConversationSessionReceipt>("activate_conversation_session_command", { conversationId, sessionId }),
-      listConversationMessages: (conversationId: string) => invoke<ConversationMessageListReceipt>("list_conversation_messages_command", { conversationId }),
+      listConversationMessages: (conversationId: string, query?: MessagePageQuery) => invoke<ConversationMessageListReceipt>("list_conversation_messages_command", { conversationId, query }),
+      createMessageThreadFromSource: (request: CreateMessageThreadRequest) => invoke<MessageThreadReceipt>("create_message_thread_from_source_command", { request }),
+      getMessageThread: (threadId: string) => invoke<MessageThreadReceipt>("get_message_thread_command", { threadId }),
+      replyToMessageThread: (threadId: string, request: ReplyToMessageThreadRequest) => invoke<MessageThreadReplyReceipt>("reply_to_message_thread_command", { threadId, request }),
       sendConversationMessage: (conversationId: string, request: ConversationMessageRequest, sessionId?: string) => invoke<ConversationMessageReceipt>("send_conversation_message_command", { conversationId, request, sessionId }),
       resolvePermission: (request: PermissionResolveRequest) => invoke<ConversationMessageReceipt>("resolve_permission_command", { request }),
       uploadConversationAttachment: (request: ConversationAttachmentUploadRequest) => invoke<ConversationAttachmentReceipt>("upload_conversation_attachment_command", { request }),

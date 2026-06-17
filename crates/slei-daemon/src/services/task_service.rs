@@ -39,6 +39,7 @@ pub struct TaskRecord {
     pub creator_id: String,
     pub assignee_id: Option<String>,
     pub source_message_id: Option<String>,
+    pub thread_id: Option<String>,
     pub assignment_reason: Option<String>,
     pub needs_assignment: bool,
     pub title: String,
@@ -76,6 +77,7 @@ pub struct TaskSummaryView {
     pub creator_id: String,
     pub assignee_id: Option<String>,
     pub source_message_id: Option<String>,
+    pub thread_id: Option<String>,
     pub title: String,
     pub status: TaskStatus,
     pub attention_required: bool,
@@ -197,6 +199,7 @@ impl TaskService {
             creator_id: creator_id.to_string(),
             assignee_id: None,
             source_message_id: None,
+            thread_id: None,
             assignment_reason: None,
             needs_assignment: true,
             title: title.to_string(),
@@ -233,6 +236,31 @@ impl TaskService {
         assignment_reason: &str,
         idempotency_key: &str,
     ) -> Result<TaskRecord, TaskError> {
+        self.create_from_coordinator_with_thread(
+            channel_id,
+            creator_id,
+            source_message_id,
+            title,
+            assignee_id,
+            assignment_reason,
+            idempotency_key,
+            None,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_from_coordinator_with_thread(
+        &self,
+        channel_id: &str,
+        creator_id: &str,
+        source_message_id: &str,
+        title: &str,
+        assignee_id: Option<String>,
+        assignment_reason: &str,
+        idempotency_key: &str,
+        thread_id: Option<String>,
+    ) -> Result<TaskRecord, TaskError> {
         let idempotency_key = namespaced_key("task:create_from_coordinator", idempotency_key)
             .ok_or(TaskError::MissingIdempotencyKey)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
@@ -255,7 +283,10 @@ impl TaskService {
         if let Some(task_id) = existing_task_id {
             return self.task(&task_id).await;
         }
-        if let Some(existing) = self.task_for_source_message(source_message_id).await {
+        if let Some(existing) = self
+            .attach_thread_to_existing_task(source_message_id, thread_id.as_deref())
+            .await?
+        {
             self.idempotency
                 .lock()
                 .expect("task idempotency lock")
@@ -273,6 +304,7 @@ impl TaskService {
             needs_assignment: !has_assignee,
             assignee_id,
             source_message_id: Some(source_message_id.to_string()),
+            thread_id,
             assignment_reason: Some(assignment_reason.to_string()),
             title: title.to_string(),
             status: if has_assignee {
@@ -319,6 +351,22 @@ impl TaskService {
         creator_id: &str,
         idempotency_key: &str,
     ) -> Result<TaskRecord, TaskError> {
+        self.create_from_source_message_with_thread(
+            source_message_id,
+            creator_id,
+            idempotency_key,
+            None,
+        )
+        .await
+    }
+
+    pub async fn create_from_source_message_with_thread(
+        &self,
+        source_message_id: &str,
+        creator_id: &str,
+        idempotency_key: &str,
+        thread_id: Option<String>,
+    ) -> Result<TaskRecord, TaskError> {
         let source_message_id = source_message_id.trim();
         let creator_id = creator_id.trim();
         if source_message_id.is_empty() || creator_id.is_empty() {
@@ -347,7 +395,10 @@ impl TaskService {
         if let Some(task_id) = existing_task_id {
             return self.task(&task_id).await;
         }
-        if let Some(existing) = self.task_for_source_message(source_message_id).await {
+        if let Some(existing) = self
+            .attach_thread_to_existing_task(source_message_id, thread_id.as_deref())
+            .await?
+        {
             self.idempotency
                 .lock()
                 .expect("task idempotency lock")
@@ -371,6 +422,7 @@ impl TaskService {
             creator_id: source_author_id,
             assignee_id: None,
             source_message_id: Some(source_message_id.to_string()),
+            thread_id,
             assignment_reason: None,
             needs_assignment: true,
             title: title_from_body(&source_body, source_message_id),
@@ -804,6 +856,26 @@ impl TaskService {
             .find(|reply| reply.id == reply_id)
             .ok_or(TaskError::TaskNotFound)
     }
+
+    async fn attach_thread_to_existing_task(
+        &self,
+        source_message_id: &str,
+        thread_id: Option<&str>,
+    ) -> Result<Option<TaskRecord>, TaskError> {
+        let Some(mut existing) = self.task_for_source_message(source_message_id).await else {
+            return Ok(None);
+        };
+        if existing.thread_id.is_none() {
+            if let Some(thread_id) = thread_id {
+                self.repos
+                    .update_task_thread_id(&existing.id, thread_id)
+                    .await
+                    .map_err(storage_error)?;
+                existing.thread_id = Some(thread_id.to_string());
+            }
+        }
+        Ok(Some(existing))
+    }
 }
 
 fn summary_for(task: &TaskRecord, reply_count: usize) -> TaskSummaryView {
@@ -813,6 +885,7 @@ fn summary_for(task: &TaskRecord, reply_count: usize) -> TaskSummaryView {
         creator_id: task.creator_id.clone(),
         assignee_id: task.assignee_id.clone(),
         source_message_id: task.source_message_id.clone(),
+        thread_id: task.thread_id.clone(),
         title: task.title.clone(),
         status: task.status,
         attention_required: task.attention_required,
@@ -840,6 +913,7 @@ fn task_record_to_row(task: &TaskRecord) -> TaskRootRow {
         creator_id: task.creator_id.clone(),
         assignee_id: task.assignee_id.clone(),
         source_message_id: task.source_message_id.clone(),
+        thread_id: task.thread_id.clone(),
         assignment_reason: task.assignment_reason.clone(),
         needs_assignment: task.needs_assignment,
         title: task.title.clone(),
@@ -859,6 +933,7 @@ fn task_record_from_row(row: TaskRootRow) -> TaskRecord {
         creator_id: row.creator_id,
         assignee_id: row.assignee_id,
         source_message_id: row.source_message_id,
+        thread_id: row.thread_id,
         assignment_reason: row.assignment_reason,
         needs_assignment: row.needs_assignment,
         title: row.title,

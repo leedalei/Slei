@@ -6,9 +6,9 @@
 
 ## Context
 
-Slei 频道里的“转为任务”不能把同一个请求拆成一条普通消息加一条新的任务卡片消息。这样会让 timeline 重复、session 过滤复杂化，也容易把任务识别和展示逻辑漂移到 UI。
+Slei 频道里的“转为任务”不能把同一个请求拆成一条普通消息加一条新的任务卡片消息。这样会让 timeline 重复，也容易把任务识别和展示逻辑漂移到 UI。
 
-任务消息的 source of truth 必须在 daemon 和 SQLite：消息先作为频道消息持久化，任务作为 `source_message_id` 关联到这条消息。UI 只展示 daemon 返回的消息和 task summary，不自行判断消息是否应该成为任务，也不在前端新增任务卡片。
+任务消息的 source of truth 必须在 daemon 和 SQLite：消息先作为频道消息或私聊消息持久化；只有用户勾选“转为任务”或 Agent/coordinator 显式自动转任务时，daemon 才创建 task，并作为 `source_message_id` 关联到这条消息。UI 只展示 daemon 返回的消息、thread summary 和 task summary，不自行判断消息是否应该成为任务，也不在前端新增任务卡片。
 
 ## Decision
 
@@ -17,7 +17,9 @@ Slei 频道里的“转为任务”不能把同一个请求拆成一条普通消
 - `slei task create --source-message <msg-id> --agent <agent-id>` 创建或返回 `source_message_id = msg-id` 的同一个 task root。
 - 同一源消息只能关联一个任务；重复调用必须返回同一任务，不新增任务或消息。
 - 新增生产路径禁止写入新的 `kind = task_card` 频道消息，也禁止写入新的 `task_card:` control message。
-- 消息列表 DTO 应在源消息上挂载 task summary；UI 根据 `message.task` 把原消息原地展示为任务卡片。
+- 所有频道/私聊消息都可以手动打开普通子线程；普通子线程只创建 `message_threads`，不创建 task，也不把源消息升级为任务。
+- 任务创建必须确保同一源消息对应的 `message_thread` 存在，并把 `tasks.thread_id` 关联到该 thread；已有普通子线程再转任务时复用同一个 thread。
+- 消息列表 DTO 应在源消息上挂载 thread summary；有任务时再挂载 task summary。UI 根据 `message.task` 把原消息原地展示为任务卡片。
 - 历史 `task_card:` 消息不再做 UI 兼容渲染：旧控制消息应被隐藏或通过 reset/清理移除。
 
 ## CLI 与 API 语义
@@ -35,7 +37,7 @@ slei task thread <task-id>
 
 约束：
 
-- `task create --source-message` 必须保留源消息作者、正文、频道和 session 信息；任务卡片展示仍来自源消息。
+- `task create --source-message` 必须保留源消息作者、正文和所在频道/私聊目标；任务卡片展示仍来自源消息。
 - `task claim` 是任务维度原子锁，独立于 `message claim`。只有第一个成功 claim 的 Agent 拥有该任务处理权；同一 Agent 重试应视为成功。
 - `task reply` 必须保留 `role`、`sender_id` 和稳定 reply id。重复 idempotency key 不得新增回复。
 - `task update` 只能通过 daemon API 修改 SQLite，不得从 UI、本地文件或 Agent workspace 直接改任务状态。
@@ -92,6 +94,7 @@ sequenceDiagram
 - daemon 可根据可见 mention 创建任务 handoff inbox/runtime，但不得因为 task 存在兼容 assignee 字段就隐式转交。
 - 需要其他 Agent 接力时，当前 Agent 必须在任务回复正文中可见 `@agent`。
 - 任务线程历史需要时由 Agent 调用 `slei task thread <task-id>` 主动读取。
+- 普通消息子线程回复也保存在 daemon/SQLite，并聚合在子线程抽屉中；这些回复不进入主 timeline，且回复本身不能再嵌套创建子线程。
 
 ## UX 合同
 
@@ -101,7 +104,7 @@ sequenceDiagram
 - 右上角展示：`N 条回复` `｜` 状态圆点 + 状态文案 `｜` copy star `｜` time。
 - 状态颜色与任务状态保持一致：`pending_assignment` 为 amber，`in_progress` 为 blue，`in_review` 为 violet，`done` 为 green。
 - 不再使用右下角回复按钮；点击右上角 `N 条回复` 打开该任务线程。
-- 整个卡片有 border；不使用额外 task icon 角标，避免破坏原消息视觉结构。
+- 任务卡片不使用额外 border；不使用额外 task icon 角标，避免破坏原消息视觉结构。
 - 时间格式沿用消息时间展示约定，当前为 `MM-DD HH:mm`。
 
 ## 历史数据清理
@@ -123,8 +126,10 @@ sequenceDiagram
 - `slei task update` 是否仍只通过 daemon API 改 SQLite。
 - 新增任务路径是否仍原地升级源消息，而不是写入新的 `task_card` 消息。
 - 历史 `task_card:` 是否仍被隐藏/清理，而不是恢复成 UI 兼容渲染路径。
-- 频道 session、Agent 回复、任务回复和附件入口是否继承源消息 session。
-- 任务卡片 UX 是否仍符合本 ADR 的原消息结构、右上角回复/状态/actions/time 和 border 约定，且没有恢复 task icon 角标。
+- 手动打开普通子线程是否不会创建 task，也不会把源消息升级为任务。
+- 勾选“转为任务”和 Agent/coordinator 自动转任务是否才会进入 TASK，并复用同一源消息 thread。
+- Agent 回复、任务回复和附件入口是否继承源消息所在频道/私聊目标。
+- 任务卡片 UX 是否仍符合本 ADR 的原消息结构、右上角回复/状态/actions/time，且没有恢复 border 或 task icon 角标。
 
 ## 验证清单
 

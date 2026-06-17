@@ -10,6 +10,7 @@ pub mod dev;
 pub mod diagnostics;
 pub mod events;
 pub mod members;
+pub mod message_threads;
 pub mod messages;
 pub mod nodes;
 pub mod notifications;

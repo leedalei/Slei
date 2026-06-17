@@ -277,7 +277,7 @@ describe("chat composer submit behavior", () => {
       listConversationMessages: async () => {
         polls += 1;
         if (polls === 1) {
-          return { messages: [] };
+          return { messages: [], pageInfo: { hasMoreBefore: false } };
         }
         if (polls === 2) {
           return {
@@ -289,6 +289,7 @@ describe("chat composer submit behavior", () => {
               status: "running",
               createdAt: "2026-06-04T00:00:00.000Z",
             }],
+            pageInfo: { hasMoreBefore: false },
           };
         }
         if (polls === 3) {
@@ -301,6 +302,7 @@ describe("chat composer submit behavior", () => {
               status: "running",
               createdAt: "2026-06-04T00:00:00.000Z",
             }],
+            pageInfo: { hasMoreBefore: false },
           };
         }
         return {
@@ -312,6 +314,7 @@ describe("chat composer submit behavior", () => {
             status: "done",
             createdAt: "2026-06-04T00:00:00.000Z",
           }],
+          pageInfo: { hasMoreBefore: false },
         };
       },
     };

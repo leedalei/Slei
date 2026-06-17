@@ -34,6 +34,8 @@ mod tests {
             "tasks",
             "thread_replies",
             "runtime_sessions",
+            "message_threads",
+            "message_thread_replies",
             "event_log",
             "idempotent_mutations",
             "channel_coordinators",
@@ -69,7 +71,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[tokio::test]
@@ -86,7 +88,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[tokio::test]
@@ -257,6 +259,7 @@ mod tests {
                 creator_id: "human_lei".to_string(),
                 assignee_id: None,
                 source_message_id: None,
+                thread_id: None,
                 assignment_reason: None,
                 needs_assignment: true,
                 title: "Transactional status".to_string(),
@@ -346,7 +349,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[tokio::test]
@@ -1210,6 +1213,32 @@ mod tests {
         .execute(db.pool())
         .await
         .unwrap();
+        let message_thread_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO message_threads(id, source_message_id, source_kind, source_id, created_by, reply_count)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(message_thread_id.to_string())
+        .bind(message_id.to_string())
+        .bind("channel")
+        .bind(channel_uuid.to_string())
+        .bind("human:local")
+        .bind(1_i64)
+        .execute(db.pool())
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO message_thread_replies(id, thread_id, sender_id, role, body)
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(message_thread_id.to_string())
+        .bind("human:local")
+        .bind("human")
+        .bind("reset reply")
+        .execute(db.pool())
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO agent_statuses(agent_id, state, phase, reason, run_id, channel_id, message_id, task_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1419,7 +1448,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 6);
+        assert_eq!(migration_count, 7);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

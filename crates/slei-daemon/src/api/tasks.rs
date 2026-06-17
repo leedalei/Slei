@@ -10,6 +10,7 @@ use crate::services::channel_service::ChannelError;
 use crate::services::claim_service::ClaimError;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::MessageError;
+use crate::services::message_thread_service::MessageThreadError;
 use crate::services::task_service::{TaskError, TaskQuery, TaskStatus};
 use crate::state::AppState;
 
@@ -115,12 +116,26 @@ pub async fn create_from_source_message(
         return missing_idempotency_response();
     };
 
-    match state
-        .tasks()
-        .create_from_source_message(
+    let thread = match state
+        .message_threads()
+        .ensure_thread_for_source_message(
             &payload.source_message_id,
             &payload.creator_id,
             idempotency_key,
+        )
+        .await
+    {
+        Ok(outcome) => outcome.thread,
+        Err(error) => return message_thread_error_response(error),
+    };
+
+    match state
+        .tasks()
+        .create_from_source_message_with_thread(
+            &payload.source_message_id,
+            &payload.creator_id,
+            idempotency_key,
+            Some(thread.id),
         )
         .await
     {
@@ -343,13 +358,39 @@ fn missing_idempotency_response() -> Response {
         .into_response()
 }
 
+fn message_thread_error_response(error: MessageThreadError) -> Response {
+    match error {
+        MessageThreadError::ThreadNotFound | MessageThreadError::SourceMessageNotFound => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        MessageThreadError::InvalidThreadInput
+        | MessageThreadError::MissingIdempotencyKey
+        | MessageThreadError::NestedThreadNotAllowed => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        MessageThreadError::Storage(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
 fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
     let status = match &error {
         ChannelOrchestratorError::Task(TaskError::TaskNotFound)
         | ChannelOrchestratorError::Channel(ChannelError::MissingChannel)
         | ChannelOrchestratorError::Channel(ChannelError::MissingMember)
         | ChannelOrchestratorError::Member(MemberError::AgentNotFound)
-        | ChannelOrchestratorError::Message(MessageError::MessageNotFound) => StatusCode::NOT_FOUND,
+        | ChannelOrchestratorError::Message(MessageError::MessageNotFound)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::ThreadNotFound)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::SourceMessageNotFound) => {
+            StatusCode::NOT_FOUND
+        }
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
@@ -366,6 +407,9 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Message(MessageError::InvalidMessage)
         | ChannelOrchestratorError::Message(MessageError::AgentMessageImmutable)
         | ChannelOrchestratorError::Message(MessageError::PrimaryAgentMissing)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::InvalidThreadInput)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::NestedThreadNotAllowed)
         | ChannelOrchestratorError::Claim(ClaimError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Claim(ClaimError::InvalidInput(_))
         | ChannelOrchestratorError::InvalidWorkerEvent(_)
@@ -378,6 +422,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Message(MessageError::Storage(_))
         | ChannelOrchestratorError::Task(TaskError::Storage(_))
+        | ChannelOrchestratorError::MessageThread(MessageThreadError::Storage(_))
         | ChannelOrchestratorError::Channel(ChannelError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))

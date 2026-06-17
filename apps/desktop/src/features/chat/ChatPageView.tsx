@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, CheckSquare, Copy, FileText, Hash, History, Image as ImageIcon, MessageCircle, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
+import { Bookmark, CheckSquare, Copy, FileText, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
@@ -13,7 +14,6 @@ import { Button } from "../../components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Checkbox } from "../../components/ui/checkbox";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "../../components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { cn } from "../../lib/utils";
@@ -287,11 +287,6 @@ function formatConversationDateTime(value: string): string {
   return formatLocalRecordDateTime(value);
 }
 
-function sessionCreatedTime(session: { createdAt: string }) {
-  const parsed = Date.parse(session.createdAt);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
 async function uploadComposerFile(
   file: File,
   onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
@@ -452,7 +447,7 @@ function ChannelMemberPanel(input: {
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, activeSessionId, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelNewSession, onChannelSessionSelect, onConversationHistoryToggle, onConversationNewSession, onConversationSessionSelect, onMessageSaveToggle, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending, sessionDrawerOpen }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelNewSession?: (channelId: string) => Promise<void> | void; onChannelSessionSelect?: (channelId: string, sessionId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelNewSession?: (channelId: string) => Promise<void> | void; onChannelSessionSelect?: (channelId: string, sessionId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -464,10 +459,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
+  const [selectedThreadMessageId, setSelectedThreadMessageId] = useState<string | undefined>(undefined);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
@@ -475,12 +472,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
-  const currentSessionId = activeConversation ? activeSessionId ?? activeConversation.activeSessionId : activeChannel.activeSessionId;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
-  }).filter((message) => {
-    if (!currentSessionId) return !message.sessionId;
-    return message.sessionId === currentSessionId || (!activeConversation && !message.sessionId);
   });
   const visibleMessageIds = new Set(visibleMessages.map((message) => message.id));
   const channelTasks = data.tasks.filter((task) => task.channelId === activeChannel.id && (!task.sourceMessageId || visibleMessageIds.has(task.sourceMessageId)));
@@ -503,6 +496,17 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     .filter((message) => !isTransientAgentActivity(message))
     .filter((message) => !isLinkedTaskAgentReply(message, taskSourceIds))
     .filter((message) => !isTaskCardControlMessage(message));
+  const timelineVirtualizer = useVirtualizer({
+    count: timelineMessages.length,
+    getScrollElement: () => timelineViewportRef.current,
+    estimateSize: () => 96,
+    overscan: 8,
+    getItemKey: (index) => timelineMessages[index]?.id ?? index,
+  });
+  const timelineVirtualItems = typeof document === "undefined" ? [] : timelineVirtualizer.getVirtualItems();
+  const renderedTimelineItems = timelineVirtualItems.length > 0
+    ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
+    : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -520,16 +524,28 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     !member.channelReadiness?.[activeChannel.id],
   );
   const selectedTask = data.tasks.find((task) => task.id === selectedTaskId);
-  const activeSessions = activeConversation ? data.conversationSessions.filter((session) => session.conversationId === activeConversation.id) : data.channelSessions.filter((session) => session.channelId === activeChannel.id);
-  const sortedActiveSessions = [...activeSessions].sort((left, right) => sessionCreatedTime(right) - sessionCreatedTime(left));
-  const activeSession = activeSessions.find((session) => session.id === currentSessionId) ?? sortedActiveSessions[0];
-  const allowAsTask = !dmMember;
+  const selectedThreadMessage = selectedThreadMessageId
+    ? data.messages.find((message) => message.id === selectedThreadMessageId)
+    : undefined;
+  const selectedMessageThreadTask = selectedThreadMessage?.thread
+    ? {
+        id: selectedThreadMessage.thread.id,
+        title: selectedThreadMessage.body || selectedThreadMessage.author,
+        owner: selectedThreadMessage.author,
+        status: "in_progress" as const,
+        channelId: selectedThreadMessage.channelId,
+        sourceMessageId: selectedThreadMessage.id,
+        replyCount: selectedThreadMessage.thread.replyCount,
+        replies: selectedThreadMessage.thread.replies,
+      }
+    : undefined;
+  const allowAsTask = true;
   const effectiveChannelView: ChannelEmbeddedView = dmMember ? "chat" : channelView;
-  const timelineScrollTarget = `${activeTargetId}:${currentSessionId ?? "default"}`;
-  const detailTitle = dmMember ? activeSession?.title.trim() || messages.chat.newSession : stripChannelHash(activeChannel.name);
+  const timelineScrollTarget = activeTargetId;
+  const detailTitle = dmMember ? dmMember.name : stripChannelHash(activeChannel.name);
   const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
   const detailSubtitle = dmMember
-    ? `${dmMember.name} ｜ ${formatConversationDateTime(activeSession?.createdAt ?? activeConversation?.createdAt ?? "")}`
+    ? formatConversationDateTime(activeConversation?.createdAt ?? "")
     : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
@@ -583,6 +599,13 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     return () => window.cancelAnimationFrame(frame);
   }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
 
+  useEffect(() => {
+    if (timelineMessages.length === 0) return;
+    const firstVirtualItem = timelineVirtualItems[0];
+    if (!firstVirtualItem || firstVirtualItem.index !== 0) return;
+    void Promise.resolve(onOlderMessagesLoad?.()).catch(() => undefined);
+  }, [timelineVirtualItems[0]?.index, timelineMessages.length, onOlderMessagesLoad]);
+
   async function submitMessage() {
     if (sendDisabled) return;
     setSubmitting(true);
@@ -592,7 +615,6 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         draft,
         asTask: allowAsTask ? asTask : false,
         attachments,
-        sessionId: currentSessionId,
         sendFailedMessage: messages.chat.sendFailed,
         onSendFailure: (message) => sendFailureToast(message, "error"),
         onSendMessage,
@@ -644,6 +666,11 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
     void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
   }
 
+  function openMessageThread(message: SleiMessage) {
+    setSelectedThreadMessageId(message.id);
+    void Promise.resolve(onMessageThreadOpen?.(message)).catch(() => undefined);
+  }
+
   return (
     <section className={cn("relative grid h-full min-h-0 bg-background", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
@@ -666,24 +693,8 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
           </div>
         </div>
-        {dmMember && activeConversation ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={() => onConversationNewSession?.(activeConversation.id)} size="sm" type="button" variant="outline">
-              <Plus aria-hidden="true" size={14} />{messages.chat.newSession}
-            </Button>
-            <Button onClick={onConversationHistoryToggle} size="sm" type="button" variant="outline">
-              <History aria-hidden="true" size={14} />{messages.chat.history}
-            </Button>
-          </div>
-        ) : (
+        {dmMember ? null : (
           <div className="flex shrink-0 items-center gap-2" data-testid="slei-channel-header-actions">
-            <Button onClick={() => onChannelNewSession?.(activeChannel.id)} size="sm" type="button" variant="outline">
-              <Plus aria-hidden="true" size={14} />{messages.chat.newSession}
-            </Button>
-            <Button onClick={onConversationHistoryToggle} size="sm" type="button" variant="outline">
-              <History aria-hidden="true" size={14} />{messages.chat.history}
-            </Button>
-            <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" data-testid="slei-channel-header-action-separator" />
             <Button
               aria-expanded={showChannelMembersPanel ? "true" : "false"}
               aria-label={messages.chat.channelMembers}
@@ -718,59 +729,6 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           </div>
         </Tabs>
       ) : null}
-      <Sheet
-        onOpenChange={(open) => {
-          if (!open && sessionDrawerOpen) onConversationHistoryToggle?.();
-        }}
-        open={Boolean(sessionDrawerOpen && (activeConversation || activeChannel))}
-      >
-        <SheetContent aria-label={messages.chat.history} className="w-80 p-0" showCloseButton={false}>
-          <SheetHeader className="flex-row items-center justify-between border-b">
-            <SheetTitle>{messages.chat.history}</SheetTitle>
-            <SheetClose asChild>
-              <Button aria-label={messages.common.cancel} size="icon-sm" type="button" variant="ghost"><X aria-hidden="true" size={14} /></Button>
-            </SheetClose>
-          </SheetHeader>
-          <ScrollArea className="min-h-0 flex-1 px-3">
-            <div className="grid gap-1 py-3">
-              {sortedActiveSessions.length > 0
-                ? sortedActiveSessions.map((session) => (
-                    <Button
-                      aria-current={session.id === currentSessionId ? "true" : undefined}
-                      className={cn("h-auto w-full justify-start overflow-hidden px-3 py-2 text-left", session.id === currentSessionId && "bg-accent text-accent-foreground")}
-                      key={session.id}
-                      onClick={() => activeConversation ? onConversationSessionSelect?.(activeConversation.id, session.id) : onChannelSessionSelect?.(activeChannel.id, session.id)}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <span className="grid min-w-0 flex-1 gap-0.5">
-                        <strong className="block truncate">{session.title || messages.chat.newSession}</strong>
-                        <small className="truncate text-xs font-normal text-muted-foreground">{formatConversationDateTime(session.createdAt)}</small>
-                      </span>
-                    </Button>
-                  ))
-                : null}
-            </div>
-          </ScrollArea>
-        </SheetContent>
-      </Sheet>
-      {sessionDrawerOpen && (activeConversation || activeChannel) ? (
-        <aside aria-label={messages.chat.history} data-slot="sheet-ssr-fallback" hidden>
-          <h2>{messages.chat.history}</h2>
-          {sortedActiveSessions.map((session) => (
-            <button
-              aria-current={session.id === currentSessionId ? "true" : undefined}
-              className="overflow-hidden text-left"
-              key={session.id}
-              onClick={() => activeConversation ? onConversationSessionSelect?.(activeConversation.id, session.id) : onChannelSessionSelect?.(activeChannel.id, session.id)}
-              type="button"
-            >
-              <strong className="block truncate">{session.title || messages.chat.newSession}</strong>
-              <small className="block truncate">{formatConversationDateTime(session.createdAt)}</small>
-            </button>
-          ))}
-        </aside>
-      ) : null}
       <section
         className={cn("grid min-h-0", showChannelMembersPanel ? "grid-cols-[minmax(0,1fr)_20rem]" : "grid-cols-1")}
         data-testid="slei-channel-main-region"
@@ -778,9 +736,12 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
         <div className="grid min-h-0" data-testid="slei-channel-workspace">
           {effectiveChannelView === "chat" ? (
             <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
-              <ScrollArea className="min-h-0" data-testid="slei-chat-timeline">
-                <div className="grid gap-1 px-4 py-3">
-                  {timelineMessages.map((message) => {
+              <div className="min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" ref={timelineViewportRef}>
+                <div
+                  className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
+                  style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
+                >
+                  {renderedTimelineItems.map(({ key, message, virtualItem }) => {
                     const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
                       ? message.task
                       : taskBySourceMessageId.get(message.id);
@@ -789,84 +750,101 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
                       const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                       const timestamp = messageTimestampLabel(message);
                       return (
-                        <TaskRootEntry
-                          copyLabel={messages.chat.copyMessage}
-                          key={message.id}
-                          messages={messages}
-                          onCopy={() => copyMessage(message)}
-                          onOpen={() => openTaskThread(sourceTask.id)}
-                          onSaveToggle={() => onMessageSaveToggle?.(message)}
-                          avatarIdentity={memberFromMessage(message, data.members)}
-                          roleDescription={messageRoleDescription(message, data.members, messages)}
-                          saved={saved}
-                          saveLabel={saveLabel}
-                          sourceMessage={message}
-                          task={sourceTask}
-                          timestamp={timestamp}
-                        />
+                        <div
+                          className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                          data-index={virtualItem?.index}
+                          key={key}
+                          ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
+                          style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
+                        >
+                          <TaskRootEntry
+                            copyLabel={messages.chat.copyMessage}
+                            messages={messages}
+                            onCopy={() => copyMessage(message)}
+                            onOpen={() => openTaskThread(sourceTask.id)}
+                            onSaveToggle={() => onMessageSaveToggle?.(message)}
+                            avatarIdentity={memberFromMessage(message, data.members)}
+                            roleDescription={messageRoleDescription(message, data.members, messages)}
+                            saved={saved}
+                            saveLabel={saveLabel}
+                            sourceMessage={message}
+                            task={sourceTask}
+                            timestamp={timestamp}
+                          />
+                        </div>
                       );
                     }
                     const saved = savedMessageIds.includes(message.id);
                     const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                     const timestamp = messageTimestampLabel(message);
                     return (
-                      <article
-                        className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
-                        data-focused={highlightedMessageId === message.id ? "true" : undefined}
-                        data-message-id={message.id}
-                        key={message.id}
-                        tabIndex={focusedMessageId === message.id ? -1 : undefined}
+                      <div
+                        className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                        data-index={virtualItem?.index}
+                        key={key}
+                        ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
+                        style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                       >
-                        <MemberAvatar identity={memberFromMessage(message, data.members)} />
-                        <div className="min-w-0">
-                          <div className="flex min-w-0 items-center justify-between gap-2">
-                            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                              <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
-                              {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
-                              <span aria-hidden="true">｜</span>
-                              <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
+                        <article
+                          className="group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25"
+                          data-focused={highlightedMessageId === message.id ? "true" : undefined}
+                          data-message-id={message.id}
+                          tabIndex={focusedMessageId === message.id ? -1 : undefined}
+                        >
+                          <MemberAvatar identity={memberFromMessage(message, data.members)} />
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center justify-between gap-2">
+                              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                                <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
+                                {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
+                                <span aria-hidden="true">｜</span>
+                                <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
+                                <Button aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" title={messages.tasks.commentThread} type="button" variant="ghost">
+                                  <MessageSquare aria-hidden="true" size={14} />
+                                </Button>
+                                <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                                  <Copy aria-hidden="true" size={14} />
+                                </Button>
+                                <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
+                                  <Bookmark aria-hidden="true" size={14} />
+                                </Button>
+                                <span aria-hidden="true">｜</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
+                                    {timestamp}
+                                  </time>
+                                  <MessageStatusSquare status={message.status} />
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                              <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
-                                <Copy aria-hidden="true" size={14} />
-                              </Button>
-                              <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
-                                <Bookmark aria-hidden="true" size={14} />
-                              </Button>
-                              <span aria-hidden="true">｜</span>
-                              <span className="inline-flex items-center gap-1">
-                                <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
-                                  {timestamp}
-                                </time>
-                                <MessageStatusSquare status={message.status} />
-                              </span>
-                            </div>
+                            <MarkdownMessage markdown={message.body} />
+                            <AttachmentList attachments={message.attachments ?? []} messageAttachments />
+                            {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
+                            {message.cards?.map((card) => (
+                              <InteractiveCard
+                                card={card}
+                                key={card.id}
+                                messages={messages}
+                                onCreate={() => {
+                                  if (card.kind === "createAgent") {
+                                    onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
+                                  } else if (card.kind === "createChannel") {
+                                    onChannelDraftCreate?.(card.draft, card.id);
+                                  }
+                                }}
+                                onPermissionResolve={onPermissionResolve}
+                              />
+                            ))}
                           </div>
-                          <MarkdownMessage markdown={message.body} />
-                          <AttachmentList attachments={message.attachments ?? []} messageAttachments />
-                          {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
-                          {message.cards?.map((card) => (
-                            <InteractiveCard
-                              card={card}
-                              key={card.id}
-                              messages={messages}
-                              onCreate={() => {
-                                if (card.kind === "createAgent") {
-                                  onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
-                                } else if (card.kind === "createChannel") {
-                                  onChannelDraftCreate?.(card.draft, card.id);
-                                }
-                              }}
-                              onPermissionResolve={onPermissionResolve}
-                            />
-                          ))}
-                        </div>
-                      </article>
+                        </article>
+                      </div>
                     );
                   })}
                   <div ref={timelineEndRef} />
                 </div>
-              </ScrollArea>
+              </div>
               <footer className="border-t bg-background/95">
                 {mention && mentionTargets.length > 0 ? (
                   <div className="px-4 pt-3">
@@ -964,6 +942,14 @@ export function ChatPage({ activeChannel, activeConversation, activeSessionId, d
           />
         ) : null}
       </section>
+      <TaskThreadDrawer
+        messages={messages}
+        onClose={() => setSelectedThreadMessageId(undefined)}
+        onReply={onMessageThreadReply}
+        mentionMembers={data.members}
+        open={Boolean(selectedMessageThreadTask)}
+        task={selectedMessageThreadTask}
+      />
       <TaskThreadDrawer
         messages={messages}
         onClose={() => setSelectedTaskId(undefined)}

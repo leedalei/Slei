@@ -201,6 +201,14 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("scrollIntoView({ block: \"end\" })");
   });
 
+  it("uses virtualized timeline rendering with an older-message load hook", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("useVirtualizer");
+    expect(source).toContain("timelineVirtualizer.measureElement");
+    expect(source).toContain("onOlderMessagesLoad?.()");
+  });
+
   it("defaults channel and conversation entries without stored scroll to the latest message", () => {
     const source = readChatPageSource();
 
@@ -321,9 +329,9 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain('data-testid="slei-channel-members-header-toggle"');
     expect(html).toContain('data-testid="slei-channel-view-tabs"');
     expect(tabsIndex).toBeGreaterThan(headerEndIndex);
-    expect(headerHtml).toContain(messages.chat.newSession);
-    expect(headerHtml).toContain(messages.chat.history);
-    expect(headerHtml).toContain('data-testid="slei-channel-header-action-separator"');
+    expect(headerHtml).not.toContain(messages.chat.newSession);
+    expect(headerHtml).not.toContain(messages.chat.history);
+    expect(headerHtml).not.toContain('data-testid="slei-channel-header-action-separator"');
     expect(headerHtml).toContain('data-testid="slei-channel-members-header-toggle"');
     const closedToggleHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"')));
     expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).toContain("lucide-panel-right-open");
@@ -525,7 +533,7 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-testid="slei-channel-member-add-menu"]')).toBeNull();
   });
 
-  it("renders channel tabs followed by new-session and history buttons", () => {
+  it("renders channel tabs without new-session or history controls", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0, activeSessionId: "session:channel:all:default" }],
@@ -544,12 +552,12 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.shell.nav.chat);
     expect(html).toContain(messages.chat.tasks);
     expect(html).toContain(messages.chat.files);
-    expect(html).toContain(messages.chat.newSession);
-    expect(html).toContain(messages.chat.history);
-    expect(readChatPageSource()).toContain("onChannelNewSession?.(activeChannel.id)");
+    expect(html).not.toContain(messages.chat.newSession);
+    expect(html).not.toContain(messages.chat.history);
+    expect(readChatPageSource()).not.toContain("onChannelNewSession?.(activeChannel.id)");
   });
 
-  it("filters channel timeline and history drawer by active channel session", () => {
+  it("shows all channel messages without a session history drawer", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0, activeSessionId: "session-new" }],
@@ -574,10 +582,60 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(html).toContain("新消息");
-    expect(html).not.toContain("旧消息");
-    expect(html).toContain("旧会话");
-    expect(html).toContain("新会话");
-    expect(readChatPageSource()).toContain("onChannelSessionSelect?.(activeChannel.id, session.id)");
+    expect(html).toContain("旧消息");
+    expect(html).not.toContain("旧会话");
+    expect(readChatPageSource()).not.toContain("onChannelSessionSelect?.(activeChannel.id, session.id)");
+  });
+
+  it("allows direct messages to be sent as tasks", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      conversations: [{ id: "dm:agent_architect", agentId: member.id, kind: "dm", activeSessionId: "session-dm", createdAt: "0", updatedAt: "0" }],
+      members: [member],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.asTask);
+  });
+
+  it("renders a message-thread action for normal timeline messages", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-open-thread", author: "Lei", role: "human", time: "10:00", body: "可以独立开子线程的消息", channelId: "all" },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMessageThreadOpen={() => undefined}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain('data-message-thread-open="msg-open-thread"');
+    expect(html).toContain(messages.tasks.commentThread);
+  });
+
+  it("keeps task root entries visually aligned with normal messages without a border", () => {
+    const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
+
+    expect(source).not.toContain("border border-primary");
   });
 });
 

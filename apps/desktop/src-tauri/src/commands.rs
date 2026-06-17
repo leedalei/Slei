@@ -8,14 +8,15 @@ use crate::daemon_broker::{
     ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
     ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
     ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
-    ConversationSessionReceipt, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
-    GuideBootstrapReceipt, InteractiveCardReceipt, NodeListReceipt, NodeNameError,
+    ConversationSessionReceipt, CreateMessageThreadRequest, DaemonBroker, DiagnosticsSnapshotView,
+    EventReconnectReceipt, GuideBootstrapReceipt, InteractiveCardReceipt, MessagePageQuery,
+    MessageThreadReceipt, MessageThreadReplyReceipt, NodeListReceipt, NodeNameError,
     NodeRenameReceipt, PermissionResolveRequest, PreferencesError, PreferencesReceipt,
     PreferencesUpdateRequest, ProfileError, ProfileReceipt, ProfileUpdateRequest,
-    SanitizedDaemonStatus, SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt,
-    SendChannelMessageReceipt, SendChannelMessageRequest, SkillListReceipt, TaskError,
-    TaskListQuery, TaskListReceipt, TaskReceipt, TaskReplyReceipt, TaskReplyRequest,
-    TaskStatusUpdateRequest, TaskThreadReceipt,
+    ReplyToMessageThreadRequest, SanitizedDaemonStatus, SaveMessageRequest,
+    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
+    SendChannelMessageRequest, SkillListReceipt, TaskError, TaskListQuery, TaskListReceipt,
+    TaskReceipt, TaskReplyReceipt, TaskReplyRequest, TaskStatusUpdateRequest, TaskThreadReceipt,
 };
 use serde::Deserialize;
 
@@ -149,9 +150,9 @@ pub fn remove_channel_member(
 pub fn list_channel_messages(
     broker: &DaemonBroker,
     channel_id: &str,
-    session_id: Option<&str>,
+    query: Option<&MessagePageQuery>,
 ) -> ChannelMessageListReceipt {
-    broker.list_channel_messages(channel_id, session_id)
+    broker.list_channel_messages(channel_id, query)
 }
 
 pub fn list_channel_sessions(broker: &DaemonBroker, channel_id: &str) -> ChannelSessionListReceipt {
@@ -368,8 +369,31 @@ pub fn unsave_message(broker: &DaemonBroker, message_id: &str) -> Result<(), Con
 pub fn list_conversation_messages(
     broker: &DaemonBroker,
     conversation_id: &str,
+    query: Option<&MessagePageQuery>,
 ) -> ConversationMessageListReceipt {
-    broker.list_conversation_messages(conversation_id)
+    broker.list_conversation_messages(conversation_id, query)
+}
+
+pub fn create_message_thread_from_source(
+    broker: &DaemonBroker,
+    request: CreateMessageThreadRequest,
+) -> Result<MessageThreadReceipt, ChannelError> {
+    broker.create_message_thread_from_source(request)
+}
+
+pub fn get_message_thread(
+    broker: &DaemonBroker,
+    thread_id: &str,
+) -> Result<MessageThreadReceipt, ChannelError> {
+    broker.get_message_thread(thread_id)
+}
+
+pub fn reply_to_message_thread(
+    broker: &DaemonBroker,
+    thread_id: &str,
+    request: ReplyToMessageThreadRequest,
+) -> Result<MessageThreadReplyReceipt, ChannelError> {
+    broker.reply_to_message_thread(thread_id, request)
 }
 
 pub fn send_conversation_message(
@@ -514,9 +538,9 @@ pub fn remove_channel_member_command(
 pub fn list_channel_messages_command(
     state: tauri::State<'_, DaemonBroker>,
     channel_id: String,
-    session_id: Option<String>,
+    query: Option<MessagePageQuery>,
 ) -> ChannelMessageListReceipt {
-    list_channel_messages(state.inner(), &channel_id, session_id.as_deref())
+    list_channel_messages(state.inner(), &channel_id, query.as_ref())
 }
 
 #[tauri::command]
@@ -708,8 +732,34 @@ pub fn reset_conversation_runtime_session_command(
 pub fn list_conversation_messages_command(
     state: tauri::State<'_, DaemonBroker>,
     conversation_id: String,
+    query: Option<MessagePageQuery>,
 ) -> ConversationMessageListReceipt {
-    list_conversation_messages(state.inner(), &conversation_id)
+    list_conversation_messages(state.inner(), &conversation_id, query.as_ref())
+}
+
+#[tauri::command]
+pub fn create_message_thread_from_source_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: CreateMessageThreadRequest,
+) -> Result<MessageThreadReceipt, String> {
+    create_message_thread_from_source(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_message_thread_command(
+    state: tauri::State<'_, DaemonBroker>,
+    thread_id: String,
+) -> Result<MessageThreadReceipt, String> {
+    get_message_thread(state.inner(), &thread_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn reply_to_message_thread_command(
+    state: tauri::State<'_, DaemonBroker>,
+    thread_id: String,
+    request: ReplyToMessageThreadRequest,
+) -> Result<MessageThreadReplyReceipt, String> {
+    reply_to_message_thread(state.inner(), &thread_id, request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

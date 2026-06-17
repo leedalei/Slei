@@ -27,6 +27,8 @@ pub struct SendMessageDraft {
 #[serde(rename_all = "camelCase")]
 pub struct MessageRecord {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<i64>,
     pub channel_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -597,6 +599,31 @@ impl MessageService {
             .collect()
     }
 
+    pub async fn channel_messages_page(
+        &self,
+        channel_id: &str,
+        before_sequence: Option<i64>,
+        around_message_id: Option<&str>,
+        limit: Option<i64>,
+    ) -> Result<Vec<MessageRecord>, MessageError> {
+        let rows = self
+            .repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: channel_id.to_string(),
+                limit,
+                after_sequence: None,
+                before_sequence,
+                around_message_id: around_message_id.map(str::to_string),
+            })
+            .await
+            .map_err(message_storage_error)?;
+        Ok(rows
+            .into_iter()
+            .map(message_row_to_record)
+            .filter(|message| !message.deleted)
+            .collect())
+    }
+
     pub async fn channel_messages_for_session(
         &self,
         channel_id: &str,
@@ -868,6 +895,7 @@ fn build_message_with_as_task(
 ) -> MessageRecord {
     MessageRecord {
         id: format!("msg_{}", Uuid::new_v4().simple()),
+        sequence: None,
         channel_id: channel_id.to_string(),
         session_id: session_id.map(ToString::to_string),
         author_id: author_id.to_string(),
@@ -884,6 +912,7 @@ fn build_message_with_as_task(
 fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
     MessageRecord {
         id: row.id,
+        sequence: row.sequence,
         channel_id: row.channel_id,
         session_id: row.session_id,
         author_id: row.author_id,

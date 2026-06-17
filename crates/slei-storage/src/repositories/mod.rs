@@ -17,6 +17,8 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "idempotent_mutations",
     "event_log",
     "runtime_sessions",
+    "message_thread_replies",
+    "message_threads",
     "thread_replies",
     "tasks",
     "messages",
@@ -343,12 +345,37 @@ pub struct MessageReadQueryRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MessageThreadRow {
+    pub id: String,
+    pub source_message_id: String,
+    pub source_kind: String,
+    pub source_id: String,
+    pub created_by: String,
+    pub reply_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MessageThreadReplyRow {
+    pub id: String,
+    pub thread_id: String,
+    pub sender_id: String,
+    pub role: String,
+    pub body: String,
+    pub status: Option<String>,
+    pub run_id: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRootRow {
     pub id: String,
     pub channel_id: String,
     pub creator_id: String,
     pub assignee_id: Option<String>,
     pub source_message_id: Option<String>,
+    pub thread_id: Option<String>,
     pub assignment_reason: Option<String>,
     pub needs_assignment: bool,
     pub title: String,
@@ -513,6 +540,174 @@ impl Repositories {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn upsert_message_thread_idempotent(
+        &self,
+        row: MessageThreadRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO message_threads(
+                id, source_message_id, source_kind, source_id, created_by,
+                reply_count, created_at, updated_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(source_message_id) DO UPDATE SET
+                source_kind = message_threads.source_kind,
+                source_id = message_threads.source_id,
+                created_by = message_threads.created_by,
+                reply_count = message_threads.reply_count,
+                updated_at = message_threads.updated_at",
+        )
+        .bind(&row.id)
+        .bind(&row.source_message_id)
+        .bind(&row.source_kind)
+        .bind(&row.source_id)
+        .bind(&row.created_by)
+        .bind(row.reply_count)
+        .bind(&row.created_at)
+        .bind(&row.updated_at)
+        .execute(&mut *tx)
+        .await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &row.id, response_payload).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn message_thread_by_source_message(
+        &self,
+        source_message_id: &str,
+    ) -> Result<Option<MessageThreadRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, source_message_id, source_kind, source_id, created_by,
+                    reply_count, created_at, updated_at
+             FROM message_threads
+             WHERE source_message_id = ?",
+        )
+        .bind(source_message_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(message_thread_row_from_sql).transpose()
+    }
+
+    pub async fn message_thread_by_id(
+        &self,
+        thread_id: &str,
+    ) -> Result<Option<MessageThreadRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, source_message_id, source_kind, source_id, created_by,
+                    reply_count, created_at, updated_at
+             FROM message_threads
+             WHERE id = ?",
+        )
+        .bind(thread_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(message_thread_row_from_sql).transpose()
+    }
+
+    pub async fn message_threads_for_source_messages(
+        &self,
+        source_message_ids: &[String],
+    ) -> Result<Vec<MessageThreadRow>, sqlx::Error> {
+        if source_message_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut threads = Vec::new();
+        for source_message_id in source_message_ids {
+            if let Some(thread) = self
+                .message_thread_by_source_message(source_message_id)
+                .await?
+            {
+                threads.push(thread);
+            }
+        }
+        Ok(threads)
+    }
+
+    pub async fn insert_message_thread_reply_idempotent(
+        &self,
+        row: MessageThreadReplyRow,
+        idempotency_key: &str,
+        response_payload: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO message_thread_replies(
+                id, thread_id, sender_id, role, body, status, run_id, created_at
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(&row.id)
+        .bind(&row.thread_id)
+        .bind(&row.sender_id)
+        .bind(&row.role)
+        .bind(&row.body)
+        .bind(&row.status)
+        .bind(&row.run_id)
+        .bind(&row.created_at)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "UPDATE message_threads
+             SET reply_count = (
+                    SELECT COUNT(*)
+                    FROM message_thread_replies
+                    WHERE thread_id = ?
+                 ),
+                 updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(&row.thread_id)
+        .bind(now_string())
+        .bind(&row.thread_id)
+        .execute(&mut *tx)
+        .await?;
+        record_idempotent_response_tx(&mut tx, idempotency_key, &row.id, response_payload).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn message_thread_replies(
+        &self,
+        thread_id: &str,
+    ) -> Result<Vec<MessageThreadReplyRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, thread_id, sender_id, role, body, status, run_id, created_at
+             FROM message_thread_replies
+             WHERE thread_id = ?
+             ORDER BY rowid ASC",
+        )
+        .bind(thread_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(message_thread_reply_row_from_sql)
+            .collect()
+    }
+
+    pub async fn message_thread_reply_by_id(
+        &self,
+        reply_id: &str,
+    ) -> Result<Option<MessageThreadReplyRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, thread_id, sender_id, role, body, status, run_id, created_at
+             FROM message_thread_replies
+             WHERE id = ?",
+        )
+        .bind(reply_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(message_thread_reply_row_from_sql).transpose()
     }
 
     pub async fn reset_mutable_state(&self) -> Result<(), sqlx::Error> {
@@ -1808,7 +2003,7 @@ impl Repositories {
 
     pub async fn task_by_id(&self, task_id: &str) -> Result<Option<TaskRootRow>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id, thread_id,
                     assignment_reason, needs_assignment, title, status, attention_required,
                     root_deleted, root_body, created_at, updated_at
              FROM tasks
@@ -1826,7 +2021,7 @@ impl Repositories {
         source_message_id: &str,
     ) -> Result<Option<TaskRootRow>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id, thread_id,
                     assignment_reason, needs_assignment, title, status, attention_required,
                     root_deleted, root_body, created_at, updated_at
              FROM tasks
@@ -1843,7 +2038,7 @@ impl Repositories {
 
     pub async fn list_tasks(&self, query: TaskQueryRow) -> Result<Vec<TaskRootRow>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id, thread_id,
                     assignment_reason, needs_assignment, title, status, attention_required,
                     root_deleted, root_body, created_at, updated_at
              FROM tasks
@@ -1915,7 +2110,7 @@ impl Repositories {
         }
 
         let row = sqlx::query(
-            "SELECT id, channel_id, creator_id, assignee_id, source_message_id,
+            "SELECT id, channel_id, creator_id, assignee_id, source_message_id, thread_id,
                     assignment_reason, needs_assignment, title, status, attention_required,
                     root_deleted, root_body, created_at, updated_at
              FROM tasks
@@ -1957,6 +2152,24 @@ impl Repositories {
         .bind(if needs_assignment { 1 } else { 0 })
         .bind(if attention_required { 1 } else { 0 })
         .bind(status)
+        .bind(now_string())
+        .bind(task_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn update_task_thread_id(
+        &self,
+        task_id: &str,
+        thread_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE tasks
+             SET thread_id = ?, updated_at = ?
+             WHERE id = ?",
+        )
+        .bind(thread_id)
         .bind(now_string())
         .bind(task_id)
         .execute(&self.pool)
@@ -3373,10 +3586,10 @@ async fn upsert_task_root_tx(
     sqlx::query(
         "INSERT INTO tasks(
             id, channel_id, root_message_id, title, status, created_at, creator_id,
-            assignee_id, source_message_id, assignment_reason, needs_assignment,
+            assignee_id, source_message_id, thread_id, assignment_reason, needs_assignment,
             attention_required, root_deleted, root_body, updated_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
             channel_id = excluded.channel_id,
             root_message_id = excluded.root_message_id,
@@ -3385,6 +3598,7 @@ async fn upsert_task_root_tx(
             creator_id = excluded.creator_id,
             assignee_id = excluded.assignee_id,
             source_message_id = excluded.source_message_id,
+            thread_id = excluded.thread_id,
             assignment_reason = excluded.assignment_reason,
             needs_assignment = excluded.needs_assignment,
             attention_required = excluded.attention_required,
@@ -3401,6 +3615,7 @@ async fn upsert_task_root_tx(
     .bind(row.creator_id)
     .bind(row.assignee_id)
     .bind(row.source_message_id)
+    .bind(row.thread_id)
     .bind(row.assignment_reason)
     .bind(if row.needs_assignment { 1 } else { 0 })
     .bind(if row.attention_required { 1 } else { 0 })
@@ -3663,6 +3878,7 @@ fn task_root_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskRootRow, s
         creator_id: row.try_get("creator_id")?,
         assignee_id: row.try_get("assignee_id")?,
         source_message_id: row.try_get("source_message_id")?,
+        thread_id: row.try_get("thread_id")?,
         assignment_reason: row.try_get("assignment_reason")?,
         needs_assignment: needs_assignment != 0,
         title: row.try_get("title")?,
@@ -3672,6 +3888,36 @@ fn task_root_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<TaskRootRow, s
         root_body: row.try_get("root_body")?,
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn message_thread_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<MessageThreadRow, sqlx::Error> {
+    Ok(MessageThreadRow {
+        id: row.try_get("id")?,
+        source_message_id: row.try_get("source_message_id")?,
+        source_kind: row.try_get("source_kind")?,
+        source_id: row.try_get("source_id")?,
+        created_by: row.try_get("created_by")?,
+        reply_count: row.try_get("reply_count")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn message_thread_reply_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<MessageThreadReplyRow, sqlx::Error> {
+    Ok(MessageThreadReplyRow {
+        id: row.try_get("id")?,
+        thread_id: row.try_get("thread_id")?,
+        sender_id: row.try_get("sender_id")?,
+        role: row.try_get("role")?,
+        body: row.try_get("body")?,
+        status: row.try_get("status")?,
+        run_id: row.try_get("run_id")?,
+        created_at: row.try_get("created_at")?,
     })
 }
 
@@ -3694,6 +3940,7 @@ fn task_summary_response_payload(task: &TaskRootRow, reply_count: usize) -> Stri
         "creatorId": &task.creator_id,
         "assigneeId": &task.assignee_id,
         "sourceMessageId": &task.source_message_id,
+        "threadId": &task.thread_id,
         "title": &task.title,
         "status": &task.status,
         "attentionRequired": task.attention_required,
