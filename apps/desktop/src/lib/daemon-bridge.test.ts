@@ -50,7 +50,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
         description: "Developer",
       }),
     ).rejects.toThrow("daemon offline");
-    await expect(bridge.sendChannelMessage("all", { authorId: "human:local", body: "hello" })).rejects.toThrow("daemon offline");
+    await expect(bridge.sendChannelMessage("all", { authorId: "human:local", body: "hello", asTask: false })).rejects.toThrow("daemon offline");
     await expect(bridge.listAgentWorkspace("agent_alice")).rejects.toThrow("daemon offline");
   });
 
