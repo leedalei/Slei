@@ -14,8 +14,8 @@ mod tests {
     use super::db::SleiDb;
     use super::repositories::{
         sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow, MessageReadQueryRow,
-        NewAgentActivityEventRow, NewChannelMessageRow, Repositories, TaskRootRow,
-        UserProfileRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        NewAgentActivityEventRow, NewChannelMessageRow, Repositories, TaskRootRow, UserProfileRow,
+        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {

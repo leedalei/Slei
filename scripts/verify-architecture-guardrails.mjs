@@ -40,7 +40,7 @@ const DAEMON_BRIDGE_MOCK_PATTERN = /\bcreateDaemonBridgeMock\s*\(/;
 const DAEMON_BRIDGE_MOCK_DEFINITION_PATTERN = /\b(?:export\s+)?function\s+createDaemonBridgeMock\s*\(/g;
 const OLD_MOCK_WORKSPACE_PATTERN = /\bmockAgentWorkspace(?:Entries|FileContent)\b/g;
 const PRODUCTION_FIXTURE_IMPORT_PATTERN = /["'`][^"'`]*(?:app\/fixtures|(?:\.\.\/)+test\/fixtures|(?:\.\/)?test\/fixtures|src\/test\/fixtures|apps\/desktop\/src\/test\/fixtures)[^"'`]*["'`]/g;
-const UI_AGENT_RUNNER_PATTERN = /\b(?:runTaskAgentReply|runChannelAgentReply|taskAgentReplyPrompt|channelAgentReplyPrompt|createChannelTaskPlaceholder|createChannelAgentActivityMessages)\b/g;
+const UI_AGENT_RUNNER_PATTERN = /\b(?:runTaskAgentReply|runChannelAgentReply|taskAgentReplyPrompt|channelAgentReplyPrompt|createChannelTaskPlaceholder)\b/g;
 
 function normalizePath(filePath) {
   return filePath.split(path.sep).join("/");

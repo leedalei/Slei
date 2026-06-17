@@ -226,11 +226,25 @@ test("flags production UI agent orchestration helpers", () => {
     [
       "function runTaskAgentReply() {}",
       "function createChannelTaskPlaceholder() {}",
-      "function createChannelAgentActivityMessages() {}",
     ].join("\n"),
   );
 
   assert(messages.some((message) => message.includes("delegate execution to daemon")));
+});
+
+test("allows production UI daemon outcome activity rendering helpers", () => {
+  assert.deepEqual(
+    messagesFor(
+      "apps/desktop/src/app/SleiApp.tsx",
+      [
+        "function createChannelAgentActivityMessages(outcome, channelId, members) {",
+        "  if (outcome.action !== 'request_agent_reply') return [];",
+        "  return [{ toolCall: 'channel_agent_reply', channelId }];",
+        "}",
+      ].join("\n"),
+    ),
+    [],
+  );
 });
 
 test("flags production bridge paths delegated to daemon bridge mock", () => {
