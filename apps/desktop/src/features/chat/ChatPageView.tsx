@@ -7,7 +7,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
+import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -144,7 +144,17 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
   }
 
   if (tasks.length === 0) {
-    return <section className="grid h-full min-h-0 place-items-center overflow-hidden p-6 text-sm text-muted-foreground">{messages.chat.channelTaskEmpty}</section>;
+    return (
+      <section className="grid h-full min-h-0 place-items-center overflow-hidden p-6">
+        <Empty
+          centered
+          description={messages.empty.defaultDescription.nodata}
+          framed={false}
+          title={messages.chat.channelTaskEmpty}
+          variant="nodata"
+        />
+      </section>
+    );
   }
 
   return (
@@ -201,7 +211,17 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
 
 function ChannelFileList({ files, messages }: { files: ChannelFileEntry[]; messages: DesktopMessages }) {
   if (files.length === 0) {
-    return <section className="grid min-h-0 place-items-center p-6 text-sm text-muted-foreground">{messages.chat.channelFileEmpty}</section>;
+    return (
+      <section className="grid min-h-0 place-items-center p-6">
+        <Empty
+          centered
+          description={messages.empty.defaultDescription.nodata}
+          framed={false}
+          title={messages.chat.channelFileEmpty}
+          variant="nodata"
+        />
+      </section>
+    );
   }
 
   function openAttachment(attachment: ConversationAttachmentView) {
@@ -403,7 +423,13 @@ function ChannelMemberPanel(input: {
                 </div>
               );
             }) : (
-              <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">{input.messages.chat.noAvailableChannelMembers}</p>
+              <Empty
+                description={input.messages.empty.defaultDescription.nodata}
+                framed={false}
+                size="sm"
+                title={input.messages.chat.noAvailableChannelMembers}
+                variant="nodata"
+              />
             )}
           </div>
         ) : null}
@@ -439,7 +465,13 @@ function ChannelMemberPanel(input: {
               </div>
             );
           }) : (
-            <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">{input.messages.chat.noChannelMembers}</p>
+            <Empty
+              description={input.messages.empty.defaultDescription.nodata}
+              framed={false}
+              size="sm"
+              title={input.messages.chat.noChannelMembers}
+              variant="nodata"
+            />
           )}
         </div>
       </ScrollArea>
@@ -675,15 +707,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   return (
     <section className={cn("relative grid h-full min-h-0 bg-background", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
-      <header className="flex min-h-16 items-center justify-between gap-3 border-b bg-background/95 px-4 py-3">
-        <div className="min-w-0" data-slot="workspace-titlebar">
-          <div className="min-w-0">
-            <h1 aria-label={detailAriaLabel} className="inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold">
+      <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-background/95 px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
+        <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
+          <div className="min-w-0" data-tauri-drag-region="deep">
+            <h1 aria-label={detailAriaLabel} className="inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold" data-tauri-drag-region="deep">
               <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
                 {dmMember ? <MessageCircle aria-hidden="true" size={20} /> : <Hash aria-hidden="true" size={20} />}
               </span>
               <span className="min-w-0" data-tauri-drag-region="deep">
-                <span className={cn("truncate", !dmMember && "select-none")}>{detailTitle}</span>
+                <span className="truncate" data-tauri-drag-region="deep">{detailTitle}</span>
               </span>
               {!dmMember ? (
                 <Button aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
@@ -691,7 +723,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </Button>
               ) : null}
             </h1>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{detailSubtitle}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{detailSubtitle}</p>
           </div>
         </div>
         {dmMember ? null : (
@@ -749,6 +781,17 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
                   style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
                 >
+                  {renderedTimelineItems.length === 0 ? (
+                    <div className="grid min-h-60 place-items-center px-4 py-8">
+                      <Empty
+                        centered
+                        description={messages.empty.defaultDescription.nodata}
+                        framed={false}
+                        title={messages.empty.defaultTitle.nodata}
+                        variant="nodata"
+                      />
+                    </div>
+                  ) : null}
                   {renderedTimelineItems.map(({ key, message, virtualItem }) => {
                     const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
                       ? message.task

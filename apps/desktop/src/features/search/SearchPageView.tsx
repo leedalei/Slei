@@ -212,88 +212,90 @@ export function SearchPage({
       </form>
 
       <ScrollArea className="min-h-0">
-        <div className="mx-auto grid w-full max-w-5xl gap-5 p-6">
-          {status === "idle" ? (
-            <Empty
-              description={messages.search.placeholderDescription}
-              size="lg"
-              title={messages.search.placeholderTitle}
-              variant="nodata"
-            />
-          ) : null}
+        <div className="px-6 py-6">
+          <div className="mx-auto grid w-full max-w-5xl gap-5" data-slot="search-results">
+            {status === "idle" ? (
+              <Empty
+                description={messages.search.placeholderDescription}
+                size="lg"
+                title={messages.search.placeholderTitle}
+                variant="nodata"
+              />
+            ) : null}
 
-          {status === "loading" ? (
-            <div aria-live="polite" className="flex min-h-60 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
-              <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-              {messages.search.loading}
-            </div>
-          ) : null}
+            {status === "loading" ? (
+              <div aria-live="polite" className="flex min-h-60 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+                <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+                {messages.search.loading}
+              </div>
+            ) : null}
 
-          {status === "error" ? (
-            <Empty
-              description={messages.search.errorDescription}
-              size="md"
-              title={messages.search.errorTitle}
-              variant="noresult"
-            />
-          ) : null}
+            {status === "error" ? (
+              <Empty
+                description={messages.search.errorDescription}
+                size="md"
+                title={messages.search.errorTitle}
+                variant="noresult"
+              />
+            ) : null}
 
-          {status === "success" && !hasResults ? (
-            <Empty
-              description={messages.search.noResultDescription}
-              size="md"
-              title={messages.search.noResultTitle}
-              variant="noresult"
-            />
-          ) : null}
+            {status === "success" && !hasResults ? (
+              <Empty
+                description={messages.search.noResultDescription}
+                size="md"
+                title={messages.search.noResultTitle}
+                variant="noresult"
+              />
+            ) : null}
 
-          {status === "success" && hasResults ? (
-            <section aria-label={messages.search.navigation.results} className="grid gap-5">
-              <p className="text-sm text-muted-foreground">{messages.search.resultCount((receipt?.totals.agents ?? 0) + (receipt?.totals.channels ?? 0) + (receipt?.totals.messages ?? 0))}</p>
-              {sections.map((section) => (
-                <section className="grid gap-2" key={section.category}>
-                  <header className="flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{messages.search.sections[section.category]}</h2>
-                    <span className="text-xs text-muted-foreground">{section.total}</span>
-                  </header>
-                  <div className="grid gap-2">
-                    {section.category === "agents" ? section.items.map((result) => (
-                      <AgentResultButton
-                        key={result.agentId}
-                        messages={messages}
-                        query={submittedQuery}
-                        result={result}
-                        onSelect={onAgentResultSelect}
-                      />
-                    )) : null}
-                    {section.category === "channels" ? section.items.map((result) => (
-                      <ChannelResultButton
-                        data={data}
-                        key={result.channelId}
-                        messages={messages}
-                        query={submittedQuery}
-                        result={result}
-                        onSelect={onChannelResultSelect}
-                      />
-                    )) : null}
-                    {section.category === "messages" ? section.items.map((result) => (
-                      <MessageResultButton
-                        data={data}
-                        key={`${result.sourceKind}:${result.messageId}`}
-                        messages={messages}
-                        profile={profile ?? null}
-                        query={submittedQuery}
-                        result={result}
-                        timeZone={timeZone}
-                        onLegacySelect={onResultSelect}
-                        onSelect={onMessageResultSelect}
-                      />
-                    )) : null}
-                  </div>
-                </section>
-              ))}
-            </section>
-          ) : null}
+            {status === "success" && hasResults ? (
+              <section aria-label={messages.search.navigation.results} className="grid gap-5">
+                <p className="text-sm text-muted-foreground">{messages.search.resultCount((receipt?.totals.agents ?? 0) + (receipt?.totals.channels ?? 0) + (receipt?.totals.messages ?? 0))}</p>
+                {sections.map((section) => (
+                  <section className="grid gap-2" key={section.category}>
+                    <header className="flex items-center justify-between gap-3">
+                      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{messages.search.sections[section.category]}</h2>
+                      <span className="text-xs text-muted-foreground">{section.total}</span>
+                    </header>
+                    <div className="grid gap-2">
+                      {section.category === "agents" ? section.items.map((result) => (
+                        <AgentResultButton
+                          key={result.agentId}
+                          messages={messages}
+                          query={submittedQuery}
+                          result={result}
+                          onSelect={onAgentResultSelect}
+                        />
+                      )) : null}
+                      {section.category === "channels" ? section.items.map((result) => (
+                        <ChannelResultButton
+                          data={data}
+                          key={result.channelId}
+                          messages={messages}
+                          query={submittedQuery}
+                          result={result}
+                          onSelect={onChannelResultSelect}
+                        />
+                      )) : null}
+                      {section.category === "messages" ? section.items.map((result) => (
+                        <MessageResultButton
+                          data={data}
+                          key={`${result.sourceKind}:${result.messageId}`}
+                          messages={messages}
+                          profile={profile ?? null}
+                          query={submittedQuery}
+                          result={result}
+                          timeZone={timeZone}
+                          onLegacySelect={onResultSelect}
+                          onSelect={onMessageResultSelect}
+                        />
+                      )) : null}
+                    </div>
+                  </section>
+                ))}
+              </section>
+            ) : null}
+          </div>
         </div>
       </ScrollArea>
     </section>

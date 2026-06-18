@@ -12,6 +12,9 @@ use slei_daemon::services::coordinator_service::{
     CoordinatorPromptMember, CoordinatorRuntimeInput, WorkspaceMount,
 };
 use slei_daemon::services::member_service::ProductAgentDraft;
+use slei_daemon::services::settings_service::{
+    AppearancePreferences, LocalePreference, NotificationPreferences,
+};
 use slei_daemon::services::task_service::TaskQuery;
 use slei_daemon::state::AppState;
 use tokio::time::{timeout, Duration};
@@ -238,6 +241,66 @@ async fn dev_reset_clears_live_in_memory_product_state() {
         .list_task_summaries(TaskQuery::default())
         .await
         .is_empty());
+
+    std::env::remove_var("SLEI_ENABLE_DEV_RESET");
+}
+
+#[tokio::test]
+async fn dev_reset_preserves_user_preferences_when_enabled() {
+    let _env_guard = ENV_LOCK.lock().expect("lock reset env");
+    std::env::set_var("SLEI_ENABLE_DEV_RESET", "1");
+
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), temp_data_root()).await;
+    state
+        .settings()
+        .set_locale(LocalePreference::ZhCn)
+        .await
+        .unwrap();
+    state
+        .settings()
+        .set_time_zone("Asia/Shanghai".to_string())
+        .await
+        .unwrap();
+    state
+        .settings()
+        .set_appearance(AppearancePreferences {
+            theme: "dark".to_string(),
+            font_size: "lg".to_string(),
+        })
+        .await
+        .unwrap();
+    state
+        .settings()
+        .set_notifications(NotificationPreferences {
+            mentions: false,
+            human_replies: true,
+            approvals: false,
+        })
+        .await
+        .unwrap();
+
+    let response = post_dev_reset(state.clone(), token).await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let preferences = state.settings().preferences().await;
+    assert_eq!(preferences.locale, LocalePreference::ZhCn);
+    assert_eq!(preferences.time_zone, "Asia/Shanghai");
+    assert_eq!(
+        preferences.appearance,
+        AppearancePreferences {
+            theme: "dark".to_string(),
+            font_size: "lg".to_string(),
+        }
+    );
+    assert_eq!(
+        preferences.notifications,
+        NotificationPreferences {
+            mentions: false,
+            human_replies: true,
+            approvals: false,
+        }
+    );
 
     std::env::remove_var("SLEI_ENABLE_DEV_RESET");
 }

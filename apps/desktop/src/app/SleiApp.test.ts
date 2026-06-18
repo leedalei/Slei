@@ -738,7 +738,7 @@ describe("createChannelAgentReplyMessage", () => {
 
     expect(source).toContain("aria-label={messages.shell.nav[item.id]}");
     expect(source).toContain("title={messages.shell.nav[item.id]}");
-    expect(source).toContain("size={28}");
+    expect(source).toContain("className=\"size-5\"");
     expect(source).not.toContain("<span className=\"text-[11px] leading-none\">{messages.shell.nav[item.id]}</span>");
   });
 

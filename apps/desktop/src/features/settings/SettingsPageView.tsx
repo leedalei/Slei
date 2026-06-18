@@ -63,10 +63,10 @@ export function SettingsPage(input: SettingsPageInput) {
     <section className="h-full min-h-0 overflow-hidden bg-background text-[var(--slei-font-size)]" data-settings-panel={input.activePanel}>
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
-          <header className="grid gap-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-            <Badge className="w-fit" variant="secondary">{labels.title}</Badge>
-            <h1 className="text-2xl font-semibold leading-tight">{labels.panelTitle[input.activePanel]}</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">{labels.panelSubtitle[input.activePanel]}</p>
+          <header className="grid select-none gap-1" data-slot="workspace-titlebar" data-testid="slei-settings-panel-header" data-tauri-drag-region="deep">
+            <Badge className="w-fit" variant="secondary" data-tauri-drag-region="deep">{labels.title}</Badge>
+            <h1 className="text-2xl font-semibold leading-tight" data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</h1>
+            <p className="max-w-2xl text-sm text-muted-foreground" data-tauri-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</p>
           </header>
 
           {input.activePanel === "account" && !profile ? (

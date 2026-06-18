@@ -113,6 +113,36 @@ describe("ChatPage mention panel", () => {
     expect(copyButtonIndex).toBeLessThan(titleEnd);
   });
 
+  it("makes the full channel header draggable without marking header buttons as drag regions", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const headerStart = html.indexOf('data-testid="slei-channel-header"');
+    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+    const copyButtonStart = headerHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
+    const membersButtonStart = headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"');
+
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml).toContain('data-tauri-drag-region="deep"');
+    expect(headerHtml).toContain("select-none");
+    expect(copyButtonStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml.slice(copyButtonStart, copyButtonStart + 220)).not.toContain("data-tauri-drag-region");
+    expect(membersButtonStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml.slice(membersButtonStart, membersButtonStart + 260)).not.toContain("data-tauri-drag-region");
+  });
+
   it("keeps long message role descriptions on one truncated header row", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
@@ -145,6 +175,59 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("min-w-0 flex-1 truncate");
     expect(html).toContain("shrink-0 text-sm text-foreground");
     expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(2);
+  });
+
+  it("uses the shared empty illustration for empty channel tasks and files panels", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      messages: [],
+      tasks: [],
+    });
+
+    const tasksHtml = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelView="tasks"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const filesHtml = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelView="files"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(tasksHtml).toContain(messages.chat.channelTaskEmpty);
+    expect(tasksHtml).toContain('data-empty-illustration="nodata"');
+    expect(filesHtml).toContain(messages.chat.channelFileEmpty);
+    expect(filesHtml).toContain('data-empty-illustration="nodata"');
+  });
+
+  it("uses the shared empty illustration for an empty chat timeline", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      messages: [],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.empty.defaultTitle.nodata);
+    expect(html).toContain('data-empty-illustration="nodata"');
   });
 
   it("renders copy and star actions before the full message send time", () => {

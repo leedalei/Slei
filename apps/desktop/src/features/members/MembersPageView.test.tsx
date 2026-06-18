@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import { createSleiFixtures } from "../../test/fixtures";
@@ -110,6 +110,49 @@ afterEach(async () => {
 });
 
 describe("MembersPage coordinator agents", () => {
+  it("makes the member detail header draggable without marking action buttons as drag regions", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(renderMembersPage({ messages }));
+    const headerStart = html.indexOf('data-testid="slei-member-detail-header"');
+    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+    const messageButtonStart = headerHtml.indexOf(`>${messages.members.message}<`);
+    const deleteButtonStart = headerHtml.indexOf(`>${messages.members.deleteAgent}<`);
+
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml).toContain('data-tauri-drag-region="deep"');
+    expect(headerHtml).toContain("select-none");
+    expect(messageButtonStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml.slice(messageButtonStart - 160, messageButtonStart + 80)).not.toContain("data-tauri-drag-region");
+    expect(deleteButtonStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml.slice(deleteButtonStart - 180, deleteButtonStart + 80)).not.toContain("data-tauri-drag-region");
+  });
+
+  it("keeps the member header message action clickable inside the drag-enabled header", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onMessage = vi.fn();
+    const host = await mount(renderMembersPage({ messages, onMessage }));
+    const messageButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.members.message));
+
+    expect(messageButton).toBeDefined();
+    await act(async () => {
+      messageButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onMessage).toHaveBeenCalledWith("agent_coda");
+  });
+
+  it("uses the shared channel tab bar height for member detail tabs", () => {
+    const html = renderToStaticMarkup(renderMembersPage());
+    const marker = 'data-testid="slei-member-detail-tabs"';
+    const markerIndex = html.indexOf(marker);
+
+    expect(markerIndex).toBeGreaterThanOrEqual(0);
+    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
+    expect(html.slice(markerIndex, markerIndex + 600)).toContain('data-variant="line"');
+    expect(html.slice(markerIndex, markerIndex + 600)).toContain("group-data-[orientation=horizontal]/tabs:h-8");
+  });
+
   it("shows channel coordinator runtime configuration without a direct message action", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(
@@ -225,7 +268,7 @@ describe("MembersPage coordinator agents", () => {
     expect(html).toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
-    expect(html).toContain('<span class="truncate text-xs text-muted-foreground">@coda</span>');
+    expect(html).toContain('<span class="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('data-slot="alert-dialog-trigger"');
@@ -516,6 +559,21 @@ describe("MembersPage coordinator agents", () => {
     );
 
     expect(container.textContent).toContain(messages.members.noActivity);
+    expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+  });
+
+  it("uses the shared empty illustration for empty capability lists", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const container = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({ members: [{ ...agentMember("agent_empty", "Empty"), capabilities: [] }] }),
+        activeMemberId: "agent_empty",
+      }),
+    );
+
+    expect(container.textContent).toContain(messages.members.noCapabilities);
+    expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
   });
 
   it("renders an activity error state when daemon activity loading fails", async () => {

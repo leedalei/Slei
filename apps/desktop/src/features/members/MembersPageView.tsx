@@ -341,20 +341,22 @@ export function MembersPage(input: {
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <Toast message={toast.message} type={toast.type} />
-      <header className="border-b bg-background px-6 py-5">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
-          <MemberAvatar identity={selectedMember} large />
-          <div className="min-w-0 space-y-2">
+      <header className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3" data-tauri-drag-region="deep">
+          <span className="inline-flex" data-tauri-drag-region="deep">
+            <MemberAvatar identity={selectedMember} large />
+          </span>
+          <div className="min-w-0 space-y-2" data-tauri-drag-region="deep">
             <div className="flex min-w-0 flex-wrap items-center gap-2" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-              <h1 className="truncate text-2xl font-semibold">{memberDetails.name}</h1>
-              {showHandle ? <span className="truncate text-xs text-muted-foreground">{selectedMember.handle}</span> : null}
-              <Badge variant="outline" className="gap-1">
+              <h1 className="truncate text-2xl font-semibold" data-tauri-drag-region="deep">{memberDetails.name}</h1>
+              {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
+              <Badge variant="outline" className="gap-1" data-tauri-drag-region="deep">
                 <StatusDot status={selectedMember.runtimeStatus} />
                 {input.messages.members.online}
               </Badge>
             </div>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <p className="truncate text-sm text-muted-foreground">{memberDetails.description}</p>
+            <div className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
+              <p className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</p>
               <Button aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" title={input.messages.chat.copyMessage} type="button" variant="ghost">
                 <Copy aria-hidden="true" size={14} />
               </Button>
@@ -406,7 +408,7 @@ export function MembersPage(input: {
       </header>
 
       <Tabs className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-0" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
-        <div className="border-b px-6 py-3">
+        <div className="border-b px-4 py-2" data-testid="slei-member-detail-tabs">
           <TabsList aria-label={input.messages.members.memberConfig} variant="line">
             <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
             <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
@@ -718,10 +720,13 @@ function ControlledFieldAlert(input: { message?: string }) {
 
 function InlineEmpty(input: { description: string; title: string }) {
   return (
-    <div className="rounded-lg border border-dashed bg-muted/35 p-4" role="status">
-      <strong className="text-sm font-medium">{input.title}</strong>
-      <p className="mt-1 text-sm text-muted-foreground">{input.description}</p>
-    </div>
+    <Empty
+      description={input.description}
+      framed={false}
+      size="sm"
+      title={input.title}
+      variant="nodata"
+    />
   );
 }
 

@@ -1821,6 +1821,18 @@ mod tests {
             assert_eq!(count, 0, "expected reset to empty {table}");
         }
 
+        let retained_preferences: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_preferences
+             WHERE profile_id = 'local'
+               AND locale = 'zh-CN'
+               AND time_zone = 'Asia/Shanghai'
+               AND theme = 'dark'",
+        )
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(retained_preferences, 1);
+
         let retained_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
              WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",

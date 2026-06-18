@@ -34,7 +34,6 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "channels",
     "agents",
     "user_profiles",
-    "user_preferences",
     "nodes",
     "app_metadata",
 ];

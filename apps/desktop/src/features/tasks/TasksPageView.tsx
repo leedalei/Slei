@@ -3,6 +3,7 @@ import { Hash, Kanban, List as ListIcon, MessageSquare, UserRound } from "lucide
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures, SleiTask } from "../../app/types";
+import { Empty } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,14 +58,14 @@ export function TasksPage({
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
       <Tabs className="min-h-0 gap-0" value={view} onValueChange={(value) => setView(value as "board" | "list")}>
-        <header className="border-b">
-          <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+        <header className="select-none border-b" data-testid="slei-tasks-header" data-tauri-drag-region="deep">
+          <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5" data-tauri-drag-region="deep">
             <div className="grid gap-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-              <h1 className="text-2xl font-semibold">{messages.tasks.title}</h1>
-              <p className="max-w-2xl text-sm text-muted-foreground">{messages.tasks.channelTasksCount(filteredTasks.length)}</p>
+              <h1 className="text-2xl font-semibold" data-tauri-drag-region="deep">{messages.tasks.title}</h1>
+              <p className="max-w-2xl text-sm text-muted-foreground" data-tauri-drag-region="deep">{messages.tasks.channelTasksCount(filteredTasks.length)}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3" data-tauri-drag-region="deep">
             <div className="flex flex-wrap items-center gap-2">
               <TaskFilterSelect
                 icon={<Hash aria-hidden="true" className="size-3.5" />}
@@ -121,9 +122,13 @@ export function TasksPage({
                         task={task}
                       />
                     )) : (
-                      <p className="rounded-lg border border-dashed bg-background/60 p-3 text-sm text-muted-foreground" role="status">
-                        {taskStatusLabel(column, messages)} 0
-                      </p>
+                      <Empty
+                        description={messages.empty.defaultDescription.nodata}
+                        framed={false}
+                        size="sm"
+                        title={`${taskStatusLabel(column, messages)} 0`}
+                        variant="nodata"
+                      />
                     )}
                   </section>
                 );
@@ -145,9 +150,12 @@ export function TasksPage({
                 />
               ))}
               {filteredTasks.length === 0 ? (
-                <p className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground" role="status">
-                  {messages.tasks.list} 0
-                </p>
+                <Empty
+                  description={messages.empty.defaultDescription.nodata}
+                  framed={false}
+                  title={`${messages.tasks.list} 0`}
+                  variant="nodata"
+                />
               ) : null}
             </div>
           </TabsContent>

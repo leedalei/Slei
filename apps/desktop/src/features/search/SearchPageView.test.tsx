@@ -199,8 +199,14 @@ describe("SearchPage global search UI", () => {
   it("renders the empty query placeholder and does not call daemon search", async () => {
     const onGlobalSearch = vi.fn();
     const rootElement = await renderSearchPage({ onGlobalSearch });
+    const results = rootElement.querySelector('[data-slot="search-results"]');
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
+    expect(results).toBeInstanceOf(HTMLDivElement);
+    expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
+    expect(results?.className).not.toContain("p-6");
+    expect(results?.parentElement?.className).toContain("px-6 py-6");
+    expect(results?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
     expect(onGlobalSearch).not.toHaveBeenCalled();
   });
 

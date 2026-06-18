@@ -76,21 +76,21 @@ export function ComputersPage(input: {
 
   return (
     <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
-      <header className="border-b px-6 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <header className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-tauri-drag-region="deep">
+        <div className="flex flex-wrap items-start justify-between gap-4" data-tauri-drag-region="deep">
           <div className="flex min-w-0 items-center gap-4" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-            <span className="grid size-12 shrink-0 place-items-center rounded-lg border bg-muted text-muted-foreground">
+            <span className="grid size-12 shrink-0 place-items-center rounded-lg border bg-muted text-muted-foreground" data-tauri-drag-region="deep">
               <Monitor aria-hidden="true" className="size-6" />
             </span>
-            <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-2xl font-semibold">{selectedNode.name}</h1>
-                <Badge variant={selectedNode.status === "connected" ? "secondary" : "outline"} className="gap-1">
+            <div className="min-w-0 space-y-1" data-tauri-drag-region="deep">
+              <div className="flex flex-wrap items-center gap-2" data-tauri-drag-region="deep">
+                <h1 className="truncate text-2xl font-semibold" data-tauri-drag-region="deep">{selectedNode.name}</h1>
+                <Badge variant={selectedNode.status === "connected" ? "secondary" : "outline"} className="gap-1" data-tauri-drag-region="deep">
                   <StatusDot status={selectedNode.status === "connected" ? "idle" : "offline"} />
                   {selectedNode.status === "connected" ? input.messages.computers.connected : input.messages.computers.offline}
                 </Badge>
               </div>
-              <p className="truncate text-sm text-muted-foreground">{selectedNode.device.hostname}</p>
+              <p className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{selectedNode.device.hostname}</p>
             </div>
           </div>
         </div>
@@ -181,9 +181,12 @@ export function ComputersPage(input: {
                   ))}
                 </div>
               ) : (
-                <p className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground" role="status">
-                  {input.messages.computers.noAgents}
-                </p>
+                <Empty
+                  description={input.messages.empty.defaultDescription.nodata}
+                  framed={false}
+                  title={input.messages.computers.noAgents}
+                  variant="nodata"
+                />
               )}
             </CardContent>
           </Card>

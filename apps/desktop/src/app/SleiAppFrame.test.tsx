@@ -33,6 +33,23 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html.slice(Math.max(navStart, searchIndex - 500), searchIndex + 220)).toContain('aria-current="page"');
   });
 
+  it("renders global search without the conversation sidebar", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="search"
+        data={createSleiFixtures()}
+        locale="en-US"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('data-active-view="search"');
+    expect(html).not.toContain('class="slei-context-sidebar');
+    expect(html).not.toContain('aria-label="Resize sidebar"');
+    expect(html).not.toContain('data-slot="sidebar-titlebar"');
+    expect(html).toContain('grid-template-columns:5.5rem minmax(0, 1fr)');
+  });
+
   it("removes the old search button from the channel list sidebar", () => {
     const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const channelListSource = source.slice(source.indexOf("function ChannelList"), source.indexOf("function SavedMessagesPanel"));
@@ -40,5 +57,19 @@ describe("SleiAppFrame global search navigation", () => {
     expect(channelListSource).not.toContain("onSearchToggle");
     expect(channelListSource).not.toContain("searchOpen");
     expect(channelListSource).not.toContain("Command K");
+  });
+
+  it("uses the shared empty illustration in the members navigator empty state", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="members"
+        data={createSleiFixtures({ members: [] })}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain("暂无智能体");
+    expect(html).toContain('data-empty-illustration="nodata"');
   });
 });

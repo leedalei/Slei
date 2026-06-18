@@ -126,6 +126,22 @@ afterEach(async () => {
 });
 
 describe("TasksPage filters", () => {
+  it("makes the whole tasks header draggable while keeping filters and tabs interactive", async () => {
+    await mountTasksPage();
+
+    const header = container?.querySelector('[data-testid="slei-tasks-header"]');
+    const channelSelect = header?.querySelector(`select[aria-label="频道"]`);
+    const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
+
+    expect(header).not.toBeNull();
+    expect(header?.getAttribute("data-tauri-drag-region")).toBe("deep");
+    expect(header?.className).toContain("select-none");
+    expect(channelSelect).not.toBeNull();
+    expect(channelSelect?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(boardTab).toBeDefined();
+    expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
   it("shows task source channel and assignee metadata on cards", async () => {
     await mountTasksPage();
 
@@ -165,7 +181,19 @@ describe("TasksPage filters", () => {
     await changeSelect("负责人", "agent_alice");
 
     expect(container?.textContent).toContain("列表 0");
+    expect(container?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
     expect(container?.textContent).not.toContain("AI channel task for Coda");
     expect(container?.textContent).not.toContain("Design channel task for Coda");
+  });
+
+  it("uses the shared empty illustration for empty board columns", async () => {
+    await mountTasksPage();
+
+    await changeSelect("频道", "design");
+    await changeSelect("负责人", "agent_alice");
+    await clickTab("看板");
+
+    expect(container?.textContent).toContain("待指派 0");
+    expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);
   });
 });

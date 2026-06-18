@@ -213,9 +213,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
   const messages = createDesktopMessages(input.locale);
   const profile = input.profile ?? null;
-  const sidebarTitle = input.activeView === "search" ? messages.common.search : messages.shell.nav[input.activeView];
-  const hasContextSidebar = input.activeView !== "tasks";
-  const activeAgentActivities = input.activeView === "chat" || input.activeView === "search"
+  const sidebarTitle = messages.shell.nav[input.activeView];
+  const hasContextSidebar = input.activeView !== "tasks" && input.activeView !== "search";
+  const activeAgentActivities = input.activeView === "chat"
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
     : [];
   const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, 0);
@@ -260,7 +260,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             type="button"
             variant={input.activeView === item.id ? "default" : "ghost"}
           >
-            <item.icon aria-hidden="true" size={28} strokeWidth={2.8} />
+            <item.icon aria-hidden="true" className="size-5" strokeWidth={2.8} />
           </Button>
         ))}
       </nav>
@@ -741,7 +741,7 @@ function ChannelList(input: {
                     <span className="grid min-w-0 flex-1 gap-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <Hash aria-hidden="true" size={14} />
-                        <span className="truncate">{stripChannelHash(channel.name)}</span>
+                        <span className="truncate select-none">{stripChannelHash(channel.name)}</span>
                         {channel.unread > 0 ? <Badge className="ml-auto" variant="secondary">{channel.unread}</Badge> : null}
                       </span>
                       <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{formatChannelProjectLabel(channel, input.messages)}</small>
@@ -926,7 +926,13 @@ function SavedMessagesPanel(input: {
         <Button onClick={input.onClose} size="sm" type="button" variant="ghost"><Hash aria-hidden="true" size={13} />{input.messages.chat.channels}</Button>
       </div>
       {entries.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">{input.messages.search.noResultDescription}</p>
+        <Empty
+          description={input.messages.search.noResultDescription}
+          framed={false}
+          size="sm"
+          title={input.messages.empty.defaultTitle.noresult}
+          variant="noresult"
+        />
       ) : null}
       <ScrollArea className="min-h-0 flex-1">
         <div className="grid gap-2 pr-2">
@@ -1085,7 +1091,15 @@ function MembersNavigator(input: {
           <Button aria-label={input.messages.members.newAgent} onClick={input.onCreateAgentRequest} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
         </div>
         <small className="text-muted-foreground">macbookpro m4 max</small>
-        {agents.length === 0 ? <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">{input.messages.members.noAgents}</p> : null}
+        {agents.length === 0 ? (
+          <Empty
+            description={input.messages.members.emptyDescription}
+            framed={false}
+            size="sm"
+            title={input.messages.members.noAgents}
+            variant="nodata"
+          />
+        ) : null}
         {agents.map((member) => (
           <Button
             aria-current={(input.activeMemberId ?? agents[0]?.id) === member.id ? "true" : undefined}
