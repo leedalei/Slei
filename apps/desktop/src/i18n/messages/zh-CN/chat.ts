@@ -1,7 +1,7 @@
 export const chat = {
   agentDraftTitle: "创建智能体草案",
   asTask: "转为任务",
-  backToBottom: "回到底部",
+  backToBottom: "滚动到底部",
   channel: "频道",
   channelName: "频道名称",
   channelFileEmpty: "当前频道暂无附件",

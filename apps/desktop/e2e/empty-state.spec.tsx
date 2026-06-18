@@ -25,7 +25,8 @@ describe("empty state component", () => {
     expect(nodata).toContain('data-empty-size="lg"');
     expect(nodata).toContain('data-empty-icon="true"');
     expect(nodata).toContain('data-empty-illustration="nodata"');
-    expect(nodata).toContain("slei-empty__illustration-search");
+    expect(nodata).toContain('data-empty-asset="data"');
+    expect(nodata).toContain("empty-data.png");
     expect(nodata).not.toContain("slei-empty__pixel-face");
     expect(nodata).toContain("暂无智能体");
     expect(nodata).toContain("创建第一个智能体后会显示在这里。");
@@ -33,6 +34,9 @@ describe("empty state component", () => {
     expect(noresult).toContain('data-empty-variant="noresult"');
     expect(noresult).toContain('data-empty-size="sm"');
     expect(noresult).toContain('data-empty-illustration="noresult"');
+    expect(noresult).toContain('data-empty-asset="search"');
+    expect(noresult).toContain("empty-search.png");
+    expect(noresult).not.toContain("bg-amber-500/10");
     expect(noresult).toContain("没有结果");
     expect(noresult).toContain("换一个关键词试试。");
   });

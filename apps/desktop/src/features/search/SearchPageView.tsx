@@ -217,6 +217,7 @@ export function SearchPage({
             {status === "idle" ? (
               <Empty
                 description={messages.search.placeholderDescription}
+                illustration="search"
                 size="lg"
                 title={messages.search.placeholderTitle}
                 variant="nodata"
@@ -233,6 +234,7 @@ export function SearchPage({
             {status === "error" ? (
               <Empty
                 description={messages.search.errorDescription}
+                illustration="error"
                 size="md"
                 title={messages.search.errorTitle}
                 variant="noresult"
@@ -242,6 +244,7 @@ export function SearchPage({
             {status === "success" && !hasResults ? (
               <Empty
                 description={messages.search.noResultDescription}
+                illustration="search"
                 size="md"
                 title={messages.search.noResultTitle}
                 variant="noresult"

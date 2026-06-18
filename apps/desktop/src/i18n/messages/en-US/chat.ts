@@ -1,7 +1,7 @@
 export const chat = {
   agentDraftTitle: "Agent draft",
   asTask: "As Task",
-  backToBottom: "Back to bottom",
+  backToBottom: "Scroll to bottom",
   channel: "Channel",
   channelName: "Channel name",
   channelFileEmpty: "No files in this channel",

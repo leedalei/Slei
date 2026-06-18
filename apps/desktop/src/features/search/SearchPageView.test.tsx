@@ -207,6 +207,7 @@ describe("SearchPage global search UI", () => {
     expect(results?.className).not.toContain("p-6");
     expect(results?.parentElement?.className).toContain("px-6 py-6");
     expect(results?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+    expect(results?.querySelector<HTMLImageElement>('img[data-empty-asset="search"]')?.getAttribute("src")).toContain("empty-search.png");
     expect(onGlobalSearch).not.toHaveBeenCalled();
   });
 

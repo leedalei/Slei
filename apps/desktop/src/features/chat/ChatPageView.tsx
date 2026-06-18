@@ -500,6 +500,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
+  const lastTimelineMessageIdRef = useRef<string | undefined>(undefined);
+  const timelineAtBottomRef = useRef(true);
+  const scrollFrameRef = useRef<number | undefined>(undefined);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -528,6 +532,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     .filter((message) => !isTransientAgentActivity(message))
     .filter((message) => !isLinkedTaskAgentReply(message, taskSourceIds))
     .filter((message) => !isTaskCardControlMessage(message));
+  const latestTimelineMessage = timelineMessages.at(-1);
   const timelineVirtualizer = useVirtualizer({
     count: timelineMessages.length,
     getScrollElement: () => timelineViewportRef.current,
@@ -626,11 +631,27 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     if (!pendingScrollToBottomRef.current) return;
     if (timelineMessages.length === 0) return;
     pendingScrollToBottomRef.current = false;
-    const frame = window.requestAnimationFrame(() => {
-      timelineEndRef.current?.scrollIntoView({ block: "end" });
-    });
-    return () => window.cancelAnimationFrame(frame);
+    return requestTimelineScrollToBottom();
   }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
+
+  useEffect(() => {
+    const latestMessage = latestTimelineMessage;
+    const previousMessageId = lastTimelineMessageIdRef.current;
+    lastTimelineMessageIdRef.current = latestMessage?.id;
+    if (!latestMessage || !previousMessageId || latestMessage.id === previousMessageId) return;
+    if (latestMessage.role !== "agent") return;
+    if (timelineAtBottomRef.current) {
+      requestTimelineScrollToBottom();
+      return;
+    }
+    setShowScrollToBottom(true);
+  }, [latestTimelineMessage]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (timelineMessages.length === 0) return;
@@ -654,6 +675,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       });
       if (result.sent) {
         pendingScrollToBottomRef.current = true;
+        requestTimelineScrollToBottom();
         setDraft(result.draft);
         setAttachments(result.attachments);
         setAsTask(result.asTask);
@@ -702,6 +724,34 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   function openMessageThread(message: SleiMessage) {
     setSelectedThreadMessageId(message.id);
     void Promise.resolve(onMessageThreadOpen?.(message)).catch(() => undefined);
+  }
+
+  function isTimelineAtBottom() {
+    const viewport = timelineViewportRef.current;
+    if (!viewport) return true;
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 24;
+  }
+
+  function updateTimelineBottomState() {
+    const atBottom = isTimelineAtBottom();
+    timelineAtBottomRef.current = atBottom;
+    if (atBottom) setShowScrollToBottom(false);
+  }
+
+  function requestTimelineScrollToBottom() {
+    if (typeof window === "undefined") return undefined;
+    if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
+    timelineAtBottomRef.current = true;
+    setShowScrollToBottom(false);
+    const frame = window.requestAnimationFrame(() => {
+      timelineEndRef.current?.scrollIntoView({ block: "end" });
+      scrollFrameRef.current = undefined;
+    });
+    scrollFrameRef.current = frame;
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (scrollFrameRef.current === frame) scrollFrameRef.current = undefined;
+    };
   }
 
   return (
@@ -776,129 +826,143 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         <div className="grid min-h-0" data-testid="slei-channel-workspace">
           {effectiveChannelView === "chat" ? (
             <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
-              <div className="min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" ref={timelineViewportRef}>
-                <div
-                  className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
-                  style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
-                >
-                  {renderedTimelineItems.length === 0 ? (
-                    <div className="grid min-h-60 place-items-center px-4 py-8">
-                      <Empty
-                        centered
-                        description={messages.empty.defaultDescription.nodata}
-                        framed={false}
-                        title={messages.empty.defaultTitle.nodata}
-                        variant="nodata"
-                      />
-                    </div>
-                  ) : null}
-                  {renderedTimelineItems.map(({ key, message, virtualItem }) => {
-                    const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
-                      ? message.task
-                      : taskBySourceMessageId.get(message.id);
-                    if (sourceTask) {
+              <div className="relative min-h-0">
+                <div className="h-full min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" onScroll={updateTimelineBottomState} ref={timelineViewportRef}>
+                  <div
+                    className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
+                    style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
+                  >
+                    {renderedTimelineItems.length === 0 ? (
+                      <div className="grid min-h-60 place-items-center px-4 py-8">
+                        <Empty
+                          centered
+                          description={messages.empty.defaultDescription.nodata}
+                          framed={false}
+                          title={messages.empty.defaultTitle.nodata}
+                          variant="nodata"
+                        />
+                      </div>
+                    ) : null}
+                    {renderedTimelineItems.map(({ key, message, virtualItem }) => {
+                      const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
+                        ? message.task
+                        : taskBySourceMessageId.get(message.id);
+                      if (sourceTask) {
+                        const saved = savedMessageIds.includes(message.id);
+                        const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
+                        const timestamp = messageTimestampLabel(message);
+                        return (
+                          <div
+                            className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                            data-index={virtualItem?.index}
+                            key={key}
+                            ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
+                            style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
+                          >
+                            <TaskRootEntry
+                              copyLabel={messages.chat.copyMessage}
+                              messages={messages}
+                              onCopy={() => copyMessage(message)}
+                              onOpen={() => openTaskThread(sourceTask.id)}
+                              onSaveToggle={() => onMessageSaveToggle?.(message)}
+                              avatarIdentity={memberFromMessage(message, data.members)}
+                              roleDescription={messageRoleDescription(message, data.members, messages)}
+                              saved={saved}
+                              saveLabel={saveLabel}
+                              sourceMessage={message}
+                              task={sourceTask}
+                              timestamp={timestamp}
+                            />
+                          </div>
+                        );
+                      }
                       const saved = savedMessageIds.includes(message.id);
                       const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                       const timestamp = messageTimestampLabel(message);
                       return (
                         <div
-                          className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                          className={cn("pt-3", virtualItem && "absolute left-0 top-0 w-full px-4")}
                           data-index={virtualItem?.index}
+                          data-slot="timeline-message-frame"
                           key={key}
                           ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                           style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                         >
-                          <TaskRootEntry
-                            copyLabel={messages.chat.copyMessage}
-                            messages={messages}
-                            onCopy={() => copyMessage(message)}
-                            onOpen={() => openTaskThread(sourceTask.id)}
-                            onSaveToggle={() => onMessageSaveToggle?.(message)}
-                            avatarIdentity={memberFromMessage(message, data.members)}
-                            roleDescription={messageRoleDescription(message, data.members, messages)}
-                            saved={saved}
-                            saveLabel={saveLabel}
-                            sourceMessage={message}
-                            task={sourceTask}
-                            timestamp={timestamp}
-                          />
+                          <article
+                            className={cn(
+                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
+                              highlightedMessageId === message.id && "slei-message--blink-border",
+                            )}
+                            data-focused={highlightedMessageId === message.id ? "true" : undefined}
+                            data-message-id={message.id}
+                            tabIndex={focusedMessageId === message.id ? -1 : undefined}
+                          >
+                            <MemberAvatar identity={memberFromMessage(message, data.members)} />
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                                  <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
+                                  {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
+                                  <span aria-hidden="true">｜</span>
+                                  <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
+                                  <Button aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" title={messages.tasks.commentThread} type="button" variant="ghost">
+                                    <MessageSquare aria-hidden="true" size={14} />
+                                  </Button>
+                                  <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                                    <Copy aria-hidden="true" size={14} />
+                                  </Button>
+                                  <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
+                                    <Bookmark aria-hidden="true" size={14} />
+                                  </Button>
+                                  <span aria-hidden="true">｜</span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
+                                      {timestamp}
+                                    </time>
+                                    <MessageStatusSquare status={message.status} />
+                                  </span>
+                                </div>
+                              </div>
+                              <MarkdownMessage markdown={message.body} />
+                              <AttachmentList attachments={message.attachments ?? []} messageAttachments />
+                              {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
+                              {message.cards?.map((card) => (
+                                <InteractiveCard
+                                  card={card}
+                                  key={card.id}
+                                  messages={messages}
+                                  onCreate={() => {
+                                    if (card.kind === "createAgent") {
+                                      onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
+                                    } else if (card.kind === "createChannel") {
+                                      onChannelDraftCreate?.(card.draft, card.id);
+                                    }
+                                  }}
+                                  onPermissionResolve={onPermissionResolve}
+                                />
+                              ))}
+                            </div>
+                          </article>
                         </div>
                       );
-                    }
-                    const saved = savedMessageIds.includes(message.id);
-                    const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
-                    const timestamp = messageTimestampLabel(message);
-                    return (
-                      <div
-                        className={cn("pt-3", virtualItem && "absolute left-0 top-0 w-full px-4")}
-                        data-index={virtualItem?.index}
-                        data-slot="timeline-message-frame"
-                        key={key}
-                        ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
-                        style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
-                      >
-                        <article
-                          className={cn(
-                            "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
-                            highlightedMessageId === message.id && "slei-message--blink-border",
-                          )}
-                          data-focused={highlightedMessageId === message.id ? "true" : undefined}
-                          data-message-id={message.id}
-                          tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                        >
-                          <MemberAvatar identity={memberFromMessage(message, data.members)} />
-                          <div className="min-w-0">
-                            <div className="flex min-w-0 items-center justify-between gap-2">
-                              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                                <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
-                                {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
-                                <span aria-hidden="true">｜</span>
-                                <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                <Button aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" title={messages.tasks.commentThread} type="button" variant="ghost">
-                                  <MessageSquare aria-hidden="true" size={14} />
-                                </Button>
-                                <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
-                                  <Copy aria-hidden="true" size={14} />
-                                </Button>
-                                <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
-                                  <Bookmark aria-hidden="true" size={14} />
-                                </Button>
-                                <span aria-hidden="true">｜</span>
-                                <span className="inline-flex items-center gap-1">
-                                  <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
-                                    {timestamp}
-                                  </time>
-                                  <MessageStatusSquare status={message.status} />
-                                </span>
-                              </div>
-                            </div>
-                            <MarkdownMessage markdown={message.body} />
-                            <AttachmentList attachments={message.attachments ?? []} messageAttachments />
-                            {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
-                            {message.cards?.map((card) => (
-                              <InteractiveCard
-                                card={card}
-                                key={card.id}
-                                messages={messages}
-                                onCreate={() => {
-                                  if (card.kind === "createAgent") {
-                                    onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
-                                  } else if (card.kind === "createChannel") {
-                                    onChannelDraftCreate?.(card.draft, card.id);
-                                  }
-                                }}
-                                onPermissionResolve={onPermissionResolve}
-                              />
-                            ))}
-                          </div>
-                        </article>
-                      </div>
-                    );
-                  })}
-                  <div ref={timelineEndRef} />
+                    })}
+                    <div ref={timelineEndRef} />
+                  </div>
                 </div>
+                {showScrollToBottom ? (
+                  <Button
+                    className="absolute bottom-2.5 left-1/2 z-10 -translate-x-1/2 shadow-md"
+                    data-testid="slei-scroll-to-bottom"
+                    onClick={requestTimelineScrollToBottom}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {messages.chat.backToBottom}
+                  </Button>
+                ) : null}
               </div>
               <footer className="border-t bg-background/95">
                 {mention && mentionTargets.length > 0 ? (

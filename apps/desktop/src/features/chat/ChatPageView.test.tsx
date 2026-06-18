@@ -228,6 +228,8 @@ describe("ChatPage mention panel", () => {
 
     expect(html).toContain(messages.empty.defaultTitle.nodata);
     expect(html).toContain('data-empty-illustration="nodata"');
+    expect(html).toContain('data-empty-asset="data"');
+    expect(html).toContain("empty-data.png");
   });
 
   it("renders copy and star actions before the full message send time", () => {
@@ -282,6 +284,115 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("pendingScrollToBottomRef");
     expect(source).toContain("requestAnimationFrame");
     expect(source).toContain("scrollIntoView({ block: \"end\" })");
+  });
+
+  it("scrolls to the newest message after the user sends a message", async () => {
+    const scrollIntoView = vi.fn();
+    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-existing", author: "Lei", role: "human", time: "10:00", body: "已有消息", channelId: "all" },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft="发送后滚到底部"
+          messages={messages}
+          onSendMessage={async () => undefined}
+          profile={defaultProfile}
+        />,
+      );
+      scrollIntoView.mockClear();
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
+      });
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      requestAnimationFrame.mockRestore();
+      cancelAnimationFrame.mockRestore();
+    }
+  });
+
+  it("shows a floating scroll-to-bottom button when an agent message arrives while the timeline is not at the bottom", async () => {
+    const scrollIntoView = vi.fn();
+    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const messages = createDesktopMessages("zh-CN");
+    const baseData = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-user", author: "Lei", role: "human", time: "10:00", body: "用户消息", channelId: "all" },
+      ],
+    });
+    const nextData = {
+      ...baseData,
+      messages: [
+        ...baseData.messages,
+        { id: "msg-agent-new", author: "Nova", role: "agent" as const, time: "10:01", body: "新的 agent 消息", channelId: "all" },
+      ],
+    };
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={baseData.channels[0]}
+          data={baseData}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+      setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 100 });
+      await act(async () => {
+        timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+
+      await act(async () => {
+        mountedRoot?.render(
+          <ChatPage
+            activeChannel={nextData.channels[0]}
+            data={nextData}
+            messages={messages}
+            profile={defaultProfile}
+          />,
+        );
+      });
+
+      const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+      expect(button?.textContent).toContain("滚动到底部");
+
+      scrollIntoView.mockClear();
+      await act(async () => {
+        button?.click();
+      });
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      expect(host.querySelector('[data-testid="slei-scroll-to-bottom"]')).toBeNull();
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+      requestAnimationFrame.mockRestore();
+      cancelAnimationFrame.mockRestore();
+    }
   });
 
   it("uses virtualized timeline rendering with an older-message load hook", () => {
@@ -856,4 +967,11 @@ describe("ChatPage mention panel", () => {
 
 function readChatPageSource() {
   return readFileSync(join(process.cwd(), "src/features/chat/ChatPageView.tsx"), "utf8");
+}
+
+function setScrollMetrics(element: HTMLElement | null, metrics: { clientHeight: number; scrollHeight: number; scrollTop: number }) {
+  if (!element) return;
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: metrics.clientHeight });
+  Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight });
+  Object.defineProperty(element, "scrollTop", { configurable: true, value: metrics.scrollTop, writable: true });
 }
