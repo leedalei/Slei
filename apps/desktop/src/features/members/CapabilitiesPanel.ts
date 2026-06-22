@@ -1,38 +1,36 @@
-export type CapabilityView = {
+import { createDesktopMessages } from "../../i18n";
+
+export type SkillCapabilityView = {
   name: string;
-  source: string;
+  source?: string;
   description: string;
-  available: boolean;
+  available?: boolean;
   error?: string;
 };
 
 export function renderCapabilitiesPanel(input: {
   locale: "zh-CN" | "en-US";
-  capabilities: CapabilityView[];
+  skills: SkillCapabilityView[];
 }): string {
   const messages = createDesktopMessages(input.locale).members;
   const title = messages.capabilities;
-  const readOnly = messages.readOnly;
-  const empty = messages.noCapabilities;
 
-  if (input.capabilities.length === 0) {
-    return `${title} ${readOnly} ${empty}`;
+  if (input.skills.length === 0) {
+    return `${title} ${messages.noSkills} ${messages.noSkillsDescription}`;
   }
 
   return [
     title,
-    readOnly,
-    ...input.capabilities.map((capability) =>
+    ...input.skills.map((skill) =>
       [
-        capability.available ? "available" : "unavailable",
-        capability.name,
-        capability.source,
-        capability.description,
-        capability.error ?? "",
+        skill.available === false ? "unavailable" : "available",
+        skill.name,
+        skill.source,
+        skill.description,
+        skill.error ?? "",
       ]
         .filter(Boolean)
         .join(" "),
     ),
   ].join("\n");
 }
-import { createDesktopMessages } from "../../i18n";
