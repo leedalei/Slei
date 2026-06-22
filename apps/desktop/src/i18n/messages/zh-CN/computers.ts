@@ -10,7 +10,7 @@ export const computers = {
   detectedRuntimes: "检测到的运行时",
   deviceName: "设备名称",
   editDeviceName: "编辑设备名称",
-  emptyDescription: "本机 daemon 连接后会自动显示设备信息，也可以手动添加一台设备。",
+  emptyDescription: "本机 daemon 连接后会自动显示设备信息，也可以手动添加一台设备",
   emptyTitle: "暂无设备",
   hostname: "Hostname / 主机名",
   info: "信息",

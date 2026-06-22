@@ -252,7 +252,7 @@ describe("SearchPage global search UI", () => {
 
     expect(onGlobalSearch).not.toHaveBeenCalled();
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
-    expect(rootElement.textContent).toContain("Enter a keyword to search.");
+    expect(rootElement.textContent).toContain("Enter a keyword to search; filters can narrow results by member, channel, or time range");
   });
 
   it("submits daemon-backed search requests and renders grouped highlighted results", async () => {

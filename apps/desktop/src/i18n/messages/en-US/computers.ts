@@ -10,7 +10,7 @@ export const computers = {
   detectedRuntimes: "Detected runtimes",
   deviceName: "Device name",
   editDeviceName: "Edit device name",
-  emptyDescription: "Local daemon connection will show device information automatically. You can also add a computer manually.",
+  emptyDescription: "Local daemon connection will show device information automatically; you can also add a computer manually",
   emptyTitle: "No computers",
   hostname: "Hostname",
   info: "INFO",

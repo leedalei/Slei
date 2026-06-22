@@ -1,7 +1,7 @@
 export const empty = {
   defaultDescription: {
-    nodata: "There is no data here yet.",
-    noresult: "Try another condition.",
+    nodata: "There is no data here yet",
+    noresult: "Try another condition",
   },
   defaultTitle: {
     nodata: "No data",

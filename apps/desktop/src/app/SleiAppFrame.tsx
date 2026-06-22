@@ -923,7 +923,6 @@ function SavedMessagesWorkspace(input: {
         <div className="grid h-full place-items-center p-6">
           <Empty
             centered
-            description={input.messages.search.noResultDescription}
             size="lg"
             title={input.messages.chat.savedMessagesEmpty}
             variant="noresult"
@@ -1312,7 +1311,7 @@ function renderWorkspace(
   if (!activeChannel) {
     return (
       <div className="grid h-full place-items-center p-6">
-        <Empty centered description={messages.empty.defaultDescription.nodata} size="lg" title={messages.empty.defaultTitle.nodata} />
+        <Empty centered size="lg" title={messages.empty.defaultTitle.nodata} />
       </div>
     );
   }

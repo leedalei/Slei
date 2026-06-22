@@ -124,7 +124,6 @@ export function TasksPage({
                       />
                     )) : (
                       <Empty
-                        description={messages.empty.defaultDescription.nodata}
                         framed={false}
                         size="sm"
                         title={taskStatusLabel(column, messages)}
@@ -152,7 +151,6 @@ export function TasksPage({
               ))}
               {filteredTasks.length === 0 ? (
                 <Empty
-                  description={messages.empty.defaultDescription.nodata}
                   framed={false}
                   title={messages.tasks.list}
                   variant="nodata"

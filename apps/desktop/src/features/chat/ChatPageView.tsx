@@ -154,7 +154,6 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
       <section className="grid h-full min-h-0 place-items-center overflow-hidden p-6">
         <Empty
           centered
-          description={messages.empty.defaultDescription.nodata}
           framed={false}
           title={messages.chat.channelTaskEmpty}
           variant="nodata"
@@ -221,7 +220,6 @@ function ChannelFileList({ files, messages }: { files: ChannelFileEntry[]; messa
       <section className="grid min-h-0 place-items-center p-6">
         <Empty
           centered
-          description={messages.empty.defaultDescription.nodata}
           framed={false}
           title={messages.chat.channelFileEmpty}
           variant="nodata"
@@ -420,7 +418,6 @@ function ChannelMemberPanel(input: {
                 );
               }) : (
                 <Empty
-                  description={input.messages.empty.defaultDescription.nodata}
                   framed={false}
                   size="sm"
                   title={input.messages.chat.noAvailableChannelMembers}
@@ -462,7 +459,6 @@ function ChannelMemberPanel(input: {
             );
           }) : (
             <Empty
-              description={input.messages.empty.defaultDescription.nodata}
               framed={false}
               size="sm"
               title={input.messages.chat.noChannelMembers}
@@ -898,7 +894,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       <div className="grid min-h-60 place-items-center px-4 py-8">
                         <Empty
                           centered
-                          description={messages.empty.defaultDescription.nodata}
                           framed={false}
                           title={messages.empty.defaultTitle.nodata}
                           variant="nodata"

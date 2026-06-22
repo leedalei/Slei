@@ -182,7 +182,6 @@ export function ComputersPage(input: {
                 </div>
               ) : (
                 <Empty
-                  description={input.messages.empty.defaultDescription.nodata}
                   framed={false}
                   title={input.messages.computers.noAgents}
                   variant="nodata"
