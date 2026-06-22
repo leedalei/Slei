@@ -146,7 +146,6 @@ pub async fn list_channel_messages(
         query.around_message_id.as_deref(),
         query.limit,
     );
-
     let mut messages = Vec::new();
     for mut message in match state
         .messages()

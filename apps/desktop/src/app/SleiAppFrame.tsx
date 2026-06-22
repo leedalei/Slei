@@ -156,8 +156,6 @@ export type SleiAppFrameProps = {
   onConversationNewSession?: (conversationId: string) => Promise<void> | void;
   onConversationHistoryToggle?: () => void;
   onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void;
-  onChannelNewSession?: (channelId: string) => Promise<void> | void;
-  onChannelSessionSelect?: (channelId: string, sessionId: string) => Promise<void> | void;
   onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>;
   onInteractiveCardComplete?: (cardId: string) => Promise<void> | void;
   onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void;
@@ -325,7 +323,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         </>
       ) : null}
 
-      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onChannelNewSession, input.onChannelSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onOlderMessagesLoad, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onOlderMessagesLoad, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -558,10 +556,18 @@ function SidebarFrame(input: { children: ReactNode; title: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b px-3 pb-3 pt-4" data-slot="sidebar-titlebar" data-tauri-drag-region="deep">
-        <h2 className="text-base font-bold leading-none">{input.title}</h2>
+        <h2 className="select-none text-base font-bold leading-none">{input.title}</h2>
       </div>
       <div className="min-h-0 flex-1">{input.children}</div>
     </div>
+  );
+}
+
+function SidebarSectionTitle(input: { children: ReactNode }) {
+  return (
+    <span data-slot="sidebar-section-title" className="select-none">
+      {input.children}
+    </span>
   );
 }
 
@@ -714,9 +720,9 @@ function ChannelList(input: {
         />
       ) : (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <span>{input.messages.chat.channels} {input.data.channels.length}</span>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <SidebarSectionTitle>{input.messages.chat.channels} {input.data.channels.length}</SidebarSectionTitle>
               <div className="flex items-center gap-1">
                 <Button aria-label={input.messages.chat.sortChannels} size="icon-xs" type="button" variant="ghost"><ArrowUpDown aria-hidden="true" size={14} /></Button>
                 <Button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
@@ -781,7 +787,7 @@ function ChannelList(input: {
             </div>
             <Separator />
             <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <span>{input.messages.chat.directMessages} {directMessageConversations.length}</span>
+              <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
               <Button aria-label={input.messages.chat.sortDirectMessages} size="icon-xs" type="button" variant="ghost"><ArrowUpDown aria-hidden="true" size={14} /></Button>
             </div>
             <div className="space-y-1">
@@ -926,7 +932,7 @@ function SavedMessagesPanel(input: {
   return (
     <section aria-label={input.messages.common.saved} className="slei-saved-panel flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        <span>{input.messages.common.saved} {entries.length}</span>
+        <SidebarSectionTitle>{input.messages.common.saved} {entries.length}</SidebarSectionTitle>
         <Button onClick={input.onClose} size="sm" type="button" variant="ghost"><Hash aria-hidden="true" size={13} />{input.messages.chat.channels}</Button>
       </div>
       {entries.length === 0 ? (
@@ -1002,7 +1008,9 @@ function ContextPanel({ activeView, data, messages }: { activeView: AppView; dat
   return (
     <ScrollArea className="h-full">
       <div className="grid gap-3 p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{messages.shell.sectionLabel[activeView]}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <SidebarSectionTitle>{messages.shell.sectionLabel[activeView]}</SidebarSectionTitle>
+      </div>
       <div className="rounded-lg border bg-background p-3">
         <strong>{data.tasks.filter((task) => task.attention).length}</strong>
         <span className="ml-2 text-sm text-muted-foreground">{messages.shell.attentionNeeded}</span>
@@ -1053,7 +1061,9 @@ function SettingsNavigator(input: {
       <div className="grid gap-4 p-3">
       {settingsMenu.map((group) => (
         <div className="grid gap-2" key={group.title}>
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{input.messages.settings.groups[group.title]}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <SidebarSectionTitle>{input.messages.settings.groups[group.title]}</SidebarSectionTitle>
+          </div>
           {group.items.length === 0 ? (
             <p className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground"><Server aria-hidden="true" size={14} />{input.messages.settings.serverReserved}</p>
           ) : null}
@@ -1091,7 +1101,7 @@ function MembersNavigator(input: {
     <ScrollArea className="slei-members-navigator h-full">
       <div className="grid gap-3 p-3">
         <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <span>{input.messages.members.agents}</span>
+          <SidebarSectionTitle>{input.messages.members.agents}</SidebarSectionTitle>
           <Button aria-label={input.messages.members.newAgent} onClick={input.onCreateAgentRequest} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
         </div>
         <small className="text-muted-foreground">macbookpro m4 max</small>
@@ -1138,7 +1148,7 @@ function ComputersNavigator(input: {
     <ScrollArea className="slei-computers-list h-full" aria-label={input.messages.shell.sidebarSubtitle.computers}>
       <div className="grid gap-3 p-3">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        <span>{input.messages.computers.computers} {input.nodes.length}</span>
+        <SidebarSectionTitle>{input.messages.computers.computers} {input.nodes.length}</SidebarSectionTitle>
         <Button aria-label={input.messages.computers.newComputer} onClick={input.onAdd} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
       </div>
       {input.nodes.map((node) => (
@@ -1233,8 +1243,6 @@ function renderWorkspace(
   onConversationNewSession?: (conversationId: string) => Promise<void> | void,
   onConversationHistoryToggle?: () => void,
   onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void,
-  onChannelNewSession?: (channelId: string) => Promise<void> | void,
-  onChannelSessionSelect?: (channelId: string, sessionId: string) => Promise<void> | void,
   onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>,
   onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void,
   onChannelMemberAdd?: (agentId: string) => Promise<void> | void,
@@ -1319,7 +1327,7 @@ function renderWorkspace(
       </div>
     );
   }
-  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onChannelNewSession={onChannelNewSession} onChannelSessionSelect={onChannelSessionSelect} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onMessageThreadOpen={onMessageThreadOpen} onMessageThreadReply={onMessageThreadReply} onOlderMessagesLoad={onOlderMessagesLoad} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={localHumanPresentation(profile, messages)} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onMessageThreadOpen={onMessageThreadOpen} onMessageThreadReply={onMessageThreadReply} onOlderMessagesLoad={onOlderMessagesLoad} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadOpen={onTaskThreadOpen} profile={localHumanPresentation(profile, messages)} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {

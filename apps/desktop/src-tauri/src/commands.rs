@@ -4,17 +4,16 @@ use crate::daemon_broker::{
     AgentWorkspaceListReceipt, AppRuntimeFlagsView, ArtifactOpenError, ArtifactOpenReceipt,
     CardError, ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberAddRequest,
     ChannelMemberListReceipt, ChannelMemberReceipt, ChannelMemberRemoveReceipt,
-    ChannelMessageListReceipt, ChannelReceipt, ChannelSessionListReceipt, ChannelSessionReceipt,
-    ConversationAttachmentReceipt, ConversationAttachmentUploadRequest, ConversationError,
-    ConversationListReceipt, ConversationMessageListReceipt, ConversationMessageReceipt,
-    ConversationMessageRequest, ConversationReceipt, ConversationSessionListReceipt,
-    ConversationSessionReceipt, CreateMessageThreadRequest, DaemonBroker, DiagnosticsSnapshotView,
-    EventReconnectReceipt, GlobalSearchError, GlobalSearchQuery, GlobalSearchReceipt,
-    GuideBootstrapReceipt, InteractiveCardReceipt, MessagePageQuery, MessageThreadReceipt,
-    MessageThreadReplyReceipt, NodeListReceipt, NodeNameError, NodeRenameReceipt,
-    PermissionResolveRequest, PreferencesError, PreferencesReceipt, PreferencesUpdateRequest,
-    ProfileError, ProfileReceipt, ProfileUpdateRequest, ReplyToMessageThreadRequest,
-    SanitizedDaemonStatus, SaveMessageRequest,
+    ChannelMessageListReceipt, ChannelReceipt, ConversationAttachmentReceipt,
+    ConversationAttachmentUploadRequest, ConversationError, ConversationListReceipt,
+    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
+    ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt,
+    CreateMessageThreadRequest, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
+    GlobalSearchError, GlobalSearchQuery, GlobalSearchReceipt, GuideBootstrapReceipt,
+    InteractiveCardReceipt, MessagePageQuery, MessageThreadReceipt, MessageThreadReplyReceipt,
+    NodeListReceipt, NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
+    PreferencesReceipt, PreferencesUpdateRequest, ProfileError, ProfileReceipt,
+    ProfileUpdateRequest, ReplyToMessageThreadRequest, SanitizedDaemonStatus, SaveMessageRequest,
     SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
     SendChannelMessageRequest, SkillListReceipt, TaskError, TaskListQuery, TaskListReceipt,
     TaskReceipt, TaskReplyReceipt, TaskReplyRequest, TaskStatusUpdateRequest, TaskThreadReceipt,
@@ -154,25 +153,6 @@ pub fn list_channel_messages(
     query: Option<&MessagePageQuery>,
 ) -> ChannelMessageListReceipt {
     broker.list_channel_messages(channel_id, query)
-}
-
-pub fn list_channel_sessions(broker: &DaemonBroker, channel_id: &str) -> ChannelSessionListReceipt {
-    broker.list_channel_sessions(channel_id)
-}
-
-pub fn create_channel_session(
-    broker: &DaemonBroker,
-    channel_id: &str,
-) -> Result<ChannelSessionReceipt, ChannelError> {
-    broker.create_channel_session(channel_id)
-}
-
-pub fn activate_channel_session(
-    broker: &DaemonBroker,
-    channel_id: &str,
-    session_id: &str,
-) -> Result<ChannelSessionReceipt, ChannelError> {
-    broker.activate_channel_session(channel_id, session_id)
 }
 
 pub fn send_channel_message(
@@ -549,32 +529,6 @@ pub fn list_channel_messages_command(
     query: Option<MessagePageQuery>,
 ) -> ChannelMessageListReceipt {
     list_channel_messages(state.inner(), &channel_id, query.as_ref())
-}
-
-#[tauri::command]
-pub fn list_channel_sessions_command(
-    state: tauri::State<'_, DaemonBroker>,
-    channel_id: String,
-) -> ChannelSessionListReceipt {
-    list_channel_sessions(state.inner(), &channel_id)
-}
-
-#[tauri::command]
-pub fn create_channel_session_command(
-    state: tauri::State<'_, DaemonBroker>,
-    channel_id: String,
-) -> Result<ChannelSessionReceipt, String> {
-    create_channel_session(state.inner(), &channel_id).map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub fn activate_channel_session_command(
-    state: tauri::State<'_, DaemonBroker>,
-    channel_id: String,
-    session_id: String,
-) -> Result<ChannelSessionReceipt, String> {
-    activate_channel_session(state.inner(), &channel_id, &session_id)
-        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -188,6 +188,47 @@ fn coordinator_json_validation_accepts_markdown_fenced_json_output() {
 }
 
 #[test]
+fn coordinator_json_validation_uses_later_valid_json_when_first_fenced_block_is_invalid() {
+    let members = vec![CoordinatorPromptMember {
+        agent_id: "agent_alice".to_string(),
+        name: "Alice".to_string(),
+        handle: "@alice-win".to_string(),
+        agent_kind: "agent".to_string(),
+        readiness: "ready".to_string(),
+    }];
+    let raw = r#"```json
+{
+  "intent": "request_agent_reply",
+  "action": "request_agent_reply",
+  "routeMode": "semantic",
+  "primaryAssigneeAgentId": "agent_alice",
+  "targetAgentIds": ["agent_alice"],
+  "task": null,
+  "reason": "bad first draft",
+  "confidence": 0.8
+}
+```
+```json
+{
+  "intent": "consultation",
+  "action": "request_agent_reply",
+  "routeMode": "semantic",
+  "primaryAssigneeAgentId": "agent_alice",
+  "targetAgentIds": ["agent_alice"],
+  "task": null,
+  "reason": "The coordinator selected Alice.",
+  "confidence": 0.87
+}
+```"#;
+
+    let decision = parse_and_validate_coordinator_json(raw, &members).unwrap();
+
+    assert_eq!(decision.intent, IntentKind::Consultation);
+    assert_eq!(decision.action, CoordinatorAction::RequestAgentReply);
+    assert_eq!(decision.assignee_agent_id.as_deref(), Some("agent_alice"));
+}
+
+#[test]
 fn coordinator_json_validation_rejects_coordinator_targets_without_first_ready_fallback() {
     let members = vec![
         CoordinatorPromptMember {

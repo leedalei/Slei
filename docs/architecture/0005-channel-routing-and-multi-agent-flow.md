@@ -60,7 +60,7 @@ daemon 负责为每次 Agent run 生成完整 Slei system prompt，并通过 wor
 worker 当前通过 spawn Claude CLI 执行：
 
 ```text
-claude --print --output-format stream-json --include-partial-messages
+claude --print --output-format stream-json
 ```
 
 执行约束：

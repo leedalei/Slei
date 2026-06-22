@@ -187,7 +187,6 @@ impl AppState {
         let channel_orchestrator_service = ChannelOrchestratorService::new(
             message_service.clone(),
             channel_service.clone(),
-            coordinator_service.clone(),
             card_service.clone(),
             task_service.clone(),
             message_thread_service.clone(),

@@ -283,15 +283,6 @@ export type ChannelReceipt = {
   channel: ChannelView;
 };
 
-export type ChannelSessionListReceipt = {
-  sessions: ChannelSessionView[];
-};
-
-export type ChannelSessionReceipt = {
-  channel: ChannelView;
-  session: ChannelSessionView;
-};
-
 export type ChannelCreateRequest = ProtocolChannelCreateRequest;
 
 export type ChannelMemberAddRequest = ProtocolChannelMemberAddRequest;
@@ -649,9 +640,6 @@ export type DaemonBridge = {
   addChannelMember(channelId: string, request: ChannelMemberAddRequest): Promise<ChannelMemberReceipt>;
   removeChannelMember(channelId: string, agentId: string): Promise<ChannelMemberRemoveReceipt>;
   listChannelMessages(channelId: string, query?: MessagePageQuery): Promise<ChannelMessageListReceipt>;
-  listChannelSessions(channelId: string): Promise<ChannelSessionListReceipt>;
-  createChannelSession(channelId: string): Promise<ChannelSessionReceipt>;
-  activateChannelSession(channelId: string, sessionId: string): Promise<ChannelSessionReceipt>;
   sendChannelMessage(channelId: string, request: SendChannelMessageRequest): Promise<SendChannelMessageReceipt>;
   listTasks(query?: { channelId?: string; creatorId?: string; assigneeId?: string }): Promise<TaskListReceipt>;
   getTaskThread(taskId: string): Promise<TaskThreadReceipt>;
@@ -785,11 +773,6 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async listChannelMessages() {
       return { messages: [], pageInfo: { hasMoreBefore: false } };
     },
-    async listChannelSessions() {
-      return { sessions: [] };
-    },
-    createChannelSession: rejectDaemonOffline,
-    activateChannelSession: rejectDaemonOffline,
     sendChannelMessage: rejectDaemonOffline,
     async listTasks() {
       return { tasks: [] };
@@ -880,9 +863,6 @@ export function createDaemonBridge(): DaemonBridge {
       addChannelMember: (channelId: string, request: ChannelMemberAddRequest) => invoke<ChannelMemberReceipt>("add_channel_member_command", { channelId, request }),
       removeChannelMember: (channelId: string, agentId: string) => invoke<ChannelMemberRemoveReceipt>("remove_channel_member_command", { channelId, agentId }),
       listChannelMessages: (channelId: string, query?: MessagePageQuery) => invoke<ChannelMessageListReceipt>("list_channel_messages_command", { channelId, query }),
-      listChannelSessions: (channelId: string) => invoke<ChannelSessionListReceipt>("list_channel_sessions_command", { channelId }),
-      createChannelSession: (channelId: string) => invoke<ChannelSessionReceipt>("create_channel_session_command", { channelId }),
-      activateChannelSession: (channelId: string, sessionId: string) => invoke<ChannelSessionReceipt>("activate_channel_session_command", { channelId, sessionId }),
       sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) => invoke<SendChannelMessageReceipt>("send_channel_message_command", { channelId, request }),
       listTasks: (query = {}) => invoke<TaskListReceipt>("list_tasks_command", { query }),
       getTaskThread: (taskId: string) => invoke<TaskThreadReceipt>("get_task_thread_command", { taskId }),

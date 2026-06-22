@@ -245,24 +245,6 @@ async fn run_channel_setup(
         "setup-start",
         &format!("channel_id={}", channel.id),
     );
-    match state
-        .members()
-        .ensure_global_coordinator_agent("local-node")
-        .await
-    {
-        Ok(coordinator) => {
-            channel_create_log(
-                &idempotency_key,
-                "coordinator-ready",
-                &format!("coordinator_id={}", coordinator.id),
-            );
-        }
-        Err(error) => channel_create_log(
-            &idempotency_key,
-            "coordinator-failed",
-            &format!("channel_id={} error={error}", channel.id),
-        ),
-    }
 
     for project_path in project_paths {
         match state

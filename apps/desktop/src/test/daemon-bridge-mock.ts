@@ -283,35 +283,6 @@ export function createDaemonBridgeMock(input: {
         pageInfo: { hasMoreBefore: false },
       };
     },
-    async listChannelSessions(channelId) {
-      return { sessions: channelSessions.filter((session) => session.channelId === channelId) };
-    },
-    async createChannelSession(channelId) {
-      const existing = channels.find((candidate) => candidate.id === channelId);
-      if (!existing) throw new Error("channel not found");
-      const now = new Date().toISOString();
-      const session: ChannelSessionView = {
-        id: `session:channel:${channelId}:${Date.now()}`,
-        channelId,
-        title: "新会话",
-        status: "ready",
-        createdAt: now,
-        updatedAt: now,
-      };
-      const channel = { ...existing, activeSessionId: session.id };
-      channels = channels.map((candidate) => candidate.id === channelId ? channel : candidate);
-      channelSessions = [...channelSessions, session];
-      return { channel, session };
-    },
-    async activateChannelSession(channelId, sessionId) {
-      const existing = channels.find((candidate) => candidate.id === channelId);
-      if (!existing) throw new Error("channel not found");
-      const session = channelSessions.find((candidate) => candidate.channelId === channelId && candidate.id === sessionId);
-      if (!session) throw new Error("channel session not found");
-      const channel = { ...existing, activeSessionId: session.id };
-      channels = channels.map((candidate) => candidate.id === channelId ? channel : candidate);
-      return { channel, session };
-    },
     async sendChannelMessage(channelId, request) {
       const channel = channels.find((candidate) => candidate.id === channelId);
       if (!channel) throw new Error("channel not found");

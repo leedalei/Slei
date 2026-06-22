@@ -8,7 +8,7 @@
 
 Slei 频道里的“转为任务”不能把同一个请求拆成一条普通消息加一条新的任务卡片消息。这样会让 timeline 重复，也容易把任务识别和展示逻辑漂移到 UI。
 
-任务消息的 source of truth 必须在 daemon 和 SQLite：消息先作为频道消息或私聊消息持久化；只有用户勾选“转为任务”或 Agent/coordinator 显式自动转任务时，daemon 才创建 task，并作为 `source_message_id` 关联到这条消息。UI 只展示 daemon 返回的消息、thread summary 和 task summary，不自行判断消息是否应该成为任务，也不在前端新增任务卡片。
+任务消息的 source of truth 必须在 daemon 和 SQLite：消息先作为频道消息或私聊消息持久化；只有用户勾选“转为任务”或普通 Agent 显式创建任务时，daemon 才创建 task，并作为 `source_message_id` 关联到这条消息。UI 只展示 daemon 返回的消息、thread summary 和 task summary，不自行判断消息是否应该成为任务，也不在前端新增任务卡片。
 
 ## Decision
 
@@ -127,7 +127,7 @@ sequenceDiagram
 - 新增任务路径是否仍原地升级源消息，而不是写入新的 `task_card` 消息。
 - 历史 `task_card:` 是否仍被隐藏/清理，而不是恢复成 UI 兼容渲染路径。
 - 手动打开普通子线程是否不会创建 task，也不会把源消息升级为任务。
-- 勾选“转为任务”和 Agent/coordinator 自动转任务是否才会进入 TASK，并复用同一源消息 thread。
+- 勾选“转为任务”和普通 Agent 显式创建任务是否才会进入 TASK，并复用同一源消息 thread。
 - Agent 回复、任务回复和附件入口是否继承源消息所在频道/私聊目标。
 - 任务卡片 UX 是否仍符合本 ADR 的原消息结构、右上角回复/状态/actions/time，且没有恢复 border 或 task icon 角标。
 

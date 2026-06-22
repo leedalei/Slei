@@ -276,22 +276,7 @@ fn has_ready_claude_runtime(state: &AppState, node_id: &str) -> bool {
 }
 
 pub(crate) async fn ensure_channel_coordinators(state: &AppState) -> Result<(), MemberError> {
-    for channel in state.channels().list_channels().await {
-        let coordinator = state
-            .members()
-            .ensure_channel_coordinator_agent(&channel.id, &channel.name, "local-node")
-            .await?;
-        if let Err(error) = state
-            .channels()
-            .add_agent_to_channel(&channel.id, &coordinator.id)
-            .await
-        {
-            return Err(MemberError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                error.to_string(),
-            )));
-        }
-    }
+    let _ = state;
     Ok(())
 }
 

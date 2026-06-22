@@ -417,74 +417,6 @@ impl MemberService {
         .await
     }
 
-    pub async fn ensure_channel_coordinator_agent(
-        &self,
-        channel_id: &str,
-        channel_name: &str,
-        node_id: &str,
-    ) -> Result<ProductAgentRecord, MemberError> {
-        let trimmed_channel_id = channel_id.trim();
-        if trimmed_channel_id.is_empty() || node_id.trim().is_empty() {
-            return Err(MemberError::InvalidAgent);
-        }
-
-        let id = coordinator_agent_id(trimmed_channel_id);
-        if let Some(row) = self
-            .repos
-            .agent_by_id(&id)
-            .await
-            .map_err(member_storage_error)?
-        {
-            let agent = self.product_agent_from_row(row).await?;
-            return self
-                .normalize_existing_channel_coordinator(agent, channel_name)
-                .await;
-        }
-
-        let display_channel = channel_name.trim().trim_start_matches('#');
-        let draft = ProductAgentDraft {
-            name: format!("#{display_channel} Coordinator"),
-            handle: coordinator_handle(trimmed_channel_id),
-            runtime_kind: "ClaudeCode".to_string(),
-            model: "Sonnet".to_string(),
-            node_id: node_id.trim().to_string(),
-            description: channel_coordinator_description(&format!("#{display_channel}")),
-        };
-
-        self.create_product_agent_record_with_channels(
-            draft,
-            id,
-            "coordinator",
-            true,
-            &format!("coordinator:{trimmed_channel_id}"),
-            vec![trimmed_channel_id.to_string()],
-        )
-        .await
-    }
-
-    async fn normalize_existing_channel_coordinator(
-        &self,
-        mut agent: ProductAgentRecord,
-        channel_name: &str,
-    ) -> Result<ProductAgentRecord, MemberError> {
-        let display_channel = channel_name.trim().trim_start_matches('#');
-        let description = channel_coordinator_description(&format!("#{display_channel}"));
-        if agent.description == description {
-            return Ok(agent);
-        }
-
-        agent.description = description;
-        agent.updated_at = current_timestamp();
-        fs::write(&agent.memory_path, initial_memory(&agent)).map_err(MemberError::Io)?;
-        self.repos
-            .update_agent(product_agent_to_update_row(&agent))
-            .await
-            .map_err(member_storage_error)?;
-        let mut state = self.inner.lock().await;
-        state.product_agents.insert(agent.id.clone(), agent.clone());
-        Ok(agent)
-    }
-
     async fn normalize_existing_global_coordinator(
         &self,
         mut agent: ProductAgentRecord,
@@ -1047,37 +979,8 @@ fn import_legacy_product_agents(root: &PathBuf) {
     .expect("import legacy product agents");
 }
 
-fn coordinator_agent_id(channel_id: &str) -> String {
-    format!("agent_coordinator_{}", channel_id.trim().to_lowercase())
-}
-
 pub fn is_internal_coordinator_id(agent_id: &str) -> bool {
     agent_id == GLOBAL_COORDINATOR_AGENT_ID || agent_id.starts_with("agent_coordinator_")
-}
-
-fn coordinator_handle(channel_id: &str) -> String {
-    let normalized = channel_id.trim().to_lowercase();
-    let handle = format!("{normalized}-coordinator");
-    if is_valid_handle_stem(&normalized) && handle.len() <= 32 {
-        return format!("@{handle}");
-    }
-    format!("@coord-{:016x}", stable_channel_hash(&normalized))
-}
-
-fn is_valid_handle_stem(value: &str) -> bool {
-    !value.is_empty()
-        && value.chars().all(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        })
-}
-
-fn stable_channel_hash(value: &str) -> u64 {
-    value
-        .as_bytes()
-        .iter()
-        .fold(0xcbf29ce484222325, |hash, byte| {
-            (hash ^ u64::from(*byte)).wrapping_mul(0x100000001b3)
-        })
 }
 
 fn current_timestamp() -> String {
@@ -1103,12 +1006,6 @@ fn agent_template_input(agent: &ProductAgentRecord) -> AgentTemplateInput<'_> {
 
 fn initial_memory(agent: &ProductAgentRecord) -> String {
     shared_initial_memory(&agent_template_input(agent))
-}
-
-pub(crate) fn channel_coordinator_description(channel_name: &str) -> String {
-    format!(
-        "内置频道协调员，负责分析用户在 {channel_name} 的意图并路由 Agent，自己不回复用户问题；可路由给单个或多个 Agent；用户明确 @ 某个 Agent、@all 或 @everyone 时直接转发。"
-    )
 }
 
 fn global_coordinator_description() -> String {

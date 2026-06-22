@@ -17,9 +17,8 @@ use crate::services::channel_service::{
 };
 use crate::services::claim_service::{ClaimError, ClaimService};
 use crate::services::coordinator_service::{
-    build_coordinator_prompt, parse_and_validate_coordinator_json, CoordinatorDecision,
-    CoordinatorDecisionError, CoordinatorPromptInput, CoordinatorPromptMember,
-    CoordinatorRuntimeInput, CoordinatorService, WorkspaceMount,
+    parse_and_validate_coordinator_json, CoordinatorDecision, CoordinatorDecisionError,
+    CoordinatorPromptMember,
 };
 use crate::services::member_service::{is_internal_coordinator_id, MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
@@ -80,7 +79,6 @@ struct ResolvedCoordinatorDecision {
 pub struct ChannelOrchestratorService {
     messages: MessageService,
     channels: ChannelService,
-    coordinator: CoordinatorService,
     cards: CardService,
     tasks: TaskService,
     message_threads: MessageThreadService,
@@ -110,7 +108,6 @@ impl ChannelOrchestratorService {
     pub fn new(
         messages: MessageService,
         channels: ChannelService,
-        coordinator: CoordinatorService,
         cards: CardService,
         tasks: TaskService,
         message_threads: MessageThreadService,
@@ -124,7 +121,6 @@ impl ChannelOrchestratorService {
         Self {
             messages,
             channels,
-            coordinator,
             cards,
             tasks,
             message_threads,
@@ -152,7 +148,7 @@ impl ChannelOrchestratorService {
     pub async fn send_channel_message_with_launch_guard(
         &self,
         input: SendChannelMessageInput,
-        launch_guard: &ResetLaunchGuard,
+        _launch_guard: &ResetLaunchGuard,
     ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
         let _send_guard = self.send_lock.lock().await;
         if let Some(outcome) = self
@@ -165,18 +161,6 @@ impl ChannelOrchestratorService {
             if outcome.action != "coordinator_pending" {
                 return Ok(outcome);
             }
-        }
-        if input.channel_id == "all" {
-            let coordinator = self
-                .members
-                .ensure_channel_coordinator_agent("all", "all", "local-node")
-                .await?;
-            self.channels
-                .add_agent_to_channel("all", &coordinator.id)
-                .await?;
-            self.channels
-                .set_member_readiness("all", &coordinator.id, ChannelMemberReadiness::Ready)
-                .await?;
         }
         self.sync_declared_channel_members(&input.channel_id)
             .await?;
@@ -203,7 +187,6 @@ impl ChannelOrchestratorService {
             }
         };
         let channel_id = message.channel_id.clone();
-        let author_id = message.author_id.clone();
         let channel_members = self.channels.channel_members(&channel_id).await?;
 
         if message.deleted || message.kind != MessageKind::Human {
@@ -327,63 +310,15 @@ impl ChannelOrchestratorService {
                     .insert(input.idempotency_key, outcome.clone());
                 return Ok(outcome);
             }
-        }
-
-        if !message.as_task && !explicit_agent_ids.is_empty() {
-            let decision_id = Uuid::new_v4();
-            let assignee_agent_id = explicit_agent_ids.first().cloned();
-            let reason = "explicit channel mention routed without coordinator runtime";
-            self.orchestration
-                .record_decision(
-                    decision_id,
-                    &message.channel_id,
-                    &message.id,
-                    "consultation",
-                    "request_agent_reply",
-                    assignee_agent_id.as_deref(),
-                    &explicit_agent_ids,
-                    reason,
-                )
+            let assignee_agent_ids = self
+                .create_broadcast_deliveries_for_members(&message, &channel_members)
                 .await?;
-            for agent_id in &explicit_agent_ids {
-                if let Some(readiness) = readiness_by_agent.get(agent_id) {
-                    self.create_human_mention_once(
-                        agent_id,
-                        &message.channel_id,
-                        &message.id,
-                        readiness.clone(),
-                    )
-                    .await;
-                    self.start_channel_agent_reply_once(
-                        agent_id,
-                        &message.channel_id,
-                        &message.id,
-                        &message_body,
-                    )
-                    .await?;
-                }
-            }
-            self.persist_routing_context_packages(
-                &decision_id.to_string(),
-                None,
-                &message.channel_id,
-                Some(&message.channel_id),
-                &message.id,
-                &message_body,
-                None,
-                "consultation",
-                "request_agent_reply",
-                reason,
-                assignee_agent_id.as_deref(),
-                &explicit_agent_ids,
-            )
-            .await?;
             let outcome = SendChannelMessageOutcome {
                 message_id: message.id,
-                action: "request_agent_reply".to_string(),
-                task_id: None,
-                assignee_agent_id,
-                assignee_agent_ids: explicit_agent_ids,
+                action: "broadcast_delivered".to_string(),
+                task_id: Some(task.id),
+                assignee_agent_id: None,
+                assignee_agent_ids,
                 coordinator_run_id: None,
                 decision_status: Some("completed".to_string()),
             };
@@ -394,125 +329,7 @@ impl ChannelOrchestratorService {
             return Ok(outcome);
         }
 
-        if let Some(run) = self
-            .orchestration
-            .coordinator_runtime_run_for_idempotency(&input.idempotency_key)
-            .await?
-        {
-            if run.status == "pending" {
-                let task_id = self
-                    .tasks
-                    .task_for_source_message(&run.message_id)
-                    .await
-                    .map(|task| task.id);
-                return Ok(pending_outcome(run.message_id, run.run_id, task_id));
-            }
-            return Ok(SendChannelMessageOutcome {
-                message_id: run.message_id,
-                action: "needs_manual_assignment".to_string(),
-                task_id: None,
-                assignee_agent_id: None,
-                assignee_agent_ids: Vec::new(),
-                coordinator_run_id: Some(run.run_id),
-                decision_status: Some(run.status),
-            });
-        }
-
-        let coordinator_input = self
-            .coordinator_runtime_input(
-                format!("coord_run_{}", Uuid::new_v4().simple()),
-                &channel_id,
-                &message.id,
-                &author_id,
-                &message_body,
-                &channel_members,
-            )
-            .await?;
-        let prompt = build_coordinator_prompt(CoordinatorPromptInput {
-            channel_id: coordinator_input.channel_id.clone(),
-            channel_name: coordinator_input.channel_name.clone(),
-            message_id: coordinator_input.message_id.clone(),
-            author_id: coordinator_input.author_id.clone(),
-            body: coordinator_input.body.clone(),
-            members: coordinator_input.members.clone(),
-            context_refs: coordinator_input.context_refs.clone(),
-            workspace_mounts: coordinator_input.workspace_mounts.clone(),
-        });
-        self.orchestration
-            .create_coordinator_runtime_run(
-                &coordinator_input.run_id,
-                &channel_id,
-                &message.id,
-                &input.idempotency_key,
-                &prompt,
-            )
-            .await?;
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.created",
-            &coordinator_input.run_id,
-            &channel_id,
-            &message.id,
-            format!("prompt_len={}", prompt.len()),
-        )
-        .await;
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.starting",
-            &coordinator_input.run_id,
-            &channel_id,
-            &message.id,
-            format!(
-                "workspace_mounts={}",
-                coordinator_input.workspace_mounts.len()
-            ),
-        )
-        .await;
-        let coordinator_run_id = coordinator_input.run_id.clone();
-        let run = match self
-            .coordinator
-            .start_runtime_run_with_launch_guard(coordinator_input, launch_guard)
-            .await
-        {
-            Ok(run) => run,
-            Err(error) => {
-                self.record_coordinator_runtime_diagnostic(
-                    "coordinator_runtime.start_failed",
-                    &coordinator_run_id,
-                    &channel_id,
-                    &message.id,
-                    format!("error={}", error),
-                )
-                .await;
-                let _ = self
-                    .orchestration
-                    .finish_coordinator_runtime_run(
-                        &coordinator_run_id,
-                        "failed",
-                        Some(&error.to_string()),
-                    )
-                    .await;
-                return Err(error.into());
-            }
-        };
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.started",
-            &run.run_id,
-            &channel_id,
-            &message.id,
-            "worker_run_started".to_string(),
-        )
-        .await;
-        let outcome = pending_outcome(message.id, run.run_id, None);
-        let task_id = self
-            .tasks
-            .task_for_source_message(&outcome.message_id)
-            .await
-            .map(|task| task.id);
-        let outcome = SendChannelMessageOutcome { task_id, ..outcome };
-        self.outcome_idempotency
-            .lock()
-            .expect("channel orchestrator idempotency lock")
-            .insert(input.idempotency_key, outcome.clone());
-        Ok(outcome)
+        unreachable!("channel messages are handled by broadcast or explicit task assignment before coordinator routing")
     }
 
     pub async fn broadcast_existing_channel_message(
@@ -1622,38 +1439,6 @@ impl ChannelOrchestratorService {
         Ok(())
     }
 
-    async fn coordinator_runtime_input(
-        &self,
-        run_id: String,
-        channel_id: &str,
-        message_id: &str,
-        author_id: &str,
-        body: &str,
-        channel_members: &[ChannelMemberRecord],
-    ) -> Result<CoordinatorRuntimeInput, ChannelOrchestratorError> {
-        let workspace_mounts = self
-            .channels
-            .workspaces(channel_id)
-            .await?
-            .into_iter()
-            .map(|mount| WorkspaceMount {
-                path: mount.path,
-                label: mount.label,
-            })
-            .collect::<Vec<_>>();
-        Ok(CoordinatorRuntimeInput {
-            run_id,
-            channel_id: channel_id.to_string(),
-            channel_name: channel_id.to_string(),
-            message_id: message_id.to_string(),
-            author_id: author_id.to_string(),
-            body: body.to_string(),
-            members: self.prompt_members(channel_members).await,
-            context_refs: vec![format!("channels/{channel_id}/summary")],
-            workspace_mounts,
-        })
-    }
-
     async fn prompt_members(
         &self,
         channel_members: &[ChannelMemberRecord],
@@ -2305,22 +2090,6 @@ impl From<CoordinatorDecision> for ResolvedCoordinatorDecision {
             coordinator_run_id: None,
             decision_status: Some("completed".to_string()),
         }
-    }
-}
-
-fn pending_outcome(
-    message_id: String,
-    coordinator_run_id: String,
-    task_id: Option<String>,
-) -> SendChannelMessageOutcome {
-    SendChannelMessageOutcome {
-        message_id,
-        action: "coordinator_pending".to_string(),
-        task_id,
-        assignee_agent_id: None,
-        assignee_agent_ids: Vec::new(),
-        coordinator_run_id: Some(coordinator_run_id),
-        decision_status: Some("pending".to_string()),
     }
 }
 

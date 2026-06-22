@@ -68,4 +68,29 @@ describe("ComputersPage header", () => {
     expect(createdItemHtml).toContain("<dd");
     expect(createdItemHtml).toContain(">-</dd>");
   });
+
+  it("shows daemon connection dots on the right side of each computer list row", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const offlineNode: DesktopNodeView = {
+      ...localNode,
+      id: "remote-node",
+      name: "Remote Windows",
+      status: "offline",
+      runtimes: [{ kind: "ClaudeCode", readiness: "unavailable" }],
+    };
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={messages}
+        nodes={[localNode, offlineNode]}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-computer-daemon-dot-local-node"');
+    expect(html).toContain('data-daemon-status="connected"');
+    expect(html).toContain("bg-emerald-500");
+    expect(html).toContain('data-testid="slei-computer-daemon-dot-remote-node"');
+    expect(html).toContain('data-daemon-status="offline"');
+    expect(html).toContain("bg-muted-foreground/45");
+  });
 });

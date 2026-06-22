@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { createSleiFixtures } from "../test/fixtures";
+import { createDemoMembers, createSleiFixtures } from "../test/fixtures";
 import { SleiAppFrame } from "./SleiAppFrame";
 
 const runtimeSetup = {
@@ -71,5 +71,41 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(html).toContain("暂无智能体");
     expect(html).toContain('data-empty-illustration="nodata"');
+  });
+
+  it("marks sidebar category titles as unselectable", () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      conversations: [{ id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" }],
+    });
+    const chatHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const computersHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="computers"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    expect(chatHtml).toContain('data-slot="sidebar-section-title"');
+    expect(chatHtml).toContain('class="select-none');
+    expect(chatHtml).toContain(">频道 1</");
+    expect(chatHtml).toContain(">私聊 1</");
+    expect(computersHtml).toContain('data-slot="sidebar-section-title"');
+    expect(computersHtml).toContain(">设备 1</");
+    for (const html of [chatHtml, computersHtml]) {
+      const titleMatches = html.match(/data-slot="sidebar-section-title"[^>]*class="([^"]*)"/g) ?? [];
+      expect(titleMatches.length).toBeGreaterThan(0);
+      expect(titleMatches.every((match) => match.includes("select-none"))).toBe(true);
+    }
   });
 });

@@ -10,12 +10,11 @@ use slei_daemon::services::coordinator_service::{
 use slei_daemon::services::member_service::{ProductAgentDraft, ProductAgentRecord};
 use slei_daemon::services::message_service::MessageKind;
 use slei_daemon::state::AppState;
-use tokio::time::{sleep, Duration};
 use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
-async fn global_coordinator_channel_create_does_not_join_per_channel_coordinator() {
+async fn channel_create_does_not_create_or_join_internal_coordinators() {
     let token = AuthToken::from_static("test-token");
     let root = std::env::temp_dir().join(format!("slei-global-coordinator-{}", Uuid::new_v4()));
     let state = AppState::for_tests_with_agent_root_async(token.clone(), root).await;
@@ -35,7 +34,11 @@ async fn global_coordinator_channel_create_does_not_join_per_channel_coordinator
     .await;
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    wait_for_global_coordinator(&state).await;
+    assert!(state
+        .members()
+        .get_product_agent("agent_global_coordinator")
+        .await
+        .is_err());
     assert!(state
         .members()
         .get_product_agent("agent_coordinator_dev")
@@ -48,24 +51,6 @@ async fn global_coordinator_channel_create_does_not_join_per_channel_coordinator
     assert!(members
         .iter()
         .all(|member| member.agent_id != "agent_global_coordinator"));
-}
-
-async fn wait_for_global_coordinator(state: &AppState) -> ProductAgentRecord {
-    for _ in 0..100 {
-        if let Ok(agent) = state
-            .members()
-            .get_product_agent("agent_global_coordinator")
-            .await
-        {
-            return agent;
-        }
-        sleep(Duration::from_millis(20)).await;
-    }
-    state
-        .members()
-        .get_product_agent("agent_global_coordinator")
-        .await
-        .expect("global coordinator should be created by channel setup")
 }
 
 #[tokio::test]

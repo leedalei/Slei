@@ -379,34 +379,58 @@ pub fn parse_and_validate_coordinator_json(
     raw: &str,
     members: &[CoordinatorPromptMember],
 ) -> Result<CoordinatorDecision, CoordinatorDecisionError> {
-    let parsed: CoordinatorDecisionJson = serde_json::from_str(coordinator_json_payload(raw))
-        .map_err(|error| CoordinatorDecisionError::InvalidJson(error.to_string()))?;
-    validate_coordinator_decision(parsed, members)
+    let mut last_error = None;
+    for payload in coordinator_json_payload_candidates(raw).into_iter().rev() {
+        let parsed = match serde_json::from_str::<CoordinatorDecisionJson>(payload) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                last_error = Some(CoordinatorDecisionError::InvalidJson(error.to_string()));
+                continue;
+            }
+        };
+        match validate_coordinator_decision(parsed, members) {
+            Ok(decision) => return Ok(decision),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(last_error.unwrap_or_else(|| {
+        CoordinatorDecisionError::InvalidJson("no coordinator JSON payload found".to_string())
+    }))
 }
 
-fn coordinator_json_payload(raw: &str) -> &str {
+fn coordinator_json_payload_candidates(raw: &str) -> Vec<&str> {
     let trimmed = raw.trim();
-    if !trimmed.starts_with("```") {
-        return trimmed;
+    let mut candidates = Vec::new();
+    let mut remaining = trimmed;
+
+    while let Some(fence_start) = remaining.find("```") {
+        let after_open = &remaining[fence_start + 3..];
+        let Some(first_newline) = after_open.find('\n') else {
+            break;
+        };
+        let info = after_open[..first_newline].trim();
+        let body_start = fence_start + 3 + first_newline + 1;
+        let after_body_start = &remaining[body_start..];
+
+        if !info.is_empty() && !info.eq_ignore_ascii_case("json") {
+            remaining = after_body_start;
+            continue;
+        }
+
+        let Some(fence_end) = after_body_start.find("```") else {
+            break;
+        };
+        let body = after_body_start[..fence_end].trim();
+        if !body.is_empty() {
+            candidates.push(body);
+        }
+        remaining = &after_body_start[fence_end + 3..];
     }
 
-    let Some(first_newline) = trimmed.find('\n') else {
-        return trimmed;
-    };
-    let info = trimmed[3..first_newline].trim();
-    if !info.is_empty() && !info.eq_ignore_ascii_case("json") {
-        return trimmed;
+    if candidates.is_empty() {
+        candidates.push(trimmed);
     }
-
-    let body = trimmed[first_newline + 1..].trim();
-    let Some(fence_start) = body.rfind("```") else {
-        return trimmed;
-    };
-    if body[fence_start + 3..].trim().is_empty() {
-        body[..fence_start].trim()
-    } else {
-        trimmed
-    }
+    candidates
 }
 
 fn validate_coordinator_decision(

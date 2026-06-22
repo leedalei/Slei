@@ -1058,14 +1058,13 @@ describe("global search result navigation", () => {
     expect(source).not.toContain("limit: 30");
   });
 
-  it("uses message result sessions when navigating to channel and DM messages", () => {
+  it("navigates to channel and DM messages without activating legacy sessions", () => {
     const source = readFileSync("src/app/SleiApp.tsx", "utf8");
     const handlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));
 
-    expect(handlerSource).toContain("const targetSessionId = result.sessionId ?? undefined");
-    expect(handlerSource).toContain("bridge.activateConversationSession(conversationId, targetSessionId)");
-    expect(handlerSource).toContain("bridge.activateChannelSession(channelId, targetSessionId)");
-    expect(handlerSource).toContain("loadChannelMessagesForState(channelId, data.members, targetSessionId)");
+    expect(handlerSource).not.toContain("activateConversationSession");
+    expect(handlerSource).not.toContain("activateChannelSession");
+    expect(handlerSource).toContain("loadChannelMessagesForState(channelId, data.members)");
     expect(handlerSource).toContain("replaceChannelMessages(current.messages, channelMessages, [channelId])");
     expect(handlerSource).not.toContain("handleChannelSearchResultSelect(channelId)");
   });

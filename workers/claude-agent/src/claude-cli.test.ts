@@ -41,7 +41,6 @@ describe("Claude CLI runtime helpers", () => {
       "--output-format",
       "stream-json",
       "--verbose",
-      "--include-partial-messages",
       "--append-system-prompt",
       "Slei system prompt",
       "--mcp-config",
@@ -64,6 +63,7 @@ describe("Claude CLI runtime helpers", () => {
       "11111111-1111-4111-8111-111111111111",
       "hello",
     ]);
+    expect(args).not.toContain("--include-partial-messages");
     expect(args[args.indexOf("--allowedTools") + 1].split(",")).toEqual([
       "Bash",
       "Skill",
@@ -174,15 +174,10 @@ describe("Claude CLI runtime helpers", () => {
     }
   });
 
-  it("normalizes Claude CLI stream-json into runtime events", () => {
+  it("normalizes Claude CLI stream-json assistant messages into runtime events", () => {
     const lines = fixtureLines("success.jsonl");
     const events = lines.flatMap((line) => cliJsonLineToRuntimeEvents("run_1", "agent_guide", line));
 
-    expect(events).toContainEqual({
-      type: "assistant",
-      runId: "run_1",
-      message: { content: [{ type: "text", text: "实" }] },
-    });
     expect(events).toContainEqual({
       type: "assistant",
       runId: "run_1",
@@ -214,6 +209,18 @@ describe("Claude CLI runtime helpers", () => {
       payload: expect.objectContaining({ kind: "createAgent" }),
     });
     expect(events).toContainEqual({ type: "completed", runId: "run_1" });
+  });
+
+  it("ignores partial Claude CLI stream text deltas", () => {
+    const line = JSON.stringify({
+      type: "stream_event",
+      event: {
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "partial JSON fragment" },
+      },
+    });
+
+    expect(cliJsonLineToRuntimeEvents("run_1", "agent_guide", line)).toEqual([]);
   });
 
   it("normalizes Claude CLI result errors into failed runtime events", () => {

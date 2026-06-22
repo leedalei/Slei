@@ -63,7 +63,6 @@ export function buildClaudeCliArgs(
     "--output-format",
     "stream-json",
     "--verbose",
-    "--include-partial-messages",
   ];
 
   if (command.input.system_prompt !== undefined) {
@@ -296,7 +295,7 @@ export function cliJsonLineToRuntimeEvents(
   }
 
   if (event.type === "stream_event") {
-    return streamEventToRuntimeEvents(runId, event);
+    return [];
   }
 
   const message = event.message;
@@ -379,31 +378,6 @@ function contentPartToRuntimeEvents(
         runId,
         toolUseId: part.tool_use_id,
         isError: part.is_error === true,
-      },
-    ];
-  }
-
-  return [];
-}
-
-function streamEventToRuntimeEvents(runId: string, event: Record<string, unknown>): RuntimeEvent[] {
-  const streamEvent = event.event;
-  if (!isRecord(streamEvent)) {
-    return [];
-  }
-
-  const delta = streamEvent.delta;
-  if (
-    streamEvent.type === "content_block_delta" &&
-    isRecord(delta) &&
-    delta.type === "text_delta" &&
-    typeof delta.text === "string"
-  ) {
-    return [
-      {
-        type: "assistant",
-        runId,
-        message: { content: [{ type: "text", text: delta.text }] },
       },
     ];
   }

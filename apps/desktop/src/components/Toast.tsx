@@ -50,7 +50,7 @@ export function Toast({ message, text, type }: { message?: string; text?: string
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className={cn("pointer-events-auto h-auto rounded-md bg-white px-4 py-3 text-sm shadow-md hover:bg-white dark:bg-popover dark:hover:bg-popover", variantClassName)}
+            className={cn("pointer-events-auto h-auto max-w-[70vw] justify-start rounded-md bg-white px-4 py-3 text-left text-sm whitespace-normal break-words shadow-md hover:bg-white dark:bg-popover dark:hover:bg-popover", variantClassName)}
             onClick={() => void copyToastContent(content)}
             type="button"
             variant="outline"

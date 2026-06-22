@@ -1444,7 +1444,9 @@ impl Repositories {
             let center = sqlx::query_scalar::<_, i64>(
                 "SELECT rowid
                  FROM messages
-                 WHERE id = ? AND channel_id = ? AND deleted = 0",
+                 WHERE id = ?
+                   AND channel_id = ?
+                   AND deleted = 0",
             )
             .bind(around_message_id)
             .bind(&query.channel_id)

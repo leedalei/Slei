@@ -171,19 +171,23 @@ async fn deleting_agent_removes_registry_membership_and_workspace() {
 async fn system_agents_cannot_be_deleted() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("system-agent-delete");
-    let app = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
-    assert_eq!(
-        get_json(&app, &token, "/v1/agents").await.status(),
-        StatusCode::OK
-    );
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    state.nodes().set_runtime_ready_for_tests("1.2.3");
+    let app = build_router(state);
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents/guide/bootstrap",
+        Some("bootstrap-system-agent-delete"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
 
-    let response = delete_json(&app, &token, "/v1/agents/agent_coordinator_all").await;
+    let response = delete_json(&app, &token, "/v1/agents/agent_guide_local_node").await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    assert!(root.join("agents/agent_coordinator_all").is_dir());
+    assert!(root.join("agents/agent_guide_local_node").is_dir());
 }
 
 #[tokio::test]
@@ -311,7 +315,7 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(agents
         .iter()
         .any(|agent| agent["id"] == "agent_guide_local_node"));
-    assert!(agents
+    assert!(!agents
         .iter()
         .any(|agent| agent["id"] == "agent_coordinator_all"));
 }
@@ -398,7 +402,7 @@ async fn guide_bootstrap_waits_for_runtime_ready() {
 }
 
 #[tokio::test]
-async fn list_agents_exposes_default_channel_coordinator_as_system_agent() {
+async fn list_agents_does_not_materialize_channel_coordinator_agents() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-default");
     let app = build_router(AppState::for_tests_with_agent_root(
@@ -411,26 +415,17 @@ async fn list_agents_exposes_default_channel_coordinator_as_system_agent() {
     assert_eq!(listed.status(), StatusCode::OK);
     let body = response_json(listed).await;
     let agents = body["agents"].as_array().unwrap();
-    let coordinator = agents
+    assert!(!agents
         .iter()
-        .find(|agent| agent["agentKind"] == "coordinator")
-        .expect("default channel coordinator should be listed as an agent");
-    assert_eq!(coordinator["id"], "agent_coordinator_all");
-    assert_eq!(coordinator["handle"], "@all-coordinator");
-    assert_eq!(coordinator["systemOwned"], true);
-    assert_eq!(coordinator["runtimeKind"], "ClaudeCode");
-    assert_eq!(coordinator["channelIds"], json!(["all"]));
-    assert!(
-        PathBuf::from(coordinator["workspacePath"].as_str().unwrap())
-            .ends_with("agent_coordinator_all")
-    );
-    assert!(root
-        .join("agents/agent_coordinator_all/MEMORY.md")
-        .is_file());
+        .any(|agent| agent["id"] == "agent_coordinator_all"));
+    assert!(!agents
+        .iter()
+        .any(|agent| agent["agentKind"] == "coordinator" && agent["channelIds"] == json!(["all"])));
+    assert!(!root.join("agents/agent_coordinator_all").exists());
 }
 
 #[tokio::test]
-async fn list_agents_handles_non_ascii_channel_coordinator_names() {
+async fn creating_non_ascii_channel_does_not_materialize_channel_coordinator() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-non-ascii");
     let app = build_router(AppState::for_tests_with_agent_root(
@@ -457,25 +452,22 @@ async fn list_agents_handles_non_ascii_channel_coordinator_names() {
     assert_eq!(listed.status(), StatusCode::OK);
     let body = response_json(listed).await;
     let agents = body["agents"].as_array().unwrap();
-    let coordinator = agents
+    assert!(!agents
         .iter()
-        .find(|agent| {
-            agent["agentKind"] == "coordinator" && agent["channelIds"] == json!(["内容营销开发"])
-        })
-        .expect("non-ASCII channel should get a listable coordinator");
-    let handle = coordinator["handle"].as_str().unwrap();
-    assert!(handle.starts_with("@coord-"));
-    assert!(handle
-        .trim_start_matches('@')
-        .chars()
-        .all(|character| character.is_ascii_lowercase()
-            || character.is_ascii_digit()
-            || character == '-'));
-    assert!(PathBuf::from(coordinator["workspacePath"].as_str().unwrap()).starts_with(root));
+        .any(|agent| agent["agentKind"] == "coordinator"
+            && agent["channelIds"] == json!(["内容营销开发"])));
+    assert!(!fs::read_dir(root.join("agents"))
+        .map(|entries| entries.filter_map(Result::ok).any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("agent_coordinator_")
+        }))
+        .unwrap_or(false));
 }
 
 #[tokio::test]
-async fn coordinator_agents_cannot_be_used_for_direct_messages() {
+async fn legacy_channel_coordinator_id_cannot_be_used_for_direct_messages() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-no-dm");
     let app = build_router(AppState::for_tests_with_agent_root(token.clone(), root));
@@ -494,14 +486,11 @@ async fn coordinator_agents_cannot_be_used_for_direct_messages() {
     .await;
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(
-        response_json(response).await["error"],
-        "coordinator agents do not support direct messages"
-    );
+    assert_eq!(response_json(response).await["error"], "agent not found");
 }
 
 #[tokio::test]
-async fn coordinator_runtime_configuration_updates_runtime_thread() {
+async fn guide_runtime_configuration_updates_runtime_thread() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("channel-coordinator-runtime");
     let state = AppState::for_tests_with_agent_root(token.clone(), root);
@@ -523,10 +512,20 @@ async fn coordinator_runtime_configuration_updates_runtime_thread() {
         StatusCode::OK
     );
 
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents/guide/bootstrap",
+        Some("bootstrap-guide-runtime"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+
     let response = patch_json(
         &app,
         &token,
-        "/v1/agents/agent_coordinator_all",
+        "/v1/agents/agent_guide_local_node",
         None,
         json!({ "runtimeKind": "OpenCode", "model": "Planner" }),
     )
@@ -534,7 +533,7 @@ async fn coordinator_runtime_configuration_updates_runtime_thread() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = response_json(response).await;
-    assert_eq!(body["agent"]["agentKind"], "coordinator");
+    assert_eq!(body["agent"]["agentKind"], "guide");
     assert_eq!(body["agent"]["runtimeKind"], "OpenCode");
     assert_eq!(body["agent"]["runtimeThread"]["runtimeKind"], "OpenCode");
     assert_eq!(body["agent"]["model"], "Planner");
@@ -1631,7 +1630,7 @@ async fn agents_persist_to_slei_data_root_and_reload() {
         .iter()
         .find(|agent| agent["handle"] == "@alice")
         .expect("persisted agent should still be listed");
-    assert!(agents
+    assert!(!agents
         .iter()
         .any(|agent| agent["id"] == "agent_coordinator_all"));
     assert!(!root.join("agents/index.json").exists());
