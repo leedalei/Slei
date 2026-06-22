@@ -660,6 +660,69 @@ describe("MembersPage agent details", () => {
     expect(panel.textContent).not.toContain("文件读取");
   });
 
+  it("labels the workspace skills card as skills without a duplicate subtitle", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_coda", "Coda"),
+              skills: [
+                {
+                  id: "skill_memory",
+                  name: "memory",
+                  trigger: "Use when the user asks the agent to remember facts",
+                  path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md",
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    await clickTab(host, messages.members.capabilities);
+    const panel = activeTabPanel(host);
+    const skillsCard = panel.querySelector('[data-slot="card"]');
+
+    expect(skillsCard?.querySelector('[data-slot="card-title"]')?.textContent).toBe(messages.members.skills);
+    expect(skillsCard?.querySelector('[data-slot="card-description"]')).toBeNull();
+  });
+
+  it("renders workspace skill icons small and visually muted", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_coda", "Coda"),
+              skills: [
+                {
+                  id: "skill_memory",
+                  name: "memory",
+                  trigger: "Use when the user asks the agent to remember facts",
+                  path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md",
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    await clickTab(host, messages.members.capabilities);
+    const panel = activeTabPanel(host);
+    const skillIcon = panel.querySelector('[role="listitem"] svg');
+
+    expect(skillIcon?.classList.contains("size-3")).toBe(true);
+    expect(skillIcon?.classList.contains("text-muted-foreground")).toBe(true);
+    expect(skillIcon?.classList.contains("opacity-60")).toBe(true);
+  });
+
   it("shows read-only runtime capabilities and workspace permissions on the permissions tab", async () => {
     const messages = createDesktopMessages("zh-CN");
     const host = await mount(

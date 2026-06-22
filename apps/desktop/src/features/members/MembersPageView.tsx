@@ -566,8 +566,7 @@ export function MembersPage(input: {
             <TabsContent forceMount value="capabilities" className="grid gap-4 data-[state=inactive]:hidden">
               <Card size="compact">
                 <CardHeader>
-                  <CardTitle>{input.messages.members.capabilities}</CardTitle>
-                  <CardDescription>{input.messages.members.skills}</CardDescription>
+                  <CardTitle>{input.messages.members.skills}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {memberSkills.length ? (
@@ -575,7 +574,7 @@ export function MembersPage(input: {
                       {memberSkills.map((skill) => (
                         <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id} role="listitem">
                           <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                            <Sparkles aria-hidden="true" />
+                            <Sparkles aria-hidden="true" className="size-3 shrink-0 text-muted-foreground opacity-60" />
                             <span className="truncate">{skill.name}</span>
                           </div>
                           {skill.trigger ? (
