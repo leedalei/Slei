@@ -4,30 +4,29 @@ import { renderActivityPanel } from "./ActivityPanel";
 import { renderCapabilitiesPanel } from "./CapabilitiesPanel";
 
 describe("member capabilities and activity", () => {
-  it("renders read-only capabilities including unavailable scan state", () => {
+  it("renders workspace skills with availability and source details", () => {
     const html = renderCapabilitiesPanel({
       locale: "zh-CN",
-      capabilities: [
+      skills: [
         {
           name: "youdao-lobster-pr",
-          source: "Workspace Claude",
-          description: "PR 提交流程",
+          source: "memory",
+          description: "有道龙虾项目 PR 提交流程",
           available: true,
         },
         {
-          name: "workspace scan",
-          source: "Workspace Claude",
-          description: "扫描失败",
+          name: "memory",
+          description: "保存和检索成员记忆",
           available: false,
-          error: "workspace scan timed out",
         },
       ],
     });
 
     expect(html).toContain("能力");
-    expect(html).toContain("只读");
     expect(html).toContain("youdao-lobster-pr");
-    expect(html).toContain("workspace scan timed out");
+    expect(html).toContain("有道龙虾项目 PR 提交流程");
+    expect(html).toContain("memory");
+    expect(html).not.toContain("只读");
     expect(html).not.toContain("安装");
   });
 

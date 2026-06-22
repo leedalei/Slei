@@ -228,6 +228,7 @@ export type DesktopMessages = {
     noCapabilities: string;
     noSkills: string;
     noSkillsDescription: string;
+    noWorkspacePermissions: string;
     newAgent: string;
     noAgents: string;
     online: string;
@@ -238,6 +239,7 @@ export type DesktopMessages = {
     openWorkspace: string;
     openInFileManager: string;
     channelPermission: string;
+    permissions: string;
     permissionLabels: Record<"ReadOnly" | "Edit" | "Controlled", string>;
     profile: string;
     readOnly: string;

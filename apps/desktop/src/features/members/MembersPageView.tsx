@@ -54,7 +54,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type MemberTab = "profile" | "workspace" | "capabilities" | "activity";
+type MemberTab = "profile" | "workspace" | "capabilities" | "permissions" | "activity";
 type MemberEditableField = "description" | "model" | "name" | "runtime";
 
 type ClipboardWriter = {
@@ -337,6 +337,7 @@ export function MembersPage(input: {
     expandedDirectories: expandedWorkspaceDirectories,
   });
   const effectiveSavingField = input.savingMemberField ?? savingField;
+  const memberSkills = selectedMember.skills ?? [];
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
@@ -412,6 +413,7 @@ export function MembersPage(input: {
             <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
             <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
             <TabsTrigger value="capabilities">{input.messages.members.capabilities}</TabsTrigger>
+            <TabsTrigger value="permissions">{input.messages.members.permissions}</TabsTrigger>
             <TabsTrigger value="activity">{input.messages.members.activity}</TabsTrigger>
           </TabsList>
         </div>
@@ -565,6 +567,37 @@ export function MembersPage(input: {
               <Card size="compact">
                 <CardHeader>
                   <CardTitle>{input.messages.members.capabilities}</CardTitle>
+                  <CardDescription>{input.messages.members.skills}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {memberSkills.length ? (
+                    <div className="grid gap-2" role="list">
+                      {memberSkills.map((skill) => (
+                        <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id} role="listitem">
+                          <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                            <Sparkles aria-hidden="true" />
+                            <span className="truncate">{skill.name}</span>
+                          </div>
+                          {skill.trigger ? (
+                            <p className="break-words text-xs text-muted-foreground">{skill.trigger}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <InlineEmpty
+                      description={input.messages.members.noSkillsDescription}
+                      title={input.messages.members.noSkills}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent forceMount value="permissions" className="grid gap-4 data-[state=inactive]:hidden">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{input.messages.members.capabilities}</CardTitle>
                   <CardDescription>{input.messages.members.readOnly}</CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -586,22 +619,29 @@ export function MembersPage(input: {
                 </CardContent>
               </Card>
 
-              {selectedMember.permissions.length ? (
-                <Card size="compact">
-                  <CardHeader>
-                    <CardTitle>{input.messages.members.workspacePermission}</CardTitle>
-                    <CardDescription>{input.messages.members.readOnly}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    {selectedMember.permissions.map((permission) => (
-                      <Badge className="gap-1" key={permission} variant="outline">
-                        <ShieldCheck aria-hidden="true" />
-                        {permission}
-                      </Badge>
-                    ))}
-                  </CardContent>
-                </Card>
-              ) : null}
+              <Card size="compact">
+                <CardHeader>
+                  <CardTitle>{input.messages.members.workspacePermission}</CardTitle>
+                  <CardDescription>{input.messages.members.readOnly}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedMember.permissions.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedMember.permissions.map((permission) => (
+                        <Badge className="gap-1" key={permission} variant="outline">
+                          <ShieldCheck aria-hidden="true" />
+                          {permission}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <InlineEmpty
+                      description={input.messages.members.noWorkspacePermissions}
+                      title={input.messages.members.workspacePermission}
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent forceMount value="activity" className="grid gap-2 data-[state=inactive]:hidden">

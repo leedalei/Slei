@@ -35,6 +35,7 @@ export const members = {
   noCapabilities: "No capabilities",
   noSkills: "No skills",
   noSkillsDescription: "This member workspace has no loadable skills yet",
+  noWorkspacePermissions: "This member has no workspace permission entries",
   newAgent: "New agent",
   noAgents: "No agents",
   online: "Online",
@@ -45,6 +46,7 @@ export const members = {
   openWorkspace: "Open workspace",
   openInFileManager: "Open in file manager",
   channelPermission: "Channel permission",
+  permissions: "Permissions",
   permissionLabels: {
     ReadOnly: "Read only",
     Edit: "Edit",

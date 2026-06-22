@@ -98,6 +98,23 @@ async function mount(element: React.ReactElement) {
   return mountedContainer;
 }
 
+async function clickTab(host: HTMLElement, label: string) {
+  const tab = Array.from(host.querySelectorAll('[role="tab"]')).find((element) => element.textContent === label);
+  expect(tab).toBeTruthy();
+  await act(async () => {
+    tab?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, ctrlKey: false }));
+    tab?.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0, ctrlKey: false }));
+    (tab as HTMLElement | undefined)?.click();
+  });
+  await act(async () => undefined);
+}
+
+function activeTabPanel(host: HTMLElement) {
+  const panel = host.querySelector('[role="tabpanel"][data-state="active"]');
+  expect(panel).toBeTruthy();
+  return panel as HTMLElement;
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -151,6 +168,20 @@ describe("MembersPage agent details", () => {
     expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
     expect(html.slice(markerIndex, markerIndex + 600)).toContain('data-variant="line"');
     expect(html.slice(markerIndex, markerIndex + 600)).toContain("group-data-[orientation=horizontal]/tabs:h-8");
+  });
+
+  it("renders a dedicated permissions tab label between capabilities and activity", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(renderMembersPage({ messages }));
+    const labels = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
+
+    expect(labels).toEqual([
+      messages.members.profile,
+      messages.members.workspace,
+      messages.members.capabilities,
+      messages.members.permissions,
+      messages.members.activity,
+    ]);
   });
 
   it("shows ordinary agent runtime configuration with a direct message action", () => {
@@ -414,13 +445,19 @@ describe("MembersPage agent details", () => {
       />,
     );
 
+    const workspaceContentStart = html.indexOf("content-workspace");
+    const capabilitiesContentStart = html.indexOf("content-capabilities");
+    expect(workspaceContentStart).toBeGreaterThanOrEqual(0);
+    expect(capabilitiesContentStart).toBeGreaterThan(workspaceContentStart);
+    const workspaceHtml = html.slice(workspaceContentStart, capabilitiesContentStart);
+
     expect(html).toContain("文件预览");
     expect(html).not.toContain("<h2 class=\"text-sm font-semibold\">文件</h2>");
     expect(html).not.toContain("~/.slei/agents/agent_coda</p>");
     expect(html).toContain("MEMORY-with-a-very-long-file-name-that-should-not-overflow-the-sidebar.md");
     expect(html).toContain(".claude");
-    expect(html).not.toContain("memory</span>");
-    expect(html).not.toContain("remember facts");
+    expect(workspaceHtml).not.toContain("memory</span>");
+    expect(workspaceHtml).not.toContain("remember facts");
     expect(html).toContain("w-full min-w-0 overflow-hidden justify-start gap-2 whitespace-nowrap");
     expect(html).toContain("Coda prefers concise implementation notes.");
     expect(html).toContain("通过资源管理器打开");
@@ -571,18 +608,117 @@ describe("MembersPage agent details", () => {
     expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
   });
 
-  it("uses the shared empty illustration for empty capability lists", async () => {
+  it("shows empty runtime and workspace permission states on the permissions tab", async () => {
     const messages = createDesktopMessages("zh-CN");
-    const container = await mount(
+    const host = await mount(
       renderMembersPage({
         messages,
-        data: createSleiFixtures({ members: [{ ...agentMember("agent_empty", "Empty"), capabilities: [] }] }),
+        data: createSleiFixtures({ members: [{ ...agentMember("agent_empty", "Empty"), capabilities: [], permissions: [] }] }),
         activeMemberId: "agent_empty",
       }),
     );
 
-    expect(container.textContent).toContain(messages.members.noCapabilities);
-    expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+    await clickTab(host, messages.members.permissions);
+    const panel = activeTabPanel(host);
+
+    expect(panel.textContent).toContain(messages.members.noCapabilities);
+    expect(panel.textContent).toContain(messages.members.noWorkspacePermissions);
+    expect(panel.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+  });
+
+  it("shows workspace skills on the capabilities tab without runtime capabilities or workspace permissions", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_coda", "Coda"),
+              capabilities: ["ClaudeCode"],
+              permissions: ["文件读取"],
+              skills: [
+                {
+                  id: "skill_memory",
+                  name: "长期记忆",
+                  trigger: "当用户希望保存偏好或事实时触发",
+                  path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md",
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    await clickTab(host, messages.members.capabilities);
+    const panel = activeTabPanel(host);
+
+    expect(panel.textContent).toContain("长期记忆");
+    expect(panel.textContent).toContain("当用户希望保存偏好或事实时触发");
+    expect(panel.textContent).not.toContain("ClaudeCode");
+    expect(panel.textContent).not.toContain("文件读取");
+  });
+
+  it("shows read-only runtime capabilities and workspace permissions on the permissions tab", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_coda", "Coda"),
+              capabilities: ["ClaudeCode"],
+              permissions: ["文件读取"],
+              skills: [
+                {
+                  id: "skill_memory",
+                  name: "长期记忆",
+                  trigger: "当用户希望保存偏好或事实时触发",
+                  path: "~/.slei/agents/agent_coda/.claude/skills/memory/SKILL.md",
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    await clickTab(host, messages.members.permissions);
+    const panel = activeTabPanel(host);
+
+    expect(panel.textContent).toContain(messages.members.readOnly);
+    expect(panel.textContent).toContain("ClaudeCode");
+    expect(panel.textContent).toContain("文件读取");
+    expect(panel.textContent).not.toContain("长期记忆");
+  });
+
+  it("shows the empty skills state on the capabilities tab without runtime capabilities", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(
+      renderMembersPage({
+        messages,
+        data: createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_empty", "Empty"),
+              capabilities: ["ClaudeCode"],
+              permissions: ["文件读取"],
+              skills: [],
+            },
+          ],
+        }),
+        activeMemberId: "agent_empty",
+      }),
+    );
+
+    await clickTab(host, messages.members.capabilities);
+    const panel = activeTabPanel(host);
+
+    expect(panel.textContent).toContain(messages.members.noSkills);
+    expect(panel.textContent).toContain(messages.members.noSkillsDescription);
+    expect(panel.textContent).not.toContain("ClaudeCode");
   });
 
   it("renders an activity error state when daemon activity loading fails", async () => {
