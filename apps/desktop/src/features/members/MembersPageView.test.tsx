@@ -600,18 +600,22 @@ describe("MembersPage agent details", () => {
     expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
   });
 
-  it("uses the shared empty illustration for empty capability lists", async () => {
+  it("shows empty runtime and workspace permission states on the permissions tab", async () => {
     const messages = createDesktopMessages("zh-CN");
-    const container = await mount(
+    const host = await mount(
       renderMembersPage({
         messages,
-        data: createSleiFixtures({ members: [{ ...agentMember("agent_empty", "Empty"), capabilities: [] }] }),
+        data: createSleiFixtures({ members: [{ ...agentMember("agent_empty", "Empty"), capabilities: [], permissions: [] }] }),
         activeMemberId: "agent_empty",
       }),
     );
 
-    expect(container.textContent).toContain(messages.members.noCapabilities);
-    expect(container.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+    await clickTab(host, messages.members.permissions);
+    const panel = activeTabPanel(host);
+
+    expect(panel.textContent).toContain(messages.members.noCapabilities);
+    expect(panel.textContent).toContain(messages.members.noWorkspacePermissions);
+    expect(panel.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
   });
 
   it("shows workspace skills on the capabilities tab without runtime capabilities or workspace permissions", async () => {
