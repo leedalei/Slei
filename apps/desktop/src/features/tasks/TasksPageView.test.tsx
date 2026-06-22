@@ -201,7 +201,8 @@ describe("TasksPage filters", () => {
 
     expect(container?.textContent).toContain("列表");
     expect(container?.textContent).not.toContain("列表 0");
-    expect(container?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
+    const listEmptyTitle = container?.querySelector('[data-empty-variant="nodata"] h2');
+    expect(listEmptyTitle?.textContent).toBe("暂无数据");
     expect(container?.textContent).not.toContain("AI channel task for Coda");
     expect(container?.textContent).not.toContain("Design channel task for Coda");
   });
@@ -215,6 +216,9 @@ describe("TasksPage filters", () => {
 
     expect(container?.textContent).toContain("待指派");
     expect(container?.textContent).not.toContain("待指派 0");
+    const pendingColumn = container?.querySelector('section[aria-label="待指派"]');
+    const pendingEmptyTitle = pendingColumn?.querySelector('[data-empty-variant="nodata"] h2');
+    expect(pendingEmptyTitle?.textContent).toBe("暂无数据");
     expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);
   });
 });

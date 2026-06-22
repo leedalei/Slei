@@ -126,7 +126,7 @@ export function TasksPage({
                       <Empty
                         framed={false}
                         size="sm"
-                        title={taskStatusLabel(column, messages)}
+                        title={messages.empty.defaultTitle.nodata}
                         variant="nodata"
                       />
                     )}
@@ -152,7 +152,7 @@ export function TasksPage({
               {filteredTasks.length === 0 ? (
                 <Empty
                   framed={false}
-                  title={messages.tasks.list}
+                  title={messages.empty.defaultTitle.nodata}
                   variant="nodata"
                 />
               ) : null}
