@@ -69,32 +69,7 @@ describe("ComputersPage header", () => {
     expect(createdItemHtml).toContain(">-</dd>");
   });
 
-  it("shows daemon connection dots on the right side of each computer list row", () => {
-    const messages = createDesktopMessages("zh-CN");
-    const offlineNode: DesktopNodeView = {
-      ...localNode,
-      id: "remote-node",
-      name: "Remote Windows",
-      status: "offline",
-      runtimes: [{ kind: "ClaudeCode", readiness: "unavailable" }],
-    };
-    const html = renderToStaticMarkup(
-      <ComputersPage
-        members={[]}
-        messages={messages}
-        nodes={[localNode, offlineNode]}
-      />,
-    );
-
-    expect(html).toContain('data-testid="slei-computer-daemon-dot-local-node"');
-    expect(html).toContain('data-daemon-status="connected"');
-    expect(html).toContain("bg-emerald-500");
-    expect(html).toContain('data-testid="slei-computer-daemon-dot-remote-node"');
-    expect(html).toContain('data-daemon-status="offline"');
-    expect(html).toContain("bg-muted-foreground/45");
-  });
-
-  it("keeps the computer list card compact without a separate card header gap", () => {
+  it("shows the selected computer connection status in the detail header", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(
       <ComputersPage
@@ -103,16 +78,25 @@ describe("ComputersPage header", () => {
         nodes={[localNode]}
       />,
     );
-    const markerStart = html.indexOf('data-testid="slei-computer-list-card"');
-    const cardStart = html.lastIndexOf("<div", markerStart);
-    const cardEnd = html.indexOf("</div></div>", cardStart);
-    const cardHtml = html.slice(cardStart, cardEnd);
+    const markerStart = html.indexOf('data-testid="slei-computer-detail-header"');
+    const headerStart = html.lastIndexOf("<header", markerStart);
+    const headerEnd = html.indexOf("</header>", markerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
-    expect(cardStart).toBeGreaterThanOrEqual(0);
-    expect(cardHtml).toContain('data-size="sm"');
-    expect(cardHtml).toContain(messages.computers.computers);
-    expect(cardHtml).toContain("Lei MacBook");
-    expect(cardHtml).not.toContain('data-slot="card-header"');
+    expect(headerHtml).toContain(messages.computers.connected);
+    expect(headerHtml).toContain("bg-emerald-500");
+  });
+
+  it("does not duplicate the selected computer identity in a detail list card", () => {
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={createDesktopMessages("zh-CN")}
+        nodes={[localNode]}
+      />,
+    );
+
+    expect(html).not.toContain('data-testid="slei-computer-list-card"');
   });
 });

@@ -17,7 +17,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
 
 export function ComputersPage(input: {
   activeNodeId?: string;
@@ -99,38 +98,6 @@ export function ComputersPage(input: {
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
-          <Card data-testid="slei-computer-list-card" size="sm">
-            <CardContent className="grid gap-3">
-              <h2 className="text-sm font-medium">{input.messages.computers.computers}</h2>
-              {input.nodes.map((node) => {
-                const isConnected = node.status === "connected";
-                return (
-                  <article
-                    className={cn(
-                      "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border bg-muted/30 p-3",
-                      node.id === selectedNode.id && "border-primary/40 bg-primary/5",
-                    )}
-                    key={node.id}
-                  >
-                    <div className="min-w-0">
-                      <strong className="block truncate text-sm">{node.name}</strong>
-                      <p className="truncate text-sm text-muted-foreground">{node.device.hostname}</p>
-                    </div>
-                    <span
-                      aria-label={isConnected ? input.messages.computers.connected : input.messages.computers.offline}
-                      className="grid size-5 place-items-center justify-self-end"
-                      data-daemon-status={isConnected ? "connected" : "offline"}
-                      data-testid={`slei-computer-daemon-dot-${node.id}`}
-                      role="img"
-                    >
-                      <StatusDot status={isConnected ? "idle" : "offline"} />
-                    </span>
-                  </article>
-                );
-              })}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardContent className="p-4">
               <EditableDetailField
