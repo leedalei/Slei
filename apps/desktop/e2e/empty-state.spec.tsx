@@ -27,6 +27,10 @@ describe("empty state component", () => {
     expect(nodata).toContain('data-empty-illustration="nodata"');
     expect(nodata).toContain('data-empty-asset="data"');
     expect(nodata).toContain("empty-data.png");
+    expect(nodata).not.toContain('data-slot="card"');
+    expect(nodata).not.toContain('data-slot="card-content"');
+    expect(nodata).not.toContain("border");
+    expect(nodata).not.toContain("bg-");
     expect(nodata).not.toContain("slei-empty__pixel-face");
     expect(nodata).toContain("暂无智能体");
     expect(nodata).toContain("创建第一个智能体后会显示在这里。");
@@ -36,6 +40,10 @@ describe("empty state component", () => {
     expect(noresult).toContain('data-empty-illustration="noresult"');
     expect(noresult).toContain('data-empty-asset="search"');
     expect(noresult).toContain("empty-search.png");
+    expect(noresult).not.toContain('data-slot="card"');
+    expect(noresult).not.toContain('data-slot="card-content"');
+    expect(noresult).not.toContain("border");
+    expect(noresult).not.toContain("bg-");
     expect(noresult).not.toContain("bg-amber-500/10");
     expect(noresult).toContain("没有结果");
     expect(noresult).toContain("换一个关键词试试。");

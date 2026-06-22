@@ -1,5 +1,4 @@
 import type { EmptySize, EmptyVariant } from "../app/model";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import emptyData from "../assets/empty-states/empty-data.png";
 import emptyError from "../assets/empty-states/empty-error.png";
@@ -34,13 +33,8 @@ export function Empty(input: {
   const size = input.size ?? "md";
   const illustrationSize = size === "lg" ? "h-28 w-44" : size === "sm" ? "h-16 w-28" : "h-24 w-40";
   const illustration = input.illustration ?? (variant === "noresult" ? "search" : "data");
-  const chrome = input.chrome ?? "default";
-  const framed = input.framed ?? true;
   const rootClassName = cn(
-    chrome !== "none" && "border-dashed",
-    chrome !== "none" && (variant === "noresult" ? "bg-transparent" : "bg-muted/35"),
     input.centered && "mx-auto max-w-xl",
-    !framed && chrome !== "none" && "rounded-lg border",
     input.className,
   );
   const content = (
@@ -62,27 +56,14 @@ export function Empty(input: {
     </div>
   );
 
-  if (!framed) {
-    return (
-      <div
-        className={rootClassName}
-        data-empty-size={size}
-        data-empty-variant={variant}
-        role="status"
-      >
-        {content}
-      </div>
-    );
-  }
-
   return (
-    <Card
+    <div
       className={rootClassName}
       data-empty-size={size}
       data-empty-variant={variant}
       role="status"
     >
-      <CardContent className="p-0">{content}</CardContent>
-    </Card>
+      {content}
+    </div>
   );
 }
