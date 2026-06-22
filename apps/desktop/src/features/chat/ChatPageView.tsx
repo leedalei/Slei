@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bookmark, CheckSquare, Copy, FileText, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
+import { ArrowDown, Bookmark, CheckSquare, Copy, FileText, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
@@ -24,6 +24,8 @@ import { MentionPicker } from "./MentionPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
+
+const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 200;
 
 type ChannelFileEntry = {
   attachment: ConversationAttachmentView;
@@ -489,7 +491,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
-  const timelineEndRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
   const lastTimelineMessageIdRef = useRef<string | undefined>(undefined);
@@ -719,15 +720,20 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }
 
   function isTimelineAtBottom() {
+    return timelineDistanceFromBottom() <= 24;
+  }
+
+  function timelineDistanceFromBottom() {
     const viewport = timelineViewportRef.current;
-    if (!viewport) return true;
-    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 24;
+    if (!viewport) return 0;
+    return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
   }
 
   function updateTimelineBottomState() {
-    const atBottom = isTimelineAtBottom();
+    const distanceFromBottom = timelineDistanceFromBottom();
+    const atBottom = distanceFromBottom <= 24;
     timelineAtBottomRef.current = atBottom;
-    if (atBottom) setShowScrollToBottom(false);
+    setShowScrollToBottom(distanceFromBottom >= SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX);
   }
 
   function requestTimelineScrollToBottom() {
@@ -736,7 +742,19 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     timelineAtBottomRef.current = true;
     setShowScrollToBottom(false);
     const frame = window.requestAnimationFrame(() => {
-      timelineEndRef.current?.scrollIntoView({ block: "end" });
+      const viewport = timelineViewportRef.current;
+      if (!viewport) {
+        scrollFrameRef.current = undefined;
+        return;
+      }
+      if (typeof viewport.scrollTo === "function") {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: "smooth",
+        });
+      } else {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
       scrollFrameRef.current = undefined;
     });
     scrollFrameRef.current = frame;
@@ -940,18 +958,18 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         </div>
                       );
                     })}
-                    <div ref={timelineEndRef} />
                   </div>
                 </div>
                 {showScrollToBottom ? (
                   <Button
-                    className="absolute bottom-2.5 left-1/2 z-10 -translate-x-1/2 shadow-md"
+                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-primary shadow-md hover:bg-white hover:text-primary"
                     data-testid="slei-scroll-to-bottom"
                     onClick={requestTimelineScrollToBottom}
                     size="sm"
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                   >
+                    <ArrowDown aria-hidden="true" className="size-3.5" />
                     {messages.chat.backToBottom}
                   </Button>
                 ) : null}

@@ -280,21 +280,19 @@ describe("ChatPage mention panel", () => {
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {
     const source = readChatPageSource();
 
-    expect(source).toContain("timelineEndRef");
+    expect(source).toContain("timelineViewportRef");
     expect(source).toContain("pendingScrollToBottomRef");
     expect(source).toContain("requestAnimationFrame");
-    expect(source).toContain("scrollIntoView({ block: \"end\" })");
+    expect(source).toContain("viewport.scrollTo({");
+    expect(source).toContain("behavior: \"smooth\"");
   });
 
   it("scrolls to the newest message after the user sends a message", async () => {
-    const scrollIntoView = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
       return 1;
     });
     const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -314,29 +312,28 @@ describe("ChatPage mention panel", () => {
           profile={defaultProfile}
         />,
       );
-      scrollIntoView.mockClear();
+      const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+      const scrollTo = vi.fn();
+      setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 100 });
+      Object.defineProperty(timeline, "scrollTo", { configurable: true, value: scrollTo });
 
       await act(async () => {
         host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
       });
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
     } finally {
-      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
       requestAnimationFrame.mockRestore();
       cancelAnimationFrame.mockRestore();
     }
   });
 
   it("shows a floating scroll-to-bottom button when an agent message arrives while the timeline is not at the bottom", async () => {
-    const scrollIntoView = vi.fn();
     const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
       return 1;
     });
     const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-    HTMLElement.prototype.scrollIntoView = scrollIntoView;
     const messages = createDesktopMessages("zh-CN");
     const baseData = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -362,6 +359,8 @@ describe("ChatPage mention panel", () => {
         />,
       );
       const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+      const scrollTo = vi.fn();
+      Object.defineProperty(timeline, "scrollTo", { configurable: true, value: scrollTo });
       setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 100 });
       await act(async () => {
         timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -381,18 +380,56 @@ describe("ChatPage mention panel", () => {
       const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
       expect(button?.textContent).toContain("滚动到底部");
 
-      scrollIntoView.mockClear();
       await act(async () => {
         button?.click();
       });
 
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "end" });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
       expect(host.querySelector('[data-testid="slei-scroll-to-bottom"]')).toBeNull();
     } finally {
-      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
       requestAnimationFrame.mockRestore();
       cancelAnimationFrame.mockRestore();
     }
+  });
+
+  it("shows the existing scroll-to-bottom button when the timeline is at least 200px from the bottom", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-1", author: "Lei", role: "human", time: "10:00", body: "第一条", channelId: "all" },
+        { id: "msg-2", author: "Nova", role: "agent", time: "10:01", body: "第二条", channelId: "all" },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 400 });
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+    expect(button?.textContent).toContain("滚动到底部");
+    expect(button?.querySelector(".lucide-arrow-down")).not.toBeNull();
+    expect(button?.className).toContain("h-8");
+    expect(button?.className).toContain("px-3.5");
+    expect(button?.className).toContain("border-primary");
+    expect(button?.className).toContain("bg-white");
+    expect(button?.className).toContain("text-primary");
+
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 401 });
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    expect(host.querySelector('[data-testid="slei-scroll-to-bottom"]')).toBeNull();
   });
 
   it("uses virtualized timeline rendering with an older-message load hook", () => {
@@ -408,6 +445,8 @@ describe("ChatPage mention panel", () => {
 
     expect(source).toContain("initialTimelineScrollTargetRef");
     expect(source).toContain("const timelineScrollTarget =");
+    expect(source).toContain("top: viewport.scrollHeight");
+    expect(source).toContain("behavior: \"smooth\"");
     expect(source).toContain("pendingScrollToBottomRef.current = true");
     expect(source).toContain("[timelineScrollTarget, effectiveChannelView, focusedMessageId]");
   });

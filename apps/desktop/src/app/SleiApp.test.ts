@@ -1042,6 +1042,18 @@ describe("createChannelAgentReplyMessage", () => {
 });
 
 describe("global search result navigation", () => {
+  it("loads the latest 50 messages for channel and conversation entries by default", () => {
+    const source = readFileSync("src/app/SleiApp.tsx", "utf8");
+
+    expect(source).toContain("const DEFAULT_CHAT_MESSAGE_LIMIT = 50");
+    expect(source).toContain("bridge.listConversationMessages(conversation.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listChannelMessages(channel.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listConversationMessages(activeConversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listChannelMessages(activeChannelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+  });
+
   it("uses message result sessions when navigating to channel and DM messages", () => {
     const source = readFileSync("src/app/SleiApp.tsx", "utf8");
     const handlerSource = source.slice(source.indexOf("async function handleMessageSearchResultSelect"), source.indexOf("function handleSearchResultSelect"));

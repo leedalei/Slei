@@ -319,6 +319,7 @@ function applyChannelMemberReadiness(members: SleiMember[], channelId: string, c
 const CHANNEL_MEMBER_READINESS_POLL_INTERVAL_MS = 1_000;
 const CHANNEL_MEMBER_READINESS_POLL_ATTEMPTS = 8;
 const UNSETTLED_CHANNEL_MEMBER_READINESS = new Set<SleiChannelMemberReadiness>(["joining", "memory_syncing"]);
+const DEFAULT_CHAT_MESSAGE_LIMIT = 50;
 
 export function hasUnsettledChannelMemberReadiness(members: SleiMember[], channelId: string): boolean {
   return members.some((member) => {
@@ -758,7 +759,7 @@ async function loadSleiConversationMessages(
   profile: UserProfile | null,
   messages: DesktopMessages,
 ) {
-  const receipts = await Promise.all(conversations.map((conversation) => bridge.listConversationMessages(conversation.id)));
+  const receipts = await Promise.all(conversations.map((conversation) => bridge.listConversationMessages(conversation.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })));
   return receipts.flatMap((receipt) => receipt.messages.map((message) => conversationMessageToSleiMessage(message, members, profile, messages)));
 }
 
@@ -770,7 +771,7 @@ async function loadSleiChannelMessages(
   messages: DesktopMessages,
 ) {
   const receipts = await Promise.all(
-    channels.map((channel) => bridge.listChannelMessages(channel.id).catch(() => ({ messages: [], pageInfo: { hasMoreBefore: false } }))),
+    channels.map((channel) => bridge.listChannelMessages(channel.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT }).catch(() => ({ messages: [], pageInfo: { hasMoreBefore: false } }))),
   );
   return receipts.flatMap((receipt) =>
     receipt.messages
@@ -843,7 +844,7 @@ export function SleiApp() {
 
   async function loadChannelMessagesForState(channelId: string, members: SleiMember[] = data.members, sessionIdOverride?: string) {
     void sessionIdOverride;
-    const receipt = await bridge.listChannelMessages(channelId);
+    const receipt = await bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     return receipt.messages
       .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
@@ -860,7 +861,7 @@ export function SleiApp() {
   }
 
   async function loadConversationMessagesForState(conversationId: string) {
-    const receipt = await bridge.listConversationMessages(conversationId);
+    const receipt = await bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     return receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
   }
 
@@ -1239,7 +1240,7 @@ export function SleiApp() {
     if (!activeConversationId) return;
     if (!shouldRefreshConversationMessages(data.messages, activeConversationId)) return;
     const refreshConversation = async () => {
-      const receipt = await bridge.listConversationMessages(activeConversationId);
+      const receipt = await bridge.listConversationMessages(activeConversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
       const conversationMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
       setData((current) =>
         createEmptySleiData({
@@ -1258,7 +1259,7 @@ export function SleiApp() {
     if (activeConversationId || !activeChannelId) return;
     if (!shouldRefreshChannelMessages(data.messages, activeChannelId)) return;
     const refreshChannel = async () => {
-      const receipt = await bridge.listChannelMessages(activeChannelId);
+      const receipt = await bridge.listChannelMessages(activeChannelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
       const channelMessages = receipt.messages
         .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
         .filter((message): message is SleiMessage => Boolean(message));
@@ -1513,7 +1514,7 @@ export function SleiApp() {
     if (member?.directMessageEnabled === false) return;
     const receipt = await bridge.createDmConversation(memberId);
     const sessionsReceipt = await bridge.listConversationSessions(receipt.conversation.id);
-    const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id);
+    const messagesReceipt = await bridge.listConversationMessages(receipt.conversation.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
     setData((current) =>
       createEmptySleiData({
@@ -1551,7 +1552,7 @@ export function SleiApp() {
 
   async function handleConversationSessionSelect(conversationId: string, sessionId: string) {
     const receipt = await bridge.activateConversationSession(conversationId, sessionId);
-    const messagesReceipt = await bridge.listConversationMessages(conversationId);
+    const messagesReceipt = await bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
     setData((current) =>
       createEmptySleiData({
@@ -1586,7 +1587,7 @@ export function SleiApp() {
 
   async function handleChannelSessionSelect(channelId: string, sessionId: string) {
     const receipt = await bridge.activateChannelSession(channelId, sessionId);
-    const messagesReceipt = await bridge.listChannelMessages(channelId);
+    const messagesReceipt = await bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
     const channelMessages = messagesReceipt.messages
       .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
@@ -1655,7 +1656,7 @@ export function SleiApp() {
           const nextTasks = options?.asTask ? [...current.tasks, createTaskFromChatMessage(conversationMessage, targetId)] : current.tasks;
           return createEmptySleiData({ ...current, messages: [...current.messages, conversationMessage], tasks: nextTasks });
         });
-        const messagesReceipt = await bridge.listConversationMessages(activeConversationId);
+        const messagesReceipt = await bridge.listConversationMessages(activeConversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
         const conversationMessages = messagesReceipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
         setData((current) =>
           createEmptySleiData({
