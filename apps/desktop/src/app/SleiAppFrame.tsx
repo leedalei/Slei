@@ -43,6 +43,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import {
@@ -68,7 +69,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, StatusDot, Toast, type ToastType } from "../components";
+import { Empty, MemberAvatar, StatusDot, Toast, TooltipButton, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -231,6 +232,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
 
   return (
+    <TooltipProvider>
     <div
       className={cn("grid h-screen min-h-0 overflow-hidden bg-background text-foreground", normalizedTheme === "dark" && "dark")}
       data-active-view={input.activeView}
@@ -245,7 +247,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
           </span>
         </div>
         {navItems.map((item) => (
-          <Button
+          <TooltipButton
             aria-label={messages.shell.nav[item.id]}
             aria-current={input.activeView === item.id ? "page" : undefined}
             className={cn(
@@ -256,12 +258,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             key={item.id}
             onClick={() => input.onViewChange?.(item.id)}
             size="lg"
-            title={messages.shell.nav[item.id]}
+            tooltip={messages.shell.nav[item.id]}
             type="button"
             variant={input.activeView === item.id ? "default" : "ghost"}
           >
             <item.icon aria-hidden="true" className="size-5" strokeWidth={2.8} />
-          </Button>
+          </TooltipButton>
         ))}
       </nav>
 
@@ -311,13 +313,14 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             </SidebarFrame>
           </aside>
 
-          <button
+          <Button
             aria-label={messages.common.resizeSidebar}
             aria-orientation="vertical"
-            className="w-1 !cursor-col-resize bg-border/50 outline-none transition-colors hover:bg-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
+            className="h-full w-1 !cursor-col-resize rounded-none border-0 bg-border/50 p-0 hover:bg-border focus-visible:ring-offset-0"
             onPointerDown={input.onResizeStart}
             role="separator"
             type="button"
+            variant="ghost"
           />
         </>
       ) : null}
@@ -402,6 +405,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         </div>
       ) : null}
     </div>
+    </TooltipProvider>
   );
 }
 
@@ -857,9 +861,9 @@ function ChannelList(input: {
                     {channelDraft.projectPaths.map((path) => (
                       <Badge className="max-w-full gap-1" key={path} variant="secondary">
                         <span className="truncate">{path}</span>
-                        <button aria-label={input.messages.chat.removeProject(path)} className="ml-1 rounded-sm hover:bg-background/70" onClick={() => removeProjectFolder(path)} type="button">
+                        <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 hover:bg-background/70" onClick={() => removeProjectFolder(path)} size="icon-xs" type="button" variant="ghost">
                           <X aria-hidden="true" className="size-3" />
-                        </button>
+                        </Button>
                       </Badge>
                     ))}
                   </div>
@@ -1388,9 +1392,9 @@ function ShellDialog(input: {
           >
             {input.children}
             {input.showCloseButton !== false ? (
-              <button className="absolute top-2 right-2" data-slot="dialog-close" type="button">
+              <Button className="absolute top-2 right-2" data-slot="dialog-close" size="icon-sm" type="button" variant="ghost">
                 <span className="sr-only">{input.closeLabel ?? "Close"}</span>
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>

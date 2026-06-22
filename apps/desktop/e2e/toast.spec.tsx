@@ -15,7 +15,7 @@ describe("shared toast feedback", () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("<button");
     expect(html).toContain('type="button"');
-    expect(html).toContain('title="点击复制"');
+    expect(html).toContain('data-slot="tooltip-trigger"');
     expect(html).toContain("fixed");
     expect(html).toContain("top-4");
     expect(html).toContain("left-1/2");

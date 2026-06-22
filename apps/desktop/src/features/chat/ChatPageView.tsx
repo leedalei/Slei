@@ -7,15 +7,17 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
+import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Checkbox } from "../../components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
@@ -89,9 +91,9 @@ function AttachmentList({ attachments, messageAttachments = false, onRemove }: {
             <span className="max-w-48 truncate">{attachment.name}</span>
             <small className="text-muted-foreground">{formatAttachmentSize(attachment.size)}</small>
             {onRemove ? (
-              <button aria-label={`Remove ${attachment.name}`} className="grid size-5 place-items-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onRemove(attachment.id)} type="button">
+              <Button aria-label={`Remove ${attachment.name}`} className="-mr-1" onClick={() => onRemove(attachment.id)} size="icon-xs" type="button" variant="ghost">
                 <X aria-hidden="true" size={12} />
-              </button>
+              </Button>
             ) : null}
           </Badge>
         );
@@ -348,25 +350,6 @@ function ChannelMemberPanel(input: {
   const [confirmingAddId, setConfirmingAddId] = useState<string | undefined>(undefined);
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const panelRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!addMenuOpen || typeof document === "undefined") return;
-
-    function closeAddMenuOnOutsideInteraction(event: PointerEvent | FocusEvent) {
-      const target = event.target;
-      if (target instanceof Node && panelRef.current?.contains(target)) return;
-      setAddMenuOpen(false);
-      setConfirmingAddId(undefined);
-    }
-
-    document.addEventListener("pointerdown", closeAddMenuOnOutsideInteraction);
-    document.addEventListener("focusin", closeAddMenuOnOutsideInteraction);
-    return () => {
-      document.removeEventListener("pointerdown", closeAddMenuOnOutsideInteraction);
-      document.removeEventListener("focusin", closeAddMenuOnOutsideInteraction);
-    };
-  }, [addMenuOpen]);
 
   async function mutate(memberId: string, action: "add" | "remove") {
     setMutatingMemberId(memberId);
@@ -389,50 +372,59 @@ function ChannelMemberPanel(input: {
       aria-label={input.messages.chat.channelMembers}
       className="grid h-full min-h-0 w-80 grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-background p-4"
       data-testid="slei-channel-member-panel"
-      ref={panelRef}
     >
-      <div className="relative flex items-center justify-between gap-2 pr-2">
+      <div className="flex items-center justify-between gap-2 pr-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
             <Users aria-hidden="true" size={16} />
             <span className="truncate">{input.messages.chat.channelMembers}({input.members.length})</span>
           </h2>
         </div>
-        <Button aria-expanded={addMenuOpen ? "true" : "false"} aria-label={input.messages.chat.addChannelMember} onClick={() => setAddMenuOpen((current) => !current)} size="icon-xs" title={input.messages.chat.addChannelMember} type="button" variant="ghost">
-          <Plus aria-hidden="true" size={18} />
-        </Button>
-        {addMenuOpen ? (
-          <div className="absolute right-2 top-8 z-30 grid w-64 gap-1 rounded-lg border bg-popover p-2 shadow-lg" data-testid="slei-channel-member-add-menu">
+        <Popover open={addMenuOpen} onOpenChange={(open) => {
+          setAddMenuOpen(open);
+          if (!open) setConfirmingAddId(undefined);
+        }}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>
+                <Button aria-label={input.messages.chat.addChannelMember} size="icon-xs" type="button" variant="ghost">
+                  <Plus aria-hidden="true" size={18} />
+                </Button>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{input.messages.chat.addChannelMember}</TooltipContent>
+          </Tooltip>
+          <PopoverContent align="end" className="grid w-64 gap-1" data-testid="slei-channel-member-add-popover">
             {input.availableMembers.length > 0 ? input.availableMembers.map((member) => {
-              const confirming = confirmingAddId === member.id;
-              return (
-                <div className="grid gap-1 rounded-md px-1 py-1" key={member.id}>
-                  <Button className="h-auto justify-start gap-2 px-2 py-2" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingAddId(member.id)} type="button" variant="ghost">
-                    <MemberAvatar identity={member} />
-                    <span className="grid min-w-0 text-left">
-                      <strong className="truncate text-sm">{member.name}</strong>
-                      <small className="truncate text-xs font-normal text-muted-foreground">{member.handle}</small>
-                    </span>
-                  </Button>
-                  {confirming ? (
-                    <div className="flex justify-end gap-2 px-1">
-                      <Button onClick={() => setConfirmingAddId(undefined)} size="sm" type="button" variant="ghost">{input.messages.common.cancel}</Button>
-                      <Button disabled={mutatingMemberId === member.id} onClick={() => void mutate(member.id, "add")} size="sm" type="button">{input.messages.chat.addChannelMember}</Button>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            }) : (
-              <Empty
-                description={input.messages.empty.defaultDescription.nodata}
-                framed={false}
-                size="sm"
-                title={input.messages.chat.noAvailableChannelMembers}
-                variant="nodata"
-              />
-            )}
-          </div>
-        ) : null}
+                const confirming = confirmingAddId === member.id;
+                return (
+                  <div className="grid gap-1 rounded-md px-1 py-1" key={member.id}>
+                    <Button className="h-auto justify-start gap-2 px-2 py-2" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingAddId(member.id)} type="button" variant="ghost">
+                      <MemberAvatar identity={member} />
+                      <span className="grid min-w-0 text-left">
+                        <strong className="truncate text-sm">{member.name}</strong>
+                        <small className="truncate text-xs font-normal text-muted-foreground">{member.handle}</small>
+                      </span>
+                    </Button>
+                    {confirming ? (
+                      <div className="flex justify-end gap-2 px-1">
+                        <Button onClick={() => setConfirmingAddId(undefined)} size="sm" type="button" variant="ghost">{input.messages.common.cancel}</Button>
+                        <Button disabled={mutatingMemberId === member.id} onClick={() => void mutate(member.id, "add")} size="sm" type="button">{input.messages.chat.addChannelMember}</Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }) : (
+                <Empty
+                  description={input.messages.empty.defaultDescription.nodata}
+                  framed={false}
+                  size="sm"
+                  title={input.messages.chat.noAvailableChannelMembers}
+                  variant="nodata"
+                />
+              )}
+          </PopoverContent>
+        </Popover>
       </div>
       <ScrollArea className="min-h-0 pr-2">
         <div className="grid gap-1">
@@ -768,9 +760,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 <span className="truncate" data-tauri-drag-region="deep">{detailTitle}</span>
               </span>
               {!dmMember ? (
-                <Button aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                   <Copy aria-hidden="true" size={14} />
-                </Button>
+                </TooltipButton>
               ) : null}
             </h1>
             <p className="mt-0.5 truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{detailSubtitle}</p>
@@ -778,7 +770,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         </div>
         {dmMember ? null : (
           <div className="flex shrink-0 items-center gap-2" data-testid="slei-channel-header-actions">
-            <Button
+            <TooltipButton
               aria-expanded={showChannelMembersPanel ? "true" : "false"}
               aria-label={messages.chat.channelMembers}
               className={cn(showChannelMembersPanel && "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
@@ -791,13 +783,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 }
                 setChannelMembersOpen((current) => !current);
               }}
-              title={messages.chat.channelMembers}
+              tooltip={messages.chat.channelMembers}
               type="button"
               variant="outline"
               size="icon-sm"
             >
               {showChannelMembersPanel ? <PanelRightClose aria-hidden="true" size={15} /> : <PanelRightOpen aria-hidden="true" size={15} />}
-            </Button>
+            </TooltipButton>
           </div>
         )}
       </header>
@@ -907,15 +899,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                  <Button aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" title={messages.tasks.commentThread} type="button" variant="ghost">
+                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
                                     <MessageSquare aria-hidden="true" size={14} />
-                                  </Button>
-                                  <Button aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" title={messages.chat.copyMessage} type="button" variant="ghost">
+                                  </TooltipButton>
+                                  <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                                     <Copy aria-hidden="true" size={14} />
-                                  </Button>
-                                  <Button aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" title={saveLabel} type="button" variant="ghost">
+                                  </TooltipButton>
+                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
                                     <Bookmark aria-hidden="true" size={14} />
-                                  </Button>
+                                  </TooltipButton>
                                   <span aria-hidden="true">｜</span>
                                   <span className="inline-flex items-center gap-1">
                                     <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>

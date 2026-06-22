@@ -536,11 +536,11 @@ describe("ChatPage mention panel", () => {
     expect(panelOpenTag).not.toContain("top-16");
     expect(html).not.toContain("top-[calc(4rem+1px)]");
     expect(panelHtml).toContain("w-80");
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-menu"');
-    expect(readChatPageSource()).toContain("relative flex items-center justify-between gap-2 pr-2");
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-popover"');
+    expect(readChatPageSource()).toContain("PopoverContent");
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('width="18"');
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('height="18"');
-    expect(readChatPageSource()).toContain("absolute right-2 top-8");
+    expect(readChatPageSource()).not.toContain("absolute right-2 top-8");
     expect(html).toContain("lucide-plus");
     expect(html).toContain("Coda");
     expect(html).toContain("Nova");
@@ -812,13 +812,13 @@ describe("ChatPage mention panel", () => {
       addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(host.querySelector('[data-testid="slei-channel-member-add-menu"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="slei-channel-member-add-popover"]')).not.toBeNull();
 
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
     });
 
-    expect(host.querySelector('[data-testid="slei-channel-member-add-menu"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="slei-channel-member-add-popover"]')).toBeNull();
   });
 
   it("renders channel tabs without new-session or history controls", () => {

@@ -1,22 +1,27 @@
 import type { SleiMessage } from "../app/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export function MessageStatusSquare({ status }: { status?: SleiMessage["status"] }) {
   const tone = messageStatusSquare(status);
   if (!tone) return null;
   return (
-    <span
-      aria-label={status}
-      className={cn(
-        "inline-block size-2.5 shrink-0 rounded-[2px]",
-        tone === "running" && "bg-sky-500",
-        tone === "approval" && "bg-amber-500",
-        tone === "failed" && "bg-destructive",
-        tone === "pending" && "bg-muted-foreground/45",
-      )}
-      role="img"
-      title={status}
-    />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          aria-label={status}
+          className={cn(
+            "inline-block size-2.5 shrink-0 rounded-[2px]",
+            tone === "running" && "bg-sky-500",
+            tone === "approval" && "bg-amber-500",
+            tone === "failed" && "bg-destructive",
+            tone === "pending" && "bg-muted-foreground/45",
+          )}
+          role="img"
+        />
+      </TooltipTrigger>
+      <TooltipContent>{status}</TooltipContent>
+    </Tooltip>
   );
 }
 

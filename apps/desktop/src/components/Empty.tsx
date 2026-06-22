@@ -21,6 +21,7 @@ const EMPTY_ILLUSTRATIONS: Record<EmptyIllustration, string> = {
 
 export function Empty(input: {
   title: string;
+  chrome?: "default" | "none";
   className?: string;
   description?: string;
   framed?: boolean;
@@ -33,12 +34,13 @@ export function Empty(input: {
   const size = input.size ?? "md";
   const illustrationSize = size === "lg" ? "h-28 w-44" : size === "sm" ? "h-16 w-28" : "h-24 w-40";
   const illustration = input.illustration ?? (variant === "noresult" ? "search" : "data");
+  const chrome = input.chrome ?? "default";
   const framed = input.framed ?? true;
   const rootClassName = cn(
-    "border-dashed",
-    variant === "noresult" ? "bg-transparent" : "bg-muted/35",
+    chrome !== "none" && "border-dashed",
+    chrome !== "none" && (variant === "noresult" ? "bg-transparent" : "bg-muted/35"),
     input.centered && "mx-auto max-w-xl",
-    !framed && "rounded-lg border",
+    !framed && chrome !== "none" && "rounded-lg border",
     input.className,
   );
   const content = (

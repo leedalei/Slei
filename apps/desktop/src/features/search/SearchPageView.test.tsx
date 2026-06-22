@@ -10,6 +10,7 @@ import { defaultProfile } from "../../app/model";
 import { SearchPage } from "./SearchPageView";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 function agentMember(id: string, name: string): SleiMember {
   return {
@@ -155,6 +156,10 @@ function inputByLabel(rootElement: HTMLElement, label: string): HTMLInputElement
   return input as HTMLInputElement;
 }
 
+function searchEmptyState(rootElement: HTMLElement) {
+  return rootElement.querySelector<HTMLElement>('[data-slot="search-results"] [role="status"][data-empty-size]');
+}
+
 async function changeInput(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
   await act(async () => {
@@ -186,6 +191,29 @@ async function clickButtonWithExactText(rootElement: HTMLElement, text: string) 
   return button as HTMLButtonElement;
 }
 
+async function openSelect(rootElement: HTMLElement, label: string) {
+  const trigger = Array.from(rootElement.querySelectorAll<HTMLButtonElement>('[data-slot="select-trigger"]')).find((candidate) => {
+    const name = `${candidate.getAttribute("aria-label") ?? ""} ${candidate.textContent ?? ""}`;
+    return name.includes(label);
+  });
+  expect(trigger).toBeInstanceOf(HTMLButtonElement);
+  await act(async () => {
+    trigger?.click();
+  });
+  await act(async () => undefined);
+  return trigger as HTMLButtonElement;
+}
+
+async function clickSelectItem(text: string) {
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="select-item"]')).find((candidate) => candidate.textContent?.includes(text));
+  expect(item).toBeInstanceOf(HTMLElement);
+  await act(async () => {
+    item?.click();
+  });
+  await act(async () => undefined);
+  return item as HTMLElement;
+}
+
 async function submitSearchForm(rootElement: HTMLElement) {
   const form = rootElement.querySelector("form");
   expect(form).toBeInstanceOf(HTMLFormElement);
@@ -200,12 +228,16 @@ describe("SearchPage global search UI", () => {
     const onGlobalSearch = vi.fn();
     const rootElement = await renderSearchPage({ onGlobalSearch });
     const results = rootElement.querySelector('[data-slot="search-results"]');
+    const emptyState = searchEmptyState(rootElement);
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
     expect(results?.className).not.toContain("p-6");
     expect(results?.parentElement?.className).toContain("px-6 py-6");
+    expect(emptyState?.dataset.emptySize).toBe("lg");
+    expect(emptyState?.className).not.toContain("border");
+    expect(emptyState?.className).not.toContain("bg-");
     expect(results?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
     expect(results?.querySelector<HTMLImageElement>('img[data-empty-asset="search"]')?.getAttribute("src")).toContain("empty-search.png");
     expect(onGlobalSearch).not.toHaveBeenCalled();
@@ -242,6 +274,36 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).toContain("Messages");
     expect(rootElement.textContent).toContain("Coda");
     expect(rootElement.querySelectorAll("mark").length).toBeGreaterThan(0);
+  });
+
+  it("renders result sections as a non-exclusive accordion", async () => {
+    const onGlobalSearch = vi.fn(async (_query: GlobalSearchQuery) => receipt);
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+
+    await changeInput(inputByLabel(rootElement, "Global search input"), " coda ");
+    await clickButton(rootElement, "Search");
+
+    const accordion = rootElement.querySelector('[data-slot="search-results-accordion"]');
+    const items = Array.from(rootElement.querySelectorAll<HTMLElement>('[data-slot="accordion-item"]'));
+    const triggers = Array.from(rootElement.querySelectorAll<HTMLButtonElement>('[data-slot="accordion-trigger"]'));
+    const agentsTrigger = triggers.find((trigger) => trigger.textContent?.includes("Agents"));
+    const channelsTrigger = triggers.find((trigger) => trigger.textContent?.includes("Channels"));
+
+    expect(accordion?.getAttribute("data-type")).toBe("multiple");
+    expect(items.length).toBe(3);
+    expect(items[0]?.className).toContain("border-b");
+    expect(items[0]?.className).not.toContain("border-0");
+    expect(items[2]?.className).toContain("last:border-b-0");
+    expect(triggers.length).toBe(3);
+    expect(agentsTrigger?.getAttribute("aria-expanded")).toBe("true");
+    expect(channelsTrigger?.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => {
+      agentsTrigger?.click();
+    });
+
+    expect(agentsTrigger?.getAttribute("aria-expanded")).toBe("false");
+    expect(channelsTrigger?.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("ignores stale search results after clearing the query before the request resolves", async () => {
@@ -310,17 +372,21 @@ describe("SearchPage global search UI", () => {
     const onGlobalSearch = vi.fn(async (_query: GlobalSearchQuery) => receipt);
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
-    await clickButton(rootElement, "From");
-    expect(rootElement.textContent).toContain("Lei");
-    expect(rootElement.textContent).toContain("Coda");
-    await clickButton(rootElement, "Coda");
+    const filterTriggers = Array.from(rootElement.querySelectorAll<HTMLElement>('[data-slot="select-trigger"]'));
+    expect(filterTriggers.length).toBe(3);
+    expect(filterTriggers.every((trigger) => trigger.querySelector(".lucide-chevron-down"))).toBe(true);
 
-    await clickButton(rootElement, "Channel");
-    expect(rootElement.textContent).toContain("#release");
-    await clickButton(rootElement, "#release");
+    await openSelect(rootElement, "From");
+    expect(document.body.textContent).toContain("Lei");
+    expect(document.body.textContent).toContain("Coda");
+    await clickSelectItem("Coda");
 
-    await clickButton(rootElement, "Any time");
-    await clickButton(rootElement, "Last 7 days");
+    await openSelect(rootElement, "Channel");
+    expect(document.body.textContent).toContain("#release");
+    await clickSelectItem("#release");
+
+    await openSelect(rootElement, "Any time");
+    await clickSelectItem("Last 7 days");
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
     await clickButton(rootElement, "Search");
@@ -343,6 +409,24 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).not.toContain("Relevant");
   });
 
+  it("renders the no-result placeholder without background or border at the same size as the empty-query placeholder", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const rootElement = await renderSearchPage({
+      messages,
+      onGlobalSearch: async () => ({ query: "不存在", totals: { agents: 0, channels: 0, messages: 0 }, agents: [], channels: [], messages: [] }),
+    });
+
+    await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "不存在");
+    await clickButtonWithExactText(rootElement, "搜索");
+
+    const emptyState = searchEmptyState(rootElement);
+    expect(rootElement.textContent).toContain(messages.search.noResultTitle);
+    expect(emptyState?.dataset.emptySize).toBe("lg");
+    expect(emptyState?.className).not.toContain("border");
+    expect(emptyState?.className).not.toContain("bg-");
+    expect(rootElement.querySelector<HTMLImageElement>('img[data-empty-asset="search"]')?.getAttribute("src")).toContain("empty-search.png");
+  });
+
   it("renders localized generic error copy without visible raw thrown details", async () => {
     const messages = createDesktopMessages("zh-CN");
     const rootElement = await renderSearchPage({
@@ -356,6 +440,9 @@ describe("SearchPage global search UI", () => {
     await clickButtonWithExactText(rootElement, "搜索");
 
     expect(rootElement.textContent).toContain(messages.search.errorDescription);
+    expect(searchEmptyState(rootElement)?.dataset.emptySize).toBe("lg");
+    expect(searchEmptyState(rootElement)?.className).not.toContain("border");
+    expect(searchEmptyState(rootElement)?.className).not.toContain("bg-");
     expect(rootElement.textContent).not.toContain("backend timeout in English");
   });
 

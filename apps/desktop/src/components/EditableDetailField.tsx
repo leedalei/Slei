@@ -1,6 +1,7 @@
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { type ComponentProps, type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { Pencil } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ export function EditableDetailField(input: {
   saving?: boolean;
   error?: string;
   readClassName?: string;
+  readBadgeVariant?: ComponentProps<typeof Badge>["variant"];
   sectionClassName?: string;
   titleTag?: "h2" | "h3";
   value: string;
@@ -155,6 +157,8 @@ export function EditableDetailField(input: {
             </Button>
           </div>
         </form>
+      ) : input.readBadgeVariant ? (
+        <Badge className={input.readClassName} variant={input.readBadgeVariant}>{input.value}</Badge>
       ) : (
         <p className={cn("text-sm text-muted-foreground", input.readClassName)}>{input.value}</p>
       )}

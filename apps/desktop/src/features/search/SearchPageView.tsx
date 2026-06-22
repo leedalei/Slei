@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
-import { Calendar, Check, Hash, LoaderCircle, Search, UserRound, X } from "lucide-react";
+import { Calendar, Hash, LoaderCircle, Search, UserRound, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type {
@@ -17,9 +17,11 @@ import {
   type UserProfile,
 } from "../../app/model";
 import { Empty, MemberAvatar } from "../../components";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import {
   buildGlobalSearchRequest,
   createGlobalSearchSections,
@@ -29,6 +31,7 @@ import {
 } from "./globalSearch";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
+const RESET_FILTER_VALUE = "__slei_filter_reset__";
 
 type SearchFromOption = {
   id: string;
@@ -67,7 +70,6 @@ export function SearchPage({
   const [fromId, setFromId] = useState("");
   const [channelId, setChannelId] = useState("");
   const [timeRange, setTimeRange] = useState<GlobalSearchTimeRangeFilter>("any");
-  const [openFilter, setOpenFilter] = useState<"from" | "channel" | "time" | undefined>();
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [receipt, setReceipt] = useState<GlobalSearchReceipt | undefined>();
   const [submittedQuery, setSubmittedQuery] = useState("");
@@ -109,7 +111,6 @@ export function SearchPage({
   async function submitSearch(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const request = buildCurrentSearchRequest();
-    setOpenFilter(undefined);
     if (!request) {
       requestSequenceRef.current += 1;
       setActiveRequestKey("");
@@ -175,36 +176,30 @@ export function SearchPage({
           </div>
 
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2">
-            <FilterMenu
+            <FilterSelect
               icon={<UserRound aria-hidden="true" className="size-4" />}
               label={messages.search.filters.from}
-              open={openFilter === "from"}
               options={fromOptions}
               resetLabel={messages.search.filters.anyone}
               selectedId={fromId}
               selectedLabel={selectedFrom?.label ?? messages.search.filters.anyone}
-              onOpenChange={(open) => setOpenFilter(open ? "from" : undefined)}
               onSelect={setFromId}
             />
-            <FilterMenu
+            <FilterSelect
               icon={<Hash aria-hidden="true" className="size-4" />}
               label={messages.search.filters.channel}
-              open={openFilter === "channel"}
               options={channelOptions}
               resetLabel={messages.search.filters.allChannels}
               selectedId={channelId}
               selectedLabel={selectedChannel?.label ?? messages.search.filters.allChannels}
-              onOpenChange={(open) => setOpenFilter(open ? "channel" : undefined)}
               onSelect={setChannelId}
             />
-            <FilterMenu
+            <FilterSelect
               icon={<Calendar aria-hidden="true" className="size-4" />}
               label={messages.search.filters.timeRangeLabel}
-              open={openFilter === "time"}
               options={timeOptions}
               selectedId={timeRange}
               selectedLabel={selectedTime.label}
-              onOpenChange={(open) => setOpenFilter(open ? "time" : undefined)}
               onSelect={(id) => setTimeRange(id as GlobalSearchTimeRangeFilter)}
             />
           </div>
@@ -216,7 +211,9 @@ export function SearchPage({
           <div className="mx-auto grid w-full max-w-5xl gap-5" data-slot="search-results">
             {status === "idle" ? (
               <Empty
+                chrome="none"
                 description={messages.search.placeholderDescription}
+                framed={false}
                 illustration="search"
                 size="lg"
                 title={messages.search.placeholderTitle}
@@ -233,9 +230,11 @@ export function SearchPage({
 
             {status === "error" ? (
               <Empty
+                chrome="none"
                 description={messages.search.errorDescription}
+                framed={false}
                 illustration="error"
-                size="md"
+                size="lg"
                 title={messages.search.errorTitle}
                 variant="noresult"
               />
@@ -243,9 +242,11 @@ export function SearchPage({
 
             {status === "success" && !hasResults ? (
               <Empty
+                chrome="none"
                 description={messages.search.noResultDescription}
+                framed={false}
                 illustration="search"
-                size="md"
+                size="lg"
                 title={messages.search.noResultTitle}
                 variant="noresult"
               />
@@ -254,48 +255,55 @@ export function SearchPage({
             {status === "success" && hasResults ? (
               <section aria-label={messages.search.navigation.results} className="grid gap-5">
                 <p className="text-sm text-muted-foreground">{messages.search.resultCount((receipt?.totals.agents ?? 0) + (receipt?.totals.channels ?? 0) + (receipt?.totals.messages ?? 0))}</p>
-                {sections.map((section) => (
-                  <section className="grid gap-2" key={section.category}>
-                    <header className="flex items-center justify-between gap-3">
-                      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{messages.search.sections[section.category]}</h2>
-                      <span className="text-xs text-muted-foreground">{section.total}</span>
-                    </header>
-                    <div className="grid gap-2">
-                      {section.category === "agents" ? section.items.map((result) => (
-                        <AgentResultButton
-                          key={result.agentId}
-                          messages={messages}
-                          query={submittedQuery}
-                          result={result}
-                          onSelect={onAgentResultSelect}
-                        />
-                      )) : null}
-                      {section.category === "channels" ? section.items.map((result) => (
-                        <ChannelResultButton
-                          data={data}
-                          key={result.channelId}
-                          messages={messages}
-                          query={submittedQuery}
-                          result={result}
-                          onSelect={onChannelResultSelect}
-                        />
-                      )) : null}
-                      {section.category === "messages" ? section.items.map((result) => (
-                        <MessageResultButton
-                          data={data}
-                          key={`${result.sourceKind}:${result.messageId}`}
-                          messages={messages}
-                          profile={profile ?? null}
-                          query={submittedQuery}
-                          result={result}
-                          timeZone={timeZone}
-                          onLegacySelect={onResultSelect}
-                          onSelect={onMessageResultSelect}
-                        />
-                      )) : null}
-                    </div>
-                  </section>
-                ))}
+                <Accordion
+                  className="grid gap-3"
+                  data-slot="search-results-accordion"
+                  defaultValue={sections.map((section) => section.category)}
+                  type="multiple"
+                >
+                  {sections.map((section) => (
+                    <AccordionItem className="border-b border-border/70 last:border-b-0" key={section.category} value={section.category}>
+                      <AccordionTrigger className="rounded-lg px-0 py-2 text-muted-foreground hover:no-underline">
+                        <span className="text-sm font-semibold uppercase tracking-wide">{messages.search.sections[section.category]}</span>
+                        <span className="ml-auto text-xs font-normal tabular-nums">{section.total}</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="grid gap-2 pb-3">
+                        {section.category === "agents" ? section.items.map((result) => (
+                          <AgentResultButton
+                            key={result.agentId}
+                            messages={messages}
+                            query={submittedQuery}
+                            result={result}
+                            onSelect={onAgentResultSelect}
+                          />
+                        )) : null}
+                        {section.category === "channels" ? section.items.map((result) => (
+                          <ChannelResultButton
+                            data={data}
+                            key={result.channelId}
+                            messages={messages}
+                            query={submittedQuery}
+                            result={result}
+                            onSelect={onChannelResultSelect}
+                          />
+                        )) : null}
+                        {section.category === "messages" ? section.items.map((result) => (
+                          <MessageResultButton
+                            data={data}
+                            key={`${result.sourceKind}:${result.messageId}`}
+                            messages={messages}
+                            profile={profile ?? null}
+                            query={submittedQuery}
+                            result={result}
+                            timeZone={timeZone}
+                            onLegacySelect={onResultSelect}
+                            onSelect={onMessageResultSelect}
+                          />
+                        )) : null}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </section>
             ) : null}
           </div>
@@ -305,76 +313,41 @@ export function SearchPage({
   );
 }
 
-function FilterMenu(input: {
+function FilterSelect(input: {
   icon: ReactNode;
   label: string;
-  open: boolean;
   options: SelectOption[];
   resetLabel?: string;
   selectedId: string;
   selectedLabel: string;
-  onOpenChange: (open: boolean) => void;
   onSelect: (id: string) => void;
 }) {
+  const value = input.selectedId || RESET_FILTER_VALUE;
   return (
-    <div className="relative">
-      <Button
-        aria-expanded={input.open}
+    <Select value={value} onValueChange={(nextValue) => input.onSelect(nextValue === RESET_FILTER_VALUE ? "" : nextValue)}>
+      <SelectTrigger
         aria-label={input.label}
-        className="min-w-36 justify-start"
-        onClick={() => input.onOpenChange(!input.open)}
-        type="button"
-        variant="outline"
+        className="min-w-36"
       >
         {input.icon}
-        <span className="truncate">{input.selectedLabel}</span>
-      </Button>
-      {input.open ? (
-        <div className="absolute left-0 z-30 mt-2 grid max-h-72 w-72 gap-1 overflow-auto rounded-lg border bg-popover p-2 text-popover-foreground shadow-lg">
-          {input.resetLabel ? (
-            <FilterOption
-              checked={!input.selectedId}
-              option={{ id: "", label: input.resetLabel }}
-              onSelect={(id) => {
-                input.onSelect(id);
-                input.onOpenChange(false);
-              }}
-            />
-          ) : null}
-          {input.options.map((option) => (
-            <FilterOption
-              checked={input.selectedId === option.id}
-              key={option.id}
-              option={option}
-              onSelect={(id) => {
-                input.onSelect(id);
-                input.onOpenChange(false);
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function FilterOption(input: {
-  checked: boolean;
-  option: SelectOption;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <button
-      className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={() => input.onSelect(input.option.id)}
-      type="button"
-    >
-      <span className="grid min-w-0 flex-1">
-        <span className="truncate">{input.option.label}</span>
-        {input.option.subtitle ? <small className="truncate text-xs text-muted-foreground">{input.option.subtitle}</small> : null}
-      </span>
-      {input.checked ? <Check aria-hidden="true" className="size-4 text-primary" /> : null}
-    </button>
+        <span data-slot="select-value" className="min-w-0 flex-1 truncate">{input.selectedLabel}</span>
+      </SelectTrigger>
+      <SelectContent align="start" className="w-72" position="popper">
+        {input.resetLabel ? (
+          <SelectItem textValue={input.resetLabel} value={RESET_FILTER_VALUE}>
+            <span className="truncate">{input.resetLabel}</span>
+          </SelectItem>
+        ) : null}
+        {input.options.map((option) => (
+          <SelectItem key={option.id} textValue={option.label} value={option.id}>
+            <span className="grid min-w-0">
+              <span className="truncate">{option.label}</span>
+              {option.subtitle ? <small className="truncate text-xs text-muted-foreground">{option.subtitle}</small> : null}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

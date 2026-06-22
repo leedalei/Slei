@@ -28,7 +28,7 @@ import type {
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
 import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, type ToastType } from "../../components";
+import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -357,9 +357,9 @@ export function MembersPage(input: {
             </div>
             <div className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
               <p className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</p>
-              <Button aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" title={input.messages.chat.copyMessage} type="button" variant="ghost">
+              <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                 <Copy aria-hidden="true" size={14} />
-              </Button>
+              </TooltipButton>
             </div>
           </div>
           {canMessage ? (
@@ -373,7 +373,6 @@ export function MembersPage(input: {
                   <AlertDialogTrigger asChild>
                     <Button
                       disabled={deleting}
-                      title={input.messages.members.deleteAgentConfirm(selectedMember.name)}
                       type="button"
                       variant="destructive"
                     >
@@ -483,7 +482,7 @@ export function MembersPage(input: {
                     label="Runtime"
                     messages={input.messages}
                     onSave={(value) => updateMemberDetail("runtime", value)}
-                    readClassName="w-fit rounded-4xl border border-border px-2 py-0.5 text-xs font-medium text-foreground"
+                    readBadgeVariant="outline"
                     saving={effectiveSavingField === "runtime"}
                     sectionClassName="grid gap-2"
                     value={memberDetails.runtime}
@@ -495,7 +494,7 @@ export function MembersPage(input: {
                     label={input.messages.members.model}
                     messages={input.messages}
                     onSave={(value) => updateMemberDetail("model", value)}
-                    readClassName="w-fit rounded-4xl border border-border px-2 py-0.5 text-xs font-medium text-foreground"
+                    readBadgeVariant="outline"
                     saving={effectiveSavingField === "model"}
                     sectionClassName="grid gap-2"
                     value={memberDetails.model}

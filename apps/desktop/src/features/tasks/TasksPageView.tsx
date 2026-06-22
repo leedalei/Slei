@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskThreadDrawer } from "./TaskThreadDrawer";
@@ -182,23 +183,19 @@ function TaskFilterSelect(input: {
   options: Array<{ label: string; value: string }>;
   value: string;
 }) {
+  const selectedLabel = input.options.find((option) => option.value === input.value)?.label ?? input.label;
   return (
-    <label className="inline-flex h-8 items-center gap-2 rounded-lg border bg-background px-2.5 text-sm text-foreground shadow-xs">
-      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+    <Select value={input.value} onValueChange={input.onChange}>
+      <SelectTrigger aria-label={input.label} className="min-w-36">
         {input.icon}
-        {input.label}
-      </span>
-      <select
-        aria-label={input.label}
-        className="min-w-24 bg-transparent text-sm font-medium outline-none"
-        onChange={(event) => input.onChange(event.target.value)}
-        value={input.value}
-      >
+        <span data-slot="select-value" className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
+      </SelectTrigger>
+      <SelectContent align="start" position="popper">
         {input.options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
+          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
         ))}
-      </select>
-    </label>
+      </SelectContent>
+    </Select>
   );
 }
 

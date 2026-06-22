@@ -9,6 +9,7 @@ import type { SleiTask } from "../../app/types";
 import { TasksPage } from "./TasksPageView";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 function agentMember(id: string, name: string): SleiMember {
   return {
@@ -92,12 +93,30 @@ async function mountTasksPage() {
 }
 
 async function changeSelect(label: string, value: string) {
-  const select = container?.querySelector(`select[aria-label="${label}"]`) as HTMLSelectElement | null;
-  expect(select).not.toBeNull();
+  const trigger = container?.querySelector(`[data-slot="select-trigger"][aria-label="${label}"]`) as HTMLButtonElement | null;
+  expect(trigger).not.toBeNull();
+  const view = container!.ownerDocument.defaultView!;
+  if (!view.PointerEvent) {
+    view.PointerEvent = view.MouseEvent as typeof PointerEvent;
+  }
   await act(async () => {
-    select!.value = value;
-    select!.dispatchEvent(new Event("change", { bubbles: true }));
+    trigger!.click();
   });
+  await act(async () => undefined);
+
+  const optionLabel = {
+    ai: "#AI咨询",
+    design: "#设计",
+    agent_coda: "Coda",
+    agent_alice: "Alice",
+    all: label === "频道" ? "所有频道" : "所有负责人",
+  }[value] ?? value;
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="select-item"]')).find((candidate) => candidate.textContent?.includes(optionLabel));
+  expect(item).not.toBeNull();
+  await act(async () => {
+    item!.click();
+  });
+  await act(async () => undefined);
 }
 
 async function clickTab(text: string) {
@@ -130,7 +149,7 @@ describe("TasksPage filters", () => {
     await mountTasksPage();
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
-    const channelSelect = header?.querySelector(`select[aria-label="频道"]`);
+    const channelSelect = header?.querySelector(`[data-slot="select-trigger"][aria-label="频道"]`);
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
 
     expect(header).not.toBeNull();

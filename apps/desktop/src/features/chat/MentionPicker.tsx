@@ -4,6 +4,7 @@ import { MemberAvatar, StatusDot } from "../../components";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { ScrollArea } from "../../components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { cn } from "../../lib/utils";
 
 export function MentionPicker({
@@ -45,7 +46,12 @@ export function MentionPicker({
                   </span>
                   <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
                 </span>
-                <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground" title={member.handle}>{member.handle}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground">{member.handle}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{member.handle}</TooltipContent>
+                </Tooltip>
               </Button>
             ))}
           </div>

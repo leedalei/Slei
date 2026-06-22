@@ -1,4 +1,6 @@
 import { cn } from "../lib/utils";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export const TOAST_VISIBLE_MS = 2500;
 
@@ -45,14 +47,19 @@ export function Toast({ message, text, type }: { message?: string; text?: string
 
   return (
     <div aria-live={urgent ? "assertive" : "polite"} className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2" role={urgent ? "alert" : "status"}>
-      <button
-        className={cn("pointer-events-auto rounded-md border px-4 py-3 text-sm shadow-md", variantClassName)}
-        onClick={() => void copyToastContent(content)}
-        title="点击复制"
-        type="button"
-      >
-        {content}
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            className={cn("pointer-events-auto h-auto rounded-md px-4 py-3 text-sm shadow-md", variantClassName)}
+            onClick={() => void copyToastContent(content)}
+            type="button"
+            variant="outline"
+          >
+            {content}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>点击复制</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

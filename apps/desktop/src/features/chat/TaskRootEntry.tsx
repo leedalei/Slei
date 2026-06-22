@@ -2,7 +2,7 @@ import { Bookmark, Copy, MessageSquare } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMessage, SleiTask } from "../../app/types";
-import { MemberAvatar, type MemberAvatarIdentity } from "../../components";
+import { MemberAvatar, TooltipButton, type MemberAvatarIdentity } from "../../components";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -87,12 +87,12 @@ export function TaskRootEntry(input: {
               {input.messages.tasks.status[input.task.status]}
             </span>
             <span aria-hidden="true">｜</span>
-            <Button aria-label={copyLabel} onClick={() => void input.onCopy?.()} size="icon-xs" title={copyLabel} type="button" variant="ghost">
+            <TooltipButton aria-label={copyLabel} onClick={() => void input.onCopy?.()} size="icon-xs" tooltip={copyLabel} type="button" variant="ghost">
               <Copy aria-hidden="true" size={14} />
-            </Button>
-            <Button aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} onClick={() => void input.onSaveToggle?.()} size="icon-xs" title={saveLabel} type="button" variant="ghost">
+            </TooltipButton>
+            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} onClick={() => void input.onSaveToggle?.()} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
               <Bookmark aria-hidden="true" size={14} />
-            </Button>
+            </TooltipButton>
             {timestamp ? (
               <>
                 <span aria-hidden="true">｜</span>

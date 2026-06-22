@@ -27,7 +27,7 @@ describe("member pixel avatars", () => {
     const coda = createDemoMembers().find((member) => member.name === "Coda")!;
     const html = renderToStaticMarkup(<MemberAvatar identity={coda} />);
 
-    expect(html).toContain('title="Coda"');
+    expect(html).toContain('aria-label="Coda"');
     expect(html).toContain('data-avatar-size="default"');
     expect(html).toContain('data-avatar-image-rendering="pixelated"');
   });
@@ -55,9 +55,9 @@ describe("member pixel avatars", () => {
       <SleiAppFrame activeView="chat" data={data} initialChatDraft="@" locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(membersHtml).toContain('title="Coda"');
+    expect(membersHtml).toContain('aria-label="Coda"');
     expect(membersHtml).toContain('data-slot="avatar"');
-    expect(chatHtml).toContain('title="Coda"');
+    expect(chatHtml).toContain('aria-label="Coda"');
     expect(chatHtml).toContain('data-slot="avatar"');
     expect(chatHtml).toContain("pixel avatar check");
     expect(chatHtml).toContain("@Coda");

@@ -737,7 +737,7 @@ describe("createChannelAgentReplyMessage", () => {
     const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
 
     expect(source).toContain("aria-label={messages.shell.nav[item.id]}");
-    expect(source).toContain("title={messages.shell.nav[item.id]}");
+    expect(source).toContain("tooltip={messages.shell.nav[item.id]}");
     expect(source).toContain("className=\"size-5\"");
     expect(source).not.toContain("<span className=\"text-[11px] leading-none\">{messages.shell.nav[item.id]}</span>");
   });
