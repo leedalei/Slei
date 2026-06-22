@@ -111,7 +111,7 @@ export function TasksPage({
                   <section aria-label={taskStatusLabel(column, messages)} className="grid min-h-40 content-start gap-3 rounded-lg border bg-muted/20 p-3" key={column}>
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="text-sm font-medium">{taskStatusLabel(column, messages)}</h2>
-                      <Badge variant="outline">{columnTasks.length}</Badge>
+                      {columnTasks.length > 0 ? <Badge variant="outline">{columnTasks.length}</Badge> : null}
                     </div>
                     {columnTasks.length ? columnTasks.map((task) => (
                       <TaskCard
@@ -127,7 +127,7 @@ export function TasksPage({
                         description={messages.empty.defaultDescription.nodata}
                         framed={false}
                         size="sm"
-                        title={`${taskStatusLabel(column, messages)} 0`}
+                        title={taskStatusLabel(column, messages)}
                         variant="nodata"
                       />
                     )}
@@ -154,7 +154,7 @@ export function TasksPage({
                 <Empty
                   description={messages.empty.defaultDescription.nodata}
                   framed={false}
-                  title={`${messages.tasks.list} 0`}
+                  title={messages.tasks.list}
                   variant="nodata"
                 />
               ) : null}

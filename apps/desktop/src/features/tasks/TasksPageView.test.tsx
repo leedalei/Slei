@@ -199,7 +199,8 @@ describe("TasksPage filters", () => {
     await changeSelect("频道", "design");
     await changeSelect("负责人", "agent_alice");
 
-    expect(container?.textContent).toContain("列表 0");
+    expect(container?.textContent).toContain("列表");
+    expect(container?.textContent).not.toContain("列表 0");
     expect(container?.querySelector('[data-empty-illustration="nodata"]')).not.toBeNull();
     expect(container?.textContent).not.toContain("AI channel task for Coda");
     expect(container?.textContent).not.toContain("Design channel task for Coda");
@@ -212,7 +213,8 @@ describe("TasksPage filters", () => {
     await changeSelect("负责人", "agent_alice");
     await clickTab("看板");
 
-    expect(container?.textContent).toContain("待指派 0");
+    expect(container?.textContent).toContain("待指派");
+    expect(container?.textContent).not.toContain("待指派 0");
     expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);
   });
 });
