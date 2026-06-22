@@ -39,9 +39,6 @@ mod tests {
             "message_thread_replies",
             "event_log",
             "idempotent_mutations",
-            "channel_coordinators",
-            "coordinator_decisions",
-            "coordinator_runtime_runs",
             "agent_inbox_events",
             "memory_update_events",
             "memory_document_states",
@@ -55,6 +52,17 @@ mod tests {
             "user_profiles",
         ] {
             assert!(db.table_exists(table).await.unwrap(), "missing {table}");
+        }
+
+        for table in [
+            "channel_coordinators",
+            "coordinator_decisions",
+            "coordinator_runtime_runs",
+        ] {
+            assert!(
+                !db.table_exists(table).await.unwrap(),
+                "legacy coordinator table should not exist: {table}"
+            );
         }
     }
 
@@ -72,7 +80,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[tokio::test]
@@ -89,7 +97,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[tokio::test]
@@ -350,7 +358,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[tokio::test]
@@ -1396,7 +1404,6 @@ mod tests {
         let attachment_id = Uuid::new_v4();
         let conversation_message_id = Uuid::new_v4();
         let interactive_card_id = Uuid::new_v4();
-        let event_message_id = Uuid::new_v4().to_string();
 
         sqlx::query("INSERT INTO app_metadata(key, value) VALUES ('boot.mode', 'reset-test')")
             .execute(db.pool())
@@ -1494,33 +1501,6 @@ mod tests {
         .execute(db.pool())
         .await
         .unwrap();
-        repos
-            .insert_channel_coordinator(&channel_uuid.to_string(), "round-robin", true)
-            .await
-            .unwrap();
-        repos
-            .insert_coordinator_decision(
-                decision_id,
-                &channel_uuid.to_string(),
-                &event_message_id,
-                "route",
-                "assign",
-                Some("agent_reset"),
-                &["agent_reset".to_string()],
-                "reset reason",
-            )
-            .await
-            .unwrap();
-        repos
-            .insert_coordinator_runtime_run(
-                "run-reset",
-                &channel_uuid.to_string(),
-                &event_message_id,
-                "idem-reset",
-                "prompt",
-            )
-            .await
-            .unwrap();
         repos
             .insert_agent_inbox_event(
                 inbox_event_id,
@@ -1800,7 +1780,7 @@ mod tests {
 
         let seeded_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -1835,7 +1815,7 @@ mod tests {
 
         let retained_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'coordinator_decisions', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -1846,7 +1826,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 7);
+        assert_eq!(migration_count, 8);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")
@@ -1882,7 +1862,7 @@ mod tests {
                 "agent_coda",
                 "Coda Prime",
                 "@coda-prime",
-                "coordinator",
+                "reviewer",
                 true,
                 "Codex",
                 "GPT-5",
@@ -1918,7 +1898,7 @@ mod tests {
         assert_eq!(agents[0].id, "agent_coda");
         assert_eq!(agents[0].name, "Coda Prime");
         assert_eq!(agents[0].handle, "@coda-prime");
-        assert_eq!(agents[0].agent_kind, "coordinator");
+        assert_eq!(agents[0].agent_kind, "reviewer");
         assert!(agents[0].system_owned);
         assert_eq!(agents[0].runtime_kind, "Codex");
         assert_eq!(agents[0].model, "GPT-5");
@@ -2154,97 +2134,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn coordinator_decisions_persist_full_assignee_target_list() {
-        let (url, _path) = sqlite_file_url("decision-targets");
-        let db = SleiDb::connect(&url).await.unwrap();
-        db.migrate().await.unwrap();
-        let repos = Repositories::new(db.pool().clone());
-        let decision_id = Uuid::new_v4();
-
-        repos
-            .insert_coordinator_decision(
-                decision_id,
-                "all",
-                "msg_broadcast",
-                "consultation",
-                "request_agent_reply",
-                Some("agent_alice"),
-                &["agent_alice".to_string(), "agent_coda".to_string()],
-                "broadcast routed to all selected agents",
-            )
-            .await
-            .unwrap();
-
-        let decisions = repos
-            .coordinator_decisions_for_message("msg_broadcast")
-            .await
-            .unwrap();
-
-        assert_eq!(
-            decisions[0].assignee_agent_id.as_deref(),
-            Some("agent_alice")
-        );
-        assert_eq!(
-            decisions[0].assignee_agent_ids,
-            vec!["agent_alice".to_string(), "agent_coda".to_string()]
-        );
-    }
-
-    #[tokio::test]
-    async fn coordinator_runtime_runs_persist_pending_output_and_status() {
-        let (url, _path) = sqlite_file_url("coordinator-runs");
-        let db = SleiDb::connect(&url).await.unwrap();
-        db.migrate().await.unwrap();
-        let repos = Repositories::new(db.pool().clone());
-
-        repos
-            .insert_coordinator_runtime_run("coord_run_1", "dev", "msg_1", "idem-1", "prompt body")
-            .await
-            .unwrap();
-        repos
-            .append_coordinator_runtime_output("coord_run_1", "{\"intent\"")
-            .await
-            .unwrap();
-        repos
-            .append_coordinator_runtime_output("coord_run_1", ":\"consultation\"}")
-            .await
-            .unwrap();
-        repos
-            .finish_coordinator_runtime_run("coord_run_1", "completed", None)
-            .await
-            .unwrap();
-
-        let run = repos
-            .coordinator_runtime_run("coord_run_1")
-            .await
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(run.status, "completed");
-        assert_eq!(run.output, "{\"intent\":\"consultation\"}");
-        assert_eq!(run.message_id, "msg_1");
-        assert_eq!(run.idempotency_key, "idem-1");
-    }
-
-    #[tokio::test]
     async fn migration_repairs_legacy_orchestration_tables_missing_sequence_columns() {
         let (url, _path) = sqlite_file_url("legacy-sequence");
         let db = SleiDb::connect(&url).await.unwrap();
-        sqlx::query(
-            "CREATE TABLE coordinator_decisions (
-                id TEXT PRIMARY KEY,
-                channel_id TEXT NOT NULL,
-                message_id TEXT NOT NULL,
-                intent TEXT NOT NULL,
-                action TEXT NOT NULL,
-                assignee_agent_id TEXT,
-                reason TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )",
-        )
-        .execute(db.pool())
-        .await
-        .unwrap();
         sqlx::query(
             "CREATE TABLE agent_inbox_events (
                 id TEXT PRIMARY KEY,
@@ -2261,47 +2153,15 @@ mod tests {
 
         db.migrate().await.unwrap();
         let repos = Repositories::new(db.pool().clone());
-        let decision_id = Uuid::new_v4();
         let inbox_id = Uuid::new_v4();
 
         repos
-            .insert_coordinator_decision(
-                decision_id,
-                "all",
-                "message-legacy",
-                "conversation",
-                "request_agent_reply",
-                Some("agent_coordinator_all"),
-                &["agent_coordinator_all".to_string()],
-                "legacy repaired",
-            )
-            .await
-            .unwrap();
-        repos
-            .insert_agent_inbox_event(
-                inbox_id,
-                "agent_coordinator_all",
-                "human_mention",
-                "pending",
-                "{}",
-            )
+            .insert_agent_inbox_event(inbox_id, "agent_alice", "human_mention", "pending", "{}")
             .await
             .unwrap();
 
         assert_eq!(
-            repos
-                .coordinator_decisions_for_message("message-legacy")
-                .await
-                .unwrap()[0]
-                .id,
-            decision_id
-        );
-        assert_eq!(
-            repos
-                .agent_inbox_events("agent_coordinator_all")
-                .await
-                .unwrap()[0]
-                .id,
+            repos.agent_inbox_events("agent_alice").await.unwrap()[0].id,
             inbox_id
         );
     }

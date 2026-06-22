@@ -368,17 +368,17 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("Jack");
   });
 
-  it("excludes channel coordinators from composer mention suggestions", () => {
+  it("shows matching members in composer mention suggestions", () => {
     const data = createSleiFixtures({
       members: [
         ...createDemoMembers(),
         {
           ...createDemoMembers()[0],
-          id: "agent_coordinator_all",
-          name: "#all Coordinator",
-          handle: "@all-coordinator",
-          role: "频道协调员",
-          directMessageEnabled: false,
+          id: "agent_allison",
+          name: "Allison",
+          handle: "@allison",
+          role: "工程师",
+          directMessageEnabled: true,
         },
       ],
     });
@@ -392,7 +392,7 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).not.toContain("@all-coordinator");
+    expect(html).toContain("@allison");
   });
 
   it("uses lucide-react icons instead of raw glyph placeholders for controls", () => {

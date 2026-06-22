@@ -10,7 +10,6 @@ pub mod channel_orchestrator_service;
 pub mod channel_service;
 pub mod claim_service;
 pub mod conversation_service;
-pub mod coordinator_service;
 pub mod delegation_service;
 pub mod diagnostics_service;
 pub mod event_service;

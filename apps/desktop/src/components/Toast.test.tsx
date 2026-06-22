@@ -41,7 +41,7 @@ describe("Toast", () => {
   });
 
   it("limits long messages to 70 percent of the app width and wraps overflow text", () => {
-    const { host, root } = renderToast("invalid coordinator JSON: unknown variant request_agent_reply expected one of many other variants");
+    const { host, root } = renderToast("backend service failed while processing a long diagnostic message with many details");
 
     try {
       const button = host.querySelector("button");

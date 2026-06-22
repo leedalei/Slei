@@ -1,13 +1,10 @@
 use std::fmt;
 
 use slei_storage::repositories::{
-    AgentInboxEventRecord, BlockedMemorySectionRecord, CoordinatorDecisionRecord,
-    CoordinatorRuntimeRunRecord, EventRecord, MemoryUpdateEventRecord, Repositories,
-    RoutingContextPackageRecord,
+    AgentInboxEventRecord, BlockedMemorySectionRecord, EventRecord, MemoryUpdateEventRecord,
+    Repositories, RoutingContextPackageRecord,
 };
 use uuid::Uuid;
-
-use crate::services::reset_service::ResetRuntimeState;
 
 #[derive(Clone)]
 pub struct OrchestrationStore {
@@ -16,7 +13,6 @@ pub struct OrchestrationStore {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OrchestrationEventCounts {
-    pub coordinator_decision_count: u64,
     pub agent_inbox_event_count: u64,
     pub memory_update_event_count: u64,
 }
@@ -34,107 +30,6 @@ impl OrchestrationStore {
 
     pub fn repos(&self) -> Repositories {
         self.repos.clone()
-    }
-
-    pub async fn record_channel_coordinator(
-        &self,
-        channel_id: &str,
-        strategy: &str,
-    ) -> Result<(), sqlx::Error> {
-        self.repos
-            .insert_channel_coordinator(channel_id, strategy, true)
-            .await
-    }
-
-    pub async fn record_decision(
-        &self,
-        id: Uuid,
-        channel_id: &str,
-        message_id: &str,
-        intent: &str,
-        action: &str,
-        assignee_agent_id: Option<&str>,
-        assignee_agent_ids: &[String],
-        reason: &str,
-    ) -> Result<(), sqlx::Error> {
-        self.repos
-            .insert_coordinator_decision(
-                id,
-                channel_id,
-                message_id,
-                intent,
-                action,
-                assignee_agent_id,
-                assignee_agent_ids,
-                reason,
-            )
-            .await
-    }
-
-    pub async fn create_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-        channel_id: &str,
-        message_id: &str,
-        idempotency_key: &str,
-        prompt: &str,
-    ) -> Result<(), sqlx::Error> {
-        self.repos
-            .insert_coordinator_runtime_run(run_id, channel_id, message_id, idempotency_key, prompt)
-            .await
-    }
-
-    pub async fn append_coordinator_runtime_output(
-        &self,
-        run_id: &str,
-        delta: &str,
-    ) -> Result<(), sqlx::Error> {
-        self.repos
-            .append_coordinator_runtime_output(run_id, delta)
-            .await
-    }
-
-    pub async fn finish_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-        status: &str,
-        error: Option<&str>,
-    ) -> Result<(), sqlx::Error> {
-        self.repos
-            .finish_coordinator_runtime_run(run_id, status, error)
-            .await
-    }
-
-    pub async fn coordinator_runtime_run(
-        &self,
-        run_id: &str,
-    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
-        self.repos.coordinator_runtime_run(run_id).await
-    }
-
-    pub async fn coordinator_runtime_run_for_idempotency(
-        &self,
-        idempotency_key: &str,
-    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
-        self.repos
-            .coordinator_runtime_run_for_idempotency(idempotency_key)
-            .await
-    }
-
-    pub async fn pending_coordinator_runtime_run_ids(&self) -> Result<Vec<String>, sqlx::Error> {
-        self.repos.pending_coordinator_runtime_run_ids().await
-    }
-
-    pub async fn cancel_pending_coordinator_runs_for_reset(
-        &self,
-        reset_runtime: &ResetRuntimeState,
-    ) -> Result<Vec<String>, sqlx::Error> {
-        let run_ids = self.pending_coordinator_runtime_run_ids().await?;
-        reset_runtime.mark_cancelled_runs(run_ids.clone()).await;
-        self.repos
-            .cancel_coordinator_runtime_runs(&run_ids, "development reset")
-            .await?;
-        Ok(run_ids)
     }
 
     pub async fn record_inbox_event(
@@ -251,24 +146,6 @@ impl OrchestrationStore {
             .await
     }
 
-    pub async fn decisions_for_message_for_tests(
-        &self,
-        message_id: &str,
-    ) -> Vec<CoordinatorDecisionRecord> {
-        self.decisions_for_message(message_id)
-            .await
-            .expect("read coordinator decisions for tests")
-    }
-
-    pub async fn decisions_for_message(
-        &self,
-        message_id: &str,
-    ) -> Result<Vec<CoordinatorDecisionRecord>, sqlx::Error> {
-        self.repos
-            .coordinator_decisions_for_message(message_id)
-            .await
-    }
-
     pub async fn routing_context_packages_for_message_for_tests(
         &self,
         message_id: &str,
@@ -282,16 +159,9 @@ impl OrchestrationStore {
         &self,
         message_id: &str,
     ) -> Result<Vec<RoutingContextPackageRecord>, sqlx::Error> {
-        let decisions = self.decisions_for_message(message_id).await?;
-        let mut packages = Vec::new();
-        for decision in decisions {
-            packages.extend(
-                self.repos
-                    .routing_context_packages_for_decision(decision.id)
-                    .await?,
-            );
-        }
-        Ok(packages)
+        self.repos
+            .routing_context_packages_for_message(message_id)
+            .await
     }
 
     pub async fn blocked_memory_sections(
@@ -303,7 +173,6 @@ impl OrchestrationStore {
 
     pub async fn event_counts(&self) -> Result<OrchestrationEventCounts, sqlx::Error> {
         Ok(OrchestrationEventCounts {
-            coordinator_decision_count: self.repos.coordinator_decision_count().await?,
             agent_inbox_event_count: self.repos.agent_inbox_event_count().await?,
             memory_update_event_count: self.repos.memory_update_event_count().await?,
         })

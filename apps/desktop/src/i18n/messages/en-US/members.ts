@@ -45,7 +45,6 @@ export const members = {
   openWorkspace: "Open workspace",
   openInFileManager: "Open in file manager",
   channelPermission: "Channel permission",
-  channelCoordinator: "Channel coordinator",
   permissionLabels: {
     ReadOnly: "Read only",
     Edit: "Edit",

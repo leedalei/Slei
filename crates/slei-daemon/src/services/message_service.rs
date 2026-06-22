@@ -578,14 +578,8 @@ impl MessageService {
         {
             return Ok(existing);
         }
-        self.insert_channel_message(
-            channel_id,
-            None,
-            "channel_coordinator",
-            &body,
-            MessageKind::TaskCard,
-        )
-        .await
+        self.insert_channel_message(channel_id, None, "system", &body, MessageKind::TaskCard)
+            .await
     }
 
     pub async fn channel_messages(&self, channel_id: &str) -> Vec<MessageRecord> {

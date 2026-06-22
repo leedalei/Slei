@@ -315,9 +315,6 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(agents
         .iter()
         .any(|agent| agent["id"] == "agent_guide_local_node"));
-    assert!(!agents
-        .iter()
-        .any(|agent| agent["id"] == "agent_coordinator_all"));
 }
 
 #[tokio::test]
@@ -402,97 +399,9 @@ async fn guide_bootstrap_waits_for_runtime_ready() {
 }
 
 #[tokio::test]
-async fn list_agents_does_not_materialize_channel_coordinator_agents() {
-    let token = AuthToken::from_static("test-token");
-    let root = make_temp_dir("channel-coordinator-default");
-    let app = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
-
-    let listed = get_json(&app, &token, "/v1/agents").await;
-
-    assert_eq!(listed.status(), StatusCode::OK);
-    let body = response_json(listed).await;
-    let agents = body["agents"].as_array().unwrap();
-    assert!(!agents
-        .iter()
-        .any(|agent| agent["id"] == "agent_coordinator_all"));
-    assert!(!agents
-        .iter()
-        .any(|agent| agent["agentKind"] == "coordinator" && agent["channelIds"] == json!(["all"])));
-    assert!(!root.join("agents/agent_coordinator_all").exists());
-}
-
-#[tokio::test]
-async fn creating_non_ascii_channel_does_not_materialize_channel_coordinator() {
-    let token = AuthToken::from_static("test-token");
-    let root = make_temp_dir("channel-coordinator-non-ascii");
-    let app = build_router(AppState::for_tests_with_agent_root(
-        token.clone(),
-        root.clone(),
-    ));
-
-    let created = post_json(
-        &app,
-        &token,
-        "/v1/channels",
-        Some("create-content-channel"),
-        json!({
-            "name": "内容营销开发",
-            "description": "kol-content",
-            "agentIds": []
-        }),
-    )
-    .await;
-    assert_eq!(created.status(), StatusCode::CREATED);
-
-    let listed = get_json(&app, &token, "/v1/agents").await;
-
-    assert_eq!(listed.status(), StatusCode::OK);
-    let body = response_json(listed).await;
-    let agents = body["agents"].as_array().unwrap();
-    assert!(!agents
-        .iter()
-        .any(|agent| agent["agentKind"] == "coordinator"
-            && agent["channelIds"] == json!(["内容营销开发"])));
-    assert!(!fs::read_dir(root.join("agents"))
-        .map(|entries| entries.filter_map(Result::ok).any(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with("agent_coordinator_")
-        }))
-        .unwrap_or(false));
-}
-
-#[tokio::test]
-async fn legacy_channel_coordinator_id_cannot_be_used_for_direct_messages() {
-    let token = AuthToken::from_static("test-token");
-    let root = make_temp_dir("channel-coordinator-no-dm");
-    let app = build_router(AppState::for_tests_with_agent_root(token.clone(), root));
-    assert_eq!(
-        get_json(&app, &token, "/v1/agents").await.status(),
-        StatusCode::OK
-    );
-
-    let response = post_json(
-        &app,
-        &token,
-        "/v1/conversations/dm",
-        Some("dm-coordinator"),
-        json!({ "agentId": "agent_coordinator_all" }),
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    assert_eq!(response_json(response).await["error"], "agent not found");
-}
-
-#[tokio::test]
 async fn guide_runtime_configuration_updates_runtime_thread() {
     let token = AuthToken::from_static("test-token");
-    let root = make_temp_dir("channel-coordinator-runtime");
+    let root = make_temp_dir("guide-runtime");
     let state = AppState::for_tests_with_agent_root(token.clone(), root);
     state.nodes().set_runtimes_for_tests(vec![
         slei_daemon::services::node_service::RuntimeReadinessDto {
@@ -1630,9 +1539,6 @@ async fn agents_persist_to_slei_data_root_and_reload() {
         .iter()
         .find(|agent| agent["handle"] == "@alice")
         .expect("persisted agent should still be listed");
-    assert!(!agents
-        .iter()
-        .any(|agent| agent["id"] == "agent_coordinator_all"));
     assert!(!root.join("agents/index.json").exists());
     assert!(alice["createdAt"].as_str().unwrap().len() > 4);
 }

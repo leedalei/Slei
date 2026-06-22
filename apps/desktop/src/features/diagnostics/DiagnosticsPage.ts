@@ -7,7 +7,6 @@ export type DiagnosticsStatus = {
   worker: string;
   protocolVersion: string;
   schemaVersion: string;
-  coordinatorDecisionCount?: number;
   agentInboxEventCount?: number;
   memoryUpdateEventCount?: number;
   failureSummary?: string;
@@ -25,7 +24,6 @@ export function renderDiagnosticsPage(input: {
     `Worker: ${input.status.worker}`,
     `Protocol: ${input.status.protocolVersion}`,
     `Schema: ${input.status.schemaVersion}`,
-    `Coordinator decisions: ${input.status.coordinatorDecisionCount ?? 0}`,
     `Inbox events: ${input.status.agentInboxEventCount ?? 0}`,
     `Memory updates: ${input.status.memoryUpdateEventCount ?? 0}`,
     input.status.failureSummary ? `Failure: ${input.status.failureSummary}` : "",

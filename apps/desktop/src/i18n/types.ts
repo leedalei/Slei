@@ -238,7 +238,6 @@ export type DesktopMessages = {
     openWorkspace: string;
     openInFileManager: string;
     channelPermission: string;
-    channelCoordinator: string;
     permissionLabels: Record<"ReadOnly" | "Edit" | "Controlled", string>;
     profile: string;
     readOnly: string;

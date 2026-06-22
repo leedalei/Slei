@@ -187,7 +187,6 @@ export function createDaemonBridgeMock(input: {
         worker: "unknown",
         protocolVersion: "v1",
         schemaVersion: "",
-        coordinatorDecisionCount: 0,
         agentInboxEventCount: 0,
         memoryUpdateEventCount: 0,
         recentEvents: [],
@@ -290,9 +289,6 @@ export function createDaemonBridgeMock(input: {
       if (!channel) throw new Error("channel not found");
       const agent = agents.find((candidate) => candidate.id === request.agentId);
       if (!agent) throw new Error("agent not found");
-      if (agent.agentKind === "coordinator" || agent.id === "agent_global_coordinator" || agent.id.startsWith("agent_coordinator_")) {
-        throw new Error("coordinator agents cannot join channels");
-      }
       const existing = channelMembers.find((member) => member.channelId === channelId && member.agentId === request.agentId);
       const member = existing ?? {
         channelId,
@@ -339,31 +335,12 @@ export function createDaemonBridgeMock(input: {
       ];
       const memberIds = channelMembers.filter((candidate) => candidate.channelId === channelId).map((member) => member.agentId);
       const explicitMember = agents.find((agent) => memberIds.includes(agent.id) && body.toLowerCase().includes(agent.handle.toLowerCase()));
-      const readyMembers = channelMembers.filter((candidate) => candidate.channelId === channelId && candidate.readiness === "ready");
-      const readyMember = readyMembers[0];
-      const isTaskCommand = containsAny(body, ["实现", "修复", "检查", "整理", "创建", "改一下", "写一个", "生成", "调查", "验证"]);
-      const isConsultation = containsAny(body, ["?", "？", "怎么看", "为什么"]);
-      const action = explicitMember
-        ? "request_agent_reply"
-        : request.asTask || isTaskCommand
-          ? readyMember
-            ? "create_task_and_assign"
-            : "needs_manual_assignment"
-          : isConsultation && readyMember
-            ? "request_agent_reply"
-            : "archive_only";
-      const broadcastRequest = containsAny(body, ["大家", "所有", "一起", "都"]);
-      const assigneeAgentIds = explicitMember
+      const action = request.asTask && explicitMember ? "create_task_and_assign" : "broadcast_delivered";
+      const assigneeAgentIds = action === "create_task_and_assign" && explicitMember
         ? [explicitMember.id]
-        : action === "request_agent_reply" && broadcastRequest
-          ? readyMembers.map((member) => member.agentId)
-          : action === "create_task_and_assign" || action === "request_agent_reply"
-            ? readyMember
-              ? [readyMember.agentId]
-              : []
-            : [];
+        : memberIds;
       const assigneeAgentId = assigneeAgentIds[0];
-      const taskId = action === "create_task_and_assign" || action === "needs_manual_assignment" ? `task_${messageId}` : undefined;
+      const taskId = request.asTask ? `task_${messageId}` : undefined;
       if (taskId) {
         const now = String(Date.now());
         const task: TaskSummaryView = {
@@ -845,10 +822,6 @@ function testMockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath
     return ["---", `name: ${skill.name}`, `description: ${skill.trigger}`, "---", "", `# ${skill.name}`].join("\n");
   }
   return "";
-}
-
-function containsAny(body: string, markers: string[]) {
-  return markers.some((marker) => body.includes(marker));
 }
 
 function globalSearchMockReceipt(

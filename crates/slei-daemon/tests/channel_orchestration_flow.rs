@@ -278,12 +278,6 @@ async fn task_message_without_explicit_mentions_creates_task_and_broadcasts_sour
         &[command_body],
         &[],
     );
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run_for_idempotency("send-command")
-        .await
-        .unwrap()
-        .is_none());
     let task_id = outcome.task_id.as_deref().unwrap();
     let task = state.tasks().task(task_id).await.unwrap();
     assert_eq!(task.assignee_id, None);
@@ -310,12 +304,6 @@ async fn task_message_without_explicit_mentions_creates_task_and_broadcasts_sour
     assert!(messages
         .iter()
         .any(|message| { message.id == outcome.message_id && message.kind == MessageKind::Human }));
-
-    let decisions = state
-        .orchestration()
-        .decisions_for_message_for_tests(&outcome.message_id)
-        .await;
-    assert!(decisions.is_empty());
 
     let packages = state
         .orchestration()
@@ -396,11 +384,11 @@ async fn broadcast_channel_message_creates_deliveries_for_all_regular_targets() 
     )
     .await;
 
-    let decisions = state
+    let packages = state
         .orchestration()
-        .decisions_for_message_for_tests(&outcome.message_id)
+        .routing_context_packages_for_message_for_tests(&outcome.message_id)
         .await;
-    assert!(decisions.is_empty());
+    assert!(packages.is_empty());
 }
 
 #[tokio::test]
@@ -408,7 +396,6 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
     let state = app_state_with_agent_specs(&[
         TestAgentSpec::regular("agent_alice", "@alice-win"),
         TestAgentSpec::regular("agent_coda", "@coda-win"),
-        TestAgentSpec::coordinator("agent_coordinator_dev", "@dev-coordinator"),
         TestAgentSpec::system_owned("agent_system_guide", "@guide"),
     ])
     .await;
@@ -424,12 +411,7 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
         )
         .await
         .unwrap();
-    for agent_id in [
-        "agent_alice",
-        "agent_coda",
-        "agent_coordinator_dev",
-        "agent_system_guide",
-    ] {
+    for agent_id in ["agent_alice", "agent_coda", "agent_system_guide"] {
         state
             .channels()
             .add_agent_to_channel("dev", agent_id)
@@ -487,20 +469,13 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
         &["大家看一下这个发布风险"],
         &["旧历史不应进 broadcast prompt"],
     );
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run_for_idempotency("send-plain-broadcast-delivery")
-        .await
-        .unwrap()
-        .is_none());
-
     assert_broadcast_deliveries_running(
         &state,
         &outcome.message_id,
         &["agent_alice", "agent_coda"],
     )
     .await;
-    for agent_id in ["agent_coordinator_dev", "agent_system_guide"] {
+    for agent_id in ["agent_system_guide"] {
         assert!(state
             .claims()
             .pending_message_deliveries(agent_id, 20)
@@ -511,7 +486,7 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
 }
 
 #[tokio::test]
-async fn mentioned_channel_message_still_broadcasts_deliveries_without_coordinator_runtime() {
+async fn mentioned_channel_message_still_broadcasts_deliveries_without_central_routing() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -560,12 +535,6 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_coordinat
         &["@alice-win 你先看一下"],
         &[],
     );
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run_for_idempotency("send-mention-broadcast-delivery")
-        .await
-        .unwrap()
-        .is_none());
     assert_broadcast_deliveries_running(
         &state,
         &outcome.message_id,
@@ -797,7 +766,7 @@ async fn pure_consultation_broadcasts_without_creating_task() {
 }
 
 #[tokio::test]
-async fn normal_channel_message_replay_recovers_completed_reply_route_side_effects() {
+async fn normal_channel_message_replay_uses_broadcast_delivery() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state
         .channels()
@@ -829,40 +798,6 @@ async fn normal_channel_message_replay_recovers_completed_reply_route_side_effec
         .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
         .await
         .unwrap();
-    let decision_id = Uuid::new_v4();
-    state
-        .orchestration()
-        .record_decision(
-            decision_id,
-            "dev",
-            &message.id,
-            "consultation",
-            "request_agent_reply",
-            Some("agent_alice"),
-            &["agent_alice".to_string()],
-            "consultation should be answered by Alice",
-        )
-        .await
-        .unwrap();
-    state
-        .orchestration()
-        .record_routing_context_package(
-            Uuid::new_v4(),
-            decision_id,
-            &message.id,
-            &json!({
-                "currentMessageId": message.id,
-                "targetAgentId": "agent_alice",
-                "targetAgentIds": ["agent_alice"],
-                "action": "request_agent_reply",
-                "sourceBody": body,
-            })
-            .to_string(),
-            false,
-        )
-        .await
-        .unwrap();
-
     let outcome = state
         .channel_orchestrator()
         .send_channel_message(SendChannelMessageInput {
@@ -875,25 +810,14 @@ async fn normal_channel_message_replay_recovers_completed_reply_route_side_effec
         .await
         .unwrap();
 
-    assert_eq!(outcome.action, "request_agent_reply");
+    assert_eq!(outcome.action, "broadcast_delivered");
     assert_eq!(outcome.message_id, message.id);
-    let inbox = state.agent_inbox().events_for_agent("agent_alice").await;
-    assert_eq!(
-        inbox
-            .iter()
-            .filter(|event| event.event_type == "human_mention" && event.message_id == message.id)
-            .count(),
-        1
-    );
-    assert!(state.worker_commands().iter().any(|command| {
-        command["type"] == "start_run"
-            && command["session"]["agent_id"] == "agent_alice"
-            && command["input"]["prompt"] == body
-    }));
+    assert_eq!(outcome.assignee_agent_ids, vec!["agent_alice".to_string()]);
+    assert_broadcast_deliveries_running(&state, &outcome.message_id, &["agent_alice"]).await;
 }
 
 #[tokio::test]
-async fn explicit_multi_mention_routes_all_targets_without_coordinator_and_writes_each_reply() {
+async fn explicit_multi_mention_routes_all_targets_with_broadcast_delivery() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -1028,7 +952,7 @@ async fn explicit_task_mentions_create_assignment_inbox_events_for_all_targets()
 }
 
 #[tokio::test]
-async fn task_message_without_mentions_never_starts_coordinator_or_fallback_assignment() {
+async fn task_message_without_mentions_broadcasts_without_fallback_assignment() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -1062,7 +986,7 @@ async fn task_message_without_mentions_never_starts_coordinator_or_fallback_assi
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "请看看这个问题".to_string(),
-        idempotency_key: "send-invalid-coordinator-json".to_string(),
+        idempotency_key: "send-as-task-broadcast".to_string(),
         as_task: true,
     };
     let outcome = state
@@ -1078,13 +1002,6 @@ async fn task_message_without_mentions_never_starts_coordinator_or_fallback_assi
         outcome.assignee_agent_ids,
         vec!["agent_alice".to_string(), "agent_coda".to_string()]
     );
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run_for_idempotency("send-invalid-coordinator-json")
-        .await
-        .unwrap()
-        .is_none());
-
     for agent_id in ["agent_alice", "agent_coda"] {
         let inbox = state.agent_inbox().events_for_agent(agent_id).await;
         assert!(!inbox
@@ -1092,11 +1009,11 @@ async fn task_message_without_mentions_never_starts_coordinator_or_fallback_assi
             .any(|event| { event.message_id == outcome.message_id }));
     }
 
-    let decisions = state
+    let packages = state
         .orchestration()
-        .decisions_for_message_for_tests(&outcome.message_id)
+        .routing_context_packages_for_message_for_tests(&outcome.message_id)
         .await;
-    assert!(decisions.is_empty());
+    assert!(packages.is_empty());
 }
 
 #[tokio::test]
@@ -1185,11 +1102,11 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
 
     let task = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "agent_alice",
             "msg_root",
-            "实现频道 Coordinator",
+            "实现频道 Agent 分派",
             Some("agent_alice".to_string()),
             "initial architecture assignment",
             "task-handoff-root",
@@ -1301,7 +1218,7 @@ async fn task_agent_reply_does_not_create_implicit_same_agent_handoff() {
 
     let task = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "human_lei",
             "msg_root_agent_no_implicit",
@@ -1363,7 +1280,7 @@ async fn task_human_reply_without_visible_mention_does_not_handoff_to_assignee()
 
     let task = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "human_lei",
             "msg_root_human_no_implicit",
@@ -1430,11 +1347,11 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
 
     let task_a = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "agent_alice",
             "msg_root_a",
-            "实现频道 Coordinator",
+            "实现频道 Agent 分派",
             Some("agent_alice".to_string()),
             "initial architecture assignment",
             "task-handoff-replay-a",
@@ -1443,7 +1360,7 @@ async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
         .unwrap();
     let task_b = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "agent_bob",
             "msg_root_b",
@@ -1653,159 +1570,11 @@ async fn command_message_retry_replays_outcome_without_duplicate_side_effects() 
 
     assert_broadcast_deliveries_running(&state, &first.message_id, &["agent_alice"]).await;
 
-    let decisions = state
-        .orchestration()
-        .decisions_for_message_for_tests(&first.message_id)
-        .await;
-    assert!(decisions.is_empty());
-
     let packages = state
         .orchestration()
         .routing_context_packages_for_message_for_tests(&first.message_id)
         .await;
     assert!(packages.is_empty());
-}
-
-#[tokio::test]
-async fn command_message_partial_retry_recovers_existing_side_effects_without_duplicates() {
-    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
-    state
-        .channels()
-        .create_channel(
-            ChannelDraft {
-                name: "dev".to_string(),
-                description: None,
-                permission: PermissionPreset::Controlled,
-            },
-            "create-dev",
-        )
-        .await
-        .unwrap();
-    state
-        .channels()
-        .add_agent_to_channel("dev", "agent_alice")
-        .await
-        .unwrap();
-    state
-        .channels()
-        .set_member_readiness("dev", "agent_alice", ChannelMemberReadiness::Ready)
-        .await
-        .unwrap();
-
-    let idempotency_key = "send-command-partial";
-    let body = "实现频道创建时选择 Agent 的功能";
-    let message = state
-        .messages()
-        .create_human_channel_message("dev", "human_lei", body, idempotency_key, false)
-        .await
-        .unwrap();
-    let assignment_reason = "task command assigned to ready agent agent_alice";
-    let decision_id = Uuid::new_v4();
-    let target_agent_ids = vec!["agent_alice".to_string()];
-    state
-        .orchestration()
-        .record_decision(
-            decision_id,
-            "dev",
-            &message.id,
-            "task_command",
-            "create_task_and_assign",
-            Some("agent_alice"),
-            &target_agent_ids,
-            assignment_reason,
-        )
-        .await
-        .unwrap();
-    let task = state
-        .tasks()
-        .create_from_coordinator(
-            "dev",
-            "human_lei",
-            &message.id,
-            body,
-            Some("agent_alice".to_string()),
-            assignment_reason,
-            &format!("{idempotency_key}:coordinator-task"),
-        )
-        .await
-        .unwrap();
-    state
-        .messages()
-        .create_task_card_message("dev", &task.id, &message.id)
-        .await
-        .unwrap();
-    state
-        .agent_inbox()
-        .create_task_assignment("agent_alice", "dev", &task.id, &message.id)
-        .await;
-    state
-        .orchestration()
-        .record_routing_context_package(
-            Uuid::new_v4(),
-            decision_id,
-            &message.id,
-            &serde_json::json!({
-                "currentMessageId": message.id,
-                "taskId": task.id,
-                "assignmentReason": assignment_reason,
-                "relatedMessageIds": [message.id],
-                "safeMemoryRefs": ["MEMORY.md", "notes/channels.md", "notes/relationships.md"],
-            })
-            .to_string(),
-            false,
-        )
-        .await
-        .unwrap();
-
-    let outcome = state
-        .channel_orchestrator()
-        .send_channel_message(SendChannelMessageInput {
-            channel_id: "dev".to_string(),
-            author_id: "human_lei".to_string(),
-            body: body.to_string(),
-            idempotency_key: idempotency_key.to_string(),
-            as_task: false,
-        })
-        .await
-        .unwrap();
-
-    assert_eq!(outcome.message_id, message.id);
-    assert_eq!(outcome.task_id.as_deref(), Some(task.id.as_str()));
-    assert_eq!(outcome.action, "create_task_and_assign");
-    assert_eq!(outcome.assignee_agent_id.as_deref(), Some("agent_alice"));
-
-    let task_cards = state
-        .channel_messages_for_tests("dev")
-        .await
-        .into_iter()
-        .filter(|message| message.kind == MessageKind::TaskCard)
-        .collect::<Vec<_>>();
-    assert_eq!(task_cards.len(), 1);
-
-    let matching_assignments = state
-        .agent_inbox()
-        .events_for_agent("agent_alice")
-        .await
-        .into_iter()
-        .filter(|event| {
-            event.event_type == "task_assigned"
-                && event.message_id == outcome.message_id
-                && event.task_id.as_deref() == outcome.task_id.as_deref()
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(matching_assignments.len(), 1);
-
-    let decisions = state
-        .orchestration()
-        .decisions_for_message_for_tests(&outcome.message_id)
-        .await;
-    assert_eq!(decisions.len(), 1);
-
-    let packages = state
-        .orchestration()
-        .routing_context_packages_for_message_for_tests(&outcome.message_id)
-        .await;
-    assert_eq!(packages.len(), 1);
 }
 
 #[tokio::test]
@@ -1874,11 +1643,6 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
     assert!(state
         .agent_inbox()
         .events_for_agent("agent_alice")
-        .await
-        .is_empty());
-    assert!(state
-        .orchestration()
-        .decisions_for_message_for_tests(&message.id)
         .await
         .is_empty());
     assert!(state
@@ -1956,11 +1720,11 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
         .await
         .is_empty());
 
-    let decisions = state
+    let packages = state
         .orchestration()
-        .decisions_for_message_for_tests(&message.id)
+        .routing_context_packages_for_message_for_tests(&message.id)
         .await;
-    assert!(decisions.is_empty());
+    assert!(packages.is_empty());
     assert!(state
         .channel_messages_for_tests("dev")
         .await
@@ -2198,12 +1962,6 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
 
     assert_broadcast_deliveries_running(&state, &first.message_id, &["agent_alice"]).await;
 
-    let decisions = state
-        .orchestration()
-        .decisions_for_message_for_tests(&first.message_id)
-        .await;
-    assert!(decisions.is_empty());
-
     let packages = state
         .orchestration()
         .routing_context_packages_for_message_for_tests(&first.message_id)
@@ -2339,7 +2097,7 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
         Some("api-core-explicit-multi"),
         json!({
             "authorId": "human_lei",
-            "body": "@alice-win @coda-win 一起确认 coordinator 路由。"
+            "body": "@alice-win @coda-win 一起确认广播认领。"
         }),
     )
     .await;
@@ -2358,7 +2116,7 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
         Some("api-core-execution-task"),
         json!({
             "authorId": "human_lei",
-            "body": "实现频道发言与 coordinator 路由的修复。",
+            "body": "实现频道发言与广播认领的修复。",
             "asTask": true
         }),
     )
@@ -2568,7 +2326,7 @@ async fn task_channel_agent_worker_completed_or_failed_output_creates_task_repli
 
     let task = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "dev",
             "human_lei",
             "worker-task-output-source-message",
@@ -2833,11 +2591,11 @@ async fn public_default_all_channel_message_api_accepts_messages() {
     let message_id = body["outcome"]["messageId"].as_str().unwrap();
     assert!(message_id.starts_with("msg_"));
 
-    let decisions = state
+    let packages = state
         .orchestration()
-        .decisions_for_message_for_tests(message_id)
+        .routing_context_packages_for_message_for_tests(message_id)
         .await;
-    assert!(decisions.is_empty());
+    assert!(packages.is_empty());
 
     assert_broadcast_deliveries_running(&state, message_id, &["agent_alice"]).await;
 
@@ -2863,7 +2621,7 @@ async fn public_default_all_channel_message_api_accepts_messages() {
 }
 
 #[tokio::test]
-async fn public_channel_as_task_message_creates_task_and_broadcasts_without_coordinator_runtime() {
+async fn public_channel_as_task_message_creates_task_and_broadcasts_without_central_routing() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");
     let app = build_router(state.clone());
@@ -2889,12 +2647,6 @@ async fn public_channel_as_task_message_creates_task_and_broadcasts_without_coor
 
     let task = state.tasks().task(task_id).await.unwrap();
     assert_eq!(task.source_message_id.as_deref(), Some(message_id));
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run_for_idempotency("public-api-as-task-broadcast")
-        .await
-        .unwrap()
-        .is_none());
     assert_broadcast_deliveries_running(&state, message_id, &["agent_alice"]).await;
 }
 
@@ -3335,15 +3087,6 @@ impl TestAgentSpec {
             handle: handle.into(),
             agent_kind: "agent".to_string(),
             system_owned: false,
-        }
-    }
-
-    fn coordinator(id: impl Into<String>, handle: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            handle: handle.into(),
-            agent_kind: "coordinator".to_string(),
-            system_owned: true,
         }
     }
 

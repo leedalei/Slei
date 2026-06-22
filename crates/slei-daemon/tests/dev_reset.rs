@@ -8,9 +8,6 @@ use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::channel_orchestrator_service::SendChannelMessageInput;
 use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
-use slei_daemon::services::coordinator_service::{
-    CoordinatorPromptMember, CoordinatorRuntimeInput, WorkspaceMount,
-};
 use slei_daemon::services::member_service::ProductAgentDraft;
 use slei_daemon::services::settings_service::{
     AppearancePreferences, LocalePreference, NotificationPreferences,
@@ -120,15 +117,6 @@ async fn dev_reset_clears_database_and_agent_workspace_when_enabled() {
     assert!(!data_root.join("agents/agent_coda/MEMORY.md").exists());
     assert!(!data_root.join("channels/index.json").exists());
     assert!(!data_root.join("attachments/index.json").exists());
-    assert_eq!(
-        state
-            .orchestration()
-            .event_counts()
-            .await
-            .unwrap()
-            .coordinator_decision_count,
-        0
-    );
     assert!(state
         .orchestration()
         .repos()
@@ -328,58 +316,7 @@ async fn dev_reset_restores_live_local_node_state() {
 }
 
 #[tokio::test]
-async fn dev_reset_ignores_stale_worker_events_after_cleanup() {
-    let _env_guard = ENV_LOCK.lock().expect("lock reset env");
-    std::env::set_var("SLEI_ENABLE_DEV_RESET", "1");
-
-    let token = AuthToken::from_static("test-token");
-    let state = AppState::for_tests_with_agent_root_async(token.clone(), temp_data_root()).await;
-    state
-        .orchestration()
-        .create_coordinator_runtime_run(
-            "coord_run_stale",
-            "dev",
-            "message_stale",
-            "stale-key",
-            "prompt",
-        )
-        .await
-        .unwrap();
-    state
-        .handle_worker_event(json!({
-            "type": "output_delta",
-            "run_id": "coord_run_stale",
-            "delta": "{\"intent\"",
-        }))
-        .await
-        .unwrap();
-
-    let response = post_dev_reset(state.clone(), token).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(state
-        .worker_commands()
-        .iter()
-        .any(|command| { command["type"] == "cancel" && command["run_id"] == "coord_run_stale" }));
-
-    state
-        .handle_worker_event(json!({
-            "type": "completed",
-            "run_id": "coord_run_stale",
-        }))
-        .await
-        .unwrap();
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run("coord_run_stale")
-        .await
-        .unwrap()
-        .is_none());
-
-    std::env::remove_var("SLEI_ENABLE_DEV_RESET");
-}
-
-#[tokio::test]
-async fn dev_reset_in_progress_blocks_new_coordinator_runs() {
+async fn dev_reset_in_progress_blocks_new_channel_runs() {
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests_with_agent_root_async(token, temp_data_root()).await;
     let reset_guard = state.reset().runtime().begin_reset().await.unwrap();
@@ -401,59 +338,12 @@ async fn dev_reset_in_progress_blocks_new_coordinator_runs() {
 }
 
 #[tokio::test]
-async fn dev_reset_in_progress_blocks_direct_coordinator_runtime_start() {
-    let token = AuthToken::from_static("test-token");
-    let state = AppState::for_tests_with_agent_root_async(token, temp_data_root()).await;
-    let reset_guard = state.reset().runtime().begin_reset().await.unwrap();
-
-    let result = state
-        .coordinator()
-        .start_runtime_run(CoordinatorRuntimeInput {
-            run_id: "coord_run_direct_reset".to_string(),
-            channel_id: "dev".to_string(),
-            channel_name: "dev".to_string(),
-            message_id: "message_direct_reset".to_string(),
-            author_id: "human_lei".to_string(),
-            body: "please route".to_string(),
-            members: vec![CoordinatorPromptMember {
-                agent_id: "agent_coda".to_string(),
-                name: "Coda".to_string(),
-                handle: "@coda".to_string(),
-                agent_kind: "agent".to_string(),
-                readiness: "ready".to_string(),
-            }],
-            context_refs: Vec::new(),
-            workspace_mounts: vec![WorkspaceMount {
-                path: ".".to_string(),
-                label: "repo".to_string(),
-            }],
-        })
-        .await;
-
-    let error = result.unwrap_err().to_string();
-    assert!(error.contains("reset in progress"));
-    assert!(state.worker_commands().is_empty());
-    reset_guard.finish().await;
-}
-
-#[tokio::test]
 async fn dev_reset_waits_for_in_flight_activity_and_ignores_new_worker_events() {
     let _env_guard = ENV_LOCK.lock().expect("lock reset env");
     std::env::set_var("SLEI_ENABLE_DEV_RESET", "1");
 
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests_with_agent_root_async(token.clone(), temp_data_root()).await;
-    state
-        .orchestration()
-        .create_coordinator_runtime_run(
-            "coord_run_event_gate",
-            "dev",
-            "message_event_gate",
-            "event-gate-key",
-            "prompt",
-        )
-        .await
-        .unwrap();
     let activity_guard = state.reset().runtime().begin_launch().await.unwrap();
 
     let reset_task = tokio::spawn(post_dev_reset(state.clone(), token));
@@ -463,31 +353,9 @@ async fn dev_reset_waits_for_in_flight_activity_and_ignores_new_worker_events() 
         "reset must wait for in-flight activity before clearing state"
     );
 
-    state
-        .handle_worker_event(json!({
-            "type": "output_delta",
-            "run_id": "coord_run_event_gate",
-            "delta": "{\"intent\":\"consultation\"}",
-        }))
-        .await
-        .unwrap();
-    let run = state
-        .orchestration()
-        .coordinator_runtime_run("coord_run_event_gate")
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(run.output, "");
-
     drop(activity_guard);
     let response = reset_task.await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(state
-        .orchestration()
-        .coordinator_runtime_run("coord_run_event_gate")
-        .await
-        .unwrap()
-        .is_none());
 
     std::env::remove_var("SLEI_ENABLE_DEV_RESET");
 }

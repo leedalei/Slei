@@ -216,14 +216,13 @@ mod tests {
               "worker":"claude-agent",
               "protocolVersion":"v1",
               "schemaVersion":"2026-05-27",
-              "coordinatorDecisionCount":1,
               "agentInboxEventCount":0,
               "memoryUpdateEventCount":0,
               "recentEvents":[{
                 "sequence":66,
-                "eventType":"coordinator_runtime.failed",
+                "eventType":"channel_agent_runtime.failed",
                 "entityId":"event_1",
-                "payload":"run_id=coord_run_1 decision_failed",
+                "payload":"run_id=run_1 agent_id=agent_alice source_message_id=msg_1",
                 "createdAt":"2026-06-11 09:57:39"
               }]
             }"#;
@@ -251,7 +250,7 @@ mod tests {
         assert_eq!(snapshot.recent_events[0].sequence, 66);
         assert_eq!(
             snapshot.recent_events[0].event_type,
-            "coordinator_runtime.failed"
+            "channel_agent_runtime.failed"
         );
     }
 
@@ -335,7 +334,7 @@ mod tests {
                     "taskId": "daemon_task_1",
                     "assigneeAgentId": "agent_alice",
                     "assigneeAgentIds": ["agent_alice"],
-                    "coordinatorRunId": "coord_run_1",
+                    "coordinatorRunId": null,
                     "decisionStatus": "completed"
                 }
             })
@@ -1483,10 +1482,10 @@ mod tests {
             .agents
             .iter()
             .any(|agent| agent.id == created.agent.id));
-        assert!(agents
+        assert!(!agents
             .agents
             .iter()
-            .any(|agent| agent.id == "agent_global_coordinator"));
+            .any(|agent| agent.system_owned == Some(true)));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
@@ -1594,48 +1593,6 @@ mod tests {
             .agents
             .iter()
             .any(|agent| agent.id == created.id));
-        let coordinator_id = "agent_global_coordinator";
-        assert!(delete_agent(&broker, coordinator_id).is_err());
-        assert!(list_agents(&broker)
-            .agents
-            .iter()
-            .any(|agent| agent.id == coordinator_id));
-        std::env::remove_var("SLEI_DATA_ROOT");
-    }
-
-    #[test]
-    fn broker_lists_global_coordinator_and_blocks_direct_message() {
-        let _env_guard = test_env_lock();
-        let agent_root = std::env::temp_dir().join(format!(
-            "slei-desktop-coordinator-test-{}",
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&agent_root);
-        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener);
-        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
-            endpoint: format!("http://127.0.0.1:{port}"),
-            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
-            token: "secret-token".to_string(),
-            daemon_version: "0.1.0".to_string(),
-            protocol_version: "v1".to_string(),
-        });
-
-        let agents = list_agents(&broker);
-        let coordinator = agents
-            .agents
-            .iter()
-            .find(|agent| agent.agent_kind.as_deref() == Some("coordinator"))
-            .expect("global coordinator should be listed");
-
-        assert_eq!(coordinator.id, "agent_global_coordinator");
-        assert_eq!(coordinator.handle, "@global-coordinator");
-        assert_eq!(coordinator.channel_ids.as_deref(), Some(&[] as &[String]));
-        assert_eq!(coordinator.runtime_kind, "ClaudeCode");
-        assert!(fs::metadata(&coordinator.memory_path).unwrap().is_file());
-        assert!(create_dm_conversation(&broker, &coordinator.id).is_err());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -1723,10 +1680,10 @@ mod tests {
         let reloaded = DaemonBroker::for_tests(descriptor);
         let agents = list_agents(&reloaded);
         assert!(!agents.agents.iter().any(|agent| agent.id == created.id));
-        assert!(agents
+        assert!(!agents
             .agents
             .iter()
-            .any(|agent| agent.id == "agent_global_coordinator"));
+            .any(|agent| agent.system_owned == Some(true)));
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 
@@ -1760,10 +1717,10 @@ mod tests {
 
         let recovered = list_agents(&DaemonBroker::for_tests(descriptor.clone()));
         assert!(!recovered.agents.iter().any(|agent| agent.id == agent_id));
-        assert!(recovered
+        assert!(!recovered
             .agents
             .iter()
-            .any(|agent| agent.id == "agent_global_coordinator"));
+            .any(|agent| agent.system_owned == Some(true)));
 
         let index_path = agent_root.join("agents/index.json");
         fs::create_dir_all(index_path.parent().unwrap()).unwrap();

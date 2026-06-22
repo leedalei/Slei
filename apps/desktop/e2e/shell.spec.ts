@@ -54,13 +54,12 @@ describe("desktop shell daemon connectivity", () => {
 
     await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "实现 API" })).resolves.toMatchObject({
       outcome: {
-        action: "create_task_and_assign",
-        taskId: expect.any(String),
+        action: "broadcast_delivered",
       },
     });
     await expect(bridge.sendChannelMessage("dev", { authorId: "human:local", body: "这个方案怎么看？" })).resolves.toMatchObject({
       outcome: {
-        action: "request_agent_reply",
+        action: "broadcast_delivered",
       },
     });
 
@@ -96,15 +95,15 @@ describe("desktop shell daemon connectivity", () => {
     });
     await expect(readyBridge.sendChannelMessage("dev", { authorId: "human:local", body: "实现 API" })).resolves.toMatchObject({
       outcome: {
-        action: "create_task_and_assign",
-        assigneeAgentId: "agent_alice",
+        action: "broadcast_delivered",
+        assigneeAgentIds: ["agent_alice"],
       },
     });
     await expect(readyBridge.sendChannelMessage("dev", { authorId: "human:local", body: "这个方案怎么看？" })).resolves.toMatchObject({
       outcome: {
-        action: "request_agent_reply",
+        action: "broadcast_delivered",
         taskId: undefined,
-        assigneeAgentId: "agent_alice",
+        assigneeAgentIds: ["agent_alice"],
       },
     });
   });

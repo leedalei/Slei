@@ -72,23 +72,15 @@ pub async fn create_dm(
         Err(response) => return response,
     };
 
-    let agent = state
+    let agent_exists = state
         .members()
         .list_product_agents()
         .await
         .iter()
-        .find(|agent| agent.id == payload.agent_id)
-        .cloned();
-    let Some(agent) = agent else {
+        .any(|agent| agent.id == payload.agent_id);
+    if !agent_exists {
         return error_response(StatusCode::BAD_REQUEST, "agent not found");
-    };
-    if agent.agent_kind == "coordinator" {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "coordinator agents do not support direct messages",
-        );
     }
-
     match state.conversations().create_dm(&payload.agent_id).await {
         Ok((conversation, created)) => (
             if created {

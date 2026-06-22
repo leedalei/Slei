@@ -232,13 +232,40 @@ test("flags production UI agent orchestration helpers", () => {
   assert(messages.some((message) => message.includes("delegate execution to daemon")));
 });
 
-test("allows production UI daemon outcome activity rendering helpers", () => {
+test("flags legacy coordinator control plane symbols in production paths", () => {
+  const messages = messagesFor(
+    "crates/slei-daemon/src/state.rs",
+    [
+      "use crate::services::coordinator_service::CoordinatorService;",
+      "const ID: &str = \"agent_global_coordinator\";",
+      "let table = \"coordinator_runtime_runs\";",
+    ].join("\n"),
+  );
+
+  assert(messages.some((message) => message.includes("legacy coordinator control plane")));
+});
+
+test("flags legacy coordinator action names in production UI helpers", () => {
+  const messages = messagesFor(
+    "apps/desktop/src/app/SleiApp.tsx",
+    [
+      "function createChannelAgentActivityMessages(outcome, channelId, members) {",
+      "  if (outcome.action !== 'request_agent_reply') return [];",
+      "  return [{ toolCall: 'coordinator_routing', channelId }];",
+      "}",
+    ].join("\n"),
+  );
+
+  assert(messages.some((message) => message.includes("legacy coordinator control plane")));
+});
+
+test("allows production UI daemon broadcast outcome activity rendering helpers", () => {
   assert.deepEqual(
     messagesFor(
       "apps/desktop/src/app/SleiApp.tsx",
       [
         "function createChannelAgentActivityMessages(outcome, channelId, members) {",
-        "  if (outcome.action !== 'request_agent_reply') return [];",
+        "  if (outcome.action !== 'broadcast_delivered') return [];",
         "  return [{ toolCall: 'channel_agent_reply', channelId }];",
         "}",
       ].join("\n"),

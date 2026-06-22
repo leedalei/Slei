@@ -58,9 +58,7 @@ function renderKeyKnowledge(input: AgentTemplateInput): string {
   const base =
     input.agentKind === "guide"
       ? DEFAULT_KEY_KNOWLEDGE.guide
-      : input.agentKind === "coordinator"
-        ? DEFAULT_KEY_KNOWLEDGE.coordinator
-        : DEFAULT_KEY_KNOWLEDGE.agent;
+      : DEFAULT_KEY_KNOWLEDGE.agent;
   const channelIds = [...new Set(input.channelIds ?? [])].sort();
   if (channelIds.length === 0) return base;
   return `${base}\n已加入频道：${channelIds.map((channelId) => `#${channelId}`).join("、")}`;

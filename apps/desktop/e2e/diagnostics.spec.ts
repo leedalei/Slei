@@ -32,7 +32,7 @@ describe("diagnostics and localized recovery", () => {
     expect(browse).not.toContain("Search");
   });
 
-  it("renders coordinator and inbox diagnostics counts", () => {
+  it("renders inbox and memory diagnostics counts", () => {
     const html = renderDiagnosticsPage({
       locale: "en-US",
       status: {
@@ -41,14 +41,11 @@ describe("diagnostics and localized recovery", () => {
         worker: "claude-agent",
         protocolVersion: "v1",
         schemaVersion: "2026-05-27",
-        coordinatorDecisionCount: 3,
         agentInboxEventCount: 5,
         memoryUpdateEventCount: 8,
       },
     });
 
-    expect(html).toContain("Coordinator");
-    expect(html).toContain("3");
     expect(html).toContain("Inbox");
     expect(html).toContain("5");
     expect(html).toContain("Memory updates");

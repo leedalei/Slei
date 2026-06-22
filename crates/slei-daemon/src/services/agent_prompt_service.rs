@@ -171,11 +171,6 @@ Format each Active Context entry with:
     )
 }
 
-pub fn build_legacy_coordinator_system_prompt() -> String {
-    "Slei coordinator runtime. Route messages through daemon-owned state and return only the requested coordinator output. Do not answer users visibly from the coordinator."
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,15 +246,6 @@ mod tests {
         assert!(prompt.contains("- channel name: none"));
         assert!(prompt.contains("- triggering message id: none"));
         assert!(prompt.contains("- task id: none"));
-        assert!(!prompt.contains("raft "));
-    }
-
-    #[test]
-    fn legacy_prompt_is_minimal_and_slei_named() {
-        let prompt = build_legacy_coordinator_system_prompt();
-
-        assert!(prompt.contains("Slei"));
-        assert!(prompt.contains("coordinator"));
         assert!(!prompt.contains("raft "));
     }
 }

@@ -145,7 +145,7 @@ describe("chat composer submit behavior", () => {
 
   it("builds pending agent activity when the daemon requests a channel reply", () => {
     const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_2", action: "request_agent_reply", assigneeAgentId: "agent_alice", assigneeAgentIds: ["agent_alice"] },
+      { messageId: "msg_channel_all_2", action: "broadcast_delivered", assigneeAgentId: "agent_alice", assigneeAgentIds: ["agent_alice"] },
       "all",
       [
         {
@@ -205,7 +205,7 @@ describe("chat composer submit behavior", () => {
     const activities = createChannelAgentActivityMessages(
       {
         messageId: "msg_channel_all_multi",
-        action: "request_agent_reply",
+        action: "broadcast_delivered",
         assigneeAgentId: "agent_alice",
         assigneeAgentIds: ["agent_alice", "agent_coda"],
       },
@@ -221,19 +221,9 @@ describe("chat composer submit behavior", () => {
     ]);
   });
 
-  it("does not show pending activity for channel coordinators", () => {
-    const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_3", action: "request_agent_reply", assigneeAgentId: "agent_coordinator_all", assigneeAgentIds: ["agent_coordinator_all"] },
-      "all",
-      [],
-    );
-
-    expect(activity).toBeNull();
-  });
-
   it("shows pending activity for the system guide because it can reply", () => {
     const activity = createChannelAgentActivityMessage(
-      { messageId: "msg_channel_all_4", action: "request_agent_reply", assigneeAgentId: "agent_guide_local_node", assigneeAgentIds: ["agent_guide_local_node"] },
+      { messageId: "msg_channel_all_4", action: "broadcast_delivered", assigneeAgentId: "agent_guide_local_node", assigneeAgentIds: ["agent_guide_local_node"] },
       "all",
       [
         {

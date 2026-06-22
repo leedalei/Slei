@@ -62,7 +62,6 @@ import {
   formatMessageDateTime,
   formatMessageTime,
   formatMemberCreatedDate,
-  isInternalCoordinatorMember,
   localHumanPresentation,
   mergeMessagePage,
   normalizeAppearance,
@@ -203,12 +202,6 @@ function displayUserHandle(handle: string) {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 }
 
-function coordinatorRoutingActivitySourceId(message: SleiMessage): string | undefined {
-  return message.toolCall === "coordinator_routing"
-    ? message.id.match(/^coordinator-activity-(.+)$/)?.[1]
-    : undefined;
-}
-
 function channelAgentActivitySourceId(message: SleiMessage): string | undefined {
   if (message.toolCall !== "channel_agent_reply") return undefined;
   return message.sourceMessageId ?? message.id.match(/^agent-activity-(.+)-agent[_-]/)?.[1];
@@ -237,8 +230,6 @@ export function replaceChannelMessages(current: SleiMessage[], channelMessages: 
   return [
     ...current.filter((message) => {
       if (!message.channelId || message.channelId.startsWith("dm:") || !ids.has(message.channelId)) return true;
-      const coordinatorSourceId = coordinatorRoutingActivitySourceId(message);
-      if (coordinatorSourceId) return !hasRoutedChannelResultAfterSource(channelMessages, coordinatorSourceId);
       const agentSourceId = channelAgentActivitySourceId(message);
       if (agentSourceId) return !hasChannelAgentResultAfterSource(channelMessages, agentSourceId);
       return false;
@@ -249,7 +240,6 @@ export function replaceChannelMessages(current: SleiMessage[], channelMessages: 
 
 function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")): SleiMember {
   const node = nodes.find((candidate) => candidate.id === agent.nodeId);
-  const isCoordinator = agent.agentKind === "coordinator";
   return {
     id: agent.id,
     name: agent.name,
@@ -259,9 +249,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     agentKind: agent.agentKind,
     type: "agent",
     runtimeStatus: node?.status === "offline" ? "offline" : "idle",
-    role: isCoordinator
-      ? messages.members.channelCoordinator
-      : agent.agentKind === "guide"
+    role: agent.agentKind === "guide"
         ? messages.chat.guide
         : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent,
     description: agent.description,
@@ -281,7 +269,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     memoryPath: agent.memoryPath,
     docsPath: agent.docsPath,
     skills: agent.skills,
-    directMessageEnabled: !isCoordinator,
+    directMessageEnabled: true,
     systemOwned: agent.systemOwned ?? false,
   };
 }
@@ -296,8 +284,7 @@ function mergeAgentViewsIntoMembers(current: SleiMember[], agents: DesktopAgentV
         ...member,
         channelReadiness: existing?.channelReadiness,
       };
-    })
-    .filter((member) => !isInternalCoordinatorMember(member));
+    });
 }
 
 function applyChannelMemberReadiness(members: SleiMember[], channelId: string, channelMembers: ChannelMemberView[]): SleiMember[] {
@@ -484,24 +471,6 @@ export function createChannelArchiveNoticeMessage(outcome: SendChannelMessageOut
   };
 }
 
-export function createCoordinatorRoutingActivityMessage(outcome: SendChannelMessageOutcome, channelId: string, messages: DesktopMessages): SleiMessage | null {
-  if (outcome.action !== "coordinator_pending") return null;
-  const now = new Date().toISOString();
-  return {
-    id: `coordinator-activity-${outcome.messageId}`,
-    author: messages.members.channelCoordinator,
-    handle: "@coordinator",
-    avatar: "CO",
-    role: "agent",
-    time: formatMessageTime(now),
-    sentAt: formatMessageDateTime(now),
-    body: "",
-    channelId,
-    status: "pending",
-    toolCall: "coordinator_routing",
-  };
-}
-
 function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
   const ids = outcome.assigneeAgentIds && outcome.assigneeAgentIds.length > 0
     ? outcome.assigneeAgentIds
@@ -512,11 +481,11 @@ function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
 }
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
-  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
+  if (outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
   const now = new Date().toISOString();
   const agentId = channelReplyTargetIds(outcome).find((targetId) => {
     const member = members.find((candidate) => candidate.id === targetId);
-    return !isInternalCoordinatorMember(member ?? { id: targetId }) && member?.directMessageEnabled !== false;
+    return member?.directMessageEnabled !== false;
   });
   if (!agentId) return [];
   const member = members.find((candidate) => candidate.id === agentId);
@@ -620,16 +589,14 @@ function diagnosticPayloadValue(event: DiagnosticEventView, key: string): string
   return match?.[1];
 }
 
-export function markCoordinatorActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+export function markAgentActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
   if (!diagnosticEventNeedsToast(event)) return messages;
   const messageId = diagnosticPayloadValue(event, "message_id") ?? diagnosticPayloadValue(event, "source_message_id");
   if (!messageId) return messages;
-  const activityId = `coordinator-activity-${messageId}`;
   let changed = false;
   const nextMessages = messages.map((message) => {
-    const matchesCoordinator = message.id === activityId && message.toolCall === "coordinator_routing";
     const matchesAgent = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
-    if ((!matchesCoordinator && !matchesAgent) || message.status === "failed") {
+    if (!matchesAgent || message.status === "failed") {
       return message;
     }
     changed = true;
@@ -706,7 +673,7 @@ function isPendingAgentActivity(message: SleiMessage) {
   return (
     message.role === "agent" &&
     (message.status === "pending" || message.status === "running") &&
-    (message.toolCall === "channel_agent_reply" || message.toolCall === "coordinator_routing")
+    message.toolCall === "channel_agent_reply"
   );
 }
 
@@ -1094,7 +1061,7 @@ export function SleiApp() {
           return createEmptySleiData({ ...current, messages: removeCompletedAgentActivityByDiagnostic(updatedMessages, event) });
         });
         if (diagnosticEventNeedsToast(event)) {
-          setData((current) => createEmptySleiData({ ...current, messages: markCoordinatorActivityFailedByDiagnostic(current.messages, event) }));
+          setData((current) => createEmptySleiData({ ...current, messages: markAgentActivityFailedByDiagnostic(current.messages, event) }));
           showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
         }
       }
@@ -1710,16 +1677,15 @@ export function SleiApp() {
 
     setData((current) => {
       const archiveNotice = createChannelArchiveNoticeMessage(result.receipt.outcome, targetId, messages);
-      const coordinatorActivity = createCoordinatorRoutingActivityMessage(result.receipt.outcome, targetId, messages);
       const agentActivities = createChannelAgentActivityMessages(result.receipt.outcome, targetId, current.members);
-      const nextMessages = [channelMessage, archiveNotice, coordinatorActivity, ...agentActivities].filter((message): message is SleiMessage => Boolean(message));
+      const nextMessages = [channelMessage, archiveNotice, ...agentActivities].filter((message): message is SleiMessage => Boolean(message));
       return createEmptySleiData({ ...current, messages: [...current.messages, ...nextMessages] });
     });
     void refreshChannelMessagesIntoState(targetId, data.members).catch((error: unknown) => {
       logAppEvent(bridge, "channel-refresh", "messages-refresh-failed-after-send", { channelId: targetId, error: formatLogError(error) });
       showBackendServiceErrorToast(error);
     });
-    if (result.receipt.outcome.action === "request_agent_reply" || result.receipt.outcome.taskId) {
+    if ((result.receipt.outcome.assigneeAgentIds ?? []).length > 0 || result.receipt.outcome.taskId) {
       logAppEvent(bridge, "channel-agent-reply", "delegated-to-daemon", {
         channelId: targetId,
         messageId: result.receipt.outcome.messageId,

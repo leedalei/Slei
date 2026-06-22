@@ -15,8 +15,6 @@ use slei_default_agent_assets::{
 };
 use uuid::Uuid;
 
-const GLOBAL_COORDINATOR_AGENT_ID: &str = "agent_global_coordinator";
-
 #[derive(Clone, Debug)]
 pub struct RuntimeDescriptor {
     pub endpoint: String,
@@ -172,7 +170,6 @@ pub struct DiagnosticsSnapshotView {
     pub schema_version: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_summary: Option<String>,
-    pub coordinator_decision_count: u64,
     pub agent_inbox_event_count: u64,
     pub memory_update_event_count: u64,
     pub recent_events: Vec<DiagnosticEventView>,
@@ -1106,7 +1103,6 @@ impl DaemonBroker {
             protocol_version: self.descriptor.protocol_version.clone(),
             schema_version: "local".to_string(),
             failure_summary: None,
-            coordinator_decision_count: 0,
             agent_inbox_event_count: 0,
             memory_update_event_count: 0,
             recent_events: local_events,
@@ -1771,7 +1767,6 @@ impl DaemonBroker {
         } else if self.offline_fallback == OfflineFallback::Empty {
             AgentListReceipt { agents: Vec::new() }
         } else {
-            let _ = self.ensure_local_global_coordinator();
             AgentListReceipt {
                 agents: self.agents.lock().expect("agents mutex poisoned").clone(),
             }
@@ -2120,13 +2115,9 @@ impl DaemonBroker {
             .iter()
             .find(|agent| agent.id == agent_id)
             .cloned();
-        let Some(agent) = agent else {
+        if agent.is_none() {
             return Err(ConversationError::AgentNotFound);
-        };
-        if agent.agent_kind.as_deref() == Some("coordinator") {
-            return Err(ConversationError::InvalidConversation);
         }
-
         if let Some(receipt) = self.create_dm_conversation_in_daemon(agent_id) {
             self.upsert_local_conversation(receipt.conversation.clone())?;
             return Ok(receipt);
@@ -3328,67 +3319,6 @@ impl DaemonBroker {
         format!("{}/agents/{id}", self.data_root)
     }
 
-    fn ensure_local_global_coordinator(&self) -> Result<DesktopAgentView, AgentError> {
-        let id = GLOBAL_COORDINATOR_AGENT_ID.to_string();
-        {
-            let mut agents = self.agents.lock().expect("agents mutex poisoned");
-            if let Some(index) = agents.iter().position(|agent| agent.id == id) {
-                let description = global_coordinator_description();
-                if agents[index].name != "Global Coordinator"
-                    || agents[index].handle != "@global-coordinator"
-                    || agents[index].description != description
-                    || agents[index]
-                        .channel_ids
-                        .as_ref()
-                        .is_none_or(|channel_ids| !channel_ids.is_empty())
-                {
-                    agents[index].name = "Global Coordinator".to_string();
-                    agents[index].handle = "@global-coordinator".to_string();
-                    agents[index].agent_kind = Some("coordinator".to_string());
-                    agents[index].system_owned = Some(true);
-                    agents[index].description = description;
-                    agents[index].channel_ids = Some(Vec::new());
-                    agents[index].updated_at = monotonic_id();
-                    fs::write(&agents[index].memory_path, initial_memory(&agents[index]))
-                        .map_err(AgentError::Io)?;
-                    persist_local_agents_at_root(&self.data_root, &agents)?;
-                }
-                return Ok(agents[index].clone());
-            }
-        }
-
-        let now = monotonic_id();
-        let workspace_path = self.local_agent_workspace(&id);
-        let mut agent = DesktopAgentView {
-            id: id.clone(),
-            name: "Global Coordinator".to_string(),
-            handle: "@global-coordinator".to_string(),
-            agent_kind: Some("coordinator".to_string()),
-            system_owned: Some(true),
-            runtime_kind: "ClaudeCode".to_string(),
-            model: "Sonnet".to_string(),
-            node_id: "local-node".to_string(),
-            description: global_coordinator_description(),
-            workspace_path: workspace_path.clone(),
-            memory_path: format!("{workspace_path}/MEMORY.md"),
-            docs_path: format!("{workspace_path}/docs"),
-            avatar_seed: id,
-            runtime_thread: Some(RuntimeThreadView {
-                runtime_kind: "ClaudeCode".to_string(),
-                status: "ready".to_string(),
-                created_at: now.clone(),
-            }),
-            skills: None,
-            channel_ids: Some(Vec::new()),
-            created_at: now.clone(),
-            updated_at: now,
-        };
-        agent.skills = Some(default_skill_records(&agent));
-        create_local_agent_workspace(&agent)?;
-        self.upsert_local_agent(agent.clone());
-        Ok(agent)
-    }
-
     fn upsert_local_channel(&self, channel: ChannelView) {
         let mut channels = self.channels.lock().expect("channels mutex poisoned");
         match channels
@@ -4511,11 +4441,6 @@ fn append_local_agent_memory(agent: &DesktopAgentView, fact: &str) -> Result<(),
 
 fn initial_memory(agent: &DesktopAgentView) -> String {
     shared_initial_memory(&agent_template_input(agent))
-}
-
-fn global_coordinator_description() -> String {
-    "内置全局频道协调员，负责根据当前频道成员和上下文分析用户意图并路由 Agent，自己不回复用户问题。"
-        .to_string()
 }
 
 fn is_daemon_unavailable_error(error: &str) -> bool {

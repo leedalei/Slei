@@ -66,48 +66,6 @@ CREATE TABLE IF NOT EXISTS idempotent_mutations (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS channel_coordinators (
-    channel_id TEXT PRIMARY KEY,
-    strategy TEXT NOT NULL,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS coordinator_decisions (
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-    id TEXT NOT NULL UNIQUE,
-    channel_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    intent TEXT NOT NULL,
-    action TEXT NOT NULL,
-    assignee_agent_id TEXT,
-    assignee_agent_ids TEXT NOT NULL DEFAULT '[]',
-    reason TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_coordinator_decisions_message_id
-    ON coordinator_decisions(message_id);
-
-CREATE TABLE IF NOT EXISTS coordinator_runtime_runs (
-    run_id TEXT PRIMARY KEY,
-    channel_id TEXT NOT NULL,
-    message_id TEXT NOT NULL,
-    idempotency_key TEXT NOT NULL,
-    prompt TEXT NOT NULL,
-    output TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL DEFAULT 'pending',
-    error TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_coordinator_runtime_runs_message
-    ON coordinator_runtime_runs(message_id);
-
-CREATE INDEX IF NOT EXISTS idx_coordinator_runtime_runs_idempotency
-    ON coordinator_runtime_runs(idempotency_key);
-
 CREATE TABLE IF NOT EXISTS agent_inbox_events (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE,
@@ -152,7 +110,7 @@ CREATE TABLE IF NOT EXISTS memory_document_states (
 CREATE TABLE IF NOT EXISTS routing_context_packages (
     sequence INTEGER PRIMARY KEY AUTOINCREMENT,
     id TEXT NOT NULL UNIQUE,
-    decision_id TEXT NOT NULL REFERENCES coordinator_decisions(id),
+    decision_id TEXT NOT NULL,
     source_message_id TEXT NOT NULL,
     payload TEXT NOT NULL,
     contains_deleted_body INTEGER NOT NULL DEFAULT 0,
@@ -174,6 +132,7 @@ pub const MIGRATION_0004: &str = include_str!("../migrations/0004_task_source_un
 pub const MIGRATION_0005: &str = include_str!("../migrations/0005_agent_activity_event_fields.sql");
 pub const MIGRATION_0006: &str = include_str!("../migrations/0006_user_profile.sql");
 pub const MIGRATION_0007: &str = include_str!("../migrations/0007_message_threads.sql");
+pub const MIGRATION_0008: &str = include_str!("../migrations/0008_drop_legacy_coordinator.sql");
 
 pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, MIGRATION_0001),
@@ -183,4 +142,5 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (5, MIGRATION_0005),
     (6, MIGRATION_0006),
     (7, MIGRATION_0007),
+    (8, MIGRATION_0008),
 ];

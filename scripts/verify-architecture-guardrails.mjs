@@ -41,6 +41,7 @@ const DAEMON_BRIDGE_MOCK_DEFINITION_PATTERN = /\b(?:export\s+)?function\s+create
 const OLD_MOCK_WORKSPACE_PATTERN = /\bmockAgentWorkspace(?:Entries|FileContent)\b/g;
 const PRODUCTION_FIXTURE_IMPORT_PATTERN = /["'`][^"'`]*(?:app\/fixtures|(?:\.\.\/)+test\/fixtures|(?:\.\/)?test\/fixtures|src\/test\/fixtures|apps\/desktop\/src\/test\/fixtures)[^"'`]*["'`]/g;
 const UI_AGENT_RUNNER_PATTERN = /\b(?:runTaskAgentReply|runChannelAgentReply|taskAgentReplyPrompt|channelAgentReplyPrompt|createChannelTaskPlaceholder)\b/g;
+const LEGACY_COORDINATOR_CONTROL_PLANE_PATTERN = /\b(?:CoordinatorService|coordinator_runtime_runs|coordinator_decisions|channel_coordinators|agent_global_coordinator|agent_coordinator_|request_agent_reply|coordinator_routing)\b/g;
 
 function normalizePath(filePath) {
   return filePath.split(path.sep).join("/");
@@ -497,6 +498,13 @@ export function analyzeFile({ filePath, content }) {
     contentForRules,
     UI_AGENT_RUNNER_PATTERN,
     "production UI must not run agent/task orchestration locally; delegate execution to daemon and render daemon data",
+  );
+  addRegexViolations(
+    violations,
+    filePath,
+    contentForRules,
+    LEGACY_COORDINATOR_CONTROL_PLANE_PATTERN,
+    "legacy coordinator control plane is forbidden; use broadcast delivery and agent claim",
   );
 
   addOfflineBridgeMockViolations(violations, filePath, contentForRules);

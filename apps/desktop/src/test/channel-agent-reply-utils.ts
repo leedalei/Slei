@@ -1,5 +1,4 @@
 import type { ConversationMessageView, DaemonBridge, SendChannelMessageOutcome } from "../lib/daemon-bridge";
-import { isInternalCoordinatorMember } from "../app/model";
 import type { SleiMember, SleiMessage } from "../app/types";
 
 export function channelReplyTargetIds(outcome: SendChannelMessageOutcome): string[] {
@@ -93,10 +92,10 @@ export function createChannelAgentActivityMessage(outcome: SendChannelMessageOut
 }
 
 export function createChannelAgentActivityMessages(outcome: SendChannelMessageOutcome, channelId: string, members: SleiMember[]): SleiMessage[] {
-  if (outcome.action !== "request_agent_reply" && outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
+  if (outcome.action !== "create_task_and_assign" && outcome.action !== "broadcast_delivered") return [];
   const agentId = channelReplyTargetIds(outcome).find((targetId) => {
     const member = members.find((candidate) => candidate.id === targetId);
-    return !isInternalCoordinatorMember(member ?? { id: targetId }) && member?.directMessageEnabled !== false;
+    return member?.directMessageEnabled !== false;
   });
   if (!agentId) return [];
   const member = members.find((candidate) => candidate.id === agentId);

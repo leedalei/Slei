@@ -30,7 +30,6 @@ pub struct StandardSkillAsset {
 #[derive(Deserialize)]
 struct KeyKnowledge {
     guide: String,
-    coordinator: String,
     agent: String,
 }
 
@@ -89,7 +88,6 @@ pub fn base_key_knowledge(agent_kind: Option<&str>) -> &'static str {
     let key_knowledge = key_knowledge();
     match agent_kind {
         Some("guide") => &key_knowledge.guide,
-        Some("coordinator") => &key_knowledge.coordinator,
         _ => &key_knowledge.agent,
     }
 }
@@ -185,21 +183,6 @@ mod tests {
         assert!(memory.contains("slei message read/search"));
         assert!(memory.contains("空闲"));
         assert!(!memory.contains("| #all | 首次启动 | 等待用户提出需要引导的任务 | idle |"));
-    }
-
-    #[test]
-    fn coordinator_memory_says_it_is_legacy_and_does_not_route_new_flow() {
-        let memory = initial_memory(&AgentTemplateInput {
-            name: "Coordinator",
-            handle: "@coordinator",
-            description: "Routes channel messages",
-            agent_kind: Some("coordinator"),
-            channel_ids: vec![],
-        });
-
-        assert!(memory.contains("历史内部路由角色"));
-        assert!(memory.contains("slei message claim"));
-        assert!(memory.contains("不要生成新的中心路由决策"));
     }
 
     #[test]

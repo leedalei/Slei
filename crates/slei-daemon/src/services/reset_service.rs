@@ -121,13 +121,6 @@ impl ResetService {
         self.agent_dm_runs
             .cancel_all_for_reset(&self.worker, &self.runtime)
             .await?;
-        let coordinator_run_ids = self
-            .orchestration
-            .cancel_pending_coordinator_runs_for_reset(&self.runtime)
-            .await?;
-        for run_id in coordinator_run_ids {
-            self.worker.cancel_run(&run_id)?;
-        }
         self.orchestration.repos().reset_mutable_state().await?;
         self.clear_process_local_state().await;
 

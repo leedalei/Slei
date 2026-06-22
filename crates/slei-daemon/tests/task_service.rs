@@ -123,18 +123,18 @@ async fn task_service_blocks_root_delete_while_active_and_updates_status() {
 }
 
 #[tokio::test]
-async fn task_created_from_coordinator_keeps_source_and_assignment_reason() {
+async fn task_created_from_source_assignment_keeps_source_and_assignment_reason() {
     let service = TaskService::for_tests();
 
     let task = service
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "channel_dev",
             "human_lei",
             "msg_1",
-            "实现频道 Coordinator",
+            "实现频道 Agent 分派",
             Some("agent_alice".to_string()),
             "command intent requires architecture",
-            "task-from-coordinator",
+            "task-from-source-assignment",
         )
         .await
         .unwrap();
@@ -239,7 +239,7 @@ async fn source_message_create_replays_idempotency_before_same_source_fallback()
 }
 
 #[tokio::test]
-async fn coordinator_and_source_message_create_reuse_same_source_task() {
+async fn assigned_and_source_message_create_reuse_same_source_task() {
     let root = std::env::temp_dir().join(format!("slei-source-dedupe-{}", uuid::Uuid::new_v4()));
     let state =
         AppState::for_tests_with_agent_root_async(AuthToken::from_static("test-token"), root).await;
@@ -260,21 +260,21 @@ async fn coordinator_and_source_message_create_reuse_same_source_task() {
         .create_from_source_message(&source.id, "agent_cindy", "source-dedupe-api")
         .await
         .unwrap();
-    let from_coordinator = state
+    let from_assignment = state
         .tasks()
-        .create_from_coordinator(
+        .create_from_source_with_assignment(
             "all",
             "human_lei",
             &source.id,
-            "coordinator title should not duplicate",
+            "assigned title should not duplicate",
             Some("agent_cindy".to_string()),
-            "coordinator duplicate check",
-            "source-dedupe-coordinator",
+            "assignment duplicate check",
+            "source-dedupe-assignment",
         )
         .await
         .unwrap();
 
-    assert_eq!(from_coordinator.id, from_source.id);
+    assert_eq!(from_assignment.id, from_source.id);
     assert_eq!(
         state
             .tasks()

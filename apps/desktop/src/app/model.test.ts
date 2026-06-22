@@ -6,7 +6,6 @@ import {
   formatLocalRecordDateTime,
   formatMessageDateTime,
   formatMessageTime,
-  isInternalCoordinatorMember,
   localeFromSystemLanguages,
   mentionSuggestions,
   mergeMessagePage,
@@ -41,21 +40,14 @@ function agent(overrides: Partial<SleiMember> = {}): SleiMember {
   };
 }
 
-describe("internal coordinator members", () => {
-  it("identifies global and legacy channel coordinators", () => {
-    expect(isInternalCoordinatorMember(agent({ id: "agent_global_coordinator", agentKind: "coordinator" }))).toBe(true);
-    expect(isInternalCoordinatorMember(agent({ id: "agent_coordinator_all" }))).toBe(true);
-    expect(isInternalCoordinatorMember(agent({ id: "agent_coda", agentKind: "agent" }))).toBe(false);
-  });
-
-  it("omits coordinator agents from mention suggestions", () => {
+describe("mention suggestions", () => {
+  it("matches members by handle and name", () => {
     const members = [
-      agent({ id: "agent_global_coordinator", name: "Global Coordinator", handle: "@global-coordinator", agentKind: "coordinator" }),
-      agent({ id: "agent_coordinator_all", name: "Channel Coordinator", handle: "@channel-coordinator" }),
       agent({ id: "agent_coda", name: "Coda", handle: "@coda", agentKind: "agent" }),
+      agent({ id: "agent_mira", name: "Mira", handle: "@mira", agentKind: "agent" }),
     ];
 
-    expect(mentionSuggestions("", members).map((member) => member.id)).toEqual(["agent_coda"]);
+    expect(mentionSuggestions("co", members).map((member) => member.id)).toEqual(["agent_coda"]);
   });
 });
 
@@ -67,19 +59,19 @@ describe("member created date formatting", () => {
 });
 
 describe("channel message refresh", () => {
-  it("keeps polling while the active channel has coordinator or agent pending activity", () => {
+  it("keeps polling while the active channel has pending agent activity", () => {
     expect(
       shouldRefreshChannelMessages(
         [
           {
-            id: "coordinator-activity-msg_1",
-            author: "频道协调员",
+            id: "agent-activity-msg_1-agent_coda",
+            author: "Coda",
             role: "agent",
             time: "",
             body: "",
             channelId: "all",
             status: "pending",
-            toolCall: "coordinator_routing",
+            toolCall: "channel_agent_reply",
           },
         ],
         "all",

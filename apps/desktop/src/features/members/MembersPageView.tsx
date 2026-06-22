@@ -329,7 +329,7 @@ export function MembersPage(input: {
 
   const canMessage = selectedMember.directMessageEnabled !== false;
   const canDelete = selectedMember.type === "agent" && !selectedMember.systemOwned && selectedMember.directMessageEnabled !== false;
-  const showHandle = !selectedMember.id.startsWith("agent_coordinator_");
+  const showHandle = true;
   const nodeStatus = selectedNode?.status ?? "connected";
   const nodeDotStatus = selectedNode?.status === "offline" ? "offline" : "idle";
   const workspaceRows = buildWorkspaceTreeRows({

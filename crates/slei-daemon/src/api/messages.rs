@@ -474,9 +474,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Card(_)
         | ChannelOrchestratorError::Claim(ClaimError::Json(_))
         | ChannelOrchestratorError::Claim(ClaimError::Storage(_))
-        | ChannelOrchestratorError::Coordinator(_)
         | ChannelOrchestratorError::Worker(_)
-        | ChannelOrchestratorError::InvalidDecisionId
         | ChannelOrchestratorError::Json(_)
         | ChannelOrchestratorError::Sql(_) => StatusCode::INTERNAL_SERVER_ERROR,
     };

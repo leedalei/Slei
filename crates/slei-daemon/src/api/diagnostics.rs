@@ -66,7 +66,6 @@ pub async fn get(State(state): State<AppState>, headers: HeaderMap) -> Response 
             protocol_version: state.protocol_version.to_string(),
             schema_version: DIAGNOSTICS_SCHEMA_VERSION.to_string(),
             recent_failure: None,
-            coordinator_decision_count: counts.coordinator_decision_count,
             agent_inbox_event_count: counts.agent_inbox_event_count,
             memory_update_event_count: counts.memory_update_event_count,
             recent_events,

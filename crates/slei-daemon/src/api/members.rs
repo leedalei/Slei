@@ -18,10 +18,6 @@ pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> R
         Err(response) => return response,
     };
 
-    if let Err(error) = ensure_channel_coordinators(&state).await {
-        return member_error_response(error);
-    }
-
     Json(json!({ "agents": state.members().list_product_agents().await })).into_response()
 }
 
@@ -273,11 +269,6 @@ fn has_ready_claude_runtime(state: &AppState, node_id: &str) -> bool {
             .iter()
             .any(|runtime| runtime.kind == "ClaudeCode" && runtime.readiness == "ready")
     })
-}
-
-pub(crate) async fn ensure_channel_coordinators(state: &AppState) -> Result<(), MemberError> {
-    let _ = state;
-    Ok(())
 }
 
 fn member_error_response(error: MemberError) -> Response {

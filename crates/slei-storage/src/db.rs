@@ -67,7 +67,6 @@ impl SleiDb {
     async fn repair_after_migration(&self, version: i64) -> Result<(), sqlx::Error> {
         if version >= 1 {
             self.repair_legacy_sequence_columns().await?;
-            self.repair_legacy_coordinator_columns().await?;
             self.repair_legacy_app_state_columns().await?;
         }
         if version >= 5 {
@@ -81,7 +80,6 @@ impl SleiDb {
 
     async fn repair_legacy_sequence_columns(&self) -> Result<(), sqlx::Error> {
         for table in [
-            "coordinator_decisions",
             "agent_inbox_events",
             "memory_update_events",
             "routing_context_packages",
@@ -93,22 +91,6 @@ impl SleiDb {
                     format!("UPDATE {table} SET sequence = rowid WHERE sequence IS NULL");
                 sqlx::query(&backfill).execute(&self.pool).await?;
             }
-        }
-        Ok(())
-    }
-
-    async fn repair_legacy_coordinator_columns(&self) -> Result<(), sqlx::Error> {
-        if self.table_exists("coordinator_decisions").await?
-            && !self
-                .column_exists("coordinator_decisions", "assignee_agent_ids")
-                .await?
-        {
-            sqlx::query(
-                "ALTER TABLE coordinator_decisions
-                 ADD COLUMN assignee_agent_ids TEXT NOT NULL DEFAULT '[]'",
-            )
-            .execute(&self.pool)
-            .await?;
         }
         Ok(())
     }

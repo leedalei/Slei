@@ -9,7 +9,6 @@ use crate::services::channel_orchestrator_service::ChannelOrchestratorService;
 use crate::services::channel_service::ChannelService;
 use crate::services::claim_service::ClaimService;
 use crate::services::conversation_service::ConversationService;
-use crate::services::coordinator_service::CoordinatorService;
 use crate::services::event_service::EventService;
 use crate::services::member_service::MemberService;
 use crate::services::memory_event_service::MemoryEventService;
@@ -45,7 +44,6 @@ pub struct AppState {
     task_service: TaskService,
     claims: ClaimService,
     orchestration_store: OrchestrationStore,
-    coordinator_service: CoordinatorService,
     agent_inbox_service: AgentInboxService,
     memory_event_service: MemoryEventService,
     memory_maintainer_service: MemoryMaintainerService,
@@ -165,11 +163,6 @@ impl AppState {
         let conversation_service = ConversationService::new(repos.clone(), data_root.clone());
         let workspace_service = WorkspaceService::new(event_service.clone());
         let settings_service = SettingsService::new(repos.clone());
-        let coordinator_service = CoordinatorService::new_with_worker_and_reset(
-            orchestration_store.clone(),
-            worker.clone(),
-            reset_runtime.clone(),
-        );
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let task_service = TaskService::new(repos.clone());
@@ -236,7 +229,6 @@ impl AppState {
             task_service,
             claims,
             orchestration_store,
-            coordinator_service,
             agent_inbox_service,
             memory_event_service,
             memory_maintainer_service,
@@ -296,10 +288,6 @@ impl AppState {
 
     pub fn orchestration(&self) -> &OrchestrationStore {
         &self.orchestration_store
-    }
-
-    pub fn coordinator(&self) -> &CoordinatorService {
-        &self.coordinator_service
     }
 
     pub fn agent_inbox(&self) -> &AgentInboxService {
@@ -426,20 +414,12 @@ impl AppState {
                 return Ok(());
             }
         }
-        let handled_by_coordinator = self
+        let handled_by_channel_agent = self
             .channel_orchestrator()
-            .handle_coordinator_worker_event_with_launch_guard(event.clone(), &activity_guard)
+            .handle_channel_agent_worker_event_with_launch_guard(event.clone(), &activity_guard)
             .await
             .map_err(|error| error.to_string())?;
-        let handled_by_channel_agent = if handled_by_coordinator {
-            false
-        } else {
-            self.channel_orchestrator()
-                .handle_channel_agent_worker_event_with_launch_guard(event.clone(), &activity_guard)
-                .await
-                .map_err(|error| error.to_string())?
-        };
-        if !handled_by_coordinator && !handled_by_channel_agent {
+        if !handled_by_channel_agent {
             self.agent_dm()
                 .handle_worker_event_with_launch_guard(event, &activity_guard)
                 .await

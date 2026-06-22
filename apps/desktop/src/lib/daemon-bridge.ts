@@ -628,7 +628,6 @@ export type DiagnosticsSnapshotView = {
   protocolVersion: string;
   schemaVersion: string;
   failureSummary?: string;
-  coordinatorDecisionCount: number;
   agentInboxEventCount: number;
   memoryUpdateEventCount: number;
   recentEvents: DiagnosticEventView[];
@@ -756,7 +755,6 @@ export function createOfflineDaemonBridge(): DaemonBridge {
         worker: "unknown",
         protocolVersion: "",
         schemaVersion: "",
-        coordinatorDecisionCount: 0,
         agentInboxEventCount: 0,
         memoryUpdateEventCount: 0,
         recentEvents: [],

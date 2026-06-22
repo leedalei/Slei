@@ -226,7 +226,7 @@ impl TaskService {
         Ok(task)
     }
 
-    pub async fn create_from_coordinator(
+    pub async fn create_from_source_with_assignment(
         &self,
         channel_id: &str,
         creator_id: &str,
@@ -236,7 +236,7 @@ impl TaskService {
         assignment_reason: &str,
         idempotency_key: &str,
     ) -> Result<TaskRecord, TaskError> {
-        self.create_from_coordinator_with_thread(
+        self.create_from_source_with_assignment_and_thread(
             channel_id,
             creator_id,
             source_message_id,
@@ -250,7 +250,7 @@ impl TaskService {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_from_coordinator_with_thread(
+    pub async fn create_from_source_with_assignment_and_thread(
         &self,
         channel_id: &str,
         creator_id: &str,
@@ -261,8 +261,9 @@ impl TaskService {
         idempotency_key: &str,
         thread_id: Option<String>,
     ) -> Result<TaskRecord, TaskError> {
-        let idempotency_key = namespaced_key("task:create_from_coordinator", idempotency_key)
-            .ok_or(TaskError::MissingIdempotencyKey)?;
+        let idempotency_key =
+            namespaced_key("task:create_from_source_with_assignment", idempotency_key)
+                .ok_or(TaskError::MissingIdempotencyKey)?;
         let _idempotency_guard = self.idempotency_gate.lock().await;
         if let Some(task_id) = self.task_id_for_idempotency(&idempotency_key).await? {
             self.idempotency

@@ -5,14 +5,13 @@ import {
   channelMessageToSleiMessage,
   conversationMessageToSleiMessage,
   createChannelAgentActivityMessages,
-  createCoordinatorRoutingActivityMessage,
   debugLaunchEnabledFromSearch,
   failStaleAgentActivities,
   findActiveAgentActivities,
   hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
   keepOnlyClaimedAgentActivityByDiagnostic,
-  markCoordinatorActivityFailedByDiagnostic,
+  markAgentActivityFailedByDiagnostic,
   applyPreferenceMutation,
   removeCompletedAgentActivityByDiagnostic,
   shouldToastBackendServiceError,
@@ -65,124 +64,6 @@ describe("createChannelAgentReplyMessage", () => {
     expect(applied).toEqual(["en-US", "zh-CN", "error"]);
   });
 
-  it("shows coordinator pending work in the chat sidebar agent activity area", () => {
-    const outcome: SendChannelMessageOutcome = {
-      messageId: "msg_route_1",
-      action: "coordinator_pending",
-      coordinatorRunId: "coord_run_1",
-      decisionStatus: "pending",
-    };
-    const message = createCoordinatorRoutingActivityMessage(outcome, "all", createDesktopMessages("zh-CN"));
-
-    expect(message).toMatchObject({
-      id: "coordinator-activity-msg_route_1",
-      author: "频道协调员",
-      handle: "@coordinator",
-      role: "agent",
-      channelId: "all",
-      status: "pending",
-      toolCall: "coordinator_routing",
-    });
-    expect(
-      findActiveAgentActivities(
-        { channels: [{ id: "all", name: "all", description: "", unread: 0 }], messages: [message!], members: [] } as never,
-        { id: "all", name: "all", description: "", unread: 0 },
-      ).map((activity) => activity.message.id),
-    ).toEqual(["coordinator-activity-msg_route_1"]);
-  });
-
-  it("keeps coordinator sidebar activity during pending refresh and removes it after route output appears", () => {
-    const pending = {
-      id: "coordinator-activity-msg_route_1",
-      author: "频道协调员",
-      handle: "@coordinator",
-      avatar: "CO",
-      role: "agent",
-      time: "",
-      body: "",
-      channelId: "all",
-      status: "pending",
-      toolCall: "coordinator_routing",
-    } satisfies SleiMessage;
-    const human = {
-      id: "msg_route_1",
-      author: "Lei",
-      role: "human",
-      time: "",
-      body: "这个方案怎么看？",
-      channelId: "all",
-    } satisfies SleiMessage;
-
-    expect(replaceChannelMessages([human, pending], [human], ["all"]).map((message) => message.id)).toEqual([
-      "coordinator-activity-msg_route_1",
-      "msg_route_1",
-    ]);
-
-    const agentReply = {
-      id: "msg_agent_1",
-      author: "Alice",
-      role: "agent",
-      time: "",
-      body: "我来看。",
-      channelId: "all",
-      status: "done",
-    } satisfies SleiMessage;
-    expect(replaceChannelMessages([human, pending], [human, agentReply], ["all"]).map((message) => message.id)).toEqual([
-      "msg_route_1",
-      "msg_agent_1",
-    ]);
-
-    const taskCard = {
-      id: "msg_task_1",
-      author: "系统",
-      role: "system",
-      time: "",
-      body: "task_card:task_1:source:msg_route_1",
-      channelId: "all",
-      taskCard: { taskId: "task_1", sourceMessageId: "msg_route_1" },
-    } satisfies SleiMessage;
-    expect(replaceChannelMessages([human, pending], [human, taskCard], ["all"]).map((message) => message.id)).toEqual([
-      "msg_route_1",
-      "msg_task_1",
-    ]);
-  });
-
-  it("removes coordinator sidebar activity when the source message carries task metadata", () => {
-    const pending = {
-      id: "coordinator-activity-msg_route_1",
-      author: "频道协调员",
-      handle: "@coordinator",
-      avatar: "CO",
-      role: "agent",
-      time: "",
-      body: "",
-      channelId: "all",
-      status: "pending",
-      toolCall: "coordinator_routing",
-    } satisfies SleiMessage;
-    const taskSource = {
-      id: "msg_route_1",
-      author: "Lei",
-      role: "human",
-      time: "",
-      body: "实现任务分支",
-      channelId: "all",
-      task: {
-        id: "task_1",
-        title: "实现任务分支",
-        owner: "Lei",
-        status: "pending_assignment",
-        channelId: "all",
-        sourceMessageId: "msg_route_1",
-        replyCount: 0,
-      },
-    } satisfies SleiMessage;
-
-    expect(replaceChannelMessages([pending], [taskSource], ["all"]).map((message) => message.id)).toEqual([
-      "msg_route_1",
-    ]);
-  });
-
   it("keeps direct agent activity during pending refresh and removes it after the agent reply appears", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_alice",
@@ -225,34 +106,6 @@ describe("createChannelAgentReplyMessage", () => {
     ]);
   });
 
-  it("marks pending coordinator activity failed when daemon diagnostics report the source message failure", () => {
-    const pending = {
-      id: "coordinator-activity-msg_route_1",
-      author: "频道协调员",
-      handle: "@coordinator",
-      avatar: "CO",
-      role: "agent",
-      time: "",
-      body: "",
-      channelId: "content",
-      status: "pending",
-      toolCall: "coordinator_routing",
-    } satisfies SleiMessage;
-    const messages = markCoordinatorActivityFailedByDiagnostic([pending], {
-      sequence: 66,
-      eventType: "coordinator_runtime.failed",
-      entityId: "event_66",
-      payload: "run_id=coord_run_1 channel_id=content message_id=msg_route_1 decision_failed",
-      createdAt: "2026-06-11 09:57:39",
-    });
-
-    expect(messages[0]).toMatchObject({
-      id: "coordinator-activity-msg_route_1",
-      status: "failed",
-      toolCall: "coordinator_routing",
-    });
-  });
-
   it("marks pending agent activity failed when daemon diagnostics report the agent run failure", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",
@@ -267,7 +120,7 @@ describe("createChannelAgentReplyMessage", () => {
       sourceMessageId: "msg_route_1",
       toolCall: "channel_agent_reply",
     } satisfies SleiMessage;
-    const messages = markCoordinatorActivityFailedByDiagnostic([pending], {
+    const messages = markAgentActivityFailedByDiagnostic([pending], {
       sequence: 67,
       eventType: "channel_agent_runtime.failed",
       entityId: "event_67",
@@ -382,7 +235,7 @@ describe("createChannelAgentReplyMessage", () => {
   it("builds a stable activity message only for the first spawned channel target", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
-      action: "request_agent_reply",
+      action: "broadcast_delivered",
       assigneeAgentId: "agent_alice",
       assigneeAgentIds: ["agent_alice", "agent_coda"],
     };
@@ -765,7 +618,7 @@ describe("createChannelAgentReplyMessage", () => {
   it("keeps the channel activity id stable across progress and completion", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
-      action: "request_agent_reply",
+      action: "broadcast_delivered",
       assigneeAgentId: "agent_guide_local_node",
     };
     const reply: ConversationMessageView = {
@@ -786,7 +639,7 @@ describe("createChannelAgentReplyMessage", () => {
   it("preserves cards from the completed runtime message", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
-      action: "request_agent_reply",
+      action: "broadcast_delivered",
       assigneeAgentId: "agent_guide_local_node",
     };
     const reply: ConversationMessageView = {
@@ -987,7 +840,7 @@ describe("createChannelAgentReplyMessage", () => {
   it("combines multiple card replies into one channel message", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",
-      action: "request_agent_reply",
+      action: "broadcast_delivered",
       assigneeAgentId: "agent_guide_local_node",
     };
     const replies: ConversationMessageView[] = [

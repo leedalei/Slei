@@ -4,7 +4,7 @@
     "name": "memory",
     "relativePath": ".claude/skills/memory/SKILL.md",
     "triggerTemplate": "Use when the user mentions {{handle}} and asks this agent to remember, learn, or 记住 something.",
-    "agentKinds": ["guide", "agent", "coordinator"]
+    "agentKinds": ["guide", "agent"]
   },
   {
     "id": "guide-create",

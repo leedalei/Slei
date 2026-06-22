@@ -11,9 +11,6 @@ pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "memory_document_states",
     "memory_update_events",
     "agent_inbox_events",
-    "coordinator_runtime_runs",
-    "coordinator_decisions",
-    "channel_coordinators",
     "idempotent_mutations",
     "event_log",
     "runtime_sessions",
@@ -44,7 +41,6 @@ pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
     "task_claims",
     "agent_activity_logs",
     "event_log",
-    "coordinator_decisions",
     "agent_inbox_events",
     "memory_update_events",
     "routing_context_packages",
@@ -458,43 +454,12 @@ pub struct TaskThreadSummary {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct CoordinatorDecisionRecord {
-    pub id: Uuid,
-    pub channel_id: String,
-    pub message_id: String,
-    pub intent: String,
-    pub action: String,
-    pub assignee_agent_id: Option<String>,
-    pub assignee_agent_ids: Vec<String>,
-    pub reason: String,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct CoordinatorRuntimeRunRecord {
-    pub run_id: String,
-    pub channel_id: String,
-    pub message_id: String,
-    pub idempotency_key: String,
-    pub prompt: String,
-    pub output: String,
-    pub status: String,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct AgentInboxEventRecord {
     pub id: Uuid,
     pub agent_id: String,
     pub event_type: String,
     pub delivery_state: String,
     pub payload: String,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct ChannelCoordinatorRecord {
-    pub channel_id: String,
-    pub strategy: String,
-    pub enabled: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -2532,257 +2497,6 @@ impl Repositories {
         .transpose()
     }
 
-    pub async fn insert_channel_coordinator(
-        &self,
-        channel_id: &str,
-        strategy: &str,
-        enabled: bool,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "INSERT INTO channel_coordinators(channel_id, strategy, enabled)
-             VALUES (?, ?, ?)
-             ON CONFLICT(channel_id) DO UPDATE SET
-                strategy = excluded.strategy,
-                enabled = excluded.enabled,
-                updated_at = CURRENT_TIMESTAMP",
-        )
-        .bind(channel_id)
-        .bind(strategy)
-        .bind(if enabled { 1 } else { 0 })
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    pub async fn channel_coordinator(
-        &self,
-        channel_id: &str,
-    ) -> Result<Option<ChannelCoordinatorRecord>, sqlx::Error> {
-        let row = sqlx::query(
-            "SELECT channel_id, strategy, enabled
-             FROM channel_coordinators
-             WHERE channel_id = ?",
-        )
-        .bind(channel_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(|row| {
-            let channel_id: String = row.try_get("channel_id")?;
-            let enabled: i64 = row.try_get("enabled")?;
-            Ok(ChannelCoordinatorRecord {
-                channel_id,
-                strategy: row.try_get("strategy")?,
-                enabled: enabled != 0,
-            })
-        })
-        .transpose()
-    }
-
-    pub async fn insert_coordinator_decision(
-        &self,
-        id: Uuid,
-        channel_id: &str,
-        message_id: &str,
-        intent: &str,
-        action: &str,
-        assignee_agent_id: Option<&str>,
-        assignee_agent_ids: &[String],
-        reason: &str,
-    ) -> Result<(), sqlx::Error> {
-        let assignee_agent_ids_json = serde_json::to_string(assignee_agent_ids)
-            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-        sqlx::query(
-            "INSERT INTO coordinator_decisions(
-                id, channel_id, message_id, intent, action, assignee_agent_id, assignee_agent_ids, reason
-             )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id.to_string())
-        .bind(channel_id)
-        .bind(message_id)
-        .bind(intent)
-        .bind(action)
-        .bind(assignee_agent_id)
-        .bind(assignee_agent_ids_json)
-        .bind(reason)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    pub async fn coordinator_decisions_for_message(
-        &self,
-        message_id: &str,
-    ) -> Result<Vec<CoordinatorDecisionRecord>, sqlx::Error> {
-        let rows = sqlx::query(
-            "SELECT id, channel_id, message_id, intent, action, assignee_agent_id, assignee_agent_ids, reason
-             FROM coordinator_decisions
-             WHERE message_id = ?
-             ORDER BY sequence ASC",
-        )
-        .bind(message_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(|row| {
-                let id: String = row.try_get("id")?;
-                let channel_id: String = row.try_get("channel_id")?;
-                let message_id: String = row.try_get("message_id")?;
-                let assignee_agent_ids_raw: String = row.try_get("assignee_agent_ids")?;
-                let assignee_agent_ids =
-                    serde_json::from_str::<Vec<String>>(&assignee_agent_ids_raw)
-                        .unwrap_or_default();
-                Ok(CoordinatorDecisionRecord {
-                    id: parse_uuid(&id)?,
-                    channel_id,
-                    message_id,
-                    intent: row.try_get("intent")?,
-                    action: row.try_get("action")?,
-                    assignee_agent_id: row.try_get("assignee_agent_id")?,
-                    assignee_agent_ids,
-                    reason: row.try_get("reason")?,
-                })
-            })
-            .collect()
-    }
-
-    pub async fn coordinator_decision_count(&self) -> Result<u64, sqlx::Error> {
-        self.count_rows("coordinator_decisions").await
-    }
-
-    pub async fn insert_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-        channel_id: &str,
-        message_id: &str,
-        idempotency_key: &str,
-        prompt: &str,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "INSERT INTO coordinator_runtime_runs(
-                run_id, channel_id, message_id, idempotency_key, prompt
-             )
-             VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(run_id)
-        .bind(channel_id)
-        .bind(message_id)
-        .bind(idempotency_key)
-        .bind(prompt)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    pub async fn append_coordinator_runtime_output(
-        &self,
-        run_id: &str,
-        delta: &str,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "UPDATE coordinator_runtime_runs
-             SET output = output || ?, updated_at = CURRENT_TIMESTAMP
-             WHERE run_id = ?",
-        )
-        .bind(delta)
-        .bind(run_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    pub async fn finish_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-        status: &str,
-        error: Option<&str>,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "UPDATE coordinator_runtime_runs
-             SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP
-             WHERE run_id = ?",
-        )
-        .bind(status)
-        .bind(error)
-        .bind(run_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    pub async fn pending_coordinator_runtime_run_ids(&self) -> Result<Vec<String>, sqlx::Error> {
-        let rows = sqlx::query(
-            "SELECT run_id
-             FROM coordinator_runtime_runs
-             WHERE status IN ('pending', 'running')
-             ORDER BY updated_at ASC, run_id ASC",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter().map(|row| row.try_get("run_id")).collect()
-    }
-
-    pub async fn cancel_coordinator_runtime_runs(
-        &self,
-        run_ids: &[String],
-        error: &str,
-    ) -> Result<(), sqlx::Error> {
-        if run_ids.is_empty() {
-            return Ok(());
-        }
-        let mut tx = self.pool.begin().await?;
-        for run_id in run_ids {
-            sqlx::query(
-                "UPDATE coordinator_runtime_runs
-                 SET status = 'cancelled', error = ?, updated_at = CURRENT_TIMESTAMP
-                 WHERE run_id = ? AND status IN ('pending', 'running')",
-            )
-            .bind(error)
-            .bind(run_id)
-            .execute(&mut *tx)
-            .await?;
-        }
-        tx.commit().await?;
-        Ok(())
-    }
-
-    pub async fn coordinator_runtime_run(
-        &self,
-        run_id: &str,
-    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
-        let row = sqlx::query(
-            "SELECT run_id, channel_id, message_id, idempotency_key, prompt, output, status, error
-             FROM coordinator_runtime_runs
-             WHERE run_id = ?",
-        )
-        .bind(run_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(coordinator_runtime_run_from_row).transpose()
-    }
-
-    pub async fn coordinator_runtime_run_for_idempotency(
-        &self,
-        idempotency_key: &str,
-    ) -> Result<Option<CoordinatorRuntimeRunRecord>, sqlx::Error> {
-        let row = sqlx::query(
-            "SELECT run_id, channel_id, message_id, idempotency_key, prompt, output, status, error
-             FROM coordinator_runtime_runs
-             WHERE idempotency_key = ?
-             ORDER BY updated_at DESC
-             LIMIT 1",
-        )
-        .bind(idempotency_key)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(coordinator_runtime_run_from_row).transpose()
-    }
-
     pub async fn insert_agent_inbox_event(
         &self,
         id: Uuid,
@@ -2988,6 +2702,37 @@ impl Repositories {
              ORDER BY sequence ASC",
         )
         .bind(decision_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                let decision_id: String = row.try_get("decision_id")?;
+                let source_message_id: String = row.try_get("source_message_id")?;
+                let contains_deleted_body: i64 = row.try_get("contains_deleted_body")?;
+                Ok(RoutingContextPackageRecord {
+                    id: parse_uuid(&id)?,
+                    decision_id: parse_uuid(&decision_id)?,
+                    source_message_id,
+                    payload: row.try_get("payload")?,
+                    contains_deleted_body: contains_deleted_body != 0,
+                })
+            })
+            .collect()
+    }
+
+    pub async fn routing_context_packages_for_message(
+        &self,
+        source_message_id: &str,
+    ) -> Result<Vec<RoutingContextPackageRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, decision_id, source_message_id, payload, contains_deleted_body
+             FROM routing_context_packages
+             WHERE source_message_id = ?
+             ORDER BY sequence ASC",
+        )
+        .bind(source_message_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -4336,21 +4081,6 @@ fn now_string() -> String {
 
 fn parse_uuid(value: &str) -> Result<Uuid, sqlx::Error> {
     Uuid::parse_str(value).map_err(|err| sqlx::Error::Decode(Box::new(err)))
-}
-
-fn coordinator_runtime_run_from_row(
-    row: sqlx::sqlite::SqliteRow,
-) -> Result<CoordinatorRuntimeRunRecord, sqlx::Error> {
-    Ok(CoordinatorRuntimeRunRecord {
-        run_id: row.try_get("run_id")?,
-        channel_id: row.try_get("channel_id")?,
-        message_id: row.try_get("message_id")?,
-        idempotency_key: row.try_get("idempotency_key")?,
-        prompt: row.try_get("prompt")?,
-        output: row.try_get("output")?,
-        status: row.try_get("status")?,
-        error: row.try_get("error")?,
-    })
 }
 
 fn escape_json_string(value: &str) -> String {

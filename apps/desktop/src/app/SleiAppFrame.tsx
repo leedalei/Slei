@@ -83,7 +83,6 @@ import {
   defaultNotifications,
   defaultTimeZone,
   deviceOsLabel,
-  isInternalCoordinatorMember,
   localHumanPresentation,
   normalizeAppearanceTheme,
   stripChannelHash,
@@ -591,7 +590,7 @@ export function findActiveAgentActivities(
     if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
     if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending" && message.status !== "failed")) return false;
     const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle);
-    return member?.directMessageEnabled !== false && (!member || !isInternalCoordinatorMember(member));
+    return member?.directMessageEnabled !== false;
   });
 
   return activeMessages.map((message) => {

@@ -11,7 +11,7 @@ Use this skill when the user asks Yeal to create, add, set up, or prepare one or
 
 - Do not create agents by returning plain JSON, markdown tables, or natural language for the frontend to parse.
 - Do not silently invent missing runtime-critical values. Use the defaults below only when the user has not specified them.
-- Do not create a card for Yeal or for a channel coordinator.
+- Do not create a card for Yeal or for hidden/system-owned roles.
 - Do not call the tool for a vague request such as "make my team better" until you have enough role/name detail to form a useful agent draft.
 
 ## Workflow

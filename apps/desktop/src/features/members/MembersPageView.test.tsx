@@ -109,7 +109,7 @@ afterEach(async () => {
   mountedContainer = undefined;
 });
 
-describe("MembersPage coordinator agents", () => {
+describe("MembersPage agent details", () => {
   it("makes the member detail header draggable without marking action buttons as drag regions", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(renderMembersPage({ messages }));
@@ -153,37 +153,37 @@ describe("MembersPage coordinator agents", () => {
     expect(html.slice(markerIndex, markerIndex + 600)).toContain("group-data-[orientation=horizontal]/tabs:h-8");
   });
 
-  it("shows channel coordinator runtime configuration without a direct message action", () => {
+  it("shows ordinary agent runtime configuration with a direct message action", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(
       <MembersPage
-        activeMemberId="agent_coordinator_all"
+        activeMemberId="agent_coda"
         data={createSleiFixtures({
           members: [
             {
-              id: "agent_coordinator_all",
-              name: "#all Coordinator",
-              handle: "@all-coordinator",
-              avatar: "#A",
-              avatarSeed: "agent_coordinator_all",
+              id: "agent_coda",
+              name: "Coda",
+              handle: "@coda",
+              avatar: "CO",
+              avatarSeed: "agent_coda",
               type: "agent",
               runtimeStatus: "idle",
-              role: "Channel coordinator",
+              role: "Developer",
               runtime: "ClaudeCode",
               model: "Sonnet",
               computer: "Local",
               nodeId: "local-node",
               created: "2026-06-04",
               creator: "system",
-              instructions: "Routes channel messages.",
-              description: "Routes channel messages.",
+              instructions: "Builds features.",
+              description: "Builds features.",
               permissions: [],
               environmentVariables: [],
               activity: "Idle",
               skills: [],
               capabilities: ["ClaudeCode"],
               createdAgents: [],
-              directMessageEnabled: false,
+              directMessageEnabled: true,
             },
           ],
         })}
@@ -203,15 +203,14 @@ describe("MembersPage coordinator agents", () => {
       />,
     );
 
-    expect(html).toContain("#all Coordinator");
-    expect(html).not.toContain("@all-coordinator");
-    expect(html).toContain("Routes channel messages.");
+    expect(html).toContain("Coda");
+    expect(html).toContain("@coda");
+    expect(html).toContain("Builds features.");
     expect(html).toContain("Runtime configuration");
     expect(html).toContain("ClaudeCode");
     expect(html).toContain("Capabilities");
     expect(html).toContain("Workspace");
-    expect(html).not.toContain(`>${messages.members.message}<`);
-    expect(html).not.toContain(`>${messages.members.deleteAgent}<`);
+    expect(html).toContain(`>${messages.members.message}<`);
   });
 
   it("shows a delete action for ordinary agents", () => {

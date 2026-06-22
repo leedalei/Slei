@@ -10,12 +10,15 @@ Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 
 
 新流转不再依赖中心角色输出中心化 JSON 来决定普通频道消息交给谁。daemon 把新消息广播投递给频道内普通 Agent；Agent 根据自己的 system prompt、角色、消息 header、`@mention`、职责和按需拉取的历史，自主判断是否通过 `slei message claim` 认领。
 
+旧 coordinator 控制面已删除，不是兼容保留：生产代码中不得再创建 `agent_global_coordinator`、不得启动 coordinator runtime、不得解析 coordinator JSON、不得写入 `channel_coordinators` / `coordinator_decisions` / `coordinator_runtime_runs` 表，也不得使用 `request_agent_reply` 作为频道消息结果。历史 `docs/superpowers/specs` 或 `docs/superpowers/plans` 中的 coordinator 方案只作为历史资料，本 ADR 优先生效。
+
 ## 核心原则
 
 - daemon 是业务控制面：消息、投递、claim、任务、状态、日志、诊断、reset 防护、幂等和 SQLite 持久化都必须在 daemon 内完成。
 - UI shell 只调用 daemon API、显示 loading/error/empty 状态、渲染 daemon DTO。UI 不得自行决定消息应该交给哪个 Agent。
 - 新频道消息流转是广播投递 + Agent 自主 claim；不得新增 UI 路由、daemon 关键词兜底或中心化 JSON 路由作为新架构入口。
 - 频道内可见消息写入后都触发同一广播机制。Agent 后续协作靠可见 `@mention` 接力，不依赖隐藏路由。
+- 旧 coordinator runtime、coordinator JSON、coordinator agent 和 coordinator SQLite 表不得作为 fallback、diagnostics、mock 或兼容路径恢复。
 - `slei message claim` 是消息独占处理的唯一入口。claim 必须是 daemon/SQLite 原子操作；claim 失败的 Agent 静默退出。
 - `slei task claim` 是任务维度的原子锁，独立于 message claim。
 - 可见频道发言、任务回复、任务创建、任务状态更新和 Agent 状态上报都必须通过 `slei` CLI 进入 daemon API。
@@ -259,14 +262,14 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 | `interactive_cards` | product tool 产生的交互卡片 |
 | `diagnostic_events` | runtime started/completed/failed、reset、失败诊断 |
 
-如果代码里暂时仍存在历史内部路由表，只能作为待清理遗留结构；新普通频道消息路径不得依赖它们。
+禁止新增或恢复历史 coordinator 持久化对象。`channel_coordinators`、`coordinator_decisions` 和 `coordinator_runtime_runs` 已从 schema 删除；已有开发库只能通过破坏性 migration/drop 或 dev reset 清掉，不做生产兼容读取。
 
 ## Reset Policy
 
 开发 reset 的目标是清空产品状态和运行期 Agent workspace，让系统从全新状态重新开始：
 
 - 清空 messages、tasks、task replies、claims、deliveries、statuses、activity logs、diagnostics 等可变业务表。
-- 清空历史内部路由相关运行数据。
+- 删除旧 coordinator 表和旧 coordinator agent workspace；允许开发环境直接丢弃 `~/.slei/slei.sqlite` 和运行期 `agents/` workspace。
 - 删除运行期生成的 `agents/` workspace。
 - 保留代码内置资源、SQLite schema migration 和必要空目录。
 
@@ -279,6 +282,7 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 - 频道消息是否仍先落 daemon message，再由 daemon 创建 broadcast delivery。
 - UI 是否没有新增 route、assign、claim、任务判断或 mock 回复。
 - 普通新消息是否仍走 broadcast + claim，而不是中心化 JSON、关键词或第一个 ready Agent。
+- 生产代码、Tauri broker、React UI、mock 和 diagnostics 是否仍没有 `CoordinatorService`、`coordinator_runtime_runs`、`coordinator_decisions`、`channel_coordinators`、`agent_global_coordinator`、`agent_coordinator_*`、`request_agent_reply` 或 `coordinator_routing`。
 - `slei message claim` 是否仍是唯一消息独占入口。
 - Agent stdout 是否仍不会自动生成可见频道消息；可见动作是否来自 `slei` CLI/API。
 - `slei agent status` 是否仍写最新状态并追加最近 200 条操作日志；daemon 观察到的 `run` / `input` / `output` / `tool` / `completed` / `failed` 事件是否仍追加到同一张活动日志，且不参与路由、claim 或任务调度决策。

@@ -12,8 +12,6 @@ use slei_storage::repositories::{AgentRow, AgentUpdateRow, Repositories};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-pub const GLOBAL_COORDINATOR_AGENT_ID: &str = "agent_global_coordinator";
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub enum PermissionPreset {
     ReadOnly,
@@ -379,100 +377,6 @@ impl MemberService {
         Ok((agent, true))
     }
 
-    pub async fn ensure_global_coordinator_agent(
-        &self,
-        node_id: &str,
-    ) -> Result<ProductAgentRecord, MemberError> {
-        if node_id.trim().is_empty() {
-            return Err(MemberError::InvalidAgent);
-        }
-
-        if let Some(row) = self
-            .repos
-            .agent_by_id(GLOBAL_COORDINATOR_AGENT_ID)
-            .await
-            .map_err(member_storage_error)?
-        {
-            let agent = self.product_agent_from_row(row).await?;
-            return self.normalize_existing_global_coordinator(agent).await;
-        }
-
-        let draft = ProductAgentDraft {
-            name: "Global Coordinator".to_string(),
-            handle: "@global-coordinator".to_string(),
-            runtime_kind: "ClaudeCode".to_string(),
-            model: "Sonnet".to_string(),
-            node_id: node_id.trim().to_string(),
-            description: global_coordinator_description(),
-        };
-
-        self.create_product_agent_record_with_channels(
-            draft,
-            GLOBAL_COORDINATOR_AGENT_ID.to_string(),
-            "coordinator",
-            true,
-            "coordinator:global",
-            Vec::new(),
-        )
-        .await
-    }
-
-    async fn normalize_existing_global_coordinator(
-        &self,
-        mut agent: ProductAgentRecord,
-    ) -> Result<ProductAgentRecord, MemberError> {
-        let description = global_coordinator_description();
-        if agent.name == "Global Coordinator"
-            && agent.handle == "@global-coordinator"
-            && agent.description == description
-            && agent.agent_kind == "coordinator"
-            && agent.system_owned
-            && agent.channel_ids.is_empty()
-        {
-            return Ok(agent);
-        }
-
-        let previous_handle = agent.handle.to_lowercase();
-        agent.name = "Global Coordinator".to_string();
-        agent.handle = "@global-coordinator".to_string();
-        agent.agent_kind = "coordinator".to_string();
-        agent.system_owned = true;
-        agent.description = description;
-        agent.channel_ids.clear();
-        agent.updated_at = current_timestamp();
-        fs::write(&agent.memory_path, initial_memory(&agent)).map_err(MemberError::Io)?;
-        if let Some(owner) = self
-            .repos
-            .agent_by_handle("@global-coordinator")
-            .await
-            .map_err(member_storage_error)?
-        {
-            if owner.id != agent.id {
-                return Err(MemberError::DuplicateHandle);
-            }
-        }
-        self.repos
-            .update_agent(product_agent_to_update_row(&agent))
-            .await
-            .map_err(member_storage_error)?;
-        let mut state = self.inner.lock().await;
-        state.product_agent_handles.remove(&previous_handle);
-        state
-            .product_agent_handles
-            .insert(agent.handle.to_lowercase(), agent.id.clone());
-        state.product_agents.insert(agent.id.clone(), agent.clone());
-        Ok(agent)
-    }
-
-    pub async fn is_coordinator_agent(&self, agent_id: &str) -> bool {
-        self.repos
-            .agent_by_id(agent_id)
-            .await
-            .ok()
-            .flatten()
-            .is_some_and(|agent| agent.agent_kind == "coordinator")
-    }
-
     async fn normalize_existing_guide_agent(
         &self,
         mut agent: ProductAgentRecord,
@@ -780,9 +684,7 @@ impl MemberService {
         &self,
         row: AgentRow,
     ) -> Result<ProductAgentRecord, MemberError> {
-        let include_joining_memberships = row.agent_kind == "coordinator";
-        let channel_ids =
-            channel_ids_for_agent(&self.repos, &row.id, include_joining_memberships).await?;
+        let channel_ids = channel_ids_for_agent(&self.repos, &row.id, false).await?;
         let record = product_agent_from_row(row, channel_ids);
         let _ = write_default_skills(&record);
         Ok(record)
@@ -979,10 +881,6 @@ fn import_legacy_product_agents(root: &PathBuf) {
     .expect("import legacy product agents");
 }
 
-pub fn is_internal_coordinator_id(agent_id: &str) -> bool {
-    agent_id == GLOBAL_COORDINATOR_AGENT_ID || agent_id.starts_with("agent_coordinator_")
-}
-
 fn current_timestamp() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -1006,11 +904,6 @@ fn agent_template_input(agent: &ProductAgentRecord) -> AgentTemplateInput<'_> {
 
 fn initial_memory(agent: &ProductAgentRecord) -> String {
     shared_initial_memory(&agent_template_input(agent))
-}
-
-fn global_coordinator_description() -> String {
-    "内置全局频道协调员，负责根据当前频道成员和上下文分析用户意图并路由 Agent，自己不回复用户问题。"
-        .to_string()
 }
 
 fn sanitize_legacy_guide_memory(agent: &ProductAgentRecord) -> Result<(), MemberError> {

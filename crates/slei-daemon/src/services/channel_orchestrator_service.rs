@@ -16,11 +16,7 @@ use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
 };
 use crate::services::claim_service::{ClaimError, ClaimService};
-use crate::services::coordinator_service::{
-    parse_and_validate_coordinator_json, CoordinatorDecision, CoordinatorDecisionError,
-    CoordinatorPromptMember,
-};
-use crate::services::member_service::{is_internal_coordinator_id, MemberError, MemberService};
+use crate::services::member_service::{MemberError, MemberService};
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
 use crate::services::message_thread_service::MessageThreadReplyView;
 use crate::services::message_thread_service::{MessageThreadError, MessageThreadService};
@@ -64,15 +60,6 @@ pub struct TaskReplyRoute {
 pub struct TaskReplyReceipt {
     pub reply: TaskThreadMessage,
     pub route: TaskReplyRoute,
-}
-
-#[derive(Clone, Debug)]
-struct ResolvedCoordinatorDecision {
-    action: String,
-    assignee_agent_id: Option<String>,
-    assignee_agent_ids: Vec<String>,
-    coordinator_run_id: Option<String>,
-    decision_status: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -158,9 +145,7 @@ impl ChannelOrchestratorService {
             .get(&input.idempotency_key)
             .cloned()
         {
-            if outcome.action != "coordinator_pending" {
-                return Ok(outcome);
-            }
+            return Ok(outcome);
         }
         self.sync_declared_channel_members(&input.channel_id)
             .await?;
@@ -199,23 +184,6 @@ impl ChannelOrchestratorService {
                 message_id: message.id.clone(),
             }
         })?;
-        if let Some(decision) = self.existing_decision_for_message(&message.id).await? {
-            let run = self
-                .orchestration
-                .coordinator_runtime_run_for_idempotency(&input.idempotency_key)
-                .await?;
-            let outcome = self
-                .outcome_for_completed_decision(&message.id, decision, run.as_ref())
-                .await?;
-            self.recover_completed_decision_side_effects(&message, &message_body, &outcome)
-                .await?;
-            self.outcome_idempotency
-                .lock()
-                .expect("channel orchestrator idempotency lock")
-                .insert(input.idempotency_key, outcome.clone());
-            return Ok(outcome);
-        }
-
         if !message.as_task {
             let assignee_agent_ids = self
                 .create_broadcast_deliveries_for_members(&message, &channel_members)
@@ -257,19 +225,7 @@ impl ChannelOrchestratorService {
                 .await?;
             if !explicit_agent_ids.is_empty() {
                 let decision_id = Uuid::new_v4();
-                let reason = "explicit channel task mention routed without coordinator runtime";
-                self.orchestration
-                    .record_decision(
-                        decision_id,
-                        &message.channel_id,
-                        &message.id,
-                        "task_command",
-                        "create_task_and_assign",
-                        assignee_agent_id.as_deref(),
-                        &explicit_agent_ids,
-                        reason,
-                    )
-                    .await?;
+                let reason = "user explicitly converted message to task";
                 for agent_id in &explicit_agent_ids {
                     self.create_task_assignment_and_start_once(
                         agent_id,
@@ -281,8 +237,7 @@ impl ChannelOrchestratorService {
                     .await?;
                 }
                 self.persist_routing_context_packages(
-                    &decision_id.to_string(),
-                    None,
+                    decision_id,
                     &message.channel_id,
                     Some(&message.channel_id),
                     &message.id,
@@ -329,7 +284,7 @@ impl ChannelOrchestratorService {
             return Ok(outcome);
         }
 
-        unreachable!("channel messages are handled by broadcast or explicit task assignment before coordinator routing")
+        unreachable!("channel messages are handled by broadcast or explicit task assignment")
     }
 
     pub async fn broadcast_existing_channel_message(
@@ -545,93 +500,6 @@ impl ChannelOrchestratorService {
             None,
         )
         .await
-    }
-
-    pub async fn handle_coordinator_worker_event(
-        &self,
-        event: Value,
-    ) -> Result<bool, ChannelOrchestratorError> {
-        let activity_guard = match self.reset_runtime.begin_launch().await {
-            Ok(guard) => guard,
-            Err(ResetRuntimeError::ResetInProgress) => {
-                return Ok(event.get("run_id").and_then(Value::as_str).is_some());
-            }
-        };
-        self.handle_coordinator_worker_event_with_launch_guard(event, &activity_guard)
-            .await
-    }
-
-    pub(crate) async fn handle_coordinator_worker_event_with_launch_guard(
-        &self,
-        event: Value,
-        _activity_guard: &ResetLaunchGuard,
-    ) -> Result<bool, ChannelOrchestratorError> {
-        let _send_guard = self.send_lock.lock().await;
-        let Some(run_id) = event.get("run_id").and_then(Value::as_str) else {
-            return Ok(false);
-        };
-        if self.reset_runtime.should_ignore_worker_event(run_id).await {
-            return Ok(true);
-        }
-        let Some(run) = self.orchestration.coordinator_runtime_run(run_id).await? else {
-            return Ok(false);
-        };
-
-        match event.get("type").and_then(Value::as_str) {
-            Some("output_delta") => {
-                if run.status == "pending" {
-                    let delta = event
-                        .get("delta")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default();
-                    self.orchestration
-                        .append_coordinator_runtime_output(run_id, delta)
-                        .await?;
-                    self.record_coordinator_runtime_diagnostic(
-                        "coordinator_runtime.output_delta",
-                        run_id,
-                        &run.channel_id,
-                        &run.message_id,
-                        format!("delta_len={}", delta.len()),
-                    )
-                    .await;
-                }
-                Ok(true)
-            }
-            Some("completed") => {
-                if run.status == "pending" {
-                    self.record_coordinator_runtime_diagnostic(
-                        "coordinator_runtime.completed_event",
-                        run_id,
-                        &run.channel_id,
-                        &run.message_id,
-                        "worker_completed".to_string(),
-                    )
-                    .await;
-                    self.complete_coordinator_runtime_run(run_id).await?;
-                }
-                Ok(true)
-            }
-            Some("failed") => {
-                if run.status == "pending" {
-                    let message = event
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("Coordinator worker failed");
-                    self.record_coordinator_runtime_diagnostic(
-                        "coordinator_runtime.failed_event",
-                        run_id,
-                        &run.channel_id,
-                        &run.message_id,
-                        "worker_failed".to_string(),
-                    )
-                    .await;
-                    self.fail_coordinator_runtime_run(run_id, message).await?;
-                }
-                Ok(true)
-            }
-            _ => Ok(true),
-        }
     }
 
     pub(crate) async fn handle_channel_agent_worker_event_with_launch_guard(
@@ -983,81 +851,6 @@ impl ChannelOrchestratorService {
         }
     }
 
-    async fn complete_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-    ) -> Result<(), ChannelOrchestratorError> {
-        let Some(run) = self.orchestration.coordinator_runtime_run(run_id).await? else {
-            return Ok(());
-        };
-        if run.status != "pending" {
-            return Ok(());
-        }
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.completing",
-            run_id,
-            &run.channel_id,
-            &run.message_id,
-            format!("output_len={}", run.output.len()),
-        )
-        .await;
-        let message = self.messages.message(&run.message_id).await?;
-        let message_body = message.body.clone().ok_or_else(|| {
-            ChannelOrchestratorError::InactiveIdempotentMessage {
-                message_id: message.id.clone(),
-            }
-        })?;
-        let channel_members = self.channels.channel_members(&message.channel_id).await?;
-        let prompt_members = self.prompt_members(&channel_members).await;
-        let decision = match parse_and_validate_coordinator_json(&run.output, &prompt_members) {
-            Ok(mut decision) => {
-                decision.channel_id = message.channel_id.clone();
-                decision.message_id = message.id.clone();
-                decision
-            }
-            Err(error) => {
-                self.record_coordinator_runtime_diagnostic(
-                    "coordinator_runtime.decision_parse_failed",
-                    run_id,
-                    &run.channel_id,
-                    &run.message_id,
-                    format!("error={}", error),
-                )
-                .await;
-                self.persist_failed_coordinator_decision(&run, &message, &message_body, &error)
-                    .await?;
-                return Ok(());
-            }
-        };
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.decision_parsed",
-            run_id,
-            &run.channel_id,
-            &run.message_id,
-            format!(
-                "action={} assignee_agent_ids={}",
-                enum_storage_str(&decision.action),
-                decision.assignee_agent_ids.len()
-            ),
-        )
-        .await;
-
-        self.apply_completed_coordinator_decision(&run, &message, &message_body, decision)
-            .await?;
-        self.orchestration
-            .finish_coordinator_runtime_run(run_id, "completed", None)
-            .await?;
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.completed",
-            run_id,
-            &run.channel_id,
-            &run.message_id,
-            "decision_applied".to_string(),
-        )
-        .await;
-        Ok(())
-    }
-
     async fn begin_runtime_launch(&self) -> Result<ResetLaunchGuard, ChannelOrchestratorError> {
         Ok(self.reset_runtime.begin_launch().await?)
     }
@@ -1067,416 +860,6 @@ impl ChannelOrchestratorService {
             .lock()
             .expect("channel orchestrator idempotency lock")
             .clear();
-    }
-
-    async fn fail_coordinator_runtime_run(
-        &self,
-        run_id: &str,
-        message: &str,
-    ) -> Result<(), ChannelOrchestratorError> {
-        let Some(run) = self.orchestration.coordinator_runtime_run(run_id).await? else {
-            return Ok(());
-        };
-        let source_message = self.messages.message(&run.message_id).await?;
-        let message_body = source_message.body.clone().unwrap_or_default();
-        self.persist_failed_coordinator_decision(
-            &run,
-            &source_message,
-            &message_body,
-            &CoordinatorDecisionError::Worker(message.to_string()),
-        )
-        .await?;
-        self.record_coordinator_runtime_diagnostic(
-            "coordinator_runtime.failed",
-            run_id,
-            &run.channel_id,
-            &run.message_id,
-            "decision_failed".to_string(),
-        )
-        .await;
-        Ok(())
-    }
-
-    async fn record_coordinator_runtime_diagnostic(
-        &self,
-        event_type: &str,
-        run_id: &str,
-        channel_id: &str,
-        message_id: &str,
-        detail: String,
-    ) {
-        let _ = self
-            .orchestration
-            .record_diagnostic_event(
-                event_type,
-                &format!(
-                    "run_id={} channel_id={} message_id={} {}",
-                    run_id, channel_id, message_id, detail
-                ),
-            )
-            .await;
-    }
-
-    async fn persist_failed_coordinator_decision(
-        &self,
-        run: &slei_storage::repositories::CoordinatorRuntimeRunRecord,
-        message: &crate::services::message_service::MessageRecord,
-        message_body: &str,
-        error: &CoordinatorDecisionError,
-    ) -> Result<(), ChannelOrchestratorError> {
-        let decision_id = Uuid::new_v4();
-        let reason = format!("Coordinator decision failed: {error}");
-        self.orchestration
-            .record_decision(
-                decision_id,
-                &message.channel_id,
-                &message.id,
-                "ambiguous",
-                "needs_manual_assignment",
-                None,
-                &[],
-                &reason,
-            )
-            .await?;
-        self.persist_routing_context_packages(
-            &decision_id.to_string(),
-            Some(&run.run_id),
-            &message.channel_id,
-            Some(&message.channel_id),
-            &message.id,
-            message_body,
-            None,
-            "ambiguous",
-            "needs_manual_assignment",
-            &reason,
-            None,
-            &[],
-        )
-        .await?;
-        self.orchestration
-            .finish_coordinator_runtime_run(&run.run_id, "failed", Some(&error.to_string()))
-            .await?;
-        Ok(())
-    }
-
-    async fn apply_completed_coordinator_decision(
-        &self,
-        run: &slei_storage::repositories::CoordinatorRuntimeRunRecord,
-        message: &crate::services::message_service::MessageRecord,
-        message_body: &str,
-        decision: CoordinatorDecision,
-    ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
-        let decision_id = Uuid::parse_str(&decision.id)
-            .map_err(|_| ChannelOrchestratorError::InvalidDecisionId)?;
-        let channel_members = self.channels.channel_members(&message.channel_id).await?;
-        let readiness_by_agent = channel_members
-            .iter()
-            .map(|member| (member.agent_id.clone(), member.readiness.clone()))
-            .collect::<HashMap<_, _>>();
-        let member_ids = readiness_by_agent.keys().cloned().collect::<HashSet<_>>();
-        let explicit_agent_ids = self
-            .resolve_explicit_mentions(message_body, &member_ids)
-            .await;
-        let mut intent = enum_storage_str(&decision.intent);
-        let mut action = enum_storage_str(&decision.action);
-        let mut assignee_agent_id = decision.assignee_agent_id.clone();
-        let mut assignee_agent_ids = decision.assignee_agent_ids.clone();
-        let mut reason = decision.reason.clone();
-        if message.as_task {
-            let task_targets = if !explicit_agent_ids.is_empty() {
-                explicit_agent_ids.clone()
-            } else if !assignee_agent_ids.is_empty() {
-                assignee_agent_ids.clone()
-            } else {
-                assignee_agent_id.iter().cloned().collect()
-            };
-            assignee_agent_id = task_targets.first().cloned();
-            assignee_agent_ids = task_targets;
-            action = if !assignee_agent_ids.is_empty() {
-                "create_task_and_assign".to_string()
-            } else {
-                "needs_manual_assignment".to_string()
-            };
-            intent = "task_command".to_string();
-            reason = "user explicitly converted message to task".to_string();
-        }
-        self.orchestration
-            .record_decision(
-                decision_id,
-                &message.channel_id,
-                &message.id,
-                &intent,
-                &action,
-                assignee_agent_id.as_deref(),
-                &assignee_agent_ids,
-                &reason,
-            )
-            .await?;
-
-        let mut task_id = None;
-        match action.as_str() {
-            "request_agent_reply" => {
-                let targets = if assignee_agent_ids.is_empty() {
-                    assignee_agent_id.iter().cloned().collect::<Vec<_>>()
-                } else {
-                    assignee_agent_ids.clone()
-                };
-                for agent_id in targets {
-                    if let Some(readiness) = readiness_by_agent.get(&agent_id) {
-                        self.create_human_mention_once(
-                            &agent_id,
-                            &message.channel_id,
-                            &message.id,
-                            readiness.clone(),
-                        )
-                        .await;
-                        self.start_channel_agent_reply_once(
-                            &agent_id,
-                            &message.channel_id,
-                            &message.id,
-                            message_body,
-                        )
-                        .await?;
-                    }
-                }
-            }
-            "create_task_and_assign" | "needs_manual_assignment" if intent == "task_command" => {
-                let assignee = if action == "create_task_and_assign" {
-                    assignee_agent_id.clone()
-                } else {
-                    None
-                };
-                let task = self
-                    .ensure_source_task(
-                        message,
-                        message_body,
-                        assignee.clone(),
-                        &reason,
-                        &format!("{}:coordinator-task", run.idempotency_key),
-                    )
-                    .await?;
-                let targets = if assignee_agent_ids.is_empty() {
-                    assignee
-                        .as_ref()
-                        .or(task.assignee_id.as_ref())
-                        .cloned()
-                        .into_iter()
-                        .collect::<Vec<_>>()
-                } else {
-                    assignee_agent_ids.clone()
-                };
-                for agent_id in targets {
-                    self.create_task_assignment_and_start_once(
-                        &agent_id,
-                        &message.channel_id,
-                        &task.id,
-                        &message.id,
-                        message_body,
-                    )
-                    .await?;
-                }
-                task_id = Some(task.id);
-            }
-            _ => {}
-        }
-
-        self.persist_routing_context_packages(
-            &decision.id,
-            Some(&run.run_id),
-            &message.channel_id,
-            Some(&message.channel_id),
-            &message.id,
-            message_body,
-            task_id.as_deref(),
-            &intent,
-            &action,
-            &reason,
-            assignee_agent_id.as_deref(),
-            &assignee_agent_ids,
-        )
-        .await?;
-
-        let outcome = SendChannelMessageOutcome {
-            message_id: message.id.clone(),
-            action,
-            task_id,
-            assignee_agent_id,
-            assignee_agent_ids,
-            coordinator_run_id: Some(run.run_id.clone()),
-            decision_status: Some("completed".to_string()),
-        };
-        self.outcome_idempotency
-            .lock()
-            .expect("channel orchestrator idempotency lock")
-            .insert(run.idempotency_key.clone(), outcome.clone());
-        Ok(outcome)
-    }
-
-    async fn existing_decision_for_message(
-        &self,
-        message_id: &str,
-    ) -> Result<Option<ResolvedCoordinatorDecision>, ChannelOrchestratorError> {
-        Ok(self
-            .orchestration
-            .decisions_for_message(message_id)
-            .await?
-            .into_iter()
-            .next()
-            .map(|decision| ResolvedCoordinatorDecision {
-                action: decision.action,
-                assignee_agent_id: decision.assignee_agent_id,
-                assignee_agent_ids: decision.assignee_agent_ids,
-                coordinator_run_id: None,
-                decision_status: Some("completed".to_string()),
-            }))
-    }
-
-    async fn outcome_for_completed_decision(
-        &self,
-        message_id: &str,
-        mut decision: ResolvedCoordinatorDecision,
-        run: Option<&slei_storage::repositories::CoordinatorRuntimeRunRecord>,
-    ) -> Result<SendChannelMessageOutcome, ChannelOrchestratorError> {
-        let task_id = if matches!(
-            decision.action.as_str(),
-            "create_task_and_assign" | "needs_manual_assignment"
-        ) {
-            self.tasks
-                .task_for_source_message(message_id)
-                .await
-                .map(|task| task.id)
-        } else {
-            None
-        };
-        if let Some(run) = run {
-            decision.coordinator_run_id = Some(run.run_id.clone());
-            decision.decision_status = Some(run.status.clone());
-        }
-        Ok(SendChannelMessageOutcome {
-            message_id: message_id.to_string(),
-            action: decision.action,
-            task_id,
-            assignee_agent_id: decision.assignee_agent_id,
-            assignee_agent_ids: decision.assignee_agent_ids,
-            coordinator_run_id: decision.coordinator_run_id,
-            decision_status: decision.decision_status,
-        })
-    }
-
-    async fn recover_completed_decision_side_effects(
-        &self,
-        message: &crate::services::message_service::MessageRecord,
-        message_body: &str,
-        outcome: &SendChannelMessageOutcome,
-    ) -> Result<(), ChannelOrchestratorError> {
-        match outcome.action.as_str() {
-            "request_agent_reply" => {
-                let readiness_by_agent = self
-                    .channels
-                    .channel_members(&message.channel_id)
-                    .await?
-                    .into_iter()
-                    .map(|member| (member.agent_id, member.readiness))
-                    .collect::<HashMap<_, _>>();
-                let targets = if outcome.assignee_agent_ids.is_empty() {
-                    outcome
-                        .assignee_agent_id
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                } else {
-                    outcome.assignee_agent_ids.clone()
-                };
-                for agent_id in targets {
-                    if let Some(readiness) = readiness_by_agent.get(&agent_id) {
-                        let created = self
-                            .create_human_mention_once(
-                                &agent_id,
-                                &message.channel_id,
-                                &message.id,
-                                readiness.clone(),
-                            )
-                            .await;
-                        if created {
-                            self.start_channel_agent_reply_once(
-                                &agent_id,
-                                &message.channel_id,
-                                &message.id,
-                                message_body,
-                            )
-                            .await?;
-                        }
-                    }
-                }
-            }
-            "create_task_and_assign" => {
-                let Some(task_id) = outcome.task_id.as_deref() else {
-                    return Ok(());
-                };
-                let targets = if outcome.assignee_agent_ids.is_empty() {
-                    outcome
-                        .assignee_agent_id
-                        .iter()
-                        .cloned()
-                        .collect::<Vec<_>>()
-                } else {
-                    outcome.assignee_agent_ids.clone()
-                };
-                for agent_id in targets {
-                    self.create_task_assignment_and_start_once(
-                        &agent_id,
-                        &message.channel_id,
-                        task_id,
-                        &message.id,
-                        message_body,
-                    )
-                    .await?;
-                }
-            }
-            "needs_manual_assignment" => {}
-            _ => {}
-        }
-        Ok(())
-    }
-
-    async fn prompt_members(
-        &self,
-        channel_members: &[ChannelMemberRecord],
-    ) -> Vec<CoordinatorPromptMember> {
-        let product_agents = self
-            .members
-            .list_product_agents()
-            .await
-            .into_iter()
-            .map(|agent| (agent.id.clone(), agent))
-            .collect::<HashMap<_, _>>();
-        channel_members
-            .iter()
-            .map(|member| {
-                if let Some(agent) = product_agents.get(&member.agent_id) {
-                    CoordinatorPromptMember {
-                        agent_id: agent.id.clone(),
-                        name: agent.name.clone(),
-                        handle: agent.handle.clone(),
-                        agent_kind: agent.agent_kind.clone(),
-                        readiness: readiness_label(&member.readiness).to_string(),
-                    }
-                } else {
-                    CoordinatorPromptMember {
-                        agent_id: member.agent_id.clone(),
-                        name: member.agent_id.clone(),
-                        handle: format!("@{}", member.agent_id),
-                        agent_kind: if member.agent_id.starts_with("agent_coordinator_") {
-                            "coordinator"
-                        } else {
-                            "agent"
-                        }
-                        .to_string(),
-                        readiness: readiness_label(&member.readiness).to_string(),
-                    }
-                }
-            })
-            .collect()
     }
 
     async fn resolve_explicit_mentions(
@@ -1499,57 +882,12 @@ impl ChannelOrchestratorService {
         let mut resolved = Vec::new();
         for handle in mentioned_handles {
             if let Some(agent_id) = handle_to_agent.get(&handle) {
-                if member_ids.contains(agent_id)
-                    && !is_internal_coordinator_id(agent_id)
-                    && !resolved.contains(agent_id)
-                {
+                if member_ids.contains(agent_id) && !resolved.contains(agent_id) {
                     resolved.push(agent_id.clone());
                 }
             }
         }
         resolved
-    }
-
-    async fn create_human_mention_once(
-        &self,
-        agent_id: &str,
-        channel_id: &str,
-        message_id: &str,
-        readiness: ChannelMemberReadiness,
-    ) -> bool {
-        let already_created = self
-            .agent_inbox
-            .events_for_agent(agent_id)
-            .await
-            .into_iter()
-            .any(|event| {
-                event.event_type == "human_mention"
-                    && event.channel_id == channel_id
-                    && event.message_id == message_id
-            });
-        if !already_created {
-            let event = self
-                .agent_inbox
-                .create_human_mention(agent_id, channel_id, message_id, readiness)
-                .await;
-            let _ = self
-                .orchestration
-                .record_diagnostic_event(
-                    "agent_inbox.created",
-                    &format!(
-                        "event_id={} agent_id={} channel_id={} message_id={} event_type={} delivery_state={:?}",
-                        event.id,
-                        event.agent_id,
-                        event.channel_id,
-                        event.message_id,
-                        event.event_type,
-                        event.delivery_state
-                    ),
-                )
-                .await;
-            return true;
-        }
-        false
     }
 
     async fn ensure_source_task(
@@ -1573,7 +911,7 @@ impl ChannelOrchestratorService {
             .await?;
         Ok(self
             .tasks
-            .create_from_coordinator_with_thread(
+            .create_from_source_with_assignment_and_thread(
                 &message.channel_id,
                 &message.author_id,
                 &message.id,
@@ -1584,25 +922,6 @@ impl ChannelOrchestratorService {
                 Some(thread.thread.id),
             )
             .await?)
-    }
-
-    async fn start_channel_agent_reply_once(
-        &self,
-        agent_id: &str,
-        channel_id: &str,
-        source_message_id: &str,
-        prompt: &str,
-    ) -> Result<(), ChannelOrchestratorError> {
-        self.start_channel_agent_run_once(
-            agent_id,
-            channel_id,
-            source_message_id,
-            prompt,
-            None,
-            None,
-            None,
-        )
-        .await
     }
 
     async fn start_channel_agent_task_reply_once(
@@ -1833,9 +1152,7 @@ impl ChannelOrchestratorService {
     ) -> Result<(), ChannelOrchestratorError> {
         let agents = self.members.list_product_agents().await;
         for agent in agents {
-            if agent.agent_kind == "coordinator"
-                || !agent.channel_ids.iter().any(|id| id == channel_id)
-            {
+            if !agent.channel_ids.iter().any(|id| id == channel_id) {
                 continue;
             }
             self.channels
@@ -1856,11 +1173,8 @@ impl ChannelOrchestratorService {
             if !seen.insert(member.agent_id.clone()) {
                 continue;
             }
-            if is_internal_coordinator_id(&member.agent_id) {
-                continue;
-            }
             let agent = self.members.get_product_agent(&member.agent_id).await?;
-            if agent.agent_kind == "coordinator" || agent.system_owned {
+            if agent.system_owned {
                 continue;
             }
             self.claims
@@ -2007,8 +1321,7 @@ impl ChannelOrchestratorService {
 
     async fn persist_routing_context_packages(
         &self,
-        decision_id: &str,
-        coordinator_run_id: Option<&str>,
+        decision_id: Uuid,
         channel_id: &str,
         channel_name: Option<&str>,
         message_id: &str,
@@ -2030,8 +1343,6 @@ impl ChannelOrchestratorService {
         {
             return Ok(());
         }
-        let decision_id = Uuid::parse_str(decision_id)
-            .map_err(|_| ChannelOrchestratorError::InvalidDecisionId)?;
         let safe_memory_refs = if !assignee_agent_ids.is_empty() {
             vec!["MEMORY.md", "notes/channels.md", "notes/relationships.md"]
         } else {
@@ -2050,7 +1361,6 @@ impl ChannelOrchestratorService {
             let payload = json!({
                 "sourceMessageId": message_id,
                 "currentMessageId": message_id,
-                "coordinatorRunId": coordinator_run_id,
                 "channelId": channel_id,
                 "channelName": channel_name,
                 "targetAgentId": target_agent_id,
@@ -2078,18 +1388,6 @@ impl ChannelOrchestratorService {
                 .await?;
         }
         Ok(())
-    }
-}
-
-impl From<CoordinatorDecision> for ResolvedCoordinatorDecision {
-    fn from(decision: CoordinatorDecision) -> Self {
-        Self {
-            action: enum_storage_str(&decision.action),
-            assignee_agent_id: decision.assignee_agent_id,
-            assignee_agent_ids: decision.assignee_agent_ids,
-            coordinator_run_id: None,
-            decision_status: Some("completed".to_string()),
-        }
     }
 }
 
@@ -2178,16 +1476,6 @@ This reply belongs to a message thread. Keep follow-up work scoped to the thread
     )
 }
 
-fn readiness_label(readiness: &ChannelMemberReadiness) -> &'static str {
-    match readiness {
-        ChannelMemberReadiness::Joining => "joining",
-        ChannelMemberReadiness::MemorySyncing => "memory_syncing",
-        ChannelMemberReadiness::Ready => "ready",
-        ChannelMemberReadiness::MemoryFailed => "memory_failed",
-        ChannelMemberReadiness::Unavailable => "unavailable",
-    }
-}
-
 fn is_channel_join_run(source_message_id: &str) -> bool {
     source_message_id.starts_with("channel_join:")
 }
@@ -2252,17 +1540,6 @@ fn worker_tool_name(event: &Value) -> &str {
         .unwrap_or("tool")
 }
 
-fn enum_storage_str<T>(value: &T) -> String
-where
-    T: Serialize,
-{
-    serde_json::to_value(value)
-        .expect("serialize enum")
-        .as_str()
-        .expect("enum serializes to string")
-        .to_string()
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelOrchestratorError {
     #[error(transparent)]
@@ -2280,15 +1557,11 @@ pub enum ChannelOrchestratorError {
     #[error(transparent)]
     Claim(#[from] ClaimError),
     #[error(transparent)]
-    Coordinator(#[from] CoordinatorDecisionError),
-    #[error(transparent)]
     Worker(#[from] ClaudeWorkerError),
     #[error(transparent)]
     Reset(#[from] ResetRuntimeError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    #[error("invalid coordinator decision id")]
-    InvalidDecisionId,
     #[error("worker channel event is missing or invalid field: {0}")]
     InvalidWorkerEvent(&'static str),
     #[error("inactive idempotent message cannot be routed: {message_id}")]
