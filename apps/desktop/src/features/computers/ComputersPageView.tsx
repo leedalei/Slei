@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/types";
 import { agentsForComputerNode, deviceOsLabel, formatCreatedDate } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
+import { DetailBlock, EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -98,8 +98,8 @@ export function ComputersPage(input: {
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
-          <Card>
-            <CardContent className="p-4">
+          <Card size="compact">
+            <CardContent>
               <EditableDetailField
                 ariaLabel={input.messages.computers.editDeviceName}
                 error={renameError}
@@ -116,7 +116,7 @@ export function ComputersPage(input: {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card size="compact">
             <CardHeader>
               <CardTitle>{input.messages.computers.info}</CardTitle>
               <CardDescription>{input.messages.computers.systemInfo}</CardDescription>
@@ -137,8 +137,7 @@ export function ComputersPage(input: {
                 </InfoItem>
               </dl>
 
-              <section aria-label={input.messages.computers.detectedRuntimes} className="grid gap-3 rounded-lg border bg-muted/30 p-3">
-                <h3 className="text-sm font-medium">{input.messages.computers.detectedRuntimes}</h3>
+              <DetailBlock aria-label={input.messages.computers.detectedRuntimes} data-detail-block-kind="runtime" title={input.messages.computers.detectedRuntimes}>
                 <div className="flex flex-wrap gap-2">
                   {selectedNode.runtimes.map((runtime) => (
                     <Badge
@@ -150,11 +149,11 @@ export function ComputersPage(input: {
                     </Badge>
                   ))}
                 </div>
-              </section>
+              </DetailBlock>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card size="compact">
             <CardHeader>
               <CardTitle>{input.messages.computers.agentsOnThisComputer}</CardTitle>
               <CardAction>
@@ -168,16 +167,18 @@ export function ComputersPage(input: {
               {hostedAgents.length ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   {hostedAgents.map((member) => (
-                    <article className="grid grid-cols-[auto_1fr] gap-3 rounded-lg border bg-muted/30 p-3" key={member.id}>
-                      <MemberAvatar identity={member} />
-                      <div className="min-w-0">
-                        <strong className="block truncate text-sm">{member.name}</strong>
-                        <p className="truncate text-sm text-muted-foreground">{member.runtime}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          <StatusDot status={member.runtimeStatus} /> {runtimeStatusLabel(member.runtimeStatus, input.messages)}
-                        </p>
-                      </div>
-                    </article>
+                    <DetailBlock data-detail-block-kind="hosted-agent" key={member.id}>
+                      <article className="grid grid-cols-[auto_1fr] gap-3">
+                        <MemberAvatar identity={member} />
+                        <div className="min-w-0">
+                          <strong className="block truncate text-sm">{member.name}</strong>
+                          <p className="truncate text-sm text-muted-foreground">{member.runtime}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            <StatusDot status={member.runtimeStatus} /> {runtimeStatusLabel(member.runtimeStatus, input.messages)}
+                          </p>
+                        </div>
+                      </article>
+                    </DetailBlock>
                   ))}
                 </div>
               ) : (
@@ -214,12 +215,12 @@ function runtimeStatusLabel(status: "idle" | "busy" | "offline", messages: Deskt
 
 function InfoItem(input: { children: ReactNode; icon: LucideIcon; label: string }) {
   return (
-    <div className="grid gap-2 rounded-lg border bg-muted/30 p-3">
+    <DetailBlock>
       <dt className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <input.icon aria-hidden="true" className="size-3.5" />
         {input.label}
       </dt>
       <dd className="break-words text-sm">{input.children}</dd>
-    </div>
+    </DetailBlock>
   );
 }

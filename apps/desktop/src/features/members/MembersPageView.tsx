@@ -28,7 +28,7 @@ import type {
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
 import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
-import { EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
+import { DetailBlock, EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -419,7 +419,7 @@ export function MembersPage(input: {
         <ScrollArea className="min-h-0">
           <div className="grid gap-4 p-6">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card>
+              <Card size="compact">
                 <CardHeader>
                   <CardTitle>{input.messages.members.profile}</CardTitle>
                 </CardHeader>
@@ -453,24 +453,24 @@ export function MembersPage(input: {
                   <Separator />
                   <h2 className="text-base font-semibold">{input.messages.members.info}</h2>
                   <div className="grid gap-3 md:grid-cols-3">
-                    <InfoItem icon={Cpu} label={input.messages.members.computer}>
+                    <InfoItem blockId="computer" icon={Cpu} label={input.messages.members.computer}>
                       <span>{selectedNode?.name ?? selectedMember.computer}</span>
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
                         <StatusDot status={nodeDotStatus} />
                         {nodeStatus} · daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
                       </span>
                     </InfoItem>
-                    <InfoItem icon={CalendarDays} label={input.messages.members.created}>
+                    <InfoItem blockId="created" icon={CalendarDays} label={input.messages.members.created}>
                       {formatMemberCreatedDate(selectedMember.created)}
                     </InfoItem>
-                    <InfoItem icon={UserRound} label={input.messages.members.creator}>
+                    <InfoItem blockId="creator" icon={UserRound} label={input.messages.members.creator}>
                       {selectedMember.creator}
                     </InfoItem>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card size="compact">
                 <CardHeader>
                   <CardTitle>{input.messages.members.runtimeConfig}</CardTitle>
                   <CardDescription>{input.messages.status.runtime[selectedMember.runtimeStatus]}</CardDescription>
@@ -562,7 +562,7 @@ export function MembersPage(input: {
             </TabsContent>
 
             <TabsContent forceMount value="capabilities" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card>
+              <Card size="compact">
                 <CardHeader>
                   <CardTitle>{input.messages.members.capabilities}</CardTitle>
                   <CardDescription>{input.messages.members.readOnly}</CardDescription>
@@ -587,7 +587,7 @@ export function MembersPage(input: {
               </Card>
 
               {selectedMember.permissions.length ? (
-                <Card>
+                <Card size="compact">
                   <CardHeader>
                     <CardTitle>{input.messages.members.workspacePermission}</CardTitle>
                     <CardDescription>{input.messages.members.readOnly}</CardDescription>
@@ -730,18 +730,19 @@ function InlineEmpty(input: { description: string; title: string }) {
 }
 
 function InfoItem(input: {
+  blockId?: string;
   children: ReactNode;
   icon: LucideIcon;
   label: string;
 }) {
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
+    <DetailBlock data-member-detail-block={input.blockId}>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <input.icon aria-hidden="true" className="size-3.5" />
         {input.label}
       </div>
       <div className="grid gap-1 text-sm">{input.children}</div>
-    </div>
+    </DetailBlock>
   );
 }
 

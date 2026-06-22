@@ -215,6 +215,14 @@ describe("MembersPage agent details", () => {
     expect(html).toContain(`>${messages.members.message}<`);
   });
 
+  it("uses compact cards and secondary detail blocks in member profile details", () => {
+    const html = renderToStaticMarkup(renderMembersPage());
+
+    expect(html).toContain('data-size="compact"');
+    expect(html).toContain('data-slot="detail-block"');
+    expect(html).toContain('data-member-detail-block="computer"');
+  });
+
   it("shows a delete action for ordinary agents", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(

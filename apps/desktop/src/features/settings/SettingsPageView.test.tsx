@@ -41,4 +41,38 @@ describe("SettingsPage header", () => {
     expect(headerHtml).toContain("Language");
     expect(headerHtml).toContain("Region");
   });
+
+  it("uses compact cards and secondary detail blocks for settings rows", () => {
+    const messages = createDesktopMessages("en-US");
+    const notificationsHtml = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="notifications"
+        appearance={{ theme: "system", fontSize: "md" }}
+        locale="en-US"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        profile={null}
+        timeZone="America/Los_Angeles"
+      />,
+    );
+    const aboutHtml = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="about"
+        appearance={{ theme: "system", fontSize: "md" }}
+        locale="en-US"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        profile={null}
+        timeZone="America/Los_Angeles"
+      />,
+    );
+
+    expect(notificationsHtml).toContain('data-size="compact"');
+    expect(notificationsHtml).toContain('data-slot="detail-block"');
+    expect(notificationsHtml).toContain('data-settings-notification="mentions"');
+    expect(aboutHtml).toContain('data-slot="detail-block"');
+    expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
+  });
 });

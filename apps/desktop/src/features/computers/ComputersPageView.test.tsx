@@ -124,6 +124,28 @@ describe("ComputersPage header", () => {
     expect(html).not.toContain('data-testid="slei-computer-list-card"');
   });
 
+  it("uses compact detail cards and secondary detail blocks in the computer detail page", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[hostedAgent]}
+        messages={messages}
+        nodes={[localNode]}
+      />,
+    );
+    const deviceNameIndex = html.indexOf(messages.computers.deviceName);
+    const deviceCardStart = html.lastIndexOf('data-slot="card"', deviceNameIndex);
+    const deviceCardEnd = html.indexOf('data-slot="card"', deviceNameIndex + 1);
+    const deviceCardHtml = html.slice(deviceCardStart, deviceCardEnd);
+
+    expect(deviceCardHtml).toContain('data-size="compact"');
+    expect(deviceCardHtml).not.toContain('data-slot="card-content" class="p-4');
+    expect(deviceCardHtml).not.toContain('data-slot="card-content" class="px-4 p-4');
+    expect(html).toContain('data-slot="detail-block"');
+    expect(html).toContain('data-detail-block-kind="runtime"');
+    expect(html).toContain('data-detail-block-kind="hosted-agent"');
+  });
+
   it("labels hosted agents by connection state instead of idle workload state", () => {
     const html = renderToStaticMarkup(
       <ComputersPage

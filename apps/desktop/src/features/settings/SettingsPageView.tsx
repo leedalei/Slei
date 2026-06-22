@@ -1,7 +1,7 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { EditableDetailField, MemberAvatar } from "../../components";
+import { DetailBlock, EditableDetailField, MemberAvatar } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +70,7 @@ export function SettingsPage(input: SettingsPageInput) {
           </header>
 
           {input.activePanel === "account" && !profile ? (
-            <Card>
+            <Card size="compact">
               <CardHeader>
                 <CardTitle>{labels.profile}</CardTitle>
                 <CardDescription>{labels.profileUnavailable}</CardDescription>
@@ -79,7 +79,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "account" && profile ? (
-            <Card>
+            <Card size="compact">
               <CardHeader>
                 <CardTitle>{labels.profile}</CardTitle>
                 <CardDescription>{labels.accountSubtitle}</CardDescription>
@@ -95,13 +95,11 @@ export function SettingsPage(input: SettingsPageInput) {
                     saving={profilePending}
                     value={profile.displayName}
                   />
-                  <div className="grid gap-2 slei-detail-section">
-                    <h3 className="text-base font-semibold">{labels.handle}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{labels.handleReadOnly}</p>
-                  </div>
+                  <DetailBlock
+                    description={labels.handleReadOnly}
+                    title={labels.handle}
+                    value={profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
+                  />
                 </div>
 
                 <Separator />
@@ -148,7 +146,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "language-region" ? (
-            <Card>
+            <Card size="compact">
               <CardHeader>
                 <CardTitle>{labels.languageRegion}</CardTitle>
                 <CardDescription>{labels.languageRegionSubtitle}</CardDescription>
@@ -189,7 +187,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <Card data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined}>
+            <Card data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} size="compact">
               <CardHeader>
                 <CardTitle>{labels.appearance}</CardTitle>
                 <CardDescription>{labels.appearanceSubtitle}</CardDescription>
@@ -244,7 +242,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <Card data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined}>
+            <Card data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} size="compact">
               <CardHeader>
                 <CardTitle>{labels.notifications}</CardTitle>
                 <CardDescription>{labels.notificationsSubtitle}</CardDescription>
@@ -281,17 +279,17 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "about" ? (
-            <Card>
+            <Card size="compact">
               <CardHeader>
                 <CardTitle>{labels.about}</CardTitle>
                 <CardDescription>{labels.aboutSubtitle}</CardDescription>
               </CardHeader>
               <CardContent>
-                <dl className="grid gap-3">
+                <div className="grid gap-3">
                   <AboutRow label={labels.desktopVersion} value={desktopVersion} />
                   <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
                   <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
-                </dl>
+                </div>
               </CardContent>
             </Card>
           ) : null}
@@ -358,26 +356,36 @@ function NotificationSwitch(input: {
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border p-3" data-settings-notification={input.name}>
-      <Label className="text-sm" htmlFor={`settings-notification-${input.name}`}>{input.label}</Label>
-      <Switch
-        aria-label={input.label}
-        checked={input.checked}
-        disabled={input.disabled}
-        id={`settings-notification-${input.name}`}
-        onCheckedChange={input.onCheckedChange}
-      />
-    </div>
+    <DetailBlock
+      action={(
+        <Switch
+          aria-label={input.label}
+          checked={input.checked}
+          disabled={input.disabled}
+          id={`settings-notification-${input.name}`}
+          onCheckedChange={input.onCheckedChange}
+        />
+      )}
+      data-settings-notification={input.name}
+      title={<Label className="text-sm" htmlFor={`settings-notification-${input.name}`}>{input.label}</Label>}
+    />
   );
 }
 
 function AboutRow(input: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-      <dt className="text-sm text-muted-foreground">{input.label}</dt>
-      <dd className="font-medium">{input.value}</dd>
-    </div>
+    <DetailBlock
+      action={<span className="font-medium">{input.value}</span>}
+      data-settings-about-row={aboutRowKey(input.label)}
+      title={<span className="text-sm font-normal text-muted-foreground">{input.label}</span>}
+    />
   );
+}
+
+function aboutRowKey(label: string) {
+  if (/desktop/i.test(label) || label.includes("桌面")) return "desktopVersion";
+  if (/daemon/i.test(label)) return "daemonVersion";
+  return "connectedComputers";
 }
 
 function themeOptions(labels: DesktopMessages["settings"]): Array<SelectOption<"light" | "dark">> {

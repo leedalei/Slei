@@ -1,4 +1,5 @@
 export { Empty } from "./Empty";
+export { DetailBlock } from "./DetailBlock";
 export { EditableDetailField } from "./EditableDetailField";
 export { MemberAvatar } from "./MemberAvatar";
 export { MessageStatusSquare, StatusDot } from "./StatusIndicators";
