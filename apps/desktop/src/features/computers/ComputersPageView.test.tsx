@@ -93,4 +93,26 @@ describe("ComputersPage header", () => {
     expect(html).toContain('data-daemon-status="offline"');
     expect(html).toContain("bg-muted-foreground/45");
   });
+
+  it("keeps the computer list card compact without a separate card header gap", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={messages}
+        nodes={[localNode]}
+      />,
+    );
+    const markerStart = html.indexOf('data-testid="slei-computer-list-card"');
+    const cardStart = html.lastIndexOf("<div", markerStart);
+    const cardEnd = html.indexOf("</div></div>", cardStart);
+    const cardHtml = html.slice(cardStart, cardEnd);
+
+    expect(markerStart).toBeGreaterThanOrEqual(0);
+    expect(cardStart).toBeGreaterThanOrEqual(0);
+    expect(cardHtml).toContain('data-size="sm"');
+    expect(cardHtml).toContain(messages.computers.computers);
+    expect(cardHtml).toContain("Lei MacBook");
+    expect(cardHtml).not.toContain('data-slot="card-header"');
+  });
 });

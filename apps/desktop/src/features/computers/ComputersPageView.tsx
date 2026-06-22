@@ -99,11 +99,9 @@ export function ComputersPage(input: {
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{input.messages.computers.computers}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
+          <Card data-testid="slei-computer-list-card" size="sm">
+            <CardContent className="grid gap-3">
+              <h2 className="text-sm font-medium">{input.messages.computers.computers}</h2>
               {input.nodes.map((node) => {
                 const isConnected = node.status === "connected";
                 return (
