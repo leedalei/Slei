@@ -1,7 +1,7 @@
 export const status = {
   runtime: {
-    idle: "Idle",
-    busy: "Busy",
+    idle: "Online",
+    busy: "Online",
     offline: "Offline",
   },
   readiness: {

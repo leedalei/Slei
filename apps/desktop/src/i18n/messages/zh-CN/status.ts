@@ -1,7 +1,7 @@
 export const status = {
   runtime: {
-    idle: "空闲",
-    busy: "忙碌",
+    idle: "在线",
+    busy: "在线",
     offline: "离线",
   },
   readiness: {

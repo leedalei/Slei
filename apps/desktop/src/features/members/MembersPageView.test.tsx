@@ -207,6 +207,8 @@ describe("MembersPage agent details", () => {
     expect(html).toContain("@coda");
     expect(html).toContain("Builds features.");
     expect(html).toContain("Runtime configuration");
+    expect(html).toContain(">Online<");
+    expect(html).not.toContain(">idle<");
     expect(html).toContain("ClaudeCode");
     expect(html).toContain("Capabilities");
     expect(html).toContain("Workspace");

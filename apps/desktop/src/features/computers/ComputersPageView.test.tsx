@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
+import type { SleiMember } from "../../app/types";
 import { ComputersPage } from "./ComputersPageView";
 
 const localNode: DesktopNodeView = {
@@ -13,6 +14,29 @@ const localNode: DesktopNodeView = {
   daemonVersion: "0.1.0",
   device: { platform: "darwin", arch: "arm64", hostname: "MateBook-Pro-Max-3.local" },
   runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+};
+
+const hostedAgent: SleiMember = {
+  id: "agent_yeal",
+  name: "Yeal",
+  handle: "@yeal",
+  avatar: "YE",
+  type: "agent",
+  runtimeStatus: "idle",
+  role: "Guide",
+  description: "Guide agent.",
+  computer: "Lei MacBook",
+  nodeId: "local-node",
+  created: "2026-06-22",
+  creator: "system",
+  runtime: "ClaudeCode",
+  model: "Sonnet",
+  instructions: "Guide agent.",
+  permissions: [],
+  environmentVariables: [],
+  createdAgents: [],
+  activity: "Idle",
+  capabilities: ["ClaudeCode"],
 };
 
 describe("ComputersPage header", () => {
@@ -98,5 +122,18 @@ describe("ComputersPage header", () => {
     );
 
     expect(html).not.toContain('data-testid="slei-computer-list-card"');
+  });
+
+  it("labels hosted agents by connection state instead of idle workload state", () => {
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[hostedAgent]}
+        messages={createDesktopMessages("zh-CN")}
+        nodes={[localNode]}
+      />,
+    );
+
+    expect(html).toContain("在线");
+    expect(html).not.toContain("空闲");
   });
 });

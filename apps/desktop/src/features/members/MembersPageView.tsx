@@ -473,7 +473,7 @@ export function MembersPage(input: {
               <Card>
                 <CardHeader>
                   <CardTitle>{input.messages.members.runtimeConfig}</CardTitle>
-                  <CardDescription>{selectedMember.runtimeStatus}</CardDescription>
+                  <CardDescription>{input.messages.status.runtime[selectedMember.runtimeStatus]}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   <EditableDetailField
