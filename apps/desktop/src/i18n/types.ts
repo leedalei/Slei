@@ -66,6 +66,7 @@ export type DesktopMessages = {
     directMessages: string;
     files: string;
     guide: string;
+    loadingOlderMessages: string;
     approvalHandled: string;
     approvalPending: string;
     artifact: string;

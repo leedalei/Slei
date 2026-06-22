@@ -76,6 +76,8 @@ describe("computers management page", () => {
     expect(html).toContain("Daemon Version");
     expect(html).toContain("检测到的运行时");
     expect(html).toContain("创建时间");
+    expect(html).toContain("2026-05-26");
+    expect(html).not.toContain("May 26, 2026");
     expect(html).toContain("此设备上的智能体");
     expect(html).not.toContain('data-slot="card-description">3');
     expect(html).toContain('data-slot="avatar"');

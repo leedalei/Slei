@@ -565,10 +565,10 @@ export function agentsForComputerNode(node: DesktopNodeView, members: SleiMember
   });
 }
 
-export function formatMemberCreatedDate(value?: string): string {
+export function formatCreatedDate(value?: string): string {
   const raw = value?.trim() ?? "";
   if (!raw) return "";
-  if (/^\d{8}$/.test(raw)) return raw;
+  if (/^\d{8}$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
   let date: Date;
   if (/^\d+$/.test(raw)) {
     try {
@@ -590,7 +590,11 @@ export function formatMemberCreatedDate(value?: string): string {
   const year = String(date.getFullYear()).padStart(4, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
+  return `${year}-${month}-${day}`;
+}
+
+export function formatMemberCreatedDate(value?: string): string {
+  return formatCreatedDate(value);
 }
 
 export function stripChannelHash(name: string) {

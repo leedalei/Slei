@@ -24,6 +24,7 @@ export const chat = {
   directMessages: "DIRECT MESSAGES",
   files: "Files",
   guide: "Guide",
+  loadingOlderMessages: "Loading older messages...",
   approvalHandled: "Approval handled",
   approvalPending: "Waiting for approval",
   artifact: "Artifact",

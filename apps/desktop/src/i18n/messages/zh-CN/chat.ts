@@ -24,6 +24,7 @@ export const chat = {
   directMessages: "私聊",
   files: "附件",
   guide: "引导员",
+  loadingOlderMessages: "正在加载历史消息…",
   approvalHandled: "审批已处理",
   approvalPending: "等待审批",
   artifact: "附件",

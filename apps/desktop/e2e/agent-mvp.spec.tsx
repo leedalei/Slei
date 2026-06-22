@@ -163,7 +163,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).not.toContain("应用");
   });
 
-  it("renders member details with YYYYMMDD created date, clickable workspace paths, and skill cards", () => {
+  it("renders member details with YYYY-MM-DD created date, clickable workspace paths, and skill cards", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeMemberId="agent_coda"
@@ -182,7 +182,8 @@ describe("agent creation, device association, and memory MVP", () => {
       />,
     );
 
-    expect(html).toContain("20260529");
+    expect(html).toContain("2026-05-29");
+    expect(html).not.toContain("20260529");
     expect(html).not.toContain("2026-05-29T07:28:51.000Z");
     expect(html).toContain("工作区");
     expect(html).toContain("MEMORY.md");

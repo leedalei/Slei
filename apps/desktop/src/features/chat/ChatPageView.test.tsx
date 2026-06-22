@@ -328,6 +328,148 @@ describe("ChatPage mention panel", () => {
     }
   });
 
+  it("uses the virtualizer last item when scrolling to the latest message", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("timelineVirtualizer.scrollToIndex(timelineMessages.length - 1");
+    expect(source).toContain("align: \"end\"");
+    expect(source).toContain("behavior: \"smooth\"");
+  });
+
+  it("enables timeline virtualization only when there are more than 50 messages", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("const TIMELINE_VIRTUALIZATION_THRESHOLD = 50");
+    expect(source).toContain("const timelineUsesVirtualization = timelineMessages.length > TIMELINE_VIRTUALIZATION_THRESHOLD");
+    expect(source).toContain("count: timelineUsesVirtualization ? timelineMessages.length : 0");
+  });
+
+  it("does not request older messages when the timeline is at the bottom", async () => {
+    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const messages = createDesktopMessages("zh-CN");
+    const onOlderMessagesLoad = vi.fn();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: Array.from({ length: 60 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        author: "Lei",
+        role: "human" as const,
+        time: `10:${String(index).padStart(2, "0")}`,
+        body: `消息 ${index + 1}`,
+        channelId: "all",
+      })),
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          onOlderMessagesLoad={onOlderMessagesLoad}
+          profile={defaultProfile}
+        />,
+      );
+      const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+      setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 3000, scrollTop: 2600 });
+
+      await act(async () => {
+        timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+
+      expect(onOlderMessagesLoad).not.toHaveBeenCalled();
+    } finally {
+      requestAnimationFrame.mockRestore();
+      cancelAnimationFrame.mockRestore();
+    }
+  });
+
+  it("requests older messages when the user scrolls near the top", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onOlderMessagesLoad = vi.fn();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: Array.from({ length: 60 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        author: "Lei",
+        role: "human" as const,
+        time: `10:${String(index).padStart(2, "0")}`,
+        body: `消息 ${index + 1}`,
+        channelId: "all",
+      })),
+    });
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onOlderMessagesLoad={onOlderMessagesLoad}
+        profile={defaultProfile}
+      />,
+    );
+    const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 3000, scrollTop: 32 });
+
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    expect(onOlderMessagesLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a loading status while older messages are loading", async () => {
+    let resolveOlderMessages!: () => void;
+    const messages = createDesktopMessages("zh-CN");
+    const onOlderMessagesLoad = vi.fn(() => new Promise<void>((resolve) => {
+      resolveOlderMessages = resolve;
+    }));
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: Array.from({ length: 60 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        author: "Lei",
+        role: "human" as const,
+        time: `10:${String(index).padStart(2, "0")}`,
+        body: `消息 ${index + 1}`,
+        channelId: "all",
+      })),
+    });
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onOlderMessagesLoad={onOlderMessagesLoad}
+        profile={defaultProfile}
+      />,
+    );
+    const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 3000, scrollTop: 0 });
+
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-testid="slei-older-messages-loading"]')?.textContent).toContain("正在加载");
+
+    await act(async () => {
+      resolveOlderMessages();
+    });
+
+    expect(host.querySelector('[data-testid="slei-older-messages-loading"]')).toBeNull();
+  });
+
+  it("preserves the viewport anchor after older messages are prepended", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("pendingOlderMessagesScrollRestoreRef");
+    expect(source).toContain("viewport.scrollTop = restore.scrollTop + delta");
+  });
+
   it("shows a floating scroll-to-bottom button when an agent message arrives while the timeline is not at the bottom", async () => {
     const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
@@ -440,11 +582,24 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("onOlderMessagesLoad?.()");
   });
 
+  it("requests older messages only from the near-top timeline scroll path", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX");
+    expect(source).toContain("function requestOlderMessagesIfNearTop()");
+    expect(source).toContain("viewport.scrollTop > HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX");
+    expect(source).toContain("olderMessagesRequestInFlightRef.current");
+    expect(source).toContain("requestOlderMessagesIfNearTop();");
+    expect(source).not.toContain("timelineVirtualItems[0]?.index, timelineMessages.length, onOlderMessagesLoad");
+  });
+
   it("defaults channel and conversation entries without stored scroll to the latest message", () => {
     const source = readChatPageSource();
 
     expect(source).toContain("initialTimelineScrollTargetRef");
     expect(source).toContain("const timelineScrollTarget =");
+    expect(source).toContain("if (timelineUsesVirtualization && timelineMessages.length > 0)");
+    expect(source).toContain("timelineVirtualizer.scrollToIndex(timelineMessages.length - 1");
     expect(source).toContain("top: viewport.scrollHeight");
     expect(source).toContain("behavior: \"smooth\"");
     expect(source).toContain("pendingScrollToBottomRef.current = true");

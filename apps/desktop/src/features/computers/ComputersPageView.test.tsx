@@ -49,4 +49,23 @@ describe("ComputersPage header", () => {
     expect(html).toContain(messages.computers.noAgents);
     expect(html).toContain('data-empty-illustration="nodata"');
   });
+
+  it("renders a dash when the computer created time is missing", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={messages}
+        nodes={[{ ...localNode, created: undefined }]}
+      />,
+    );
+    const createdLabelIndex = html.indexOf(messages.computers.created);
+    const createdItemStart = html.lastIndexOf("<div", createdLabelIndex);
+    const createdItemEnd = html.indexOf("</div>", createdLabelIndex);
+    const createdItemHtml = html.slice(createdItemStart, createdItemEnd);
+
+    expect(createdLabelIndex).toBeGreaterThanOrEqual(0);
+    expect(createdItemHtml).toContain("<dd");
+    expect(createdItemHtml).toContain(">-</dd>");
+  });
 });

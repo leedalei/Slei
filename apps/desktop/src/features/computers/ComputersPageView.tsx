@@ -4,7 +4,7 @@ import { Bot, Calendar, Cpu, Monitor, Plus, Server, type LucideIcon } from "luci
 import type { DesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/types";
-import { agentsForComputerNode, deviceOsLabel } from "../../app/model";
+import { agentsForComputerNode, deviceOsLabel, formatCreatedDate } from "../../app/model";
 import { EditableDetailField, Empty, MemberAvatar, StatusDot } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,7 +133,7 @@ export function ComputersPage(input: {
                   <strong>{selectedNode.daemonVersion}</strong>
                 </InfoItem>
                 <InfoItem icon={Calendar} label={input.messages.computers.created}>
-                  {selectedNode.created ?? "May 26, 2026"}
+                  {formatCreatedDate(selectedNode.created) || "-"}
                 </InfoItem>
               </dl>
 

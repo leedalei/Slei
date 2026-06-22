@@ -11,10 +11,10 @@ type ToastClipboard = {
 };
 
 const toastVariantClassNames: Record<ToastType, string> = {
-  success: "border-emerald-500/50 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/70 dark:text-emerald-50",
-  info: "border-sky-500/50 bg-sky-50 text-sky-950 dark:bg-sky-950/70 dark:text-sky-50",
-  warn: "border-amber-500/60 bg-amber-50 text-amber-950 dark:bg-amber-950/70 dark:text-amber-50",
-  error: "border-destructive/60 bg-destructive/10 text-destructive dark:bg-destructive/20",
+  success: "border-emerald-500/50 text-emerald-950 dark:text-emerald-50",
+  info: "border-sky-500/50 text-sky-950 dark:text-sky-50",
+  warn: "border-amber-500/60 text-amber-950 dark:text-amber-50",
+  error: "border-destructive/60 text-destructive",
 };
 
 export async function copyToastContent(text: string, environment?: { clipboard?: ToastClipboard }) {
@@ -43,14 +43,14 @@ export function Toast({ message, text, type }: { message?: string; text?: string
   const content = (text ?? message)?.trim();
   if (!content) return null;
   const urgent = type === "error";
-  const variantClassName = type ? toastVariantClassNames[type] : "bg-popover text-popover-foreground";
+  const variantClassName = type ? toastVariantClassNames[type] : "border-border text-popover-foreground";
 
   return (
     <div aria-live={urgent ? "assertive" : "polite"} className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2" role={urgent ? "alert" : "status"}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            className={cn("pointer-events-auto h-auto rounded-md px-4 py-3 text-sm shadow-md", variantClassName)}
+            className={cn("pointer-events-auto h-auto rounded-md bg-white px-4 py-3 text-sm shadow-md hover:bg-white dark:bg-popover dark:hover:bg-popover", variantClassName)}
             onClick={() => void copyToastContent(content)}
             type="button"
             variant="outline"

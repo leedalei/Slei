@@ -320,6 +320,7 @@ const CHANNEL_MEMBER_READINESS_POLL_INTERVAL_MS = 1_000;
 const CHANNEL_MEMBER_READINESS_POLL_ATTEMPTS = 8;
 const UNSETTLED_CHANNEL_MEMBER_READINESS = new Set<SleiChannelMemberReadiness>(["joining", "memory_syncing"]);
 const DEFAULT_CHAT_MESSAGE_LIMIT = 50;
+const OLDER_CHAT_MESSAGE_LIMIT = 20;
 
 export function hasUnsettledChannelMemberReadiness(members: SleiMember[], channelId: string): boolean {
   return members.some((member) => {
@@ -1802,11 +1803,11 @@ export function SleiApp() {
       let hasMoreBefore = false;
       let olderMessages: SleiMessage[] = [];
       if (activeConversationId) {
-        const receipt = await bridge.listConversationMessages(activeConversationId, { before: oldestSequence, limit: 30 });
+        const receipt = await bridge.listConversationMessages(activeConversationId, { before: oldestSequence, limit: OLDER_CHAT_MESSAGE_LIMIT });
         hasMoreBefore = receipt.pageInfo.hasMoreBefore;
         olderMessages = receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
       } else {
-        const receipt = await bridge.listChannelMessages(activeChannelId, { before: oldestSequence, limit: 30 });
+        const receipt = await bridge.listChannelMessages(activeChannelId, { before: oldestSequence, limit: OLDER_CHAT_MESSAGE_LIMIT });
         hasMoreBefore = receipt.pageInfo.hasMoreBefore;
         olderMessages = receipt.messages
           .map((message) => channelMessageToSleiMessage(message, data.members, profile, messages))

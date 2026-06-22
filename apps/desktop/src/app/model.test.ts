@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SleiMember } from "./types";
 import {
+  formatMemberCreatedDate,
   formatLocalRecordDateTime,
   formatMessageDateTime,
   formatMessageTime,
@@ -55,6 +56,13 @@ describe("internal coordinator members", () => {
     ];
 
     expect(mentionSuggestions("", members).map((member) => member.id)).toEqual(["agent_coda"]);
+  });
+});
+
+describe("member created date formatting", () => {
+  it("formats member created time as YYYY-MM-DD", () => {
+    expect(formatMemberCreatedDate("2026-05-29T07:28:51.000Z")).toBe("2026-05-29");
+    expect(formatMemberCreatedDate("20260529")).toBe("2026-05-29");
   });
 });
 

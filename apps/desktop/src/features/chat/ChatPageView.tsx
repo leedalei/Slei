@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, Bookmark, CheckSquare, Copy, FileText, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -26,6 +26,8 @@ import { TaskRootEntry } from "./TaskRootEntry";
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 200;
+const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
+const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
 
 type ChannelFileEntry = {
   attachment: ConversationAttachmentView;
@@ -496,7 +498,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const lastTimelineMessageIdRef = useRef<string | undefined>(undefined);
   const timelineAtBottomRef = useRef(true);
   const scrollFrameRef = useRef<number | undefined>(undefined);
+  const olderMessagesRequestInFlightRef = useRef(false);
+  const pendingOlderMessagesScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | undefined>(undefined);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -525,16 +530,17 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     .filter((message) => !isTransientAgentActivity(message))
     .filter((message) => !isLinkedTaskAgentReply(message, taskSourceIds))
     .filter((message) => !isTaskCardControlMessage(message));
+  const timelineUsesVirtualization = timelineMessages.length > TIMELINE_VIRTUALIZATION_THRESHOLD;
   const latestTimelineMessage = timelineMessages.at(-1);
   const timelineVirtualizer = useVirtualizer({
-    count: timelineMessages.length,
+    count: timelineUsesVirtualization ? timelineMessages.length : 0,
     getScrollElement: () => timelineViewportRef.current,
     estimateSize: () => 96,
     overscan: 8,
     getItemKey: (index) => timelineMessages[index]?.id ?? index,
   });
-  const timelineVirtualItems = typeof document === "undefined" ? [] : timelineVirtualizer.getVirtualItems();
-  const renderedTimelineItems = timelineVirtualItems.length > 0
+  const timelineVirtualItems = timelineUsesVirtualization && typeof document !== "undefined" ? timelineVirtualizer.getVirtualItems() : [];
+  const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
   const channelFiles: ChannelFileEntry[] = visibleMessages
@@ -627,6 +633,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     return requestTimelineScrollToBottom();
   }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
 
+  useLayoutEffect(() => {
+    restoreOlderMessagesScrollPosition();
+  }, [timelineMessages.length]);
+
   useEffect(() => {
     const latestMessage = latestTimelineMessage;
     const previousMessageId = lastTimelineMessageIdRef.current;
@@ -645,13 +655,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (timelineMessages.length === 0) return;
-    const firstVirtualItem = timelineVirtualItems[0];
-    if (!firstVirtualItem || firstVirtualItem.index !== 0) return;
-    void Promise.resolve(onOlderMessagesLoad?.()).catch(() => undefined);
-  }, [timelineVirtualItems[0]?.index, timelineMessages.length, onOlderMessagesLoad]);
 
   async function submitMessage() {
     if (sendDisabled) return;
@@ -736,6 +739,33 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     setShowScrollToBottom(distanceFromBottom >= SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX);
   }
 
+  function requestOlderMessagesIfNearTop() {
+    const viewport = timelineViewportRef.current;
+    if (!viewport || viewport.scrollTop > HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX || olderMessagesRequestInFlightRef.current) return;
+    olderMessagesRequestInFlightRef.current = true;
+    pendingOlderMessagesScrollRestoreRef.current = {
+      scrollHeight: viewport.scrollHeight,
+      scrollTop: viewport.scrollTop,
+    };
+    setOlderMessagesLoading(true);
+    void Promise.resolve(onOlderMessagesLoad?.())
+      .catch(() => undefined)
+      .finally(() => {
+        olderMessagesRequestInFlightRef.current = false;
+        setOlderMessagesLoading(false);
+        if (typeof window !== "undefined") {
+          window.requestAnimationFrame(() => restoreOlderMessagesScrollPosition());
+        } else {
+          restoreOlderMessagesScrollPosition();
+        }
+      });
+  }
+
+  function handleTimelineScroll() {
+    updateTimelineBottomState();
+    requestOlderMessagesIfNearTop();
+  }
+
   function requestTimelineScrollToBottom() {
     if (typeof window === "undefined") return undefined;
     if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
@@ -744,6 +774,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     const frame = window.requestAnimationFrame(() => {
       const viewport = timelineViewportRef.current;
       if (!viewport) {
+        scrollFrameRef.current = undefined;
+        return;
+      }
+      if (timelineUsesVirtualization && timelineMessages.length > 0) {
+        timelineVirtualizer.scrollToIndex(timelineMessages.length - 1, {
+          align: "end",
+          behavior: "smooth",
+        });
         scrollFrameRef.current = undefined;
         return;
       }
@@ -762,6 +800,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       window.cancelAnimationFrame(frame);
       if (scrollFrameRef.current === frame) scrollFrameRef.current = undefined;
     };
+  }
+
+  function restoreOlderMessagesScrollPosition() {
+    const restore = pendingOlderMessagesScrollRestoreRef.current;
+    const viewport = timelineViewportRef.current;
+    if (!restore || !viewport) return;
+    const delta = viewport.scrollHeight - restore.scrollHeight;
+    if (delta > 0) viewport.scrollTop = restore.scrollTop + delta;
+    pendingOlderMessagesScrollRestoreRef.current = undefined;
   }
 
   return (
@@ -837,7 +884,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
           {effectiveChannelView === "chat" ? (
             <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
               <div className="relative min-h-0">
-                <div className="h-full min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" onScroll={updateTimelineBottomState} ref={timelineViewportRef}>
+                {olderMessagesLoading ? (
+                  <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-background/95 px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
+                    {messages.chat.loadingOlderMessages}
+                  </div>
+                ) : null}
+                <div className="h-full min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" onScroll={handleTimelineScroll} ref={timelineViewportRef}>
                   <div
                     className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
                     style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
