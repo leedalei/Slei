@@ -571,9 +571,9 @@ export function MembersPage(input: {
                 </CardHeader>
                 <CardContent>
                   {memberSkills.length ? (
-                    <div className="grid gap-2">
+                    <div className="grid gap-2" role="list">
                       {memberSkills.map((skill) => (
-                        <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id}>
+                        <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id} role="listitem">
                           <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                             <Sparkles aria-hidden="true" />
                             <span className="truncate">{skill.name}</span>
