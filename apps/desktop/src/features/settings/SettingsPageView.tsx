@@ -2,7 +2,6 @@ import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPre
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar } from "../../components";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -64,7 +63,6 @@ export function SettingsPage(input: SettingsPageInput) {
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
           <header className="grid select-none gap-1" data-slot="workspace-titlebar" data-testid="slei-settings-panel-header" data-tauri-drag-region="deep">
-            <Badge className="w-fit" variant="secondary" data-tauri-drag-region="deep">{labels.title}</Badge>
             <h1 className="text-2xl font-semibold leading-tight" data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</h1>
             <p className="max-w-2xl text-sm text-muted-foreground" data-tauri-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</p>
           </header>

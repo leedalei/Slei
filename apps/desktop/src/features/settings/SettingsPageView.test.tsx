@@ -40,6 +40,8 @@ describe("SettingsPage header", () => {
     expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Language");
     expect(headerHtml).toContain("Region");
+    expect(headerHtml).not.toContain('data-slot="badge"');
+    expect(headerHtml).not.toContain(">Settings<");
   });
 
   it("uses compact cards and secondary detail blocks for settings rows", () => {
