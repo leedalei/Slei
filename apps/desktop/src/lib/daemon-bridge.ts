@@ -507,6 +507,13 @@ export type SavedMessageView = {
   sourceKind: "channel" | "dm" | string;
   sessionId?: string;
   savedAt: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  messageCreatedAt: string;
+  sourceName: string;
+  sourceLabel: string;
+  messageDeleted: boolean;
 };
 
 export type SavedMessageListReceipt = {

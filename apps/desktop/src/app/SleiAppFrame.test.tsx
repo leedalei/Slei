@@ -52,11 +52,52 @@ describe("SleiAppFrame global search navigation", () => {
 
   it("removes the old search button from the channel list sidebar", () => {
     const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-    const channelListSource = source.slice(source.indexOf("function ChannelList"), source.indexOf("function SavedMessagesPanel"));
+    const channelListSource = source.slice(source.indexOf("function ChannelList"), source.indexOf("function SavedMessagesWorkspace"));
 
     expect(channelListSource).not.toContain("onSearchToggle");
     expect(channelListSource).not.toContain("searchOpen");
     expect(channelListSource).not.toContain("Command K");
+  });
+
+  it("renders saved messages in the right workspace while keeping channels and DMs in the sidebar", () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      conversations: [{ id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" }],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeChatWorkspace="saved"
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+        savedMessages={[{
+          id: "saved:channel:all:msg_1",
+          messageId: "msg_1",
+          sourceId: "all",
+          sourceKind: "channel",
+          savedAt: "2026-06-22T09:00:00Z",
+          body: "这是一条保存消息正文",
+          authorId: "a1",
+          authorName: "Coda",
+          messageCreatedAt: "2026-06-22T08:59:00Z",
+          sourceName: "all",
+          sourceLabel: "群聊 · #all",
+          messageDeleted: false,
+        }]}
+      />,
+    );
+
+    expect(html).toContain('data-testid="slei-saved-workspace"');
+    expect(html).toContain(">频道 1</");
+    expect(html).toContain(">私聊 1</");
+    expect(html).toContain("这是一条保存消息正文");
+    expect(html).toContain("群聊 · #all");
+    expect(html).toContain("Coda");
+    expect(html).toContain("发送于 2026-06-22");
+    expect(html).toContain("保存于 2026-06-22");
   });
 
   it("uses the shared empty illustration in the members navigator empty state", () => {

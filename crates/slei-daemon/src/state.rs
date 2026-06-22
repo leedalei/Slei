@@ -19,6 +19,7 @@ use crate::services::message_thread_service::MessageThreadService;
 use crate::services::node_service::NodeService;
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetRuntimeState, ResetService};
+use crate::services::saved_message_service::SavedMessageService;
 use crate::services::search_service::SearchService;
 use crate::services::settings_service::SettingsService;
 use crate::services::task_service::TaskService;
@@ -53,6 +54,7 @@ pub struct AppState {
     message_thread_service: MessageThreadService,
     channel_orchestrator_service: ChannelOrchestratorService,
     search_service: SearchService,
+    saved_message_service: SavedMessageService,
     reset_service: ResetService,
     reset_runtime: ResetRuntimeState,
     worker: ClaudeWorkerAdapter,
@@ -198,6 +200,7 @@ impl AppState {
             reset_runtime.clone(),
         );
         let search_service = SearchService::new(repos.clone());
+        let saved_message_service = SavedMessageService::new(repos.clone());
         let reset_service = ResetService::new(
             data_root.clone(),
             orchestration_store.clone(),
@@ -242,6 +245,7 @@ impl AppState {
             message_thread_service,
             channel_orchestrator_service,
             search_service,
+            saved_message_service,
             reset_service,
             reset_runtime,
             worker,
@@ -328,6 +332,10 @@ impl AppState {
 
     pub fn search(&self) -> &SearchService {
         &self.search_service
+    }
+
+    pub fn saved_messages(&self) -> &SavedMessageService {
+        &self.saved_message_service
     }
 
     pub fn reset(&self) -> &ResetService {

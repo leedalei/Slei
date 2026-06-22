@@ -45,7 +45,6 @@ pub struct DaemonBroker {
     conversation_sessions: Mutex<Vec<ConversationSessionView>>,
     conversation_messages: Arc<Mutex<Vec<ConversationMessageView>>>,
     conversation_attachments: Mutex<Vec<ConversationAttachmentView>>,
-    saved_messages: Mutex<Vec<SavedMessageView>>,
     preferences: Mutex<UserPreferencesView>,
     profile: Mutex<Option<UserProfileView>>,
     diagnostic_events: Mutex<Vec<String>>,
@@ -872,6 +871,20 @@ pub struct SavedMessageView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     pub saved_at: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub author_id: String,
+    #[serde(default)]
+    pub author_name: String,
+    #[serde(default)]
+    pub message_created_at: String,
+    #[serde(default)]
+    pub source_name: String,
+    #[serde(default)]
+    pub source_label: String,
+    #[serde(default)]
+    pub message_deleted: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1046,7 +1059,6 @@ impl DaemonBroker {
             conversation_sessions: Mutex::new(Vec::new()),
             conversation_messages: Arc::new(Mutex::new(Vec::new())),
             conversation_attachments: Mutex::new(Vec::new()),
-            saved_messages: Mutex::new(Vec::new()),
             preferences: Mutex::new(default_preferences()),
             profile: Mutex::new(None),
             diagnostic_events: Mutex::new(Vec::new()),
@@ -2631,18 +2643,10 @@ impl DaemonBroker {
     }
 
     pub fn list_saved_messages(&self) -> SavedMessageListReceipt {
-        if self.offline_fallback == OfflineFallback::Empty {
-            return SavedMessageListReceipt {
+        self.fetch_saved_messages_from_daemon()
+            .unwrap_or_else(|| SavedMessageListReceipt {
                 saved_messages: Vec::new(),
-            };
-        }
-        let mut saved_messages = self
-            .saved_messages
-            .lock()
-            .expect("saved messages mutex poisoned")
-            .clone();
-        saved_messages.sort_by(|left, right| right.saved_at.cmp(&left.saved_at));
-        SavedMessageListReceipt { saved_messages }
+            })
     }
 
     pub fn save_message(
@@ -2656,26 +2660,8 @@ impl DaemonBroker {
         {
             return Err(ConversationError::InvalidMessage);
         }
-        if self.offline_fallback == OfflineFallback::Empty {
-            return Err(ConversationError::DaemonUnavailable);
-        }
 
-        let mut saved_messages = self
-            .saved_messages
-            .lock()
-            .expect("saved messages mutex poisoned");
-        if let Some(existing) = saved_messages
-            .iter()
-            .find(|saved| saved.message_id == message_id)
-            .cloned()
-        {
-            return Ok(SavedMessageReceipt {
-                saved_message: existing,
-            });
-        }
-
-        let saved_message = SavedMessageView {
-            id: format!("saved:{source_kind}:{source_id}:{message_id}"),
+        self.save_message_in_daemon(&SaveMessageRequest {
             message_id: message_id.to_string(),
             source_id: source_id.to_string(),
             source_kind: source_kind.to_string(),
@@ -2685,11 +2671,7 @@ impl DaemonBroker {
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(ToString::to_string),
-            saved_at: monotonic_id(),
-        };
-        saved_messages.push(saved_message.clone());
-        persist_local_saved_messages_at_root(&self.data_root, &saved_messages)?;
-        Ok(SavedMessageReceipt { saved_message })
+        })
     }
 
     pub fn unsave_message(&self, message_id: &str) -> Result<(), ConversationError> {
@@ -2697,15 +2679,7 @@ impl DaemonBroker {
         if message_id.is_empty() {
             return Err(ConversationError::InvalidMessage);
         }
-        if self.offline_fallback == OfflineFallback::Empty {
-            return Err(ConversationError::DaemonUnavailable);
-        }
-        let mut saved_messages = self
-            .saved_messages
-            .lock()
-            .expect("saved messages mutex poisoned");
-        saved_messages.retain(|saved| saved.message_id != message_id);
-        persist_local_saved_messages_at_root(&self.data_root, &saved_messages)
+        self.unsave_message_in_daemon(message_id)
     }
 
     pub fn last_authorization_header(&self) -> Option<String> {
@@ -2953,6 +2927,33 @@ impl DaemonBroker {
             .map_err(GlobalSearchError::DaemonRequest)?;
         serde_json::from_str::<GlobalSearchReceipt>(&response)
             .map_err(|error| GlobalSearchError::DaemonResponse(error.to_string()))
+    }
+
+    fn fetch_saved_messages_from_daemon(&self) -> Option<SavedMessageListReceipt> {
+        let response = self.send_daemon_request("GET", "/v1/saved-messages", None, &[])?;
+        serde_json::from_str::<SavedMessageListReceipt>(&response).ok()
+    }
+
+    fn save_message_in_daemon(
+        &self,
+        request: &SaveMessageRequest,
+    ) -> Result<SavedMessageReceipt, ConversationError> {
+        let body = serde_json::to_string(request).map_err(ConversationError::Json)?;
+        let response = self
+            .send_daemon_request_checked("POST", "/v1/saved-messages", Some(&body), &[])
+            .map_err(|_| ConversationError::DaemonUnavailable)?;
+        serde_json::from_str::<SavedMessageReceipt>(&response).map_err(ConversationError::Json)
+    }
+
+    fn unsave_message_in_daemon(&self, message_id: &str) -> Result<(), ConversationError> {
+        self.send_daemon_request_checked(
+            "DELETE",
+            &format!("/v1/saved-messages/{message_id}"),
+            None,
+            &[],
+        )
+        .map_err(|_| ConversationError::DaemonUnavailable)?;
+        Ok(())
     }
 
     fn fetch_task_thread_from_daemon(&self, task_id: &str) -> Result<TaskThreadReceipt, TaskError> {
@@ -4026,6 +4027,8 @@ impl DaemonBroker {
             && !response.starts_with("HTTP/1.0 201")
             && !response.starts_with("HTTP/1.1 202")
             && !response.starts_with("HTTP/1.0 202")
+            && !response.starts_with("HTTP/1.1 204")
+            && !response.starts_with("HTTP/1.0 204")
         {
             let status = response
                 .lines()
@@ -4713,14 +4716,6 @@ fn persist_local_attachments_at_root(
     attachments: &[ConversationAttachmentView],
 ) -> Result<(), ConversationError> {
     let _ = (root, attachments);
-    Ok(())
-}
-
-fn persist_local_saved_messages_at_root(
-    root: &str,
-    saved_messages: &[SavedMessageView],
-) -> Result<(), ConversationError> {
-    let _ = (root, saved_messages);
     Ok(())
 }
 

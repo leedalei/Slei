@@ -82,6 +82,13 @@ describe("saved chat messages", () => {
             sourceId: "dev-team",
             sourceKind: "channel",
             savedAt: "2026-06-03T09:00:00.000Z",
+            body: "请收藏这条频道消息",
+            authorId: "user_lei",
+            authorName: "Lei",
+            messageCreatedAt: "2026-06-03T08:42:00.000Z",
+            sourceName: "dev-team",
+            sourceLabel: "群聊 · #dev-team",
+            messageDeleted: false,
           },
         ]}
       />,
@@ -94,7 +101,7 @@ describe("saved chat messages", () => {
     expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf('aria-label="取消收藏"'));
   });
 
-  it("switches the chat sidebar into a saved list with source and date metadata", () => {
+  it("switches the chat workspace into a saved list with source and date metadata", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeChannelId="dev-team"
@@ -126,7 +133,7 @@ describe("saved chat messages", () => {
             },
           ],
         })}
-        initialSavedPanelOpen
+        activeChatWorkspace="saved"
         locale="zh-CN"
         runtimeSetup={readyRuntime}
         savedMessages={[
@@ -136,6 +143,13 @@ describe("saved chat messages", () => {
             sourceId: "dev-team",
             sourceKind: "channel",
             savedAt: "2026-06-03T09:00:00.000Z",
+            body: "来自群聊的收藏",
+            authorId: "user_lei",
+            authorName: "Lei",
+            messageCreatedAt: "2026-06-03T08:42:00.000Z",
+            sourceName: "dev-team",
+            sourceLabel: "群聊 · #dev-team",
+            messageDeleted: false,
           },
           {
             id: "saved-dm-msg",
@@ -144,15 +158,26 @@ describe("saved chat messages", () => {
             sourceKind: "dm",
             sessionId: "session-current",
             savedAt: "2026-06-02T10:00:00.000Z",
+            body: "来自私聊的收藏",
+            authorId: "agent_coda",
+            authorName: "Coda",
+            messageCreatedAt: "2026-06-02T09:59:00.000Z",
+            sourceName: "Coda",
+            sourceLabel: "私聊 · Coda",
+            messageDeleted: false,
           },
         ]}
       />,
     );
 
     expect(html).not.toContain("Slei</strong><span>工作区</span>");
-    expect(html).toContain("slei-saved-panel");
-    expect(html).toContain("群聊 · #dev-team · 2026-06-03");
-    expect(html).toContain("私聊 · Coda / 修复收藏 · 2026-06-02");
+    expect(html).toContain("slei-saved-workspace");
+    expect(html).toContain(">频道 1</");
+    expect(html).toContain(">私聊 1</");
+    expect(html).toContain("群聊 · #dev-team");
+    expect(html).toContain("私聊 · Coda");
+    expect(html).toContain("发送于 2026-06-03");
+    expect(html).toContain("保存于 2026-06-02");
     expect(html).toContain("来自群聊的收藏");
     expect(html).toContain("来自私聊的收藏");
   });

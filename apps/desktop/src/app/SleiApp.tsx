@@ -22,6 +22,7 @@ import {
   type NotificationPreferences,
   type PermissionDecision,
   type GlobalMessageSearchResult,
+  type MessagePageQuery,
   type SaveMessageRequest,
   type SavedMessageView,
   type AgentActivityListReceipt,
@@ -38,7 +39,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ToastType } from "../components";
-import { SleiAppFrame, type SleiAppFrameProps } from "./SleiAppFrame";
+import { SleiAppFrame, type ChatWorkspaceMode, type SleiAppFrameProps } from "./SleiAppFrame";
 import { createEmptySleiData } from "./empty-data";
 import {
   type SleiChannel,
@@ -826,6 +827,7 @@ export function SleiApp() {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
   const [activeMemberId, setActiveMemberId] = useState<string | undefined>(undefined);
   const [savedMessages, setSavedMessages] = useState<SavedMessageView[]>([]);
+  const [chatWorkspaceMode, setChatWorkspaceMode] = useState<ChatWorkspaceMode>("chat");
   const [focusedMessageId, setFocusedMessageId] = useState<string | undefined>(undefined);
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false);
   const [sendingConversationIds, setSendingConversationIds] = useState<string[]>([]);
@@ -868,8 +870,8 @@ export function SleiApp() {
     );
   }
 
-  async function loadChannelMessagesForState(channelId: string, members: SleiMember[] = data.members) {
-    const receipt = await bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
+  async function loadChannelMessagesForState(channelId: string, members: SleiMember[] = data.members, query: MessagePageQuery = {}) {
+    const receipt = await bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT, ...query });
     return receipt.messages
       .map((message) => channelMessageToSleiMessage(message, members, profile, messages))
       .filter((message): message is SleiMessage => Boolean(message));
@@ -885,8 +887,8 @@ export function SleiApp() {
     );
   }
 
-  async function loadConversationMessagesForState(conversationId: string) {
-    const receipt = await bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT });
+  async function loadConversationMessagesForState(conversationId: string, query: MessagePageQuery = {}) {
+    const receipt = await bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT, ...query });
     return receipt.messages.map((message) => conversationMessageToSleiMessage(message, data.members, profile, messages));
   }
 
@@ -1905,6 +1907,7 @@ export function SleiApp() {
     setActiveChannelId(channelId);
     setActiveConversationId(undefined);
     setActiveSessionId(undefined);
+    setChatWorkspaceMode("chat");
     navigateToView("chat");
   }
 
@@ -1969,6 +1972,7 @@ export function SleiApp() {
         setActiveSessionId(undefined);
       }
       setSessionDrawerOpen(false);
+      setChatWorkspaceMode("chat");
       focusMessageFromNavigation(result.messageId, selectionSequence);
       navigateToView("chat");
     } catch (error) {
@@ -2014,7 +2018,10 @@ export function SleiApp() {
     try {
       if (savedMessage.sourceKind === "dm" || savedMessage.sourceId.startsWith("dm:")) {
         const conversation = data.conversations.find((candidate) => candidate.id === savedMessage.sourceId);
-        const conversationMessages = await loadConversationMessagesForState(savedMessage.sourceId);
+        const conversationMessages = await loadConversationMessagesForState(savedMessage.sourceId, {
+          aroundMessageId: savedMessage.messageId,
+          limit: DEFAULT_CHAT_MESSAGE_LIMIT,
+        });
         if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
         setData((current) =>
           createEmptySleiData({
@@ -2028,7 +2035,10 @@ export function SleiApp() {
         setActiveSessionId(conversation?.activeSessionId);
         setActiveChannelId("all");
       } else {
-        const channelMessages = await loadChannelMessagesForState(savedMessage.sourceId, data.members);
+        const channelMessages = await loadChannelMessagesForState(savedMessage.sourceId, data.members, {
+          aroundMessageId: savedMessage.messageId,
+          limit: DEFAULT_CHAT_MESSAGE_LIMIT,
+        });
         if (!isCurrentMessageNavigationSelection(selectionSequence)) return;
         setData((current) =>
           createEmptySleiData({
@@ -2043,6 +2053,7 @@ export function SleiApp() {
         setActiveSessionId(undefined);
       }
       setSessionDrawerOpen(false);
+      setChatWorkspaceMode("chat");
       focusMessageFromNavigation(savedMessage.messageId, selectionSequence);
       navigateToView("chat");
     } catch (error) {
@@ -2182,13 +2193,21 @@ export function SleiApp() {
 
   function navigateToView(view: AppView, options: { replace?: boolean } = {}) {
     setActiveView(view);
+    if (view !== "chat") setChatWorkspaceMode("chat");
     const route = routePathForView(view);
     if (location.pathname === route) return;
     navigate(route, { replace: options.replace });
   }
 
+  function handleSavedMessagesOpen() {
+    beginMessageNavigationSelection();
+    setChatWorkspaceMode("saved");
+    navigateToView("chat");
+  }
+
   return (
     <SleiAppFrame
+      activeChatWorkspace={chatWorkspaceMode}
       activeView={activeView}
       activeChannelId={activeChannelId}
       activeConversationId={activeConversationId}
@@ -2214,6 +2233,7 @@ export function SleiApp() {
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
       onChannelSelect={(channelId) => {
+        setChatWorkspaceMode("chat");
         setActiveChannelId(channelId);
         setActiveConversationId(undefined);
         setActiveSessionId(undefined);
@@ -2239,6 +2259,7 @@ export function SleiApp() {
       onMessageResultSelect={handleMessageSearchResultSelect}
       onSearchResultSelect={handleSearchResultSelect}
       onSavedMessageSelect={handleSavedMessageSelect}
+      onSavedMessagesOpen={handleSavedMessagesOpen}
       onMessageSaveToggle={handleMessageSaveToggle}
       onMessageThreadOpen={handleMessageThreadOpen}
       onMessageThreadReply={handleMessageThreadReply}
@@ -2259,6 +2280,7 @@ export function SleiApp() {
       onConversationNewSession={handleCreateConversationSession}
       onConversationHistoryToggle={() => setSessionDrawerOpen((current) => !current)}
       onConversationSelect={(conversationId) => {
+        setChatWorkspaceMode("chat");
         const conversation = data.conversations.find((candidate) => candidate.id === conversationId);
         setActiveConversationId(conversationId);
         setActiveSessionId(conversation?.activeSessionId);

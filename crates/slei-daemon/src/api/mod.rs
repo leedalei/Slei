@@ -15,6 +15,7 @@ pub mod messages;
 pub mod nodes;
 pub mod notifications;
 pub mod runs;
+pub mod saved_messages;
 pub mod search;
 pub mod settings;
 pub mod tasks;

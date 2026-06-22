@@ -23,6 +23,7 @@ import type {
   InteractiveCardView,
   MessageThreadReplyView,
   MessageThreadSummaryView,
+  SaveMessageRequest,
   SavedMessageView,
   SkillView,
   TaskSummaryView,
@@ -119,6 +120,39 @@ export function createDaemonBridgeMock(input: {
   let preferences = defaultUserPreferences();
   let profile: UserProfileView | null = input.profile ?? null;
   const eventSubscriptions: Array<{ after: number }> = [];
+
+  function savedMessageFromRequest(request: SaveMessageRequest): SavedMessageView {
+    const channelMessage = request.sourceKind === "channel"
+      ? channelMessages.find((message) => message.id === request.messageId)
+      : undefined;
+    const conversationMessage = request.sourceKind === "dm"
+      ? messages.find((message) => message.id === request.messageId && message.conversationId === request.sourceId)
+      : undefined;
+    const authorId = channelMessage?.authorId ?? conversationMessage?.authorId ?? "";
+    const author = agents.find((agent) => agent.id === authorId);
+    const channel = channels.find((candidate) => candidate.id === request.sourceId);
+    const conversation = conversations.find((candidate) => candidate.id === request.sourceId);
+    const conversationAgent = agents.find((agent) => agent.id === conversation?.agentId);
+    const sourceName = request.sourceKind === "dm" ? (conversationAgent?.name ?? conversation?.agentId ?? request.sourceId) : (channel?.name ?? request.sourceId);
+    const body = channelMessage?.body ?? conversationMessage?.body ?? "";
+    const messageCreatedAt = channelMessage?.createdAt ?? conversationMessage?.createdAt ?? "";
+    const messageDeleted = request.sourceKind === "channel" ? Boolean(channelMessage?.deleted) || !channelMessage : !conversationMessage;
+    return {
+      id: `saved:${request.sourceKind}:${request.sourceId}:${request.messageId}`,
+      messageId: request.messageId,
+      sourceId: request.sourceId,
+      sourceKind: request.sourceKind,
+      sessionId: request.sessionId,
+      savedAt: new Date().toISOString(),
+      body: messageDeleted ? "" : body,
+      authorId,
+      authorName: author?.name ?? authorId,
+      messageCreatedAt,
+      sourceName,
+      sourceLabel: request.sourceKind === "dm" ? `私聊 · ${sourceName}` : `群聊 · #${sourceName.replace(/^#/, "")}`,
+      messageDeleted,
+    };
+  }
 
   return {
     eventSubscriptions,
@@ -694,14 +728,7 @@ export function createDaemonBridgeMock(input: {
     async saveMessage(request) {
       const existing = savedMessages.find((saved) => saved.messageId === request.messageId);
       if (existing) return { savedMessage: existing };
-      const savedMessage: SavedMessageView = {
-        id: `saved:${request.sourceKind}:${request.sourceId}:${request.messageId}`,
-        messageId: request.messageId,
-        sourceId: request.sourceId,
-        sourceKind: request.sourceKind,
-        sessionId: request.sessionId,
-        savedAt: new Date().toISOString(),
-      };
+      const savedMessage = savedMessageFromRequest(request);
       savedMessages = [savedMessage, ...savedMessages];
       return { savedMessage };
     },

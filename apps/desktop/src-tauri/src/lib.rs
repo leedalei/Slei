@@ -3009,7 +3009,7 @@ mod tests {
     }
 
     #[test]
-    fn saved_messages_are_memory_only_and_support_unsave() {
+    fn saved_messages_use_daemon_routes_and_do_not_persist_local_json() {
         let _env_guard = test_env_lock();
         let root = std::env::temp_dir().join(format!(
             "slei-desktop-saved-messages-test-{}",
@@ -3019,7 +3019,56 @@ mod tests {
         std::env::set_var("SLEI_DATA_ROOT", &root);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        drop(listener);
+        let handle = thread::spawn(move || {
+            let responses = [
+                (
+                    "200 OK",
+                    r#"{"savedMessages":[{"id":"saved:channel:all:msg_1","messageId":"msg_1","sourceId":"all","sourceKind":"channel","savedAt":"1","body":"保存的正文","authorId":"agent_coda","authorName":"Coda","messageCreatedAt":"2026-06-22 12:00:00","sourceName":"all","sourceLabel":"群聊 · #all","messageDeleted":false}]}"#,
+                ),
+                (
+                    "201 Created",
+                    r#"{"savedMessage":{"id":"saved:channel:all:msg_1","messageId":"msg_1","sourceId":"all","sourceKind":"channel","savedAt":"2","body":"保存的正文","authorId":"agent_coda","authorName":"Coda","messageCreatedAt":"2026-06-22 12:00:00","sourceName":"all","sourceLabel":"群聊 · #all","messageDeleted":false}}"#,
+                ),
+                ("204 No Content", ""),
+            ];
+            let mut requests = Vec::new();
+            for (status, body) in responses {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut bytes = Vec::new();
+                let mut buffer = [0_u8; 512];
+                loop {
+                    let count = std::io::Read::read(&mut stream, &mut buffer).unwrap();
+                    if count == 0 {
+                        break;
+                    }
+                    bytes.extend_from_slice(&buffer[..count]);
+                    let request = String::from_utf8_lossy(&bytes);
+                    let Some(header_end) = request.find("\r\n\r\n") else {
+                        continue;
+                    };
+                    let content_length = request
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                requests.push(String::from_utf8(bytes).unwrap());
+                std::io::Write::write_all(
+                    &mut stream,
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            }
+            requests
+        });
         let descriptor = RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
             event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
@@ -3029,30 +3078,56 @@ mod tests {
         };
         let broker = DaemonBroker::for_tests(descriptor.clone());
 
+        let listed = list_saved_messages(&broker);
+        assert_eq!(listed.saved_messages.len(), 1);
+        assert_eq!(listed.saved_messages[0].body, "保存的正文");
+        assert_eq!(listed.saved_messages[0].author_name, "Coda");
+        assert_eq!(listed.saved_messages[0].source_label, "群聊 · #all");
+
         let saved = save_message(
             &broker,
             SaveMessageRequest {
                 message_id: "msg_1".to_string(),
-                source_id: "dev-team".to_string(),
+                source_id: "all".to_string(),
                 source_kind: "channel".to_string(),
                 session_id: None,
             },
         )
         .unwrap()
         .saved_message;
-        assert_eq!(saved.id, "saved:channel:dev-team:msg_1");
-        assert_eq!(list_saved_messages(&broker).saved_messages.len(), 1);
+        assert_eq!(saved.id, "saved:channel:all:msg_1");
+        assert_eq!(saved.body, "保存的正文");
+        assert_eq!(saved.message_deleted, false);
         assert!(!root.join("saved/messages.json").exists());
 
-        let restarted = DaemonBroker::for_tests(descriptor);
+        unsave_message(&broker, "msg_1").unwrap();
+
+        let requests = handle.join().unwrap();
+        assert!(requests[0].starts_with("GET /v1/saved-messages "));
+        assert!(requests[1].starts_with("POST /v1/saved-messages "));
+        assert!(requests[1].contains(r#""messageId":"msg_1""#));
+        assert!(requests[2].starts_with("DELETE /v1/saved-messages/msg_1 "));
+
+        let restarted = DaemonBroker::for_tests(descriptor.clone());
         let reloaded = list_saved_messages(&restarted);
         assert!(reloaded.saved_messages.is_empty());
         let serialized = serde_json::to_string(&reloaded).unwrap();
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
 
-        unsave_message(&broker, "msg_1").unwrap();
-        assert!(list_saved_messages(&broker).saved_messages.is_empty());
+        let unavailable = DaemonBroker::for_tests_empty_fallback(descriptor);
+        assert!(list_saved_messages(&unavailable).saved_messages.is_empty());
+        assert!(save_message(
+            &unavailable,
+            SaveMessageRequest {
+                message_id: "msg_offline".to_string(),
+                source_id: "all".to_string(),
+                source_kind: "channel".to_string(),
+                session_id: None,
+            },
+        )
+        .is_err());
+        assert!(!root.join("saved/messages.json").exists());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 }

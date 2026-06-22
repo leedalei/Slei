@@ -1049,8 +1049,8 @@ describe("global search result navigation", () => {
     expect(source).toContain("const OLDER_CHAT_MESSAGE_LIMIT = 20");
     expect(source).toContain("bridge.listConversationMessages(conversation.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
     expect(source).toContain("bridge.listChannelMessages(channel.id, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
-    expect(source).toContain("bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
-    expect(source).toContain("bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
+    expect(source).toContain("bridge.listChannelMessages(channelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT, ...query })");
+    expect(source).toContain("bridge.listConversationMessages(conversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT, ...query })");
     expect(source).toContain("bridge.listConversationMessages(activeConversationId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
     expect(source).toContain("bridge.listChannelMessages(activeChannelId, { limit: DEFAULT_CHAT_MESSAGE_LIMIT })");
     expect(source).toContain("bridge.listConversationMessages(activeConversationId, { before: oldestSequence, limit: OLDER_CHAT_MESSAGE_LIMIT })");
@@ -1083,6 +1083,8 @@ describe("global search result navigation", () => {
     expect(savedHandlerSource).toContain("if (!isCurrentMessageNavigationSelection(selectionSequence)) return");
     expect(searchHandlerSource).toContain("focusMessageFromNavigation(result.messageId, selectionSequence)");
     expect(savedHandlerSource).toContain("focusMessageFromNavigation(savedMessage.messageId, selectionSequence)");
+    expect(savedHandlerSource).toContain("aroundMessageId: savedMessage.messageId");
+    expect(savedHandlerSource).toContain('setChatWorkspaceMode("chat")');
   });
 
   it("logs raw navigation failures but shows localized search failure copy", () => {
