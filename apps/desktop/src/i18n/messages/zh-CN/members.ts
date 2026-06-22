@@ -35,6 +35,7 @@ export const members = {
   noCapabilities: "暂无能力",
   noSkills: "暂无技能",
   noSkillsDescription: "当前成员的工作区还没有可加载的技能。",
+  noWorkspacePermissions: "当前成员没有工作区权限条目。",
   newAgent: "新增智能体",
   noAgents: "暂无智能体",
   online: "在线",
@@ -45,6 +46,7 @@ export const members = {
   openWorkspace: "打开工作区",
   openInFileManager: "通过资源管理器打开",
   channelPermission: "频道权限",
+  permissions: "权限",
   permissionLabels: {
     ReadOnly: "只读",
     Edit: "编辑",
