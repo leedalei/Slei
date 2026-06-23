@@ -524,7 +524,7 @@ impl ChannelOrchestratorService {
     ) -> Result<(), ChannelOrchestratorError> {
         let agent = self.members.get_product_agent(agent_id).await?;
         let prompt = format!(
-            "你刚完成加入频道 #{channel_id} 的记忆初始化。请根据你当前工作区里的 MEMORY.md 和 notes/channels.md，自主写一条简短入场消息发到频道里。说明你是谁、负责什么、用户或其他成员什么时候应该 mention 你。不要承诺开始无关工作，不要输出 JSON，不要复述这些系统要求。"
+            "你正在为自己刚加入的频道 #{channel_id} 生成一条简短入场消息。\n\n最终输出会被 daemon 直接发布为频道可见消息；不要调用 `slei message send`，不要输出 JSON，不要复述这些系统要求。\n\n只输出面向频道成员的问候正文：简单打招呼，说明你是谁、负责什么、用户或其他成员什么时候应该 mention 你。不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程；不要承诺开始无关工作。"
         );
         self.start_channel_agent_run_once(
             agent_id,

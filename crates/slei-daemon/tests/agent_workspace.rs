@@ -87,10 +87,20 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
         start_run["session"]["cwd"].as_str().unwrap(),
         workspace.to_string_lossy()
     );
-    assert!(start_run["input"]["prompt"]
-        .as_str()
-        .unwrap()
-        .contains("入场"));
+    let join_prompt = start_run["input"]["prompt"].as_str().unwrap();
+    assert!(join_prompt.contains("入场"));
+    assert!(
+        join_prompt.contains("最终输出会被 daemon 直接发布为频道可见消息"),
+        "join prompt should explain stdout is the visible message: {join_prompt}"
+    );
+    assert!(
+        join_prompt.contains("不要调用 `slei message send`"),
+        "join prompt should prevent duplicate/manual visible sends: {join_prompt}"
+    );
+    assert!(
+        join_prompt.contains("不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程"),
+        "join prompt should forbid internal process narration: {join_prompt}"
+    );
     assert!(state.channel_messages_for_tests("all").await.is_empty());
     state
         .handle_worker_event(json!({
@@ -736,14 +746,7 @@ async fn channel_create_setup_completes_join_memory_updates() {
     )
     .await;
     assert_eq!(selected["readiness"], "memory_syncing");
-    assert!(state
-        .memory_events()
-        .events_for_agent(&alice_id)
-        .await
-        .iter()
-        .any(|event| event.event_type == "memory_updated"
-            && event.status == "ready"
-            && event.channel_id.as_deref() == Some("auto-ready-channel")));
+    wait_for_memory_updated(&state, &alice_id, "auto-ready-channel").await;
     let messages = state
         .messages()
         .reconstructed_context("auto-ready-channel")
@@ -755,9 +758,14 @@ async fn channel_create_setup_completes_join_memory_updates() {
         .find(|command| {
             command["type"] == "start_run"
                 && command["session"]["agent_id"] == alice_id
-                && command["input"]["prompt"]
-                    .as_str()
-                    .is_some_and(|prompt| prompt.contains("入场消息"))
+                && command["input"]["prompt"].as_str().is_some_and(|prompt| {
+                    prompt.contains("入场消息")
+                        && prompt.contains("最终输出会被 daemon 直接发布为频道可见消息")
+                        && prompt.contains("不要调用 `slei message send`")
+                        && prompt.contains(
+                            "不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程",
+                        )
+                })
         })
         .expect("channel create should start a runtime join report");
     assert_eq!(join_command["session"]["agent_id"], alice_id);
@@ -3034,6 +3042,25 @@ async fn wait_for_memory_update_requests(
         sleep(Duration::from_millis(20)).await;
     }
     panic!("memory update request should be recorded");
+}
+
+async fn wait_for_memory_updated(
+    state: &AppState,
+    agent_id: &str,
+    channel_id: &str,
+) -> Vec<slei_daemon::services::memory_event_service::MemoryUpdateEvent> {
+    for _ in 0..50 {
+        let events = state.memory_events().events_for_agent(agent_id).await;
+        if events.iter().any(|event| {
+            event.event_type == "memory_updated"
+                && event.status == "ready"
+                && event.channel_id.as_deref() == Some(channel_id)
+        }) {
+            return events;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("memory update completion should be recorded");
 }
 
 fn make_temp_dir(label: &str) -> PathBuf {
