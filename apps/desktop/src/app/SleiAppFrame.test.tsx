@@ -50,6 +50,78 @@ afterEach(async () => {
   window.localStorage.clear();
 });
 
+describe("SleiAppFrame appearance preferences", () => {
+  it("syncs the font size preference to the document root and restores it on unmount", async () => {
+    document.documentElement.style.fontSize = "13px";
+    document.documentElement.style.setProperty("--slei-font-size", "13px");
+    document.documentElement.style.setProperty("--text-sm", "12px");
+
+    const container = await mount(
+      <SleiAppFrame
+        activeView="settings"
+        appearance={{ theme: "light", fontSize: "lg" }}
+        data={createSleiFixtures()}
+        initialSettingsPanel="appearance"
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(container.querySelector("[data-font-size='lg']")).not.toBeNull();
+    expect(document.documentElement.style.fontSize).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("16px");
+
+    await act(async () => {
+      mountedRoot?.render(
+        <SleiAppFrame
+          activeView="settings"
+          appearance={{ theme: "light", fontSize: "sm" }}
+          data={createSleiFixtures()}
+          initialSettingsPanel="appearance"
+          locale="zh-CN"
+          runtimeSetup={runtimeSetup}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(document.documentElement.style.fontSize).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
+    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("14px");
+
+    await act(async () => {
+      mountedRoot?.unmount();
+    });
+    mountedRoot = undefined;
+
+    expect(document.documentElement.style.fontSize).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
+  });
+
+  it("updates tokens used by explicit text utility nodes", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="settings"
+        appearance={{ theme: "light", fontSize: "lg" }}
+        data={createSleiFixtures()}
+        initialSettingsPanel="appearance"
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    const description = container.querySelector<HTMLElement>("[data-testid='slei-settings-panel-header'] p");
+
+    expect(description).not.toBeNull();
+    expect(description?.className).toContain("text-sm");
+    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
+  });
+});
+
 describe("SleiAppFrame global search navigation", () => {
   it("renders search as an active far-left rail item", () => {
     const html = renderToStaticMarkup(

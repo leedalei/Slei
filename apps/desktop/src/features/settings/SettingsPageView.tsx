@@ -59,7 +59,7 @@ export function SettingsPage(input: SettingsPageInput) {
   }
 
   return (
-    <section className="h-full min-h-0 overflow-hidden bg-background text-[var(--slei-font-size)]" data-settings-panel={input.activePanel}>
+    <section className="h-full min-h-0 overflow-hidden bg-background" data-settings-panel={input.activePanel}>
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
           <header className="grid select-none gap-1" data-slot="workspace-titlebar" data-testid="slei-settings-panel-header" data-tauri-drag-region="deep">
@@ -206,6 +206,7 @@ export function SettingsPage(input: SettingsPageInput) {
                     {(["sm", "md", "lg"] as const).map((size) => (
                       <Button
                         aria-pressed={input.appearance.fontSize === size ? "true" : "false"}
+                        data-settings-font-size-option={size}
                         disabled={preferencePending}
                         key={size}
                         onClick={() => updateAppearance({ fontSize: size })}
