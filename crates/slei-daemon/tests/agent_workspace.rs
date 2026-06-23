@@ -1332,6 +1332,50 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
     .await;
     assert_eq!(duplicate.status(), StatusCode::CONFLICT);
 
+    let duplicate_case = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-two-case"),
+        json!({
+            "name": "Case Other",
+            "handle": "@Coda",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "case-insensitive duplicate handle"
+        }),
+    )
+    .await;
+    assert_eq!(duplicate_case.status(), StatusCode::CONFLICT);
+
+    let guide_bootstrap = post_json(
+        &app,
+        &token,
+        "/v1/agents/guide/bootstrap",
+        Some("bootstrap-guide-before-handle-conflict"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(guide_bootstrap.status(), StatusCode::CREATED);
+
+    let guide_duplicate = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-guide-handle"),
+        json!({
+            "name": "User Yeal",
+            "handle": "@yeal",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "must conflict with the system guide handle"
+        }),
+    )
+    .await;
+    assert_eq!(guide_duplicate.status(), StatusCode::CONFLICT);
+
     let bad_node = post_json(
         &app,
         &token,

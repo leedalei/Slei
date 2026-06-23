@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::Mutex as AsyncMutex;
 
 use serde::Serialize;
@@ -89,6 +90,8 @@ struct ChannelAgentRunRecord {
     task_id: Option<String>,
     suppress_visible_output: bool,
     output: String,
+    started_at: Instant,
+    first_tool_latency_recorded: bool,
 }
 
 impl ChannelOrchestratorService {
@@ -354,6 +357,16 @@ impl ChannelOrchestratorService {
             .await?;
         let reply = reply_outcome.reply;
         let task = self.tasks.task(&reply_outcome.task_id).await?;
+        let public_reply = thread_message_for_reply(&reply_outcome.task_id, reply.clone());
+        if task.status == TaskStatus::Done {
+            return Ok(TaskReplyReceipt {
+                reply: public_reply,
+                route: TaskReplyRoute {
+                    handoff_agent_ids: Vec::new(),
+                    needs_assignment: false,
+                },
+            });
+        }
         let channel_members = self.channels.channel_members(&task.channel_id).await?;
         let readiness_by_agent = channel_members
             .iter()
@@ -366,6 +379,9 @@ impl ChannelOrchestratorService {
 
         let mut handoff_agent_ids = Vec::new();
         for agent_id in explicit_agent_ids {
+            if agent_id == reply.sender_id {
+                continue;
+            }
             if let Some(readiness) = readiness_by_agent.get(&agent_id) {
                 let created = self
                     .create_task_handoff_once(
@@ -395,7 +411,6 @@ impl ChannelOrchestratorService {
             }
         }
 
-        let public_reply = thread_message_for_reply(&reply_outcome.task_id, reply);
         let needs_assignment = handoff_agent_ids.is_empty()
             && task.assignee_id.is_none()
             && reply_requires_work(&public_reply.body);
@@ -441,6 +456,9 @@ impl ChannelOrchestratorService {
             .await;
 
         for agent_id in explicit_agent_ids {
+            if agent_id == reply.sender_id {
+                continue;
+            }
             if readiness_by_agent.contains_key(&agent_id) {
                 self.claims
                     .create_message_delivery(&reply.id, &thread.source_id, &agent_id)
@@ -755,8 +773,31 @@ impl ChannelOrchestratorService {
                 Ok(true)
             }
             Some("tool_started") => {
+                let first_tool_latency_payload = if !record.first_tool_latency_recorded {
+                    record.first_tool_latency_recorded = true;
+                    let latency_ms = record.started_at.elapsed().as_millis();
+                    Some(format!(
+                        "run_id={} agent_id={} channel_id={} source_message_id={} latency_ms={}",
+                        run_id,
+                        record.agent_id,
+                        record.channel_id,
+                        record.source_message_id,
+                        latency_ms
+                    ))
+                } else {
+                    None
+                };
                 let record = record.clone();
                 drop(runs);
+                if let Some(payload) = first_tool_latency_payload {
+                    let _ = self
+                        .orchestration
+                        .record_diagnostic_event(
+                            "channel_agent_runtime.first_tool_latency",
+                            &payload,
+                        )
+                        .await;
+                }
                 let tool_name = worker_tool_name(&event);
                 self.record_channel_agent_activity(
                     &record,
@@ -872,18 +913,33 @@ impl ChannelOrchestratorService {
             return Vec::new();
         }
 
-        let handle_to_agent = self
-            .members
-            .list_product_agents()
-            .await
-            .into_iter()
-            .map(|agent| (agent.handle.to_lowercase(), agent.id))
-            .collect::<HashMap<_, _>>();
+        let handle_to_agent = self.members.list_product_agents().await.into_iter().fold(
+            HashMap::<String, Vec<String>>::new(),
+            |mut handles, agent| {
+                handles
+                    .entry(agent.handle.to_lowercase())
+                    .or_default()
+                    .push(agent.id);
+                handles
+            },
+        );
         let mut resolved = Vec::new();
         for handle in mentioned_handles {
-            if let Some(agent_id) = handle_to_agent.get(&handle) {
-                if member_ids.contains(agent_id) && !resolved.contains(agent_id) {
-                    resolved.push(agent_id.clone());
+            if let Some(agent_ids) = handle_to_agent.get(&handle) {
+                if agent_ids.len() > 1 {
+                    let _ = self
+                        .orchestration
+                        .record_diagnostic_event(
+                            "mention.resolve_ambiguous_handle",
+                            &format!("handle={} agent_ids={}", handle, agent_ids.join(",")),
+                        )
+                        .await;
+                    continue;
+                }
+                if let Some(agent_id) = agent_ids.first() {
+                    if member_ids.contains(agent_id) && !resolved.contains(agent_id) {
+                        resolved.push(agent_id.clone());
+                    }
                 }
             }
         }
@@ -1019,6 +1075,8 @@ impl ChannelOrchestratorService {
                 task_id: task_id.clone(),
                 suppress_visible_output,
                 output: String::new(),
+                started_at: Instant::now(),
+                first_tool_latency_recorded: false,
             },
         );
         let session = match self.worker.create_session(CreateSessionRequest {
@@ -1026,6 +1084,7 @@ impl ChannelOrchestratorService {
             cwd: agent.workspace_path.clone(),
             session_id: Uuid::new_v4().to_string(),
             resume_session: false,
+            persist_session: false,
         }) {
             Ok(session) => session,
             Err(error) => {
@@ -1083,6 +1142,8 @@ impl ChannelOrchestratorService {
             task_id,
             suppress_visible_output,
             output: String::new(),
+            started_at: Instant::now(),
+            first_tool_latency_recorded: false,
         };
         self.record_channel_agent_activity(
             &record,
@@ -1168,15 +1229,11 @@ impl ChannelOrchestratorService {
         channel_members: &[ChannelMemberRecord],
     ) -> Result<Vec<String>, ChannelOrchestratorError> {
         let mut delivered_agent_ids = Vec::new();
-        let mut seen = HashSet::new();
-        for member in channel_members {
-            if !seen.insert(member.agent_id.clone()) {
-                continue;
-            }
-            let agent = self.members.get_product_agent(&member.agent_id).await?;
-            if agent.system_owned {
-                continue;
-            }
+        let target_agent_ids = self
+            .delivery_target_agent_ids_for_message(message, channel_members)
+            .await;
+        for agent_id in target_agent_ids {
+            let agent = self.members.get_product_agent(&agent_id).await?;
             self.claims
                 .create_message_delivery(&message.id, &message.channel_id, &agent.id)
                 .await?;
@@ -1211,6 +1268,35 @@ impl ChannelOrchestratorService {
             delivered_agent_ids.push(agent.id);
         }
         Ok(delivered_agent_ids)
+    }
+
+    async fn delivery_target_agent_ids_for_message(
+        &self,
+        message: &MessageRecord,
+        channel_members: &[ChannelMemberRecord],
+    ) -> Vec<String> {
+        let member_ids = channel_members
+            .iter()
+            .map(|member| member.agent_id.clone())
+            .collect::<HashSet<_>>();
+        let mut targets = match message.kind {
+            MessageKind::Human => channel_members
+                .iter()
+                .map(|member| member.agent_id.clone())
+                .collect::<Vec<_>>(),
+            MessageKind::Agent => {
+                let body = message.body.as_deref().unwrap_or_default();
+                self.resolve_explicit_mentions(body, &member_ids).await
+            }
+            MessageKind::TaskCard | MessageKind::Tombstone => Vec::new(),
+        };
+        let mut seen = HashSet::new();
+        targets.retain(|agent_id| {
+            agent_id != &message.author_id
+                && member_ids.contains(agent_id)
+                && seen.insert(agent_id.clone())
+        });
+        targets
     }
 
     async fn create_task_assignment_once(
@@ -1419,9 +1505,7 @@ fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
 ```
 
 ## Required First Action
-Decide whether this message needs your response according to the system Claim Intent Classes.
-
-If you should respond, first run exactly:
+Classify the message with the system Claim Intent Classes. If you should respond, first run:
 
 ```bash
 slei message claim {message_id} --agent {agent_id}
@@ -1430,20 +1514,20 @@ slei message claim {message_id} --agent {agent_id}
 If the claim fails, exit silently.
 
 ## Optional Context Lookup
-Do not rely on this packet for full channel history. Read nearby previous messages only when needed to classify group flow, order, prior participants, or topic continuity.
+Read nearby messages only when classification needs flow, order, prior participants, or topic continuity.
 
 ```bash
 slei message read --channel "#{channel_id}" --around {message_id}
 ```
 
 ## Visible Reply
-If the claim succeeds, use Slei CLI for all visible follow-up work. Send channel replies by piping the body through stdin:
+If the claim succeeds, use Slei CLI for visible work. Send channel replies through stdin:
 
 ```bash
 printf "..." | slei message send --target "#{channel_id}" --agent {agent_id}
 ```
 
-Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful progress, and use `slei task` commands for task operations when needed."##,
+Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful progress. Use `slei task` commands when the work belongs to a task."##,
         channel_id = message.channel_id,
         message_id = message.id,
         author_id = message.author_id,

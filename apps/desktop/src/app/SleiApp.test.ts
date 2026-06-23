@@ -10,6 +10,7 @@ import {
   findActiveAgentActivities,
   hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
+  markNodesOfflineForDaemonUnavailable,
   keepOnlyClaimedAgentActivityByDiagnostic,
   markAgentActivityFailedByDiagnostic,
   applyPreferenceMutation,
@@ -26,7 +27,7 @@ import {
 } from "../test/channel-agent-reply-utils";
 import { createDesktopMessages } from "../i18n";
 import { defaultProfile } from "./model";
-import type { ChannelMessageView, ConversationMessageView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
+import type { ChannelMessageView, ConversationMessageView, DesktopNodeView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
 import type { SleiMember, SleiMessage } from "./types";
 
 function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt: string } {
@@ -46,6 +47,38 @@ function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt:
 }
 
 describe("createChannelAgentReplyMessage", () => {
+  it("marks cached nodes offline when a daemon unavailable error is observed", () => {
+    const nodes: DesktopNodeView[] = [
+      {
+        id: "local-node",
+        name: "本机设备",
+        status: "connected",
+        daemonVersion: "0.1.0",
+        device: { platform: "darwin", arch: "arm64", hostname: "MateBook-Pro-Max-3.local" },
+        runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+      },
+    ];
+
+    expect(markNodesOfflineForDaemonUnavailable(nodes, new Error("daemon unavailable"))).toEqual([
+      { ...nodes[0], status: "offline" },
+    ]);
+  });
+
+  it("keeps cached node status for non-daemon business errors", () => {
+    const nodes: DesktopNodeView[] = [
+      {
+        id: "local-node",
+        name: "本机设备",
+        status: "connected",
+        daemonVersion: "0.1.0",
+        device: { platform: "darwin", arch: "arm64", hostname: "MateBook-Pro-Max-3.local" },
+        runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+      },
+    ];
+
+    expect(markNodesOfflineForDaemonUnavailable(nodes, new Error("channel name already exists"))).toBe(nodes);
+  });
+
   it("rolls back optimistic preference changes when persistence fails", async () => {
     const applied: string[] = [];
     await expect(

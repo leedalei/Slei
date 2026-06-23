@@ -8,7 +8,7 @@
 
 Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 协作工作区。频道中的可见消息写入后，daemon 必须负责消息落库、广播投递、原子 claim、任务流转、状态日志、诊断、幂等、reset 和恢复。UI 只展示 daemon 返回的数据，并触发 daemon API。
 
-新流转不再依赖中心角色输出中心化 JSON 来决定普通频道消息交给谁。daemon 把新消息广播投递给频道内普通 Agent；Agent 根据自己的 system prompt、角色、消息 header、`@mention`、职责和按需拉取的历史，自主判断是否通过 `slei message claim` 认领。
+新流转不再依赖中心角色输出中心化 JSON 来决定频道消息交给谁。daemon 对 human 频道消息广播投递给频道内所有 Agent 成员；对 Agent 频道消息只投递给正文中显式 `@handle` 的目标成员。Agent 根据自己的 system prompt、角色、消息 header、`@mention`、职责和按需拉取的历史，自主判断是否通过 `slei message claim` 认领。
 
 旧 coordinator 控制面已删除，不是兼容保留：生产代码中不得再创建 `agent_global_coordinator`、不得启动 coordinator runtime、不得解析 coordinator JSON、不得写入 `channel_coordinators` / `coordinator_decisions` / `coordinator_runtime_runs` 表，也不得使用 `request_agent_reply` 作为频道消息结果。历史 `docs/superpowers/specs` 或 `docs/superpowers/plans` 中的 coordinator 方案只作为历史资料，本 ADR 优先生效。
 
@@ -16,8 +16,10 @@ Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 
 
 - daemon 是业务控制面：消息、投递、claim、任务、状态、日志、诊断、reset 防护、幂等和 SQLite 持久化都必须在 daemon 内完成。
 - UI shell 只调用 daemon API、显示 loading/error/empty 状态、渲染 daemon DTO。UI 不得自行决定消息应该交给哪个 Agent。
-- 新频道消息流转是广播投递 + Agent 自主 claim；不得新增 UI 路由、daemon 关键词兜底或中心化 JSON 路由作为新架构入口。
-- 频道内可见消息写入后都触发同一广播机制。Agent 后续协作靠可见 `@mention` 接力，不依赖隐藏路由。
+- 新频道消息流转是 daemon 投递 + Agent 自主 claim；不得新增 UI 路由、daemon 关键词兜底或中心化 JSON 路由作为新架构入口。
+- Human 频道消息触发广播投递；Agent 频道消息默认不触发 claim，只有显式 `@handle` 才投递给目标 Agent。Agent 后续协作靠可见 `@mention` 接力，不依赖隐藏路由。
+- 所有投递都必须排除消息作者，避免自唤醒和无意义 self-run。
+- `@mention` 只按 handle 解析，不按 display name 解析。Agent handle 必须全局大小写不敏感唯一，例如 `@Coda` 与 `@coda` 冲突；历史重复 handle 必须阻止启动或迁移，不得随机选人。
 - 旧 coordinator runtime、coordinator JSON、coordinator agent 和 coordinator SQLite 表不得作为 fallback、diagnostics、mock 或兼容路径恢复。
 - `slei message claim` 是消息独占处理的唯一入口。claim 必须是 daemon/SQLite 原子操作；claim 失败的 Agent 静默退出。
 - `slei task claim` 是任务维度的原子锁，独立于 message claim。
@@ -93,7 +95,7 @@ Agent 看到的频道消息必须带统一 header，便于判断 target、claim 
 | `time` | daemon 持久化的消息时间 |
 | `type` | `human`、`agent`、`system`、`tombstone` 等消息类型；新增任务不写 `task_card` 消息 |
 
-正文中的可见 `@handle` 是协作接力信号。Agent 判断是否参与时必须以 header + 正文 + system prompt 规则为准。
+正文中的可见 `@handle` 是协作接力信号。Agent 判断是否参与时必须以 header + 正文 + system prompt 规则为准。display name 可以重复，不能作为 mention 解析依据。
 
 ## Agent System Prompt 必须包含
 
@@ -109,9 +111,10 @@ Agent 判断规则由 system prompt 注入到每个 Agent 上下文中，不由�
 
 基础判断规则按 Markdown 的 Claim Intent Classes 注入：
 
-- Direct Address：消息明确点名或委派给某个 Agent。若明确 `@我`，应尝试 `slei message claim <msg-id> --agent <agent-id>`；claim 失败则静默退出。若明确 `@别人` 且没有 `@我`，不应 claim，除非这条可见消息同时属于频道群体发言、当前 active task 或明确 handoff 给自己。
+- Direct Address：消息通过稳定 `@handle` 明确委派给某个 Agent。若明确 `@我`，应尝试 `slei message claim <msg-id> --agent <agent-id>`；claim 失败则静默退出。若明确 `@别人` 且没有 `@我`，不应 claim，除非这条可见消息同时属于频道群体发言、当前 active task 或明确 handoff 给自己。
+- Agent-authored message：`type=agent` 的消息默认静默。只有正文显式 `@我` 且分配了具体后续任务、决策或 handoff 时才 claim。Agent 普通回复不会唤醒上一个 Agent；A `@B` 后，B 普通回复不唤醒 A，只有 B 显式 `@A` 才会唤醒 A。
 - Channel Group Address：消息面向频道群体发起互动、问候、咨询、要求或协调，即使没有显式群体词也成立。`@all` 永远表示 Channel Group Address，不是单个 Agent 的 Direct Address。例子包括 `大家`、`各位`、`我们`、`谁来`、`有人吗`、`早上好`、`怎么看`、`报数`、`每个人说一下`、开放咨询、群体请求和轻量社交互动。
-- Channel Group Address 是串行群体参与流：每个普通 Agent 最多参与一次；只 claim 当前最新相关消息；不要 claim 自己刚发出的频道消息；若流程需要顺序，按可见历史继续序列；若别人已经 claim 当前最新消息，静默退出，等待下一条可见消息触发。
+- Channel Group Address 是串行群体参与流：每个频道 Agent 最多参与一次；只 claim 当前最新相关消息；不要 claim 自己刚发出的频道消息；不要 claim 其他 Agent 的普通回复；若流程需要顺序，按可见历史继续序列；若别人已经 claim 当前最新消息，静默退出，等待下一条可见消息触发。
 - Channel Group Address 可以按需向上检索历史：当需要判断原始群体问题、当前顺序、哪些 Agent 已参与、最新消息是否属于同一群体流或用户是否换题时，用 `slei message read --channel "#channel" --around <msgId>` 或小窗口 `--limit 20` 读取；简单独立问候无需为了回复而读历史。
 - Specialized Work Request：消息要求具体工作但不是面向全频道群体。只有工作符合自身角色、active task 或 prior handoff 时才 claim；如果另一个 Agent 更合适或已经 claim，则静默退出。
 - 如果 claim 成功，先根据需要调用 `slei agent status` 上报阶段，再读取历史或执行任务。
@@ -169,7 +172,7 @@ sequenceDiagram
     Sender->>API: 发送频道消息
     API->>Msg: 按 idempotency_key 持久化 channel message
     Msg->>Store: channel_messages
-    API->>Store: 为频道普通成员创建 message_deliveries
+    API->>Store: 按消息类型选择目标 Agent 并创建 message_deliveries
     API->>Store: pending -> running, 绑定 run_id
     API->>Launch: spawn Agent run with single triggering message
     Launch->>Agent: system prompt + header/body + runtime metadata
@@ -181,12 +184,15 @@ sequenceDiagram
     API->>Store: 更新消息、任务、状态、日志
 ```
 
-过滤规则：
+投递与过滤规则：
 
-- 只为普通 Agent 创建 delivery。
-- 排除系统内置或非普通成员 Agent，例如 `system_owned = true`、internal system id 或历史内部路由 Agent。
+- Human 消息为频道内所有 Agent 成员创建 delivery，包括 guide 这类 `system_owned` Agent。
+- Agent 消息只为正文中显式 `@handle` 的频道成员创建 delivery；没有 mention 时不创建 delivery、不启动 worker、不触发 claim。
+- 任何消息都必须排除 author；Agent mention 自己时忽略自己。
+- 排除非频道成员、已删除 Agent 或历史内部路由 Agent；不得因为 `system_owned = true` 排除当前频道成员。
 - delivery 写入使用唯一约束保证同一 `(message_id, agent_id)` 不重复。
 - delivery 从 `pending` 原子切换到 `running` 后才绑定 run id；run 启动失败必须回滚为 `pending`，允许 retry。
+- 已 `done` 的任务不再因为 reply 或 mention 产生新 claim、handoff 或 run。
 
 ## 可见 @mention 协作链
 
@@ -199,7 +205,7 @@ sequenceDiagram
 @nancy-win -> @lei-lee 请求确认
 ```
 
-每一跳都只是频道或任务线程中的新可见消息。daemon 不隐藏插入路由决策；被 mention 的 Agent 在自己的下一次唤醒中根据 prompt 规则决定是否 claim。
+每一跳都只是频道或任务线程中的新可见消息。daemon 不隐藏插入路由决策；被 mention 的 Agent 在自己的下一次唤醒中根据 prompt 规则决定是否 claim。不存在自动转发或隐式流水线，所有 Agent-to-Agent 协作都必须通过显式 `@handle`。
 
 ## 进程生命周期与并发
 
@@ -312,7 +318,8 @@ pnpm --filter @slei/desktop typecheck
 
 手工验证建议：
 
-1. 发送无显式 mention 的频道消息，应创建普通 Agent delivery，并启动对应短生命周期 Agent run；不应出现新的中心路由 runtime。
-2. 发送包含 `@agent` 的频道消息，也应走同一广播机制；只有被 prompt 规则允许的 Agent 才 claim。
-3. Agent 通过 `slei message send` 发言后，新消息应再次广播并触发下一轮 claim。
-4. 停掉 daemon 后发送频道消息，UI 应显示 daemon unavailable/offline，不得启用本地 mock 回复。
+1. Human 发送无显式 mention 的频道消息，应为频道内所有 Agent 成员创建 delivery，并启动对应短生命周期 Agent run；不应出现新的中心路由 runtime。
+2. Human 发送包含 `@agent` 的频道消息，也应广播给频道内所有 Agent；只有被 prompt 规则允许的 Agent 才 claim。
+3. Agent 通过 `slei message send` 发言且没有显式 mention 时，不应创建 delivery 或启动下一轮 run。
+4. Agent 通过 `slei message send` 显式 `@handle` 时，只应投递给被 mention 的频道成员，并排除作者。
+5. 停掉 daemon 后发送频道消息，UI 应显示 daemon unavailable/offline，不得启用本地 mock 回复。

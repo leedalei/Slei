@@ -12,6 +12,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::db::SleiDb;
+    use super::migrations::MIGRATIONS;
     use super::repositories::{
         sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow,
         ConversationMessageRow, ConversationRow, MessageReadQueryRow, NewAgentActivityEventRow,
@@ -80,7 +81,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[tokio::test]
@@ -97,7 +98,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[tokio::test]
@@ -148,6 +149,97 @@ mod tests {
         });
 
         assert!(has_unique_source_index);
+    }
+
+    #[tokio::test]
+    async fn agents_reject_case_insensitive_duplicate_handles() {
+        let (url, _path) = sqlite_file_url("agent-handle-lower-unique");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_agent(
+                "agent_coda",
+                "Coda",
+                "@coda",
+                "agent",
+                false,
+                "ClaudeCode",
+                "Sonnet",
+                "local-node",
+                "开发",
+                "coda",
+            )
+            .await
+            .unwrap();
+        let duplicate = repos
+            .upsert_agent(
+                "agent_other",
+                "Other",
+                "@Coda",
+                "agent",
+                false,
+                "ClaudeCode",
+                "Sonnet",
+                "local-node",
+                "重复",
+                "other",
+            )
+            .await
+            .unwrap_err();
+
+        let message = duplicate.to_string();
+        assert!(
+            message.contains("idx_agents_handle_lower_unique") || message.contains("UNIQUE"),
+            "unexpected duplicate handle error: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_rejects_historical_case_insensitive_duplicate_handles() {
+        let (url, _path) = sqlite_file_url("agent-handle-legacy-duplicates");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate_for_test(&MIGRATIONS[..8]).await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_agent(
+                "agent_coda",
+                "Coda",
+                "@coda",
+                "agent",
+                false,
+                "ClaudeCode",
+                "Sonnet",
+                "local-node",
+                "开发",
+                "coda",
+            )
+            .await
+            .unwrap();
+        repos
+            .upsert_agent(
+                "agent_other",
+                "Other",
+                "@Coda",
+                "agent",
+                false,
+                "ClaudeCode",
+                "Sonnet",
+                "local-node",
+                "重复",
+                "other",
+            )
+            .await
+            .unwrap();
+
+        let error = db.migrate().await.unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("idx_agents_handle_lower_unique") || message.contains("UNIQUE"),
+            "unexpected migration error: {message}"
+        );
     }
 
     #[tokio::test]
@@ -358,7 +450,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[tokio::test]
@@ -1826,7 +1918,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 8);
+        assert_eq!(migration_count, 9);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

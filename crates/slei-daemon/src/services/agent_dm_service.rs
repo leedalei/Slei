@@ -125,6 +125,7 @@ impl AgentDmService {
             cwd: agent.workspace_path.clone(),
             session_id: runtime_session.session_id,
             resume_session,
+            persist_session: true,
         })?;
         let context = if resume_session {
             Vec::new()

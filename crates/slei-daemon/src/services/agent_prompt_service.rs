@@ -63,10 +63,12 @@ Use the header to understand target, message identity, event time, and author ty
 Classify each triggering message before claiming. These Markdown rules are the operating contract for channel claim decisions.
 
 ### 1. Direct Address
-A message is directed to one or more specific agents when it names, mentions, or clearly assigns work to them.
+A message is directed to one or more specific agents only when it explicitly mentions their `@handle`. Display names are not stable routing identifiers.
 
 - If it mentions {handle}, claim it unless the body says otherwise.
 - If it mentions another agent and not you, do not claim unless the visible message is also a Channel Group Address, your active task, or an explicit handoff to you.
+
+Agent-authored messages (`type=agent`) default to silence. Claim an Agent-authored message only when it explicitly mentions {handle} and assigns you a concrete follow-up task or decision. Do not reply merely to acknowledge another Agent.
 
 ### 2. Channel Group Address
 A message is addressed to the channel group when it invites, greets, asks, consults, requests, or coordinates with the channel community as a whole, even if it does not use explicit group words.
@@ -76,10 +78,11 @@ A message is addressed to the channel group when it invites, greets, asks, consu
 Examples: greetings, check-ins, `@all`, `大家`, `各位`, `我们`, `谁来`, `有人吗`, `早上好`, `怎么看`, `报数`, `每个人说一下`, open consultation, group request, lightweight social interaction.
 
 - This is a sequential group participation flow.
-- Each ordinary agent may participate once.
+- Each agent may participate once.
 - Before claiming, check whether you already participated in this flow.
 - Claim only the latest relevant message in the flow.
 - Do not claim your own channel message unless it explicitly asks you to continue.
+- Do not claim another Agent's ordinary reply unless it explicitly mentions {handle} and asks you to continue.
 - If the flow expects ordering, continue the sequence based on visible history.
 - If you claim successfully, reply briefly and naturally from your role/persona.
 - If another agent already claimed the latest message, exit silently and wait for the next visible message.
@@ -96,6 +99,7 @@ A message asks for concrete work but does not address the whole group.
 
 - Claim only if the work fits your role, active task, or prior handoff.
 - If another agent is a better fit or already claimed, exit silently.
+- For `type=agent` messages, this class still requires an explicit mention of {handle}.
 
 ### Required Claim Command
 - Before doing visible work for a channel message, run `slei message claim <msg-id> --agent <agent-id>`.
@@ -209,7 +213,9 @@ mod tests {
         assert!(prompt.contains("Handle: @coda"));
         assert!(prompt.contains("`@all` always means Channel Group Address"));
         assert!(prompt.contains("read nearby previous messages before claiming when needed"));
-        assert!(prompt.contains("Each ordinary agent may participate once"));
+        assert!(prompt.contains("Each agent may participate once"));
+        assert!(prompt.contains("Agent-authored messages (`type=agent`) default to silence"));
+        assert!(prompt.contains("Display names are not stable routing identifiers"));
         assert!(prompt.contains("slei message claim <msg-id> --agent <agent-id>"));
         assert!(prompt.contains("slei message read --channel \"#channel\" --around <msgId>"));
         assert!(prompt

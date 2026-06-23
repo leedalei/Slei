@@ -392,7 +392,7 @@ async fn broadcast_channel_message_creates_deliveries_for_all_regular_targets() 
 }
 
 #[tokio::test]
-async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_agents_only() {
+async fn user_plain_channel_message_broadcasts_pending_deliveries_to_all_channel_agents() {
     let state = app_state_with_agent_specs(&[
         TestAgentSpec::regular("agent_alice", "@alice-win"),
         TestAgentSpec::regular("agent_coda", "@coda-win"),
@@ -460,29 +460,32 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_regular_age
     assert_eq!(outcome.decision_status.as_deref(), Some("completed"));
     assert_eq!(
         outcome.assignee_agent_ids,
-        vec!["agent_alice".to_string(), "agent_coda".to_string()]
+        vec![
+            "agent_alice".to_string(),
+            "agent_coda".to_string(),
+            "agent_system_guide".to_string()
+        ]
     );
     assert_broadcast_runs_started(
         &state,
-        &["agent_alice", "agent_coda"],
+        &["agent_alice", "agent_coda", "agent_system_guide"],
         &outcome.message_id,
         &["大家看一下这个发布风险"],
         &["旧历史不应进 broadcast prompt"],
     );
+    for command in state
+        .worker_commands()
+        .iter()
+        .filter(|command| command["type"] == "start_run")
+    {
+        assert_eq!(command["session"]["persist_session"], false);
+    }
     assert_broadcast_deliveries_running(
         &state,
         &outcome.message_id,
-        &["agent_alice", "agent_coda"],
+        &["agent_alice", "agent_coda", "agent_system_guide"],
     )
     .await;
-    for agent_id in ["agent_system_guide"] {
-        assert!(state
-            .claims()
-            .pending_message_deliveries(agent_id, 20)
-            .await
-            .unwrap()
-            .is_empty());
-    }
 }
 
 #[tokio::test]
@@ -658,6 +661,14 @@ async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostic
 
     state
         .handle_worker_event(serde_json::json!({
+            "type": "tool_started",
+            "run_id": run_id,
+            "tool_name": "Read"
+        }))
+        .await
+        .unwrap();
+    state
+        .handle_worker_event(serde_json::json!({
             "type": "output_delta",
             "run_id": run_id,
             "delta": "我不能直接回复，因为 CLI 不可用",
@@ -690,6 +701,11 @@ async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostic
         event.event_type == "channel_agent_runtime.delivery_completed"
             && event.payload.contains(&format!("run_id={run_id}"))
             && event.payload.contains("marked=true")
+    }));
+    assert!(events.iter().any(|event| {
+        event.event_type == "channel_agent_runtime.first_tool_latency"
+            && event.payload.contains(&format!("run_id={run_id}"))
+            && event.payload.contains("latency_ms=")
     }));
     assert!(events.iter().any(|event| {
         event.event_type == "channel_agent_runtime.broadcast_stdout_suppressed"
@@ -1313,6 +1329,80 @@ async fn task_human_reply_without_visible_mention_does_not_handoff_to_assignee()
 }
 
 #[tokio::test]
+async fn done_task_reply_with_visible_mention_does_not_create_handoff_or_run() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-done-task-no-handoff",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let task = state
+        .tasks()
+        .create_from_source_with_assignment(
+            "dev",
+            "human_lei",
+            "msg_root_done_task",
+            "已经完成的任务",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-done-no-handoff-root",
+        )
+        .await
+        .unwrap();
+    state
+        .tasks()
+        .update_status(&task.id, TaskStatus::Done)
+        .await
+        .unwrap();
+
+    let command_count_before = state.worker_commands().len();
+    let receipt = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "@coda-win 这条 done 任务里的 mention 不应该再启动交接。",
+            "task-done-no-handoff-reply",
+        )
+        .await
+        .unwrap();
+
+    assert!(receipt.route.handoff_agent_ids.is_empty());
+    assert!(!receipt.route.needs_assignment);
+    assert_eq!(state.worker_commands().len(), command_count_before);
+    let coda_handoffs = state
+        .agent_inbox()
+        .events_for_agent("agent_coda")
+        .await
+        .into_iter()
+        .filter(|event| event.event_type == "task_handoff")
+        .collect::<Vec<_>>();
+    assert!(coda_handoffs.is_empty());
+}
+
+#[tokio::test]
 async fn task_reply_retry_uses_stored_reply_for_handoff_side_effects() {
     let state = app_state_with_agent_handles(&[
         ("agent_alice", "@alice-win"),
@@ -1495,7 +1585,7 @@ async fn unassigned_task_reply_replay_preserves_completed_state_and_attention() 
         .await
         .unwrap();
     assert_eq!(first.reply.id, replay.reply.id);
-    assert!(replay.route.needs_assignment);
+    assert!(!replay.route.needs_assignment);
 
     let task = state.tasks().task(&task.id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Done);
@@ -2174,7 +2264,7 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
 }
 
 #[tokio::test]
-async fn agent_send_api_broadcasts_agent_message_to_channel_members() {
+async fn agent_send_api_without_mentions_does_not_start_channel_runs() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -2216,12 +2306,67 @@ async fn agent_send_api_broadcasts_agent_message_to_channel_members() {
     let sent = response_json(sent).await;
     let message_id = sent["messageId"].as_str().unwrap();
 
-    assert_broadcast_deliveries_running(&state, message_id, &["agent_alice", "agent_coda"]).await;
+    let deliveries = state
+        .claims()
+        .message_deliveries_for_message(message_id)
+        .await
+        .unwrap();
+    assert!(deliveries.is_empty());
+    assert!(state.worker_commands().is_empty());
+}
+
+#[tokio::test]
+async fn agent_send_api_mentions_only_target_channel_members_and_excludes_author() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_bob", "@bob-win"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-agent-send-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda", "agent_bob"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/messages/send",
+        Some("agent-send-mention-delivery"),
+        json!({
+            "target": "#api-core",
+            "agentId": "agent_alice",
+            "body": "@coda-win 请继续验证。@alice-win 我这里不需要自己再跑。"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent = response_json(sent).await;
+    let message_id = sent["messageId"].as_str().unwrap();
+
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_coda"]).await;
     assert_broadcast_runs_started(
         &state,
-        &["agent_alice", "agent_coda"],
+        &["agent_coda"],
         message_id,
-        &["Alice 已完成第一轮检查"],
+        &["@coda-win 请继续验证"],
         &[],
     );
 }
@@ -2959,6 +3104,10 @@ fn assert_broadcast_runs_started(
             .find(|command| command["session"]["agent_id"] == *agent_id)
             .unwrap_or_else(|| panic!("missing start_run for {agent_id}; commands={commands:?}"));
         let prompt = command["input"]["prompt"].as_str().unwrap();
+        assert_eq!(
+            command["session"]["persist_session"], false,
+            "channel broadcast runs should not persist Claude CLI sessions"
+        );
         assert!(
             prompt.contains(&format!("- Agent ID: `{agent_id}`")),
             "prompt missing agent metadata: {prompt}"
@@ -3024,6 +3173,8 @@ fn assert_broadcast_runs_started(
             system_prompt.contains("## Claim Intent Classes")
                 && system_prompt.contains("### 2. Channel Group Address")
                 && system_prompt.contains("`@all` always means Channel Group Address")
+                && system_prompt
+                    .contains("Agent-authored messages (`type=agent`) default to silence")
                 && system_prompt
                     .contains("read nearby previous messages before claiming when needed"),
             "system prompt missing markdown claim intent classes: {system_prompt}"

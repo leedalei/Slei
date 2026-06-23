@@ -2424,19 +2424,18 @@ impl DaemonBroker {
                 conversation.kind == "dm" && request.author_id.starts_with("human:")
             });
 
-        if should_run_local_runtime {
-            eprintln!(
-                "[slei-runtime] local_runtime_selected conversation_id={} author_id={}",
-                conversation_id, request.author_id
-            );
-        } else if let Some(receipt) =
-            self.send_conversation_message_to_daemon(conversation_id, &request)
-        {
+        if let Some(receipt) = self.send_conversation_message_to_daemon(conversation_id, &request) {
             self.upsert_local_conversation_message(receipt.message.clone())?;
             return Ok(receipt);
         }
         if self.offline_fallback == OfflineFallback::Empty {
             return Err(ConversationError::DaemonUnavailable);
+        }
+        if should_run_local_runtime {
+            eprintln!(
+                "[slei-runtime] local_runtime_selected conversation_id={} author_id={}",
+                conversation_id, request.author_id
+            );
         }
 
         let mut conversations = self
@@ -5505,5 +5504,99 @@ mod system_preference_tests {
         assert!(is_supported_time_zone("America/Los_Angeles"));
         assert!(!is_supported_time_zone("UTC"));
         assert!(!is_supported_time_zone("../Asia/Shanghai"));
+    }
+}
+
+#[cfg(test)]
+mod conversation_daemon_routing_tests {
+    use super::*;
+
+    #[test]
+    fn empty_fallback_human_dm_sends_to_daemon_before_local_runtime() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind test daemon");
+        listener.set_nonblocking(true).expect("set nonblocking");
+        let endpoint = format!("http://{}", listener.local_addr().expect("local addr"));
+        let server = std::thread::spawn(move || {
+            let started = Instant::now();
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut buffer = [0_u8; 2048];
+                        let count = stream.read(&mut buffer).expect("read request");
+                        let request = String::from_utf8_lossy(&buffer[..count]).to_string();
+                        let body = serde_json::json!({
+                            "message": {
+                                "id": "msg_daemon",
+                                "sequence": 1,
+                                "conversationId": "dm:agent_guide",
+                                "sessionId": "session:dm:agent_guide:default",
+                                "authorId": "human:local",
+                                "body": "hello",
+                                "createdAt": "2026-06-22T12:00:00.000Z"
+                            }
+                        })
+                        .to_string();
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        stream
+                            .write_all(response.as_bytes())
+                            .expect("write response");
+                        return request;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if started.elapsed() > Duration::from_millis(500) {
+                            return "NO_REQUEST".to_string();
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => return format!("ACCEPT_ERROR: {error}"),
+                }
+            }
+        });
+
+        let broker = DaemonBroker::for_tests_empty_fallback(RuntimeDescriptor {
+            endpoint,
+            event_socket: "ws://127.0.0.1:0/v1/events/ws".to_string(),
+            token: "desktop-session-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        broker
+            .conversations
+            .lock()
+            .expect("conversations")
+            .push(ConversationView {
+                id: "dm:agent_guide".to_string(),
+                kind: "dm".to_string(),
+                agent_id: "agent_guide".to_string(),
+                active_session_id: Some("session:dm:agent_guide:default".to_string()),
+                runtime_session: None,
+                created_at: "2026-06-22T12:00:00.000Z".to_string(),
+                updated_at: "2026-06-22T12:00:00.000Z".to_string(),
+            });
+
+        let result = broker.send_conversation_message(
+            "dm:agent_guide",
+            ConversationMessageRequest {
+                author_id: "human:local".to_string(),
+                body: "hello".to_string(),
+                session_id: Some("session:dm:agent_guide:default".to_string()),
+                attachment_ids: Vec::new(),
+                workspace_mounts: Vec::new(),
+                source_channel_id: None,
+                source_channel_name: None,
+            },
+        );
+        let request = server.join().expect("server thread");
+
+        assert_ne!(
+            request, "NO_REQUEST",
+            "DM send skipped the reachable daemon"
+        );
+        assert!(request.starts_with("POST /v1/conversations/dm:agent_guide/messages "));
+        assert_eq!(result.expect("daemon send").message.id, "msg_daemon");
     }
 }

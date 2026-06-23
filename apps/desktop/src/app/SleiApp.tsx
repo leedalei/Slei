@@ -565,6 +565,22 @@ function formatLogError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isDaemonUnavailableError(error: unknown): boolean {
+  const message = formatLogError(error).toLowerCase();
+  return message.includes("daemon unavailable") || message.includes("daemon offline");
+}
+
+export function markNodesOfflineForDaemonUnavailable(nodes: DesktopNodeView[], error: unknown): DesktopNodeView[] {
+  if (!isDaemonUnavailableError(error)) return nodes;
+  let changed = false;
+  const nextNodes = nodes.map((node) => {
+    if (node.status === "offline") return node;
+    changed = true;
+    return { ...node, status: "offline" as const };
+  });
+  return changed ? nextNodes : nodes;
+}
+
 export function debugLaunchEnabledFromSearch(search: string): boolean {
   const params = new URLSearchParams(search.startsWith("?") ? search : `?${search}`);
   const value = params.get("debug");
@@ -982,7 +998,20 @@ export function SleiApp() {
     appToastTimerRef.current = setTimeout(() => setAppToast((current) => ({ ...current, message: "" })), 4_000);
   }
 
+  function markCachedNodesOfflineForDaemonUnavailable(error: unknown) {
+    if (!isDaemonUnavailableError(error)) return;
+    setData((current) => {
+      const nodes = markNodesOfflineForDaemonUnavailable(current.nodes, error);
+      return nodes === current.nodes ? current : createEmptySleiData({ ...current, nodes });
+    });
+    setRuntimeSetup((current) => {
+      const nodes = markNodesOfflineForDaemonUnavailable(current.nodes, error);
+      return nodes === current.nodes ? current : { ...current, nodes };
+    });
+  }
+
   function showBackendServiceErrorToast(error: unknown) {
+    markCachedNodesOfflineForDaemonUnavailable(error);
     if (!shouldToastBackendServiceError(backendErrorToastsEnabled)) return;
     showAppToast(formatAppErrorToast(messages.common.operationFailed, error), "error");
   }
@@ -1697,6 +1726,15 @@ export function SleiApp() {
     }
   }
 
+  async function handleSendMessageWithBackendState(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) {
+    try {
+      await handleSendMessage(body, options);
+    } catch (error) {
+      markCachedNodesOfflineForDaemonUnavailable(error);
+      throw error;
+    }
+  }
+
   async function handleTaskReply(taskId: string, body: string) {
     const trimmed = body.trim();
     if (!trimmed) return;
@@ -2230,7 +2268,7 @@ export function SleiApp() {
       onMessageThreadOpen={handleMessageThreadOpen}
       onMessageThreadReply={handleMessageThreadReply}
       onOlderMessagesLoad={handleLoadOlderMessages}
-      onSendMessage={handleSendMessage}
+      onSendMessage={handleSendMessageWithBackendState}
       onMessageSendFailure={showAppToast}
       onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}

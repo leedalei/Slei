@@ -22,6 +22,7 @@ fn claude_worker_create_session_reports_claude_mvp_capabilities() {
             cwd: "/workspace/app".to_string(),
             session_id: "11111111-1111-4111-8111-111111111111".to_string(),
             resume_session: false,
+            persist_session: true,
         })
         .unwrap();
 
@@ -41,6 +42,7 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
             cwd: "/workspace/app".to_string(),
             session_id: "11111111-1111-4111-8111-111111111111".to_string(),
             resume_session: true,
+            persist_session: true,
         })
         .unwrap();
 

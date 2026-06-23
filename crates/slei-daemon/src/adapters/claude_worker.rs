@@ -12,6 +12,7 @@ pub struct CreateSessionRequest {
     pub cwd: String,
     pub session_id: String,
     pub resume_session: bool,
+    pub persist_session: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +45,7 @@ impl ClaudeWorkerAdapter {
             agent_id: request.agent_id,
             runtime: "ClaudeCode".to_string(),
             cwd: request.cwd,
-            persist_session: true,
+            persist_session: request.persist_session,
             resume_session: request.resume_session,
             capabilities: RuntimeCapabilities {
                 resume_session: true,
