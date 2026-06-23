@@ -6,7 +6,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/too
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
+import { SkillSlashPicker } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
@@ -358,6 +359,22 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnType<typeof leadingSkillSlashToken> }) {
+  if (!skillToken) {
+    return <MarkdownMessage markdown={body} />;
+  }
+  const rest = skillToken.rest;
+  const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
+  return (
+    <div className={cn("slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-foreground", inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline")}>
+      <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
+        {skillToken.token}
+      </span>
+      {rest ? <MarkdownMessage markdown={rest} /> : null}
+    </div>
+  );
+}
+
 function ChannelMemberPanel(input: {
   availableMembers: SleiMember[];
   channelId: string;
@@ -510,6 +527,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
@@ -522,6 +540,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
@@ -535,6 +554,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
+  const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
+  const skillSlashTargets = skillSlash && dmMember ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
@@ -658,6 +679,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   useEffect(() => {
+    if (!skillSlash || skillSlashTargets.length === 0) return;
+    skillOptionRefs.current[selectedSkillIndex]?.scrollIntoView({ block: "nearest" });
+  }, [skillSlash, skillSlashTargets.length, selectedSkillIndex]);
+
+  useEffect(() => {
+    setSelectedSkillIndex(0);
+  }, [skillSlash?.query, dmMember?.id]);
+
+  useEffect(() => {
     if (effectiveChannelView !== "chat" || focusedMessageId) return;
     if (initialTimelineScrollTargetRef.current === timelineScrollTarget) return;
     initialTimelineScrollTargetRef.current = timelineScrollTarget;
@@ -730,6 +760,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     if (!mention || !mentionTargets[index]) return;
     setDraft(insertMention(draft, mention, mentionTargets[index].handle));
     setSelectedMentionIndex(0);
+  }
+
+  function selectSkillSlash(index = selectedSkillIndex) {
+    if (!skillSlash || !skillSlashTargets[index]) return;
+    setDraft(insertSkillSlash(draft, skillSlash, skillSlashTargets[index]));
+    setSelectedSkillIndex(0);
   }
 
   async function copyMessage(message: SleiMessage) {
@@ -1112,7 +1148,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   </span>
                                 </div>
                               </div>
-                              <MarkdownMessage markdown={message.body} />
+                              <MessageBody
+                                body={message.body}
+                                skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
+                              />
                               <AttachmentList attachments={message.attachments ?? []} messageAttachments />
                               {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
                               {message.cards?.map((card) => (
@@ -1165,6 +1204,19 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
+                {skillSlash && skillSlashTargets.length > 0 ? (
+                  <div className="px-4 pt-3">
+                    <SkillSlashPicker
+                      messages={messages}
+                      onSelect={selectSkillSlash}
+                      optionRef={(index, node) => {
+                        skillOptionRefs.current[index] = node;
+                      }}
+                      selectedIndex={selectedSkillIndex}
+                      skills={skillSlashTargets}
+                    />
+                  </div>
+                ) : null}
                 <form className="grid gap-2 px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
                   {attachments.length > 0 ? (
                     <AttachmentList
@@ -1182,7 +1234,31 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     onKeyDown={(event) => {
                       const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
                       const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                      if (!composing && mention && mentionTargets.length > 0) {
+                      const hasSkillSlashTargets = Boolean(skillSlash && skillSlashTargets.length > 0);
+                      if (!composing && skillSlash && hasSkillSlashTargets) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => moveMentionSelection(current, 1, skillSlashTargets.length));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => moveMentionSelection(current, -1, skillSlashTargets.length));
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setDraft(draft.slice(0, skillSlash.start));
+                          setSelectedSkillIndex(0);
+                          return;
+                        }
+                        if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
+                          event.preventDefault();
+                          selectSkillSlash();
+                          return;
+                        }
+                      }
+                      if (!composing && mention && hasMentionTargets) {
                         if (event.key === "ArrowDown") {
                           event.preventDefault();
                           setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));

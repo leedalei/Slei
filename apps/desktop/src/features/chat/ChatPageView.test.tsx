@@ -17,6 +17,7 @@ import { ChatPage } from "./ChatPageView";
   observe() {}
   unobserve() {}
 };
+HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 function memberWithLongMentionText(): SleiMember {
   return {
@@ -39,6 +40,39 @@ function memberWithLongMentionText(): SleiMember {
     createdAgents: [],
     activity: "Idle",
     capabilities: ["architecture"],
+  };
+}
+
+function dmSkillSlashFixture(
+  initialDraft: string,
+  options: { onSendMessage?: (body: string) => Promise<void> | void } = {},
+) {
+  const messages = createDesktopMessages("zh-CN");
+  const member = {
+    ...memberWithLongMentionText(),
+    skills: [
+      { id: "guide-create", name: "guide-create", trigger: "Create agents", path: "/tmp/guide/SKILL.md" },
+      { id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" },
+    ],
+  };
+  const data = createSleiFixtures({
+    conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+    members: [member],
+  });
+
+  return {
+    element: (
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft={initialDraft}
+        messages={messages}
+        onSendMessage={options.onSendMessage}
+        profile={defaultProfile}
+      />
+    ),
+    messages,
   };
 }
 
@@ -67,7 +101,320 @@ afterEach(async () => {
   mountedContainer = undefined;
 });
 
+describe("ChatPage DM skill message highlight", () => {
+  it("highlights only a known leading DM skill slash token", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_skill",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory **重点**",
+          channelId: "dm_agent_architect",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("slei-message-skill");
+    expect(html).toContain("/memory");
+    expect(html).toContain("<strong>重点</strong>");
+  });
+
+  it("preserves whitespace-sensitive markdown after a highlighted DM skill token", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_skill_code",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory\n    code",
+          channelId: "dm_agent_architect",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("slei-message-skill");
+    expect(html).toContain("/memory");
+    expect(html).toContain("<pre>");
+    expect(html).toContain("<code>code");
+  });
+
+  it("does not highlight middle, unknown, leading-space, or channel slash tokens", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const dmConversation = { id: "dm_agent_architect", kind: "dm" as const, agentId: member.id, createdAt: "0", updatedAt: "0" };
+
+    const renderBody = (body: string, conversation = dmConversation) => {
+      const data = createSleiFixtures({
+        conversations: [dmConversation],
+        members: [member],
+        messages: [
+          {
+            id: `msg_${body.replace(/\W+/g, "_")}`,
+            author: "Lei",
+            role: "human",
+            time: "10:00",
+            body,
+            channelId: conversation.id,
+          },
+        ],
+      });
+
+      return renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          activeConversation={conversation}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+    };
+
+    expect(renderBody("请用 /memory")).not.toContain("slei-message-skill");
+    expect(renderBody("/unknown")).not.toContain("slei-message-skill");
+    expect(renderBody(" /memory")).not.toContain("slei-message-skill");
+
+    const channelData = createSleiFixtures({
+      members: [member],
+      messages: [
+        {
+          id: "msg_channel_skill",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const channelHtml = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={channelData.channels[0]}
+        data={channelData}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(channelHtml).not.toContain("slei-message-skill");
+  });
+});
+
 describe("ChatPage mention panel", () => {
+  it("renders the DM skill slash picker for a leading slash draft", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.chooseSkill);
+    expect(html).toContain("/memory");
+  });
+
+  it("renders DM skill slash options with the expected DOM contract and click behavior", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const panel = host.querySelector('[data-testid="slei-skill-slash-panel"]');
+    const option = host.querySelector<HTMLButtonElement>('[data-skill-slash-option-index="0"]');
+
+    expect(panel).not.toBeNull();
+    expect(option).not.toBeNull();
+    expect(option?.getAttribute("aria-current")).toBe("true");
+    expect(option?.textContent).toContain("Remember facts");
+
+    await act(async () => {
+      option?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("/memory ");
+  });
+
+  it("does not render the skill slash picker for channel drafts", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(host.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+  });
+
+  it("selects a DM skill slash option with keyboard", async () => {
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(input.value).toBe("/memory ");
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("moves the selected DM skill slash option with arrow keys", async () => {
+    const { element } = dmSkillSlashFixture("/");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-skill-slash-option-index]"));
+
+    expect(options()[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options()[1]?.getAttribute("aria-current")).toBeNull();
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+
+    expect(options()[0]?.getAttribute("aria-current")).toBeNull();
+    expect(options()[1]?.getAttribute("aria-current")).toBe("true");
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    expect(options()[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options()[1]?.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("selects a DM skill slash option with Tab", async () => {
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    expect(input.value).toBe("/memory ");
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps Shift+Enter available while the DM skill slash picker is active", async () => {
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    });
+
+    expect(input.value).toBe("/me");
+    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).not.toBeNull();
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("clears the leading skill slash query with Escape", async () => {
+    const { element } = dmSkillSlashFixture("/me");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(input.value).toBe("");
+    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+  });
+
   it("renders channel titles at a size close to the hash icon", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({

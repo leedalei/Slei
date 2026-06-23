@@ -1,4 +1,4 @@
-import type { AppLocale, AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences } from "../lib/daemon-bridge";
+import type { AppLocale, AppearancePreferences, ConversationAttachmentView, DaemonBridge, DesktopNodeView, NotificationPreferences, SkillView } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { SleiChannelMemberReadiness, SleiMember, SleiMessage, SleiTask } from "./types";
 
@@ -18,6 +18,12 @@ export type ChatSearchFilters = {
 };
 
 export type ActiveMention = {
+  query: string;
+  start: number;
+  end: number;
+};
+
+export type ActiveSkillSlashQuery = {
   query: string;
   start: number;
   end: number;
@@ -482,6 +488,16 @@ export function activeMentionQuery(draft: string): ActiveMention | null {
   };
 }
 
+export function activeSkillSlashQuery(draft: string): ActiveSkillSlashQuery | null {
+  const match = /^\/([\w-]*)$/u.exec(draft);
+  if (!match) return null;
+  return {
+    query: match[1] ?? "",
+    start: 0,
+    end: draft.length,
+  };
+}
+
 export function moveMentionSelection(current: number, delta: number, count: number): number {
   if (count <= 0) return 0;
   return (current + delta + count) % count;
@@ -499,6 +515,37 @@ export function mentionSuggestions(query: string, members: SleiMember[]): SleiMe
     const name = normalizeSearch(member.name);
     return !normalized || handle.includes(normalized) || name.includes(normalized);
   });
+}
+
+export function skillSlashSuggestions(query: string, skills: SkillView[]): SkillView[] {
+  const normalized = normalizeSearch(query.replace(/^\//, ""));
+  return skills.filter((skill) => {
+    const name = normalizeSearch(skill.name);
+    const id = normalizeSearch(skill.id);
+    return Boolean(skill.name.trim()) && (!normalized || name.includes(normalized) || id.includes(normalized));
+  });
+}
+
+export function insertSkillSlash(draft: string, slash: ActiveSkillSlashQuery, skill: Pick<SkillView, "name">): string {
+  const name = skill.name.trim();
+  if (!name) return draft;
+  return `${draft.slice(0, slash.start)}/${name} ${draft.slice(slash.end)}`;
+}
+
+export function leadingSkillSlashToken(body: string, skills: SkillView[]): { skill: SkillView; token: string; rest: string } | null {
+  const match = /^\/([\w-]+)(?=$|\s)/u.exec(body);
+  if (!match) return null;
+  const tokenName = match[1] ?? "";
+  const normalized = normalizeSearch(tokenName);
+  const skill = skills.find((candidate) =>
+    normalizeSearch(candidate.name) === normalized || normalizeSearch(candidate.id) === normalized,
+  );
+  if (!skill) return null;
+  return {
+    skill,
+    token: match[0],
+    rest: body.slice(match[0].length),
+  };
 }
 
 export function detectAgentMemoryRequest(message: string, members: SleiMember[]): AgentMemoryRequest | null {

@@ -2,15 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SleiMember } from "./types";
 import {
+  activeSkillSlashQuery,
   formatMemberCreatedDate,
   formatLocalRecordDateTime,
   formatMessageDateTime,
   formatMessageTime,
+  insertSkillSlash,
+  leadingSkillSlashToken,
   localeFromSystemLanguages,
   mentionSuggestions,
   mergeMessagePage,
   sendChatComposerMessage,
   shouldRefreshChannelMessages,
+  skillSlashSuggestions,
   timeZoneFromSystemValue,
 } from "./model";
 import type { SleiMessage } from "./types";
@@ -48,6 +52,46 @@ describe("mention suggestions", () => {
     ];
 
     expect(mentionSuggestions("co", members).map((member) => member.id)).toEqual(["agent_coda"]);
+  });
+});
+
+describe("skill slash helpers", () => {
+  const skills = [
+    { id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/.claude/skills/memory/SKILL.md" },
+    { id: "guide-create", name: "guide-create", trigger: "Create agents", path: "/tmp/.claude/skills/guide-create/SKILL.md" },
+  ];
+
+  it("detects only literal-start slash queries", () => {
+    expect(activeSkillSlashQuery("/")).toEqual({ query: "", start: 0, end: 1 });
+    expect(activeSkillSlashQuery("/me")).toEqual({ query: "me", start: 0, end: 3 });
+    expect(activeSkillSlashQuery(" /me")).toBeNull();
+    expect(activeSkillSlashQuery("hi /me")).toBeNull();
+    expect(activeSkillSlashQuery("请用 /memory")).toBeNull();
+    expect(activeSkillSlashQuery("/memory remember this")).toBeNull();
+  });
+
+  it("filters suggestions by skill name and id", () => {
+    expect(skillSlashSuggestions("me", skills).map((skill) => skill.id)).toEqual(["memory"]);
+    expect(skillSlashSuggestions("guide", skills).map((skill) => skill.id)).toEqual(["guide-create"]);
+    expect(skillSlashSuggestions("", skills).map((skill) => skill.id)).toEqual(["memory", "guide-create"]);
+  });
+
+  it("inserts a selected slash skill with a trailing space", () => {
+    const slash = activeSkillSlashQuery("/me");
+    expect(slash).not.toBeNull();
+    expect(insertSkillSlash("/me", slash!, skills[0])).toBe("/memory ");
+  });
+
+  it("matches only known leading skill tokens", () => {
+    expect(leadingSkillSlashToken("/memory remember this", skills)).toEqual({
+      skill: skills[0],
+      token: "/memory",
+      rest: " remember this",
+    });
+    expect(leadingSkillSlashToken("/guide-create", skills)?.skill.id).toBe("guide-create");
+    expect(leadingSkillSlashToken(" /memory", skills)).toBeNull();
+    expect(leadingSkillSlashToken("please /memory", skills)).toBeNull();
+    expect(leadingSkillSlashToken("/unknown", skills)).toBeNull();
   });
 });
 

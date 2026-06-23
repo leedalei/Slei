@@ -10,6 +10,7 @@ export const chat = {
   channelView: "频道视图",
   channels: "频道",
   chooseMentionMember: "选择提及成员",
+  chooseSkill: "选择技能",
   createChannel: "创建频道",
   createChannelDescription: "为团队会话创建新的频道，并按需关联多个项目文件夹。",
   createChannelFailed: "创建频道失败",

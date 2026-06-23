@@ -30,6 +30,7 @@ import {
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
   type SendChannelMessageOutcome,
+  type SkillListReceipt,
   type RuntimeSetupState,
   type TaskStatusView,
   type TaskSummaryView,
@@ -44,6 +45,7 @@ import { createEmptySleiData } from "./empty-data";
 import {
   type SleiChannel,
   type SleiChannelMemberReadiness,
+  type SleiFixtures,
   type SleiMember,
   type SleiMessage,
   type SleiTask,
@@ -314,6 +316,50 @@ export function hasUnsettledChannelMemberReadiness(members: SleiMember[], channe
     const readiness = member.channelReadiness?.[channelId];
     return readiness ? UNSETTLED_CHANNEL_MEMBER_READINESS.has(readiness) : false;
   });
+}
+
+export function mergeActiveDmAgentSkills(input: {
+  activeConversationId?: string;
+  agentId: string;
+  data: SleiFixtures;
+  skills: SkillListReceipt["skills"];
+}): SleiFixtures {
+  if (!input.activeConversationId) return input.data;
+  const conversation = input.data.conversations.find((candidate) => candidate.id === input.activeConversationId);
+  if (conversation?.kind !== "dm" || conversation.agentId !== input.agentId) return input.data;
+  const member = input.data.members.find((candidate) => candidate.id === input.agentId);
+  if (!member || member.type !== "agent" || member.skills) return input.data;
+
+  return createEmptySleiData({
+    ...input.data,
+    members: input.data.members.map((candidate) =>
+      candidate.id === input.agentId ? { ...candidate, skills: input.skills } : candidate,
+    ),
+  });
+}
+
+export async function ensureActiveDmAgentSkills(input: {
+  activeConversationId?: string;
+  data: SleiFixtures;
+  listAgentSkills: (agentId: string) => Promise<SkillListReceipt>;
+}): Promise<SleiFixtures> {
+  if (!input.activeConversationId) return input.data;
+  const conversation = input.data.conversations.find((candidate) => candidate.id === input.activeConversationId);
+  if (conversation?.kind !== "dm") return input.data;
+  const member = input.data.members.find((candidate) => candidate.id === conversation.agentId);
+  if (!member || member.type !== "agent" || member.skills) return input.data;
+
+  try {
+    const receipt = await input.listAgentSkills(member.id);
+    return mergeActiveDmAgentSkills({
+      activeConversationId: input.activeConversationId,
+      agentId: member.id,
+      data: input.data,
+      skills: receipt.skills,
+    });
+  } catch {
+    return input.data;
+  }
 }
 
 async function loadSleiChannelMemberReadiness(bridge: DaemonBridge, channels: ChannelView[], members: SleiMember[]): Promise<SleiMember[]> {
@@ -846,8 +892,17 @@ export function SleiApp() {
   const olderMessagesLoadingRef = useRef(false);
   const exhaustedOlderMessageTargetsRef = useRef(new Set<string>());
   const messageNavigationSequenceRef = useRef(0);
+  const activeDmSkillLoadsRef = useRef(new Set<string>());
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
+  const activeDmAgentId = useMemo(() => {
+    if (!activeConversationId) return undefined;
+    const conversation = data.conversations.find((candidate) => candidate.id === activeConversationId);
+    if (conversation?.kind !== "dm") return undefined;
+    const member = data.members.find((candidate) => candidate.id === conversation.agentId);
+    if (!member || member.type !== "agent" || member.skills) return undefined;
+    return member.id;
+  }, [activeConversationId, data.conversations, data.members]);
 
   async function refreshTasks(channelId?: string) {
     const receipt = await bridge.listTasks(channelId ? { channelId } : {});
@@ -1270,6 +1325,28 @@ export function SleiApp() {
       mounted = false;
     };
   }, [activeMemberId, bridge, data.members]);
+
+  useEffect(() => {
+    if (!activeConversationId || !activeDmAgentId) return;
+    if (activeDmSkillLoadsRef.current.has(activeDmAgentId)) return;
+    activeDmSkillLoadsRef.current.add(activeDmAgentId);
+    bridge
+      .listAgentSkills(activeDmAgentId)
+      .then((receipt) => {
+        setData((current) =>
+          mergeActiveDmAgentSkills({
+            activeConversationId,
+            agentId: activeDmAgentId,
+            data: current,
+            skills: receipt.skills,
+          }),
+        );
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        activeDmSkillLoadsRef.current.delete(activeDmAgentId);
+      });
+  }, [activeConversationId, activeDmAgentId, bridge]);
 
   useEffect(() => {
     if (!activeConversationId) return;

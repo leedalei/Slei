@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   channelMessageToSleiMessage,
@@ -10,6 +11,8 @@ import {
   findActiveAgentActivities,
   hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
+  ensureActiveDmAgentSkills,
+  mergeActiveDmAgentSkills,
   markNodesOfflineForDaemonUnavailable,
   keepOnlyClaimedAgentActivityByDiagnostic,
   markAgentActivityFailedByDiagnostic,
@@ -28,7 +31,7 @@ import {
 import { createDesktopMessages } from "../i18n";
 import { defaultProfile } from "./model";
 import type { ChannelMessageView, ConversationMessageView, DesktopNodeView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
-import type { SleiMember, SleiMessage } from "./types";
+import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 
 function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt: string } {
   const date = new Date(`${utcValue.replace(" ", "T")}Z`);
@@ -45,6 +48,151 @@ function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt:
     sentAt: `${valueFor("month")}-${valueFor("day")} ${valueFor("hour")}:${valueFor("minute")}`,
   };
 }
+
+function dataWithDmAgent(skills?: SleiMember["skills"]): SleiFixtures {
+  const member: SleiMember = {
+    id: "agent_coda",
+    name: "Coda",
+    handle: "@coda",
+    avatar: "CO",
+    type: "agent",
+    runtimeStatus: "idle",
+    role: "Developer",
+    description: "Builds features",
+    computer: "Local",
+    created: "2026-06-10",
+    creator: "system",
+    runtime: "ClaudeCode",
+    model: "Sonnet",
+    instructions: "",
+    permissions: [],
+    environmentVariables: [],
+    createdAgents: [],
+    activity: "",
+    capabilities: [],
+    skills,
+  };
+  return {
+    nodes: [],
+    channels: [{ id: "all", name: "all", description: "All", unread: 0 }],
+    messages: [],
+    tasks: [],
+    members: [member],
+    conversations: [{ id: "dm_agent_coda", kind: "dm", agentId: "agent_coda", createdAt: "0", updatedAt: "0" }],
+    conversationSessions: [],
+    channelSessions: [],
+  };
+}
+
+describe("ensureActiveDmAgentSkills", () => {
+  it("loads missing skills for the active DM agent", async () => {
+    const data = dataWithDmAgent(undefined);
+    const listAgentSkills = vi.fn().mockResolvedValue({
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    });
+
+    const next = await ensureActiveDmAgentSkills({
+      activeConversationId: "dm_agent_coda",
+      data,
+      listAgentSkills,
+    });
+
+    expect(listAgentSkills).toHaveBeenCalledWith("agent_coda");
+    expect(next.members[0].skills?.map((skill) => skill.id)).toEqual(["memory"]);
+  });
+
+  it("does not reload skills that are already present", async () => {
+    const data = dataWithDmAgent([]);
+    const listAgentSkills = vi.fn();
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "dm_agent_coda", data, listAgentSkills })).resolves.toBe(data);
+
+    expect(listAgentSkills).not.toHaveBeenCalled();
+  });
+
+  it("keeps current data when loading skills fails", async () => {
+    const data = dataWithDmAgent(undefined);
+    const listAgentSkills = vi.fn().mockRejectedValue(new Error("offline"));
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "dm_agent_coda", data, listAgentSkills })).resolves.toBe(data);
+  });
+
+  it("ignores channel context and non-DM conversations", async () => {
+    const data = dataWithDmAgent(undefined);
+    const dataWithNonDmConversation: SleiFixtures = {
+      ...data,
+      conversations: [{ id: "group_coda", kind: "group", agentId: "agent_coda", createdAt: "0", updatedAt: "0" }],
+    };
+    const listAgentSkills = vi.fn();
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: undefined, data, listAgentSkills })).resolves.toBe(data);
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "missing", data, listAgentSkills })).resolves.toBe(data);
+    await expect(
+      ensureActiveDmAgentSkills({ activeConversationId: "group_coda", data: dataWithNonDmConversation, listAgentSkills }),
+    ).resolves.toBe(dataWithNonDmConversation);
+
+    expect(listAgentSkills).not.toHaveBeenCalled();
+  });
+
+  it("ignores active DM conversations whose member is missing or not an agent", async () => {
+    const data = dataWithDmAgent(undefined);
+    const missingMemberData: SleiFixtures = {
+      ...data,
+      conversations: [{ id: "dm_missing", kind: "dm", agentId: "agent_missing", createdAt: "0", updatedAt: "0" }],
+    };
+    const humanMemberData: SleiFixtures = {
+      ...data,
+      members: [{ ...data.members[0], id: "human_lei", type: "human" }],
+      conversations: [{ id: "dm_human", kind: "dm", agentId: "human_lei", createdAt: "0", updatedAt: "0" }],
+    };
+    const listAgentSkills = vi.fn();
+
+    await expect(
+      ensureActiveDmAgentSkills({ activeConversationId: "dm_missing", data: missingMemberData, listAgentSkills }),
+    ).resolves.toBe(missingMemberData);
+    await expect(
+      ensureActiveDmAgentSkills({ activeConversationId: "dm_human", data: humanMemberData, listAgentSkills }),
+    ).resolves.toBe(humanMemberData);
+
+    expect(listAgentSkills).not.toHaveBeenCalled();
+  });
+
+  it("merges loaded DM skills into the current data snapshot only when the target is still missing skills", () => {
+    const data = dataWithDmAgent(undefined);
+    const currentWithMessage: SleiFixtures = {
+      ...data,
+      messages: [{ id: "msg_new", author: "Lei", role: "human", time: "", body: "newer message", channelId: "dm_agent_coda" }],
+    };
+
+    const next = mergeActiveDmAgentSkills({
+      activeConversationId: "dm_agent_coda",
+      agentId: "agent_coda",
+      data: currentWithMessage,
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    });
+
+    expect(next.members[0].skills?.map((skill) => skill.id)).toEqual(["memory"]);
+    expect(next.messages.map((message) => message.id)).toEqual(["msg_new"]);
+    expect(
+      mergeActiveDmAgentSkills({
+        activeConversationId: "dm_agent_coda",
+        agentId: "agent_coda",
+        data: next,
+        skills: [{ id: "other", name: "other", trigger: "Other", path: "/tmp/other/SKILL.md" }],
+      }),
+    ).toBe(next);
+  });
+
+  it("wires the active DM effect with guarded functional state merging", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/SleiApp.tsx"), "utf8");
+    expect(source).toContain("const activeDmSkillLoadsRef = useRef(new Set<string>())");
+    expect(source).toContain("setData((current) =>");
+    expect(source).toContain("mergeActiveDmAgentSkills({");
+    expect(source).toContain("activeDmSkillLoadsRef.current.delete(activeDmAgentId)");
+    expect(source).not.toContain("if (nextData !== data) setData(nextData)");
+    expect(source).not.toContain("}, [activeConversationId, bridge.listAgentSkills, data]);");
+  });
+});
 
 describe("createChannelAgentReplyMessage", () => {
   it("marks cached nodes offline when a daemon unavailable error is observed", () => {
