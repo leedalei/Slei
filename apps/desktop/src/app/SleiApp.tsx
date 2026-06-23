@@ -30,6 +30,7 @@ import {
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
   type SendChannelMessageOutcome,
+  type SkillListReceipt,
   type RuntimeSetupState,
   type TaskStatusView,
   type TaskSummaryView,
@@ -44,6 +45,7 @@ import { createEmptySleiData } from "./empty-data";
 import {
   type SleiChannel,
   type SleiChannelMemberReadiness,
+  type SleiFixtures,
   type SleiMember,
   type SleiMessage,
   type SleiTask,
@@ -314,6 +316,30 @@ export function hasUnsettledChannelMemberReadiness(members: SleiMember[], channe
     const readiness = member.channelReadiness?.[channelId];
     return readiness ? UNSETTLED_CHANNEL_MEMBER_READINESS.has(readiness) : false;
   });
+}
+
+export async function ensureActiveDmAgentSkills(input: {
+  activeConversationId?: string;
+  data: SleiFixtures;
+  listAgentSkills: (agentId: string) => Promise<SkillListReceipt>;
+}): Promise<SleiFixtures> {
+  if (!input.activeConversationId) return input.data;
+  const conversation = input.data.conversations.find((candidate) => candidate.id === input.activeConversationId);
+  if (conversation?.kind !== "dm") return input.data;
+  const member = input.data.members.find((candidate) => candidate.id === conversation.agentId);
+  if (!member || member.type !== "agent" || member.skills) return input.data;
+
+  try {
+    const receipt = await input.listAgentSkills(member.id);
+    return createEmptySleiData({
+      ...input.data,
+      members: input.data.members.map((candidate) =>
+        candidate.id === member.id ? { ...candidate, skills: receipt.skills } : candidate,
+      ),
+    });
+  } catch {
+    return input.data;
+  }
 }
 
 async function loadSleiChannelMemberReadiness(bridge: DaemonBridge, channels: ChannelView[], members: SleiMember[]): Promise<SleiMember[]> {
@@ -1268,6 +1294,24 @@ export function SleiApp() {
       mounted = false;
     };
   }, [activeMemberId, bridge, data.members]);
+
+  useEffect(() => {
+    let mounted = true;
+    ensureActiveDmAgentSkills({
+      activeConversationId,
+      data,
+      listAgentSkills: bridge.listAgentSkills,
+    })
+      .then((nextData) => {
+        if (!mounted) return;
+        if (nextData !== data) setData(nextData);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeConversationId, bridge.listAgentSkills, data]);
 
   useEffect(() => {
     if (!activeConversationId) return;

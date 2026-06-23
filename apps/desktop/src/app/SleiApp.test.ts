@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   channelMessageToSleiMessage,
@@ -10,6 +11,7 @@ import {
   findActiveAgentActivities,
   hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
+  ensureActiveDmAgentSkills,
   markNodesOfflineForDaemonUnavailable,
   keepOnlyClaimedAgentActivityByDiagnostic,
   markAgentActivityFailedByDiagnostic,
@@ -28,7 +30,7 @@ import {
 import { createDesktopMessages } from "../i18n";
 import { defaultProfile } from "./model";
 import type { ChannelMessageView, ConversationMessageView, DesktopNodeView, SendChannelMessageOutcome } from "../lib/daemon-bridge";
-import type { SleiMember, SleiMessage } from "./types";
+import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 
 function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt: string } {
   const date = new Date(`${utcValue.replace(" ", "T")}Z`);
@@ -45,6 +47,91 @@ function expectedLocalMessageDateTime(utcValue: string): { time: string; sentAt:
     sentAt: `${valueFor("month")}-${valueFor("day")} ${valueFor("hour")}:${valueFor("minute")}`,
   };
 }
+
+function dataWithDmAgent(skills?: SleiMember["skills"]): SleiFixtures {
+  const member: SleiMember = {
+    id: "agent_coda",
+    name: "Coda",
+    handle: "@coda",
+    avatar: "CO",
+    type: "agent",
+    runtimeStatus: "idle",
+    role: "Developer",
+    description: "Builds features",
+    computer: "Local",
+    created: "2026-06-10",
+    creator: "system",
+    runtime: "ClaudeCode",
+    model: "Sonnet",
+    instructions: "",
+    permissions: [],
+    environmentVariables: [],
+    createdAgents: [],
+    activity: "",
+    capabilities: [],
+    skills,
+  };
+  return {
+    nodes: [],
+    channels: [{ id: "all", name: "all", description: "All", unread: 0 }],
+    messages: [],
+    tasks: [],
+    members: [member],
+    conversations: [{ id: "dm_agent_coda", kind: "dm", agentId: "agent_coda", createdAt: "0", updatedAt: "0" }],
+    conversationSessions: [],
+    channelSessions: [],
+  };
+}
+
+describe("ensureActiveDmAgentSkills", () => {
+  it("loads missing skills for the active DM agent", async () => {
+    const data = dataWithDmAgent(undefined);
+    const listAgentSkills = vi.fn().mockResolvedValue({
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    });
+
+    const next = await ensureActiveDmAgentSkills({
+      activeConversationId: "dm_agent_coda",
+      data,
+      listAgentSkills,
+    });
+
+    expect(listAgentSkills).toHaveBeenCalledWith("agent_coda");
+    expect(next.members[0].skills?.map((skill) => skill.id)).toEqual(["memory"]);
+  });
+
+  it("does not reload skills that are already present", async () => {
+    const data = dataWithDmAgent([]);
+    const listAgentSkills = vi.fn();
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "dm_agent_coda", data, listAgentSkills })).resolves.toBe(data);
+
+    expect(listAgentSkills).not.toHaveBeenCalled();
+  });
+
+  it("keeps current data when loading skills fails", async () => {
+    const data = dataWithDmAgent(undefined);
+    const listAgentSkills = vi.fn().mockRejectedValue(new Error("offline"));
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "dm_agent_coda", data, listAgentSkills })).resolves.toBe(data);
+  });
+
+  it("ignores channel context and non-DM conversations", async () => {
+    const data = dataWithDmAgent(undefined);
+    const listAgentSkills = vi.fn();
+
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: undefined, data, listAgentSkills })).resolves.toBe(data);
+    await expect(ensureActiveDmAgentSkills({ activeConversationId: "missing", data, listAgentSkills })).resolves.toBe(data);
+
+    expect(listAgentSkills).not.toHaveBeenCalled();
+  });
+
+  it("wires the active DM effect through the helper", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/SleiApp.tsx"), "utf8");
+    expect(source).toContain("ensureActiveDmAgentSkills({");
+    expect(source).toContain("listAgentSkills: bridge.listAgentSkills");
+  });
+});
 
 describe("createChannelAgentReplyMessage", () => {
   it("marks cached nodes offline when a daemon unavailable error is observed", () => {
