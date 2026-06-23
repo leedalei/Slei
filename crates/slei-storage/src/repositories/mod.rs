@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 pub const RESET_MUTABLE_TABLES: &[&str] = &[
     "agent_activity_logs",
+    "agent_message_todos",
     "agent_statuses",
     "task_claims",
     "message_claims",
@@ -39,6 +40,7 @@ pub const RESET_MUTABLE_SEQUENCE_TABLES: &[&str] = &[
     "message_deliveries",
     "message_claims",
     "task_claims",
+    "agent_message_todos",
     "agent_activity_logs",
     "event_log",
     "agent_inbox_events",

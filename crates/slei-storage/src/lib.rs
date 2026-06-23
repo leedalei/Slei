@@ -81,7 +81,24 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+
+    #[tokio::test]
+    async fn migration_creates_agent_message_todos() {
+        let (url, _path) = sqlite_file_url("agent-message-todos-migration");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+
+        assert!(db.table_exists("agent_message_todos").await.unwrap());
+
+        let versions = sqlx::query_scalar::<_, i64>(
+            "SELECT version FROM schema_migrations ORDER BY version ASC",
+        )
+        .fetch_all(db.pool())
+        .await
+        .unwrap();
+        assert_eq!(versions.last().copied(), Some(10));
     }
 
     #[tokio::test]
@@ -98,7 +115,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 
     #[tokio::test]
@@ -450,7 +467,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 
     #[tokio::test]
@@ -1496,6 +1513,7 @@ mod tests {
         let attachment_id = Uuid::new_v4();
         let conversation_message_id = Uuid::new_v4();
         let interactive_card_id = Uuid::new_v4();
+        let todo_id = Uuid::new_v4();
 
         sqlx::query("INSERT INTO app_metadata(key, value) VALUES ('boot.mode', 'reset-test')")
             .execute(db.pool())
@@ -1561,6 +1579,26 @@ mod tests {
             .insert_human_message(message_id, channel_uuid, "reset body")
             .await
             .unwrap();
+        sqlx::query(
+            "INSERT INTO agent_message_todos(
+                id, agent_id, channel_id, message_id, message_author_id,
+                message_created_at, claim_owner_agent_id, status, run_id, note
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(todo_id.to_string())
+        .bind("agent_reset")
+        .bind(channel_uuid.to_string())
+        .bind(message_id.to_string())
+        .bind("human:local")
+        .bind("2026-06-15T00:00:00Z")
+        .bind("agent_reset")
+        .bind("pending")
+        .bind("run-reset")
+        .bind("reset todo")
+        .execute(db.pool())
+        .await
+        .unwrap();
         repos
             .insert_task(task_id, channel_uuid, message_id, "reset task")
             .await
@@ -1872,7 +1910,7 @@ mod tests {
 
         let seeded_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_message_todos', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -1907,7 +1945,7 @@ mod tests {
 
         let retained_sequence_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM sqlite_sequence
-             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
+             WHERE name IN ('message_deliveries', 'message_claims', 'task_claims', 'agent_message_todos', 'agent_activity_logs', 'event_log', 'agent_inbox_events', 'memory_update_events', 'routing_context_packages')",
         )
         .fetch_one(db.pool())
         .await
@@ -1918,7 +1956,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 9);
+        assert_eq!(migration_count, 10);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")
