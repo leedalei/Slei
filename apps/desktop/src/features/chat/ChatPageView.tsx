@@ -6,7 +6,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/too
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
+import { SkillSlashPicker } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
@@ -480,6 +481,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
@@ -488,6 +490,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
@@ -501,6 +504,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
+  const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
+  const skillSlashTargets = skillSlash ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
@@ -688,6 +693,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     if (!mention || !mentionTargets[index]) return;
     setDraft(insertMention(draft, mention, mentionTargets[index].handle));
     setSelectedMentionIndex(0);
+  }
+
+  function selectSkillSlash(index = selectedSkillIndex) {
+    if (!skillSlash || !skillSlashTargets[index]) return;
+    setDraft(insertSkillSlash(draft, skillSlash, skillSlashTargets[index]));
+    setSelectedSkillIndex(0);
   }
 
   async function copyMessage(message: SleiMessage) {
@@ -1032,6 +1043,19 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         mentionOptionRefs.current[index] = node;
                       }}
                       selectedIndex={selectedMentionIndex}
+                    />
+                  </div>
+                ) : null}
+                {skillSlash && skillSlashTargets.length > 0 ? (
+                  <div className="px-4 pt-3">
+                    <SkillSlashPicker
+                      messages={messages}
+                      onSelect={selectSkillSlash}
+                      optionRef={(index, node) => {
+                        skillOptionRefs.current[index] = node;
+                      }}
+                      selectedIndex={selectedSkillIndex}
+                      skills={skillSlashTargets}
                     />
                   </div>
                 ) : null}

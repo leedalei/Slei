@@ -68,6 +68,34 @@ afterEach(async () => {
 });
 
 describe("ChatPage mention panel", () => {
+  it("renders the DM skill slash picker for a leading slash draft", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.chooseSkill);
+    expect(html).toContain("/memory");
+  });
+
   it("renders channel titles at a size close to the hash icon", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({

@@ -10,6 +10,7 @@ export const chat = {
   channelView: "Channel view",
   channels: "CHANNELS",
   chooseMentionMember: "Choose member to mention",
+  chooseSkill: "Choose skill",
   createChannel: "Create channel",
   createChannelDescription: "Create a new channel for team conversations and optionally link multiple project folders.",
   createChannelFailed: "Create channel failed",
