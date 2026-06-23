@@ -98,6 +98,11 @@ pub async fn claim_message(
                         ),
                     )
                     .await;
+            } else if let Some(owner) = response.agent_id.as_deref() {
+                let _ = state
+                    .agent_message_todos()
+                    .create_pending_from_failed_claim(&message_id, &payload.agent_id, owner)
+                    .await;
             }
             Json(response).into_response()
         }

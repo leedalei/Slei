@@ -1,8 +1,10 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
+use axum::Router;
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::agent_message_todo_service::AgentMessageTodoListQuery;
 use slei_daemon::services::channel_service::{
     ChannelDraft, ChannelMemberReadiness, PermissionPreset,
 };
@@ -56,6 +58,25 @@ fn authed_json_request_with_idempotency(
 async fn response_json(response: axum::response::Response) -> Value {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     serde_json::from_slice(&body).unwrap()
+}
+
+async fn claim_message_json(
+    app: Router,
+    token: &AuthToken,
+    message_id: &str,
+    agent_id: &str,
+) -> Value {
+    let response = app
+        .oneshot(authed_json_request(
+            token,
+            "POST",
+            format!("/v1/claims/messages/{message_id}"),
+            json!({ "agentId": agent_id }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    response_json(response).await
 }
 
 #[tokio::test]
@@ -809,6 +830,251 @@ async fn message_claim_api_returns_owner_for_losing_agents() {
     let retry_json = response_json(retry).await;
     assert_eq!(retry_json["claimed"], true);
     assert_eq!(retry_json["agentId"], "agent_cindy");
+}
+
+#[tokio::test]
+async fn failed_message_claim_creates_agent_message_todo() {
+    let token = AuthToken::from_static("test-token");
+    let root = std::env::temp_dir().join(format!(
+        "slei-failed-claim-agent-message-todo-{}",
+        Uuid::new_v4()
+    ));
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    let db_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&db_url).await.unwrap();
+    let message = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "请 agent_b 后续接手",
+            "failed-claim-todo-message",
+            false,
+        )
+        .await
+        .unwrap();
+    let message_created_at =
+        sqlx::query_scalar::<_, String>("SELECT created_at FROM messages WHERE id = ?")
+            .bind(&message.id)
+            .fetch_one(db.pool())
+            .await
+            .unwrap();
+    state
+        .claims()
+        .create_message_delivery(&message.id, "all", "agent_b")
+        .await
+        .unwrap();
+    let app = build_router(state.clone());
+
+    let first_claim = claim_message_json(app.clone(), &token, &message.id, "agent_a").await;
+    assert_eq!(first_claim["claimed"], true);
+    assert_eq!(first_claim["agentId"], "agent_a");
+
+    let failed_claim = claim_message_json(app.clone(), &token, &message.id, "agent_b").await;
+    assert_eq!(failed_claim["claimed"], false);
+    assert_eq!(failed_claim["agentId"], "agent_a");
+
+    let todos = state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some("agent_b".to_string()),
+            channel_id: Some("all".to_string()),
+            status: Some("pending".to_string()),
+            include_deleted: false,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(todos.len(), 1);
+    let todo = &todos[0];
+    assert_eq!(todo.agent_id, "agent_b");
+    assert_eq!(todo.channel_id, "all");
+    assert_eq!(todo.message_id, message.id);
+    assert_eq!(todo.message_author_id, "human_lei");
+    assert_eq!(todo.message_created_at, message_created_at);
+    assert_eq!(todo.claim_owner_agent_id, "agent_a");
+    assert_eq!(todo.status, "pending");
+
+    let duplicate_failed_claim =
+        claim_message_json(app.clone(), &token, &message.id, "agent_b").await;
+    assert_eq!(duplicate_failed_claim["claimed"], false);
+    assert_eq!(duplicate_failed_claim["agentId"], "agent_a");
+    let duplicate_todos = state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some("agent_b".to_string()),
+            channel_id: Some("all".to_string()),
+            status: Some("pending".to_string()),
+            include_deleted: false,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(duplicate_todos.len(), 1);
+    assert_eq!(duplicate_todos[0].id, todo.id);
+
+    let no_delivery = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "没有投递不应该创建待办",
+            "failed-claim-no-delivery",
+            false,
+        )
+        .await
+        .unwrap();
+    claim_message_json(app.clone(), &token, &no_delivery.id, "agent_a").await;
+    let no_delivery_claim =
+        claim_message_json(app.clone(), &token, &no_delivery.id, "agent_b").await;
+    assert_eq!(no_delivery_claim["claimed"], false);
+    let todos_after_no_delivery = state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some("agent_b".to_string()),
+            channel_id: Some("all".to_string()),
+            status: Some("pending".to_string()),
+            include_deleted: false,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(todos_after_no_delivery.len(), 1);
+    assert!(!todos_after_no_delivery
+        .iter()
+        .any(|todo| todo.message_id == no_delivery.id));
+
+    let agent_message = state
+        .messages()
+        .create_agent_channel_message("all", "agent_writer", "agent-authored processable")
+        .await
+        .unwrap();
+    state
+        .claims()
+        .create_message_delivery(&agent_message.id, "all", "agent_c")
+        .await
+        .unwrap();
+    claim_message_json(app.clone(), &token, &agent_message.id, "agent_a").await;
+    let agent_message_failed_claim =
+        claim_message_json(app.clone(), &token, &agent_message.id, "agent_c").await;
+    assert_eq!(agent_message_failed_claim["claimed"], false);
+    let agent_todos = state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some("agent_c".to_string()),
+            channel_id: Some("all".to_string()),
+            status: Some("pending".to_string()),
+            include_deleted: false,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(agent_todos.len(), 1);
+    assert_eq!(agent_todos[0].message_id, agent_message.id);
+    assert_eq!(agent_todos[0].message_author_id, "agent_writer");
+    assert_eq!(agent_todos[0].claim_owner_agent_id, "agent_a");
+
+    let task_card = state
+        .messages()
+        .create_task_card_message("all", "task_hidden", &message.id)
+        .await
+        .unwrap();
+    let tombstone = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "墓碑消息不创建",
+            "failed-claim-tombstone",
+            false,
+        )
+        .await
+        .unwrap();
+    state
+        .messages()
+        .delete_human_message(&tombstone.id)
+        .await
+        .unwrap();
+    let task = state
+        .tasks()
+        .create_task_root(
+            "all",
+            "human_lei",
+            "旧任务 root 不创建",
+            "failed-claim-task-root",
+        )
+        .await
+        .unwrap();
+    let reply = state
+        .tasks()
+        .add_reply(
+            &task.id,
+            "agent_a",
+            "旧任务 reply 不创建",
+            "failed-claim-task-reply",
+        )
+        .await
+        .unwrap();
+    let legacy_task_control = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "system",
+            "task_card:{\"taskId\":\"legacy\"}",
+            "failed-claim-legacy-task-control",
+            false,
+        )
+        .await
+        .unwrap();
+    let deleted_message = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "deleted flag should not create",
+            "failed-claim-deleted",
+            false,
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE messages SET deleted = 1 WHERE id = ?")
+        .bind(&deleted_message.id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let task_root_message_id = format!("task_root_msg_{}", task.id);
+    let task_reply_message_id = format!("task_reply_msg_{}", reply.id);
+    for message_id in [
+        task_card.id.as_str(),
+        tombstone.id.as_str(),
+        task_root_message_id.as_str(),
+        task_reply_message_id.as_str(),
+        legacy_task_control.id.as_str(),
+        deleted_message.id.as_str(),
+    ] {
+        state
+            .claims()
+            .create_message_delivery(message_id, "all", "agent_d")
+            .await
+            .unwrap();
+        let owner_claim = claim_message_json(app.clone(), &token, message_id, "agent_a").await;
+        assert_eq!(owner_claim["claimed"], true);
+        let failed_claim = claim_message_json(app.clone(), &token, message_id, "agent_d").await;
+        assert_eq!(failed_claim["claimed"], false);
+    }
+    let rejected_todos = state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some("agent_d".to_string()),
+            channel_id: Some("all".to_string()),
+            status: Some("pending".to_string()),
+            include_deleted: false,
+            limit: None,
+        })
+        .await
+        .unwrap();
+    assert!(rejected_todos.is_empty());
 }
 
 #[tokio::test]

@@ -225,6 +225,55 @@ impl AgentMessageTodoService {
         todos_from_payload(&payload)
     }
 
+    pub async fn create_pending_from_failed_claim(
+        &self,
+        message_id: &str,
+        failed_agent_id: &str,
+        claim_owner_agent_id: &str,
+    ) -> Result<Option<AgentMessageTodo>, AgentMessageTodoError> {
+        let message_id = required_trimmed(message_id, "message id")?;
+        let failed_agent_id = required_trimmed(failed_agent_id, "failed agent id")?;
+        let claim_owner_agent_id = required_trimmed(claim_owner_agent_id, "claim owner agent id")?;
+        let Some(message) = self
+            .repos
+            .channel_message(message_id)
+            .await
+            .map_err(storage_error)?
+        else {
+            return Ok(None);
+        };
+        if message.deleted || !is_processable_message(&message) {
+            return Ok(None);
+        }
+
+        let deliveries = self
+            .repos
+            .message_deliveries_for_message(message_id)
+            .await
+            .map_err(storage_error)?;
+        if !deliveries
+            .iter()
+            .any(|delivery| delivery.agent_id == failed_agent_id)
+        {
+            return Ok(None);
+        }
+
+        let todo = self
+            .repos
+            .create_agent_message_todo(NewAgentMessageTodoRow {
+                agent_id: failed_agent_id.to_string(),
+                channel_id: message.channel_id,
+                message_id: message.id,
+                message_author_id: message.author_id,
+                message_created_at: message.created_at,
+                claim_owner_agent_id: claim_owner_agent_id.to_string(),
+                note: None,
+            })
+            .await
+            .map_err(storage_error)?;
+        Ok(Some(AgentMessageTodo::from(todo)))
+    }
+
     async fn validate_manual_source_message(
         &self,
         channel_id: &str,
