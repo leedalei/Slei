@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   Bell,
@@ -288,11 +288,47 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
     : [];
   const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, 0);
+  const fontSize = fontSizeValue(appearance.fontSize);
+  const textTokenValues = useMemo(() => fontSizeTextTokenValues(appearance.fontSize), [appearance.fontSize]);
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
-    "--slei-font-size": fontSizeValue(appearance.fontSize),
+    "--slei-font-size": fontSize,
     gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const root = document.documentElement;
+    const previousFontSize = root.style.fontSize;
+    const previousSleiFontSize = root.style.getPropertyValue("--slei-font-size");
+    const previousTextTokenValues = Object.fromEntries(
+      Object.keys(textTokenValues).map((key) => [key, root.style.getPropertyValue(key)]),
+    );
+
+    root.style.fontSize = fontSize;
+    root.style.setProperty("--slei-font-size", fontSize);
+    for (const [key, value] of Object.entries(textTokenValues)) {
+      root.style.setProperty(key, value);
+    }
+
+    return () => {
+      root.style.fontSize = previousFontSize;
+      if (previousSleiFontSize) {
+        root.style.setProperty("--slei-font-size", previousSleiFontSize);
+      } else {
+        root.style.removeProperty("--slei-font-size");
+      }
+      for (const key of Object.keys(textTokenValues)) {
+        const previousValue = previousTextTokenValues[key];
+        if (previousValue) {
+          root.style.setProperty(key, previousValue);
+        } else {
+          root.style.removeProperty(key);
+        }
+      }
+    };
+  }, [fontSize, textTokenValues]);
 
   useEffect(() => {
     if (input.runtimeSetup.nodes.some((node) => node.id === activeComputerId)) return;
@@ -304,6 +340,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     <div
       className={cn("grid h-screen min-h-0 overflow-hidden bg-background text-foreground", normalizedTheme === "dark" && "dark")}
       data-active-view={input.activeView}
+      data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
       style={shellStyle}
     >
@@ -1485,6 +1522,21 @@ function fontSizeValue(size: AppearancePreferences["fontSize"]) {
     md: "15px",
     lg: "16px",
   }[size];
+}
+
+function fontSizeTextTokenValues(size: AppearancePreferences["fontSize"]) {
+  const offset = { sm: -1, md: 0, lg: 1 }[size];
+  const px = (value: number) => `${value + offset}px`;
+  return {
+    "--text-xs": px(11),
+    "--text-sm": px(13),
+    "--text-base": px(15),
+    "--text-md": px(15),
+    "--text-lg": px(16),
+    "--text-xl": px(18),
+    "--text-2xl": px(24),
+    "--text-display": px(30),
+  } as const;
 }
 
 function ShellDialog(input: {

@@ -163,6 +163,13 @@ describe("SettingsPage header", () => {
 
     expect(onAppearanceChange).toHaveBeenCalledWith({ theme: "dark", fontSize: "md" });
 
+    await act(async () => {
+      appearanceContainer.querySelector<HTMLButtonElement>("[data-settings-font-size-option='lg']")?.click();
+    });
+    await act(async () => undefined);
+
+    expect(onAppearanceChange).toHaveBeenCalledWith({ theme: "light", fontSize: "lg" });
+
     const onNotificationsChange = vi.fn();
     const notificationsContainer = await mountSettingsPage(
       <SettingsPage
