@@ -711,10 +711,155 @@ async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostic
             && event.payload.contains("latency_ms=")
     }));
     assert!(events.iter().any(|event| {
+        event.event_type == "agent_activity.updated"
+            && event.payload.contains(&format!("run_id={run_id}"))
+            && event.payload.contains("event_kind=tool.started")
+            && event.payload.contains("tool_name=Read")
+            && event.payload.contains("state=running")
+    }));
+    assert!(events.iter().any(|event| {
         event.event_type == "channel_agent_runtime.broadcast_stdout_suppressed"
             && event
                 .payload
                 .contains("visible_replies_require_slei_cli_claim_send")
+    }));
+}
+
+#[tokio::test]
+async fn channel_join_memory_permission_auto_approves_own_memory_and_notes_files() {
+    let state = app_state_with_agent_handle("agent_luna", "@luna").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "kol-content".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-kol-content-for-memory-permission",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .start_channel_agent_join_report("kol-content", "agent_luna")
+        .await
+        .unwrap();
+    let run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_luna"
+        })
+        .and_then(|command| command["run_id"].as_str().map(str::to_string))
+        .expect("join report run");
+    let agent = state
+        .members()
+        .get_product_agent("agent_luna")
+        .await
+        .unwrap();
+
+    for (request_id, target_path) in [
+        ("perm_memory", agent.memory_path.as_str()),
+        ("perm_notes", "notes/channel.md"),
+    ] {
+        state
+            .handle_worker_event(json!({
+                "type": "permission_requested",
+                "run_id": run_id,
+                "request_id": request_id,
+                "tool_use_id": format!("tool_{request_id}"),
+                "agent_id": "agent_luna",
+                "tool_name": "Edit",
+                "target_path": target_path,
+            }))
+            .await
+            .unwrap();
+    }
+
+    let commands = state.worker_commands();
+    for request_id in ["perm_memory", "perm_notes"] {
+        assert!(
+            commands.iter().any(|command| {
+                command["type"] == "resolve_permission"
+                    && command["request_id"] == request_id
+                    && command["decision"] == "approve_once"
+            }),
+            "missing auto approval command for {request_id}: {commands:?}"
+        );
+    }
+    let events = state
+        .orchestration()
+        .recent_diagnostic_events(20)
+        .await
+        .unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_type == "channel_agent_runtime.permission_auto_approved"
+            && event.payload.contains(&format!("run_id={run_id}"))
+            && event.payload.contains("request_id=perm_memory")
+    }));
+}
+
+#[tokio::test]
+async fn channel_join_memory_permission_does_not_auto_approve_outside_agent_memory_files() {
+    let state = app_state_with_agent_handle("agent_luna", "@luna").await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "kol-content".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-kol-content-for-memory-deny",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .start_channel_agent_join_report("kol-content", "agent_luna")
+        .await
+        .unwrap();
+    let run_id = state
+        .worker_commands()
+        .into_iter()
+        .rev()
+        .find(|command| {
+            command["type"] == "start_run" && command["session"]["agent_id"] == "agent_luna"
+        })
+        .and_then(|command| command["run_id"].as_str().map(str::to_string))
+        .expect("join report run");
+
+    state
+        .handle_worker_event(json!({
+            "type": "permission_requested",
+            "run_id": run_id,
+            "request_id": "perm_escape",
+            "tool_use_id": "tool_escape",
+            "agent_id": "agent_luna",
+            "tool_name": "Edit",
+            "target_path": "../agent_other/MEMORY.md",
+        }))
+        .await
+        .unwrap();
+
+    let commands = state.worker_commands();
+    assert!(
+        !commands.iter().any(|command| {
+            command["type"] == "resolve_permission" && command["request_id"] == "perm_escape"
+        }),
+        "outside memory path should not be auto approved: {commands:?}"
+    );
+    let events = state
+        .orchestration()
+        .recent_diagnostic_events(20)
+        .await
+        .unwrap();
+    assert!(events.iter().any(|event| {
+        event.event_type == "channel_agent_runtime.permission_requires_approval"
+            && event.payload.contains(&format!("run_id={run_id}"))
+            && event.payload.contains("request_id=perm_escape")
     }));
 }
 

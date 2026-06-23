@@ -636,6 +636,8 @@ export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: 
   if (!messageId || messageId === "none" || !agentId) return messages;
   const state = diagnosticPayloadValue(event, "state");
   const phase = diagnosticPayloadValue(event, "phase")?.replaceAll("_", " ") ?? "";
+  const activityEventKind = diagnosticPayloadValue(event, "event_kind");
+  const activityToolName = diagnosticPayloadValue(event, "tool_name");
   const replacedMessages = replaceChannelAgentActivityForClaim(messages, messageId, agentId, members);
   let changed = replacedMessages !== messages;
   const nextMessages = replacedMessages.map((message) => {
@@ -646,6 +648,8 @@ export function updateAgentActivityByDiagnostic(messages: SleiMessage[], event: 
       ...message,
       body: phase,
       status: state === "failed" ? "failed" as const : "running" as const,
+      activityEventKind,
+      activityToolName,
     };
   });
   return changed ? nextMessages : messages;

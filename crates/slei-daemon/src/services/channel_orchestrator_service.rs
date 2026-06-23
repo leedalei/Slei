@@ -1,4 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tokio::sync::Mutex as AsyncMutex;
@@ -21,7 +24,7 @@ use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
 };
 use crate::services::claim_service::{ClaimError, ClaimService};
-use crate::services::member_service::{MemberError, MemberService};
+use crate::services::member_service::{MemberError, MemberService, ProductAgentRecord};
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
 use crate::services::message_thread_service::MessageThreadReplyView;
 use crate::services::message_thread_service::{MessageThreadError, MessageThreadService};
@@ -832,6 +835,13 @@ impl ChannelOrchestratorService {
                     None,
                 )
                 .await;
+                self.record_channel_agent_tool_activity_update(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    tool_name,
+                )
+                .await;
                 Ok(true)
             }
             Some("tool_completed") => {
@@ -848,6 +858,13 @@ impl ChannelOrchestratorService {
                     Some(event.to_string()),
                     Some(tool_name.to_string()),
                     Some(ok),
+                )
+                .await;
+                self.record_channel_agent_tool_activity_update(
+                    &record,
+                    run_id,
+                    "tool.completed",
+                    tool_name,
                 )
                 .await;
                 Ok(true)
@@ -868,6 +885,13 @@ impl ChannelOrchestratorService {
                     Some(event.to_string()),
                     Some(tool_name.to_string()),
                     None,
+                )
+                .await;
+                self.record_channel_agent_tool_activity_update(
+                    &record,
+                    run_id,
+                    "tool.started",
+                    tool_name,
                 )
                 .await;
                 if tool_name != "slei_propose_interactive_card" {
@@ -907,6 +931,13 @@ impl ChannelOrchestratorService {
                         &message_id,
                         vec![card.to_view()],
                     )
+                    .await?;
+                Ok(true)
+            }
+            Some("permission_requested") => {
+                let record = record.clone();
+                drop(runs);
+                self.handle_channel_agent_permission_request(&record, run_id, &event)
                     .await?;
                 Ok(true)
             }
@@ -1260,6 +1291,116 @@ impl ChannelOrchestratorService {
                 reason: None,
             })
             .await;
+    }
+
+    async fn record_channel_agent_tool_activity_update(
+        &self,
+        record: &ChannelAgentRunRecord,
+        run_id: &str,
+        event_kind: &str,
+        tool_name: &str,
+    ) {
+        let _ = self
+            .orchestration
+            .record_diagnostic_event(
+                "agent_activity.updated",
+                &format!(
+                    "agent_id={} run_id={} channel_id={} message_id={} task_id={} state=running phase= event_kind={} tool_name={}",
+                    record.agent_id,
+                    run_id,
+                    record.channel_id,
+                    record.source_message_id,
+                    record.task_id.as_deref().unwrap_or("none"),
+                    event_kind,
+                    diagnostic_token(tool_name)
+                ),
+            )
+            .await;
+    }
+
+    async fn handle_channel_agent_permission_request(
+        &self,
+        record: &ChannelAgentRunRecord,
+        run_id: &str,
+        event: &Value,
+    ) -> Result<(), ChannelOrchestratorError> {
+        let request_id = event
+            .get("request_id")
+            .and_then(Value::as_str)
+            .ok_or(ChannelOrchestratorError::InvalidWorkerEvent("request_id"))?;
+        let event_agent_id = event
+            .get("agent_id")
+            .and_then(Value::as_str)
+            .ok_or(ChannelOrchestratorError::InvalidWorkerEvent("agent_id"))?;
+        let tool_name = event
+            .get("tool_name")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let target_path = event
+            .get("target_path")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+
+        if event_agent_id != record.agent_id {
+            let _ = self
+                .orchestration
+                .record_diagnostic_event(
+                    "channel_agent_runtime.permission_requires_approval",
+                    &format!(
+                        "run_id={} agent_id={} channel_id={} source_message_id={} request_id={} reason=agent_mismatch event_agent_id={}",
+                        run_id,
+                        record.agent_id,
+                        record.channel_id,
+                        record.source_message_id,
+                        request_id,
+                        diagnostic_token(event_agent_id)
+                    ),
+                )
+                .await;
+            return Ok(());
+        }
+
+        let agent = self.members.get_product_agent(&record.agent_id).await?;
+        if let Some(relative_target) =
+            auto_approvable_agent_memory_permission(&agent, tool_name, target_path)
+        {
+            self.worker.resolve_permission(request_id, "approve_once")?;
+            let _ = self
+                .orchestration
+                .record_diagnostic_event(
+                    "channel_agent_runtime.permission_auto_approved",
+                    &format!(
+                        "run_id={} agent_id={} channel_id={} source_message_id={} request_id={} tool_name={} target={}",
+                        run_id,
+                        record.agent_id,
+                        record.channel_id,
+                        record.source_message_id,
+                        request_id,
+                        diagnostic_token(tool_name),
+                        diagnostic_token(&relative_target.to_string_lossy())
+                    ),
+                )
+                .await;
+            return Ok(());
+        }
+
+        let _ = self
+            .orchestration
+            .record_diagnostic_event(
+                "channel_agent_runtime.permission_requires_approval",
+                &format!(
+                    "run_id={} agent_id={} channel_id={} source_message_id={} request_id={} tool_name={} target={}",
+                    run_id,
+                    record.agent_id,
+                    record.channel_id,
+                    record.source_message_id,
+                    request_id,
+                    diagnostic_token(tool_name),
+                    diagnostic_token(target_path)
+                ),
+            )
+            .await;
+        Ok(())
     }
 
     async fn sync_declared_channel_members(
@@ -1790,6 +1931,85 @@ fn reply_requires_work(body: &str) -> bool {
     ]
     .iter()
     .any(|marker| body.contains(marker))
+}
+
+fn auto_approvable_agent_memory_permission(
+    agent: &ProductAgentRecord,
+    tool_name: &str,
+    target_path: &str,
+) -> Option<PathBuf> {
+    if !matches!(tool_name, "Write" | "Edit" | "MultiEdit") {
+        return None;
+    }
+    let workspace_path = Path::new(&agent.workspace_path);
+    let relative_target = resolve_target_relative_to_workspace(workspace_path, target_path)?;
+    if is_agent_memory_relative_path(&relative_target) {
+        Some(relative_target)
+    } else {
+        None
+    }
+}
+
+fn resolve_target_relative_to_workspace(
+    workspace_path: &Path,
+    target_path: &str,
+) -> Option<PathBuf> {
+    let target_path = target_path.trim();
+    if target_path.is_empty() {
+        return None;
+    }
+    let raw_target = Path::new(target_path);
+    if raw_target
+        .components()
+        .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+    {
+        return None;
+    }
+    let workspace_path = fs::canonicalize(workspace_path).ok()?;
+    let candidate = if raw_target.is_absolute() {
+        raw_target.to_path_buf()
+    } else {
+        workspace_path.join(raw_target)
+    };
+    let mut ancestor = candidate.as_path();
+    let mut missing_components: Vec<OsString> = Vec::new();
+    while !ancestor.exists() {
+        missing_components.push(ancestor.file_name()?.to_os_string());
+        ancestor = ancestor.parent()?;
+    }
+    let mut resolved = fs::canonicalize(ancestor).ok()?;
+    for component in missing_components.iter().rev() {
+        resolved.push(component);
+    }
+    if !resolved.starts_with(&workspace_path) {
+        return None;
+    }
+    resolved
+        .strip_prefix(&workspace_path)
+        .ok()
+        .map(Path::to_path_buf)
+}
+
+fn is_agent_memory_relative_path(relative_target: &Path) -> bool {
+    if relative_target == Path::new("MEMORY.md") {
+        return true;
+    }
+    let mut components = relative_target.components();
+    let Some(Component::Normal(root)) = components.next() else {
+        return false;
+    };
+    if root != "notes" {
+        return false;
+    }
+    let Some(Component::Normal(file_name)) = components.next() else {
+        return false;
+    };
+    if components.next().is_some() {
+        return false;
+    }
+    Path::new(file_name)
+        .extension()
+        .is_some_and(|extension| extension == "md")
 }
 
 fn diagnostic_token(value: &str) -> String {

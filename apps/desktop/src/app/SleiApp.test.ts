@@ -139,6 +139,39 @@ describe("createChannelAgentReplyMessage", () => {
     ]);
   });
 
+  it("stores the latest channel agent tool diagnostic on the activity placeholder", () => {
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_alice",
+      author: "Alice",
+      handle: "@alice",
+      role: "agent",
+      time: "",
+      body: "",
+      channelId: "all",
+      status: "pending",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const event = {
+      sequence: 1,
+      eventType: "agent_activity.updated",
+      entityId: "run_1",
+      payload: "agent_id=agent_alice run_id=run_1 channel_id=all message_id=msg_route_1 task_id=none state=running phase= event_kind=tool.started tool_name=Bash",
+      createdAt: "2026-06-23T08:00:00.000Z",
+    };
+
+    const [activity] = updateAgentActivityByDiagnostic([pending], event) as Array<SleiMessage & {
+      activityEventKind?: string;
+      activityToolName?: string;
+    }>;
+
+    expect(activity).toMatchObject({
+      status: "running",
+      activityEventKind: "tool.started",
+      activityToolName: "Bash",
+    });
+  });
+
   it("marks pending agent activity failed when daemon diagnostics report the agent run failure", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",

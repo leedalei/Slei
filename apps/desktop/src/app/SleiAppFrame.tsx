@@ -605,10 +605,17 @@ export function selectAgentActivityForTick(activities: AgentActivityView[], _tic
   return activities[0];
 }
 
+function agentActivityLabel(activity: AgentActivityView, messages: DesktopMessages) {
+  if (activity.message.status === "failed") return messages.chat.agentRunFailed;
+  if (activity.message.activityEventKind === "tool.started") return messages.chat.agentRunningCommand;
+  return messages.chat.agentThinking;
+}
+
 function AgentActivityPanel(input: { activity?: AgentActivityView; messages: DesktopMessages }) {
   const { activity } = input;
   if (!activity) return null;
   const failed = activity.message.status === "failed";
+  const label = agentActivityLabel(activity, input.messages);
   const identity = activity.member ?? {
     id: activity.message.id,
     name: activity.message.author,
@@ -623,7 +630,7 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
         <div className="min-w-0 flex-1">
           <strong className="block truncate text-sm">{activity.member?.name ?? activity.message.author}</strong>
           <small className={cn("block truncate text-xs text-muted-foreground", failed && "font-medium text-destructive")}>
-            {failed ? input.messages.chat.agentRunFailed : input.messages.chat.agentThinking}
+            {label}
           </small>
         </div>
       </div>

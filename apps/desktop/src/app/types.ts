@@ -41,6 +41,8 @@ export type SleiMessage = {
   task?: SleiTask;
   thread?: SleiMessageThread;
   taskCard?: { taskId: string; sourceMessageId?: string };
+  activityEventKind?: string;
+  activityToolName?: string;
   toolCall?: string;
 };
 

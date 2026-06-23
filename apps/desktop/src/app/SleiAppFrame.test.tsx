@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createDemoMembers, createSleiFixtures } from "../test/fixtures";
 import { SleiAppFrame } from "./SleiAppFrame";
+import type { SleiMessage } from "./types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 (globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver ??= class ResizeObserver {
@@ -170,6 +171,43 @@ describe("SleiAppFrame global search navigation", () => {
     expect(document.body.textContent).toContain("Coda");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
+  });
+
+  it("shows command execution copy for an active channel agent tool event", () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      messages: [{
+        id: "agent-activity-msg_1-a1",
+        author: "Coda",
+        handle: "@coda",
+        role: "agent",
+        time: "",
+        body: "",
+        channelId: "all",
+        status: "running",
+        sourceMessageId: "msg_1",
+        activityEventKind: "tool.started",
+        activityToolName: "Bash",
+        toolCall: "channel_agent_reply",
+      } as SleiMessage & {
+        activityEventKind: string;
+        activityToolName: string;
+      }],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('data-slot="agent-activity"');
+    expect(html).toContain("正在执行命令");
+    expect(html).not.toContain("正在思考");
   });
 
   it("marks sidebar category titles as unselectable", () => {
