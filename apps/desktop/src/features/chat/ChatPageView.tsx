@@ -1103,7 +1103,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           setSelectedSkillIndex(0);
                           return;
                         }
-                        if (event.key === "Enter" || event.key === "Tab") {
+                        if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
                           event.preventDefault();
                           selectSkillSlash();
                           return;

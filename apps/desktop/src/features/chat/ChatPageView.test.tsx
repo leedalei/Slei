@@ -43,7 +43,10 @@ function memberWithLongMentionText(): SleiMember {
   };
 }
 
-function dmSkillSlashFixture(initialDraft: string) {
+function dmSkillSlashFixture(
+  initialDraft: string,
+  options: { onSendMessage?: (body: string) => Promise<void> | void } = {},
+) {
   const messages = createDesktopMessages("zh-CN");
   const member = {
     ...memberWithLongMentionText(),
@@ -65,6 +68,7 @@ function dmSkillSlashFixture(initialDraft: string) {
         data={data}
         initialDraft={initialDraft}
         messages={messages}
+        onSendMessage={options.onSendMessage}
         profile={defaultProfile}
       />
     ),
@@ -192,7 +196,8 @@ describe("ChatPage mention panel", () => {
   });
 
   it("selects a DM skill slash option with keyboard", async () => {
-    const { element } = dmSkillSlashFixture("/me");
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
@@ -201,6 +206,7 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("/memory ");
+    expect(onSendMessage).not.toHaveBeenCalled();
   });
 
   it("moves the selected DM skill slash option with arrow keys", async () => {
@@ -228,7 +234,8 @@ describe("ChatPage mention panel", () => {
   });
 
   it("selects a DM skill slash option with Tab", async () => {
-    const { element } = dmSkillSlashFixture("/me");
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
@@ -237,6 +244,22 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("/memory ");
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps Shift+Enter available while the DM skill slash picker is active", async () => {
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    });
+
+    expect(input.value).toBe("/me");
+    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).not.toBeNull();
+    expect(onSendMessage).not.toHaveBeenCalled();
   });
 
   it("clears the leading skill slash query with Escape", async () => {
