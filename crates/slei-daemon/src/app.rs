@@ -48,6 +48,20 @@ pub fn build_router(state: AppState) -> Router {
         .route("/v1/messages/read", get(api::messages::read_messages))
         .route("/v1/messages/search", get(api::messages::search_messages))
         .route("/v1/messages/send", post(api::messages::send_agent_message))
+        .route(
+            "/v1/agent-message-todos",
+            get(api::agent_message_todos::list).post(api::agent_message_todos::create),
+        )
+        .route(
+            "/v1/agent-message-todos/clear",
+            post(api::agent_message_todos::clear),
+        )
+        .route(
+            "/v1/agent-message-todos/{id}",
+            get(api::agent_message_todos::get)
+                .patch(api::agent_message_todos::update)
+                .delete(api::agent_message_todos::delete),
+        )
         .route("/v1/search/global", get(api::search::global))
         .route(
             "/v1/saved-messages",

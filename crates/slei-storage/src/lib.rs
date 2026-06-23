@@ -268,6 +268,117 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn agent_message_todo_idempotent_create_rolls_back_when_response_recording_fails() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-create-idempotent-rollback");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_1".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human:local".to_string(),
+                body: Some("please handle this".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER fail_agent_message_todo_idempotency
+             BEFORE INSERT ON idempotent_mutations
+             WHEN NEW.idempotency_key = 'agent-message-todo:create:fail'
+             BEGIN
+                SELECT RAISE(ABORT, 'idempotency insert failed');
+             END",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+        let error = repos
+            .create_agent_message_todo_idempotent(
+                new_agent_message_todo("agent_a", "all", "msg_1"),
+                "agent-message-todo:create:fail",
+                |todo| format!("{{\"todoId\":\"{}\"}}", todo.id),
+            )
+            .await
+            .expect_err("idempotency insert failure should fail the whole mutation");
+        assert!(error.to_string().contains("idempotency insert failed"));
+
+        let todos = repos
+            .agent_message_todos(AgentMessageTodoQueryRow {
+                agent_id: Some("agent_a".to_string()),
+                channel_id: Some("all".to_string()),
+                status: None,
+                include_deleted: true,
+                limit: Some(10),
+            })
+            .await
+            .unwrap();
+        assert!(todos.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_clear_only_soft_deletes_pending_rows() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-clear-pending-only");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..2 {
+            let message_id = format!("msg_{index}");
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: message_id.clone(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human:local".to_string(),
+                    body: Some(format!("message {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            repos
+                .create_agent_message_todo(new_agent_message_todo("agent_a", "all", &message_id))
+                .await
+                .unwrap();
+        }
+        let running = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_1", 1)
+            .await
+            .unwrap();
+        assert_eq!(running.len(), 1);
+
+        let cleared = repos
+            .clear_agent_message_todos(
+                AgentMessageTodoQueryRow {
+                    agent_id: Some("agent_a".to_string()),
+                    channel_id: Some("all".to_string()),
+                    status: Some("pending".to_string()),
+                    include_deleted: false,
+                    limit: None,
+                },
+                Some("clear pending only"),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(cleared.len(), 1);
+        assert_eq!(cleared[0].status, "deleted");
+        let running_after = repos
+            .agent_message_todo(&running[0].id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(running_after.status, "running");
+        assert_eq!(running_after.run_id.as_deref(), Some("run_1"));
+    }
+
+    #[tokio::test]
     async fn agent_message_todo_lifecycle_transitions_clear_run_id() {
         let (url, _path) = sqlite_file_url("agent-message-todo-lifecycle");
         let db = SleiDb::connect(&url).await.unwrap();

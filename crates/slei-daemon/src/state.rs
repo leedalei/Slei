@@ -3,6 +3,7 @@ use crate::adapters::worker_rpc::WorkerTransport;
 use crate::auth::AuthToken;
 use crate::services::agent_dm_service::{AgentDmRunStore, AgentDmService};
 use crate::services::agent_inbox_service::AgentInboxService;
+use crate::services::agent_message_todo_service::AgentMessageTodoService;
 use crate::services::card_service::CardService;
 use crate::services::channel_join_report_service::ChannelJoinReportService;
 use crate::services::channel_orchestrator_service::ChannelOrchestratorService;
@@ -42,6 +43,7 @@ pub struct AppState {
     event_service: EventService,
     settings_service: SettingsService,
     task_service: TaskService,
+    agent_message_todos: AgentMessageTodoService,
     claims: ClaimService,
     orchestration_store: OrchestrationStore,
     agent_inbox_service: AgentInboxService,
@@ -166,6 +168,7 @@ impl AppState {
         let agent_inbox_service = AgentInboxService::new(orchestration_store.clone());
         let memory_event_service = MemoryEventService::new(orchestration_store.clone());
         let task_service = TaskService::new(repos.clone());
+        let agent_message_todos = AgentMessageTodoService::new(repos.clone());
         let message_thread_service = MessageThreadService::new(
             repos.clone(),
             message_service.clone(),
@@ -227,6 +230,7 @@ impl AppState {
             event_service,
             settings_service,
             task_service,
+            agent_message_todos,
             claims,
             orchestration_store,
             agent_inbox_service,
@@ -280,6 +284,10 @@ impl AppState {
 
     pub fn tasks(&self) -> &TaskService {
         &self.task_service
+    }
+
+    pub fn agent_message_todos(&self) -> AgentMessageTodoService {
+        self.agent_message_todos.clone()
     }
 
     pub fn claims(&self) -> &ClaimService {

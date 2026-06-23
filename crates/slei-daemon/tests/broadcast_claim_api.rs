@@ -1895,6 +1895,655 @@ async fn agent_activity_api_clamps_limit_to_200() {
     assert_eq!(logs.len(), 200);
 }
 
+#[tokio::test]
+async fn agent_message_todo_api_creates_lists_updates_deletes_and_gets_deleted_todo() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let message = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "请跟进发布检查",
+            "todo-api-message",
+            false,
+        )
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let created = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "todo-create-once",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": message.id,
+                "note": "manual follow-up"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created_json = response_json(created).await;
+    let todo = &created_json["todo"];
+    let todo_id = todo["id"].as_str().unwrap().to_string();
+    assert_eq!(todo["agentId"], "agent_coda");
+    assert_eq!(todo["channelId"], "all");
+    assert_eq!(todo["messageId"], message.id);
+    assert_eq!(todo["messageAuthorId"], "human_lei");
+    assert_eq!(todo["claimOwnerAgentId"], "agent_coda");
+    assert_eq!(todo["status"], "pending");
+    assert_eq!(todo["note"], "manual follow-up");
+
+    let listed = app
+        .clone()
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agent-message-todos?agentId=agent_coda&channelId=all&status=pending",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(listed.status(), StatusCode::OK);
+    let listed_json = response_json(listed).await;
+    let todos = listed_json["todos"].as_array().unwrap();
+    assert_eq!(todos.len(), 1);
+    assert_eq!(todos[0]["id"], todo_id);
+
+    let updated = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-update-once",
+            json!({
+                "status": "done",
+                "note": "verified by human"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(updated.status(), StatusCode::OK);
+    let updated_json = response_json(updated).await;
+    assert_eq!(updated_json["todo"]["id"], todo_id);
+    assert_eq!(updated_json["todo"]["status"], "done");
+    assert_eq!(updated_json["todo"]["note"], "verified by human");
+    assert!(updated_json["todo"]["completedAt"].as_str().is_some());
+
+    let deleted = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "DELETE",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-delete-once",
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+    let deleted_json = response_json(deleted).await;
+    assert_eq!(deleted_json["todo"]["id"], todo_id);
+    assert_eq!(deleted_json["todo"]["status"], "deleted");
+
+    let fetched = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!("/v1/agent-message-todos/{todo_id}"),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), StatusCode::OK);
+    let fetched_json = response_json(fetched).await;
+    assert_eq!(fetched_json["todo"]["id"], todo_id);
+    assert_eq!(fetched_json["todo"]["status"], "deleted");
+}
+
+#[tokio::test]
+async fn agent_message_todo_api_clear_soft_deletes_matching_pending_todos() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let first = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "第一条待办", "todo-clear-first", false)
+        .await
+        .unwrap();
+    let second = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "第二条待办", "todo-clear-second", false)
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    for (key, message_id) in [
+        ("todo-clear-create-first", first.id.as_str()),
+        ("todo-clear-create-second", second.id.as_str()),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(authed_json_request_with_idempotency(
+                &token,
+                "POST",
+                "/v1/agent-message-todos",
+                key,
+                json!({
+                    "agentId": "agent_coda",
+                    "channelId": "all",
+                    "messageId": message_id
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let cleared = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos/clear",
+            "todo-clear-once",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "status": "pending",
+                "note": "cleared manually"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(cleared.status(), StatusCode::OK);
+    let cleared_json = response_json(cleared).await;
+    let cleared_todos = cleared_json["todos"].as_array().unwrap();
+    assert_eq!(cleared_todos.len(), 2);
+    assert!(cleared_todos.iter().all(|todo| {
+        todo["agentId"] == "agent_coda"
+            && todo["channelId"] == "all"
+            && todo["status"] == "deleted"
+            && todo["note"] == "cleared manually"
+    }));
+
+    let pending = app
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agent-message-todos?agentId=agent_coda&channelId=all&status=pending",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(pending.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(pending).await["todos"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn agent_message_todo_api_write_calls_require_idempotency_key() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let message = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "缺少幂等键", "todo-missing-key", false)
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let create = app
+        .clone()
+        .oneshot(authed_json_request(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": message.id
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(create).await["error"],
+        "idempotency-key is required"
+    );
+
+    let blank_create = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "   ",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": message.id
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blank_create.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response_json(blank_create).await["error"],
+        "idempotency-key is required"
+    );
+
+    let created = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "todo-missing-key-create",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": message.id
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let todo_id = response_json(created).await["todo"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    for (method, uri, body) in [
+        (
+            "PATCH",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            json!({ "status": "done" }),
+        ),
+        (
+            "DELETE",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            json!({}),
+        ),
+        (
+            "POST",
+            "/v1/agent-message-todos/clear".to_string(),
+            json!({ "agentId": "agent_coda", "channelId": "all", "status": "pending" }),
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(authed_json_request(&token, method, uri, body))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response_json(response).await["error"],
+            "idempotency-key is required"
+        );
+    }
+}
+
+#[tokio::test]
+async fn agent_message_todo_api_replays_idempotent_create_update_delete_and_clear() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let first = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "待办一", "todo-replay-first", false)
+        .await
+        .unwrap();
+    let second = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "待办二", "todo-replay-second", false)
+        .await
+        .unwrap();
+    let third = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "待办三", "todo-replay-third", false)
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let first_create = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "todo-replay-create",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": first.id,
+                "note": "first response"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_create.status(), StatusCode::CREATED);
+    let first_create_json = response_json(first_create).await;
+    let todo_id = first_create_json["todo"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let replay_create = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "todo-replay-create",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": second.id,
+                "note": "should not be applied"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(replay_create.status(), StatusCode::CREATED);
+    assert_eq!(response_json(replay_create).await, first_create_json);
+
+    let listed_after_create_replay = app
+        .clone()
+        .oneshot(authed_empty_request(
+            &token,
+            "/v1/agent-message-todos?agentId=agent_coda&channelId=all",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        response_json(listed_after_create_replay).await["todos"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let first_update = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-replay-update",
+            json!({
+                "status": "done",
+                "note": "done once"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_update.status(), StatusCode::OK);
+    let first_update_json = response_json(first_update).await;
+
+    let replay_update = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-replay-update",
+            json!({
+                "status": "pending",
+                "note": "should not reopen"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(replay_update.status(), StatusCode::OK);
+    assert_eq!(response_json(replay_update).await, first_update_json);
+
+    let first_delete = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "DELETE",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-replay-delete",
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_delete.status(), StatusCode::OK);
+    let first_delete_json = response_json(first_delete).await;
+
+    let replay_delete = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "DELETE",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-replay-delete",
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(replay_delete.status(), StatusCode::OK);
+    assert_eq!(response_json(replay_delete).await, first_delete_json);
+
+    for (key, message_id) in [
+        ("todo-replay-clear-create-second", second.id.as_str()),
+        ("todo-replay-clear-create-third", third.id.as_str()),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(authed_json_request_with_idempotency(
+                &token,
+                "POST",
+                "/v1/agent-message-todos",
+                key,
+                json!({
+                    "agentId": "agent_coda",
+                    "channelId": "all",
+                    "messageId": message_id
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    let first_clear = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos/clear",
+            "todo-replay-clear",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "status": "pending",
+                "note": "clear once"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first_clear.status(), StatusCode::OK);
+    let first_clear_json = response_json(first_clear).await;
+    assert_eq!(first_clear_json["todos"].as_array().unwrap().len(), 2);
+
+    let replay_clear = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos/clear",
+            "todo-replay-clear",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "status": "pending",
+                "note": "should not matter"
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(replay_clear.status(), StatusCode::OK);
+    assert_eq!(response_json(replay_clear).await, first_clear_json);
+}
+
+#[tokio::test]
+async fn agent_message_todo_api_rejects_running_status_and_unprocessable_messages() {
+    let token = AuthToken::from_static("test-token");
+    let root = std::env::temp_dir().join(format!(
+        "slei-agent-message-todo-api-unprocessable-{}",
+        Uuid::new_v4()
+    ));
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    let message = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "有效待办",
+            "todo-running-message",
+            false,
+        )
+        .await
+        .unwrap();
+    let task_card = state
+        .messages()
+        .create_task_card_message("all", "task_123", &message.id)
+        .await
+        .unwrap();
+    let tombstone = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "墓碑消息",
+            "todo-tombstone-message",
+            false,
+        )
+        .await
+        .unwrap();
+    state
+        .messages()
+        .delete_human_message(&tombstone.id)
+        .await
+        .unwrap();
+    let task = state
+        .tasks()
+        .create_task_root(
+            "all",
+            "human_lei",
+            "todo rejects task root",
+            "todo-task-root",
+        )
+        .await
+        .unwrap();
+    let reply = state
+        .tasks()
+        .add_reply(
+            &task.id,
+            "agent_coda",
+            "todo rejects task reply",
+            "todo-task-reply",
+        )
+        .await
+        .unwrap();
+    let legacy_control = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "task_card:{\"taskId\":\"task_legacy\"}",
+            "todo-legacy-control",
+            false,
+        )
+        .await
+        .unwrap();
+    let deleted_message = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "已删除", "todo-deleted-message", false)
+        .await
+        .unwrap();
+    let db_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&db_url).await.unwrap();
+    sqlx::query("UPDATE messages SET deleted = 1 WHERE id = ?")
+        .bind(&deleted_message.id)
+        .execute(db.pool())
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let created = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "POST",
+            "/v1/agent-message-todos",
+            "todo-running-create",
+            json!({
+                "agentId": "agent_coda",
+                "channelId": "all",
+                "messageId": message.id
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let todo_id = response_json(created).await["todo"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let running = app
+        .clone()
+        .oneshot(authed_json_request_with_idempotency(
+            &token,
+            "PATCH",
+            format!("/v1/agent-message-todos/{todo_id}"),
+            "todo-running-update",
+            json!({ "status": "running" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(running.status(), StatusCode::BAD_REQUEST);
+    assert!(response_json(running).await["error"]
+        .as_str()
+        .unwrap()
+        .contains("running"));
+
+    let task_root_message_id = format!("task_root_msg_{}", task.id);
+    let task_reply_message_id = format!("task_reply_msg_{}", reply.id);
+    for (key, message_id) in [
+        ("todo-task-card-reject", task_card.id.as_str()),
+        ("todo-tombstone-reject", tombstone.id.as_str()),
+        ("todo-task-root-reject", task_root_message_id.as_str()),
+        ("todo-task-reply-reject", task_reply_message_id.as_str()),
+        ("todo-legacy-control-reject", legacy_control.id.as_str()),
+        ("todo-deleted-message-reject", deleted_message.id.as_str()),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(authed_json_request_with_idempotency(
+                &token,
+                "POST",
+                "/v1/agent-message-todos",
+                key,
+                json!({
+                    "agentId": "agent_coda",
+                    "channelId": "all",
+                    "messageId": message_id
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}
+
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     let root = std::env::temp_dir().join(format!("slei-broadcast-api-{}", Uuid::new_v4()));
     app_state_with_agent_handle_at_root(agent_id, handle, root).await
