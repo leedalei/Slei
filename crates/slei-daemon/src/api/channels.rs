@@ -37,6 +37,13 @@ pub struct AddChannelMemberRequest {
     agent_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceProjectPathsRequest {
+    #[serde(default)]
+    project_paths: Vec<String>,
+}
+
 pub async fn create(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -345,6 +352,84 @@ pub async fn members(
     }
 }
 
+pub async fn delete_channel(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let affected_agent_ids = match state.channels().channel_members(&id).await {
+        Ok(members) => members
+            .into_iter()
+            .map(|member| member.agent_id)
+            .collect::<Vec<_>>(),
+        Err(error) => return channel_error_response(error),
+    };
+
+    match state.channels().delete_channel(&id).await {
+        Ok(channel) => {
+            if let Err(error) = state
+                .memory_maintainer()
+                .sync_channel_notes_for_agents(&id, &affected_agent_ids)
+                .await
+            {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            Json(json!({ "deletedChannel": channel })).into_response()
+        }
+        Err(error) => channel_error_response(error),
+    }
+}
+
+pub async fn replace_project_paths(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(payload): Json<ReplaceProjectPathsRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    let members = match state.channels().channel_members(&id).await {
+        Ok(members) => members,
+        Err(error) => return channel_error_response(error),
+    };
+
+    match state
+        .channels()
+        .replace_project_paths(&id, payload.project_paths)
+        .await
+    {
+        Ok(channel) => {
+            let agent_ids = members
+                .into_iter()
+                .map(|member| member.agent_id)
+                .collect::<Vec<_>>();
+            if let Err(error) = state
+                .memory_maintainer()
+                .sync_channel_notes_for_agents(&id, &agent_ids)
+                .await
+            {
+                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+            }
+            Json(json!({ "channel": channel })).into_response()
+        }
+        Err(error) => channel_error_response(error),
+    }
+}
+
 pub async fn add_member(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -483,6 +568,11 @@ fn channel_error_response(error: ChannelError) -> Response {
         )
             .into_response(),
         ChannelError::InvalidChannel => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": error.to_string() })),
+        )
+            .into_response(),
+        ChannelError::DefaultChannelImmutable => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": error.to_string() })),
         )

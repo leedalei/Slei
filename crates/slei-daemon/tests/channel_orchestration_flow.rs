@@ -3690,6 +3690,177 @@ async fn public_channel_create_api_allows_idempotent_project_path_retries() {
 }
 
 #[tokio::test]
+async fn public_channel_project_paths_api_replaces_mounts() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-project-edit-channel"),
+        json!({
+            "name": "project-edit",
+            "description": "Project edit",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let _ = wait_for_channel_workspaces(&state, "project-edit", 1).await;
+
+    let updated = patch_json(
+        &app,
+        &token,
+        "/v1/channels/project-edit/project-paths",
+        None,
+        json!({ "projectPaths": ["/workspace/web", "/workspace/web", "/workspace/app"] }),
+    )
+    .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let body = response_json(updated).await;
+    assert_eq!(
+        body["channel"]["projectPaths"],
+        json!(["/workspace/app", "/workspace/web"])
+    );
+    let workspaces = state.channels().workspaces("project-edit").await.unwrap();
+    assert_eq!(workspaces.len(), 2);
+    assert_eq!(workspaces[0].path, "/workspace/app");
+    assert_eq!(workspaces[1].path, "/workspace/web");
+}
+
+#[tokio::test]
+async fn public_channel_project_paths_api_rejects_paths_mounted_by_other_channels() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-owner-channel"),
+        json!({
+            "name": "owner",
+            "description": "Owner",
+            "agentIds": [],
+            "projectPaths": ["/workspace/api"]
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let _ = wait_for_channel_workspaces(&state, "owner", 1).await;
+
+    let second = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-borrower-channel"),
+        json!({
+            "name": "borrower",
+            "description": "Borrower",
+            "agentIds": []
+        }),
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::CREATED);
+
+    let duplicate = patch_json(
+        &app,
+        &token,
+        "/v1/channels/borrower/project-paths",
+        None,
+        json!({ "projectPaths": ["/workspace/api/"] }),
+    )
+    .await;
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let body = response_json(duplicate).await;
+    assert!(body["error"]
+        .as_str()
+        .unwrap()
+        .contains("workspace path already mounted"));
+}
+
+#[tokio::test]
+async fn public_channel_delete_api_removes_channel_and_agent_memberships() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/channels",
+        Some("create-delete-me-channel"),
+        json!({
+            "name": "delete-me",
+            "description": "Delete me",
+            "agentIds": ["agent_alice", "agent_coda"],
+            "projectPaths": ["/workspace/delete-me"]
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let _ = wait_for_channel_member(&app, &token, "delete-me", "agent_alice").await;
+    let _ = wait_for_channel_member(&app, &token, "delete-me", "agent_coda").await;
+
+    let deleted = delete_json(&app, &token, "/v1/channels/delete-me").await;
+    let deleted_status = deleted.status();
+    let body = response_json(deleted).await;
+    assert_eq!(deleted_status, StatusCode::OK, "{body}");
+    assert_eq!(body["deletedChannel"]["id"], "delete-me");
+
+    let listed = response_json(get_json(&app, &token, "/v1/channels").await).await;
+    assert!(!listed["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|channel| channel["id"] == "delete-me"));
+    assert_eq!(
+        get_json(&app, &token, "/v1/channels/delete-me/members")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+
+    let agents = response_json(get_json(&app, &token, "/v1/agents").await).await;
+    for agent_id in ["agent_alice", "agent_coda"] {
+        let agent = agents["agents"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|agent| agent["id"] == agent_id)
+            .expect("agent should still exist");
+        assert!(!agent["channelIds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|channel_id| channel_id == "delete-me"));
+    }
+}
+
+#[tokio::test]
+async fn public_channel_delete_api_rejects_default_all_channel() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state);
+    let _ = get_json(&app, &token, "/v1/channels").await;
+
+    let deleted = delete_json(&app, &token, "/v1/channels/all").await;
+    assert_eq!(deleted.status(), StatusCode::BAD_REQUEST);
+    let listed = response_json(get_json(&app, &token, "/v1/channels").await).await;
+    assert!(listed["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|channel| channel["id"] == "all"));
+}
+
+#[tokio::test]
 async fn public_channel_create_api_rejects_missing_idempotency_key() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     let token = AuthToken::from_static("test-token");
@@ -4185,6 +4356,20 @@ async fn patch_json(
         .unwrap()
 }
 
+async fn delete_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
 async fn wait_for_channel_workspaces(
     state: &AppState,
     channel_id: &str,
@@ -4198,6 +4383,29 @@ async fn wait_for_channel_workspaces(
         sleep(Duration::from_millis(20)).await;
     }
     panic!("channel workspaces should be mounted");
+}
+
+async fn wait_for_channel_member(
+    app: &axum::Router,
+    token: &AuthToken,
+    channel_id: &str,
+    agent_id: &str,
+) -> Value {
+    for _ in 0..50 {
+        let response = get_json(app, token, &format!("/v1/channels/{channel_id}/members")).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response_json(response).await;
+        if let Some(member) = body["members"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|member| member["agentId"] == agent_id)
+        {
+            return member.clone();
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("channel member {agent_id} should join {channel_id}");
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> axum::response::Response {

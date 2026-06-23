@@ -1030,10 +1030,95 @@ impl Repositories {
     }
 
     pub async fn delete_channel(&self, channel_id: &str) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "DELETE FROM message_thread_replies
+             WHERE thread_id IN (
+                SELECT id FROM message_threads
+                WHERE (source_kind = 'channel' AND source_id = ?)
+                   OR source_message_id IN (SELECT id FROM messages WHERE channel_id = ?)
+             )",
+        )
+        .bind(channel_id)
+        .bind(channel_id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "DELETE FROM message_threads
+             WHERE (source_kind = 'channel' AND source_id = ?)
+                OR source_message_id IN (SELECT id FROM messages WHERE channel_id = ?)",
+        )
+        .bind(channel_id)
+        .bind(channel_id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("DELETE FROM thread_replies WHERE task_id IN (SELECT id FROM tasks WHERE channel_id = ?)")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "DELETE FROM task_claims WHERE task_id IN (SELECT id FROM tasks WHERE channel_id = ?)",
+        )
+        .bind(channel_id)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("DELETE FROM saved_messages WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM interactive_cards WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM agent_message_todos WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM message_claims WHERE message_id IN (SELECT id FROM messages WHERE channel_id = ?)")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM message_deliveries WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM agent_statuses WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM agent_activity_logs WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM runtime_sessions WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM tasks WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM messages WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM channel_workspace_mounts WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM channel_members WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM channel_sessions WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM channels WHERE id = ?")
             .bind(channel_id)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
+        tx.commit().await?;
         Ok(())
     }
 
@@ -1290,6 +1375,31 @@ impl Repositories {
         .bind(label)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    pub async fn replace_channel_workspace_mounts(
+        &self,
+        channel_id: &str,
+        mounts: &[WorkspaceMountRow],
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM channel_workspace_mounts WHERE channel_id = ?")
+            .bind(channel_id)
+            .execute(&mut *tx)
+            .await?;
+        for mount in mounts {
+            sqlx::query(
+                "INSERT INTO channel_workspace_mounts(channel_id, path, label)
+                 VALUES (?, ?, ?)",
+            )
+            .bind(channel_id)
+            .bind(&mount.path)
+            .bind(&mount.label)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
     }
 

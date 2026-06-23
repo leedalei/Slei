@@ -686,8 +686,83 @@ impl MemberService {
     ) -> Result<ProductAgentRecord, MemberError> {
         let channel_ids = channel_ids_for_agent(&self.repos, &row.id, false).await?;
         let record = product_agent_from_row(row, channel_ids);
-        let _ = write_default_skills(&record);
+        write_default_skills(&record)?;
+        migrate_channel_memory_guidance(&record)?;
+        self.write_agent_channel_notes(&record).await?;
         Ok(record)
+    }
+
+    async fn write_agent_channel_notes(
+        &self,
+        agent: &ProductAgentRecord,
+    ) -> Result<(), MemberError> {
+        let workspace = PathBuf::from(&agent.workspace_path);
+        let notes_dir = workspace.join("notes");
+        let channels_path = notes_dir.join("channels.md");
+        if !channels_path.starts_with(&workspace) {
+            return Err(MemberError::WorkspaceBoundary);
+        }
+        fs::create_dir_all(&notes_dir).map_err(MemberError::Io)?;
+
+        let mut channels = self.repos.channels().await.map_err(member_storage_error)?;
+        channels.sort_by(|left, right| {
+            left.is_default
+                .cmp(&right.is_default)
+                .reverse()
+                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        let mut sections = Vec::new();
+        for channel in channels {
+            let members = self
+                .repos
+                .channel_members(&channel.id)
+                .await
+                .map_err(member_storage_error)?;
+            if !members.iter().any(|member| member.agent_id == agent.id) {
+                continue;
+            }
+            let mut roster = Vec::new();
+            for member in members {
+                match self
+                    .repos
+                    .agent_by_id(&member.agent_id)
+                    .await
+                    .map_err(member_storage_error)?
+                {
+                    Some(row) => roster.push(format!(
+                        "- {} ({}) — {}",
+                        row.handle, row.name, row.description
+                    )),
+                    None => roster.push(format!("- {} — channel member", member.agent_id)),
+                }
+            }
+            roster.sort();
+            let project_paths = self
+                .repos
+                .channel_workspace_mounts(&channel.id)
+                .await
+                .map_err(member_storage_error)?
+                .into_iter()
+                .map(|mount| mount.path)
+                .collect::<Vec<_>>();
+            let projects = if project_paths.is_empty() {
+                "无".to_string()
+            } else {
+                project_paths.join(", ")
+            };
+            sections.push(format!(
+                "## #{channel_id}\n- Channel id: {channel_id}\n- Associated projects: {projects}\n- Roster:\n{roster}\n- Handoff rule: finish the current stage, then visibly @ the next suitable member from this channel roster; if no handoff is needed, @ the current user for acceptance/review.\n",
+                channel_id = channel.id,
+                projects = projects,
+                roster = roster.join("\n"),
+            ));
+        }
+        fs::write(
+            channels_path,
+            format!("# Channel Notes\n\n{}\n", sections.join("\n")),
+        )
+        .map_err(MemberError::Io)
     }
 }
 
@@ -920,6 +995,42 @@ fn sanitize_legacy_guide_memory(agent: &ProductAgentRecord) -> Result<(), Member
         fs::write(&agent.memory_path, cleaned).map_err(MemberError::Io)?;
     }
     Ok(())
+}
+
+fn migrate_channel_memory_guidance(agent: &ProductAgentRecord) -> Result<(), MemberError> {
+    let memory = match fs::read_to_string(&agent.memory_path) {
+        Ok(memory) => memory,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(MemberError::Io(error)),
+    };
+    let mut cleaned = memory
+        .lines()
+        .filter(|line| !is_legacy_channel_memory_line(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    if memory.ends_with('\n') {
+        cleaned.push('\n');
+    }
+    if !cleaned.contains("频道信息请读取 `notes/channels.md`") {
+        let guidance = "\n- 频道信息请读取 `notes/channels.md`，不要在 MEMORY.md 中重复维护频道列表或成员表。\n";
+        if let Some(index) = cleaned.find("## Active Context") {
+            cleaned.insert_str(index, guidance);
+        } else {
+            if !cleaned.ends_with('\n') {
+                cleaned.push('\n');
+            }
+            cleaned.push_str("\n## Key Knowledge\n");
+            cleaned.push_str(guidance.trim_start_matches('\n'));
+        }
+    }
+    if cleaned != memory {
+        fs::write(&agent.memory_path, cleaned).map_err(MemberError::Io)?;
+    }
+    Ok(())
+}
+
+fn is_legacy_channel_memory_line(line: &str) -> bool {
+    line.contains("主频道：#all") || line.contains("已加入频道：")
 }
 
 fn remove_legacy_guide_memory_lines(memory: &str) -> String {

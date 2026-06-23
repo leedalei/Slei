@@ -446,6 +446,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidWorkspacePath)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
+        | ChannelOrchestratorError::Channel(ChannelError::DefaultChannelImmutable)
         | ChannelOrchestratorError::Member(MemberError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Member(MemberError::InvalidAgent)
         | ChannelOrchestratorError::Member(MemberError::InvalidHandle)

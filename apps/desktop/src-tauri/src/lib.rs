@@ -15,6 +15,8 @@ pub fn run() {
             commands::bootstrap_guide_agent_command,
             commands::list_channels_command,
             commands::create_channel_command,
+            commands::delete_channel_command,
+            commands::replace_channel_project_paths_command,
             commands::list_channel_members_command,
             commands::add_channel_member_command,
             commands::remove_channel_member_command,
@@ -1443,7 +1445,7 @@ mod tests {
     fn agent_commands_sanitize_dto_and_support_create_update_memory() {
         let _env_guard = test_env_lock();
         let agent_root =
-            std::env::temp_dir().join(format!("slei-desktop-agent-test-{}", std::process::id()));
+            std::env::temp_dir().join(format!("slei-desktop-agent-test-{}", uuid::Uuid::new_v4()));
         std::env::set_var("SLEI_DATA_ROOT", &agent_root);
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1472,9 +1474,14 @@ mod tests {
         assert!(created.agent.workspace_path.contains("/agents/agent_"));
         assert!(fs::metadata(&created.agent.memory_path).unwrap().is_file());
         assert!(fs::metadata(&created.agent.docs_path).unwrap().is_dir());
-        assert!(fs::read_to_string(&created.agent.memory_path)
+        let memory = fs::read_to_string(&created.agent.memory_path).unwrap();
+        assert!(!memory.contains("已加入频道：#all"));
+        assert!(memory.contains("notes/channels.md"));
+        let channel_notes =
+            std::path::Path::new(&created.agent.workspace_path).join("notes/channels.md");
+        assert!(fs::read_to_string(channel_notes)
             .unwrap()
-            .contains("已加入频道：#all"));
+            .contains("## #all"));
 
         let agents = list_agents(&broker);
         let serialized = serde_json::to_string(&agents).unwrap();

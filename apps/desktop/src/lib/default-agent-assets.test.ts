@@ -14,7 +14,9 @@ describe("default agent assets", () => {
 
     expect(memory).toContain("# Yeal");
     expect(memory).toContain("创建成员时通过 guide-create Skill 生成产品交互卡");
-    expect(memory).toContain("已加入频道：#all、#zeta");
+    expect(memory).not.toContain("主频道：#all");
+    expect(memory).not.toContain("已加入频道：#all、#zeta");
+    expect(memory).toContain("频道信息请读取 `notes/channels.md`");
     expect(memory).toContain("## Active Context");
   });
 

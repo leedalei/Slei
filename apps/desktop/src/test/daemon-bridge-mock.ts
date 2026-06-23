@@ -281,6 +281,31 @@ export function createDaemonBridgeMock(input: {
       ];
       return { channel };
     },
+    async deleteChannel(channelId) {
+      const channel = channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error("channel not found");
+      if (channel.isDefault || channel.id === "all") throw new Error("default channel cannot be deleted");
+      channels = channels.filter((candidate) => candidate.id !== channelId);
+      channelMembers = channelMembers.filter((member) => member.channelId !== channelId);
+      channelMessages = channelMessages.filter((message) => message.channelId !== channelId);
+      channelSessions = channelSessions.filter((session) => session.channelId !== channelId);
+      tasks = tasks.filter((task) => task.channelId !== channelId);
+      return { deletedChannel: channel };
+    },
+    async replaceChannelProjectPaths(channelId, request) {
+      const channel = channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error("channel not found");
+      const projectPaths = uniqueProjectPaths(request.projectPaths);
+      const mountedProjectPaths = new Set(
+        channels
+          .filter((candidate) => candidate.id !== channelId)
+          .flatMap((candidate) => uniqueProjectPaths(candidate.projectPaths ?? [])),
+      );
+      if (projectPaths.some((path) => mountedProjectPaths.has(path))) throw new Error("workspace path already mounted");
+      const updated = { ...channel, description: projectPaths.length > 0 ? projectPaths.join(", ") : channel.description, projectPaths };
+      channels = channels.map((candidate) => candidate.id === channelId ? updated : candidate);
+      return { channel: updated };
+    },
     async listChannelMembers(channelId) {
       return { members: channelMembers.filter((member) => member.channelId === channelId) };
     },

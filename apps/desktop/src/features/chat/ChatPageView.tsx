@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowDown, Bookmark, CheckSquare, Copy, FileText, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Plus, Send, Trash2, Users, X } from "lucide-react";
+import { ArrowDown, Bookmark, CheckSquare, Copy, FileText, FolderPlus, Hash, Image as ImageIcon, MessageCircle, MessageSquare, PanelRightClose, PanelRightOpen, Paperclip, Pencil, Plus, Send, Trash2, Users, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
@@ -35,6 +35,24 @@ type ChannelFileEntry = {
   messageId: string;
   time: string;
 };
+
+function uniqueProjectPaths(paths: string[]) {
+  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
+}
+
+function projectPathFromPickedFile(file: File) {
+  const metadata = file as File & { path?: string; webkitRelativePath?: string };
+  const relativePath = metadata.webkitRelativePath ?? "";
+  const rootFolder = relativePath.split("/").filter(Boolean)[0];
+  if (metadata.path && relativePath && rootFolder) {
+    const separator = metadata.path.includes("\\") ? "\\" : "/";
+    const suffix = relativePath.split("/").join(separator);
+    if (metadata.path.endsWith(suffix)) {
+      return `${metadata.path.slice(0, -suffix.length)}${rootFolder}`;
+    }
+  }
+  return rootFolder ?? metadata.path ?? file.name;
+}
 
 function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
   if (card.kind === "permissionApproval") {
@@ -471,7 +489,7 @@ function ChannelMemberPanel(input: {
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -484,8 +502,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
   const [selectedThreadMessageId, setSelectedThreadMessageId] = useState<string | undefined>(undefined);
+  const [projectEditorOpen, setProjectEditorOpen] = useState(false);
+  const [projectDraftPaths, setProjectDraftPaths] = useState<string[]>(activeChannel.projectPaths ?? []);
+  const [projectSaving, setProjectSaving] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
@@ -576,9 +598,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const timelineScrollTarget = activeTargetId;
   const detailTitle = dmMember ? dmMember.name : stripChannelHash(activeChannel.name);
   const detailAriaLabel = dmMember ? detailTitle : `# ${detailTitle}`;
+  const activeChannelProjectName = activeChannel.projectPaths?.length ? activeChannel.projectPaths.join(", ") : activeChannel.projectName;
   const detailSubtitle = dmMember
     ? formatConversationDateTime(activeConversation?.createdAt ?? "")
-    : activeChannel.projectName ? messages.chat.projectPrefix(activeChannel.projectName) : activeChannel.description;
+    : activeChannelProjectName ? messages.chat.projectPrefix(activeChannelProjectName) : activeChannel.description;
+  const showProjectEditor = !dmMember && activeChannel.id !== "all";
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
   const showChannelMembersPanel = !dmMember && channelMembersOpen && effectiveChannelView === "chat";
@@ -587,6 +611,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   useEffect(() => {
     setChannelView(initialChannelView ?? "chat");
   }, [activeChannel.id, activeConversation?.id, initialChannelView]);
+
+  useEffect(() => {
+    setProjectDraftPaths(activeChannel.projectPaths ?? []);
+    setProjectEditorOpen(false);
+    setProjectSaving(false);
+  }, [activeChannel.id, activeChannel.projectPaths]);
 
   useEffect(() => {
     if (dmMember || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -798,6 +828,30 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     };
   }
 
+  function addProjectFolders(files: FileList | null) {
+    const paths = Array.from(files ?? []).map(projectPathFromPickedFile).filter(Boolean);
+    if (paths.length === 0) return;
+    setProjectDraftPaths((current) => uniqueProjectPaths([...current, ...paths]));
+  }
+
+  function removeProjectFolder(path: string) {
+    setProjectDraftPaths((current) => current.filter((candidate) => candidate !== path));
+  }
+
+  async function saveProjectPaths() {
+    if (!onChannelProjectPathsChange) return;
+    setProjectSaving(true);
+    try {
+      const paths = uniqueProjectPaths(projectDraftPaths);
+      await onChannelProjectPathsChange(activeChannel.id, paths);
+      setProjectDraftPaths(paths);
+      setProjectEditorOpen(false);
+    } catch {
+    } finally {
+      setProjectSaving(false);
+    }
+  }
+
   function restoreOlderMessagesScrollPosition() {
     const restore = pendingOlderMessagesScrollRestoreRef.current;
     const viewport = timelineViewportRef.current;
@@ -826,7 +880,71 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </TooltipButton>
               ) : null}
             </h1>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{detailSubtitle}</p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-tauri-drag-region="deep">
+              <p className="truncate" data-tauri-drag-region="deep">{detailSubtitle}</p>
+              {showProjectEditor ? (
+                <Popover open={projectEditorOpen} onOpenChange={setProjectEditorOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button
+                          aria-label={messages.chat.editProjects}
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          data-testid="slei-channel-project-edit"
+                          size="icon-xs"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Pencil aria-hidden="true" size={13} />
+                        </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>{messages.chat.editProjects}</TooltipContent>
+                  </Tooltip>
+                  <PopoverContent align="start" className="w-80 p-3">
+                    <div className="grid gap-3">
+                      <input
+                        aria-label={messages.chat.projectFolderPicker}
+                        className="sr-only"
+                        multiple
+                        onChange={(event) => {
+                          addProjectFolders(event.currentTarget.files);
+                          event.currentTarget.value = "";
+                        }}
+                        ref={projectFolderInputRef}
+                        type="file"
+                        {...{ directory: "", webkitdirectory: "" }}
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <strong className="text-sm text-foreground">{messages.chat.project}</strong>
+                        <Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">
+                          <FolderPlus aria-hidden="true" size={14} />
+                          {messages.chat.projectFolderPicker}
+                        </Button>
+                      </div>
+                      {projectDraftPaths.length > 0 ? (
+                        <div className="flex max-h-32 flex-wrap gap-2 overflow-auto">
+                          {projectDraftPaths.map((path) => (
+                            <Badge className="max-w-full gap-1" key={path} variant="secondary">
+                              <span className="truncate">{path}</span>
+                              <Button aria-label={messages.chat.removeProject(path)} className="-mr-1 ml-0.5 hover:bg-background/70" onClick={() => removeProjectFolder(path)} size="icon-xs" type="button" variant="ghost">
+                                <X aria-hidden="true" className="size-3" />
+                              </Button>
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{messages.chat.noLinkedProjects}</p>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button disabled={projectSaving} onClick={() => setProjectEditorOpen(false)} size="sm" type="button" variant="ghost">{messages.common.cancel}</Button>
+                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button">{messages.common.save}</Button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : null}
+            </div>
           </div>
         </div>
         {dmMember ? null : (

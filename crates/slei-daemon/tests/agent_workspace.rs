@@ -56,11 +56,15 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
     assert!(memory.contains("## Team"));
     assert!(memory.contains("@coda — 我自己"));
     assert!(memory.contains("## Key Knowledge"));
-    assert!(memory.contains("主频道：#all"));
-    assert!(memory.contains("已加入频道：#all"));
+    assert!(!memory.contains("主频道：#all"));
+    assert!(!memory.contains("已加入频道：#all"));
+    assert!(memory.contains("频道信息请读取 `notes/channels.md`"));
     assert!(memory.contains("自发判断是否需要 @ 下一位成员接手"));
     assert!(memory.contains("如果无需接手，应 @ 当前用户进行验收或审阅"));
     assert!(memory.contains("## Active Context"));
+    let channel_notes = fs::read_to_string(workspace.join("notes/channels.md")).unwrap();
+    assert!(channel_notes.contains("## #all"));
+    assert!(channel_notes.find("## #all").unwrap() < channel_notes.find("- Roster:").unwrap());
     assert_eq!(agent["agentKind"], "agent");
     assert_eq!(agent["systemOwned"], false);
     assert_eq!(agent["channelIds"], json!(["all"]));
@@ -128,6 +132,49 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
                 .body
                 .as_deref()
                 .is_some_and(|body| body.contains("Coda"))));
+}
+
+#[tokio::test]
+async fn reading_existing_agent_migrates_channel_facts_out_of_memory() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-channel-memory-migration");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let app = build_router(state.clone());
+
+    let response = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-migrated-coda"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = response_json(response).await;
+    let agent = &body["agent"];
+    let id = agent["id"].as_str().unwrap();
+    let workspace = PathBuf::from(agent["workspacePath"].as_str().unwrap());
+    let memory_path = workspace.join("MEMORY.md");
+    let mut legacy_memory = fs::read_to_string(&memory_path).unwrap();
+    legacy_memory.push_str("\n- 主频道：#all\n- 已加入频道：#all、#kol-content\n");
+    fs::write(&memory_path, legacy_memory).unwrap();
+
+    state.members().get_product_agent(id).await.unwrap();
+
+    let migrated_memory = fs::read_to_string(&memory_path).unwrap();
+    assert!(!migrated_memory.contains("主频道：#all"));
+    assert!(!migrated_memory.contains("已加入频道："));
+    assert!(migrated_memory.contains("频道信息请读取 `notes/channels.md`"));
+    let channel_notes = fs::read_to_string(workspace.join("notes/channels.md")).unwrap();
+    assert!(channel_notes.contains("## #all"));
+    assert!(channel_notes.find("## #all").unwrap() < channel_notes.find("- Roster:").unwrap());
 }
 
 #[tokio::test]
@@ -691,7 +738,7 @@ async fn memory_update_completion_marks_member_ready_and_posts_ready_message() {
     let memory = fs::read_to_string(workspace.join("MEMORY.md")).unwrap();
     let channels = fs::read_to_string(workspace.join("notes/channels.md")).unwrap();
     assert!(memory.contains("notes/channels.md"));
-    assert!(memory.contains("notes/relationships.md"));
+    assert!(!memory.contains("notes/relationships.md"));
     assert!(channels.contains("ready-channel"));
 }
 

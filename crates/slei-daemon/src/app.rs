@@ -16,6 +16,11 @@ pub fn build_router(state: AppState) -> Router {
             "/v1/channels",
             get(api::channels::list).post(api::channels::create),
         )
+        .route("/v1/channels/{id}", delete(api::channels::delete_channel))
+        .route(
+            "/v1/channels/{id}/project-paths",
+            patch(api::channels::replace_project_paths),
+        )
         .route(
             "/v1/channels/{id}/members",
             get(api::channels::members).post(api::channels::add_member),

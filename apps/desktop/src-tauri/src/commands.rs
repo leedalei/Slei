@@ -2,16 +2,17 @@ use crate::daemon_broker::{
     AgentActivityListReceipt, AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError,
     AgentPathOpenReceipt, AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt,
     AgentWorkspaceListReceipt, AppRuntimeFlagsView, ArtifactOpenError, ArtifactOpenReceipt,
-    CardError, ChannelCreateRequest, ChannelError, ChannelListReceipt, ChannelMemberAddRequest,
-    ChannelMemberListReceipt, ChannelMemberReceipt, ChannelMemberRemoveReceipt,
-    ChannelMessageListReceipt, ChannelReceipt, ConversationAttachmentReceipt,
-    ConversationAttachmentUploadRequest, ConversationError, ConversationListReceipt,
-    ConversationMessageListReceipt, ConversationMessageReceipt, ConversationMessageRequest,
-    ConversationReceipt, ConversationSessionListReceipt, ConversationSessionReceipt,
-    CreateMessageThreadRequest, DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt,
-    GlobalSearchError, GlobalSearchQuery, GlobalSearchReceipt, GuideBootstrapReceipt,
-    InteractiveCardReceipt, MessagePageQuery, MessageThreadReceipt, MessageThreadReplyReceipt,
-    NodeListReceipt, NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
+    CardError, ChannelCreateRequest, ChannelDeleteReceipt, ChannelError, ChannelListReceipt,
+    ChannelMemberAddRequest, ChannelMemberListReceipt, ChannelMemberReceipt,
+    ChannelMemberRemoveReceipt, ChannelMessageListReceipt, ChannelProjectPathsRequest,
+    ChannelReceipt, ConversationAttachmentReceipt, ConversationAttachmentUploadRequest,
+    ConversationError, ConversationListReceipt, ConversationMessageListReceipt,
+    ConversationMessageReceipt, ConversationMessageRequest, ConversationReceipt,
+    ConversationSessionListReceipt, ConversationSessionReceipt, CreateMessageThreadRequest,
+    DaemonBroker, DiagnosticsSnapshotView, EventReconnectReceipt, GlobalSearchError,
+    GlobalSearchQuery, GlobalSearchReceipt, GuideBootstrapReceipt, InteractiveCardReceipt,
+    MessagePageQuery, MessageThreadReceipt, MessageThreadReplyReceipt, NodeListReceipt,
+    NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
     PreferencesReceipt, PreferencesUpdateRequest, ProfileError, ProfileReceipt,
     ProfileUpdateRequest, ReplyToMessageThreadRequest, SanitizedDaemonStatus, SaveMessageRequest,
     SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
@@ -125,6 +126,21 @@ pub fn create_channel(
     request: ChannelCreateRequest,
 ) -> Result<ChannelReceipt, ChannelError> {
     broker.create_channel(request)
+}
+
+pub fn delete_channel(
+    broker: &DaemonBroker,
+    channel_id: &str,
+) -> Result<ChannelDeleteReceipt, ChannelError> {
+    broker.delete_channel(channel_id)
+}
+
+pub fn replace_channel_project_paths(
+    broker: &DaemonBroker,
+    channel_id: &str,
+    request: ChannelProjectPathsRequest,
+) -> Result<ChannelReceipt, ChannelError> {
+    broker.replace_channel_project_paths(channel_id, request)
 }
 
 pub fn list_channel_members(broker: &DaemonBroker, channel_id: &str) -> ChannelMemberListReceipt {
@@ -494,6 +510,24 @@ pub fn create_channel_command(
     request: ChannelCreateRequest,
 ) -> Result<ChannelReceipt, String> {
     create_channel(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_channel_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+) -> Result<ChannelDeleteReceipt, String> {
+    delete_channel(state.inner(), &channel_id).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn replace_channel_project_paths_command(
+    state: tauri::State<'_, DaemonBroker>,
+    channel_id: String,
+    request: ChannelProjectPathsRequest,
+) -> Result<ChannelReceipt, String> {
+    replace_channel_project_paths(state.inner(), &channel_id, request)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -11,7 +11,7 @@ Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat 
 
 - `Key Knowledge`: durable facts, role expectations, user preferences, project conventions, and lessons likely to matter across many sessions.
 - `Active Context`: current task state for resuming later: channel, time, current item, latest meaningful progress, blocker, and next action. It is a small working set, not a transcript.
-- `Maintained Notes`: links to `notes/*.md` for detailed channel/project/team context.
+- `Channel Notes`: `notes/channels.md` is the source for channel membership, rosters, associated projects, and handoff relationships.
 
 ## Workflow
 
@@ -19,7 +19,7 @@ Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat 
 2. Classify the update:
    - durable fact or preference -> update `Key Knowledge`
    - current task/progress/blocker/next step -> replace or compact `Active Context`
-   - detailed multi-line context -> create or update a focused `notes/*.md` file and link it from `Maintained Notes`
+   - channel membership, roster, associated project, or handoff relationship -> read `notes/channels.md`; do not duplicate it in `MEMORY.md`
 3. Deduplicate or replace stale entries instead of adding near-duplicates.
 4. Keep entries short, specific, and attributable to real user instructions or observed project facts.
 5. Do not store secrets, one-off chatter, unverified guesses, or facts that can be cheaply rediscovered.
