@@ -83,7 +83,21 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).not.toContain('class="slei-context-sidebar');
     expect(html).not.toContain('aria-label="Resize sidebar"');
     expect(html).not.toContain('data-slot="sidebar-titlebar"');
-    expect(html).toContain('grid-template-columns:5.5rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:4.75rem minmax(0, 1fr)');
+  });
+
+  it("uses a compact left rail and navigation button footprint", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('grid-template-columns:4.75rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+    expect(html).toContain("grid h-14 w-14 place-items-center");
   });
 
   it("removes the old search button from the channel list sidebar", () => {

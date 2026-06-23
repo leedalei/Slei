@@ -456,7 +456,7 @@ describe("chat search, channel management, and mentions", () => {
 
     expect(html).toContain('data-nav-icon="chat"');
     expect(html).toContain('data-slot="button"');
-    expect(html).toContain("grid h-16 w-16");
+    expect(html).toContain("grid h-14 w-14");
     expect(html).toContain('aria-label="聊天"');
     expect(html).toContain("lucide-message-circle size-5");
     expect(html).not.toContain("text-[11px]");
