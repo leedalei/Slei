@@ -14,14 +14,14 @@ Slei 的频道不是前端本地聊天室，而是由 daemon 驱动的多 Agent 
 
 ## 核心原则
 
-- daemon 是业务控制面：消息、投递、claim、任务、状态、日志、诊断、reset 防护、幂等和 SQLite 持久化都必须在 daemon 内完成。
+- daemon 是业务控制面：消息、投递、claim、Agent 消息待办、任务、状态、日志、诊断、reset 防护、幂等和 SQLite 持久化都必须在 daemon 内完成。
 - UI shell 只调用 daemon API、显示 loading/error/empty 状态、渲染 daemon DTO。UI 不得自行决定消息应该交给哪个 Agent。
 - 新频道消息流转是 daemon 投递 + Agent 自主 claim；不得新增 UI 路由、daemon 关键词兜底或中心化 JSON 路由作为新架构入口。
 - Human 频道消息触发广播投递；Agent 频道消息默认不触发 claim，只有显式 `@handle` 才投递给目标 Agent。Agent 后续协作靠可见 `@mention` 接力，不依赖隐藏路由。
 - 所有投递都必须排除消息作者，避免自唤醒和无意义 self-run。
 - `@mention` 只按 handle 解析，不按 display name 解析。Agent handle 必须全局大小写不敏感唯一，例如 `@Coda` 与 `@coda` 冲突；历史重复 handle 必须阻止启动或迁移，不得随机选人。
 - 旧 coordinator runtime、coordinator JSON、coordinator agent 和 coordinator SQLite 表不得作为 fallback、diagnostics、mock 或兼容路径恢复。
-- `slei message claim` 是消息独占处理的唯一入口。claim 必须是 daemon/SQLite 原子操作；claim 失败的 Agent 静默退出。
+- `slei message claim` 是消息独占处理的唯一入口。claim 必须是 daemon/SQLite 原子操作；claim 失败的 Agent 默认静默退出；若失败 Agent 对该消息已有 delivery，daemon 可以记录 `agent_message_todos`，供后续同频道可见消息串行唤醒。
 - `slei task claim` 是任务维度的原子锁，独立于 message claim。
 - 可见频道发言、任务回复、任务创建、任务状态更新和 Agent 状态上报都必须通过 `slei` CLI 进入 daemon API。
 - Agent runtime 的普通 stdout 不会自动变成可见频道消息；可见产品动作必须来自 `slei message send` 或任务相关 API/CLI。
@@ -70,7 +70,7 @@ claude --print --output-format stream-json
 
 执行约束：
 
-- `input.prompt` 是 Markdown 格式的本次运行包，只包含当前触发消息、统一 header、claim 命令、按需读历史入口和可见回复入口，不注入完整频道历史。
+- `input.prompt` 是 Markdown 格式的本次运行包，只包含当前触发消息、统一 header、claim 命令、按需读历史入口、可见回复入口，以及当前 Agent 在当前频道的最多 5 条 Pending Message Todos；不注入完整频道历史。
 - `input.context` 在频道 broadcast/task handoff 路径保持为空；需要历史时由 Agent 主动调用 `slei message read/search` 或 `slei task thread/list`。
 - `input.system_prompt` 承载 Slei 合同：身份、角色、CLI 用法、header 规范、claim 规则、任务规则、MEMORY/Active Context 约定和运行时元数据。
 - worker 使用 `--append-system-prompt` 注入 daemon 生成的 prompt。
@@ -114,8 +114,8 @@ Agent 判断规则由 system prompt 注入到每个 Agent 上下文中，不由�
 - Direct Address：消息通过稳定 `@handle` 明确委派给某个 Agent。若明确 `@我`，应尝试 `slei message claim <msg-id> --agent <agent-id>`；claim 失败则静默退出。若明确 `@别人` 且没有 `@我`，不应 claim，除非这条可见消息同时属于频道群体发言、当前 active task 或明确 handoff 给自己。
 - Agent-authored message：`type=agent` 的消息默认静默。只有正文显式 `@我` 且分配了具体后续任务、决策或 handoff 时才 claim。Agent 普通回复不会唤醒上一个 Agent；A `@B` 后，B 普通回复不唤醒 A，只有 B 显式 `@A` 才会唤醒 A。
 - Channel Group Address：消息面向频道群体发起互动、问候、咨询、要求或协调，即使没有显式群体词也成立。`@all` 永远表示 Channel Group Address，不是单个 Agent 的 Direct Address。例子包括 `大家`、`各位`、`我们`、`谁来`、`有人吗`、`早上好`、`怎么看`、`报数`、`每个人说一下`、开放咨询、群体请求和轻量社交互动。
-- Channel Group Address 是串行群体参与流：每个频道 Agent 最多参与一次；只 claim 当前最新相关消息；不要 claim 自己刚发出的频道消息；不要 claim 其他 Agent 的普通回复；若流程需要顺序，按可见历史继续序列；若别人已经 claim 当前最新消息，静默退出，等待下一条可见消息触发。
-- Channel Group Address 可以按需向上检索历史：当需要判断原始群体问题、当前顺序、哪些 Agent 已参与、最新消息是否属于同一群体流或用户是否换题时，用 `slei message read --channel "#channel" --around <msgId>` 或小窗口 `--limit 20` 读取；简单独立问候无需为了回复而读历史。
+- Channel Group Address 是串行群体参与流：每个频道 Agent 最多参与一次；只 claim 当前最新相关消息；不要 claim 自己刚发出的频道消息；不要 claim 其他 Agent 的普通回复；若流程需要顺序，按可见历史继续序列。若别人已经 claim 当前最新消息，当前 Agent 默认静默退出；daemon 会在满足 delivery + failed claim 条件时记录待办，由后续同频道可见消息重新唤醒。
+- Channel Group Address 可以按需向上检索历史：当需要判断原始群体问题、当前顺序、哪些 Agent 已参与、最新消息是否属于同一群体流或用户是否换题时，用 `slei message read --channel "#channel" --around <msgId>`、小窗口 `--limit 20`，或待办区间 `--from-message <msgA> --to-message <msgB>` 读取；简单独立问候无需为了回复而读历史。
 - Specialized Work Request：消息要求具体工作但不是面向全频道群体。只有工作符合自身角色、active task 或 prior handoff 时才 claim；如果另一个 Agent 更合适或已经 claim，则静默退出。
 - 如果 claim 成功，先根据需要调用 `slei agent status` 上报阶段，再读取历史或执行任务。
 - 需要历史、普通消息子线程或任务上下文时，主动用 `slei message read/search`、消息线程 API 和 `slei task thread/list` 拉取，不要求 daemon 在初始 prompt 注入完整频道历史。
@@ -133,6 +133,7 @@ slei message read --channel "#channel:msgId"
 slei message read --channel "#channel" --after <seqNo>
 slei message read --channel "#channel" --before <seqNo>
 slei message read --channel "#channel" --around <msgId>
+slei message read --channel "#channel" --from-message <msgA> --to-message <msgB>
 slei message search --query "关键词"
 
 slei task create --source-message <msg-id> --agent <agent-id>
@@ -187,12 +188,45 @@ sequenceDiagram
 投递与过滤规则：
 
 - Human 消息为频道内所有 Agent 成员创建 delivery，包括 guide 这类 `system_owned` Agent。
-- Agent 消息只为正文中显式 `@handle` 的频道成员创建 delivery；没有 mention 时不创建 delivery、不启动 worker、不触发 claim。
+- Agent 消息只为正文中显式 `@handle` 的频道成员创建 delivery；没有 mention 时不创建普通 delivery、不启动普通 claim run。
+- Agent 无显式 mention 的顶层频道消息可以作为同频道 `agent_message_todos` 的串行推进触发器；daemon 每次最多额外唤醒一个有 pending 待办的频道成员。
 - 任何消息都必须排除 author；Agent mention 自己时忽略自己。
 - 排除非频道成员、已删除 Agent 或历史内部路由 Agent；不得因为 `system_owned = true` 排除当前频道成员。
 - delivery 写入使用唯一约束保证同一 `(message_id, agent_id)` 不重复。
 - delivery 从 `pending` 原子切换到 `running` 后才绑定 run id；run 启动失败必须回滚为 `pending`，允许 retry。
 - 已 `done` 的任务不再因为 reply 或 mention 产生新 claim、handoff 或 run。
+
+## Agent 消息待办
+
+`agent_message_todos` 是 daemon/SQLite 管理的补充参与状态，用来修复群体消息中“多个 Agent 都应参与，但只有第一个 claim 成功”的断点。它不是 coordinator 决策，不是 UI 路由，也不是关键词兜底；待办只能来自已经存在的 delivery 和真实 failed claim。
+
+创建规则：
+
+- 当 `slei message claim` 因消息已被其他 Agent claim 而失败，且失败 Agent 对原始消息已有 delivery，daemon 为失败 Agent 幂等创建一条 pending 待办。
+- 原始消息必须是可处理的频道消息，且未删除；可处理消息不限定 human，agent-authored 消息只要存在 delivery 且通过同样 failed-claim 条件，也可以创建待办。
+- `task_card`、`tombstone`、旧任务控制消息和 deleted 消息不创建待办。
+- 同一 `(agent_id, message_id)` 只保留一条待办；自动路径不重开 `done` 或 `deleted` 待办。
+
+调度规则：
+
+- 顶层频道消息有显式 `@handle` 时，mention 唤醒优先。daemon 启动被 mention Agent 的 run 时，把该 Agent 当前频道的 pending 待办注入本次 prompt，并标记为 `running`。
+- Human 无 mention 消息保持频道 broadcast：为成员创建 delivery 并启动普通 run；这些普通 run 可以注入各自待办，但 daemon 不为同一 human 消息额外启动 todo-only run。
+- Agent 无 mention 顶层频道消息不会走普通 delivery/claim 广播，但可以额外串行推进一个 pending todo Agent。任务回复和普通消息子线程回复不触发 todo-only 推进。
+- 每次 run 最多注入 5 条当前频道、当前 Agent 的 pending 待办，按稳定创建顺序选择。无效、已删除或不可处理的 source message 不会阻塞队列，应被终止或跳过。
+
+Prompt 规则：
+
+- 出现 `## Pending Message Todos` 时，Agent 应优先处理这些待办；即使当前触发消息不可 claim 或普通规则要求静默，也不要因此忽略待办。
+- Agent 不要为了处理待办而 claim 当前触发消息，也不要重新 claim 待办源消息；源消息的独占 claim 已属于第一个成功 claim 的 Agent。
+- 若待办上下文不足，Agent 可以用 `slei message read --channel "#channel" --from-message <todoMsg> --to-message <triggerMsg>` 读取包含端点的区间消息。
+- Agent system prompt 只暴露待办处理规则，不暴露 `slei todo update/delete/clear/reopen` 等管理命令；待办完成、恢复和删除由 daemon 生命周期或人工 CLI 管理。
+
+生命周期：
+
+- `pending -> running`：注入 prompt 前绑定本次 `run_id`，写入 `last_prompted_at`。
+- `running -> done`：worker completed 后，daemon 将本次 `run_id` 绑定的待办标记完成并清空 `run_id`。
+- `running -> pending`：worker 启动失败、run failed 或 cancelled 时恢复 pending 并清空 `run_id`。
+- `* -> deleted`：人工 CLI/API 软删除，或 daemon 发现 source message 缺失、删除、空正文或不可处理时终止。
 
 ## 可见 @mention 协作链
 
@@ -260,6 +294,7 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 | `channel_messages` | 人类和 Agent 可见频道消息 |
 | `message_deliveries` | 每条消息投递给哪些 Agent、delivery state、run id |
 | `message_claims` | 消息 claim 锁、owner、状态 |
+| `agent_message_todos` | failed claim 后的 Agent 补充参与待办、状态、run id 和 source message |
 | `task_claims` | 任务 claim 锁、owner、状态 |
 | `message_threads` / `message_thread_replies` | 普通消息子线程与聚合回复；任务可通过 `tasks.thread_id` 复用同一源消息 thread |
 | `tasks` / `task_replies` | 任务和任务线程 |
@@ -274,7 +309,7 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 
 开发 reset 的目标是清空产品状态和运行期 Agent workspace，让系统从全新状态重新开始：
 
-- 清空 messages、tasks、task replies、claims、deliveries、statuses、activity logs、diagnostics 等可变业务表。
+- 清空 messages、tasks、task replies、claims、deliveries、agent message todos、statuses、activity logs、diagnostics 等可变业务表。
 - 删除旧 coordinator 表和旧 coordinator agent workspace；允许开发环境直接丢弃 `~/.slei/slei.sqlite` 和运行期 `agents/` workspace。
 - 删除运行期生成的 `agents/` workspace。
 - 保留代码内置资源、SQLite schema migration 和必要空目录。
@@ -288,6 +323,11 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 - 频道消息是否仍先落 daemon message，再由 daemon 创建 broadcast delivery。
 - UI 是否没有新增 route、assign、claim、任务判断或 mock 回复。
 - 普通新消息是否仍走 broadcast + claim，而不是中心化 JSON、关键词或第一个 ready Agent。
+- failed claim 待办是否只在“已有 delivery + 真实 failed claim + 可处理频道消息”时由 daemon/SQLite 创建；UI、mock、diagnostics 或 Agent workspace 是否没有写待办状态。
+- mention 唤醒是否仍优先，并且只给被唤醒 Agent 注入当前频道、属于该 Agent 的 pending todos。
+- Human 无 mention 消息是否仍只走 broadcast，不额外启动 todo-only run；Agent 无 mention 顶层频道消息是否每次最多串行推进一个 pending todo Agent。
+- 任务回复和普通消息子线程回复是否不会触发 pending todo-only 推进。
+- Pending Message Todos prompt 是否仍明确：可处理待办而不 claim 当前触发消息、不 claim 待办源消息，必要时用 `slei message read --from-message --to-message` 查区间。
 - 生产代码、Tauri broker、React UI、mock 和 diagnostics 是否仍没有 `CoordinatorService`、`coordinator_runtime_runs`、`coordinator_decisions`、`channel_coordinators`、`agent_global_coordinator`、`agent_coordinator_*`、`request_agent_reply` 或 `coordinator_routing`。
 - `slei message claim` 是否仍是唯一消息独占入口。
 - Agent stdout 是否仍不会自动生成可见频道消息；可见动作是否来自 `slei` CLI/API。
@@ -308,6 +348,7 @@ cargo fmt --check
 cargo test -p slei-storage
 cargo test -p slei-daemon --test channel_orchestration_flow
 cargo test -p slei-daemon --test broadcast_claim_api
+cargo test -p slei-cli
 ```
 
 涉及桌面 bridge 或 UI 展示时再补充：
@@ -320,6 +361,7 @@ pnpm --filter @slei/desktop typecheck
 
 1. Human 发送无显式 mention 的频道消息，应为频道内所有 Agent 成员创建 delivery，并启动对应短生命周期 Agent run；不应出现新的中心路由 runtime。
 2. Human 发送包含 `@agent` 的频道消息，也应广播给频道内所有 Agent；只有被 prompt 规则允许的 Agent 才 claim。
-3. Agent 通过 `slei message send` 发言且没有显式 mention 时，不应创建 delivery 或启动下一轮 run。
-4. Agent 通过 `slei message send` 显式 `@handle` 时，只应投递给被 mention 的频道成员，并排除作者。
-5. 停掉 daemon 后发送频道消息，UI 应显示 daemon unavailable/offline，不得启用本地 mock 回复。
+3. 多个 Agent 对同一群体消息尝试 claim 时，第一个成功 claim；其他已有 delivery 且 claim 失败的 Agent 应产生 pending `agent_message_todos`。
+4. Agent 通过 `slei message send` 发言且没有显式 mention 时，不应创建普通 delivery；若当前频道有 pending todo，应最多串行唤醒一个待办 Agent。
+5. Agent 通过 `slei message send` 显式 `@handle` 时，只应投递给被 mention 的频道成员，并排除作者；被 mention Agent 的 prompt 可包含自己的当前频道 pending todos。
+6. 停掉 daemon 后发送频道消息，UI 应显示 daemon unavailable/offline，不得启用本地 mock 回复。
