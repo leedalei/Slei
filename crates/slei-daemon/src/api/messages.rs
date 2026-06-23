@@ -39,6 +39,8 @@ pub struct ReadMessagesQuery {
     after: Option<i64>,
     before: Option<i64>,
     around: Option<String>,
+    from_message: Option<String>,
+    to_message: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,6 +207,8 @@ pub async fn read_messages(
             query.after,
             query.before,
             query.around.as_deref(),
+            query.from_message.as_deref(),
+            query.to_message.as_deref(),
         )
         .await
     {

@@ -1165,6 +1165,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1175,6 +1177,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1191,6 +1195,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1342,6 +1348,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1355,6 +1363,8 @@ mod tests {
                 after_sequence: Some(first_sequence),
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1365,6 +1375,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: Some(third_sequence),
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1382,6 +1394,53 @@ mod tests {
                 .map(|row| row.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["msg_0", "msg_1"]
+        );
+    }
+
+    #[tokio::test]
+    async fn message_range_read_returns_inclusive_message_id_range() {
+        let (url, _path) = sqlite_file_url("message-range-read");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for (id, body) in [
+            ("msg_before", "before"),
+            ("msg_first", "first"),
+            ("msg_second", "second"),
+            ("msg_third", "third"),
+            ("msg_after", "after"),
+        ] {
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: id.to_string(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human".to_string(),
+                    body: Some(body.to_string()),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let rows = repos
+            .read_channel_messages(MessageReadQueryRow {
+                channel_id: "all".to_string(),
+                limit: Some(20),
+                after_sequence: None,
+                before_sequence: None,
+                around_message_id: None,
+                from_message_id: Some("msg_first".to_string()),
+                to_message_id: Some("msg_third".to_string()),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            vec!["msg_first", "msg_second", "msg_third"]
         );
     }
 
@@ -1414,6 +1473,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1461,6 +1522,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: None,
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();
@@ -1488,6 +1551,8 @@ mod tests {
                 after_sequence: None,
                 before_sequence: None,
                 around_message_id: Some("msg_1".to_string()),
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .unwrap();

@@ -415,6 +415,8 @@ impl MessageService {
         after_sequence: Option<i64>,
         before_sequence: Option<i64>,
         around_message_id: Option<&str>,
+        from_message_id: Option<&str>,
+        to_message_id: Option<&str>,
     ) -> Result<Vec<AgentVisibleMessageRecord>, MessageError> {
         let (channel_id, thread_message_id) = parse_message_target(channel)?;
         if thread_message_id.is_some() {
@@ -425,6 +427,37 @@ impl MessageService {
             Some(message_id) => Some(message_id.to_string()),
             None => None,
         };
+        let range_message_ids = match (from_message_id.map(str::trim), to_message_id.map(str::trim))
+        {
+            (None, None) => None,
+            (Some(""), _) | (_, Some("")) => return Err(MessageError::InvalidMessage),
+            (Some(from_message_id), Some(to_message_id)) => {
+                if around_message_id.is_some()
+                    || after_sequence.is_some()
+                    || before_sequence.is_some()
+                {
+                    return Err(MessageError::InvalidMessage);
+                }
+                for message_id in [from_message_id, to_message_id] {
+                    let Some(message) = self
+                        .repos
+                        .channel_message(message_id)
+                        .await
+                        .map_err(message_storage_error)?
+                    else {
+                        return Err(MessageError::InvalidMessage);
+                    };
+                    if message.channel_id != channel_id || message.deleted {
+                        return Err(MessageError::InvalidMessage);
+                    }
+                }
+                Some((from_message_id.to_string(), to_message_id.to_string()))
+            }
+            _ => return Err(MessageError::InvalidMessage),
+        };
+        let (from_message_id, to_message_id) = range_message_ids
+            .map(|(from_message_id, to_message_id)| (Some(from_message_id), Some(to_message_id)))
+            .unwrap_or((None, None));
         let rows = self
             .repos
             .read_channel_messages(MessageReadQueryRow {
@@ -433,6 +466,8 @@ impl MessageService {
                 after_sequence,
                 before_sequence,
                 around_message_id,
+                from_message_id,
+                to_message_id,
             })
             .await
             .map_err(message_storage_error)?;
@@ -608,6 +643,8 @@ impl MessageService {
                 after_sequence: None,
                 before_sequence,
                 around_message_id: around_message_id.map(str::to_string),
+                from_message_id: None,
+                to_message_id: None,
             })
             .await
             .map_err(message_storage_error)?;

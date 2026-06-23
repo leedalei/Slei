@@ -407,6 +407,8 @@ pub struct MessageReadQueryRow {
     pub after_sequence: Option<i64>,
     pub before_sequence: Option<i64>,
     pub around_message_id: Option<String>,
+    pub from_message_id: Option<String>,
+    pub to_message_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1446,7 +1448,50 @@ impl Repositories {
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
         let limit = normalize_repository_limit(query.limit);
 
-        let rows = if let Some(around_message_id) = query.around_message_id.as_deref() {
+        let rows = if let (Some(from_message_id), Some(to_message_id)) = (
+            query.from_message_id.as_deref(),
+            query.to_message_id.as_deref(),
+        ) {
+            let endpoints = sqlx::query_scalar::<_, i64>(
+                "SELECT rowid
+                 FROM messages
+                 WHERE channel_id = ?
+                   AND id IN (?, ?)
+                   AND deleted = 0
+                 ORDER BY rowid ASC",
+            )
+            .bind(&query.channel_id)
+            .bind(from_message_id)
+            .bind(to_message_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+            match (endpoints.first(), endpoints.last()) {
+                (Some(start), Some(end))
+                    if endpoints.len() == 2 || from_message_id == to_message_id =>
+                {
+                    sqlx::query(
+                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                         FROM messages
+                         WHERE channel_id = ?
+                           AND rowid >= ?
+                           AND rowid <= ?
+                           AND deleted = 0
+                           AND kind NOT IN ('task_root', 'task_reply', 'task_card', 'tombstone')
+                           AND (content IS NULL OR content NOT LIKE 'task_card:%')
+                         ORDER BY rowid ASC
+                         LIMIT ?",
+                    )
+                    .bind(&query.channel_id)
+                    .bind(*start)
+                    .bind(*end)
+                    .bind(limit)
+                    .fetch_all(&self.pool)
+                    .await?
+                }
+                _ => Vec::new(),
+            }
+        } else if let Some(around_message_id) = query.around_message_id.as_deref() {
             let center = sqlx::query_scalar::<_, i64>(
                 "SELECT rowid
                  FROM messages

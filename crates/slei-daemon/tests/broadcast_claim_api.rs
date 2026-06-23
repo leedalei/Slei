@@ -214,6 +214,271 @@ async fn message_read_api_reads_context_around_message_id() {
 }
 
 #[tokio::test]
+async fn message_read_api_reads_inclusive_message_id_range() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "before", "read-range-before", false)
+        .await
+        .unwrap();
+    let first = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "first", "read-range-first", false)
+        .await
+        .unwrap();
+    let second = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "second")
+        .await
+        .unwrap();
+    let third = state
+        .messages()
+        .create_agent_channel_message("all", "agent_mina", "third")
+        .await
+        .unwrap();
+    state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "after", "read-range-after", false)
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!(
+                "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&limit=20",
+                first.id, third.id
+            ),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let message_ids = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| message["messageId"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(message_ids, vec![first.id, second.id, third.id]);
+}
+
+#[tokio::test]
+async fn message_read_api_reads_reversed_message_id_range_ascending() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let first = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "first reversed",
+            "read-range-reversed-first",
+            false,
+        )
+        .await
+        .unwrap();
+    let second = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "second reversed")
+        .await
+        .unwrap();
+    let third = state
+        .messages()
+        .create_agent_channel_message("all", "agent_mina", "third reversed")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!(
+                "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&limit=20",
+                third.id, first.id
+            ),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let message_ids = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| message["messageId"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(message_ids, vec![first.id, second.id, third.id]);
+}
+
+#[tokio::test]
+async fn message_read_api_rejects_invalid_message_id_range_inputs() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let all_message = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "all", "read-range-all", false)
+        .await
+        .unwrap();
+    let ops_message = state
+        .messages()
+        .create_human_channel_message("ops", "human_lei", "ops", "read-range-ops", false)
+        .await
+        .unwrap();
+    let deleted = state
+        .messages()
+        .create_human_channel_message("all", "human_lei", "deleted", "read-range-deleted", false)
+        .await
+        .unwrap();
+    state
+        .messages()
+        .delete_human_message(&deleted.id)
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    for uri in [
+        format!(
+            "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&limit=20",
+            all_message.id, ops_message.id
+        ),
+        format!(
+            "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&limit=20",
+            deleted.id, all_message.id
+        ),
+        format!(
+            "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&around={}&limit=20",
+            all_message.id, all_message.id, all_message.id
+        ),
+        format!(
+            "/v1/messages/read?channel=all&fromMessage={}&limit=20",
+            all_message.id
+        ),
+        format!(
+            "/v1/messages/read?channel=all&fromMessage=&toMessage={}&limit=20",
+            all_message.id
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(authed_empty_request(&token, uri))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+}
+
+#[tokio::test]
+async fn message_read_api_range_hides_task_control_messages() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    let first = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "visible first",
+            "read-range-controls-first",
+            false,
+        )
+        .await
+        .unwrap();
+    let legacy_task_card = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "system",
+            "task_card:legacy:source:msg_old",
+            "read-range-legacy-task-card",
+            false,
+        )
+        .await
+        .unwrap();
+    let task_card = state
+        .messages()
+        .create_task_card_message("all", "task_hidden", &first.id)
+        .await
+        .unwrap();
+    let tombstone = state
+        .messages()
+        .create_human_channel_message(
+            "all",
+            "human_lei",
+            "deleted hidden",
+            "read-range-controls-deleted",
+            false,
+        )
+        .await
+        .unwrap();
+    state
+        .messages()
+        .delete_human_message(&tombstone.id)
+        .await
+        .unwrap();
+    let task = state
+        .tasks()
+        .create_task_root(
+            "all",
+            "human_lei",
+            "hidden task root",
+            "read-range-task-root",
+        )
+        .await
+        .unwrap();
+    let reply = state
+        .tasks()
+        .add_reply(
+            &task.id,
+            "agent_cindy",
+            "hidden task reply",
+            "read-range-task-reply",
+        )
+        .await
+        .unwrap();
+    let last = state
+        .messages()
+        .create_agent_channel_message("all", "agent_cindy", "visible last")
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(authed_empty_request(
+            &token,
+            format!(
+                "/v1/messages/read?channel=all&fromMessage={}&toMessage={}&limit=20",
+                first.id, last.id
+            ),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response_json(response).await;
+    let message_ids = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|message| message["messageId"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(message_ids, vec![first.id, last.id]);
+    for hidden_id in [
+        legacy_task_card.id,
+        task_card.id,
+        tombstone.id,
+        format!("task_root_msg_{}", task.id),
+        format!("task_reply_msg_{}", reply.id),
+    ] {
+        assert!(
+            !message_ids.contains(&hidden_id),
+            "{hidden_id} should be hidden"
+        );
+    }
+}
+
+#[tokio::test]
 async fn search_api_returns_matching_agent_visible_messages() {
     let token = AuthToken::from_static("test-token");
     let state = AppState::for_tests(token.clone());
