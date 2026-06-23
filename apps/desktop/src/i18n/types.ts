@@ -52,6 +52,7 @@ export type DesktopMessages = {
     channelView: string;
     channels: string;
     chooseMentionMember: string;
+    chooseSkill: string;
     createChannel: string;
     createChannelDescription: string;
     createChannelFailed: string;

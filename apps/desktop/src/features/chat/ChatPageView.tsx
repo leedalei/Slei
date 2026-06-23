@@ -521,7 +521,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
   const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
-  const skillSlashTargets = skillSlash ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
+  const skillSlashTargets = skillSlash && dmMember ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
