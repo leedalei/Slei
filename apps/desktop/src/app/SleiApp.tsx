@@ -1875,20 +1875,37 @@ export function SleiApp() {
   }
 
   async function handleAddChannelMember(agentId: string) {
-    await bridge.addChannelMember(activeChannelId, { agentId });
-    const members = await refreshChannelMembersIntoState(activeChannelId);
-    await refreshChannelMessagesIntoState(activeChannelId, members);
-    refreshChannelMembersInBackground(activeChannelId, members);
+    try {
+      await bridge.addChannelMember(activeChannelId, { agentId });
+      const members = await refreshChannelMembersIntoState(activeChannelId);
+      await refreshChannelMessagesIntoState(activeChannelId, members);
+      refreshChannelMembersInBackground(activeChannelId, members);
+      showAppToast(messages.chat.addChannelMemberSuccess, "success");
+    } catch (error) {
+      showAppToast(formatAppErrorToast(messages.chat.addChannelMemberFailed, error), "error");
+    }
   }
 
   async function handleRemoveChannelMember(agentId: string) {
-    await bridge.removeChannelMember(activeChannelId, agentId);
-    const members = await refreshChannelMembersIntoState(activeChannelId);
-    await refreshChannelMessagesIntoState(activeChannelId, members);
+    try {
+      await bridge.removeChannelMember(activeChannelId, agentId);
+      const members = await refreshChannelMembersIntoState(activeChannelId);
+      await refreshChannelMessagesIntoState(activeChannelId, members);
+      showAppToast(messages.chat.removeChannelMemberSuccess, "success");
+    } catch (error) {
+      showAppToast(formatAppErrorToast(messages.chat.removeChannelMemberFailed, error), "error");
+    }
   }
 
-  function handleDeleteChannel(channelId: string) {
+  async function handleDeleteChannel(channelId: string) {
     if (channelId === "all") return;
+    const channelName = stripChannelHash(data.channels.find((channel) => channel.id === channelId)?.name ?? channelId);
+    try {
+      await bridge.deleteChannel(channelId);
+    } catch (error) {
+      showAppToast(formatAppErrorToast(messages.chat.deleteChannelFailed, error), "error");
+      return;
+    }
     setData((current) =>
       createEmptySleiData({
         ...current,
@@ -1902,6 +1919,24 @@ export function SleiApp() {
       }),
     );
     setActiveChannelId((current) => (current === channelId ? "all" : current));
+    showAppToast(messages.chat.deleteChannelSuccess(channelName), "success");
+  }
+
+  async function handleReplaceChannelProjectPaths(channelId: string, projectPaths: string[]) {
+    try {
+      const receipt = await bridge.replaceChannelProjectPaths(channelId, { projectPaths });
+      const updatedChannel = channelFromView(receipt.channel, messages);
+      setData((current) =>
+        createEmptySleiData({
+          ...current,
+          channels: current.channels.map((channel) => channel.id === channelId ? { ...channel, ...updatedChannel } : channel),
+        }),
+      );
+      showAppToast(messages.chat.projectUpdateSuccess, "success");
+    } catch (error) {
+      showAppToast(formatAppErrorToast(messages.chat.projectUpdateFailed, error), "error");
+      throw error;
+    }
   }
 
   function handleAgentSearchResultSelect(agentId: string) {
@@ -2238,6 +2273,7 @@ export function SleiApp() {
       onChannelDelete={handleDeleteChannel}
       onChannelMemberAdd={handleAddChannelMember}
       onChannelMemberRemove={handleRemoveChannelMember}
+      onChannelProjectPathsChange={handleReplaceChannelProjectPaths}
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
       onChannelSelect={(channelId) => {

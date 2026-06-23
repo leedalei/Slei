@@ -1685,7 +1685,7 @@ impl ChannelOrchestratorService {
             return Ok(());
         }
         let safe_memory_refs = if !assignee_agent_ids.is_empty() {
-            vec!["MEMORY.md", "notes/channels.md", "notes/relationships.md"]
+            vec!["MEMORY.md", "notes/channels.md"]
         } else {
             Vec::new()
         };

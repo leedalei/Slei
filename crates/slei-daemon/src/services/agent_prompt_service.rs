@@ -138,7 +138,8 @@ Visible replies and task operations:
 - Read a task thread with `slei task thread <task-id>`.
 - To hand work to another agent, send a visible `@mention` with the next owner and task/thread context, then update the task/status as needed.
 - Update status with `slei agent status --agent <agent-id> --state working --phase "正在阅读历史"` and keep phase text truthful.
-- Update `MEMORY.md` directly when Active Context should survive handoff, wait, or exit, then use `slei agent status` to record that you are updating memory.
+- Read channel membership, rosters, associated projects, and handoff relationships from `notes/channels.md`; do not duplicate those channel facts in `MEMORY.md`.
+- Update `MEMORY.md` directly only when task Active Context should survive handoff, wait, or exit, then use `slei agent status` to record that you are updating memory.
 
 ## Runtime Status Phases
 Use status phases such as:

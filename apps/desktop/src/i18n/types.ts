@@ -61,7 +61,13 @@ export type DesktopMessages = {
     channelNameRequired: string;
     deleteChannel: (name: string) => string;
     deleteChannelConfirm: (name: string) => string;
+    deleteChannelSuccess: (name: string) => string;
+    deleteChannelFailed: string;
     addChannelMember: string;
+    addChannelMemberSuccess: string;
+    addChannelMemberFailed: string;
+    removeChannelMemberSuccess: string;
+    removeChannelMemberFailed: string;
     directMessage: string;
     directMessages: string;
     files: string;
@@ -117,6 +123,10 @@ export type DesktopMessages = {
     projectFolderPicker: string;
     projectFolderHint: string;
     projectPrefix: (projectName: string) => string;
+    editProjects: string;
+    noLinkedProjects: string;
+    projectUpdateSuccess: string;
+    projectUpdateFailed: string;
     removeProject: (projectName: string) => string;
     removeChannelMember: (name: string) => string;
     selectAgents: string;

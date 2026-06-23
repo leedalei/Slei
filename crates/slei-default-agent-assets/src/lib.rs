@@ -93,20 +93,8 @@ pub fn base_key_knowledge(agent_kind: Option<&str>) -> &'static str {
 }
 
 fn render_key_knowledge(input: &AgentTemplateInput<'_>) -> String {
-    let mut key_knowledge = base_key_knowledge(input.agent_kind).to_string();
-    let mut channel_ids = input.channel_ids.clone();
-    channel_ids.sort_unstable();
-    channel_ids.dedup();
-    if !channel_ids.is_empty() {
-        let joined_channels = channel_ids
-            .iter()
-            .map(|channel_id| format!("#{channel_id}"))
-            .collect::<Vec<_>>()
-            .join("、");
-        key_knowledge.push_str("\n已加入频道：");
-        key_knowledge.push_str(&joined_channels);
-    }
-    key_knowledge
+    let _ = input.channel_ids.len();
+    base_key_knowledge(input.agent_kind).to_string()
 }
 
 fn render_template(template: &str, replacements: &[(&str, &str)]) -> String {
@@ -166,12 +154,14 @@ mod tests {
     }
 
     #[test]
-    fn guide_memory_includes_product_card_guidance_and_sorted_channels() {
+    fn guide_memory_includes_product_card_guidance_without_inline_channels() {
         let memory = initial_memory(&guide_input());
 
         assert!(memory.contains("# Yeal"));
         assert!(memory.contains("创建成员时通过 guide-create Skill 生成产品交互卡"));
-        assert!(memory.contains("已加入频道：#all、#zeta"));
+        assert!(!memory.contains("主频道：#all"));
+        assert!(!memory.contains("已加入频道：#all、#zeta"));
+        assert!(memory.contains("频道信息请读取 `notes/channels.md`"));
         assert!(memory.contains("## Active Context"));
         assert!(memory.contains("最多 3 个频道"));
         assert!(memory.contains("频道"));

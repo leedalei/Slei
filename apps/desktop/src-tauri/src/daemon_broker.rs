@@ -469,6 +469,12 @@ pub struct ChannelReceipt {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ChannelDeleteReceipt {
+    pub deleted_channel: ChannelView,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChannelSessionListReceipt {
     pub sessions: Vec<ChannelSessionView>,
 }
@@ -487,6 +493,13 @@ pub struct ChannelCreateRequest {
     pub description: Option<String>,
     #[serde(default, alias = "agentIds")]
     pub agent_ids: Vec<String>,
+    #[serde(default, alias = "projectPaths")]
+    pub project_paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelProjectPathsRequest {
     #[serde(default, alias = "projectPaths")]
     pub project_paths: Vec<String>,
 }
@@ -1379,6 +1392,22 @@ impl DaemonBroker {
         request: ChannelCreateRequest,
     ) -> Result<ChannelReceipt, ChannelError> {
         let receipt = self.create_channel_in_daemon(&request)?;
+        self.upsert_local_channel(receipt.channel.clone());
+        Ok(receipt)
+    }
+
+    pub fn delete_channel(&self, channel_id: &str) -> Result<ChannelDeleteReceipt, ChannelError> {
+        let receipt = self.delete_channel_in_daemon(channel_id)?;
+        self.remove_local_channel(channel_id);
+        Ok(receipt)
+    }
+
+    pub fn replace_channel_project_paths(
+        &self,
+        channel_id: &str,
+        request: ChannelProjectPathsRequest,
+    ) -> Result<ChannelReceipt, ChannelError> {
+        let receipt = self.replace_channel_project_paths_in_daemon(channel_id, &request)?;
         self.upsert_local_channel(receipt.channel.clone());
         Ok(receipt)
     }
@@ -2783,6 +2812,36 @@ impl DaemonBroker {
         })
     }
 
+    fn delete_channel_in_daemon(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelDeleteReceipt, ChannelError> {
+        let response = self
+            .send_daemon_request_checked("DELETE", &format!("/v1/channels/{channel_id}"), None, &[])
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelDeleteReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
+    fn replace_channel_project_paths_in_daemon(
+        &self,
+        channel_id: &str,
+        request: &ChannelProjectPathsRequest,
+    ) -> Result<ChannelReceipt, ChannelError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "PATCH",
+                &format!("/v1/channels/{channel_id}/project-paths"),
+                Some(&payload),
+                &[],
+            )
+            .map_err(ChannelError::DaemonRequest)?;
+        serde_json::from_str::<ChannelReceipt>(&response)
+            .map_err(|error| ChannelError::DaemonResponse(error.to_string()))
+    }
+
     fn fetch_channel_members_from_daemon(
         &self,
         channel_id: &str,
@@ -3327,6 +3386,29 @@ impl DaemonBroker {
             Some(existing) => *existing = channel,
             None => channels.push(channel),
         }
+    }
+
+    fn remove_local_channel(&self, channel_id: &str) {
+        self.channels
+            .lock()
+            .expect("channels mutex poisoned")
+            .retain(|channel| channel.id != channel_id);
+        self.channel_members
+            .lock()
+            .expect("channel members mutex poisoned")
+            .retain(|member| member.channel_id != channel_id);
+        self.channel_messages
+            .lock()
+            .expect("channel messages mutex poisoned")
+            .retain(|message| message.channel_id != channel_id);
+        self.channel_sessions
+            .lock()
+            .expect("channel sessions mutex poisoned")
+            .retain(|session| session.channel_id != channel_id);
+        self.tasks
+            .lock()
+            .expect("tasks mutex poisoned")
+            .retain(|task| task.channel_id != channel_id);
     }
 
     fn upsert_local_channel_session(&self, session: ChannelSessionView) {
@@ -4060,7 +4142,36 @@ fn persist_local_agents_at_root(root: &str, agents: &[DesktopAgentView]) -> Resu
 fn create_local_agent_workspace(agent: &DesktopAgentView) -> Result<(), AgentError> {
     fs::create_dir_all(&agent.docs_path).map_err(AgentError::Io)?;
     fs::write(&agent.memory_path, initial_memory(agent)).map_err(AgentError::Io)?;
+    write_local_agent_channel_notes(agent)?;
     write_local_agent_skills(agent)
+}
+
+fn write_local_agent_channel_notes(agent: &DesktopAgentView) -> Result<(), AgentError> {
+    let notes_dir = Path::new(&agent.workspace_path).join("notes");
+    fs::create_dir_all(&notes_dir).map_err(AgentError::Io)?;
+    let mut channel_ids = agent
+        .channel_ids
+        .clone()
+        .unwrap_or_else(|| vec!["all".to_string()]);
+    channel_ids.sort_by(|left, right| {
+        (left != "all")
+            .cmp(&(right != "all"))
+            .then_with(|| left.cmp(right))
+    });
+    let sections = channel_ids
+        .into_iter()
+        .map(|channel_id| {
+            format!(
+                "## #{channel_id}\n- Channel id: {channel_id}\n- Associated projects: 无\n- Roster:\n- {} ({}) — {}\n- Handoff rule: finish the current stage, then visibly @ the next suitable member from this channel roster; if no handoff is needed, @ the current user for acceptance/review.\n",
+                agent.handle, agent.name, agent.description
+            )
+        })
+        .collect::<Vec<_>>();
+    fs::write(
+        notes_dir.join("channels.md"),
+        format!("# Channel Notes\n\n{}\n", sections.join("\n")),
+    )
+    .map_err(AgentError::Io)
 }
 
 fn write_local_agent_skills(agent: &DesktopAgentView) -> Result<(), AgentError> {

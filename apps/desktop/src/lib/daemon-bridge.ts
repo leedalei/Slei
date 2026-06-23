@@ -283,7 +283,15 @@ export type ChannelReceipt = {
   channel: ChannelView;
 };
 
+export type ChannelDeleteReceipt = {
+  deletedChannel: ChannelView;
+};
+
 export type ChannelCreateRequest = ProtocolChannelCreateRequest;
+
+export type ChannelProjectPathsRequest = {
+  projectPaths: string[];
+};
 
 export type ChannelMemberAddRequest = ProtocolChannelMemberAddRequest;
 
@@ -642,6 +650,8 @@ export type DaemonBridge = {
   bootstrapGuideAgent(): Promise<GuideBootstrapReceipt>;
   listChannels(): Promise<ChannelListReceipt>;
   createChannel(request: ChannelCreateRequest): Promise<ChannelReceipt>;
+  deleteChannel(channelId: string): Promise<ChannelDeleteReceipt>;
+  replaceChannelProjectPaths(channelId: string, request: ChannelProjectPathsRequest): Promise<ChannelReceipt>;
   listChannelMembers(channelId: string): Promise<ChannelMemberListReceipt>;
   addChannelMember(channelId: string, request: ChannelMemberAddRequest): Promise<ChannelMemberReceipt>;
   removeChannelMember(channelId: string, agentId: string): Promise<ChannelMemberRemoveReceipt>;
@@ -770,6 +780,8 @@ export function createOfflineDaemonBridge(): DaemonBridge {
       return { channels: [] };
     },
     createChannel: rejectDaemonOffline,
+    deleteChannel: rejectDaemonOffline,
+    replaceChannelProjectPaths: rejectDaemonOffline,
     async listChannelMembers() {
       return { members: [] };
     },
@@ -864,6 +876,8 @@ export function createDaemonBridge(): DaemonBridge {
       bootstrapGuideAgent: () => invoke<GuideBootstrapReceipt>("bootstrap_guide_agent_command"),
       listChannels: () => invoke<ChannelListReceipt>("list_channels_command"),
       createChannel: (request: ChannelCreateRequest) => invoke<ChannelReceipt>("create_channel_command", { request }),
+      deleteChannel: (channelId: string) => invoke<ChannelDeleteReceipt>("delete_channel_command", { channelId }),
+      replaceChannelProjectPaths: (channelId: string, request: ChannelProjectPathsRequest) => invoke<ChannelReceipt>("replace_channel_project_paths_command", { channelId, request }),
       listChannelMembers: (channelId: string) => invoke<ChannelMemberListReceipt>("list_channel_members_command", { channelId }),
       addChannelMember: (channelId: string, request: ChannelMemberAddRequest) => invoke<ChannelMemberReceipt>("add_channel_member_command", { channelId, request }),
       removeChannelMember: (channelId: string, agentId: string) => invoke<ChannelMemberRemoveReceipt>("remove_channel_member_command", { channelId, agentId }),

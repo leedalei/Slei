@@ -55,13 +55,12 @@ export function defaultSkillContent(input: { skillId: string; handle: string }):
 }
 
 function renderKeyKnowledge(input: AgentTemplateInput): string {
-  const base =
+  void input.channelIds;
+  return (
     input.agentKind === "guide"
       ? DEFAULT_KEY_KNOWLEDGE.guide
-      : DEFAULT_KEY_KNOWLEDGE.agent;
-  const channelIds = [...new Set(input.channelIds ?? [])].sort();
-  if (channelIds.length === 0) return base;
-  return `${base}\n已加入频道：${channelIds.map((channelId) => `#${channelId}`).join("、")}`;
+      : DEFAULT_KEY_KNOWLEDGE.agent
+  );
 }
 
 function renderTrigger(definition: (typeof DEFAULT_SKILL_DEFINITIONS)[number], handle: string): string {

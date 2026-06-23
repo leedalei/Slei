@@ -113,6 +113,45 @@ describe("ChatPage mention panel", () => {
     expect(copyButtonIndex).toBeLessThan(titleEnd);
   });
 
+  it("renders a project edit button beside non-default channel project text", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "kol-content", name: "kol-content", description: "kol-content", projectName: "kol-content", projectPaths: ["/workspace/kol-content"], unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.projectPrefix("/workspace/kol-content"));
+    expect(html).toContain(`aria-label="${messages.chat.editProjects}"`);
+    expect(html).toContain('data-testid="slei-channel-project-edit"');
+  });
+
+  it("does not render the project edit button for the all channel", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", projectPaths: [], unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).not.toContain(`aria-label="${messages.chat.editProjects}"`);
+    expect(html).not.toContain('data-testid="slei-channel-project-edit"');
+  });
+
   it("makes the full channel header draggable without marking header buttons as drag regions", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({

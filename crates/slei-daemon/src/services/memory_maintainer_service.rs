@@ -135,6 +135,24 @@ impl MemoryMaintainerService {
         Ok(())
     }
 
+    pub async fn sync_channel_notes_for_agents(
+        &self,
+        source_channel_id: &str,
+        agent_ids: &[String],
+    ) -> Result<(), MemoryMaintainerError> {
+        for agent_id in agent_ids {
+            self.memory_events
+                .start_update(agent_id, source_channel_id)
+                .await;
+            self.update_agent_channel_notes(agent_id, source_channel_id)
+                .await?;
+            self.memory_events
+                .complete_update(agent_id, source_channel_id)
+                .await;
+        }
+        Ok(())
+    }
+
     async fn update_agent_channel_notes(
         &self,
         agent_id: &str,
@@ -145,34 +163,20 @@ impl MemoryMaintainerService {
         let memory_path = PathBuf::from(&agent.memory_path);
         let notes_dir = workspace.join("notes");
         let channels_path = notes_dir.join("channels.md");
-        let relationships_path = notes_dir.join("relationships.md");
 
-        if !memory_path.starts_with(&workspace)
-            || !channels_path.starts_with(&workspace)
-            || !relationships_path.starts_with(&workspace)
-        {
+        if !memory_path.starts_with(&workspace) || !channels_path.starts_with(&workspace) {
             return Err(MemoryMaintainerError::WorkspaceBoundary);
         }
 
         fs::create_dir_all(&notes_dir).map_err(MemoryMaintainerError::Io)?;
         self.ensure_memory_links(&memory_path)?;
-        self.write_channel_notes(&channels_path, channel_id).await?;
-        self.write_relationship_notes(&relationships_path, &agent, channel_id)
-            .await?;
+        self.write_channel_notes(&channels_path, &agent).await?;
 
         self.memory_events
             .record_document_touch(agent_id, channel_id, "MEMORY.md", "Channel Notes")
             .await;
         self.memory_events
             .record_document_touch(agent_id, channel_id, "notes/channels.md", channel_id)
-            .await;
-        self.memory_events
-            .record_document_touch(
-                agent_id,
-                channel_id,
-                "notes/relationships.md",
-                "Acceptance Rule",
-            )
             .await;
         Ok(())
     }
@@ -182,9 +186,6 @@ impl MemoryMaintainerService {
         let mut additions = Vec::new();
         if !memory.contains("notes/channels.md") {
             additions.push("- [Channel notes](notes/channels.md)");
-        }
-        if !memory.contains("notes/relationships.md") {
-            additions.push("- [Relationship notes](notes/relationships.md)");
         }
         if additions.is_empty() {
             return Ok(());
@@ -206,40 +207,39 @@ impl MemoryMaintainerService {
     async fn write_channel_notes(
         &self,
         path: &Path,
-        channel_id: &str,
-    ) -> Result<(), MemoryMaintainerError> {
-        let members = self.channels.channel_members(channel_id).await?;
-        let mut roster = Vec::new();
-        for member in members {
-            match self.members.get_product_agent(&member.agent_id).await {
-                Ok(agent) => roster.push(format!(
-                    "- {} ({}) — {}",
-                    agent.handle, agent.name, agent.description
-                )),
-                Err(_) => roster.push(format!("- {} — channel member", member.agent_id)),
-            }
-        }
-        roster.sort();
-
-        let content = format!(
-            "# Channel Notes\n\n## #{channel_id}\n- Channel id: {channel_id}\n- Roster:\n{}\n",
-            roster.join("\n")
-        );
-        fs::write(path, content).map_err(MemoryMaintainerError::Io)
-    }
-
-    async fn write_relationship_notes(
-        &self,
-        path: &Path,
         agent: &ProductAgentRecord,
-        channel_id: &str,
     ) -> Result<(), MemoryMaintainerError> {
-        let content = format!(
-            "# Relationship Notes\n\n## {name} in #{channel_id}\n- Self: {handle} — {description}\n- User: @lei-lee — 人类用户，项目发起人\n- Relationship hint: use the channel roster in notes/channels.md before assuming responsibility.\n\n## Handoff Rule\nAfter finishing the current stage, decide from the current context and channel roster whether another member should take over. If so, visibly @ that member. If no handoff is needed, @ the current user for acceptance/review.\n\n## Acceptance Rule\nIf this Agent is unsure, has no relevant relationship, or the task appears complete, notify the user for 验收 / acceptance.\n",
-            name = agent.name,
-            handle = agent.handle,
-            description = agent.description,
-        );
+        let mut sections = Vec::new();
+        for channel in self.channels.list_channels().await {
+            let members = self.channels.channel_members(&channel.id).await?;
+            if !members.iter().any(|member| member.agent_id == agent.id) {
+                continue;
+            }
+            let mut roster = Vec::new();
+            for member in members {
+                match self.members.get_product_agent(&member.agent_id).await {
+                    Ok(member_agent) => roster.push(format!(
+                        "- {} ({}) — {}",
+                        member_agent.handle, member_agent.name, member_agent.description
+                    )),
+                    Err(_) => roster.push(format!("- {} — channel member", member.agent_id)),
+                }
+            }
+            roster.sort();
+            let projects = if channel.project_paths.is_empty() {
+                "无".to_string()
+            } else {
+                channel.project_paths.join(", ")
+            };
+            sections.push(format!(
+                "## #{channel_id}\n- Channel id: {channel_id}\n- Associated projects: {projects}\n- Roster:\n{roster}\n- Handoff rule: finish the current stage, then visibly @ the next suitable member from this channel roster; if no handoff is needed, @ the current user for acceptance/review.\n",
+                channel_id = channel.id,
+                projects = projects,
+                roster = roster.join("\n"),
+            ));
+        }
+
+        let content = format!("# Channel Notes\n\n{}\n", sections.join("\n"));
         fs::write(path, content).map_err(MemoryMaintainerError::Io)
     }
 }

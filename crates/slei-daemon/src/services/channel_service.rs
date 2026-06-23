@@ -355,6 +355,62 @@ impl ChannelService {
             .map(member_row_to_record))
     }
 
+    pub async fn delete_channel(&self, channel_id: &str) -> Result<ChannelRecord, ChannelError> {
+        let channel = self
+            .channel_by_id(channel_id)
+            .await?
+            .ok_or(ChannelError::MissingChannel)?;
+        if channel.is_default || channel.id == "all" {
+            return Err(ChannelError::DefaultChannelImmutable);
+        }
+        self.repos
+            .delete_channel(channel_id)
+            .await
+            .map_err(channel_storage_error)?;
+        Ok(channel)
+    }
+
+    pub async fn replace_project_paths(
+        &self,
+        channel_id: &str,
+        project_paths: Vec<String>,
+    ) -> Result<ChannelRecord, ChannelError> {
+        if self.channel_by_id(channel_id).await?.is_none() {
+            return Err(ChannelError::MissingChannel);
+        }
+        let mut normalized_paths = Vec::new();
+        for path in project_paths {
+            let normalized_path = normalize_workspace_path(&path)?;
+            if !normalized_paths.contains(&normalized_path) {
+                normalized_paths.push(normalized_path);
+            }
+        }
+        for path in &normalized_paths {
+            if self
+                .workspace_path_exists_outside_channel(path, channel_id)
+                .await?
+            {
+                return Err(ChannelError::DuplicateWorkspacePath);
+            }
+        }
+
+        let mounts = normalized_paths
+            .iter()
+            .map(|path| WorkspaceMountRow {
+                channel_id: channel_id.to_string(),
+                path: path.clone(),
+                label: workspace_label(path),
+            })
+            .collect::<Vec<_>>();
+        self.repos
+            .replace_channel_workspace_mounts(channel_id, &mounts)
+            .await
+            .map_err(map_workspace_insert_error)?;
+        self.channel_by_id(channel_id)
+            .await?
+            .ok_or(ChannelError::MissingChannel)
+    }
+
     pub async fn mount_workspace(
         &self,
         channel_id: &str,
@@ -646,6 +702,33 @@ impl ChannelService {
         Ok(false)
     }
 
+    async fn workspace_path_exists_outside_channel(
+        &self,
+        normalized_path: &str,
+        current_channel_id: &str,
+    ) -> Result<bool, ChannelError> {
+        for channel in self.repos.channels().await.map_err(channel_storage_error)? {
+            if channel.id == current_channel_id {
+                continue;
+            }
+            if self
+                .repos
+                .channel_workspace_mounts(&channel.id)
+                .await
+                .map_err(channel_storage_error)?
+                .iter()
+                .any(|mount| {
+                    normalize_workspace_path(&mount.path)
+                        .map(|path| path == normalized_path)
+                        .unwrap_or(false)
+                })
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     async fn ensure_agent_placeholder(&self, agent_id: &str) -> Result<(), ChannelError> {
         if self
             .repos
@@ -792,6 +875,15 @@ fn workspace_row_to_record(row: WorkspaceMountRow) -> WorkspaceMount {
     }
 }
 
+fn workspace_label(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
 fn permission_to_storage(permission: PermissionPreset) -> &'static str {
     match permission {
         PermissionPreset::ReadOnly => "ReadOnly",
@@ -936,6 +1028,8 @@ pub enum ChannelError {
     DuplicateChannelName,
     #[error("workspace path already mounted")]
     DuplicateWorkspacePath,
+    #[error("default channel cannot be deleted")]
+    DefaultChannelImmutable,
     #[error("channel io error: {0}")]
     Io(std::io::Error),
 }
