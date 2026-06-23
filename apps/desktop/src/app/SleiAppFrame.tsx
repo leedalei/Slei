@@ -223,7 +223,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
-    gridTemplateColumns: hasContextSidebar ? "5.5rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)" : "5.5rem minmax(0, 1fr)",
+    gridTemplateColumns: hasContextSidebar ? "4.75rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)" : "4.75rem minmax(0, 1fr)",
   } as CSSProperties;
 
   useEffect(() => {
@@ -251,7 +251,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             aria-label={messages.shell.nav[item.id]}
             aria-current={input.activeView === item.id ? "page" : undefined}
             className={cn(
-              "grid h-16 w-16 place-items-center rounded-lg p-0",
+              "grid h-14 w-14 place-items-center rounded-lg p-0",
               input.activeView === item.id && "shadow-sm",
             )}
             data-nav-icon={item.id}
