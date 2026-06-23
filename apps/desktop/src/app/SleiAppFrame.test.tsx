@@ -1,17 +1,52 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createDemoMembers, createSleiFixtures } from "../test/fixtures";
 import { SleiAppFrame } from "./SleiAppFrame";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & { ResizeObserver?: typeof ResizeObserver }).ResizeObserver ??= class ResizeObserver {
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+};
 
 const runtimeSetup = {
   loading: false,
   hasClaudeRuntimeReady: true,
   nodes: [],
 };
+
+let mountedRoot: Root | undefined;
+let mountedContainer: HTMLDivElement | undefined;
+
+async function mount(element: React.ReactElement) {
+  mountedContainer = document.createElement("div");
+  document.body.appendChild(mountedContainer);
+  mountedRoot = createRoot(mountedContainer);
+  await act(async () => {
+    mountedRoot?.render(element);
+  });
+  await act(async () => undefined);
+  return mountedContainer;
+}
+
+afterEach(async () => {
+  if (mountedRoot) {
+    await act(async () => {
+      mountedRoot?.unmount();
+    });
+  }
+  mountedContainer?.remove();
+  mountedRoot = undefined;
+  mountedContainer = undefined;
+  document.body.innerHTML = "";
+});
 
 describe("SleiAppFrame global search navigation", () => {
   it("renders search as an active far-left rail item", () => {
@@ -112,6 +147,29 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(html).toContain("暂无智能体");
     expect(html).toContain('data-empty-illustration="nodata"');
+  });
+
+  it("does not show channel readiness copy before a channel is created", async () => {
+    const host = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({ members: createDemoMembers() })}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    const createButton = host.querySelector('button[aria-label="创建频道"]') as HTMLButtonElement | null;
+    expect(createButton).toBeTruthy();
+    await act(async () => {
+      createButton?.click();
+    });
+    await act(async () => undefined);
+
+    expect(document.body.textContent).toContain("选择 Agent");
+    expect(document.body.textContent).toContain("Coda");
+    expect(document.body.textContent).not.toContain("记忆同步中");
+    expect(document.body.textContent).not.toContain("记忆失败");
   });
 
   it("marks sidebar category titles as unselectable", () => {

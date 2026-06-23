@@ -179,7 +179,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("slei-channel-form");
   });
 
-  it("select agents in the create channel modal with readiness copy", () => {
+  it("selects agents in the create channel modal without pre-channel readiness copy", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -193,7 +193,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("选择 Agent");
     expect(html).toContain("@Coda");
     expect(html).toContain("@alice");
-    expect(html).toContain("记忆同步中");
+    expect(html).not.toContain("记忆同步中");
+    expect(html).not.toContain("记忆失败");
     expect(html).not.toContain("@lei");
   });
 

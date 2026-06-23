@@ -870,24 +870,20 @@ function ChannelList(input: {
                 <legend className="text-sm font-medium">{input.messages.chat.selectAgents}</legend>
                 <ScrollArea className="max-h-60 rounded-lg border">
                   <div className="grid gap-1 p-2">
-                    {agentMembers.map((member) => {
-                      const readiness = member.channelReadiness?.[stripChannelHash(channelDraft.name)] ?? member.channelReadiness?.__create__ ?? "memory_syncing";
-                      return (
-                        <Label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted" key={member.id}>
-                          <Checkbox
-                            aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
-                            checked={channelDraft.selectedAgentIds.includes(member.id)}
-                            onCheckedChange={() => toggleSelectedAgent(member.id)}
-                          />
-                          <MemberAvatar identity={member} />
-                          <span className="grid min-w-0 flex-1">
-                            <strong className="truncate text-sm">{member.name}</strong>
-                            <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
-                          </span>
-                          <Badge variant="outline">{channelReadinessLabel(readiness, input.messages)}</Badge>
-                        </Label>
-                      );
-                    })}
+                    {agentMembers.map((member) => (
+                      <Label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted" key={member.id}>
+                        <Checkbox
+                          aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
+                          checked={channelDraft.selectedAgentIds.includes(member.id)}
+                          onCheckedChange={() => toggleSelectedAgent(member.id)}
+                        />
+                        <MemberAvatar identity={member} />
+                        <span className="grid min-w-0 flex-1">
+                          <strong className="truncate text-sm">{member.name}</strong>
+                          <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
+                        </span>
+                      </Label>
+                    ))}
                   </div>
                 </ScrollArea>
               </fieldset>
