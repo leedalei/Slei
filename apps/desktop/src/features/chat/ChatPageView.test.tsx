@@ -138,6 +138,43 @@ describe("ChatPage DM skill message highlight", () => {
     expect(html).toContain("<strong>重点</strong>");
   });
 
+  it("preserves whitespace-sensitive markdown after a highlighted DM skill token", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_skill_code",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory\n    code",
+          channelId: "dm_agent_architect",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("slei-message-skill");
+    expect(html).toContain("/memory");
+    expect(html).toContain("<pre>");
+    expect(html).toContain("<code>code");
+  });
+
   it("does not highlight middle, unknown, leading-space, or channel slash tokens", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = {

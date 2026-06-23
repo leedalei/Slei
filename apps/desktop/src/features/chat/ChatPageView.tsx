@@ -346,12 +346,13 @@ function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnTy
     return <MarkdownMessage markdown={body} />;
   }
   const rest = skillToken.rest;
+  const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
   return (
-    <div className="slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-foreground [&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline">
-      <span className="slei-message-skill inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
+    <div className={cn("slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-foreground", inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline")}>
+      <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
         {skillToken.token}
       </span>
-      {rest ? <MarkdownMessage markdown={rest.replace(/^\s+/, "")} /> : null}
+      {rest ? <MarkdownMessage markdown={rest} /> : null}
     </div>
   );
 }
