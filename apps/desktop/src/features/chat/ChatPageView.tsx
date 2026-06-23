@@ -621,6 +621,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   useEffect(() => {
+    if (!skillSlash || skillSlashTargets.length === 0) return;
+    skillOptionRefs.current[selectedSkillIndex]?.scrollIntoView({ block: "nearest" });
+  }, [skillSlash, skillSlashTargets.length, selectedSkillIndex]);
+
+  useEffect(() => {
+    setSelectedSkillIndex(0);
+  }, [skillSlash?.query, dmMember?.id]);
+
+  useEffect(() => {
     if (effectiveChannelView !== "chat" || focusedMessageId) return;
     if (initialTimelineScrollTargetRef.current === timelineScrollTarget) return;
     initialTimelineScrollTargetRef.current = timelineScrollTarget;
@@ -1076,7 +1085,31 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     onKeyDown={(event) => {
                       const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
                       const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                      if (!composing && mention && mentionTargets.length > 0) {
+                      const hasSkillSlashTargets = Boolean(skillSlash && skillSlashTargets.length > 0);
+                      if (!composing && skillSlash && hasSkillSlashTargets) {
+                        if (event.key === "ArrowDown") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => moveMentionSelection(current, 1, skillSlashTargets.length));
+                          return;
+                        }
+                        if (event.key === "ArrowUp") {
+                          event.preventDefault();
+                          setSelectedSkillIndex((current) => moveMentionSelection(current, -1, skillSlashTargets.length));
+                          return;
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setDraft(draft.slice(0, skillSlash.start));
+                          setSelectedSkillIndex(0);
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === "Tab") {
+                          event.preventDefault();
+                          selectSkillSlash();
+                          return;
+                        }
+                      }
+                      if (!composing && mention && hasMentionTargets) {
                         if (event.key === "ArrowDown") {
                           event.preventDefault();
                           setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));

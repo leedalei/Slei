@@ -17,6 +17,7 @@ import { ChatPage } from "./ChatPageView";
   observe() {}
   unobserve() {}
 };
+HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 function memberWithLongMentionText(): SleiMember {
   return {
@@ -39,6 +40,35 @@ function memberWithLongMentionText(): SleiMember {
     createdAgents: [],
     activity: "Idle",
     capabilities: ["architecture"],
+  };
+}
+
+function dmSkillSlashFixture(initialDraft: string) {
+  const messages = createDesktopMessages("zh-CN");
+  const member = {
+    ...memberWithLongMentionText(),
+    skills: [
+      { id: "guide-create", name: "guide-create", trigger: "Create agents", path: "/tmp/guide/SKILL.md" },
+      { id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" },
+    ],
+  };
+  const data = createSleiFixtures({
+    conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+    members: [member],
+  });
+
+  return {
+    element: (
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft={initialDraft}
+        messages={messages}
+        profile={defaultProfile}
+      />
+    ),
+    messages,
   };
 }
 
@@ -159,6 +189,67 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(host.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+  });
+
+  it("selects a DM skill slash option with keyboard", async () => {
+    const { element } = dmSkillSlashFixture("/me");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+
+    expect(input.value).toBe("/memory ");
+  });
+
+  it("moves the selected DM skill slash option with arrow keys", async () => {
+    const { element } = dmSkillSlashFixture("/");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-skill-slash-option-index]"));
+
+    expect(options()[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options()[1]?.getAttribute("aria-current")).toBeNull();
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+
+    expect(options()[0]?.getAttribute("aria-current")).toBeNull();
+    expect(options()[1]?.getAttribute("aria-current")).toBe("true");
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    });
+
+    expect(options()[0]?.getAttribute("aria-current")).toBe("true");
+    expect(options()[1]?.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("selects a DM skill slash option with Tab", async () => {
+    const { element } = dmSkillSlashFixture("/me");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+
+    expect(input.value).toBe("/memory ");
+  });
+
+  it("clears the leading skill slash query with Escape", async () => {
+    const { element } = dmSkillSlashFixture("/me");
+    const container = await mountChatPage(element);
+    const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
+
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+
+    expect(input.value).toBe("");
+    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
   });
 
   it("renders channel titles at a size close to the hash icon", () => {
