@@ -246,6 +246,9 @@ mod tests {
         assert!(!body.contains("#channel"));
         assert!(!body.contains("| #all | YYYY-MM-DD HH:MM | idle |"));
         assert!(body.contains("Do not store secrets"));
-        assert!(body.contains("notes/*.md"));
+        assert!(body.contains("Channel Notes"));
+        assert!(body.contains("notes/channels.md"));
+        assert!(body.contains("do not duplicate it in `MEMORY.md`"));
+        assert!(!body.contains("notes/*.md"));
     }
 }
