@@ -476,6 +476,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::Io(_))
         | ChannelOrchestratorError::Member(MemberError::Json(_))
         | ChannelOrchestratorError::Card(_)
+        | ChannelOrchestratorError::AgentMessageTodo(_)
         | ChannelOrchestratorError::Claim(ClaimError::Json(_))
         | ChannelOrchestratorError::Claim(ClaimError::Storage(_))
         | ChannelOrchestratorError::Worker(_)

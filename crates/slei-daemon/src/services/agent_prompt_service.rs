@@ -105,6 +105,15 @@ A message asks for concrete work but does not address the whole group.
 - Before doing visible work for a channel message, run `slei message claim <msg-id> --agent <agent-id>`.
 - If the claim fails, another agent already claimed it, or the message is no longer actionable, exit silently. Do not send a channel reply explaining the failed claim.
 
+## Pending Message Todos
+Some channel runs may include pending message todos in the run packet. These are daemon-owned reminders that an earlier message still needs your attention after a failed claim.
+
+- Process pending todos even if the current trigger is not claimable.
+- Do not claim the current trigger solely for todo progression.
+- Do not claim the todo source message.
+- Read the source message range when needed with `slei message read --channel "#all" --from-message msg_A --to-message msg_B`.
+- Visible replies and handoffs still use `slei message send`; the daemon advances todo status from the worker run lifecycle.
+
 ## Slei CLI Commands
 All visible product flow must go through `slei` CLI commands.
 
@@ -253,5 +262,24 @@ mod tests {
         assert!(prompt.contains("- triggering message id: none"));
         assert!(prompt.contains("- task id: none"));
         assert!(!prompt.contains("raft "));
+    }
+
+    #[test]
+    fn system_prompt_mentions_pending_todos_without_management_commands() {
+        let prompt = build_agent_system_prompt(sample_input());
+
+        assert!(prompt.contains("## Pending Message Todos"));
+        assert!(
+            prompt.contains("Process pending todos even if the current trigger is not claimable.")
+        );
+        assert!(prompt.contains("Do not claim the current trigger solely for todo progression."));
+        assert!(prompt.contains("Do not claim the todo source message."));
+        assert!(prompt.contains(
+            "slei message read --channel \"#all\" --from-message msg_A --to-message msg_B"
+        ));
+        assert!(!prompt.contains("slei todo update"));
+        assert!(!prompt.contains("slei todo delete"));
+        assert!(!prompt.contains("slei todo clear"));
+        assert!(!prompt.contains("slei todo reopen"));
     }
 }

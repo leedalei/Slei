@@ -3,6 +3,9 @@ use axum::http::{Request, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::agent_message_todo_service::{
+    AgentMessageTodo, AgentMessageTodoListQuery, CreateAgentMessageTodoInput,
+};
 use slei_daemon::services::channel_orchestrator_service::SendChannelMessageInput;
 use slei_daemon::services::channel_service::{
     ChannelDraft, ChannelMemberReadiness, PermissionPreset,
@@ -713,6 +716,560 @@ async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostic
                 .payload
                 .contains("visible_replies_require_slei_cli_claim_send")
     }));
+}
+
+#[tokio::test]
+async fn agent_message_todo_mention_run_injects_target_agent_current_channel_pending_todos_only() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "alice dev todo body",
+        "alice-dev-todo",
+    )
+    .await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "coda dev todo body",
+        "coda-dev-todo",
+    )
+    .await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "all",
+        "alice all todo body",
+        "alice-all-todo",
+    )
+    .await;
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_coda",
+            "@alice-win 请继续看一下",
+            "agent-mention-alice-todo",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+
+    assert_eq!(delivered, vec!["agent_alice".to_string()]);
+    let prompt = prompt_for_agent(&state, "agent_alice");
+    assert!(prompt.contains("## Pending Message Todos"));
+    assert!(prompt.contains("alice dev todo body"));
+    assert!(!prompt.contains("coda dev todo body"));
+    assert!(!prompt.contains("alice all todo body"));
+}
+
+#[tokio::test]
+async fn agent_message_todo_multi_mention_run_injects_each_target_agents_own_todos_only() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_nova", "@nova-win"),
+    ])
+    .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda", "agent_nova"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "alice only pending todo",
+        "alice-own-todo",
+    )
+    .await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "coda only pending todo",
+        "coda-own-todo",
+    )
+    .await;
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_nova",
+            "@alice-win @coda-win 请分别继续",
+            "agent-multi-mention-todos",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+
+    assert_eq!(delivered.len(), 2);
+    let alice_prompt = prompt_for_agent(&state, "agent_alice");
+    let coda_prompt = prompt_for_agent(&state, "agent_coda");
+    assert!(alice_prompt.contains("alice only pending todo"));
+    assert!(!alice_prompt.contains("coda only pending todo"));
+    assert!(coda_prompt.contains("coda only pending todo"));
+    assert!(!coda_prompt.contains("alice only pending todo"));
+}
+
+#[tokio::test]
+async fn agent_message_todo_human_no_mention_broadcast_may_inject_todos_without_extra_todo_only_run(
+) {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "alice broadcast todo",
+        "alice-broadcast-todo",
+    )
+    .await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "coda broadcast todo",
+        "coda-broadcast-todo",
+    )
+    .await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "大家同步一下进展".to_string(),
+            idempotency_key: "human-broadcast-with-todos".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "broadcast_delivered");
+    let start_runs = start_run_commands(&state);
+    assert_eq!(start_runs.len(), 2);
+    assert!(prompt_for_agent(&state, "agent_alice").contains("alice broadcast todo"));
+    assert!(prompt_for_agent(&state, "agent_coda").contains("coda broadcast todo"));
+}
+
+#[tokio::test]
+async fn agent_message_todo_agent_no_mention_message_starts_one_todo_only_run_without_trigger_delivery(
+) {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "author todo should be skipped",
+        "author-skipped-todo",
+    )
+    .await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "todo-only alice body",
+        "todo-only-alice",
+    )
+    .await;
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_coda",
+            "我这边先记一下当前状态",
+            "agent-no-mention-todo-only",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+
+    assert!(delivered.is_empty());
+    assert!(state
+        .claims()
+        .message_deliveries_for_message(&trigger.id)
+        .await
+        .unwrap()
+        .is_empty());
+    let start_runs = start_run_commands(&state);
+    assert_eq!(start_runs.len(), 1);
+    assert_eq!(start_runs[0]["session"]["agent_id"], "agent_alice");
+    let prompt = prompt_for_agent(&state, "agent_alice");
+    assert!(prompt.contains("todo-only alice body"));
+    assert!(!prompt.contains("author todo should be skipped"));
+    assert!(prompt.contains("Do not claim the current trigger solely for todo progression."));
+}
+
+#[tokio::test]
+async fn agent_message_todo_agent_unknown_mention_does_not_start_todo_only_run() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "unknown mention must not progress this todo",
+        "unknown-mention-no-todo-only",
+    )
+    .await;
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_coda",
+            "@missing-agent 请继续",
+            "agent-unknown-mention-no-todo-only",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+
+    assert!(delivered.is_empty());
+    assert!(start_run_commands(&state).is_empty());
+    let pending = todos_for_agent_status(&state, "agent_alice", Some("pending")).await;
+    assert_eq!(pending.len(), 1);
+}
+
+#[tokio::test]
+async fn agent_message_todo_deleted_source_is_terminal_and_does_not_starve_five_valid_todos() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    create_dev_channel_with_agents(&state, &["agent_alice"]).await;
+    let invalid = create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "deleted source should not stay pending",
+        "deleted-source-todo",
+    )
+    .await;
+    state
+        .messages()
+        .delete_human_message(&invalid.message_id)
+        .await
+        .unwrap();
+    for index in 0..6 {
+        create_pending_todo(
+            &state,
+            "agent_alice",
+            "dev",
+            &format!("valid todo body {index}"),
+            &format!("valid-after-deleted-{index}"),
+        )
+        .await;
+    }
+
+    state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "触发待办注入".to_string(),
+            idempotency_key: "deleted-source-valid-fill".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    let prompt = prompt_for_agent(&state, "agent_alice");
+    assert!(!prompt.contains("deleted source should not stay pending"));
+    for index in 0..5 {
+        assert!(prompt.contains(&format!("valid todo body {index}")));
+    }
+    assert!(!prompt.contains("valid todo body 5"));
+
+    let deleted = todos_for_agent_status(&state, "agent_alice", Some("deleted")).await;
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].id, invalid.id);
+    assert!(deleted[0]
+        .note
+        .as_deref()
+        .is_some_and(|note| note.contains("source message")));
+    let running = todos_for_agent_status(&state, "agent_alice", Some("running")).await;
+    assert_eq!(running.len(), 5);
+    let pending = todos_for_agent_status(&state, "agent_alice", Some("pending")).await;
+    assert_eq!(pending.len(), 1);
+}
+
+#[tokio::test]
+async fn agent_message_todo_task_reply_runs_do_not_inject_pending_todos() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "task reply must not inject this pending todo",
+        "task-reply-no-inject",
+    )
+    .await;
+    let task = state
+        .tasks()
+        .create_from_source_with_assignment(
+            "dev",
+            "human_lei",
+            "task-reply-no-inject-source",
+            "任务根消息",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-reply-no-inject-task",
+        )
+        .await
+        .unwrap();
+
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "@coda-win 请接手任务线程里的实现。",
+            "task-reply-no-inject-handoff",
+        )
+        .await
+        .unwrap();
+
+    let prompt = prompt_for_agent(&state, "agent_coda");
+    assert!(!prompt.contains("## Pending Message Todos"));
+    assert!(!prompt.contains("task reply must not inject this pending todo"));
+    let pending = todos_for_agent_status(&state, "agent_coda", Some("pending")).await;
+    assert_eq!(pending.len(), 1);
+}
+
+#[tokio::test]
+async fn agent_message_todo_message_thread_reply_runs_do_not_inject_pending_todos() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    create_pending_todo(
+        &state,
+        "agent_coda",
+        "dev",
+        "message thread must not inject this pending todo",
+        "message-thread-no-inject",
+    )
+    .await;
+    let source = state
+        .messages()
+        .create_human_channel_message(
+            "dev",
+            "human_lei",
+            "普通消息线程源消息",
+            "message-thread-no-inject-source",
+            false,
+        )
+        .await
+        .unwrap();
+    let thread = state
+        .message_threads()
+        .ensure_thread_for_source_message(&source.id, "human_lei", "message-thread-no-inject")
+        .await
+        .unwrap()
+        .thread;
+    let guard = state.reset().runtime().begin_launch().await.unwrap();
+
+    state
+        .channel_orchestrator()
+        .add_message_thread_reply_with_launch_guard(
+            &thread.id,
+            "agent_alice",
+            None,
+            "@coda-win 请看普通消息子线程。",
+            "message-thread-no-inject-reply",
+            &guard,
+        )
+        .await
+        .unwrap();
+
+    let prompt = prompt_for_agent(&state, "agent_coda");
+    assert!(!prompt.contains("## Pending Message Todos"));
+    assert!(!prompt.contains("message thread must not inject this pending todo"));
+    let pending = todos_for_agent_status(&state, "agent_coda", Some("pending")).await;
+    assert_eq!(pending.len(), 1);
+}
+
+#[tokio::test]
+async fn agent_message_todo_worker_completed_marks_run_bound_todos_done() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    create_dev_channel_with_agents(&state, &["agent_alice"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "complete me from run",
+        "completed-run-todo",
+    )
+    .await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "请处理广播并带上待办".to_string(),
+            idempotency_key: "completed-run-binds-todo".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let run_id = run_id_for_agent(&state, "agent_alice");
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_alice", Some("running"))
+            .await
+            .len(),
+        1
+    );
+
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.action, "broadcast_delivered");
+    let done = todos_for_agent_status(&state, "agent_alice", Some("done")).await;
+    assert_eq!(done.len(), 1);
+    assert_eq!(done[0].message_author_id, "human_lei");
+    assert!(done[0].completed_at.is_some());
+}
+
+#[tokio::test]
+async fn agent_message_todo_worker_failed_and_start_failure_restore_run_bound_todos_pending() {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    create_dev_channel_with_agents(&state, &["agent_alice"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "restore me after failure",
+        "failed-run-todo",
+    )
+    .await;
+
+    state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "这次 worker 会失败".to_string(),
+            idempotency_key: "failed-run-restores-todo".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let failed_run_id = run_id_for_agent(&state, "agent_alice");
+    state
+        .handle_worker_event(json!({
+            "type": "failed",
+            "run_id": failed_run_id,
+            "message": "runtime failed"
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_alice", Some("pending"))
+            .await
+            .len(),
+        1
+    );
+
+    state.fail_next_worker_send_for_tests();
+    let start_failure = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "这次 start_run 会失败".to_string(),
+            idempotency_key: "start-failure-restores-todo".to_string(),
+            as_task: false,
+        })
+        .await;
+    assert!(start_failure.is_err());
+    let pending = todos_for_agent_status(&state, "agent_alice", Some("pending")).await;
+    assert_eq!(pending.len(), 1);
+    assert!(pending[0].run_id.is_none());
+}
+
+#[tokio::test]
+async fn agent_message_todo_reset_clears_in_flight_todos_and_later_worker_events_do_not_restore_them(
+) {
+    let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
+    create_dev_channel_with_agents(&state, &["agent_alice"]).await;
+    create_pending_todo(
+        &state,
+        "agent_alice",
+        "dev",
+        "reset should clear this",
+        "reset-clears-todo",
+    )
+    .await;
+
+    state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "启动后马上 reset".to_string(),
+            idempotency_key: "reset-in-flight-todo".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let run_id = run_id_for_agent(&state, "agent_alice");
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_alice", Some("running"))
+            .await
+            .len(),
+        1
+    );
+
+    state.reset().reset_development_state().await.unwrap();
+    assert!(todos_for_agent_status(&state, "agent_alice", None)
+        .await
+        .is_empty());
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": run_id,
+        }))
+        .await
+        .unwrap();
+    assert!(todos_for_agent_status(&state, "agent_alice", None)
+        .await
+        .is_empty());
 }
 
 #[tokio::test]
@@ -3079,6 +3636,110 @@ async fn public_channel_message_api_rejects_empty_idempotency_key_before_orchest
 
 async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
     app_state_with_agent_handles(&[(agent_id, handle)]).await
+}
+
+async fn create_dev_channel_with_agents(state: &AppState, agent_ids: &[&str]) {
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            &format!("create-dev-{}", Uuid::new_v4()),
+        )
+        .await
+        .unwrap();
+    for agent_id in agent_ids {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+}
+
+async fn create_pending_todo(
+    state: &AppState,
+    agent_id: &str,
+    channel_id: &str,
+    body: &str,
+    key: &str,
+) -> AgentMessageTodo {
+    let message = state
+        .messages()
+        .create_human_channel_message(
+            channel_id,
+            "human_lei",
+            body,
+            &format!("{key}:message"),
+            false,
+        )
+        .await
+        .unwrap();
+    state
+        .agent_message_todos()
+        .create_manual_idempotent(
+            CreateAgentMessageTodoInput {
+                agent_id: agent_id.to_string(),
+                channel_id: channel_id.to_string(),
+                message_id: message.id,
+                note: None,
+            },
+            &format!("{key}:todo"),
+        )
+        .await
+        .unwrap()
+}
+
+fn start_run_commands(state: &AppState) -> Vec<Value> {
+    state
+        .worker_commands()
+        .into_iter()
+        .filter(|command| command["type"] == "start_run")
+        .collect()
+}
+
+fn prompt_for_agent(state: &AppState, agent_id: &str) -> String {
+    start_run_commands(state)
+        .into_iter()
+        .rev()
+        .find(|command| command["session"]["agent_id"] == agent_id)
+        .and_then(|command| command["input"]["prompt"].as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| panic!("missing prompt for {agent_id}"))
+}
+
+fn run_id_for_agent(state: &AppState, agent_id: &str) -> String {
+    start_run_commands(state)
+        .into_iter()
+        .rev()
+        .find(|command| command["session"]["agent_id"] == agent_id)
+        .and_then(|command| command["run_id"].as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| panic!("missing run for {agent_id}"))
+}
+
+async fn todos_for_agent_status(
+    state: &AppState,
+    agent_id: &str,
+    status: Option<&str>,
+) -> Vec<AgentMessageTodo> {
+    state
+        .agent_message_todos()
+        .list(AgentMessageTodoListQuery {
+            agent_id: Some(agent_id.to_string()),
+            channel_id: None,
+            status: status.map(str::to_string),
+            include_deleted: true,
+            limit: None,
+        })
+        .await
+        .unwrap()
 }
 
 fn assert_broadcast_runs_started(

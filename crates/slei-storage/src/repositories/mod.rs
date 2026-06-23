@@ -2207,6 +2207,7 @@ impl Repositories {
                 "UPDATE agent_message_todos
                  SET status = 'running',
                      run_id = ?,
+                     last_prompted_at = CURRENT_TIMESTAMP,
                      completed_at = NULL,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = ? AND status = 'pending'",

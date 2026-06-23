@@ -72,6 +72,17 @@ pub struct AgentMessageTodo {
     pub updated_at: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingMessageTodoPrompt {
+    pub id: String,
+    pub channel_id: String,
+    pub message_id: String,
+    pub author_id: String,
+    pub created_at: String,
+    pub claim_owner_agent_id: String,
+    pub body: String,
+}
+
 impl AgentMessageTodoService {
     pub fn new(repos: Repositories) -> Self {
         Self {
@@ -274,6 +285,93 @@ impl AgentMessageTodoService {
         Ok(Some(AgentMessageTodo::from(todo)))
     }
 
+    pub async fn mark_running_for_prompt(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        run_id: &str,
+        limit: i64,
+    ) -> Result<Vec<PendingMessageTodoPrompt>, AgentMessageTodoError> {
+        let agent_id = required_trimmed(agent_id, "agent id")?;
+        let channel_id = required_trimmed(channel_id, "channel id")?;
+        let run_id = required_trimmed(run_id, "run id")?;
+        let limit = limit.max(0) as usize;
+        let mut prompts = Vec::with_capacity(limit);
+        while prompts.len() < limit {
+            let batch_limit = (limit - prompts.len()) as i64;
+            let rows = self
+                .repos
+                .mark_agent_message_todos_running(agent_id, channel_id, run_id, batch_limit)
+                .await
+                .map_err(storage_error)?;
+            if rows.is_empty() {
+                break;
+            }
+
+            for row in rows {
+                let message = self
+                    .repos
+                    .channel_message(&row.message_id)
+                    .await
+                    .map_err(storage_error)?;
+                let Some(message) = message else {
+                    self.mark_invalid_source_deleted(&row.id).await?;
+                    continue;
+                };
+                if message.deleted || !is_processable_message(&message) {
+                    self.mark_invalid_source_deleted(&row.id).await?;
+                    continue;
+                }
+                let Some(body) = message
+                    .body
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|body| !body.is_empty())
+                else {
+                    self.mark_invalid_source_deleted(&row.id).await?;
+                    continue;
+                };
+                prompts.push(PendingMessageTodoPrompt {
+                    id: row.id,
+                    channel_id: row.channel_id,
+                    message_id: row.message_id,
+                    author_id: message.author_id,
+                    created_at: message.created_at,
+                    claim_owner_agent_id: row.claim_owner_agent_id,
+                    body: body.to_string(),
+                });
+            }
+        }
+
+        Ok(prompts)
+    }
+
+    pub async fn mark_done_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<AgentMessageTodo>, AgentMessageTodoError> {
+        let run_id = required_trimmed(run_id, "run id")?;
+        let rows = self
+            .repos
+            .mark_agent_message_todos_done_for_run(run_id)
+            .await
+            .map_err(storage_error)?;
+        Ok(rows.into_iter().map(AgentMessageTodo::from).collect())
+    }
+
+    pub async fn restore_pending_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<AgentMessageTodo>, AgentMessageTodoError> {
+        let run_id = required_trimmed(run_id, "run id")?;
+        let rows = self
+            .repos
+            .restore_agent_message_todos_pending_for_run(run_id)
+            .await
+            .map_err(storage_error)?;
+        Ok(rows.into_iter().map(AgentMessageTodo::from).collect())
+    }
+
     async fn validate_manual_source_message(
         &self,
         channel_id: &str,
@@ -301,6 +399,21 @@ impl AgentMessageTodoService {
             ));
         }
         Ok(message)
+    }
+
+    async fn mark_invalid_source_deleted(
+        &self,
+        todo_id: &str,
+    ) -> Result<(), AgentMessageTodoError> {
+        self.repos
+            .update_agent_message_todo_status(
+                todo_id,
+                "deleted",
+                Some("source message is missing, deleted, empty, or unprocessable"),
+            )
+            .await
+            .map_err(storage_error)?;
+        Ok(())
     }
 
     async fn idempotent_todo(

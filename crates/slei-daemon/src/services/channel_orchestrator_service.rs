@@ -11,6 +11,10 @@ use crate::adapters::claude_worker::{
     ClaudeWorkerAdapter, ClaudeWorkerError, CreateSessionRequest,
 };
 use crate::services::agent_inbox_service::AgentInboxService;
+use crate::services::agent_message_todo_service::{
+    AgentMessageTodoError, AgentMessageTodoListQuery, AgentMessageTodoService,
+    PendingMessageTodoPrompt,
+};
 use crate::services::agent_prompt_service::{build_agent_system_prompt, AgentSystemPromptInput};
 use crate::services::card_service::{CardError, CardService};
 use crate::services::channel_service::{
@@ -71,6 +75,7 @@ pub struct ChannelOrchestratorService {
     tasks: TaskService,
     message_threads: MessageThreadService,
     claims: ClaimService,
+    agent_message_todos: AgentMessageTodoService,
     agent_inbox: AgentInboxService,
     orchestration: OrchestrationStore,
     members: MemberService,
@@ -102,6 +107,7 @@ impl ChannelOrchestratorService {
         tasks: TaskService,
         message_threads: MessageThreadService,
         claims: ClaimService,
+        agent_message_todos: AgentMessageTodoService,
         agent_inbox: AgentInboxService,
         orchestration: OrchestrationStore,
         members: MemberService,
@@ -115,6 +121,7 @@ impl ChannelOrchestratorService {
             tasks,
             message_threads,
             claims,
+            agent_message_todos,
             agent_inbox,
             orchestration,
             members,
@@ -300,8 +307,18 @@ impl ChannelOrchestratorService {
         self.sync_declared_channel_members(&message.channel_id)
             .await?;
         let channel_members = self.channels.channel_members(&message.channel_id).await?;
-        self.create_broadcast_deliveries_for_members(message, &channel_members)
-            .await
+        let delivered_agent_ids = self
+            .create_broadcast_deliveries_for_members(message, &channel_members)
+            .await?;
+        if delivered_agent_ids.is_empty()
+            && message.kind == MessageKind::Agent
+            && explicit_handles(message.body.as_deref().unwrap_or_default()).is_empty()
+        {
+            let _ = self
+                .start_next_pending_todo_for_channel(&message.channel_id, message)
+                .await?;
+        }
+        Ok(delivered_agent_ids)
     }
 
     pub async fn add_task_reply(
@@ -485,6 +502,7 @@ impl ChannelOrchestratorService {
                             thread.id, thread.source_message_id
                         )),
                         false,
+                        false,
                     )
                     .await
                 {
@@ -569,6 +587,7 @@ impl ChannelOrchestratorService {
                     Some(true),
                 )
                 .await;
+                self.agent_message_todos.mark_done_for_run(run_id).await?;
                 let mut visible_output_created = false;
                 if !body.is_empty() {
                     if is_channel_join_run(&record.source_message_id) {
@@ -675,6 +694,9 @@ impl ChannelOrchestratorService {
             Some("failed") => {
                 let record = runs.remove(run_id).expect("channel agent run exists");
                 drop(runs);
+                self.agent_message_todos
+                    .restore_pending_for_run(run_id)
+                    .await?;
                 let message = event
                     .get("message")
                     .and_then(Value::as_str)
@@ -1022,6 +1044,7 @@ impl ChannelOrchestratorService {
             task_id,
             note_kind,
             false,
+            false,
         )
         .await
     }
@@ -1036,6 +1059,7 @@ impl ChannelOrchestratorService {
         agent: Option<crate::services::member_service::ProductAgentRecord>,
         task_id: Option<String>,
         note_kind: Option<String>,
+        inject_pending_todos: bool,
         suppress_visible_output: bool,
     ) -> Result<(), ChannelOrchestratorError> {
         if self.channel_agent_runs.lock().await.values().any(|run| {
@@ -1049,12 +1073,10 @@ impl ChannelOrchestratorService {
             Some(agent) => agent,
             None => self.members.get_product_agent(agent_id).await?,
         };
-        let session_id = self
-            .messages
-            .message(source_message_id)
-            .await
-            .ok()
-            .and_then(|message| message.session_id)
+        let source_message = self.messages.message(source_message_id).await.ok();
+        let session_id = source_message
+            .as_ref()
+            .and_then(|message| message.session_id.clone())
             .or_else(|| None);
         let session_id = match session_id {
             Some(session_id) => Some(session_id),
@@ -1092,6 +1114,36 @@ impl ChannelOrchestratorService {
                 return Err(error.into());
             }
         };
+        let pending_todos = if inject_pending_todos {
+            match self
+                .agent_message_todos
+                .mark_running_for_prompt(&agent.id, channel_id, run_id, 5)
+                .await
+            {
+                Ok(pending_todos) => pending_todos,
+                Err(error) => {
+                    self.agent_message_todos
+                        .restore_pending_for_run(run_id)
+                        .await?;
+                    self.channel_agent_runs.lock().await.remove(run_id);
+                    return Err(error.into());
+                }
+            }
+        } else {
+            Vec::new()
+        };
+        let prompt = if inject_pending_todos {
+            let Some(message) = source_message.as_ref() else {
+                self.agent_message_todos
+                    .restore_pending_for_run(run_id)
+                    .await?;
+                self.channel_agent_runs.lock().await.remove(run_id);
+                return Err(MessageError::MessageNotFound.into());
+            };
+            channel_run_prompt(&agent.id, message, &pending_todos)
+        } else {
+            prompt.to_string()
+        };
         let channel_name = format!("#{channel_id}");
         let task_notes = task_id.as_ref().map(|task_id| {
             format!(
@@ -1119,8 +1171,11 @@ impl ChannelOrchestratorService {
         });
         if let Err(error) =
             self.worker
-                .start_run(run_id, &session, prompt, &system_prompt, Vec::new())
+                .start_run(run_id, &session, &prompt, &system_prompt, Vec::new())
         {
+            self.agent_message_todos
+                .restore_pending_for_run(run_id)
+                .await?;
             self.channel_agent_runs.lock().await.remove(run_id);
             return Err(error.into());
         }
@@ -1255,6 +1310,7 @@ impl ChannelOrchestratorService {
                         None,
                         None,
                         true,
+                        true,
                     )
                     .await
                 {
@@ -1268,6 +1324,64 @@ impl ChannelOrchestratorService {
             delivered_agent_ids.push(agent.id);
         }
         Ok(delivered_agent_ids)
+    }
+
+    async fn start_next_pending_todo_for_channel(
+        &self,
+        channel_id: &str,
+        trigger_message: &MessageRecord,
+    ) -> Result<Option<String>, ChannelOrchestratorError> {
+        let pending_todos = self
+            .agent_message_todos
+            .list(AgentMessageTodoListQuery {
+                agent_id: None,
+                channel_id: Some(channel_id.to_string()),
+                status: Some("pending".to_string()),
+                include_deleted: false,
+                limit: Some(50),
+            })
+            .await?;
+        let channel_members = self.channels.channel_members(channel_id).await?;
+        let member_ids = channel_members
+            .iter()
+            .map(|member| member.agent_id.clone())
+            .collect::<HashSet<_>>();
+
+        for todo in pending_todos {
+            if todo.agent_id == trigger_message.author_id {
+                continue;
+            }
+            if !member_ids.contains(&todo.agent_id) {
+                continue;
+            }
+            if self
+                .channel_agent_runs
+                .lock()
+                .await
+                .values()
+                .any(|run| run.agent_id == todo.agent_id && run.channel_id == channel_id)
+            {
+                continue;
+            }
+            let agent = self.members.get_product_agent(&todo.agent_id).await?;
+            let run_id = format!("run_{}", Uuid::new_v4().simple());
+            self.start_channel_agent_run_once_with_run_id(
+                &run_id,
+                &agent.id,
+                channel_id,
+                &trigger_message.id,
+                "",
+                Some(agent.clone()),
+                None,
+                None,
+                true,
+                true,
+            )
+            .await?;
+            return Ok(Some(agent.id));
+        }
+
+        Ok(None)
     }
 
     async fn delivery_target_agent_ids_for_message(
@@ -1478,6 +1592,14 @@ impl ChannelOrchestratorService {
 }
 
 fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
+    channel_run_prompt(agent_id, message, &[])
+}
+
+fn channel_run_prompt(
+    agent_id: &str,
+    message: &MessageRecord,
+    pending_todos: &[PendingMessageTodoPrompt],
+) -> String {
     let message_type = match message.kind {
         MessageKind::Human => "human",
         MessageKind::Agent => "agent",
@@ -1489,7 +1611,32 @@ fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
         "[target=#{} msg={} time={} type={}] {}: {}",
         message.channel_id, message.id, message.created_at, message_type, message.author_id, body
     );
-    format!(
+    let pending_todo_guidance = if pending_todos.is_empty() {
+        format!(
+            r##"Classify the message with the system Claim Intent Classes. If you should respond, first run:
+
+```bash
+slei message claim {message_id} --agent {agent_id}
+```
+
+If the claim fails, exit silently."##,
+            message_id = message.id,
+        )
+    } else {
+        format!(
+            r##"Pending Message Todos are present. Process those pending todos even if the current trigger is not claimable.
+
+For the current trigger message itself, classify it with the system Claim Intent Classes. If you should respond to the trigger, first run:
+
+```bash
+slei message claim {message_id} --agent {agent_id}
+```
+
+If the trigger claim fails, continue processing Pending Message Todos. Do not claim the current trigger solely for todo progression."##,
+            message_id = message.id,
+        )
+    };
+    let mut prompt = format!(
         r##"# Slei Channel Run Packet
 
 ## Runtime Context
@@ -1505,13 +1652,7 @@ fn broadcast_message_prompt(agent_id: &str, message: &MessageRecord) -> String {
 ```
 
 ## Required First Action
-Classify the message with the system Claim Intent Classes. If you should respond, first run:
-
-```bash
-slei message claim {message_id} --agent {agent_id}
-```
-
-If the claim fails, exit silently.
+{pending_todo_guidance}
 
 ## Optional Context Lookup
 Read nearby messages only when classification needs flow, order, prior participants, or topic continuity.
@@ -1532,7 +1673,52 @@ Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful 
         message_id = message.id,
         author_id = message.author_id,
         created_at = message.created_at,
-    )
+        pending_todo_guidance = pending_todo_guidance,
+    );
+
+    if !pending_todos.is_empty() {
+        prompt.push_str(
+            r##"
+
+## Pending Message Todos
+Process pending todos even if the current trigger is not claimable.
+Do not claim the current trigger solely for todo progression.
+Do not claim the todo source message.
+Use `slei message read --channel "#all" --from-message msg_A --to-message msg_B` for source-message ranges.
+
+"##,
+        );
+        for todo in pending_todos {
+            prompt.push_str(&format!(
+                r##"### Todo `{todo_id}`
+- Todo ID: `{todo_id}`
+- Channel ID: `{todo_channel_id}`
+- Message ID: `{todo_message_id}`
+- Author ID: `{todo_author_id}`
+- Claim Owner Agent ID: `{claim_owner_agent_id}`
+- Created At: `{todo_created_at}`
+
+```text
+{todo_body}
+```
+
+```bash
+slei message read --channel "#{todo_channel_id}" --from-message {todo_message_id} --to-message {todo_message_id}
+```
+
+"##,
+                todo_id = todo.id,
+                todo_channel_id = todo.channel_id,
+                todo_message_id = todo.message_id,
+                todo_author_id = todo.author_id,
+                claim_owner_agent_id = todo.claim_owner_agent_id,
+                todo_created_at = todo.created_at,
+                todo_body = todo.body,
+            ));
+        }
+    }
+
+    prompt
 }
 
 fn thread_reply_prompt(
@@ -1641,6 +1827,8 @@ pub enum ChannelOrchestratorError {
     #[error(transparent)]
     Claim(#[from] ClaimError),
     #[error(transparent)]
+    AgentMessageTodo(#[from] AgentMessageTodoError),
+    #[error(transparent)]
     Worker(#[from] ClaudeWorkerError),
     #[error(transparent)]
     Reset(#[from] ResetRuntimeError),
@@ -1692,5 +1880,58 @@ mod tests {
         assert!(prompt.contains("## Visible Reply"));
         assert!(prompt
             .contains("printf \"...\" | slei message send --target \"#all\" --agent agent_nova"));
+    }
+
+    #[test]
+    fn pending_todos_are_injected_into_run_packet() {
+        let message = MessageRecord {
+            id: "msg_trigger".to_string(),
+            sequence: None,
+            channel_id: "all".to_string(),
+            session_id: Some("session_all".to_string()),
+            author_id: "agent_coda".to_string(),
+            body: Some("Agent progress signal without a mention".to_string()),
+            as_task: false,
+            kind: MessageKind::Agent,
+            deleted: false,
+            edited: false,
+            created_at: "2026-06-18T06:28:04Z".to_string(),
+            cards: Vec::new(),
+        };
+        let pending_todos = vec![PendingMessageTodoPrompt {
+            id: "todo_1".to_string(),
+            channel_id: "all".to_string(),
+            message_id: "msg_A".to_string(),
+            author_id: "human_lei".to_string(),
+            created_at: "2026-06-18T06:00:00Z".to_string(),
+            claim_owner_agent_id: "agent_coda".to_string(),
+            body: "Continue processing this older message.".to_string(),
+        }];
+
+        let prompt = channel_run_prompt("agent_nova", &message, &pending_todos);
+
+        assert!(prompt.contains("## Pending Message Todos"));
+        assert!(prompt.contains("- Todo ID: `todo_1`"));
+        assert!(prompt.contains("- Channel ID: `all`"));
+        assert!(prompt.contains("- Message ID: `msg_A`"));
+        assert!(prompt.contains("- Author ID: `human_lei`"));
+        assert!(prompt.contains("- Claim Owner Agent ID: `agent_coda`"));
+        assert!(prompt.contains("- Created At: `2026-06-18T06:00:00Z`"));
+        assert!(prompt.contains("Continue processing this older message."));
+        assert!(
+            prompt.contains("Process pending todos even if the current trigger is not claimable.")
+        );
+        assert!(prompt.contains("Do not claim the current trigger solely for todo progression."));
+        assert!(prompt.contains("Do not claim the todo source message."));
+        assert!(prompt
+            .contains("If the trigger claim fails, continue processing Pending Message Todos."));
+        assert!(!prompt.contains("If the claim fails, exit silently."));
+        assert!(prompt.contains(
+            "slei message read --channel \"#all\" --from-message msg_A --to-message msg_A"
+        ));
+        assert!(!prompt.contains("slei todo update"));
+        assert!(!prompt.contains("slei todo delete"));
+        assert!(!prompt.contains("slei todo clear"));
+        assert!(!prompt.contains("slei todo reopen"));
     }
 }

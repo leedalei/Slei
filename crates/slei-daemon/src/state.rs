@@ -189,6 +189,7 @@ impl AppState {
             task_service.clone(),
             message_thread_service.clone(),
             claims.clone(),
+            agent_message_todos.clone(),
             agent_inbox_service.clone(),
             orchestration_store.clone(),
             member_service.clone(),
