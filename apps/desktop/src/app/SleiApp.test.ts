@@ -118,10 +118,17 @@ describe("ensureActiveDmAgentSkills", () => {
 
   it("ignores channel context and non-DM conversations", async () => {
     const data = dataWithDmAgent(undefined);
+    const dataWithNonDmConversation: SleiFixtures = {
+      ...data,
+      conversations: [{ id: "group_coda", kind: "group", agentId: "agent_coda", createdAt: "0", updatedAt: "0" }],
+    };
     const listAgentSkills = vi.fn();
 
     await expect(ensureActiveDmAgentSkills({ activeConversationId: undefined, data, listAgentSkills })).resolves.toBe(data);
     await expect(ensureActiveDmAgentSkills({ activeConversationId: "missing", data, listAgentSkills })).resolves.toBe(data);
+    await expect(
+      ensureActiveDmAgentSkills({ activeConversationId: "group_coda", data: dataWithNonDmConversation, listAgentSkills }),
+    ).resolves.toBe(dataWithNonDmConversation);
 
     expect(listAgentSkills).not.toHaveBeenCalled();
   });
