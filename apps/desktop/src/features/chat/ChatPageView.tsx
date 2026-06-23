@@ -6,7 +6,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
-import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Badge } from "../../components/ui/badge";
@@ -339,6 +339,21 @@ function fileToBase64(file: File): Promise<string> {
     reader.addEventListener("error", () => reject(reader.error ?? new Error("file read failed")));
     reader.readAsDataURL(file);
   });
+}
+
+function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnType<typeof leadingSkillSlashToken> }) {
+  if (!skillToken) {
+    return <MarkdownMessage markdown={body} />;
+  }
+  const rest = skillToken.rest;
+  return (
+    <div className="slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-foreground [&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline">
+      <span className="slei-message-skill inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
+        {skillToken.token}
+      </span>
+      {rest ? <MarkdownMessage markdown={rest.replace(/^\s+/, "")} /> : null}
+    </div>
+  );
 }
 
 function ChannelMemberPanel(input: {
@@ -1002,7 +1017,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   </span>
                                 </div>
                               </div>
-                              <MarkdownMessage markdown={message.body} />
+                              <MessageBody
+                                body={message.body}
+                                skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
+                              />
                               <AttachmentList attachments={message.attachments ?? []} messageAttachments />
                               {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
                               {message.cards?.map((card) => (

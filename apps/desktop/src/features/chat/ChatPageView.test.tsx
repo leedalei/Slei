@@ -101,6 +101,109 @@ afterEach(async () => {
   mountedContainer = undefined;
 });
 
+describe("ChatPage DM skill message highlight", () => {
+  it("highlights only a known leading DM skill slash token", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_skill",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory **重点**",
+          channelId: "dm_agent_architect",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("slei-message-skill");
+    expect(html).toContain("/memory");
+    expect(html).toContain("<strong>重点</strong>");
+  });
+
+  it("does not highlight middle, unknown, leading-space, or channel slash tokens", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+    };
+    const dmConversation = { id: "dm_agent_architect", kind: "dm" as const, agentId: member.id, createdAt: "0", updatedAt: "0" };
+
+    const renderBody = (body: string, conversation = dmConversation) => {
+      const data = createSleiFixtures({
+        conversations: [dmConversation],
+        members: [member],
+        messages: [
+          {
+            id: `msg_${body.replace(/\W+/g, "_")}`,
+            author: "Lei",
+            role: "human",
+            time: "10:00",
+            body,
+            channelId: conversation.id,
+          },
+        ],
+      });
+
+      return renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          activeConversation={conversation}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+    };
+
+    expect(renderBody("请用 /memory")).not.toContain("slei-message-skill");
+    expect(renderBody("/unknown")).not.toContain("slei-message-skill");
+    expect(renderBody(" /memory")).not.toContain("slei-message-skill");
+
+    const channelData = createSleiFixtures({
+      members: [member],
+      messages: [
+        {
+          id: "msg_channel_skill",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "/memory",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const channelHtml = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={channelData.channels[0]}
+        data={channelData}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(channelHtml).not.toContain("slei-message-skill");
+  });
+});
+
 describe("ChatPage mention panel", () => {
   it("renders the DM skill slash picker for a leading slash draft", () => {
     const messages = createDesktopMessages("zh-CN");
