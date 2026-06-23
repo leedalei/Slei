@@ -97,6 +97,30 @@ describe("createChannelAgentReplyMessage", () => {
     expect(applied).toEqual(["en-US", "zh-CN", "error"]);
   });
 
+  it("notifies after preference persistence succeeds", async () => {
+    const applied: string[] = [];
+    const confirmed = await applyPreferenceMutation({
+      current: "zh-CN",
+      optimistic: "en-US",
+      applyOptimistic: (value) => applied.push(value),
+      persist: async () => "en-US",
+      applyConfirmed: (value) => applied.push(`confirmed:${value}`),
+      onError: () => applied.push("error"),
+      onSuccess: () => applied.push("success"),
+    });
+
+    expect(confirmed).toBe("en-US");
+    expect(applied).toEqual(["en-US", "confirmed:en-US", "success"]);
+  });
+
+  it("surfaces immediate settings changes through app toasts", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("showAppToast(messages.settings.updateSuccess, \"success\")");
+    expect(source).toContain("formatAppErrorToast(messages.settings.updateFailed, error)");
+    expect(source).toContain("if (field === \"avatar\") showAppToast(messages.settings.updateSuccess, \"success\")");
+  });
+
   it("keeps direct agent activity during pending refresh and removes it after the agent reply appears", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_alice",

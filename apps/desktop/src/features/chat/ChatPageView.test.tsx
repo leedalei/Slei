@@ -113,7 +113,7 @@ describe("ChatPage mention panel", () => {
     expect(copyButtonIndex).toBeLessThan(titleEnd);
   });
 
-  it("renders a project edit button beside non-default channel project text", () => {
+  it("renders linked project text and edit button in non-default channel headers", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "kol-content", name: "kol-content", description: "kol-content", projectName: "kol-content", projectPaths: ["/workspace/kol-content"], unread: 0 }],
@@ -131,6 +131,25 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.chat.projectPrefix("/workspace/kol-content"));
     expect(html).toContain(`aria-label="${messages.chat.editProjects}"`);
     expect(html).toContain('data-testid="slei-channel-project-edit"');
+  });
+
+  it("shows an empty linked project label instead of the channel description when no project is linked", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "dev-content", name: "dev-content", description: "频道", projectPaths: [], unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain(messages.chat.projectPrefix(messages.chat.noLinkedProjects));
+    expect(html).not.toContain(">频道</p>");
   });
 
   it("does not render the project edit button for the all channel", () => {
@@ -775,6 +794,12 @@ describe("ChatPage mention panel", () => {
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('height="18"');
     expect(readChatPageSource()).not.toContain("absolute right-2 top-8");
     expect(html).toContain("lucide-plus");
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate"');
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate-description"');
+    expect(readChatPageSource()).toContain("block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap");
+    expect(readChatPageSource()).toContain("{member.name}</strong>");
+    expect(readChatPageSource()).toContain("{member.handle}</small>");
+    expect(readChatPageSource()).toContain("{member.description}");
     expect(html).toContain("Coda");
     expect(html).toContain("Nova");
     expect(panelHtml).not.toContain("已就位");

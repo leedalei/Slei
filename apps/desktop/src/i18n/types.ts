@@ -130,7 +130,10 @@ export type DesktopMessages = {
     removeProject: (projectName: string) => string;
     removeChannelMember: (name: string) => string;
     selectAgents: string;
+    clearSort: string;
+    sortAscending: string;
     sortChannels: string;
+    sortDescending: string;
     sortDirectMessages: string;
     runtimeDetected: string;
     tasks: string;
@@ -311,6 +314,8 @@ export type DesktopMessages = {
     fontSizes: Record<AppearancePreferences["fontSize"], string>;
     saveFailed: string;
     saving: string;
+    updateFailed: string;
+    updateSuccess: string;
     bio: string;
     groups: {
       about: string;

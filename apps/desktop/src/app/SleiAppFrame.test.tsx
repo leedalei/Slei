@@ -47,6 +47,7 @@ afterEach(async () => {
   mountedRoot = undefined;
   mountedContainer = undefined;
   document.body.innerHTML = "";
+  window.localStorage.clear();
 });
 
 describe("SleiAppFrame global search navigation", () => {
@@ -83,10 +84,10 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).not.toContain('class="slei-context-sidebar');
     expect(html).not.toContain('aria-label="Resize sidebar"');
     expect(html).not.toContain('data-slot="sidebar-titlebar"');
-    expect(html).toContain('grid-template-columns:4.75rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem minmax(0, 1fr)');
   });
 
-  it("uses a compact left rail and navigation button footprint", () => {
+  it("uses a wider left rail with the existing navigation button footprint", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -96,8 +97,23 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain('grid-template-columns:4.75rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
     expect(html).toContain("grid h-14 w-14 place-items-center");
+  });
+
+  it("opens primary navigation icon tooltips on the right side of the menubar", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const navSource = source.slice(source.indexOf("<nav "), source.indexOf("</nav>"));
+
+    expect(navSource).toContain('tooltipSide="right"');
+  });
+
+  it("keeps the macOS traffic lights visually centered in the widened rail", () => {
+    const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")) as {
+      app: { windows: Array<{ trafficLightPosition?: { x: number; y: number } }> };
+    };
+
+    expect(tauriConfig.app.windows[0]?.trafficLightPosition).toEqual({ x: 8, y: 18 });
   });
 
   it("removes the old search button from the channel list sidebar", () => {
@@ -148,6 +164,131 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("Coda");
     expect(html).toContain("发送于 2026-06-22");
     expect(html).toContain("保存于 2026-06-22");
+  });
+
+  it("shows linked project labels for non-default channels while preserving the all channel description", () => {
+    const data = createSleiFixtures({
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev-content", name: "dev-content", description: "频道", projectPaths: [], unread: 0, activeSessionId: "session:dev" },
+        { id: "kol", name: "kol", description: "频道", projectPaths: ["/workspace/kol"], unread: 0, activeSessionId: "session:kol" },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    expect(html).toContain("默认团队频道");
+    expect(html).toContain("关联项目：暂无");
+    expect(html).toContain("关联项目：/workspace/kol");
+    expect(html).not.toContain(">频道</small>");
+  });
+
+  it("cycles channel and direct message sorting independently by name", async () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      channels: [
+        { id: "zeta", name: "zeta", description: "Zeta channel", unread: 0, activeSessionId: "session:zeta" },
+        { id: "alpha", name: "alpha", description: "Alpha channel", unread: 0, activeSessionId: "session:alpha" },
+        { id: "beta", name: "beta", description: "Beta channel", unread: 0, activeSessionId: "session:beta" },
+      ],
+      conversations: [
+        { id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" },
+        { id: "dm:a2", agentId: "a2", kind: "dm", activeSessionId: "session-dm-a2", createdAt: "0", updatedAt: "0" },
+        { id: "dm:a3", agentId: "a3", kind: "dm", activeSessionId: "session-dm-a3", createdAt: "0", updatedAt: "0" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const click = async (button: HTMLButtonElement) => {
+      await act(async () => {
+        button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    };
+    const channelSortButton = () => container.querySelector<HTMLButtonElement>('[data-sort-target="channels"]');
+    const directMessageSortButton = () => container.querySelector<HTMLButtonElement>('[data-sort-target="direct-messages"]');
+    const channelOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-channel-list-item]")).map((item) => item.dataset.channelId);
+    const directMessageOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.conversationId);
+
+    expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
+    expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
+    expect(channelSortButton()?.dataset.sortState).toBe("default");
+    expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
+    expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("default");
+
+    await click(channelSortButton()!);
+    expect(channelOrder()).toEqual(["alpha", "beta", "zeta"]);
+    expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
+    expect(channelSortButton()?.dataset.sortState).toBe("asc");
+    expect(channelSortButton()?.getAttribute("aria-label")).toBe("降序");
+    expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("asc");
+    expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("asc");
+
+    await click(channelSortButton()!);
+    expect(channelOrder()).toEqual(["zeta", "beta", "alpha"]);
+    expect(channelSortButton()?.dataset.sortState).toBe("desc");
+    expect(channelSortButton()?.getAttribute("aria-label")).toBe("取消排序");
+    expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("desc");
+    expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("desc");
+
+    await click(channelSortButton()!);
+    expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
+    expect(channelSortButton()?.dataset.sortState).toBe("default");
+    expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
+    expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("default");
+
+    await click(directMessageSortButton()!);
+    expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
+    expect(directMessageOrder()).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
+    expect(directMessageSortButton()?.dataset.sortState).toBe("asc");
+    expect(directMessageSortButton()?.getAttribute("aria-label")).toBe("降序");
+    expect(directMessageSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("asc");
+    expect(window.localStorage.getItem("slei:sidebar-sort:direct-messages")).toBe("asc");
+  });
+
+  it("restores channel and direct message sort preferences from frontend storage", async () => {
+    window.localStorage.setItem("slei:sidebar-sort:channels", "desc");
+    window.localStorage.setItem("slei:sidebar-sort:direct-messages", "asc");
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      channels: [
+        { id: "zeta", name: "zeta", description: "Zeta channel", unread: 0, activeSessionId: "session:zeta" },
+        { id: "alpha", name: "alpha", description: "Alpha channel", unread: 0, activeSessionId: "session:alpha" },
+        { id: "beta", name: "beta", description: "Beta channel", unread: 0, activeSessionId: "session:beta" },
+      ],
+      conversations: [
+        { id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" },
+        { id: "dm:a2", agentId: "a2", kind: "dm", activeSessionId: "session-dm-a2", createdAt: "0", updatedAt: "0" },
+        { id: "dm:a3", agentId: "a3", kind: "dm", activeSessionId: "session-dm-a3", createdAt: "0", updatedAt: "0" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    expect(Array.from(container.querySelectorAll<HTMLElement>("[data-channel-list-item]")).map((item) => item.dataset.channelId)).toEqual(["zeta", "beta", "alpha"]);
+    expect(Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.conversationId)).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
+    expect(container.querySelector<HTMLButtonElement>('[data-sort-target="channels"]')?.dataset.sortState).toBe("desc");
+    expect(container.querySelector<HTMLButtonElement>('[data-sort-target="direct-messages"]')?.dataset.sortState).toBe("asc");
   });
 
   it("uses the shared empty illustration in the members navigator empty state", () => {

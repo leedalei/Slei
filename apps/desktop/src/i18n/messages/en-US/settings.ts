@@ -21,6 +21,8 @@ export const settings = {
   },
   saveFailed: "Save failed",
   saving: "Saving",
+  updateFailed: "Update failed",
+  updateSuccess: "Updated successfully",
   bio: "Bio",
   groups: {
     about: "ABOUT",

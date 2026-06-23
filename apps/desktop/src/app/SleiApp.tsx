@@ -711,11 +711,13 @@ export async function applyPreferenceMutation<TPreferences>(input: {
   persist: () => Promise<TPreferences>;
   applyConfirmed: (value: TPreferences) => void;
   onError: (error: unknown) => void;
+  onSuccess?: () => void;
 }) {
   input.applyOptimistic(input.optimistic);
   try {
     const confirmed = await input.persist();
     input.applyConfirmed(confirmed);
+    input.onSuccess?.();
     return confirmed;
   } catch (error) {
     input.applyOptimistic(input.current);
@@ -2156,10 +2158,11 @@ export function SleiApp() {
         },
         applyConfirmed: applyPreferencesReceipt,
         onError: (error) => {
-          const message = formatAppErrorToast(messages.settings.saveFailed, error);
+          const message = formatAppErrorToast(messages.settings.updateFailed, error);
           setPreferenceError(message);
           showAppToast(message, "error");
         },
+        onSuccess: () => showAppToast(messages.settings.updateSuccess, "success"),
       });
     } finally {
       pendingPreferenceRef.current = undefined;
@@ -2206,9 +2209,10 @@ export function SleiApp() {
     try {
       const receipt = await bridge.updateProfile(patch);
       setProfile(receipt.profile);
+      if (field === "avatar") showAppToast(messages.settings.updateSuccess, "success");
     } catch (error) {
       setProfile(previous);
-      const message = formatAppErrorToast(messages.settings.saveFailed, error);
+      const message = formatAppErrorToast(field === "avatar" ? messages.settings.updateFailed : messages.settings.saveFailed, error);
       setProfileErrors((current) => ({ ...current, [field]: message }));
       showAppToast(message, "error");
       throw error;

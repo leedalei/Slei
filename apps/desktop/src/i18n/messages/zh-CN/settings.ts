@@ -21,6 +21,8 @@ export const settings = {
   },
   saveFailed: "保存失败",
   saving: "保存中",
+  updateFailed: "修改失败",
+  updateSuccess: "修改成功",
   bio: "基本信息",
   groups: {
     about: "关于",

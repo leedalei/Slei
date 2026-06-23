@@ -319,7 +319,7 @@ body {
   --padding-empty: 48px;
   --indent-message: 24px;
   --indent-list: 20px;
-  --rail-width: 76px;
+  --rail-width: 84px;
   --sidebar-width: 240px;
   --detail-width: 320px;
   --composer-height: 104px;
@@ -426,6 +426,23 @@ select:focus-visible {
   color: var(--color-error);
   font-size: var(--text-xl);
   margin: 0;
+}
+
+.slei-sort-icon path {
+  opacity: 0.5;
+  transition: opacity var(--duration-interaction) var(--ease-ui), stroke var(--duration-interaction) var(--ease-ui);
+}
+
+.slei-sort-icon[data-sort-direction="default"] path {
+  opacity: 1;
+}
+
+.slei-sort-icon[data-sort-direction="desc"] path:nth-of-type(1),
+.slei-sort-icon[data-sort-direction="desc"] path:nth-of-type(2),
+.slei-sort-icon[data-sort-direction="asc"] path:nth-of-type(3),
+.slei-sort-icon[data-sort-direction="asc"] path:nth-of-type(4) {
+  opacity: 1;
+  stroke: var(--primary);
 }
 
 .slei-crash-screen p {

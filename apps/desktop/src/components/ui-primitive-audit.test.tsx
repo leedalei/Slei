@@ -60,6 +60,13 @@ describe("desktop UI primitive usage", () => {
     expect(violations).toEqual([]);
   });
 
+  it("does not move shared buttons on press", () => {
+    const source = readSource("components/ui/button.tsx");
+
+    expect(source).not.toMatch(/\bactive:[^\s"]*(?:translate|scale)/);
+    expect(source).not.toMatch(/\bactive:not-[^\s"]*(?:translate|scale)/);
+  });
+
   it("does not keep the old hand-rolled member add menu shell", () => {
     const source = readSource("features/chat/ChatPageView.tsx");
     expect(source).not.toContain('data-testid="slei-channel-member-add-menu"');

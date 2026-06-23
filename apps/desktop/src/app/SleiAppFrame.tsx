@@ -93,6 +93,14 @@ import {
   type UserProfile,
 } from "./model";
 
+const primaryRailWidth = "5.25rem";
+type SortDirection = "default" | "asc" | "desc";
+
+const sidebarSortStorageKeys = {
+  channels: "slei:sidebar-sort:channels",
+  directMessages: "slei:sidebar-sort:direct-messages",
+} as const;
+
 const navItems: Array<{ id: AppView; icon: LucideIcon }> = [
   { id: "search", icon: Search },
   { id: "chat", icon: MessageCircle },
@@ -101,6 +109,65 @@ const navItems: Array<{ id: AppView; icon: LucideIcon }> = [
   { id: "computers", icon: Monitor },
   { id: "settings", icon: Settings },
 ];
+
+function isSortDirection(value: string | null): value is SortDirection {
+  return value === "default" || value === "asc" || value === "desc";
+}
+
+function readFrontendSortPreference(storageKey: string): SortDirection {
+  if (typeof window === "undefined") return "default";
+  try {
+    const value = window.localStorage.getItem(storageKey);
+    return isSortDirection(value) ? value : "default";
+  } catch {
+    return "default";
+  }
+}
+
+function writeFrontendSortPreference(storageKey: string, direction: SortDirection) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(storageKey, direction);
+  } catch {
+    // Local storage is a UI preference cache only; sorting still works without it.
+  }
+}
+
+function nextSortDirection(direction: SortDirection): SortDirection {
+  if (direction === "default") return "asc";
+  if (direction === "asc") return "desc";
+  return "default";
+}
+
+function sortActionLabel(messages: DesktopMessages, direction: SortDirection) {
+  const nextDirection = nextSortDirection(direction);
+  if (nextDirection === "asc") return messages.chat.sortAscending;
+  if (nextDirection === "desc") return messages.chat.sortDescending;
+  return messages.chat.clearSort;
+}
+
+function compareDisplayNames(left: string, right: string, direction: Exclude<SortDirection, "default">) {
+  const result = left.localeCompare(right, undefined, { sensitivity: "base", numeric: true });
+  return direction === "asc" ? result : -result;
+}
+
+function sortChannelsByName(channels: SleiFixtures["channels"], direction: SortDirection) {
+  if (direction === "default") return channels;
+  return [...channels].sort((left, right) => compareDisplayNames(stripChannelHash(left.name), stripChannelHash(right.name), direction));
+}
+
+function sortDirectMessagesByName(conversations: ConversationView[], members: SleiMember[], direction: SortDirection) {
+  if (direction === "default") return conversations;
+  return [...conversations].sort((left, right) => {
+    const leftName = members.find((member) => member.id === left.agentId)?.name ?? "";
+    const rightName = members.find((member) => member.id === right.agentId)?.name ?? "";
+    return compareDisplayNames(leftName, rightName, direction);
+  });
+}
+
+function SortDirectionIcon(input: { direction: SortDirection }) {
+  return <ArrowUpDown aria-hidden="true" className="slei-sort-icon" data-sort-direction={input.direction} size={14} />;
+}
 
 export type ChatWorkspaceMode = "chat" | "saved";
 
@@ -224,7 +291,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSizeValue(appearance.fontSize),
-    gridTemplateColumns: hasContextSidebar ? "4.75rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)" : "4.75rem minmax(0, 1fr)",
+    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -260,6 +327,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             onClick={() => input.onViewChange?.(item.id)}
             size="lg"
             tooltip={messages.shell.nav[item.id]}
+            tooltipSide="right"
             type="button"
             variant={input.activeView === item.id ? "default" : "ghost"}
           >
@@ -551,7 +619,9 @@ function projectPathFromPickedFile(file: File) {
 
 function formatChannelProjectLabel(channel: SleiFixtures["channels"][number], messages: DesktopMessages) {
   const projects = channel.projectPaths?.length ? channel.projectPaths.join(", ") : channel.projectName;
-  return projects ? messages.chat.projectPrefix(projects) : channel.description;
+  if (projects) return messages.chat.projectPrefix(projects);
+  if (channel.id === "all") return channel.description;
+  return messages.chat.projectPrefix(messages.chat.noLinkedProjects);
 }
 
 function SidebarFrame(input: { children: ReactNode; title: string }) {
@@ -659,13 +729,33 @@ function ChannelList(input: {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [creatingChannel, setCreatingChannel] = useState(false);
+  const [channelSortDirection, setChannelSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.channels));
+  const [directMessageSortDirection, setDirectMessageSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.directMessages));
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const directMessageConversations = input.data.conversations.filter((conversation) => {
     if (conversation.kind !== "dm") return false;
     const member = input.data.members.find((candidate) => candidate.id === conversation.agentId);
     return member?.directMessageEnabled !== false;
   });
+  const sortedChannels = sortChannelsByName(input.data.channels, channelSortDirection);
+  const sortedDirectMessageConversations = sortDirectMessagesByName(directMessageConversations, input.data.members, directMessageSortDirection);
   const agentMembers = input.data.members.filter((member) => member.type === "agent" && member.directMessageEnabled !== false);
+
+  function cycleChannelSort() {
+    setChannelSortDirection((current) => {
+      const next = nextSortDirection(current);
+      writeFrontendSortPreference(sidebarSortStorageKeys.channels, next);
+      return next;
+    });
+  }
+
+  function cycleDirectMessageSort() {
+    setDirectMessageSortDirection((current) => {
+      const next = nextSortDirection(current);
+      writeFrontendSortPreference(sidebarSortStorageKeys.directMessages, next);
+      return next;
+    });
+  }
 
   async function submitChannel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -722,18 +812,31 @@ function ChannelList(input: {
               <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <SidebarSectionTitle>{input.messages.chat.channels} {input.data.channels.length}</SidebarSectionTitle>
               <div className="flex items-center gap-1">
-                <Button aria-label={input.messages.chat.sortChannels} size="icon-xs" type="button" variant="ghost"><ArrowUpDown aria-hidden="true" size={14} /></Button>
+                <TooltipButton
+                  aria-label={sortActionLabel(input.messages, channelSortDirection)}
+                  data-sort-state={channelSortDirection}
+                  data-sort-target="channels"
+                  onClick={cycleChannelSort}
+                  size="icon-xs"
+                  tooltip={sortActionLabel(input.messages, channelSortDirection)}
+                  type="button"
+                  variant={channelSortDirection === "default" ? "ghost" : "secondary"}
+                >
+                  <SortDirectionIcon direction={channelSortDirection} />
+                </TooltipButton>
                 <Button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
               </div>
             </div>
             <div className="space-y-1">
-              {input.data.channels.map((channel) => (
+              {sortedChannels.map((channel) => (
                 <div
                   className={cn(
                     "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start rounded-lg",
                     input.activeChannelId !== channel.id && "hover:bg-muted/60",
                     input.activeChannelId === channel.id && "bg-accent text-accent-foreground",
                   )}
+                  data-channel-id={channel.id}
+                  data-channel-list-item=""
                   key={channel.id}
                 >
                   <Button
@@ -786,10 +889,21 @@ function ChannelList(input: {
             <Separator />
             <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
-              <Button aria-label={input.messages.chat.sortDirectMessages} size="icon-xs" type="button" variant="ghost"><ArrowUpDown aria-hidden="true" size={14} /></Button>
+              <TooltipButton
+                aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
+                data-sort-state={directMessageSortDirection}
+                data-sort-target="direct-messages"
+                onClick={cycleDirectMessageSort}
+                size="icon-xs"
+                tooltip={sortActionLabel(input.messages, directMessageSortDirection)}
+                type="button"
+                variant={directMessageSortDirection === "default" ? "ghost" : "secondary"}
+              >
+                <SortDirectionIcon direction={directMessageSortDirection} />
+              </TooltipButton>
             </div>
             <div className="space-y-1">
-              {directMessageConversations.map((conversation) => {
+              {sortedDirectMessageConversations.map((conversation) => {
                 const member = input.data.members.find((candidate) => candidate.id === conversation.agentId && candidate.type === "agent");
                 if (!member) return null;
                 const conversationId = conversation.id;
@@ -797,6 +911,8 @@ function ChannelList(input: {
                   <Button
                     aria-current={input.activeConversationId === conversationId ? "true" : undefined}
                     className={cn("slei-channel slei-channel--dm h-auto min-h-14 w-full justify-start whitespace-normal px-2 py-2 text-left", input.activeConversationId === conversationId && "bg-accent text-accent-foreground")}
+                    data-conversation-id={conversation.id}
+                    data-direct-message-list-item=""
                     key={conversation.id}
                     onClick={() => input.onConversationSelect?.(conversationId)}
                     type="button"

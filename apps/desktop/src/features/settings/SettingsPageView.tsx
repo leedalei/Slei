@@ -3,7 +3,7 @@ import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar } from "../../components";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,19 +69,14 @@ export function SettingsPage(input: SettingsPageInput) {
 
           {input.activePanel === "account" && !profile ? (
             <Card size="compact">
-              <CardHeader>
-                <CardTitle>{labels.profile}</CardTitle>
-                <CardDescription>{labels.profileUnavailable}</CardDescription>
-              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                {labels.profileUnavailable}
+              </CardContent>
             </Card>
           ) : null}
 
           {input.activePanel === "account" && profile ? (
             <Card size="compact">
-              <CardHeader>
-                <CardTitle>{labels.profile}</CardTitle>
-                <CardDescription>{labels.accountSubtitle}</CardDescription>
-              </CardHeader>
               <CardContent className="grid gap-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <EditableDetailField
@@ -145,10 +140,6 @@ export function SettingsPage(input: SettingsPageInput) {
 
           {input.activePanel === "language-region" ? (
             <Card size="compact">
-              <CardHeader>
-                <CardTitle>{labels.languageRegion}</CardTitle>
-                <CardDescription>{labels.languageRegionSubtitle}</CardDescription>
-              </CardHeader>
               <CardContent className="grid gap-4">
                 <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
                   <SettingsSelect
@@ -186,10 +177,6 @@ export function SettingsPage(input: SettingsPageInput) {
 
           {input.activePanel === "appearance" ? (
             <Card data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} size="compact">
-              <CardHeader>
-                <CardTitle>{labels.appearance}</CardTitle>
-                <CardDescription>{labels.appearanceSubtitle}</CardDescription>
-              </CardHeader>
               <CardContent className="grid gap-5">
                 <div className="grid gap-2">
                   <Label>{labels.theme}</Label>
@@ -241,10 +228,6 @@ export function SettingsPage(input: SettingsPageInput) {
 
           {input.activePanel === "notifications" ? (
             <Card data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} size="compact">
-              <CardHeader>
-                <CardTitle>{labels.notifications}</CardTitle>
-                <CardDescription>{labels.notificationsSubtitle}</CardDescription>
-              </CardHeader>
               <CardContent className="grid gap-2">
                 <NotificationSwitch
                   checked={input.notifications.mentions}
@@ -278,10 +261,6 @@ export function SettingsPage(input: SettingsPageInput) {
 
           {input.activePanel === "about" ? (
             <Card size="compact">
-              <CardHeader>
-                <CardTitle>{labels.about}</CardTitle>
-                <CardDescription>{labels.aboutSubtitle}</CardDescription>
-              </CardHeader>
               <CardContent>
                 <div className="grid gap-3">
                   <AboutRow label={labels.desktopVersion} value={desktopVersion} />

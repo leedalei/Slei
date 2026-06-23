@@ -419,11 +419,23 @@ function ChannelMemberPanel(input: {
                 const confirming = confirmingAddId === member.id;
                 return (
                   <div className="grid gap-1 rounded-md px-1 py-1" key={member.id}>
-                    <Button className="h-auto justify-start gap-2 px-2 py-2" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingAddId(member.id)} type="button" variant="ghost">
+                    <Button
+                      className="h-auto w-full justify-start gap-2 px-2 py-2"
+                      data-testid="slei-channel-member-add-candidate"
+                      disabled={mutatingMemberId === member.id}
+                      onClick={() => setConfirmingAddId(member.id)}
+                      type="button"
+                      variant="ghost"
+                    >
                       <MemberAvatar identity={member} />
-                      <span className="grid min-w-0 text-left">
-                        <strong className="truncate text-sm">{member.name}</strong>
-                        <small className="truncate text-xs font-normal text-muted-foreground">{member.handle}</small>
+                      <span className="grid min-w-0 flex-1 gap-0.5 overflow-hidden text-left">
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          <strong className="truncate text-sm">{member.name}</strong>
+                          <small className="shrink-0 text-xs font-normal text-muted-foreground">{member.handle}</small>
+                        </span>
+                        <small className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-normal text-muted-foreground" data-testid="slei-channel-member-add-candidate-description">
+                          {member.description}
+                        </small>
                       </span>
                     </Button>
                     {confirming ? (
@@ -601,7 +613,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const activeChannelProjectName = activeChannel.projectPaths?.length ? activeChannel.projectPaths.join(", ") : activeChannel.projectName;
   const detailSubtitle = dmMember
     ? formatConversationDateTime(activeConversation?.createdAt ?? "")
-    : activeChannelProjectName ? messages.chat.projectPrefix(activeChannelProjectName) : activeChannel.description;
+    : messages.chat.projectPrefix(activeChannelProjectName || messages.chat.noLinkedProjects);
   const showProjectEditor = !dmMember && activeChannel.id !== "all";
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
