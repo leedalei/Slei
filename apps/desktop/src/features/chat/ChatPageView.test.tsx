@@ -96,6 +96,71 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("/memory");
   });
 
+  it("renders DM skill slash options with the expected DOM contract and click behavior", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const panel = host.querySelector('[data-testid="slei-skill-slash-panel"]');
+    const option = host.querySelector<HTMLButtonElement>('[data-skill-slash-option-index="0"]');
+
+    expect(panel).not.toBeNull();
+    expect(option).not.toBeNull();
+    expect(option?.getAttribute("aria-current")).toBe("true");
+    expect(option?.textContent).toContain("Remember facts");
+
+    await act(async () => {
+      option?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("/memory ");
+  });
+
+  it("does not render the skill slash picker for channel drafts", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      members: [
+        {
+          ...member,
+          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(host.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+  });
+
   it("renders channel titles at a size close to the hash icon", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
