@@ -26,6 +26,8 @@ pub enum Command {
     #[command(subcommand)]
     Message(MessageCommand),
     #[command(subcommand)]
+    Todo(TodoCommand),
+    #[command(subcommand)]
     Task(TaskCommand),
     #[command(subcommand)]
     Agent(AgentCommand),
@@ -65,6 +67,10 @@ pub struct ReadArgs {
     pub before: Option<i64>,
     #[arg(long)]
     pub around: Option<String>,
+    #[arg(long)]
+    pub from_message: Option<String>,
+    #[arg(long)]
+    pub to_message: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -73,6 +79,72 @@ pub struct SearchArgs {
     pub query: String,
     #[arg(long)]
     pub limit: Option<i64>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TodoCommand {
+    List(TodoListArgs),
+    Show { todo_id: String },
+    Create(TodoCreateArgs),
+    Update(TodoUpdateArgs),
+    Delete(TodoDeleteArgs),
+    Clear(TodoClearArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TodoListArgs {
+    #[arg(long)]
+    pub agent: Option<String>,
+    #[arg(long)]
+    pub channel: Option<String>,
+    #[arg(long)]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TodoCreateArgs {
+    #[arg(long)]
+    pub agent: String,
+    #[arg(long)]
+    pub channel: String,
+    #[arg(long)]
+    pub message: String,
+    #[arg(long)]
+    pub note: Option<String>,
+    #[arg(long)]
+    pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TodoUpdateArgs {
+    pub todo_id: String,
+    #[arg(long)]
+    pub status: String,
+    #[arg(long)]
+    pub note: Option<String>,
+    #[arg(long)]
+    pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TodoDeleteArgs {
+    pub todo_id: String,
+    #[arg(long)]
+    pub idempotency_key: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct TodoClearArgs {
+    #[arg(long)]
+    pub agent: Option<String>,
+    #[arg(long)]
+    pub channel: Option<String>,
+    #[arg(long)]
+    pub status: Option<String>,
+    #[arg(long)]
+    pub note: Option<String>,
+    #[arg(long)]
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -192,6 +264,7 @@ async fn run() -> Result<i32> {
 async fn execute(cli: Cli, client: &DaemonClient) -> Result<i32> {
     let (json, exit_code) = match cli.command {
         Command::Message(command) => execute_message(command, client).await?,
+        Command::Todo(command) => execute_todo(command, client).await?,
         Command::Task(command) => execute_task(command, client).await?,
         Command::Agent(command) => execute_agent(command, client).await?,
     };
@@ -236,6 +309,74 @@ async fn execute_message(command: MessageCommand, client: &DaemonClient) -> Resu
             }
             let response = client
                 .get_json(&query_path("/v1/messages/search", pairs)?)
+                .await?;
+            Ok((response, 0))
+        }
+    }
+}
+
+async fn execute_todo(command: TodoCommand, client: &DaemonClient) -> Result<(Value, i32)> {
+    match command {
+        TodoCommand::List(args) => {
+            let path = query_path("/v1/agent-message-todos", todo_list_pairs(args)?)?;
+            let response = client.get_json(&path).await?;
+            Ok((response, 0))
+        }
+        TodoCommand::Show { todo_id } => {
+            let response = client
+                .get_json(&format!("/v1/agent-message-todos/{todo_id}"))
+                .await?;
+            Ok((response, 0))
+        }
+        TodoCommand::Create(args) => {
+            let key = idempotency_key(args.idempotency_key);
+            let channel_id = normalize_channel_arg(&args.channel, None)?.channel;
+            let body = TodoCreateBody {
+                agent_id: args.agent,
+                channel_id,
+                message_id: args.message,
+                note: args.note,
+            };
+            let response = client
+                .post_json_idempotent("/v1/agent-message-todos", &body, &key)
+                .await?;
+            Ok((response, 0))
+        }
+        TodoCommand::Update(args) => {
+            let key = idempotency_key(args.idempotency_key);
+            let body = TodoUpdateBody {
+                status: args.status,
+                note: args.note,
+            };
+            let response = client
+                .patch_json_idempotent(
+                    &format!("/v1/agent-message-todos/{}", args.todo_id),
+                    &body,
+                    &key,
+                )
+                .await?;
+            Ok((response, 0))
+        }
+        TodoCommand::Delete(args) => {
+            let key = idempotency_key(args.idempotency_key);
+            let response = client
+                .delete_json_idempotent(&format!("/v1/agent-message-todos/{}", args.todo_id), &key)
+                .await?;
+            Ok((response, 0))
+        }
+        TodoCommand::Clear(args) => {
+            let key = idempotency_key(args.idempotency_key);
+            let body = TodoClearBody {
+                agent_id: args.agent,
+                channel_id: match args.channel {
+                    Some(channel) => Some(normalize_channel_arg(&channel, None)?.channel),
+                    None => None,
+                },
+                status: args.status,
+                note: args.note,
+            };
+            let response = client
+                .post_json_idempotent("/v1/agent-message-todos/clear", &body, &key)
                 .await?;
             Ok((response, 0))
         }
@@ -345,6 +486,37 @@ struct AgentStatusBody {
     task_id: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TodoCreateBody {
+    agent_id: String,
+    channel_id: String,
+    message_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TodoUpdateBody {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TodoClearBody {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    channel_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+}
+
 pub fn normalize_channel_arg(
     channel: &str,
     explicit_around: Option<&str>,
@@ -434,7 +606,33 @@ fn message_read_pairs(normalized: &NormalizedChannel, args: &ReadArgs) -> Vec<(S
     if let Some(around) = &normalized.around {
         pairs.push(("around".to_string(), around.clone()));
     }
+    if let Some(from_message) = &args.from_message {
+        pairs.push(("fromMessage".to_string(), from_message.clone()));
+    }
+    if let Some(to_message) = &args.to_message {
+        pairs.push(("toMessage".to_string(), to_message.clone()));
+    }
     pairs
+}
+
+fn todo_list_pairs(args: TodoListArgs) -> Result<Vec<(String, String)>> {
+    let mut pairs = Vec::new();
+    if let Some(agent) = args.agent {
+        pairs.push(("agentId".to_string(), agent));
+    }
+    if let Some(channel) = args.channel {
+        pairs.push((
+            "channelId".to_string(),
+            normalize_channel_arg(&channel, None)?.channel,
+        ));
+    }
+    if let Some(status) = args.status {
+        if status == "deleted" {
+            pairs.push(("includeDeleted".to_string(), "true".to_string()));
+        }
+        pairs.push(("status".to_string(), status));
+    }
+    Ok(pairs)
 }
 
 fn query_path(path: &str, pairs: Vec<(String, String)>) -> Result<String> {
@@ -452,4 +650,309 @@ fn query_path(path: &str, pairs: Vec<(String, String)>) -> Result<String> {
         output.push_str(query);
     }
     Ok(output)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    #[tokio::test]
+    async fn message_read_adds_message_id_range_query_args() {
+        assert_cli_request(
+            &[
+                "slei",
+                "message",
+                "read",
+                "--channel",
+                "#all",
+                "--from-message",
+                "msg_a",
+                "--to-message",
+                "msg_b",
+            ],
+            ExpectedRequest {
+                method: "GET",
+                path: "/v1/messages/read?channel=all&fromMessage=msg_a&toMessage=msg_b",
+                body: None,
+                idempotency_key: None,
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_list_builds_filtered_query() {
+        assert_cli_request(
+            &[
+                "slei",
+                "todo",
+                "list",
+                "--agent",
+                "agent_coda",
+                "--channel",
+                "#all",
+                "--status",
+                "pending",
+            ],
+            ExpectedRequest {
+                method: "GET",
+                path: "/v1/agent-message-todos?agentId=agent_coda&channelId=all&status=pending",
+                body: None,
+                idempotency_key: None,
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_list_status_deleted_includes_deleted_rows() {
+        assert_cli_request(
+            &["slei", "todo", "list", "--status", "deleted"],
+            ExpectedRequest {
+                method: "GET",
+                path: "/v1/agent-message-todos?includeDeleted=true&status=deleted",
+                body: None,
+                idempotency_key: None,
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_show_builds_id_path() {
+        assert_cli_request(
+            &["slei", "todo", "show", "todo_123"],
+            ExpectedRequest {
+                method: "GET",
+                path: "/v1/agent-message-todos/todo_123",
+                body: None,
+                idempotency_key: None,
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_create_posts_body_with_idempotency_key() {
+        assert_cli_request(
+            &[
+                "slei",
+                "todo",
+                "create",
+                "--agent",
+                "agent_coda",
+                "--channel",
+                "#all",
+                "--message",
+                "msg_1",
+                "--note",
+                "manual recovery",
+                "--idempotency-key",
+                "create-key",
+            ],
+            ExpectedRequest {
+                method: "POST",
+                path: "/v1/agent-message-todos",
+                body: Some(json!({
+                    "agentId": "agent_coda",
+                    "channelId": "all",
+                    "messageId": "msg_1",
+                    "note": "manual recovery",
+                })),
+                idempotency_key: Some("create-key"),
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_update_patches_status_and_note_with_idempotency_key() {
+        assert_cli_request(
+            &[
+                "slei",
+                "todo",
+                "update",
+                "todo_123",
+                "--status",
+                "done",
+                "--note",
+                "manually resolved",
+                "--idempotency-key",
+                "update-key",
+            ],
+            ExpectedRequest {
+                method: "PATCH",
+                path: "/v1/agent-message-todos/todo_123",
+                body: Some(json!({
+                    "status": "done",
+                    "note": "manually resolved",
+                })),
+                idempotency_key: Some("update-key"),
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_delete_sends_delete_with_idempotency_key() {
+        assert_cli_request(
+            &[
+                "slei",
+                "todo",
+                "delete",
+                "todo_123",
+                "--idempotency-key",
+                "delete-key",
+            ],
+            ExpectedRequest {
+                method: "DELETE",
+                path: "/v1/agent-message-todos/todo_123",
+                body: None,
+                idempotency_key: Some("delete-key"),
+            },
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn todo_clear_posts_filters_with_idempotency_key() {
+        assert_cli_request(
+            &[
+                "slei",
+                "todo",
+                "clear",
+                "--agent",
+                "agent_coda",
+                "--channel",
+                "#all",
+                "--status",
+                "pending",
+                "--note",
+                "cleanup",
+                "--idempotency-key",
+                "clear-key",
+            ],
+            ExpectedRequest {
+                method: "POST",
+                path: "/v1/agent-message-todos/clear",
+                body: Some(json!({
+                    "agentId": "agent_coda",
+                    "channelId": "all",
+                    "status": "pending",
+                    "note": "cleanup",
+                })),
+                idempotency_key: Some("clear-key"),
+            },
+        )
+        .await;
+    }
+
+    struct ExpectedRequest {
+        method: &'static str,
+        path: &'static str,
+        body: Option<Value>,
+        idempotency_key: Option<&'static str>,
+    }
+
+    async fn assert_cli_request(args: &[&str], expected: ExpectedRequest) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            let response = r#"{"ok":true}"#;
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{}",
+                        response.len(),
+                        response
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+            request
+        });
+
+        let cli = Cli::try_parse_from(args).unwrap();
+        let client = DaemonClient::for_base_url(&base_url).unwrap();
+        let exit_code = execute(cli, &client).await.unwrap();
+        assert_eq!(exit_code, 0);
+
+        let request = server.await.unwrap();
+        assert_eq!(request.method, expected.method);
+        assert_eq!(request.path, expected.path);
+        assert_eq!(
+            request.headers.get("idempotency-key").map(String::as_str),
+            expected.idempotency_key
+        );
+        match expected.body {
+            Some(expected_body) => {
+                let actual: Value = serde_json::from_str(&request.body).unwrap();
+                assert_eq!(actual, expected_body);
+            }
+            None => assert!(request.body.is_empty(), "unexpected body: {}", request.body),
+        }
+    }
+
+    struct CapturedRequest {
+        method: String,
+        path: String,
+        headers: HashMap<String, String>,
+        body: String,
+    }
+
+    async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
+        let mut bytes = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        let header_end = loop {
+            let read = stream.read(&mut buffer).await.unwrap();
+            assert!(read > 0, "client closed before sending headers");
+            bytes.extend_from_slice(&buffer[..read]);
+            if let Some(index) = find_header_end(&bytes) {
+                break index;
+            }
+        };
+
+        let header_text = String::from_utf8(bytes[..header_end].to_vec()).unwrap();
+        let mut lines = header_text.split("\r\n");
+        let request_line = lines.next().unwrap();
+        let mut request_parts = request_line.split_whitespace();
+        let method = request_parts.next().unwrap().to_string();
+        let path = request_parts.next().unwrap().to_string();
+
+        let mut headers = HashMap::new();
+        for line in lines.filter(|line| !line.is_empty()) {
+            let (name, value) = line.split_once(':').unwrap();
+            headers.insert(name.to_ascii_lowercase(), value.trim().to_string());
+        }
+
+        let content_length = headers
+            .get("content-length")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let body_start = header_end + 4;
+        let mut body = bytes[body_start..].to_vec();
+        while body.len() < content_length {
+            let read = stream.read(&mut buffer).await.unwrap();
+            assert!(read > 0, "client closed before sending body");
+            body.extend_from_slice(&buffer[..read]);
+        }
+        body.truncate(content_length);
+
+        CapturedRequest {
+            method,
+            path,
+            headers,
+            body: String::from_utf8(body).unwrap(),
+        }
+    }
+
+    fn find_header_end(bytes: &[u8]) -> Option<usize> {
+        bytes.windows(4).position(|window| window == b"\r\n\r\n")
+    }
 }

@@ -16,6 +16,17 @@ pub struct DaemonClient {
 }
 
 impl DaemonClient {
+    #[cfg(test)]
+    pub fn for_base_url(base_url: &str) -> Result<Self> {
+        let base_url =
+            Url::parse(base_url).with_context(|| format!("invalid test daemon url: {base_url}"))?;
+        Ok(Self {
+            client: Client::new(),
+            base_url,
+            token: None,
+        })
+    }
+
     pub fn from_env() -> Result<Self> {
         let base_url =
             std::env::var("SLEI_DAEMON_URL").unwrap_or_else(|_| DEFAULT_DAEMON_URL.to_string());
@@ -74,6 +85,15 @@ impl DaemonClient {
         idempotency_key: &str,
     ) -> Result<T> {
         self.request_json(Method::PATCH, path, Some(body), Some(idempotency_key))
+            .await
+    }
+
+    pub async fn delete_json_idempotent<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        idempotency_key: &str,
+    ) -> Result<T> {
+        self.request_json::<(), T>(Method::DELETE, path, None, Some(idempotency_key))
             .await
     }
 

@@ -97,6 +97,7 @@ fn parses_message_read_windows() {
                 after: parsed_after,
                 before: parsed_before,
                 around: parsed_around,
+                ..
             })) if channel == "#all"
                 && parsed_limit == limit
                 && parsed_after == after
