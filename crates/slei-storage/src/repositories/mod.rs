@@ -1,4 +1,4 @@
-use sqlx::{Row, Sqlite, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 pub const RESET_MUTABLE_TABLES: &[&str] = &[
@@ -359,6 +359,45 @@ pub struct NewAgentActivityEventRow {
     pub state: Option<String>,
     pub phase: Option<String>,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentMessageTodoRow {
+    pub sequence: i64,
+    pub id: String,
+    pub agent_id: String,
+    pub channel_id: String,
+    pub message_id: String,
+    pub message_author_id: String,
+    pub message_created_at: String,
+    pub claim_owner_agent_id: String,
+    pub status: String,
+    pub run_id: Option<String>,
+    pub note: Option<String>,
+    pub last_prompted_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewAgentMessageTodoRow {
+    pub agent_id: String,
+    pub channel_id: String,
+    pub message_id: String,
+    pub message_author_id: String,
+    pub message_created_at: String,
+    pub claim_owner_agent_id: String,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AgentMessageTodoQueryRow {
+    pub agent_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub status: Option<String>,
+    pub include_deleted: bool,
+    pub limit: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1891,6 +1930,393 @@ impl Repositories {
         .execute(&self.pool)
         .await?;
         Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn create_agent_message_todo(
+        &self,
+        row: NewAgentMessageTodoRow,
+    ) -> Result<AgentMessageTodoRow, sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO agent_message_todos(
+                id, agent_id, channel_id, message_id, message_author_id,
+                message_created_at, claim_owner_agent_id, status, note
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+             ON CONFLICT(agent_id, message_id) DO NOTHING",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&row.agent_id)
+        .bind(&row.channel_id)
+        .bind(&row.message_id)
+        .bind(&row.message_author_id)
+        .bind(&row.message_created_at)
+        .bind(&row.claim_owner_agent_id)
+        .bind(&row.note)
+        .execute(&self.pool)
+        .await?;
+
+        let existing = sqlx::query(
+            "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                    message_created_at, claim_owner_agent_id, status, run_id, note,
+                    last_prompted_at, completed_at, created_at, updated_at
+             FROM agent_message_todos
+             WHERE agent_id = ? AND message_id = ?",
+        )
+        .bind(&row.agent_id)
+        .bind(&row.message_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        agent_message_todo_row_from_sql(existing)
+    }
+
+    pub async fn agent_message_todo(
+        &self,
+        todo_id: &str,
+    ) -> Result<Option<AgentMessageTodoRow>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                    message_created_at, claim_owner_agent_id, status, run_id, note,
+                    last_prompted_at, completed_at, created_at, updated_at
+             FROM agent_message_todos
+             WHERE id = ?",
+        )
+        .bind(todo_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(agent_message_todo_row_from_sql).transpose()
+    }
+
+    pub async fn agent_message_todos(
+        &self,
+        query: AgentMessageTodoQueryRow,
+    ) -> Result<Vec<AgentMessageTodoRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(query.limit);
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                    message_created_at, claim_owner_agent_id, status, run_id, note,
+                    last_prompted_at, completed_at, created_at, updated_at
+             FROM agent_message_todos
+             WHERE 1 = 1",
+        );
+
+        if let Some(agent_id) = query.agent_id {
+            builder.push(" AND agent_id = ");
+            builder.push_bind(agent_id);
+        }
+        if let Some(channel_id) = query.channel_id {
+            builder.push(" AND channel_id = ");
+            builder.push_bind(channel_id);
+        }
+        if let Some(status) = query.status {
+            builder.push(" AND status = ");
+            builder.push_bind(status);
+        }
+        if !query.include_deleted {
+            builder.push(" AND status != 'deleted'");
+        }
+        builder.push(" ORDER BY sequence ASC LIMIT ");
+        builder.push_bind(limit);
+
+        let rows = builder.build().fetch_all(&self.pool).await?;
+        rows.into_iter()
+            .map(agent_message_todo_row_from_sql)
+            .collect()
+    }
+
+    pub async fn update_agent_message_todo_status(
+        &self,
+        todo_id: &str,
+        status: &str,
+        note: Option<&str>,
+    ) -> Result<Option<AgentMessageTodoRow>, sqlx::Error> {
+        let completed_at_status = status.to_string();
+        sqlx::query(
+            "UPDATE agent_message_todos
+             SET status = ?,
+                 run_id = NULL,
+                 note = ?,
+                 completed_at = CASE
+                    WHEN ? = 'done' THEN COALESCE(completed_at, CURRENT_TIMESTAMP)
+                    ELSE NULL
+                 END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+        )
+        .bind(status)
+        .bind(note)
+        .bind(completed_at_status)
+        .bind(todo_id)
+        .execute(&self.pool)
+        .await?;
+
+        self.agent_message_todo(todo_id).await
+    }
+
+    pub async fn delete_agent_message_todo(
+        &self,
+        todo_id: &str,
+    ) -> Result<Option<AgentMessageTodoRow>, sqlx::Error> {
+        sqlx::query(
+            "UPDATE agent_message_todos
+             SET status = 'deleted',
+                 run_id = NULL,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+        )
+        .bind(todo_id)
+        .execute(&self.pool)
+        .await?;
+
+        self.agent_message_todo(todo_id).await
+    }
+
+    pub async fn clear_agent_message_todos(
+        &self,
+        query: AgentMessageTodoQueryRow,
+        note: Option<&str>,
+    ) -> Result<Vec<AgentMessageTodoRow>, sqlx::Error> {
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id
+             FROM agent_message_todos
+             WHERE 1 = 1",
+        );
+
+        if let Some(agent_id) = query.agent_id {
+            builder.push(" AND agent_id = ");
+            builder.push_bind(agent_id);
+        }
+        if let Some(channel_id) = query.channel_id {
+            builder.push(" AND channel_id = ");
+            builder.push_bind(channel_id);
+        }
+        if let Some(status) = query.status {
+            builder.push(" AND status = ");
+            builder.push_bind(status);
+        }
+        if !query.include_deleted {
+            builder.push(" AND status != 'deleted'");
+        }
+        builder.push(" ORDER BY sequence ASC");
+
+        let id_rows = builder.build().fetch_all(&self.pool).await?;
+        let ids = id_rows
+            .into_iter()
+            .map(|row| row.try_get("id"))
+            .collect::<Result<Vec<String>, sqlx::Error>>()?;
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tx = self.pool.begin().await?;
+        for id in &ids {
+            sqlx::query(
+                "UPDATE agent_message_todos
+                 SET status = 'deleted',
+                     run_id = NULL,
+                     note = ?,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?",
+            )
+            .bind(note)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let mut updated = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let row = sqlx::query(
+                "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                        message_created_at, claim_owner_agent_id, status, run_id, note,
+                        last_prompted_at, completed_at, created_at, updated_at
+                 FROM agent_message_todos
+                 WHERE id = ? AND status = 'deleted'",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if let Some(row) = row {
+                updated.push(agent_message_todo_row_from_sql(row)?);
+            }
+        }
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    pub async fn mark_agent_message_todos_running(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        run_id: &str,
+        limit: i64,
+    ) -> Result<Vec<AgentMessageTodoRow>, sqlx::Error> {
+        let limit = normalize_repository_limit(Some(limit));
+        let mut tx = self.pool.begin().await?;
+        let ids = sqlx::query_scalar::<_, String>(
+            "SELECT id
+             FROM agent_message_todos
+             WHERE agent_id = ? AND channel_id = ? AND status = 'pending'
+             ORDER BY sequence ASC
+             LIMIT ?",
+        )
+        .bind(agent_id)
+        .bind(channel_id)
+        .bind(limit)
+        .fetch_all(&mut *tx)
+        .await?;
+        if ids.is_empty() {
+            tx.commit().await?;
+            return Ok(Vec::new());
+        }
+
+        for id in &ids {
+            sqlx::query(
+                "UPDATE agent_message_todos
+                 SET status = 'running',
+                     run_id = ?,
+                     completed_at = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND status = 'pending'",
+            )
+            .bind(run_id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let mut updated = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let row = sqlx::query(
+                "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                        message_created_at, claim_owner_agent_id, status, run_id, note,
+                        last_prompted_at, completed_at, created_at, updated_at
+                 FROM agent_message_todos
+                 WHERE id = ? AND status = 'running' AND run_id = ?",
+            )
+            .bind(id)
+            .bind(run_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if let Some(row) = row {
+                updated.push(agent_message_todo_row_from_sql(row)?);
+            }
+        }
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    pub async fn mark_agent_message_todos_done_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<AgentMessageTodoRow>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let ids = sqlx::query_scalar::<_, String>(
+            "SELECT id
+             FROM agent_message_todos
+             WHERE run_id = ? AND status = 'running'
+             ORDER BY sequence ASC",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        if ids.is_empty() {
+            tx.commit().await?;
+            return Ok(Vec::new());
+        }
+
+        for id in &ids {
+            sqlx::query(
+                "UPDATE agent_message_todos
+                 SET status = 'done',
+                     run_id = NULL,
+                     completed_at = CURRENT_TIMESTAMP,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND run_id = ? AND status = 'running'",
+            )
+            .bind(id)
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let mut updated = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let row = sqlx::query(
+                "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                        message_created_at, claim_owner_agent_id, status, run_id, note,
+                        last_prompted_at, completed_at, created_at, updated_at
+                 FROM agent_message_todos
+                 WHERE id = ? AND status = 'done' AND run_id IS NULL",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if let Some(row) = row {
+                updated.push(agent_message_todo_row_from_sql(row)?);
+            }
+        }
+
+        tx.commit().await?;
+        Ok(updated)
+    }
+
+    pub async fn restore_agent_message_todos_pending_for_run(
+        &self,
+        run_id: &str,
+    ) -> Result<Vec<AgentMessageTodoRow>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let ids = sqlx::query_scalar::<_, String>(
+            "SELECT id
+             FROM agent_message_todos
+             WHERE run_id = ? AND status = 'running'
+             ORDER BY sequence ASC",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        if ids.is_empty() {
+            tx.commit().await?;
+            return Ok(Vec::new());
+        }
+
+        for id in &ids {
+            sqlx::query(
+                "UPDATE agent_message_todos
+                 SET status = 'pending',
+                     run_id = NULL,
+                     completed_at = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND run_id = ? AND status = 'running'",
+            )
+            .bind(id)
+            .bind(run_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        let mut updated = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let row = sqlx::query(
+                "SELECT sequence, id, agent_id, channel_id, message_id, message_author_id,
+                        message_created_at, claim_owner_agent_id, status, run_id, note,
+                        last_prompted_at, completed_at, created_at, updated_at
+                 FROM agent_message_todos
+                 WHERE id = ? AND status = 'pending' AND run_id IS NULL",
+            )
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            if let Some(row) = row {
+                updated.push(agent_message_todo_row_from_sql(row)?);
+            }
+        }
+
+        tx.commit().await?;
+        Ok(updated)
     }
 
     pub async fn upsert_agent_status(&self, row: AgentStatusRow) -> Result<(), sqlx::Error> {
@@ -3737,6 +4163,28 @@ fn normalize_repository_limit(limit: Option<i64>) -> i64 {
         Some(limit) if limit > 0 => limit.min(MAX_LIMIT),
         _ => DEFAULT_LIMIT,
     }
+}
+
+fn agent_message_todo_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<AgentMessageTodoRow, sqlx::Error> {
+    Ok(AgentMessageTodoRow {
+        sequence: row.try_get("sequence")?,
+        id: row.try_get("id")?,
+        agent_id: row.try_get("agent_id")?,
+        channel_id: row.try_get("channel_id")?,
+        message_id: row.try_get("message_id")?,
+        message_author_id: row.try_get("message_author_id")?,
+        message_created_at: row.try_get("message_created_at")?,
+        claim_owner_agent_id: row.try_get("claim_owner_agent_id")?,
+        status: row.try_get("status")?,
+        run_id: row.try_get("run_id")?,
+        note: row.try_get("note")?,
+        last_prompted_at: row.try_get("last_prompted_at")?,
+        completed_at: row.try_get("completed_at")?,
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
+    })
 }
 
 fn message_delivery_row_from_sql(

@@ -14,15 +14,31 @@ mod tests {
     use super::db::SleiDb;
     use super::migrations::MIGRATIONS;
     use super::repositories::{
-        sanitize_activity_payload_preview, AgentStatusRow, ChannelSessionRow,
-        ConversationMessageRow, ConversationRow, MessageReadQueryRow, NewAgentActivityEventRow,
-        NewChannelMessageRow, Repositories, TaskRootRow, UserProfileRow,
-        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        sanitize_activity_payload_preview, AgentMessageTodoQueryRow, AgentStatusRow,
+        ChannelSessionRow, ConversationMessageRow, ConversationRow, MessageReadQueryRow,
+        NewAgentActivityEventRow, NewAgentMessageTodoRow, NewChannelMessageRow, Repositories,
+        TaskRootRow, UserProfileRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("slei-{name}-{}.sqlite", Uuid::new_v4()));
         (format!("sqlite://{}", path.display()), path)
+    }
+
+    fn new_agent_message_todo(
+        agent_id: &str,
+        channel_id: &str,
+        message_id: &str,
+    ) -> NewAgentMessageTodoRow {
+        NewAgentMessageTodoRow {
+            agent_id: agent_id.to_string(),
+            channel_id: channel_id.to_string(),
+            message_id: message_id.to_string(),
+            message_author_id: "human:local".to_string(),
+            message_created_at: "2026-06-23T08:00:00Z".to_string(),
+            claim_owner_agent_id: agent_id.to_string(),
+            note: None,
+        }
     }
 
     #[tokio::test]
@@ -99,6 +115,440 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(versions.last().copied(), Some(10));
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_crud_and_unique_agent_message() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-crud");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_1".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human:local".to_string(),
+                body: Some("please handle this".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_2".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human:local".to_string(),
+                body: Some("please handle that".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let first = repos
+            .create_agent_message_todo(new_agent_message_todo("agent_a", "all", "msg_1"))
+            .await
+            .unwrap();
+        let duplicate = repos
+            .create_agent_message_todo(NewAgentMessageTodoRow {
+                note: Some("duplicate should not overwrite".to_string()),
+                ..new_agent_message_todo("agent_a", "all", "msg_1")
+            })
+            .await
+            .unwrap();
+        let second = repos
+            .create_agent_message_todo(NewAgentMessageTodoRow {
+                note: Some("second".to_string()),
+                ..new_agent_message_todo("agent_a", "all", "msg_2")
+            })
+            .await
+            .unwrap();
+
+        let rows = repos
+            .agent_message_todos(AgentMessageTodoQueryRow {
+                agent_id: Some("agent_a".to_string()),
+                channel_id: Some("all".to_string()),
+                status: Some("pending".to_string()),
+                include_deleted: false,
+                limit: Some(10),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(duplicate, first);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, first.id);
+        assert_eq!(rows[1].id, second.id);
+        assert_eq!(rows[0].status, "pending");
+        assert!(rows[0].run_id.is_none());
+        assert!(rows[0].note.is_none());
+        assert_eq!(rows[1].note.as_deref(), Some("second"));
+
+        let cleared = repos
+            .clear_agent_message_todos(
+                AgentMessageTodoQueryRow {
+                    agent_id: Some("agent_a".to_string()),
+                    channel_id: Some("all".to_string()),
+                    status: Some("pending".to_string()),
+                    include_deleted: false,
+                    limit: Some(10),
+                },
+                Some("cleared"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(cleared.len(), 2);
+        assert!(cleared
+            .iter()
+            .all(|todo| todo.status == "deleted" && todo.note.as_deref() == Some("cleared")));
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_clear_deletes_all_matches_without_pagination() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-clear-all");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..25 {
+            let message_id = format!("msg_{index}");
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: message_id.clone(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human:local".to_string(),
+                    body: Some(format!("message {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            repos
+                .create_agent_message_todo(new_agent_message_todo("agent_a", "all", &message_id))
+                .await
+                .unwrap();
+        }
+
+        let cleared = repos
+            .clear_agent_message_todos(
+                AgentMessageTodoQueryRow {
+                    agent_id: Some("agent_a".to_string()),
+                    channel_id: Some("all".to_string()),
+                    status: Some("pending".to_string()),
+                    include_deleted: false,
+                    limit: None,
+                },
+                Some("bulk clear"),
+            )
+            .await
+            .unwrap();
+        let remaining = repos
+            .agent_message_todos(AgentMessageTodoQueryRow {
+                agent_id: Some("agent_a".to_string()),
+                channel_id: Some("all".to_string()),
+                status: Some("pending".to_string()),
+                include_deleted: false,
+                limit: Some(50),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(cleared.len(), 25);
+        assert!(cleared.iter().all(|todo| {
+            todo.status == "deleted"
+                && todo.run_id.is_none()
+                && todo.note.as_deref() == Some("bulk clear")
+        }));
+        assert!(remaining.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_lifecycle_transitions_clear_run_id() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-lifecycle");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..3 {
+            let message_id = format!("msg_{index}");
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: message_id.clone(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human:local".to_string(),
+                    body: Some(format!("message {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            repos
+                .create_agent_message_todo(new_agent_message_todo("agent_a", "all", &message_id))
+                .await
+                .unwrap();
+        }
+
+        let running = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_1", 5)
+            .await
+            .unwrap();
+        assert_eq!(
+            running
+                .iter()
+                .map(|todo| todo.message_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_0", "msg_1", "msg_2"]
+        );
+        assert!(running
+            .iter()
+            .all(|todo| todo.status == "running" && todo.run_id.as_deref() == Some("run_1")));
+
+        let done = repos
+            .mark_agent_message_todos_done_for_run("run_1")
+            .await
+            .unwrap();
+        assert_eq!(done.len(), 3);
+        assert!(done.iter().all(|todo| {
+            todo.status == "done" && todo.run_id.is_none() && todo.completed_at.is_some()
+        }));
+
+        let restored_done = repos
+            .restore_agent_message_todos_pending_for_run("run_1")
+            .await
+            .unwrap();
+        assert!(restored_done.is_empty());
+
+        let rerun = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_2", 5)
+            .await
+            .unwrap();
+        assert!(rerun.is_empty());
+
+        let failed = repos
+            .update_agent_message_todo_status(&done[0].id, "failed", Some("try again"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(failed.status, "failed");
+        assert!(failed.run_id.is_none());
+
+        let failed_running = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_failed", 5)
+            .await
+            .unwrap();
+        assert!(failed_running.is_empty());
+
+        let reopened = repos
+            .update_agent_message_todo_status(&failed.id, "pending", None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reopened.status, "pending");
+        assert!(reopened.run_id.is_none());
+
+        let failed_running = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_failed", 5)
+            .await
+            .unwrap();
+        assert_eq!(failed_running.len(), 1);
+        let restored = repos
+            .restore_agent_message_todos_pending_for_run("run_failed")
+            .await
+            .unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].status, "pending");
+        assert!(restored[0].run_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_lifecycle_returns_only_actual_transitions() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-guarded-returns");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for index in 0..3 {
+            let message_id = format!("msg_{index}");
+            repos
+                .insert_channel_message(NewChannelMessageRow {
+                    id: message_id.clone(),
+                    channel_id: "all".to_string(),
+                    session_id: None,
+                    author_id: "human:local".to_string(),
+                    body: Some(format!("message {index}")),
+                    as_task: false,
+                    kind: "human".to_string(),
+                })
+                .await
+                .unwrap();
+            repos
+                .create_agent_message_todo(new_agent_message_todo("agent_a", "all", &message_id))
+                .await
+                .unwrap();
+        }
+
+        sqlx::query(
+            "CREATE TRIGGER skip_msg_0_running
+             BEFORE UPDATE OF status ON agent_message_todos
+             WHEN OLD.message_id = 'msg_0' AND NEW.status = 'running'
+             BEGIN
+                SELECT RAISE(IGNORE);
+             END",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+        let running = repos
+            .mark_agent_message_todos_running("agent_a", "all", "run_guarded", 5)
+            .await
+            .unwrap();
+        sqlx::query("DROP TRIGGER skip_msg_0_running")
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            running
+                .iter()
+                .map(|todo| todo.message_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_1", "msg_2"]
+        );
+        assert!(running
+            .iter()
+            .all(|todo| todo.status == "running" && todo.run_id.as_deref() == Some("run_guarded")));
+
+        sqlx::query(
+            "CREATE TRIGGER skip_msg_1_done
+             BEFORE UPDATE OF status ON agent_message_todos
+             WHEN OLD.message_id = 'msg_1' AND NEW.status = 'done'
+             BEGIN
+                SELECT RAISE(IGNORE);
+             END",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+        let done = repos
+            .mark_agent_message_todos_done_for_run("run_guarded")
+            .await
+            .unwrap();
+        sqlx::query("DROP TRIGGER skip_msg_1_done")
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            done.iter()
+                .map(|todo| todo.message_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["msg_2"]
+        );
+        assert!(done.iter().all(|todo| {
+            todo.status == "done" && todo.run_id.is_none() && todo.completed_at.is_some()
+        }));
+
+        sqlx::query(
+            "CREATE TRIGGER skip_msg_1_restore
+             BEFORE UPDATE OF status ON agent_message_todos
+             WHEN OLD.message_id = 'msg_1' AND NEW.status = 'pending'
+             BEGIN
+                SELECT RAISE(IGNORE);
+             END",
+        )
+        .execute(db.pool())
+        .await
+        .unwrap();
+        let restored = repos
+            .restore_agent_message_todos_pending_for_run("run_guarded")
+            .await
+            .unwrap();
+        sqlx::query("DROP TRIGGER skip_msg_1_restore")
+            .execute(db.pool())
+            .await
+            .unwrap();
+
+        assert!(restored.is_empty());
+    }
+
+    #[tokio::test]
+    async fn agent_message_todo_soft_delete_and_reopen_are_explicit() {
+        let (url, _path) = sqlite_file_url("agent-message-todo-soft-delete");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_1".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human:local".to_string(),
+                body: Some("please handle this".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+        let todo = repos
+            .create_agent_message_todo(new_agent_message_todo("agent_a", "all", "msg_1"))
+            .await
+            .unwrap();
+
+        let deleted = repos
+            .delete_agent_message_todo(&todo.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(deleted.status, "deleted");
+
+        let visible = repos
+            .agent_message_todos(AgentMessageTodoQueryRow {
+                agent_id: Some("agent_a".to_string()),
+                channel_id: Some("all".to_string()),
+                status: None,
+                include_deleted: false,
+                limit: Some(10),
+            })
+            .await
+            .unwrap();
+        assert!(visible.is_empty());
+
+        let by_id = repos.agent_message_todo(&todo.id).await.unwrap().unwrap();
+        assert_eq!(by_id.status, "deleted");
+
+        let duplicate = repos
+            .create_agent_message_todo(new_agent_message_todo("agent_a", "all", "msg_1"))
+            .await
+            .unwrap();
+        assert_eq!(duplicate.status, "deleted");
+
+        let reopened = repos
+            .update_agent_message_todo_status(&todo.id, "pending", Some("reopen"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(reopened.status, "pending");
+        assert_eq!(reopened.note.as_deref(), Some("reopen"));
+
+        let visible = repos
+            .agent_message_todos(AgentMessageTodoQueryRow {
+                agent_id: Some("agent_a".to_string()),
+                channel_id: Some("all".to_string()),
+                status: Some("pending".to_string()),
+                include_deleted: false,
+                limit: Some(10),
+            })
+            .await
+            .unwrap();
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].id, todo.id);
     }
 
     #[tokio::test]
