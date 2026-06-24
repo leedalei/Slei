@@ -72,4 +72,34 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain('data-testid="slei-channel-member-add-menu"');
     expect(source).not.toContain("absolute right-2 top-8 z-30");
   });
+
+  it("uses a compact tooltip shadow instead of the raised panel shadow", () => {
+    const source = readSource("components/ui/tooltip.tsx");
+
+    expect(source).toContain("shadow-[var(--slei-shadow-tooltip)]");
+    expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
+  });
+
+  it("uses sized soft shadows for floating primitives instead of the raised panel alias", () => {
+    const floatingPrimitiveFiles = [
+      "components/ui/dialog.tsx",
+      "components/ui/alert-dialog.tsx",
+      "components/ui/sheet.tsx",
+      "components/ui/popover.tsx",
+      "components/ui/select.tsx",
+      "components/ui/dropdown-menu.tsx",
+    ];
+
+    for (const file of floatingPrimitiveFiles) {
+      const source = readSource(file);
+      expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
+    }
+
+    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
+    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
+    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
+    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
+    expect(readSource("components/ui/select.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
+    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
+  });
 });

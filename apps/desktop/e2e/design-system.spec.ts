@@ -2,6 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("shadcn design system wiring", () => {
+  function tokenValue(source: string, name: string) {
+    return source.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1]?.trim() ?? "";
+  }
+
   it("uses desktop-local shadcn configuration and tweakcn theme tokens", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
     const webEntry = readFileSync("src/web.ts", "utf8");
@@ -47,5 +51,33 @@ describe("shadcn design system wiring", () => {
       expect(source).not.toContain("font-heading text-base font-medium");
       expect(source).not.toContain("font-heading text-base leading-none font-medium");
     }
+  });
+
+  it("uses near-white light neumorphic tokens with compatibility aliases", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+
+    expect(tokenValue(appCss, "--background")).toMatch(/^oklch\(0\.99[0-9] 0\.00[0-9] 190\)$/);
+    expect(tokenValue(appCss, "--card")).toMatch(/^oklch\(0\.98[0-9] 0\.00[0-9] 190\)$/);
+    expect(tokenValue(appCss, "--popover")).toMatch(/^oklch\(0\.99[0-9] 0\.00[0-9] 190\)$/);
+
+    for (const token of [
+      "--slei-shadow-inner-shade",
+      "--slei-shadow-outer-glow",
+      "--slei-shadow-soft-xs",
+      "--slei-shadow-soft-sm",
+      "--slei-shadow-soft-md",
+      "--slei-shadow-soft-lg",
+      "--slei-shadow-tooltip",
+    ]) {
+      expect(appCss).toContain(`${token}:`);
+    }
+
+    expect(tokenValue(appCss, "--slei-shadow-raised")).toBe("var(--slei-shadow-soft-md)");
+    expect(tokenValue(appCss, "--shadow-sm")).toBe("var(--slei-shadow-soft-xs)");
+    expect(tokenValue(appCss, "--shadow-md")).toBe("var(--slei-shadow-soft-sm)");
+    expect(tokenValue(appCss, "--shadow-lg")).toBe("var(--slei-shadow-soft-md)");
+    expect(tokenValue(appCss, "--slei-shadow-soft-md")).toContain("inset 3px 3px");
+    expect(tokenValue(appCss, "--slei-shadow-soft-md")).toContain("10px 10px");
+    expect(tokenValue(appCss, "--slei-shadow-tooltip")).toContain("8px");
   });
 });

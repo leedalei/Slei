@@ -196,6 +196,15 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).toContain('tooltipSide="right"');
   });
 
+  it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");
+    const tooltipRootSource = tooltipSource.slice(tooltipSource.indexOf("function Tooltip("), tooltipSource.indexOf("function TooltipTrigger("));
+
+    expect(frameSource).toContain("<TooltipProvider>");
+    expect(tooltipRootSource).not.toContain("<TooltipProvider>");
+  });
+
   it("keeps the macOS traffic lights visually centered in the widened rail", () => {
     const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")) as {
       app: { windows: Array<{ trafficLightPosition?: { x: number; y: number } }> };
