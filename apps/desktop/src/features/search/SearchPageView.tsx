@@ -158,7 +158,7 @@ export function SearchPage({
             <SleiIcon className="size-5 text-muted-foreground" name="search" />
             <Input
               aria-label={messages.search.navigation.searchInput}
-              className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
+              className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
               onChange={(event) => setQuery(event.currentTarget.value)}
               placeholder={messages.search.placeholderTitle}
               value={query}

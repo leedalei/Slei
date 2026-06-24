@@ -230,11 +230,15 @@ describe("SearchPage global search UI", () => {
     const results = rootElement.querySelector('[data-slot="search-results"]');
     const emptyState = searchEmptyState(rootElement);
     const searchSurface = rootElement.querySelector('[data-slot="search-input-surface"]');
+    const searchInput = inputByLabel(rootElement, "Global search input");
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(searchSurface).toBeInstanceOf(HTMLElement);
     expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
     expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
+    expect(searchInput.className).toContain("bg-transparent");
+    expect(searchInput.className).toContain("dark:bg-transparent");
+    expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
     expect(results?.className).not.toContain("p-6");
