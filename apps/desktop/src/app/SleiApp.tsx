@@ -2465,6 +2465,7 @@ function hasReadyClaudeRuntime(nodes: DesktopNodeView[]) {
 }
 
 export {
+  channelDraftFromCardDraft,
   channelDraftCreateInput,
   findActiveAgentActivities,
   resetChannelDraft,

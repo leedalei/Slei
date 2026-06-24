@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   activeMentionQuery,
+  channelDraftFromCardDraft,
   channelDraftCreateInput,
   resetChannelDraft,
   submitChannelDraftWithFeedback,
@@ -211,6 +212,45 @@ describe("chat search, channel management, and mentions", () => {
       projectName: "/Users/lei/Slei, /Users/lei/Website",
       projectPaths: ["/Users/lei/Slei", "/Users/lei/Website"],
       agentIds: [],
+    });
+  });
+
+  it("filters invalid project paths before creating a channel", () => {
+    expect(channelDraftCreateInput({
+      name: "new-dev",
+      projectName: "Slei Desktop",
+      projectPaths: [
+        " /Users/lei/Slei ",
+        "/Users/lei/Slei",
+        "../secret",
+        "file:///tmp/project",
+        "https://example.com/project",
+        "/Users/lei/\u0000bad",
+        ".",
+        "",
+      ],
+      selectedAgentIds: [],
+    })).toEqual({
+      name: "new-dev",
+      projectName: "/Users/lei/Slei",
+      projectPaths: ["/Users/lei/Slei"],
+      agentIds: [],
+    });
+  });
+
+  it("normalizes create-channel card drafts without trusting malformed fields", () => {
+    const members = createDemoMembers();
+
+    expect(channelDraftFromCardDraft({
+      name: " #qa ",
+      projectName: 42,
+      projectPaths: ["/workspace/qa", "../secret", 7, "/workspace/qa"],
+      agentIds: ["a1", "missing_agent", 5],
+    }, members)).toEqual({
+      name: "qa",
+      projectName: "",
+      projectPaths: ["/workspace/qa"],
+      selectedAgentIds: ["a1"],
     });
   });
 

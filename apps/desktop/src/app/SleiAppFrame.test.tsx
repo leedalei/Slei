@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDemoMembers, createSleiFixtures } from "../test/fixtures";
 import { SleiAppFrame } from "./SleiAppFrame";
@@ -471,5 +471,134 @@ describe("SleiAppFrame global search navigation", () => {
       expect(titleMatches.length).toBeGreaterThan(0);
       expect(titleMatches.every((match) => match.includes("select-none"))).toBe(true);
     }
+  });
+});
+
+describe("SleiAppFrame interactive channel cards", () => {
+  it("opens the create channel modal with sanitized draft values from a card", async () => {
+    const createChannel = vi.fn();
+    const completeCard = vi.fn();
+    const members = createDemoMembers();
+    const container = await mount(
+      <SleiAppFrame
+        activeChannelId="all"
+        activeView="chat"
+        data={createSleiFixtures({
+          members,
+          messages: [{
+            id: "card_message_channel_1",
+            author: "Yeal",
+            role: "agent",
+            time: "10:00",
+            body: "",
+            channelId: "all",
+            status: "done",
+            cards: [{
+              id: "card_channel_1",
+              kind: "createChannel",
+              state: "pending",
+              title: "创建 #qa",
+              summary: "#qa",
+              draft: {
+                name: " #qa ",
+                projectName: "QA Project",
+                projectPaths: [
+                  "/Users/lei/Slei",
+                  " /Users/lei/Slei ",
+                  "../secret",
+                  "file:///tmp/project",
+                  "/Users/lei/\u0000bad",
+                  ".",
+                ],
+                agentIds: ["a1", "missing_agent"],
+              },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            }],
+          }],
+        })}
+        locale="zh-CN"
+        onChannelCreate={createChannel}
+        onInteractiveCardComplete={completeCard}
+        runtimeSetup={{ ...runtimeSetup, nodes: createSleiFixtures().nodes }}
+      />,
+    );
+
+    const cardButton = container.querySelector<HTMLButtonElement>('[data-card-kind="createChannel"] button');
+    expect(cardButton).not.toBeNull();
+    await act(async () => {
+      cardButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(createChannel).not.toHaveBeenCalled();
+    expect(completeCard).not.toHaveBeenCalled();
+    expect(dialog?.textContent).toContain("/Users/lei/Slei");
+    expect(dialog?.textContent).not.toContain("../secret");
+    expect(dialog?.textContent).not.toContain("file:///tmp/project");
+
+    const nameInput = dialog?.querySelector<HTMLInputElement>("#slei-channel-name");
+    expect(nameInput?.value).toBe("qa");
+    const codaCheckbox = dialog?.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
+    const cindyCheckbox = dialog?.querySelector<HTMLElement>('[aria-label="选择 Agent Cindy"]');
+    expect(codaCheckbox?.getAttribute("aria-checked")).toBe("true");
+    expect(cindyCheckbox?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("completes a create-channel card only after modal channel creation succeeds", async () => {
+    const createChannel = vi.fn(async () => ({
+      channel: { id: "qa", name: "qa", description: "QA", projectPaths: [] },
+    }));
+    const completeCard = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeChannelId="all"
+        activeView="chat"
+        data={createSleiFixtures({
+          messages: [{
+            id: "card_message_channel_2",
+            author: "Yeal",
+            role: "agent",
+            time: "10:00",
+            body: "",
+            channelId: "all",
+            status: "done",
+            cards: [{
+              id: "card_channel_2",
+              kind: "createChannel",
+              state: "pending",
+              title: "创建 #qa",
+              summary: "#qa",
+              draft: { name: "qa", projectPaths: [], agentIds: [] },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            }],
+          }],
+        })}
+        locale="zh-CN"
+        onChannelCreate={createChannel}
+        onChannelCreateRefresh={async () => [{ id: "all", name: "all", description: "默认频道", unread: 0 }, { id: "qa", name: "qa", description: "QA", unread: 0 }]}
+        onInteractiveCardComplete={completeCard}
+        runtimeSetup={{ ...runtimeSetup, nodes: createSleiFixtures().nodes }}
+      />,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-card-kind="createChannel"] button')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const dialog = document.body.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    await act(async () => {
+      dialog?.querySelector("form")?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(createChannel).toHaveBeenCalledWith({
+      name: "qa",
+      projectName: "",
+      projectPaths: [],
+      agentIds: [],
+    });
+    expect(completeCard).toHaveBeenCalledWith("card_channel_2");
   });
 });

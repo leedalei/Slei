@@ -95,6 +95,11 @@ import {
 
 const primaryRailWidth = "5.25rem";
 type SortDirection = "default" | "asc" | "desc";
+type ChannelCardDraftRequest = {
+  id: number;
+  draft: Record<string, unknown>;
+  cardId?: string;
+};
 
 const sidebarSortStorageKeys = {
   channels: "slei:sidebar-sort:channels",
@@ -277,6 +282,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
+  const [channelCardDraftRequest, setChannelCardDraftRequest] = useState<ChannelCardDraftRequest | undefined>(undefined);
   const appearance = input.appearance ?? defaultAppearance;
   const normalizedTheme = normalizeAppearanceTheme(appearance.theme);
   const normalizedAppearance = { ...appearance, theme: normalizedTheme };
@@ -381,6 +387,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
                 <ChannelList
                   activeChannelId={input.activeConversationId ? undefined : activeChannel?.id}
                   activeConversationId={input.activeConversationId}
+                  cardDraftRequest={channelCardDraftRequest}
                   data={input.data}
                   initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
                   savedOpen={input.activeChatWorkspace === "saved"}
@@ -389,6 +396,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
                   onChannelCreateFailure={input.onChannelCreateFailure}
                   onChannelCreateLog={input.onChannelCreateLog}
                   onChannelCreateRefresh={input.onChannelCreateRefresh}
+                  onInteractiveCardComplete={input.onInteractiveCardComplete}
                   onChannelDelete={input.onChannelDelete}
                   onChannelSelect={input.onChannelSelect}
                   onConversationSelect={input.onConversationSelect}
@@ -435,26 +443,11 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
       }, async (draft, cardId) => {
-        const projectPaths = Array.isArray(draft.projectPaths) ? draft.projectPaths.filter((path): path is string => typeof path === "string") : [];
-        const result = await submitChannelDraftWithFeedback({
-          draft: {
-            name: String(draft.name ?? ""),
-            projectName: typeof draft.projectName === "string" ? draft.projectName : "",
-            projectPaths,
-            selectedAgentIds: Array.isArray(draft.agentIds) ? draft.agentIds.filter((id): id is string => typeof id === "string") : [],
-          },
-          createFailedMessage: messages.chat.createChannelFailed,
-          createPartialFailureMessage: messages.chat.createChannelPartialFailure,
-          channelNameRequiredMessage: messages.chat.channelNameRequired,
-          createdMessage: messages.chat.createChannelCreated,
-          onCreateFailure: input.onChannelCreateFailure,
-          onCreateSuccess: input.onChannelCreateFailure,
-          onChannelCreate: input.onChannelCreate,
-          onChannelRefresh: input.onChannelCreateRefresh,
-          onLog: input.onChannelCreateLog,
-        });
-        if (!result.created) return;
-        if (cardId) await input.onInteractiveCardComplete?.(cardId);
+        setChannelCardDraftRequest((current) => ({
+          id: (current?.id ?? 0) + 1,
+          draft,
+          cardId,
+        }));
       }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
 
       {computerCreateOpen ? (
@@ -542,6 +535,27 @@ export function channelDraftCreateInput(draft: ChannelDraftState): { name: strin
     projectName,
     projectPaths,
     agentIds: draft.selectedAgentIds,
+  };
+}
+
+export function channelDraftFromCardDraft(draft: Record<string, unknown>, members: SleiMember[]): ChannelDraftState {
+  const agentMemberIds = new Set(
+    members
+      .filter((member) => member.type === "agent" && member.directMessageEnabled !== false)
+      .map((member) => member.id),
+  );
+  const agentIds = Array.isArray(draft.agentIds)
+    ? draft.agentIds.filter((id): id is string => typeof id === "string" && agentMemberIds.has(id))
+    : [];
+  const projectPaths = Array.isArray(draft.projectPaths)
+    ? uniqueProjectPaths(draft.projectPaths.filter((path): path is string => typeof path === "string"))
+    : [];
+
+  return {
+    name: typeof draft.name === "string" ? stripChannelHash(draft.name.trim()) : "",
+    projectName: typeof draft.projectName === "string" ? draft.projectName : "",
+    projectPaths,
+    selectedAgentIds: [...new Set(agentIds)],
   };
 }
 
@@ -637,7 +651,14 @@ function channelCreateErrorDetail(error: unknown) {
 }
 
 function uniqueProjectPaths(paths: string[]) {
-  return [...new Set(paths.map((path) => path.trim()).filter(Boolean))];
+  return [...new Set(paths.map((path) => path.trim()).filter(isValidProjectPath))];
+}
+
+function isValidProjectPath(path: string) {
+  if (!path || path === "." || path === "..") return false;
+  if (/[\x00-\x1F\x7F]/.test(path)) return false;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(path)) return false;
+  return !path.split(/[\\/]/).filter(Boolean).includes("..");
 }
 
 function projectPathFromPickedFile(file: File) {
@@ -750,6 +771,7 @@ function ChannelList(input: {
   activeChannelId?: string;
   activeConversationId?: string;
   activeAgentActivity?: AgentActivityView;
+  cardDraftRequest?: ChannelCardDraftRequest;
   data: SleiFixtures;
   initialCreateChannelModalOpen?: boolean;
   savedOpen?: boolean;
@@ -759,6 +781,7 @@ function ChannelList(input: {
   onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
   onChannelCreateRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
   onChannelDelete?: (channelId: string) => void;
+  onInteractiveCardComplete?: (cardId: string) => Promise<void> | void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
   onSavedMessagesOpen?: () => void;
@@ -766,6 +789,7 @@ function ChannelList(input: {
   const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [creatingChannel, setCreatingChannel] = useState(false);
+  const [activeChannelCardId, setActiveChannelCardId] = useState<string | undefined>(undefined);
   const [channelSortDirection, setChannelSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.channels));
   const [directMessageSortDirection, setDirectMessageSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.directMessages));
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
@@ -777,6 +801,15 @@ function ChannelList(input: {
   const sortedChannels = sortChannelsByName(input.data.channels, channelSortDirection);
   const sortedDirectMessageConversations = sortDirectMessagesByName(directMessageConversations, input.data.members, directMessageSortDirection);
   const agentMembers = input.data.members.filter((member) => member.type === "agent" && member.directMessageEnabled !== false);
+
+  useEffect(() => {
+    const request = input.cardDraftRequest;
+    if (!request) return;
+    setChannelDraft(channelDraftFromCardDraft(request.draft, input.data.members));
+    setActiveChannelCardId(request.cardId);
+    setCreatingChannel(false);
+    setCreateOpen(true);
+  }, [input.cardDraftRequest?.id, input.data.members]);
 
   function cycleChannelSort() {
     setChannelSortDirection((current) => {
@@ -811,7 +844,10 @@ function ChannelList(input: {
         onChannelRefresh: input.onChannelCreateRefresh,
         onLog: input.onChannelCreateLog,
       });
-      if (result.created) closeCreateChannelModal();
+      if (result.created) {
+        if (activeChannelCardId) await input.onInteractiveCardComplete?.(activeChannelCardId);
+        closeCreateChannelModal();
+      }
     } finally {
       setCreatingChannel(false);
     }
@@ -819,6 +855,7 @@ function ChannelList(input: {
 
   function closeCreateChannelModal() {
     setChannelDraft(resetChannelDraft());
+    setActiveChannelCardId(undefined);
     setCreateOpen(false);
     setCreatingChannel(false);
   }
