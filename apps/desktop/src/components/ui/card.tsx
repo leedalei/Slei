@@ -19,10 +19,10 @@ function Card({
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl border py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 data-[size=compact]:gap-3 data-[size=compact]:py-3 data-[size=compact]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         variant === "surface" && "border-border/60 bg-card",
-        variant === "raised" && "border-transparent bg-card slei-raised-medium",
-        variant === "inset" && "border-border/60 bg-muted/40 slei-inset-medium",
+        variant === "raised" && "border-transparent bg-card slei-raised-small",
+        variant === "inset" && "border-border/60 bg-muted/40 slei-inset-small",
         variant === "interactive" &&
-          "cursor-pointer border-border/70 bg-card slei-raised-medium transition-[background-color,box-shadow,color] hover:slei-raised-medium",
+          "cursor-pointer border-border/70 bg-card slei-raised-small transition-[background-color,box-shadow,color] hover:slei-raised-small",
         className
       )}
       {...props}

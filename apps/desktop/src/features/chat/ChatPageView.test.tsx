@@ -1770,9 +1770,9 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
     expect(appCss).toContain("border-color: var(--slei-inset-border);");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m);");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s);");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m), 0 0 0 1px");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();

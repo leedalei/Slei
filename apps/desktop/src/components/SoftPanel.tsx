@@ -8,20 +8,20 @@ export type SoftPanelInsetSize = "s" | "m" | "l" | "xl" | "small" | "medium" | "
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   surface: "border-border/60 bg-card",
   flat: "border-transparent bg-card",
-  raised: "border-transparent bg-card slei-raised-medium",
+  raised: "border-transparent bg-card slei-raised-small",
   inset: "border-border/60 bg-muted/40",
   listItem:
-    "rounded-lg border-border/60 bg-card/80 slei-raised-medium transition-[background-color,box-shadow,color] hover:bg-card hover:slei-raised-medium",
+    "rounded-lg border-border/60 bg-card/80 slei-raised-small transition-[background-color,box-shadow,color] hover:bg-card hover:slei-raised-small",
 };
 
 const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {
-  s: "slei-inset-m",
-  m: "slei-inset-m",
-  l: "slei-inset-m",
-  xl: "slei-inset-m",
-  small: "slei-inset-m",
-  medium: "slei-inset-medium",
-  large: "slei-inset-m",
+  s: "slei-inset-small",
+  m: "slei-inset-small",
+  l: "slei-inset-small",
+  xl: "slei-inset-small",
+  small: "slei-inset-small",
+  medium: "slei-inset-small",
+  large: "slei-inset-small",
 };
 
 export function SoftPanel({
