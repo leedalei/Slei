@@ -599,7 +599,7 @@ function ChannelMemberPanel(input: {
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -695,16 +695,16 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const selectedThreadMessage = selectedThreadMessageId
     ? data.messages.find((message) => message.id === selectedThreadMessageId)
     : undefined;
-  const selectedMessageThreadTask = selectedThreadMessage?.thread
+  const selectedMessageThreadTask = selectedThreadMessage
     ? {
-        id: selectedThreadMessage.thread.id,
+        id: selectedThreadMessage.thread?.id ?? `draft-thread-${selectedThreadMessage.id}`,
         title: selectedThreadMessage.body || selectedThreadMessage.author,
         owner: selectedThreadMessage.author,
         status: "in_progress" as const,
         channelId: selectedThreadMessage.channelId,
         sourceMessageId: selectedThreadMessage.id,
-        replyCount: selectedThreadMessage.thread.replyCount,
-        replies: selectedThreadMessage.thread.replies,
+        replyCount: selectedThreadMessage.thread?.replyCount ?? 0,
+        replies: selectedThreadMessage.thread?.replies ?? [],
       }
     : undefined;
   const allowAsTask = true;
@@ -874,7 +874,18 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
 
   function openMessageThread(message: SleiMessage) {
     setSelectedThreadMessageId(message.id);
-    void Promise.resolve(onMessageThreadOpen?.(message)).catch(() => undefined);
+    if (message.thread) {
+      void Promise.resolve(onMessageThreadOpen?.(message)).catch(() => undefined);
+    }
+  }
+
+  async function replyToSelectedMessageThread(_threadId: string, body: string) {
+    if (!selectedThreadMessage) return;
+    if (selectedThreadMessage.thread?.id) {
+      await onMessageThreadReply?.(selectedThreadMessage.thread.id, body);
+      return;
+    }
+    await onMessageThreadReplyFromSource?.(selectedThreadMessage, body);
   }
 
   function isTimelineAtBottom() {
@@ -1421,7 +1432,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       <TaskThreadDrawer
         messages={messages}
         onClose={() => setSelectedThreadMessageId(undefined)}
-        onReply={onMessageThreadReply}
+        onReply={selectedThreadMessage && (selectedThreadMessage.thread?.id ? onMessageThreadReply : onMessageThreadReplyFromSource) ? replyToSelectedMessageThread : undefined}
         mentionMembers={data.members}
         open={Boolean(selectedMessageThreadTask)}
         task={selectedMessageThreadTask}

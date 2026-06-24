@@ -1865,6 +1865,22 @@ export function SleiApp() {
     appendMessageThreadReplyToState(threadId, receipt.reply);
   }
 
+  async function handleMessageThreadReplyFromSource(message: SleiMessage, body: string) {
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    const created = await bridge.createMessageThreadFromSource({
+      sourceMessageId: message.id,
+      createdBy: "human:local",
+    });
+    applyMessageThreadReceiptToState(created);
+    const receipt = await bridge.replyToMessageThread(created.thread.id, {
+      senderId: "human:local",
+      role: "human",
+      body: trimmed,
+    });
+    appendMessageThreadReplyToState(created.thread.id, receipt.reply);
+  }
+
   async function handleLoadOlderMessages() {
     const targetId = activeConversationId ?? activeChannelId;
     if (!targetId || olderMessagesLoadingRef.current || exhaustedOlderMessageTargetsRef.current.has(targetId)) return;
@@ -2388,6 +2404,7 @@ export function SleiApp() {
       onMessageSaveToggle={handleMessageSaveToggle}
       onMessageThreadOpen={handleMessageThreadOpen}
       onMessageThreadReply={handleMessageThreadReply}
+      onMessageThreadReplyFromSource={handleMessageThreadReplyFromSource}
       onOlderMessagesLoad={handleLoadOlderMessages}
       onSendMessage={handleSendMessageWithBackendState}
       onMessageSendFailure={showAppToast}

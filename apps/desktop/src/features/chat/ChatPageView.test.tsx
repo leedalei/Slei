@@ -1550,6 +1550,58 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.tasks.commentThread);
   });
 
+  it("opens a message thread drawer without creating a thread until reply submit", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-deferred-thread", author: "Lei", role: "human", time: "10:00", body: "先看看，不要立刻创建子线程", channelId: "all" },
+      ],
+    });
+    const onMessageThreadOpen = vi.fn();
+    const onMessageThreadReplyFromSource = vi.fn();
+
+    const container = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMessageThreadOpen={onMessageThreadOpen}
+        onMessageThreadReplyFromSource={onMessageThreadReplyFromSource}
+        profile={defaultProfile}
+      />,
+    );
+
+    const openButton = container.querySelector<HTMLButtonElement>('[data-message-thread-open="msg-deferred-thread"]');
+    expect(openButton).toBeTruthy();
+    await act(async () => {
+      openButton?.click();
+    });
+
+    expect(onMessageThreadOpen).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("先看看，不要立刻创建子线程");
+
+    const replyInput = document.body.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${messages.tasks.replyPlaceholder}"]`);
+    expect(replyInput).toBeTruthy();
+    await act(async () => {
+      if (!replyInput) return;
+      const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(replyInput), "value")?.set;
+      if (valueSetter) {
+        valueSetter.call(replyInput, "现在发送回复");
+      } else {
+        replyInput.value = "现在发送回复";
+      }
+      replyInput.dispatchEvent(new Event("input", { bubbles: true }));
+      replyInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const sendButton = Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.tasks.sendReply));
+    await act(async () => {
+      sendButton?.click();
+    });
+
+    expect(onMessageThreadReplyFromSource).toHaveBeenCalledWith(data.messages[0], "现在发送回复");
+  });
+
   it("adds breathing room above normal timeline message cards", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
