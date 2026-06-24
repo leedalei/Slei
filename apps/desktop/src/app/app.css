@@ -644,6 +644,16 @@ select:focus-visible {
   box-shadow: inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent);
 }
 
+.slei-shell-nav__button {
+  color: color-mix(in srgb, var(--sidebar-foreground) 76%, transparent);
+}
+
+.slei-shell-nav__button--active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--slei-raised-border));
+}
+
 .slei-context-sidebar {
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),

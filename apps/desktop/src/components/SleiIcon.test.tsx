@@ -19,6 +19,18 @@ describe("SleiIcon", () => {
     expect(html).not.toContain("aria-hidden=\"true\"");
   });
 
+  it("renders filled navigation aliases for the menubar", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <SleiIcon name="searchFilled" />
+        <SleiIcon name="membersFilled" />
+      </>,
+    );
+
+    expect(html).toContain("data-slei-icon=\"searchFilled\"");
+    expect(html).toContain("data-slei-icon=\"membersFilled\"");
+  });
+
   it("owns accessibility and semantic identity attributes", () => {
     const html = renderToStaticMarkup(
       <SleiIcon

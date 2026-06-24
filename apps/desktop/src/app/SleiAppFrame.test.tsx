@@ -215,6 +215,32 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "ghost"}');
   });
 
+  it("uses filled icons for every menubar item without changing shared outline icons", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("const navItems"), frameSource.indexOf("function isSortDirection"));
+
+    expect(navSource).toContain('{ id: "search", icon: "searchFilled" }');
+    expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
+    expect(navSource).not.toContain('{ id: "search", icon: "search" }');
+    expect(navSource).not.toContain('{ id: "members", icon: "members" }');
+    expect(iconsSource).toContain("IconSearchFilled");
+    expect(iconsSource).toContain("IconUserFilled");
+    expect(iconsSource).toContain("searchFilled: IconSearchFilled");
+    expect(iconsSource).toContain("membersFilled: IconUserFilled");
+    expect(iconsSource).toContain("search: IconSearch");
+    expect(iconsSource).toContain("members: IconUsersGroup");
+  });
+
+  it("renders the active menubar item with the same inverse contrast as selected conversations", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(navButtonCss).toContain(".slei-shell-nav__button--active");
+    expect(navButtonCss).toContain("background: var(--primary)");
+    expect(navButtonCss).toContain("color: var(--primary-foreground)");
+  });
+
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");

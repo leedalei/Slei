@@ -34,6 +34,7 @@ import {
   IconPlus,
   IconRobot,
   IconSearch,
+  IconSearchFilled,
   IconSend,
   IconServer,
   IconSettingsFilled,
@@ -41,6 +42,7 @@ import {
   IconSparkles,
   IconSquareCheckFilled,
   IconTrash,
+  IconUserFilled,
   IconUsersGroup,
   IconUserCircle,
   IconWorld,
@@ -74,6 +76,7 @@ export type SleiIconName =
   | "info"
   | "loader"
   | "members"
+  | "membersFilled"
   | "messageSquare"
   | "image"
   | "panelClose"
@@ -82,6 +85,7 @@ export type SleiIconName =
   | "palette"
   | "plus"
   | "search"
+  | "searchFilled"
   | "send"
   | "server"
   | "settings"
@@ -124,6 +128,7 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   info: IconInfoCircle,
   loader: IconLoader2,
   members: IconUsersGroup,
+  membersFilled: IconUserFilled,
   messageSquare: IconMessage,
   image: IconPhoto,
   panelClose: IconLayoutSidebarRightCollapse,
@@ -132,6 +137,7 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   palette: IconPalette,
   plus: IconPlus,
   search: IconSearch,
+  searchFilled: IconSearchFilled,
   send: IconSend,
   server: IconServer,
   settings: IconSettingsFilled,

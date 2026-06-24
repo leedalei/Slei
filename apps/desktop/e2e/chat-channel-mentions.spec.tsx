@@ -453,7 +453,8 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain('data-slei-icon="search"');
+    expect(html).toContain('data-slei-icon="searchFilled"');
+    expect(html).toContain('data-slei-icon="membersFilled"');
     expect(html).toContain('data-slei-icon="delete"');
     expect(html).toContain('data-slei-icon="send"');
     expect(html).not.toContain("⌕");
