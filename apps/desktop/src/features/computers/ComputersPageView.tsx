@@ -65,7 +65,7 @@ export function ComputersPage(input: {
   const effectiveRenamingNodeId = input.renamingComputerId ?? renamingNodeId;
 
   return (
-    <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+    <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <div className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-tauri-drag-region="deep">
         <PageHeader
           data-slot="workspace-titlebar"

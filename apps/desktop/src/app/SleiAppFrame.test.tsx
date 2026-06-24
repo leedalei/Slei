@@ -302,10 +302,30 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).not.toContain("overflow-hidden bg-background text-foreground");
     expect(frameSource).toContain("overflow-hidden bg-transparent text-foreground");
     expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
-    expect(frameSource).toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
-    expect(appCss).toContain("background: transparent;");
-    expect(appCss).toContain("#root {");
-    expect(appCss).toContain("background: transparent;");
+    expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
+    expect(appCss).toContain(".slei-glass-workspace {");
+    expect(appCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(appCss).toContain("html,\nbody,\n#app {\n  background: transparent;");
+    expect(appCss).toContain("html,\nbody,\n#app {\n  margin: 0;");
+    expect(appCss).not.toContain("#app {\n  background: var(--color-bg)");
+    expect(appCss).not.toContain("#root {");
+  });
+
+  it("keeps every workspace page root transparent so native glass remains visible", () => {
+    const sourceFiles = [
+      "src/app/SleiAppFrame.tsx",
+      "src/features/search/SearchPageView.tsx",
+      "src/features/tasks/TasksPageView.tsx",
+      "src/features/computers/ComputersPageView.tsx",
+      "src/features/settings/SettingsPageView.tsx",
+      "src/features/chat/ChatPageView.tsx",
+    ];
+
+    for (const sourceFile of sourceFiles) {
+      const source = readFileSync(join(process.cwd(), sourceFile), "utf8");
+      expect(source, sourceFile).not.toMatch(/<(main|section|aside)[^>]+className="[^"]*(?:h-full|min-h-0|grid h-full|flex h-full)[^"]*bg-background(?:\s|")/);
+      expect(source, sourceFile).not.toMatch(/<(main|section|aside)[^>]+className="[^"]*bg-background(?:\s|")[^"]*(?:h-full|min-h-0|grid h-full|flex h-full)/);
+    }
   });
 
   it("renders menubar navigation items as raised buttons", () => {

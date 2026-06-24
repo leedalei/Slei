@@ -154,7 +154,7 @@ export function SearchPage({
   }
 
   return (
-    <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+    <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
           <SoftPanel className="slei-search-input-surface flex min-h-12 items-center gap-3 rounded-full px-3 py-0" data-slot="search-input-surface" insetSize="small" variant="inset">

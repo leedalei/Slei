@@ -60,7 +60,7 @@ export function SettingsPage(input: SettingsPageInput) {
   }
 
   return (
-    <section className="h-full min-h-0 overflow-hidden bg-background" data-settings-panel={input.activePanel}>
+    <section className="h-full min-h-0 overflow-hidden bg-transparent" data-settings-panel={input.activePanel}>
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
           <PageHeader

@@ -414,7 +414,7 @@
 html,
 body,
 #app {
-  background: var(--color-bg);
+  background: transparent;
   height: 100%;
   overflow: hidden;
 }
@@ -556,7 +556,8 @@ body {
 }
 
 html,
-body {
+body,
+#app {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
@@ -565,10 +566,6 @@ body {
   font-family: var(--text-sans);
   font-size: var(--text-base);
   line-height: var(--leading-ui);
-}
-
-#root {
-  background: transparent;
 }
 
 button,
@@ -904,6 +901,12 @@ select:focus-visible {
 
 .slei-context-sidebar [data-slot="agent-activity"] {
   background: transparent;
+}
+
+.slei-glass-workspace {
+  -webkit-backdrop-filter: var(--slei-glass-filter);
+  backdrop-filter: var(--slei-glass-filter);
+  background: color-mix(in srgb, var(--background) 20%, transparent);
 }
 
 .slei-resize-handle {

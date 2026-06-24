@@ -55,7 +55,7 @@ export function TasksPage({
   }
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <Tabs className="min-h-0 gap-0" value={view} onValueChange={(value) => setView(value as "board" | "list")}>
         <header className="select-none border-b" data-testid="slei-tasks-header" data-tauri-drag-region="deep">
           <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5" data-tauri-drag-region="deep">

@@ -445,7 +445,7 @@ function ChannelMemberPanel(input: {
   return (
     <aside
       aria-label={input.messages.chat.channelMembers}
-      className="grid h-full min-h-0 w-80 grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-background p-4"
+      className="grid h-full min-h-0 w-80 grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-background/55 p-4 backdrop-blur-xl"
       data-testid="slei-channel-member-panel"
     >
       <div className="flex items-center justify-between gap-2 pr-2">
