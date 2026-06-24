@@ -36,6 +36,8 @@ type SelectOption<TValue extends string> = {
   value: TValue;
 };
 
+const settingsControlStackClass = "grid gap-3";
+
 export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
   const activeTheme = normalizeAppearanceTheme(input.appearance.theme);
@@ -80,7 +82,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "account" && profile ? (
-            <SoftPanel className="grid gap-5">
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableDetailField
                   ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
@@ -141,7 +143,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "language-region" ? (
-            <SoftPanel className="grid gap-1">
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
               <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
                 <SettingsSelect
                   ariaLabel={labels.language}
@@ -176,7 +178,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <SoftPanel className="grid gap-5" data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined}>
+            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} data-settings-control-stack="true">
               <PreferenceRow
                 control={(
                   <div className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
@@ -232,7 +234,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <SoftPanel className="grid gap-1" data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined}>
+            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} data-settings-control-stack="true">
               <NotificationSwitch
                 checked={input.notifications.mentions}
                 disabled={preferencePending}
@@ -263,12 +265,10 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "about" ? (
-            <SoftPanel>
-              <div className="grid gap-3">
-                <AboutRow label={labels.desktopVersion} value={desktopVersion} />
-                <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
-                <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
-              </div>
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+              <AboutRow label={labels.desktopVersion} value={desktopVersion} />
+              <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
+              <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
             </SoftPanel>
           ) : null}
         </div>

@@ -114,6 +114,33 @@ describe("SettingsPage header", () => {
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 
+  it("uses a 12px vertical rhythm between settings controls across panels", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const shared = {
+      appearance: { theme: "light", fontSize: "md" } as const,
+      locale: "zh-CN" as const,
+      messages,
+      nodes: [localNode],
+      notifications: { approvals: true, humanReplies: false, mentions: true },
+      profile: { displayName: "Lei", handle: "lei", avatar: "pixel-sun" },
+      timeZone: "Asia/Shanghai",
+    };
+
+    for (const activePanel of ["language-region", "appearance", "notifications", "about"] as const) {
+      const html = renderToStaticMarkup(<SettingsPage {...shared} activePanel={activePanel} />);
+      const stackMarker = 'data-settings-control-stack="true"';
+      const stackStart = html.indexOf(stackMarker);
+      const stackOpenTagStart = html.lastIndexOf("<", stackStart);
+      const stackOpenTagEnd = html.indexOf(">", stackStart);
+      const stackOpenTag = html.slice(stackOpenTagStart, stackOpenTagEnd);
+
+      expect(stackStart).toBeGreaterThanOrEqual(0);
+      expect(stackOpenTag).toContain("grid gap-3");
+      expect(stackOpenTag).not.toContain("grid gap-1");
+      expect(stackOpenTag).not.toContain("grid gap-5");
+    }
+  });
+
   it("keeps panel titles and descriptions only in the page header", () => {
     const messages = createDesktopMessages("zh-CN");
     const shared = {
