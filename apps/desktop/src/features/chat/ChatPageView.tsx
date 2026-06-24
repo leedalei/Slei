@@ -1296,7 +1296,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </div>
                 ) : null}
                 <form className="px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-                  <SoftPanel className="grid gap-2 p-3" data-testid="slei-composer-surface" variant="surface">
+                  <SoftPanel className="grid gap-2 p-3" data-testid="slei-composer-surface" variant="flat">
                     {attachments.length > 0 ? (
                       <AttachmentList
                         attachments={attachments}
