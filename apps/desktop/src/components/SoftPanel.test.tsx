@@ -14,6 +14,17 @@ describe("SoftPanel", () => {
     expect(html).toContain("面板内容");
   });
 
+  it("can render an outline-only panel without a filled background", () => {
+    const html = renderToStaticMarkup(
+      <SoftPanel variant="outline">资料</SoftPanel>,
+    );
+
+    expect(html).toContain('data-variant="outline"');
+    expect(html).toContain("border-border/60");
+    expect(html).not.toContain("bg-card");
+    expect(html).not.toContain("bg-muted");
+  });
+
   it("normalizes requested inset sizes to the small inset shadow", () => {
     const html = renderToStaticMarkup(
       <SoftPanel insetSize="small" variant="inset">搜索栏</SoftPanel>,

@@ -422,7 +422,7 @@ export function MembersPage(input: {
         <ScrollArea className="min-h-0">
           <div className="grid gap-4 p-6">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
-              <SoftPanel className="grid gap-4">
+              <SoftPanel className="grid gap-4" variant="outline">
                 <h2 className="text-base font-semibold">{input.messages.members.profile}</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <EditableDetailField
@@ -469,7 +469,7 @@ export function MembersPage(input: {
                 </div>
               </SoftPanel>
 
-              <SoftPanel className="grid gap-4">
+              <SoftPanel className="grid gap-4" variant="outline">
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                   <h2 className="text-base font-semibold">{input.messages.members.runtimeConfig}</h2>
                   <StatusBadge
@@ -757,7 +757,7 @@ function InfoItem(input: {
   label: string;
 }) {
   return (
-    <DetailBlock data-member-detail-block={input.blockId}>
+    <DetailBlock className="bg-transparent" data-member-detail-block={input.blockId}>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <SleiIcon className="size-3.5" name={input.icon} />
         {input.label}

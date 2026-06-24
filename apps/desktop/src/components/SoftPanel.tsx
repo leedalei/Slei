@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-export type SoftPanelVariant = "surface" | "flat" | "raised" | "inset" | "listItem";
+export type SoftPanelVariant = "surface" | "flat" | "raised" | "inset" | "listItem" | "outline";
 export type SoftPanelInsetSize = "s" | "m" | "l" | "xl" | "small" | "medium" | "large";
 
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
@@ -12,6 +12,7 @@ const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   inset: "border-border/60 bg-muted/40",
   listItem:
     "rounded-lg border-border/60 bg-card/80 slei-raised-small slei-hover-transition hover:bg-card hover:slei-raised-small",
+  outline: "border-border/60",
 };
 
 const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {

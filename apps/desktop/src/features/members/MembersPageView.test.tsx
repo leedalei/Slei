@@ -266,6 +266,28 @@ describe("MembersPage agent details", () => {
     expect(html).toContain('data-member-detail-block="computer"');
   });
 
+  it("renders member profile cards as outline-only surfaces", async () => {
+    const host = await mount(renderMembersPage());
+    const panel = activeTabPanel(host);
+    const profileCards = Array.from(panel.querySelectorAll<HTMLElement>("[data-slei-panel]"));
+    const detailBlocks = Array.from(panel.querySelectorAll<HTMLElement>("[data-member-detail-block]"));
+
+    expect(profileCards).toHaveLength(2);
+    for (const card of profileCards) {
+      expect(card.dataset.variant).toBe("outline");
+      expect(card.className).toContain("border-border/60");
+      expect(card.className).not.toContain("bg-card");
+      expect(card.className).not.toContain("bg-muted");
+    }
+
+    expect(detailBlocks).toHaveLength(3);
+    for (const block of detailBlocks) {
+      expect(block.className).toContain("border");
+      expect(block.className).not.toContain("bg-muted");
+      expect(block.className).not.toContain("bg-card");
+    }
+  });
+
   it("shows a delete action for ordinary agents", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(
