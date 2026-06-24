@@ -384,6 +384,8 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             data-nav-icon={item.id}
             key={item.id}
             onClick={() => input.onViewChange?.(item.id)}
+            ripple
+            rippleColor={input.activeView === item.id ? "white" : "cyan"}
             size="icon"
             tooltip={messages.shell.nav[item.id]}
             tooltipSide="right"

@@ -46,6 +46,17 @@
   --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 48%, transparent);
   --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 34%, transparent);
   --slei-glass-filter: blur(18px) saturate(145%);
+  --slei-glass-button-bg: color-mix(in srgb, var(--card) 72%, transparent);
+  --slei-glass-button-hover-bg: color-mix(in srgb, var(--card) 90%, var(--accent) 10%);
+  --slei-glass-button-border: color-mix(in srgb, var(--border) 74%, transparent);
+  --slei-glass-button-hover-border: color-mix(in srgb, var(--ring) 42%, var(--border));
+  --slei-glass-button-shadow: 0 8px 22px color-mix(in srgb, var(--slei-overlay-shadow-color) 22%, transparent), inset 0 1px 0 color-mix(in srgb, white 70%, transparent);
+  --slei-glass-button-primary-bg: color-mix(in srgb, var(--primary) 84%, transparent);
+  --slei-glass-button-primary-hover-bg: color-mix(in srgb, var(--primary) 94%, white 6%);
+  --slei-glass-button-secondary-bg: color-mix(in srgb, var(--secondary) 76%, transparent);
+  --slei-glass-button-secondary-hover-bg: color-mix(in srgb, var(--secondary) 90%, var(--foreground) 4%);
+  --slei-glass-button-destructive-bg: color-mix(in srgb, var(--destructive) 82%, transparent);
+  --slei-glass-button-destructive-hover-bg: color-mix(in srgb, var(--destructive) 92%, black 8%);
   --destructive-foreground: oklch(1.0000 0 0);
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -239,6 +250,17 @@
   --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 50%, transparent);
   --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 32%, transparent);
   --slei-glass-filter: blur(18px) saturate(145%);
+  --slei-glass-button-bg: color-mix(in srgb, var(--card) 56%, transparent);
+  --slei-glass-button-hover-bg: color-mix(in srgb, var(--card) 72%, var(--accent) 10%);
+  --slei-glass-button-border: color-mix(in srgb, var(--border) 68%, transparent);
+  --slei-glass-button-hover-border: color-mix(in srgb, var(--ring) 50%, var(--border));
+  --slei-glass-button-shadow: 0 10px 26px color-mix(in srgb, var(--slei-overlay-shadow-color) 36%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+  --slei-glass-button-primary-bg: color-mix(in srgb, var(--primary) 72%, transparent);
+  --slei-glass-button-primary-hover-bg: color-mix(in srgb, var(--primary) 84%, white 4%);
+  --slei-glass-button-secondary-bg: color-mix(in srgb, var(--secondary) 58%, transparent);
+  --slei-glass-button-secondary-hover-bg: color-mix(in srgb, var(--secondary) 74%, white 4%);
+  --slei-glass-button-destructive-bg: color-mix(in srgb, var(--destructive) 70%, transparent);
+  --slei-glass-button-destructive-hover-bg: color-mix(in srgb, var(--destructive) 82%, black 8%);
   --destructive-foreground: oklch(1.0000 0 0);
   --slei-radius-small: 6px;
   --slei-radius-medium: 8px;
@@ -698,6 +720,18 @@ select:focus-visible {
   }
 }
 
+@keyframes slei-ripple {
+  from {
+    opacity: 0.45;
+    transform: scale(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 .t-modal {
   transform-origin: center;
   transform: scale(var(--modal-scale));
@@ -883,14 +917,15 @@ select:focus-visible {
 }
 
 .slei-shell-nav__button {
-  border-color: var(--slei-menu-border);
+  border-color: var(--slei-glass-button-border);
+  box-shadow: var(--slei-glass-button-shadow);
   color: color-mix(in srgb, var(--sidebar-foreground) 76%, transparent);
 }
 
 .slei-shell-nav__button--active {
-  background: var(--primary);
+  background: var(--slei-glass-button-primary-bg);
   color: var(--primary-foreground);
-  border-color: var(--slei-menu-border);
+  border-color: var(--slei-glass-button-hover-border);
 }
 
 .slei-context-sidebar {

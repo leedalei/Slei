@@ -73,19 +73,30 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("absolute right-2 top-8 z-30");
   });
 
-  it("uses raised shadows only for clickable control surfaces", () => {
+  it("uses glass styling for shared buttons while preserving raised surfaces elsewhere", () => {
     const buttonSource = readSource("components/ui/button.tsx");
     const cardSource = readSource("components/ui/card.tsx");
     const panelSource = readSource("components/SoftPanel.tsx");
 
-    expect(buttonSource).toContain("slei-raised-small");
+    expect(buttonSource).not.toMatch(/\bslei-raised-/);
+    expect(buttonSource).not.toMatch(/\bslei-inset-/);
     expect(buttonSource).not.toContain("slei-raised-medium");
     expect(buttonSource).not.toContain("slei-raised-large");
     expect(buttonSource).not.toContain("shadow-[var(--slei-shadow-raised-");
-    expect(buttonSource).toContain("border-[var(--slei-raised-border)]");
+    expect(buttonSource).not.toContain("border-[var(--slei-raised-border)]");
+    expect(buttonSource).toContain("backdrop-blur-xl");
+    expect(buttonSource).toContain("border-[var(--slei-glass-button-border)]");
+    expect(buttonSource).toContain("bg-[var(--slei-glass-button-bg)]");
+    expect(buttonSource).toContain("hover:bg-[var(--slei-glass-button-hover-bg)]");
+    expect(buttonSource).toContain("shadow-[var(--slei-glass-button-shadow)]");
+    expect(buttonSource).toContain("bg-[var(--slei-glass-button-primary-bg)]");
+    expect(buttonSource).toContain("bg-[var(--slei-glass-button-destructive-bg)]");
+    expect(buttonSource).not.toMatch(/\bhover:[^\s"]*scale/);
+    expect(buttonSource).not.toMatch(/\bactive:[^\s"]*scale/);
     expect(buttonSource).not.toContain("shadow-sm");
-    expect(buttonSource).toContain('ghost:\n          "hover:bg-muted/70 hover:text-foreground');
-    expect(buttonSource).toContain('link: "text-primary underline-offset-4 hover:underline"');
+    expect(buttonSource).toContain("hover:bg-[var(--slei-glass-button-hover-bg)]");
+    expect(buttonSource).toContain("link:");
+    expect(buttonSource).toContain("border-transparent bg-transparent text-primary underline-offset-4 shadow-none");
     expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card slei-raised-small"');
     expect(cardSource).toContain("hover:slei-raised-small");
     expect(cardSource).not.toContain("slei-raised-medium");
