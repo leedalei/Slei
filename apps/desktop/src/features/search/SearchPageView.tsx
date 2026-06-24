@@ -156,10 +156,11 @@ export function SearchPage({
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
-          <SoftPanel className="flex min-h-12 items-center gap-3 px-3 py-0 focus-within:ring-2 focus-within:ring-ring" data-slot="search-input-surface" variant="inset">
+          <SoftPanel className="flex min-h-12 items-center gap-3 rounded-full px-3 py-0 focus-within:ring-2 focus-within:ring-ring" data-slot="search-input-surface" variant="inset">
             <SleiIcon className="size-5 text-muted-foreground" name="search" />
             <Input
               aria-label={messages.search.navigation.searchInput}
+              chrome="plain"
               className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
               onChange={(event) => setQuery(event.currentTarget.value)}
               placeholder={messages.search.placeholderTitle}

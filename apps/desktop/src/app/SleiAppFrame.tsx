@@ -341,7 +341,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
-      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-2 bg-sidebar/80 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 bg-sidebar/80 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
             SLei
@@ -352,13 +352,13 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             aria-label={messages.shell.nav[item.id]}
             aria-current={input.activeView === item.id ? "page" : undefined}
             className={cn(
-              "slei-shell-nav__button grid h-14 w-14 place-items-center rounded-lg p-0",
+              "slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0",
               input.activeView === item.id && "slei-shell-nav__button--active",
             )}
             data-nav-icon={item.id}
             key={item.id}
             onClick={() => input.onViewChange?.(item.id)}
-            size="lg"
+            size="icon"
             tooltip={messages.shell.nav[item.id]}
             tooltipSide="right"
             type="button"

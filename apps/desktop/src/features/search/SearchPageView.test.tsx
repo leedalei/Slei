@@ -236,8 +236,13 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface).toBeInstanceOf(HTMLElement);
     expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
     expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
+    expect(searchSurface?.className).toContain("rounded-full");
     expect(searchInput.className).toContain("bg-transparent");
+    expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
+    expect(searchInput.className).not.toContain("bg-muted/40");
+    expect(searchInput.className).not.toContain("slei-inset-small");
+    expect(searchInput.className).not.toContain("slei-inset-focus-small");
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
