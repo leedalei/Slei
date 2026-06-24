@@ -309,9 +309,9 @@ describe("SleiAppFrame global search navigation", () => {
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(lightThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.18)");
-    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.23)");
+    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.20)");
     expect(darkThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.58)");
-    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.63)");
+    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.60)");
     expect(navButtonCss).toContain("border-color: var(--slei-menu-border)");
     expect(navButtonCss).toContain("border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
     expect(navButtonCss).not.toContain("var(--slei-raised-border)");

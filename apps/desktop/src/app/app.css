@@ -73,7 +73,7 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.24);
   --slei-raised-border: oklch(0.91 0.012 190 / 0.86);
-  --slei-menu-border: rgb(0 0 0 / 0.23);
+  --slei-menu-border: rgb(0 0 0 / 0.20);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.98);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.18);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.16);
@@ -266,7 +266,7 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.54);
   --slei-raised-border: oklch(0.18 0.035 210 / 0.82);
-  --slei-menu-border: rgb(0 0 0 / 0.63);
+  --slei-menu-border: rgb(0 0 0 / 0.60);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.28);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.58);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.56);
