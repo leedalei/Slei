@@ -8,6 +8,7 @@ import { SleiIcon } from "./SleiIcon";
 export type SleiStatusTone =
   | "approval"
   | "busy"
+  | "connected"
   | "failed"
   | "idle"
   | "info"
@@ -20,6 +21,7 @@ export type SleiStatusTone =
 export const sleiStatusBadgeClassNames: Record<SleiStatusTone, string> = {
   approval: "border-amber-500/35 bg-amber-500/12 text-amber-900 dark:text-amber-200",
   busy: "border-amber-500/35 bg-amber-500/12 text-amber-900 dark:text-amber-200",
+  connected: "border-emerald-500/35 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200",
   failed: "bg-destructive text-destructive-foreground",
   idle: "border-emerald-500/35 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200",
   info: "border-sky-500/35 bg-sky-500/12 text-sky-900 dark:text-sky-200",
@@ -33,6 +35,7 @@ export const sleiStatusBadgeClassNames: Record<SleiStatusTone, string> = {
 export const sleiStatusIndicatorClassNames: Record<SleiStatusTone, string> = {
   approval: "bg-amber-500",
   busy: "bg-amber-500",
+  connected: "bg-emerald-500",
   failed: "bg-destructive",
   idle: "bg-emerald-500",
   info: "bg-sky-500",

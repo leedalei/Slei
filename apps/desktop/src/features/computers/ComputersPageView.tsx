@@ -66,7 +66,7 @@ export function ComputersPage(input: {
 
   return (
     <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background">
-      <header className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-tauri-drag-region="deep">
+      <div className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-tauri-drag-region="deep">
         <PageHeader
           data-slot="workspace-titlebar"
           data-tauri-drag-region="deep"
@@ -84,7 +84,7 @@ export function ComputersPage(input: {
           )}
           title={<span data-tauri-drag-region="deep">{selectedNode.name}</span>}
         />
-      </header>
+      </div>
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">

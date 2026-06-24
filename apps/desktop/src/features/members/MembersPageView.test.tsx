@@ -139,8 +139,9 @@ describe("MembersPage agent details", () => {
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain("data-slei-status");
+    expect(html).not.toContain('<header class="select-none border-b bg-background px-6 py-5"');
+    expect(html).toContain('<div class="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header"');
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
-    expect(headerHtml).toContain("select-none");
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml.slice(messageButtonStart - 160, messageButtonStart + 80)).not.toContain("data-tauri-drag-region");
     expect(deleteButtonStart).toBeGreaterThanOrEqual(0);

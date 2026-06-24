@@ -49,15 +49,15 @@ describe("ComputersPage header", () => {
       />,
     );
     const markerStart = html.indexOf('data-testid="slei-computer-detail-header"');
-    const headerStart = html.lastIndexOf("<header", markerStart);
     const headerEnd = html.indexOf("</header>", markerStart);
-    const headerHtml = html.slice(headerStart, headerEnd);
+    const headerHtml = html.slice(markerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
     expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain("data-slei-status");
+    expect(html).not.toContain('<header class="select-none border-b px-6 py-5"');
+    expect(html).toContain('<div class="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header"');
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
-    expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Lei MacBook");
     expect(headerHtml).toContain("MateBook-Pro-Max-3.local");
   });
@@ -105,13 +105,13 @@ describe("ComputersPage header", () => {
       />,
     );
     const markerStart = html.indexOf('data-testid="slei-computer-detail-header"');
-    const headerStart = html.lastIndexOf("<header", markerStart);
     const headerEnd = html.indexOf("</header>", markerStart);
-    const headerHtml = html.slice(headerStart, headerEnd);
+    const headerHtml = html.slice(markerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).toContain(messages.computers.connected);
     expect(headerHtml).toContain('data-slei-status="connected"');
+    expect(headerHtml).toContain("bg-emerald-500/12");
   });
 
   it("does not duplicate the selected computer identity in a detail list card", () => {

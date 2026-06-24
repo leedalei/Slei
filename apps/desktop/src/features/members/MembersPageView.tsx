@@ -332,7 +332,7 @@ export function MembersPage(input: {
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <Toast message={toast.message} type={toast.type} />
-      <header className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
+      <div className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
         <PageHeader
           className="grid-cols-[minmax(0,1fr)_auto]"
           data-slot="workspace-titlebar"
@@ -407,7 +407,7 @@ export function MembersPage(input: {
             <AlertDescription>{deleteError}</AlertDescription>
           </Alert>
         ) : null}
-      </header>
+      </div>
 
       <Tabs className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-0" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
         <div className="border-b px-4 py-2" data-testid="slei-member-detail-tabs">
