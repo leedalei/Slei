@@ -386,6 +386,13 @@ describe("SearchPage global search UI", () => {
     const filterTriggers = Array.from(rootElement.querySelectorAll<HTMLElement>('[data-slot="select-trigger"]'));
     expect(filterTriggers.length).toBe(3);
     expect(filterTriggers.every((trigger) => trigger.querySelector("svg"))).toBe(true);
+    for (const trigger of filterTriggers) {
+      expect(trigger.getAttribute("data-filter-select-trigger")).toBe("true");
+      expect(trigger.className).toContain("rounded-[12px]");
+      expect(trigger.className).toContain("shadow-none");
+      expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
+      expect(trigger.className).not.toContain("shadow-[var(--slei-shadow-inset-sm)]");
+    }
 
     await openSelect(rootElement, "From");
     expect(document.body.textContent).toContain("Lei");

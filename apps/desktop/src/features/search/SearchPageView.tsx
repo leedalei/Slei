@@ -44,6 +44,8 @@ type SelectOption = {
   subtitle?: string;
 };
 
+const filterSelectTriggerClassName = "min-w-36 rounded-[12px] border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/40";
+
 export function SearchPage({
   data,
   messages,
@@ -326,7 +328,8 @@ function FilterSelect(input: {
     <Select value={value} onValueChange={(nextValue) => input.onSelect(nextValue === RESET_FILTER_VALUE ? "" : nextValue)}>
       <SelectTrigger
         aria-label={input.label}
-        className="min-w-36"
+        className={filterSelectTriggerClassName}
+        data-filter-select-trigger="true"
       >
         {input.icon}
         <span data-slot="select-value" className="min-w-0 flex-1 truncate">{input.selectedLabel}</span>

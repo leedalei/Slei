@@ -117,11 +117,10 @@ describe("desktop UI primitive usage", () => {
     expect(darkThemeCss).toContain("--slei-shadow-raised-md: -6px -6px 15px var(--slei-shadow-raised-glow)");
   });
 
-  it("uses inset shadows for input-like and segmented controls", () => {
+  it("uses inset shadows for text input-like and segmented controls", () => {
     for (const file of [
       "components/ui/input.tsx",
       "components/ui/textarea.tsx",
-      "components/ui/select.tsx",
       "components/ui/tabs.tsx",
     ]) {
       expect(readSource(file)).toContain("shadow-[var(--slei-shadow-inset");
@@ -185,9 +184,22 @@ describe("desktop UI primitive usage", () => {
       selectSource.indexOf("function SelectContent"),
       selectSource.indexOf("function SelectLabel"),
     );
-    expect(selectContentSource).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
+    expect(selectContentSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
     expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-raised");
     expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-inset");
+  });
+
+  it("keeps select menus flat with compact rounded corners and soft item states", () => {
+    const selectSource = readSource("components/ui/select.tsx");
+
+    expect(selectSource).toContain("shadow-none");
+    expect(selectSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
+    expect(selectSource).toContain("rounded-[14px]");
+    expect(selectSource).toContain("data-[highlighted]:bg-muted/70");
+    expect(selectSource).toContain("data-[state=checked]:font-semibold");
+    expect(selectSource).toContain("data-[state=open]:[&_svg:last-child]:rotate-180");
+    expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
+    expect(selectSource).not.toContain("ring-1 ring-border/80");
   });
 
   it("installs transitions-dev dropdown, modal, and icon swap snippets", () => {
