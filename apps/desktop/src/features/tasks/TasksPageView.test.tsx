@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -165,6 +167,7 @@ describe("TasksPage filters", () => {
 
   it("uses task-view icons that match board and list semantics", async () => {
     await mountTasksPage();
+    const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
@@ -172,6 +175,9 @@ describe("TasksPage filters", () => {
 
     expect(boardTab?.querySelector('[data-slei-icon="kanban"]')).not.toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="listDetails"]')).not.toBeNull();
+    expect(iconsSource).toContain("IconLayoutKanban,");
+    expect(iconsSource).toContain("kanban: IconLayoutKanban");
+    expect(iconsSource).not.toContain("kanban: IconLayoutKanbanFilled");
     expect(boardTab?.querySelector('[data-slei-icon="tasks"]')).toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
   });
