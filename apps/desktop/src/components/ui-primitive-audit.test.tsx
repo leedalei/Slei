@@ -111,14 +111,14 @@ describe("desktop UI primitive usage", () => {
       const raisedTokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
       expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
       expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
-      expect(raisedTokenMatch?.[1]).toContain(`-${px} -${px} ${px} var(--slei-shadow-raised-glow)`);
-      expect(raisedTokenMatch?.[1]).toContain(`${px} ${px} ${px} var(--slei-shadow-raised-shade)`);
+      expect(raisedTokenMatch?.[1]).toContain(`-${px} -${px} 2px var(--slei-shadow-raised-glow)`);
+      expect(raisedTokenMatch?.[1]).toContain(`${px} ${px} 2px var(--slei-shadow-raised-shade)`);
 
       const insetTokenMatch = appCss.match(new RegExp(`--slei-shadow-inset-${size}: ([^;]+);`));
       expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-inset-shade)");
       expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-highlight)");
-      expect(insetTokenMatch?.[1]).toContain(`inset ${px} ${px} ${px} var(--slei-shadow-inset-shade)`);
-      expect(insetTokenMatch?.[1]).toContain(`inset -${px} -${px} ${px} var(--slei-shadow-highlight)`);
+      expect(insetTokenMatch?.[1]).toContain(`inset ${px} ${px} 2px var(--slei-shadow-inset-shade)`);
+      expect(insetTokenMatch?.[1]).toContain(`inset -${px} -${px} 2px var(--slei-shadow-highlight)`);
     }
 
     for (const themeCss of [lightThemeCss, darkThemeCss]) {

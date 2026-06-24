@@ -168,12 +168,12 @@ describe("shadcn design system wiring", () => {
     }
 
     for (const [size, px] of [["s", "2px"], ["m", "4px"], ["l", "6px"], ["xl", "8px"]] as const) {
-      expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).toContain(`-${px} -${px} ${px}`);
-      expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).toContain(`${px} ${px} ${px}`);
+      expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).toContain(`-${px} -${px} 2px`);
+      expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).toContain(`${px} ${px} 2px`);
       expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).toContain("var(--slei-shadow-raised-shade)");
       expect(tokenValue(lightTokens, `--slei-shadow-raised-${size}`)).not.toContain("var(--slei-shadow-lowlight)");
-      expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).toContain(`inset ${px} ${px} ${px}`);
-      expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).toContain(`inset -${px} -${px} ${px}`);
+      expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).toContain(`inset ${px} ${px} 2px`);
+      expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).toContain(`inset -${px} -${px} 2px`);
       expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).toContain("var(--slei-shadow-inset-shade)");
       expect(tokenValue(lightTokens, `--slei-shadow-inset-${size}`)).not.toContain("var(--slei-shadow-lowlight)");
     }
