@@ -19,10 +19,10 @@ function Card({
       className={cn(
         "group/card flex flex-col gap-4 overflow-hidden rounded-xl border py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 data-[size=compact]:gap-3 data-[size=compact]:py-3 data-[size=compact]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
         variant === "surface" && "border-border/60 bg-card",
-        variant === "raised" && "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]",
-        variant === "inset" && "border-border/60 bg-muted/40 shadow-[var(--slei-shadow-inset-md)]",
+        variant === "raised" && "border-transparent bg-card slei-raised-large",
+        variant === "inset" && "border-border/60 bg-muted/40 slei-inset-large",
         variant === "interactive" &&
-          "cursor-pointer border-border/70 bg-card shadow-[var(--slei-shadow-raised-xs)] transition-[background-color,box-shadow,color] hover:shadow-[var(--slei-shadow-raised-md)]",
+          "cursor-pointer border-border/70 bg-card slei-raised-small transition-[background-color,box-shadow,color] hover:slei-raised-medium",
         className
       )}
       {...props}

@@ -7,10 +7,10 @@ export type SoftPanelVariant = "surface" | "flat" | "raised" | "inset" | "listIt
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   surface: "border-border/60 bg-card",
   flat: "border-transparent bg-card",
-  raised: "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]",
-  inset: "border-border/60 bg-muted/40 shadow-[var(--slei-shadow-inset-md)]",
+  raised: "border-transparent bg-card slei-raised-large",
+  inset: "border-border/60 bg-muted/40 slei-inset-large",
   listItem:
-    "rounded-lg border-border/60 bg-card/80 shadow-[var(--slei-shadow-raised-xs)] transition-[background-color,box-shadow,color] hover:bg-card hover:shadow-[var(--slei-shadow-raised-md)]",
+    "rounded-lg border-border/60 bg-card/80 slei-raised-small transition-[background-color,box-shadow,color] hover:bg-card hover:slei-raised-medium",
 };
 
 export function SoftPanel({

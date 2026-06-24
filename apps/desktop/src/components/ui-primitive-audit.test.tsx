@@ -78,18 +78,20 @@ describe("desktop UI primitive usage", () => {
     const cardSource = readSource("components/ui/card.tsx");
     const panelSource = readSource("components/SoftPanel.tsx");
 
-    expect(buttonSource).toContain("shadow-[var(--slei-shadow-raised-sm)]");
+    expect(buttonSource).toContain("slei-raised-small");
+    expect(buttonSource).toContain("slei-raised-medium");
+    expect(buttonSource).not.toContain("shadow-[var(--slei-shadow-raised-");
     expect(buttonSource).toContain("border-[var(--slei-raised-border)]");
     expect(buttonSource).not.toContain("shadow-sm");
     expect(buttonSource).toContain('ghost:\n          "hover:bg-muted/70 hover:text-foreground');
     expect(buttonSource).toContain('link: "text-primary underline-offset-4 hover:underline"');
-    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
-    expect(cardSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
-    expect(panelSource).toContain('raised: "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
-    expect(panelSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
+    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card slei-raised-large"');
+    expect(cardSource).toContain("hover:slei-raised-medium");
+    expect(panelSource).toContain('raised: "border-transparent bg-card slei-raised-large"');
+    expect(panelSource).toContain("hover:slei-raised-medium");
   });
 
-  it("defines raised shadows as paired upper-left glow and lower-right shade", () => {
+  it("defines reusable raised and inset neumorphic shadow size tokens", () => {
     const appCss = readSource("app/app.css");
     const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
     const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
@@ -105,26 +107,41 @@ describe("desktop UI primitive usage", () => {
       expect(themeCss).not.toMatch(/--slei-overlay-shadow-color: oklch\(/);
     }
 
-    for (const size of ["xs", "sm", "md", "lg"]) {
-      const tokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
-      expect(tokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
-      expect(tokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
-      expect(tokenMatch?.[1]).toMatch(/-[0-9]+px -[0-9]+px [0-9]+px var\(--slei-shadow-raised-glow\)/);
-      expect(tokenMatch?.[1]).toMatch(/[0-9]+px [0-9]+px [0-9]+px var\(--slei-shadow-raised-shade\)/);
+    for (const size of ["small", "medium", "large"]) {
+      const raisedTokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
+      expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
+      expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
+      expect(raisedTokenMatch?.[1]).toMatch(/-[0-9]+px -[0-9]+px [0-9]+px var\(--slei-shadow-raised-glow\)/);
+      expect(raisedTokenMatch?.[1]).toMatch(/[0-9]+px [0-9]+px [0-9]+px var\(--slei-shadow-raised-shade\)/);
+
+      const insetTokenMatch = appCss.match(new RegExp(`--slei-shadow-inset-${size}: ([^;]+);`));
+      expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-inset-shade)");
+      expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-highlight)");
+      expect(insetTokenMatch?.[1]).toContain("inset");
     }
 
-    expect(lightThemeCss).toContain("--slei-shadow-raised-md: -6px -6px 16px var(--slei-shadow-raised-glow)");
-    expect(darkThemeCss).toContain("--slei-shadow-raised-md: -6px -6px 15px var(--slei-shadow-raised-glow)");
+    expect(lightThemeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-medium)");
+    expect(lightThemeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-medium)");
+    expect(darkThemeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-medium)");
+    expect(darkThemeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-medium)");
+    expect(appCss).toContain("@utility slei-raised-small");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-small)");
+    expect(appCss).toContain("@utility slei-raised-medium");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-medium)");
+    expect(appCss).toContain("@utility slei-raised-large");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-large)");
+    expect(appCss).toContain("@utility slei-inset-small");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-small)");
+    expect(appCss).toContain("@utility slei-inset-medium");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-medium)");
+    expect(appCss).toContain("@utility slei-inset-large");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-large)");
   });
 
   it("uses inset shadows for text input-like and segmented controls", () => {
-    for (const file of [
-      "components/ui/input.tsx",
-      "components/ui/textarea.tsx",
-      "components/ui/tabs.tsx",
-    ]) {
-      expect(readSource(file)).toContain("shadow-[var(--slei-shadow-inset");
-    }
+    expect(readSource("components/ui/input.tsx")).toContain("slei-inset-small");
+    expect(readSource("components/ui/textarea.tsx")).toContain("slei-inset-medium");
+    expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-small");
   });
 
   it("keeps static surfaces and badges flat", () => {

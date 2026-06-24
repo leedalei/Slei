@@ -1755,7 +1755,7 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
-    expect(host.querySelector('[data-testid="slei-composer-input"]')?.className).toContain("slei-shadow-inset-sm");
+    expect(host.querySelector('[data-testid="slei-composer-input"]')?.className).toContain("slei-inset-medium");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
