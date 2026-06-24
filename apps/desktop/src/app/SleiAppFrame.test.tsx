@@ -259,9 +259,9 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
     expect(navSource).not.toContain('{ id: "members", icon: "members" }');
     expect(iconsSource).toContain("IconSearchFilled");
-    expect(iconsSource).toContain("IconUserFilled");
+    expect(iconsSource).toContain("IconAlienFilled");
     expect(iconsSource).toContain("searchFilled: IconSearchFilled");
-    expect(iconsSource).toContain("membersFilled: IconUserFilled");
+    expect(iconsSource).toContain("membersFilled: IconAlienFilled");
     expect(iconsSource).toContain("search: IconSearch");
     expect(iconsSource).toContain("members: IconUsersGroup");
   });

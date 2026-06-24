@@ -1,6 +1,7 @@
 import type { Icon, IconProps } from "@tabler/icons-react";
 import {
   IconAlertCircleFilled,
+  IconAlienFilled,
   IconArrowDown,
   IconArrowsSort,
   IconBookmark,
@@ -42,7 +43,6 @@ import {
   IconSparkles,
   IconSquareCheckFilled,
   IconTrash,
-  IconUserFilled,
   IconUsersGroup,
   IconUserCircle,
   IconWorld,
@@ -128,7 +128,7 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   info: IconInfoCircle,
   loader: IconLoader2,
   members: IconUsersGroup,
-  membersFilled: IconUserFilled,
+  membersFilled: IconAlienFilled,
   messageSquare: IconMessage,
   image: IconPhoto,
   panelClose: IconLayoutSidebarRightCollapse,
