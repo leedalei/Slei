@@ -374,7 +374,7 @@ describe("SearchPage global search UI", () => {
 
     const filterTriggers = Array.from(rootElement.querySelectorAll<HTMLElement>('[data-slot="select-trigger"]'));
     expect(filterTriggers.length).toBe(3);
-    expect(filterTriggers.every((trigger) => trigger.querySelector(".lucide-chevron-down"))).toBe(true);
+    expect(filterTriggers.every((trigger) => trigger.querySelector("svg"))).toBe(true);
 
     await openSelect(rootElement, "From");
     expect(document.body.textContent).toContain("Lei");

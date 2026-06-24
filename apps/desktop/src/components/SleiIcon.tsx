@@ -2,11 +2,21 @@ import { cn } from "@/lib/utils";
 
 import { sleiIcons, type SleiIconName, type SleiTablerIconProps } from "./icons";
 
-export type SleiIconProps = Omit<SleiTablerIconProps, "name"> & {
+type SleiIconBaseProps = Omit<SleiTablerIconProps, "aria-hidden" | "aria-label" | "data-slei-icon" | "name"> & {
   name: SleiIconName;
-  decorative?: boolean;
-  label?: string;
 };
+
+type SleiIconDecorativeProps = SleiIconBaseProps & {
+  decorative?: true;
+  label?: never;
+};
+
+type SleiIconLabelledProps = SleiIconBaseProps & {
+  decorative: false;
+  label: string;
+};
+
+export type SleiIconProps = SleiIconDecorativeProps | SleiIconLabelledProps;
 
 export function SleiIcon({
   name,
@@ -21,13 +31,13 @@ export function SleiIcon({
 
   return (
     <Icon
+      {...props}
       aria-hidden={decorative ? "true" : undefined}
       aria-label={!decorative ? label : undefined}
       className={cn("shrink-0", className)}
       data-slei-icon={name}
       size={size}
       stroke={stroke}
-      {...props}
     />
   );
 }
