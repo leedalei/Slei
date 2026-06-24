@@ -1635,7 +1635,7 @@ describe("ChatPage mention panel", () => {
     expect(taskRootHtml).toContain("把这条变成任务。");
   });
 
-  it("keeps composer submit behavior unchanged on the soft composer surface", async () => {
+  it("keeps only the composer input recessed while the outer surface stays flat", async () => {
     const messages = createDesktopMessages("zh-CN");
     const onSendMessage = vi.fn().mockResolvedValue(undefined);
     const data = createSleiFixtures({
@@ -1653,7 +1653,9 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-variant")).toBe("inset");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-variant")).toBe("surface");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
+    expect(host.querySelector('[data-testid="slei-composer-input"]')?.className).toContain("slei-shadow-inset-sm");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
