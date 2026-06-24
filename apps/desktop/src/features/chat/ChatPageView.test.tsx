@@ -1551,7 +1551,7 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.chat.asTask);
   });
 
-  it("keeps timeline message selectors and actions available on soft rows", () => {
+  it("keeps timeline message selectors and actions available on flat rows", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1578,16 +1578,19 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const messageHtml = html.slice(html.indexOf('data-message-id="msg-contract"'));
+    const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
 
     expect(messageHtml).toContain('data-message-id="msg-contract"');
-    expect(messageHtml).toContain('data-variant="listItem"');
+    expect(messageHtml).toContain('data-variant="surface"');
+    expect(messageOpenTag).not.toContain("shadow-");
+    expect(messageOpenTag).not.toContain("hover:shadow");
     expect(messageHtml).toContain('data-slot="message-actions"');
     expect(messageHtml).toContain('data-message-thread-open="msg-contract"');
     expect(messageHtml).toContain(`aria-label="${messages.chat.copyMessage}"`);
     expect(messageHtml).toContain(`aria-label="${messages.chat.saveMessage}"`);
   });
 
-  it("keeps task root entry status and source message behavior on soft rows", () => {
+  it("keeps task root entry status and source message behavior on flat rows", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1625,10 +1628,13 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const taskRootHtml = html.slice(html.indexOf('data-task-root-entry="task-msg-task-source"'));
+    const taskRootOpenTag = taskRootHtml.slice(0, taskRootHtml.indexOf(">"));
 
     expect(taskRootHtml).toContain('data-task-root-entry="task-msg-task-source"');
     expect(taskRootHtml).toContain('data-source-message-id="msg-task-source"');
-    expect(taskRootHtml).toContain('data-variant="listItem"');
+    expect(taskRootHtml).toContain('data-variant="surface"');
+    expect(taskRootOpenTag).not.toContain("shadow-");
+    expect(taskRootOpenTag).not.toContain("hover:shadow");
     expect(taskRootHtml).toContain('data-task-root-entry-status');
     expect(taskRootHtml).toContain(messages.tasks.status.in_progress);
     expect(taskRootHtml).toContain('data-task-root-entry-replies');

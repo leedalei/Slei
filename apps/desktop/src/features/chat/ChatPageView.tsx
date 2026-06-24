@@ -1196,7 +1196,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                             data-focused={highlightedMessageId === message.id ? "true" : undefined}
                             data-message-id={message.id}
                             tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                            variant="listItem"
+                            variant="surface"
                           >
                             <MemberAvatar identity={memberFromMessage(message, data.members)} />
                             <div className="min-w-0">

@@ -118,10 +118,13 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-avatar-size");
     expect(html).toContain("用户");
     expect(html).toContain("data-slei-panel");
-    expect(html).toContain('data-variant="listItem"');
+    expect(html).toContain('data-variant="surface"');
     expect(html).toContain("10:00");
     const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
     const taskEntryClose = taskEntryHtml.indexOf("</section>");
+    const taskEntryOpenTag = taskEntryHtml.slice(0, taskEntryHtml.indexOf(">"));
+    expect(taskEntryOpenTag).not.toContain("shadow-");
+    expect(taskEntryOpenTag).not.toContain("hover:shadow");
     expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="复制"');
     expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="收藏"');
     expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');

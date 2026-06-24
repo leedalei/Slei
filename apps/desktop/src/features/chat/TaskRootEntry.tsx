@@ -57,7 +57,7 @@ export function TaskRootEntry(input: {
       className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2"
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
-      variant="listItem"
+      variant="surface"
     >
       <MemberAvatar identity={avatarIdentity} />
       <div className="min-w-0">
