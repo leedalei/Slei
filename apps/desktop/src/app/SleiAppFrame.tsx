@@ -341,7 +341,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
-      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 bg-sidebar/80 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
             SLei
@@ -371,7 +371,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       {hasContextSidebar ? (
         <>
-          <aside className="slei-context-sidebar min-h-0 border-r border-sidebar-border/65 bg-sidebar/75 text-sidebar-foreground max-[760px]:hidden">
+          <aside className="slei-context-sidebar min-h-0 border-r border-sidebar-border/65 text-sidebar-foreground max-[760px]:hidden">
             <SidebarFrame title={sidebarTitle}>
               {input.activeView === "chat" || input.activeView === "search" ? (
                 <ChannelList
@@ -743,7 +743,7 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
     avatarSeed: activity.message.author,
   };
   return (
-    <section aria-live="polite" className="shrink-0 border-t bg-sidebar/80 p-3" data-slot="agent-activity" role="status">
+    <section aria-live="polite" className="shrink-0 border-t p-3" data-slot="agent-activity" role="status">
       <div className={cn("flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2", failed && "border border-destructive/45 bg-destructive/10")}>
         <MemberAvatar identity={identity} />
         <div className="min-w-0 flex-1">

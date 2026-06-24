@@ -41,6 +41,11 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 76%, transparent);
+  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 70%, transparent);
+  --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 48%, transparent);
+  --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 34%, transparent);
+  --slei-glass-filter: blur(18px) saturate(145%);
   --destructive-foreground: oklch(1.0000 0 0);
   --font-sans: Outfit, sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -222,6 +227,11 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 66%, transparent);
+  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 62%, transparent);
+  --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 50%, transparent);
+  --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 32%, transparent);
+  --slei-glass-filter: blur(18px) saturate(145%);
   --destructive-foreground: oklch(1.0000 0 0);
   --slei-radius-small: 6px;
   --slei-radius-medium: 8px;
@@ -806,7 +816,12 @@ select:focus-visible {
 }
 
 .slei-shell-nav {
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent);
+  -webkit-backdrop-filter: var(--slei-glass-filter);
+  backdrop-filter: var(--slei-glass-filter);
+  background: var(--slei-glass-nav-bg);
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent),
+    inset 1px 0 0 var(--slei-glass-highlight);
 }
 
 .slei-shell-nav__button {
@@ -820,9 +835,16 @@ select:focus-visible {
 }
 
 .slei-context-sidebar {
+  -webkit-backdrop-filter: var(--slei-glass-filter);
+  backdrop-filter: var(--slei-glass-filter);
+  background: var(--slei-glass-sidebar-bg);
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
     inset 10px 0 24px color-mix(in srgb, var(--slei-shadow-highlight) 24%, transparent);
+}
+
+.slei-context-sidebar [data-slot="agent-activity"] {
+  background: transparent;
 }
 
 .slei-resize-handle {

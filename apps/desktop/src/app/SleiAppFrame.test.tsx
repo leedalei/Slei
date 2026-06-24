@@ -241,6 +241,29 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navCss).not.toContain("inset -8px 0 18px");
   });
 
+  it("renders menu and context sidebar as glass surfaces without solid sidebar fills", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+    const asideSource = frameSource.slice(frameSource.indexOf("<aside "), frameSource.indexOf("<SidebarFrame"));
+    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-shell-nav__button {"));
+    const sidebarCss = appCss.slice(appCss.indexOf(".slei-context-sidebar {"), appCss.indexOf(".slei-resize-handle {"));
+
+    expect(appCss).toContain("--slei-glass-nav-bg:");
+    expect(appCss).toContain("--slei-glass-sidebar-bg:");
+    expect(appCss).toContain("--slei-glass-filter: blur(18px) saturate(145%)");
+    expect(navSource).not.toContain("bg-sidebar/");
+    expect(asideSource).not.toContain("bg-sidebar/");
+    expect(navCss).toContain("background: var(--slei-glass-nav-bg)");
+    expect(navCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
+    expect(navCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain("background: var(--slei-glass-sidebar-bg)");
+    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain('[data-slot="agent-activity"]');
+    expect(sidebarCss).toContain("background: transparent");
+  });
+
   it("renders menubar navigation items as raised buttons", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
