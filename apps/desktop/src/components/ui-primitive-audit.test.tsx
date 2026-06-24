@@ -165,8 +165,20 @@ describe("desktop UI primitive usage", () => {
   });
 
   it("uses inset shadows for text input-like and segmented controls", () => {
-    expect(readSource("components/ui/input.tsx")).toContain("slei-inset-small");
-    expect(readSource("components/ui/textarea.tsx")).toContain("slei-inset-medium");
+    const appCss = readSource("app/app.css");
+    const inputSource = readSource("components/ui/input.tsx");
+    const textareaSource = readSource("components/ui/textarea.tsx");
+
+    expect(inputSource).toContain("slei-inset-small");
+    expect(inputSource).toContain("slei-inset-focus-small");
+    expect(inputSource).not.toContain("focus-visible:ring-3");
+    expect(textareaSource).toContain("slei-inset-medium");
+    expect(textareaSource).toContain("slei-inset-focus-medium");
+    expect(textareaSource).not.toContain("focus-visible:ring-3");
+    expect(appCss).toContain(".slei-inset-focus-small:focus-visible");
+    expect(appCss).toContain("var(--slei-shadow-inset-small), 0 0 0 1px");
+    expect(appCss).toContain(".slei-inset-focus-medium:focus-visible");
+    expect(appCss).toContain("var(--slei-shadow-inset-medium), 0 0 0 1px");
     expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-small");
   });
 

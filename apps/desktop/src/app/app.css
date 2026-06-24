@@ -287,6 +287,16 @@
   box-shadow: var(--slei-shadow-inset-large);
 }
 
+@layer utilities {
+  .slei-inset-focus-small:focus-visible {
+    box-shadow: var(--slei-shadow-inset-small), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+  }
+
+  .slei-inset-focus-medium:focus-visible {
+    box-shadow: var(--slei-shadow-inset-medium), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
