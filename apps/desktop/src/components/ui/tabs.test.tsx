@@ -29,4 +29,16 @@ describe("Tabs", () => {
     expect(html).not.toContain(["data", "horizontal:flex-col"].join("-"));
     expect(html).not.toContain(["group", "data", "horizontal/tabs:h-6"].join("-"));
   });
+
+  it("supports the soft segmented tabs variant", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+
+    expect(html).toContain('data-variant="soft"');
+  });
 });

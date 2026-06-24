@@ -22,6 +22,14 @@ describe("Card compact density", () => {
     expect(html).toContain("py-3");
     expect(html).toContain("px-4");
   });
+
+  it("renders raised and inset card variants", () => {
+    const raised = renderToStaticMarkup(<Card variant="raised">Raised</Card>);
+    const inset = renderToStaticMarkup(<Card variant="inset">Inset</Card>);
+
+    expect(raised).toContain('data-variant="raised"');
+    expect(inset).toContain('data-variant="inset"');
+  });
 });
 
 describe("DetailBlock", () => {
