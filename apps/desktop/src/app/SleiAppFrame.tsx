@@ -329,7 +329,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
-      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-2 border-r border-sidebar-border/70 bg-sidebar/80 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-2 bg-sidebar/80 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
             SLei

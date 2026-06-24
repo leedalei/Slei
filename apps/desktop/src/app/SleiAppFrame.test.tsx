@@ -196,6 +196,17 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).toContain('tooltipSide="right"');
   });
 
+  it("keeps the menubar right divider as a single thin line", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(navSource).not.toContain("border-r border-sidebar-border/70");
+    expect(navCss).toContain("inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent)");
+    expect(navCss).not.toContain("inset -8px 0 18px");
+  });
+
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");
