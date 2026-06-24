@@ -39,7 +39,7 @@ const buttonVariants = cva(
       {
         variant: ["default", "outline", "secondary", "destructive"],
         size: ["xs", "sm", "default", "icon-xs", "icon-sm", "icon"],
-        class: "slei-raised-small",
+        class: "slei-raised-medium",
       },
       {
         variant: ["default", "outline", "secondary", "destructive"],

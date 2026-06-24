@@ -81,24 +81,24 @@
   --slei-shadow-raised-m: -4px -4px 2px var(--slei-shadow-raised-glow), 4px 4px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-l: -6px -6px 2px var(--slei-shadow-raised-glow), 6px 6px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-xl: -8px -8px 2px var(--slei-shadow-raised-glow), 8px 8px 2px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-small: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-small: var(--slei-shadow-raised-m);
   --slei-shadow-raised-medium: var(--slei-shadow-raised-m);
-  --slei-shadow-raised-large: var(--slei-shadow-raised-l);
-  --slei-shadow-raised-xs: var(--slei-shadow-raised-s);
-  --slei-shadow-raised-sm: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-large: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-xs: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-sm: var(--slei-shadow-raised-m);
   --slei-shadow-raised-md: var(--slei-shadow-raised-m);
-  --slei-shadow-raised-lg: var(--slei-shadow-raised-l);
+  --slei-shadow-raised-lg: var(--slei-shadow-raised-m);
   --slei-shadow-inset-s: inset 2px 2px 2px var(--slei-shadow-inset-shade), inset -2px -2px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-m: inset 4px 4px 2px var(--slei-shadow-inset-shade), inset -4px -4px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-l: inset 6px 6px 2px var(--slei-shadow-inset-shade), inset -6px -6px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-xl: inset 8px 8px 2px var(--slei-shadow-inset-shade), inset -8px -8px 2px var(--slei-shadow-highlight);
-  --slei-shadow-inset-small: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-small: var(--slei-shadow-inset-m);
   --slei-shadow-inset-medium: var(--slei-shadow-inset-m);
-  --slei-shadow-inset-large: var(--slei-shadow-inset-l);
-  --slei-shadow-inset-xs: var(--slei-shadow-inset-s);
-  --slei-shadow-inset-sm: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-large: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-xs: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-sm: var(--slei-shadow-inset-m);
   --slei-shadow-inset-md: var(--slei-shadow-inset-m);
-  --slei-shadow-inset-lg: var(--slei-shadow-inset-l);
+  --slei-shadow-inset-lg: var(--slei-shadow-inset-m);
   --slei-shadow-overlay-xs: 0 2px 8px color-mix(in srgb, var(--slei-overlay-shadow-color) 42%, transparent);
   --slei-shadow-overlay-sm: 0 8px 24px color-mix(in srgb, var(--slei-overlay-shadow-color) 48%, transparent);
   --slei-shadow-overlay-md: 0 18px 48px color-mix(in srgb, var(--slei-overlay-shadow-color) 52%, transparent);
@@ -271,24 +271,24 @@
   --slei-shadow-raised-m: -4px -4px 2px var(--slei-shadow-raised-glow), 4px 4px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-l: -6px -6px 2px var(--slei-shadow-raised-glow), 6px 6px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-xl: -8px -8px 2px var(--slei-shadow-raised-glow), 8px 8px 2px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-small: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-small: var(--slei-shadow-raised-m);
   --slei-shadow-raised-medium: var(--slei-shadow-raised-m);
-  --slei-shadow-raised-large: var(--slei-shadow-raised-l);
-  --slei-shadow-raised-xs: var(--slei-shadow-raised-s);
-  --slei-shadow-raised-sm: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-large: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-xs: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-sm: var(--slei-shadow-raised-m);
   --slei-shadow-raised-md: var(--slei-shadow-raised-m);
-  --slei-shadow-raised-lg: var(--slei-shadow-raised-l);
+  --slei-shadow-raised-lg: var(--slei-shadow-raised-m);
   --slei-shadow-inset-s: inset 2px 2px 2px var(--slei-shadow-inset-shade), inset -2px -2px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-m: inset 4px 4px 2px var(--slei-shadow-inset-shade), inset -4px -4px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-l: inset 6px 6px 2px var(--slei-shadow-inset-shade), inset -6px -6px 2px var(--slei-shadow-highlight);
   --slei-shadow-inset-xl: inset 8px 8px 2px var(--slei-shadow-inset-shade), inset -8px -8px 2px var(--slei-shadow-highlight);
-  --slei-shadow-inset-small: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-small: var(--slei-shadow-inset-m);
   --slei-shadow-inset-medium: var(--slei-shadow-inset-m);
-  --slei-shadow-inset-large: var(--slei-shadow-inset-l);
-  --slei-shadow-inset-xs: var(--slei-shadow-inset-s);
-  --slei-shadow-inset-sm: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-large: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-xs: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-sm: var(--slei-shadow-inset-m);
   --slei-shadow-inset-md: var(--slei-shadow-inset-m);
-  --slei-shadow-inset-lg: var(--slei-shadow-inset-l);
+  --slei-shadow-inset-lg: var(--slei-shadow-inset-m);
   --slei-shadow-overlay-xs: 0 4px 10px color-mix(in srgb, var(--slei-overlay-shadow-color) 52%, transparent);
   --slei-shadow-overlay-sm: 0 12px 30px color-mix(in srgb, var(--slei-overlay-shadow-color) 58%, transparent);
   --slei-shadow-overlay-md: 0 24px 60px color-mix(in srgb, var(--slei-overlay-shadow-color) 64%, transparent);
@@ -298,7 +298,7 @@
 }
 
 @utility slei-raised-s {
-  box-shadow: var(--slei-shadow-raised-s);
+  box-shadow: var(--slei-shadow-raised-m);
 }
 
 @utility slei-raised-m {
@@ -306,15 +306,15 @@
 }
 
 @utility slei-raised-l {
-  box-shadow: var(--slei-shadow-raised-l);
+  box-shadow: var(--slei-shadow-raised-m);
 }
 
 @utility slei-raised-xl {
-  box-shadow: var(--slei-shadow-raised-xl);
+  box-shadow: var(--slei-shadow-raised-m);
 }
 
 @utility slei-raised-small {
-  box-shadow: var(--slei-shadow-raised-small);
+  box-shadow: var(--slei-shadow-raised-m);
 }
 
 @utility slei-raised-medium {
@@ -322,11 +322,11 @@
 }
 
 @utility slei-raised-large {
-  box-shadow: var(--slei-shadow-raised-large);
+  box-shadow: var(--slei-shadow-raised-m);
 }
 
 @utility slei-inset-s {
-  box-shadow: var(--slei-shadow-inset-s);
+  box-shadow: var(--slei-shadow-inset-m);
 }
 
 @utility slei-inset-m {
@@ -334,15 +334,15 @@
 }
 
 @utility slei-inset-l {
-  box-shadow: var(--slei-shadow-inset-l);
+  box-shadow: var(--slei-shadow-inset-m);
 }
 
 @utility slei-inset-xl {
-  box-shadow: var(--slei-shadow-inset-xl);
+  box-shadow: var(--slei-shadow-inset-m);
 }
 
 @utility slei-inset-small {
-  box-shadow: var(--slei-shadow-inset-small);
+  box-shadow: var(--slei-shadow-inset-m);
 }
 
 @utility slei-inset-medium {
@@ -350,12 +350,12 @@
 }
 
 @utility slei-inset-large {
-  box-shadow: var(--slei-shadow-inset-large);
+  box-shadow: var(--slei-shadow-inset-m);
 }
 
 @layer utilities {
   .slei-inset-focus-small:focus-visible {
-    box-shadow: var(--slei-shadow-inset-small), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+    box-shadow: var(--slei-shadow-inset-m), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
   }
 
   .slei-inset-focus-medium:focus-visible {
@@ -364,11 +364,11 @@
 
   .slei-composer-input {
     border-color: var(--slei-inset-border);
-    box-shadow: var(--slei-shadow-inset-small);
+    box-shadow: var(--slei-shadow-inset-m);
   }
 
   .slei-composer-input:focus-visible {
-    box-shadow: var(--slei-shadow-inset-small), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+    box-shadow: var(--slei-shadow-inset-m), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
   }
 }
 
@@ -726,7 +726,7 @@ select:focus-visible {
   background: var(--tabs-pill-bg);
   border: 1px solid color-mix(in srgb, var(--slei-shadow-highlight) 72%, var(--border));
   border-radius: var(--slei-radius-medium);
-  box-shadow: var(--slei-shadow-raised-small);
+  box-shadow: var(--slei-shadow-raised-m);
   transform: translateX(0);
   transition:
     transform var(--tabs-dur) var(--tabs-ease),

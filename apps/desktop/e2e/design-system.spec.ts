@@ -159,12 +159,20 @@ describe("shadcn design system wiring", () => {
     }
 
     for (const tokens of [lightTokens, darkTokens]) {
-      expect(tokenValue(tokens, "--slei-shadow-raised-small")).toBe("var(--slei-shadow-raised-s)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-small")).toBe("var(--slei-shadow-raised-m)");
       expect(tokenValue(tokens, "--slei-shadow-raised-medium")).toBe("var(--slei-shadow-raised-m)");
-      expect(tokenValue(tokens, "--slei-shadow-raised-large")).toBe("var(--slei-shadow-raised-l)");
-      expect(tokenValue(tokens, "--slei-shadow-inset-small")).toBe("var(--slei-shadow-inset-s)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-large")).toBe("var(--slei-shadow-raised-m)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-xs")).toBe("var(--slei-shadow-raised-m)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-sm")).toBe("var(--slei-shadow-raised-m)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-md")).toBe("var(--slei-shadow-raised-m)");
+      expect(tokenValue(tokens, "--slei-shadow-raised-lg")).toBe("var(--slei-shadow-raised-m)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-small")).toBe("var(--slei-shadow-inset-m)");
       expect(tokenValue(tokens, "--slei-shadow-inset-medium")).toBe("var(--slei-shadow-inset-m)");
-      expect(tokenValue(tokens, "--slei-shadow-inset-large")).toBe("var(--slei-shadow-inset-l)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-large")).toBe("var(--slei-shadow-inset-m)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-xs")).toBe("var(--slei-shadow-inset-m)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-sm")).toBe("var(--slei-shadow-inset-m)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-md")).toBe("var(--slei-shadow-inset-m)");
+      expect(tokenValue(tokens, "--slei-shadow-inset-lg")).toBe("var(--slei-shadow-inset-m)");
     }
 
     for (const [size, px] of [["s", "2px"], ["m", "4px"], ["l", "6px"], ["xl", "8px"]] as const) {

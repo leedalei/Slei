@@ -14,13 +14,14 @@ describe("SoftPanel", () => {
     expect(html).toContain("面板内容");
   });
 
-  it("can render a small inset panel without the default large inset shadow", () => {
+  it("normalizes requested inset sizes to the medium inset shadow", () => {
     const html = renderToStaticMarkup(
       <SoftPanel insetSize="small" variant="inset">搜索栏</SoftPanel>,
     );
 
     expect(html).toContain('data-variant="inset"');
-    expect(html).toContain("slei-inset-small");
+    expect(html).toContain("slei-inset-m");
+    expect(html).not.toContain("slei-inset-small");
     expect(html).not.toContain("slei-inset-large");
   });
 

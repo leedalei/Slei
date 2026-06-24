@@ -1259,7 +1259,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </div>
                 {showScrollToBottom ? (
                   <Button
-                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-xs text-primary slei-raised-small hover:bg-white hover:text-primary"
+                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-xs text-primary slei-raised-medium hover:bg-white hover:text-primary"
                     data-testid="slei-scroll-to-bottom"
                     onClick={requestTimelineScrollToBottom}
                     size="sm"

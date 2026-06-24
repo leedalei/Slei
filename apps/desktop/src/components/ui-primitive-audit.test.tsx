@@ -78,17 +78,22 @@ describe("desktop UI primitive usage", () => {
     const cardSource = readSource("components/ui/card.tsx");
     const panelSource = readSource("components/SoftPanel.tsx");
 
-    expect(buttonSource).toContain("slei-raised-small");
     expect(buttonSource).toContain("slei-raised-medium");
+    expect(buttonSource).not.toContain("slei-raised-small");
+    expect(buttonSource).not.toContain("slei-raised-large");
     expect(buttonSource).not.toContain("shadow-[var(--slei-shadow-raised-");
     expect(buttonSource).toContain("border-[var(--slei-raised-border)]");
     expect(buttonSource).not.toContain("shadow-sm");
     expect(buttonSource).toContain('ghost:\n          "hover:bg-muted/70 hover:text-foreground');
     expect(buttonSource).toContain('link: "text-primary underline-offset-4 hover:underline"');
-    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card slei-raised-large"');
+    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card slei-raised-medium"');
     expect(cardSource).toContain("hover:slei-raised-medium");
-    expect(panelSource).toContain('raised: "border-transparent bg-card slei-raised-large"');
+    expect(cardSource).not.toContain("slei-raised-small");
+    expect(cardSource).not.toContain("slei-raised-large");
+    expect(panelSource).toContain('raised: "border-transparent bg-card slei-raised-medium"');
     expect(panelSource).toContain("hover:slei-raised-medium");
+    expect(panelSource).not.toContain("slei-raised-small");
+    expect(panelSource).not.toContain("slei-raised-large");
   });
 
   it("defines reusable raised and inset neumorphic shadow size tokens", () => {
@@ -122,44 +127,66 @@ describe("desktop UI primitive usage", () => {
     }
 
     for (const themeCss of [lightThemeCss, darkThemeCss]) {
-      expect(themeCss).toContain("--slei-shadow-raised-small: var(--slei-shadow-raised-s)");
+      expect(themeCss).toContain("--slei-shadow-raised-small: var(--slei-shadow-raised-m)");
       expect(themeCss).toContain("--slei-shadow-raised-medium: var(--slei-shadow-raised-m)");
-      expect(themeCss).toContain("--slei-shadow-raised-large: var(--slei-shadow-raised-l)");
-      expect(themeCss).toContain("--slei-shadow-inset-small: var(--slei-shadow-inset-s)");
+      expect(themeCss).toContain("--slei-shadow-raised-large: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-raised-xs: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-raised-sm: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-raised-md: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-raised-lg: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-small: var(--slei-shadow-inset-m)");
       expect(themeCss).toContain("--slei-shadow-inset-medium: var(--slei-shadow-inset-m)");
-      expect(themeCss).toContain("--slei-shadow-inset-large: var(--slei-shadow-inset-l)");
+      expect(themeCss).toContain("--slei-shadow-inset-large: var(--slei-shadow-inset-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-xs: var(--slei-shadow-inset-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-sm: var(--slei-shadow-inset-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-md: var(--slei-shadow-inset-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-lg: var(--slei-shadow-inset-m)");
       expect(themeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-m)");
       expect(themeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-m)");
     }
 
     expect(appCss).toContain("@utility slei-raised-s");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-raised-m");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-raised-l");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-l)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-raised-xl");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-xl)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-raised-small");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-small)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-raised-medium");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-medium)");
     expect(appCss).toContain("@utility slei-raised-large");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-large)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
     expect(appCss).toContain("@utility slei-inset-s");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
     expect(appCss).toContain("@utility slei-inset-m");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
     expect(appCss).toContain("@utility slei-inset-l");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-l)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
     expect(appCss).toContain("@utility slei-inset-xl");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-xl)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
     expect(appCss).toContain("@utility slei-inset-small");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-small)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
     expect(appCss).toContain("@utility slei-inset-medium");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-medium)");
     expect(appCss).toContain("@utility slei-inset-large");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-large)");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
+  });
+
+  it("keeps production neumorphic classes on the medium size", () => {
+    const violations: string[] = [];
+    const disallowed = /\bslei-(?:raised|inset)-(?:s|l|xl|small|large)\b/g;
+
+    for (const file of sourceFiles()) {
+      const source = readSource(file);
+      for (const match of source.matchAll(disallowed)) {
+        violations.push(`${file}: ${match[0]}`);
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 
   it("keeps shared control radii on the 6px, 8px, and 10px scale", () => {
@@ -194,8 +221,10 @@ describe("desktop UI primitive usage", () => {
     const textareaSource = readSource("components/ui/textarea.tsx");
 
     expect(appCss).toContain("--slei-inset-border: rgb(0 0 0 /");
-    expect(inputSource).toContain("slei-inset-small");
-    expect(inputSource).toContain("slei-inset-focus-small");
+    expect(inputSource).toContain("slei-inset-medium");
+    expect(inputSource).toContain("slei-inset-focus-medium");
+    expect(inputSource).not.toContain("slei-inset-small");
+    expect(inputSource).not.toContain("slei-inset-focus-small");
     expect(inputSource).toContain("border-[var(--slei-inset-border)]");
     expect(inputSource).not.toContain("border-input bg-muted/40");
     expect(inputSource).not.toContain("focus-visible:ring-3");
@@ -204,11 +233,10 @@ describe("desktop UI primitive usage", () => {
     expect(textareaSource).toContain("border-[var(--slei-inset-border)]");
     expect(textareaSource).not.toContain("border-input bg-muted/40");
     expect(textareaSource).not.toContain("focus-visible:ring-3");
-    expect(appCss).toContain(".slei-inset-focus-small:focus-visible");
-    expect(appCss).toContain("var(--slei-shadow-inset-small), 0 0 0 1px");
     expect(appCss).toContain(".slei-inset-focus-medium:focus-visible");
     expect(appCss).toContain("var(--slei-shadow-inset-medium), 0 0 0 1px");
-    expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-small");
+    expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-medium");
+    expect(readSource("components/ui/tabs.tsx")).not.toContain("slei-inset-small");
   });
 
   it("uses transitions-dev sliding pills for soft tabs", () => {
