@@ -237,6 +237,10 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
     expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
     expect(searchSurface?.className).toContain("rounded-full");
+    expect(searchSurface?.className).toContain("slei-inset-small");
+    expect(searchSurface?.className).toContain("focus-within:shadow-[var(--slei-shadow-inset-small)]");
+    expect(searchSurface?.className).not.toContain("slei-inset-medium");
+    expect(searchSurface?.className).not.toContain("slei-inset-large");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
