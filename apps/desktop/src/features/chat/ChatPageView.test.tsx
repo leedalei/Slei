@@ -1831,6 +1831,41 @@ describe("ChatPage mention panel", () => {
     expect(frameHtml).toContain("pt-3");
   });
 
+  it("renders channel message markdown with card foreground text for dark theme contrast", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-dark-contrast",
+          author: "Yeal",
+          role: "agent",
+          time: "14:20",
+          body: "暗色模式下正文必须可读。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const messageStart = html.indexOf('data-message-id="msg-dark-contrast"');
+    const markdownStart = html.indexOf("slei-markdown-message", messageStart);
+    const markdownHtml = html.slice(markdownStart, html.indexOf("</section>", markdownStart));
+
+    expect(messageStart).toBeGreaterThanOrEqual(0);
+    expect(markdownStart).toBeGreaterThan(messageStart);
+    expect(markdownHtml).toContain("text-card-foreground");
+    expect(markdownHtml).not.toContain("text-foreground");
+  });
+
   it("keeps task root entries visually aligned with normal messages without a border", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
 
