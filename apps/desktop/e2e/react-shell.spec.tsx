@@ -31,7 +31,7 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('data-active-view="chat"');
-    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     expect(html).toContain('aria-label="主导航"');
     expect(html).toContain("pt-10");
     expect(html).toContain('data-slot="button"');
@@ -282,7 +282,7 @@ describe("Slei React desktop shell", () => {
         expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
         expect(html).toContain('class="slei-context-sidebar');
         expect(html).toContain('aria-label="调整侧栏宽度"');
-        expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+        expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
       }
     }
   });

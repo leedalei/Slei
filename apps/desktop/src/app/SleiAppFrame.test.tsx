@@ -219,7 +219,7 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     expect(html).toContain("grid h-14 w-14 place-items-center");
   });
 

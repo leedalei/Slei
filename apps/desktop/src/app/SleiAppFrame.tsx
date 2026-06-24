@@ -277,7 +277,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSize,
-    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
+    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -419,7 +419,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
           <Button
             aria-label={messages.common.resizeSidebar}
             aria-orientation="vertical"
-            className="slei-resize-handle h-full w-2 !cursor-col-resize rounded-none border-0 p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
+            className="slei-resize-handle h-full w-[3px] !cursor-col-resize rounded-none border-0 p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
             onPointerDown={input.onResizeStart}
             role="separator"
             type="button"

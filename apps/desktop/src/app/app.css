@@ -774,7 +774,7 @@ select:focus-visible {
   border-right: 1px solid color-mix(in srgb, var(--sidebar-border) 52%, transparent);
   cursor: col-resize;
   padding: 0;
-  width: 8px;
+  width: 3px;
   transition:
     background var(--duration-interaction) var(--ease-ui),
     box-shadow var(--duration-interaction) var(--ease-ui);
