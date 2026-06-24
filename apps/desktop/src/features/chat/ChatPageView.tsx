@@ -1308,7 +1308,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     ) : null}
                     <Textarea
                       aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-                      className="min-h-20 resize-none border-border/60 bg-background/80"
+                      className="slei-composer-input min-h-20 resize-none border-border/60 bg-background/80"
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}

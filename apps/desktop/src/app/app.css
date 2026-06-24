@@ -301,6 +301,14 @@
   .slei-inset-focus-medium:focus-visible {
     box-shadow: var(--slei-shadow-inset-medium), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
   }
+
+  .slei-composer-input {
+    box-shadow: var(--slei-shadow-inset-small);
+  }
+
+  .slei-composer-input:focus-visible {
+    box-shadow: var(--slei-shadow-inset-small), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+  }
 }
 
 @layer base {
