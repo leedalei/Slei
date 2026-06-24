@@ -251,7 +251,8 @@ describe("SearchPage global search UI", () => {
     expect(appCss).toContain("transition:");
     expect(appCss).toContain("border-color var(--focus-in-dur) var(--focus-in-ease)");
     expect(appCss).toContain(".slei-search-input-surface:focus-within {");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--slei-inset-border) 88%, transparent);");
+    expect(appCss).toContain("border-color: var(--primary);");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");

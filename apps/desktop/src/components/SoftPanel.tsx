@@ -11,7 +11,7 @@ const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   raised: "border-transparent bg-card slei-raised-small",
   inset: "border-border/60 bg-muted/40",
   listItem:
-    "rounded-lg border-border/60 bg-card/80 slei-raised-small transition-[background-color,box-shadow,color] hover:bg-card hover:slei-raised-small",
+    "rounded-lg border-border/60 bg-card/80 slei-raised-small slei-hover-transition hover:bg-card hover:slei-raised-small",
 };
 
 const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {

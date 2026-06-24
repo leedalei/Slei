@@ -22,7 +22,7 @@ function Card({
         variant === "raised" && "border-transparent bg-card slei-raised-small",
         variant === "inset" && "border-border/60 bg-muted/40 slei-inset-small",
         variant === "interactive" &&
-          "cursor-pointer border-border/70 bg-card slei-raised-small transition-[background-color,box-shadow,color] hover:slei-raised-small",
+          "cursor-pointer border-border/70 bg-card slei-raised-small slei-hover-transition hover:slei-raised-small",
         className
       )}
       {...props}

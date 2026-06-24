@@ -251,6 +251,10 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(appCss).toContain("--slei-glass-nav-bg:");
     expect(appCss).toContain("--slei-glass-sidebar-bg:");
+    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 36%, transparent)");
+    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 32%, transparent)");
+    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 42%, transparent)");
+    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 38%, transparent)");
     expect(appCss).toContain("--slei-glass-filter: blur(18px) saturate(145%)");
     expect(navSource).not.toContain("bg-sidebar/");
     expect(asideSource).not.toContain("bg-sidebar/");
@@ -262,6 +266,46 @@ describe("SleiAppFrame global search navigation", () => {
     expect(sidebarCss).toContain("backdrop-filter: var(--slei-glass-filter)");
     expect(sidebarCss).toContain('[data-slot="agent-activity"]');
     expect(sidebarCss).toContain("background: transparent");
+  });
+
+  it("keeps the native window and shell roots transparent so glass surfaces reveal apps behind Slei", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const cargoToml = readFileSync(join(process.cwd(), "src-tauri/Cargo.toml"), "utf8");
+    const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")) as {
+      app: {
+        macOSPrivateApi?: boolean;
+        windows: Array<{
+          transparent?: boolean;
+          backgroundColor?: [number, number, number, number];
+          windowEffects?: { effects?: string[]; state?: string; radius?: number };
+        }>;
+      };
+    };
+    const tauriLib = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
+
+    expect(cargoToml).toContain('tauri = { version = "2.11.2", features = ["macos-private-api"] }');
+    expect(tauriConfig.app.macOSPrivateApi).toBe(true);
+    expect(tauriConfig.app.windows[0]?.transparent).toBe(true);
+    expect(tauriConfig.app.windows[0]?.backgroundColor).toEqual([0, 0, 0, 0]);
+    expect(tauriConfig.app.windows[0]?.windowEffects).toEqual({
+      effects: ["sidebar"],
+      state: "active",
+      radius: 0,
+    });
+    expect(tauriLib).toContain("configure_transparent_window");
+    expect(tauriLib).toContain("webview_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)))");
+    expect(tauriLib).toContain("webview_window.set_effects(");
+    expect(tauriLib).toContain(".effect(tauri::window::Effect::Sidebar)");
+    expect(tauriLib).toContain(".state(tauri::window::EffectState::Active)");
+    expect(tauriLib).toContain(".radius(0.)");
+    expect(frameSource).not.toContain("overflow-hidden bg-background text-foreground");
+    expect(frameSource).toContain("overflow-hidden bg-transparent text-foreground");
+    expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
+    expect(frameSource).toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
+    expect(appCss).toContain("background: transparent;");
+    expect(appCss).toContain("#root {");
+    expect(appCss).toContain("background: transparent;");
   });
 
   it("renders menubar navigation items as raised buttons", () => {
@@ -302,18 +346,18 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
   });
 
-  it("keeps menubar button borders only slightly darker than their raised shadows", () => {
+  it("keeps menubar button borders lighter than their raised shadows", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
     const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(lightThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.18)");
-    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.20)");
+    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.15)");
     expect(darkThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.58)");
-    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.60)");
+    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.55)");
     expect(navButtonCss).toContain("border-color: var(--slei-menu-border)");
-    expect(navButtonCss).toContain("border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
+    expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
     expect(navButtonCss).not.toContain("var(--slei-raised-border)");
   });
 
@@ -527,32 +571,70 @@ describe("SleiAppFrame global search navigation", () => {
     const directMessageSortButton = () => container.querySelector<HTMLButtonElement>('[data-sort-target="direct-messages"]');
     const channelOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-channel-list-item]")).map((item) => item.dataset.channelId);
     const directMessageOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.conversationId);
+    const sortIconState = (button: HTMLButtonElement | null | undefined) => button?.querySelector<HTMLElement>("[data-sort-icon-swap]")?.dataset.state;
+    const sortDirectionIconState = (button: HTMLButtonElement | null | undefined) => button?.querySelector<HTMLElement>("[data-sort-direction-swap]")?.dataset.state;
+    const activeSortIcon = (button: HTMLButtonElement | null | undefined) => {
+      const swap = button?.querySelector<HTMLElement>("[data-sort-icon-swap]");
+      const state = swap?.dataset.state;
+      const iconSlot = Array.from(swap?.children ?? [])
+        .find((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains("t-icon") && child.dataset.icon === state);
+      const nestedSwap = iconSlot?.querySelector<HTMLElement>("[data-sort-direction-swap]");
+      if (nestedSwap) {
+        const nestedState = nestedSwap.dataset.state;
+        const nestedIconSlot = Array.from(nestedSwap.children)
+          .find((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains("t-icon") && child.dataset.icon === nestedState);
+        return nestedIconSlot?.querySelector<HTMLElement>("[data-slei-icon]")?.dataset.sleiIcon;
+      }
+      return iconSlot?.querySelector<HTMLElement>("[data-slei-icon]")?.dataset.sleiIcon;
+    };
 
     expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
     expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
     expect(channelSortButton()?.dataset.sortState).toBe("default");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
+    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
+    expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(false);
     expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("default");
+    expect(sortIconState(channelSortButton())).toBe("a");
+    expect(activeSortIcon(channelSortButton())).toBe("sort");
 
     await click(channelSortButton()!);
     expect(channelOrder()).toEqual(["alpha", "beta", "zeta"]);
     expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
     expect(channelSortButton()?.dataset.sortState).toBe("asc");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("降序");
+    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
+    expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(true);
+    expect(channelSortButton()?.classList.contains("text-foreground")).toBe(true);
+    expect(channelSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);
     expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("asc");
+    expect(sortIconState(channelSortButton())).toBe("b");
+    expect(sortDirectionIconState(channelSortButton())).toBe("a");
+    expect(activeSortIcon(channelSortButton())).toBe("arrowUp");
     expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("asc");
 
     await click(channelSortButton()!);
     expect(channelOrder()).toEqual(["zeta", "beta", "alpha"]);
     expect(channelSortButton()?.dataset.sortState).toBe("desc");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("取消排序");
+    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
+    expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(true);
+    expect(channelSortButton()?.classList.contains("text-foreground")).toBe(true);
+    expect(channelSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);
     expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("desc");
+    expect(sortIconState(channelSortButton())).toBe("b");
+    expect(sortDirectionIconState(channelSortButton())).toBe("b");
+    expect(activeSortIcon(channelSortButton())).toBe("arrowDown");
     expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("desc");
 
     await click(channelSortButton()!);
     expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
     expect(channelSortButton()?.dataset.sortState).toBe("default");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
+    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
+    expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(false);
+    expect(sortIconState(channelSortButton())).toBe("a");
+    expect(activeSortIcon(channelSortButton())).toBe("sort");
     expect(window.localStorage.getItem("slei:sidebar-sort:channels")).toBe("default");
 
     await click(directMessageSortButton()!);
@@ -560,7 +642,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(directMessageOrder()).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
     expect(directMessageSortButton()?.dataset.sortState).toBe("asc");
     expect(directMessageSortButton()?.getAttribute("aria-label")).toBe("降序");
+    expect(directMessageSortButton()?.getAttribute("data-variant")).toBe("ghost");
+    expect(directMessageSortButton()?.classList.contains("bg-muted/70")).toBe(true);
+    expect(directMessageSortButton()?.classList.contains("text-foreground")).toBe(true);
+    expect(directMessageSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);
     expect(directMessageSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("asc");
+    expect(sortIconState(directMessageSortButton())).toBe("b");
+    expect(sortDirectionIconState(directMessageSortButton())).toBe("a");
+    expect(activeSortIcon(directMessageSortButton())).toBe("arrowUp");
     expect(window.localStorage.getItem("slei:sidebar-sort:direct-messages")).toBe("asc");
   });
 

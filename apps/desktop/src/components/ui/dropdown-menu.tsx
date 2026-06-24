@@ -29,6 +29,7 @@ function DropdownMenuContent({
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
+        forceMount
         sideOffset={sideOffset}
         className={cn(
           "t-dropdown z-50 min-w-36 overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-[var(--slei-shadow-overlay-sm)] ring-1 ring-foreground/10 outline-none",
@@ -199,6 +200,7 @@ function DropdownMenuSubContent({
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
+      forceMount
       className={cn(
         "t-dropdown z-50 min-w-36 overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-[var(--slei-shadow-overlay-sm)] ring-1 ring-foreground/10 outline-none",
         className

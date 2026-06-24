@@ -12,7 +12,7 @@ export const members = {
   created: "创建时间",
   creator: "创建者",
   defaultSkill: (handle: string) => `默认技能：当用户 @${handle} 并要求记住、remember 或 learn 时，更新 MEMORY.md。`,
-  deleteAgent: "删除智能体",
+  deleteAgent: "删除",
   deleteAgentConfirm: (name: string) => `确认删除智能体 ${name}？该操作会同时删除它的工作区文件夹，且无法撤销。`,
   deleteAgentFailed: "删除智能体失败",
   description: "描述",

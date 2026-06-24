@@ -210,6 +210,35 @@ describe("chat to task thread flow", () => {
     expect(html).not.toContain("标记待评审");
   });
 
+  it("renders the task drawer title one step larger than body text without bold weight", () => {
+    const data = createSleiFixtures({
+      tasks: [{
+        id: "T-title",
+        title: "感谢欢迎，agent_guide",
+        owner: "Theo",
+        status: "in_progress",
+        channelId: "all",
+        replyCount: 0,
+        replies: [{ id: "root", sender: "Theo", role: "agent", body: "根消息" }],
+      }],
+    });
+
+    const html = renderToStaticMarkup(
+      <TaskThreadDrawer
+        messages={createDesktopMessages("zh-CN")}
+        onClose={() => undefined}
+        open
+        task={data.tasks[0]}
+      />,
+    );
+
+    const titleMatch = html.match(/<h2[^>]*data-slot="sheet-title"[^>]*class="([^"]*)"[^>]*>感谢欢迎，agent_guide<\/h2>/);
+
+    expect(titleMatch?.[1]).toContain("text-base");
+    expect(titleMatch?.[1]).toContain("font-normal");
+    expect(titleMatch?.[1]).not.toContain("font-bold");
+  });
+
   it("keeps task drawer async errors and thread-open rejections handled in source", () => {
     const drawerSource = taskThreadDrawerSource();
 

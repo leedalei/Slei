@@ -1001,9 +1001,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }
 
   return (
-    <section className={cn("relative grid h-full min-h-0 bg-background", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
+    <section className={cn("relative grid h-full min-h-0 bg-transparent", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} type={toast.type} />
-      <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-background/95 px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
+      <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
         <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
           <div className="min-w-0" data-tauri-drag-region="deep">
             <h1 aria-label={detailAriaLabel} className="inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold" data-tauri-drag-region="deep">
@@ -1113,7 +1113,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       </header>
       {!dmMember ? (
         <Tabs className="gap-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
-          <div className="border-b px-4 py-2" data-testid="slei-channel-view-tabs">
+          <div className="border-b bg-transparent px-4 py-2" data-testid="slei-channel-view-tabs">
             <TabsList aria-label={messages.chat.channelView} variant="soft">
               <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><SleiIcon name="chat" size={14} />{messages.shell.nav.chat}</TabsTrigger>
               <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><SleiIcon name="tasks" size={14} />{messages.chat.tasks}</TabsTrigger>
@@ -1138,7 +1138,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
             <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
               <div className="relative min-h-0">
                 {olderMessagesLoading ? (
-                  <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-background/95 px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
+                  <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-transparent px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
                     {messages.chat.loadingOlderMessages}
                   </div>
                 ) : null}
@@ -1282,7 +1282,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </Button>
                 ) : null}
               </div>
-              <footer className="border-t bg-background/95">
+              <footer className="border-t bg-transparent">
                 {mention && mentionTargets.length > 0 ? (
                   <div className="px-4 pt-3">
                     <MentionPicker
@@ -1319,7 +1319,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     ) : null}
                     <Textarea
                       aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-                      className="slei-composer-input min-h-20 resize-none bg-background/80"
+                      className="slei-composer-input min-h-20 resize-none bg-transparent"
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}

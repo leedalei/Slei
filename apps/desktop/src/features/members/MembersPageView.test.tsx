@@ -328,6 +328,14 @@ describe("MembersPage agent details", () => {
     expect(html).toContain("ClaudeCode");
   });
 
+  it("uses the short Chinese delete action label in the member header", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(renderMembersPage({ messages }));
+
+    expect(html).toContain(">删除<");
+    expect(html).not.toContain(">删除智能体<");
+  });
+
   it("shows the profile description only in the editable description field", () => {
     const messages = createDesktopMessages("zh-CN");
     const description = "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。";

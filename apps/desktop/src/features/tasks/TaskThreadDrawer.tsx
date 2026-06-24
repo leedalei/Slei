@@ -115,7 +115,7 @@ export function TaskThreadDrawer(input: {
       <>
         <SheetHeader className="relative border-b p-5 pr-14">
           <TaskStatusBadge messages={input.messages} status={task.status} />
-          <SheetTitle>{task.title}</SheetTitle>
+          <SheetTitle className="text-base font-normal">{task.title}</SheetTitle>
           <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(task.replyCount ?? task.replies?.length ?? 0)}</SheetDescription>
           <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3" onClick={input.onClose} size="icon-sm" type="button" variant="ghost">
             <SleiIcon className="size-4" name="x" />

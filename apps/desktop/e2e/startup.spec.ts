@@ -31,7 +31,7 @@ describe("desktop startup contract", () => {
     expect(desktopDevScript).toContain("tauri dev");
   });
 
-  it("uses native macOS overlay titlebar controls integrated with the app shell", async () => {
+  it("uses transparent macOS sidebar material with native overlay titlebar controls", async () => {
     const tauriConfig = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
     ) as {
@@ -39,13 +39,14 @@ describe("desktop startup contract", () => {
         macOSPrivateApi?: boolean;
         windows?: Array<{
           acceptFirstMouse?: boolean;
-          backgroundColor?: string;
+          backgroundColor?: [number, number, number, number];
           decorations?: boolean;
           shadow?: boolean;
           title?: string;
           titleBarStyle?: string;
           trafficLightPosition?: { x?: number; y?: number };
           transparent?: boolean;
+          windowEffects?: { effects?: string[]; radius?: number; state?: string };
         }>;
       };
     };
@@ -55,11 +56,16 @@ describe("desktop startup contract", () => {
     expect(windowConfig?.decorations).toBe(true);
     expect(windowConfig?.titleBarStyle).toBe("Overlay");
     expect(windowConfig?.trafficLightPosition).toEqual({ x: 8, y: 18 });
-    expect(windowConfig).not.toHaveProperty("transparent");
-    expect(windowConfig).not.toHaveProperty("backgroundColor");
+    expect(windowConfig?.transparent).toBe(true);
+    expect(windowConfig?.backgroundColor).toEqual([0, 0, 0, 0]);
+    expect(windowConfig?.windowEffects).toEqual({
+      effects: ["sidebar"],
+      state: "active",
+      radius: 0,
+    });
     expect(windowConfig).not.toHaveProperty("shadow");
     expect(windowConfig?.acceptFirstMouse).toBe(true);
-    expect(tauriConfig.app).not.toHaveProperty("macOSPrivateApi");
+    expect(tauriConfig.app?.macOSPrivateApi).toBe(true);
   });
 
   it("allows only the window permission needed by overlay drag regions", async () => {

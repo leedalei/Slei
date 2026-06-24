@@ -3,6 +3,7 @@ import {
   IconAlertCircleFilled,
   IconAlienFilled,
   IconArrowDown,
+  IconArrowUp,
   IconArrowsSort,
   IconBookmark,
   IconBellFilled,
@@ -54,6 +55,7 @@ import {
 export type SleiIconName =
   | "approval"
   | "arrowDown"
+  | "arrowUp"
   | "attachment"
   | "bell"
   | "bookmark"
@@ -108,6 +110,7 @@ export type SleiTablerIconProps = IconProps;
 export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   approval: IconAlertCircleFilled,
   arrowDown: IconArrowDown,
+  arrowUp: IconArrowUp,
   attachment: IconPaperclip,
   bell: IconBellFilled,
   bookmark: IconBookmarkFilled,

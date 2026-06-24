@@ -96,6 +96,44 @@ describe("desktop UI primitive usage", () => {
     expect(panelSource).not.toContain("slei-raised-large");
   });
 
+  it("applies a shared hover transition contract across global hover utilities and primitives", () => {
+    const appCss = readSource("app/app.css");
+    const buttonSource = readSource("components/ui/button.tsx");
+    const cardSource = readSource("components/ui/card.tsx");
+    const badgeSource = readSource("components/ui/badge.tsx");
+    const panelSource = readSource("components/SoftPanel.tsx");
+
+    expect(appCss).toContain("--duration-hover: 0.35s");
+    expect(appCss).toContain("--ease-hover: cubic-bezier(0.22, 1, 0.36, 1)");
+    expect(appCss).toContain("--slei-hover-transition-property:");
+    for (const property of [
+      "background-color",
+      "border-color",
+      "color",
+      "box-shadow",
+      "opacity",
+      "transform",
+      "width",
+      "height",
+      "padding",
+      "margin",
+    ]) {
+      expect(appCss).toContain(property);
+    }
+    expect(appCss).toContain("@utility slei-hover-transition");
+    expect(appCss).toContain('[class*="hover:"]');
+    expect(appCss).toContain('[class*="group-hover"]');
+    expect(appCss).toContain("transition-property: var(--slei-hover-transition-property)");
+    expect(appCss).toContain("transition-duration: var(--duration-hover)");
+    expect(appCss).toContain("transition-timing-function: var(--ease-hover)");
+
+    expect(buttonSource).toContain("slei-hover-transition");
+    expect(cardSource).toContain("slei-hover-transition");
+    expect(badgeSource).toContain("slei-hover-transition");
+    expect(badgeSource).toContain("[&_a]:slei-hover-transition");
+    expect(panelSource).toContain("slei-hover-transition");
+  });
+
   it("defines reusable raised and inset neumorphic shadow size tokens", () => {
     const appCss = readSource("app/app.css");
     const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
@@ -289,6 +327,13 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("shadow-[var(--slei-shadow-inset)]");
   });
 
+  it("renders tooltip as a bubble without an arrow pointer", () => {
+    const source = readSource("components/ui/tooltip.tsx");
+
+    expect(source).toContain("sideOffset = 4");
+    expect(source).not.toContain("TooltipPrimitive.Arrow");
+  });
+
   it("uses regular overlay shadows for floating primitives", () => {
     const floatingPrimitiveFiles = [
       "components/ui/dialog.tsx",
@@ -349,10 +394,17 @@ describe("desktop UI primitive usage", () => {
     }
 
     expect(appCss).toContain(".t-dropdown");
+    expect(appCss).toContain('.t-dropdown[data-state="open"]');
+    expect(appCss).toContain('.t-dropdown[data-state="closed"]');
+    expect(appCss).toContain("@keyframes slei-dropdown-open");
+    expect(appCss).toContain("@keyframes slei-dropdown-close");
     expect(appCss).toContain(".t-modal");
     expect(appCss).toContain(".t-icon-swap");
+    expect(appCss).toContain('.t-icon-swap[data-state="a"] > .t-icon[data-icon="a"]');
+    expect(appCss).not.toContain('.t-icon-swap[data-state="a"] .t-icon[data-icon="a"]');
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(appCss).toContain(".t-dropdown { transition: none !important; }");
+    expect(appCss).toContain("animation: none !important;");
+    expect(appCss).toContain("transition: none !important;");
     expect(appCss).toContain(".t-modal { transition: none !important; }");
     expect(appCss).toContain(".t-icon-swap .t-icon { transition: none !important; }");
   });
@@ -369,6 +421,19 @@ describe("desktop UI primitive usage", () => {
       expect(source).not.toContain("data-open:zoom-in-95");
       expect(source).not.toContain("data-closed:zoom-out-95");
     }
+
+    const dropdownSource = readSource("components/ui/dropdown-menu.tsx");
+    expect(dropdownSource).toContain("<DropdownMenuPrimitive.Content");
+    expect(dropdownSource).toContain("<DropdownMenuPrimitive.SubContent");
+    expect(dropdownSource).toContain("forceMount");
+
+    const selectSource = readSource("components/ui/select.tsx");
+    const selectContentSource = selectSource.slice(
+      selectSource.indexOf("function SelectContent"),
+      selectSource.indexOf("function SelectLabel"),
+    );
+    expect(selectContentSource).toContain("t-dropdown");
+    expect(selectContentSource).not.toContain("forceMount");
 
     for (const file of [
       "components/ui/dialog.tsx",

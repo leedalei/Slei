@@ -548,6 +548,20 @@ describe("ChatPage mention panel", () => {
     expect(headerHtml.slice(membersButtonStart, membersButtonStart + 260)).not.toContain("data-tauri-drag-region");
   });
 
+  it("keeps the full chat workspace transparent so native window material remains visible", () => {
+    const source = readFileSync(join(process.cwd(), "src/features/chat/ChatPageView.tsx"), "utf8");
+
+    expect(source).toContain('"relative grid h-full min-h-0 bg-transparent"');
+    expect(source).not.toContain('"relative grid h-full min-h-0 bg-background"');
+    expect(source).toContain('border-b bg-transparent px-4 py-3');
+    expect(source).not.toContain('border-b bg-background/95 px-4 py-3');
+    expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
+    expect(source).toContain('<footer className="border-t bg-transparent">');
+    expect(source).not.toContain('<footer className="border-t bg-background/95">');
+    expect(source).toContain('className="slei-composer-input min-h-20 resize-none bg-transparent"');
+    expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
+  });
+
   it("keeps long message role descriptions on one truncated header row", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
@@ -1194,7 +1208,7 @@ describe("ChatPage mention panel", () => {
     expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).toContain('data-slei-icon="panelOpen"');
     expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).not.toContain('data-slei-icon="members"');
     expect(headerHtml).not.toContain('role="tablist"');
-    expect(source).toContain('className="border-b px-4 py-2"');
+    expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
   });
 

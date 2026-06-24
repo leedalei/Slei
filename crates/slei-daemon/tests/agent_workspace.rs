@@ -300,7 +300,7 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(guide_skill.starts_with("---\n"));
     assert!(guide_skill.contains("\nname: guide-create\n"));
     assert!(guide_skill.contains("slei_propose_interactive_card"));
-    assert!(guide_skill.contains("Input schema"));
+    assert!(guide_skill.contains("Input Schema"));
     assert!(guide_skill.contains("Output contract"));
     assert!(guide_skill.contains("Single agent example"));
     assert!(guide_skill.contains("Multiple agents example"));

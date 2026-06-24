@@ -149,7 +149,32 @@ function sortDirectMessagesByName(conversations: ConversationView[], members: Sl
 }
 
 function SortDirectionIcon(input: { direction: SortDirection }) {
-  return <SleiIcon className="slei-sort-icon" data-sort-direction={input.direction} name="sort" size={14} />;
+  return (
+    <span
+      className="t-icon-swap slei-sort-icon-swap shrink-0"
+      data-sort-direction={input.direction}
+      data-sort-icon-swap=""
+      data-state={input.direction === "default" ? "a" : "b"}
+    >
+      <span className="t-icon" data-icon="a">
+        <SleiIcon name="sort" size={14} />
+      </span>
+      <span className="t-icon" data-icon="b">
+        <span
+          className="t-icon-swap slei-sort-direction-swap"
+          data-sort-direction-swap=""
+          data-state={input.direction === "desc" ? "b" : "a"}
+        >
+          <span className="t-icon" data-icon="a">
+            <SleiIcon name="arrowUp" size={14} />
+          </span>
+          <span className="t-icon" data-icon="b">
+            <SleiIcon name="arrowDown" size={14} />
+          </span>
+        </span>
+      </span>
+    </span>
+  );
 }
 
 export type ChatWorkspaceMode = "chat" | "saved";
@@ -335,7 +360,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   return (
     <TooltipProvider>
     <div
-      className={cn("grid h-screen min-h-0 overflow-hidden bg-background text-foreground", normalizedTheme === "dark" && "dark")}
+      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme === "dark" && "dark")}
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
@@ -429,7 +454,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         </>
       ) : null}
 
-      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
+      <main className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-transparent">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -895,13 +920,14 @@ function ChannelList(input: {
               <div className="flex items-center gap-1">
                 <TooltipButton
                   aria-label={sortActionLabel(input.messages, channelSortDirection)}
+                  className={cn(channelSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
                   data-sort-state={channelSortDirection}
                   data-sort-target="channels"
                   onClick={cycleChannelSort}
                   size="icon-xs"
                   tooltip={sortActionLabel(input.messages, channelSortDirection)}
                   type="button"
-                  variant={channelSortDirection === "default" ? "ghost" : "secondary"}
+                  variant="ghost"
                 >
                   <SortDirectionIcon direction={channelSortDirection} />
                 </TooltipButton>
@@ -969,13 +995,14 @@ function ChannelList(input: {
               <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
               <TooltipButton
                 aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
+                className={cn(directMessageSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
                 data-sort-state={directMessageSortDirection}
                 data-sort-target="direct-messages"
                 onClick={cycleDirectMessageSort}
                 size="icon-xs"
                 tooltip={sortActionLabel(input.messages, directMessageSortDirection)}
                 type="button"
-                variant={directMessageSortDirection === "default" ? "ghost" : "secondary"}
+                variant="ghost"
               >
                 <SortDirectionIcon direction={directMessageSortDirection} />
               </TooltipButton>

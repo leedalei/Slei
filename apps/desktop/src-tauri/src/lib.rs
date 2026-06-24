@@ -1,9 +1,15 @@
 pub mod commands;
 pub mod daemon_broker;
 
+use tauri::Manager;
+
 pub fn run() {
     tauri::Builder::default()
         .manage(daemon_broker::DaemonBroker::default_local())
+        .setup(|app| {
+            configure_transparent_window(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::log_frontend_crash_command,
             commands::log_frontend_event_command,
@@ -63,6 +69,20 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Slei desktop app");
+}
+
+fn configure_transparent_window(app: &tauri::App) -> tauri::Result<()> {
+    if let Some(webview_window) = app.get_webview_window("main") {
+        webview_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)))?;
+        webview_window.set_effects(
+            tauri::window::EffectsBuilder::new()
+                .effect(tauri::window::Effect::Sidebar)
+                .state(tauri::window::EffectState::Active)
+                .radius(0.)
+                .build(),
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -2528,7 +2548,7 @@ mod tests {
         assert!(guide_skill
             .content
             .contains("slei_propose_interactive_card"));
-        assert!(guide_skill.content.contains("Input schema"));
+        assert!(guide_skill.content.contains("Input Schema"));
         assert!(guide_skill.content.contains("Output contract"));
         assert!(guide_skill.content.contains("Single agent example"));
         assert!(guide_skill.content.contains("Multiple agents example"));

@@ -41,8 +41,8 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 76%, transparent);
-  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 70%, transparent);
+  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 36%, transparent);
+  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 32%, transparent);
   --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 48%, transparent);
   --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 34%, transparent);
   --slei-glass-filter: blur(18px) saturate(145%);
@@ -73,9 +73,9 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.24);
   --slei-raised-border: oklch(0.91 0.012 190 / 0.86);
-  --slei-menu-border: rgb(0 0 0 / 0.20);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.98);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.18);
+  --slei-menu-border: rgb(0 0 0 / 0.15);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.16);
   --slei-inset-border: rgb(0 0 0 / 0.24);
   --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
@@ -122,6 +122,9 @@
   --icon-swap-ease: ease-in-out;
   --focus-in-dur: 250ms;
   --focus-in-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-hover: 0.35s;
+  --ease-hover: cubic-bezier(0.22, 1, 0.36, 1);
+  --slei-hover-transition-property: background-color, border-color, color, box-shadow, opacity, transform, width, height, padding, margin;
   --tabs-dur: 250ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: color-mix(in srgb, var(--foreground) 62%, transparent);
@@ -231,8 +234,8 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 66%, transparent);
-  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 62%, transparent);
+  --slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 42%, transparent);
+  --slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 38%, transparent);
   --slei-glass-border: color-mix(in srgb, var(--sidebar-border) 50%, transparent);
   --slei-glass-highlight: color-mix(in srgb, var(--slei-shadow-highlight) 32%, transparent);
   --slei-glass-filter: blur(18px) saturate(145%);
@@ -266,9 +269,9 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.54);
   --slei-raised-border: oklch(0.18 0.035 210 / 0.82);
-  --slei-menu-border: rgb(0 0 0 / 0.60);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.28);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.58);
+  --slei-menu-border: rgb(0 0 0 / 0.55);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.56);
   --slei-inset-border: rgb(0 0 0 / 0.66);
   --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
@@ -357,6 +360,12 @@
   box-shadow: var(--slei-shadow-inset-s);
 }
 
+@utility slei-hover-transition {
+  transition-property: var(--slei-hover-transition-property);
+  transition-duration: var(--duration-hover);
+  transition-timing-function: var(--ease-hover);
+}
+
 @layer utilities {
   .slei-inset-focus-small:focus-visible {
     box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
@@ -384,8 +393,8 @@
   }
 
   .slei-search-input-surface:focus-within {
-    border-color: var(--slei-inset-border);
-    box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--slei-inset-border) 88%, transparent);
+    border-color: var(--primary);
+    box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);
   }
 }
 
@@ -551,11 +560,15 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-text-primary);
   font-family: var(--text-sans);
   font-size: var(--text-base);
   line-height: var(--leading-ui);
+}
+
+#root {
+  background: transparent;
 }
 
 button,
@@ -593,6 +606,12 @@ select:focus-visible {
 ::selection {
   background: var(--color-accent);
   color: var(--color-text-primary);
+}
+
+:where([class*="hover:"], [class*="group-hover"]) {
+  transition-property: var(--slei-hover-transition-property);
+  transition-duration: var(--duration-hover);
+  transition-timing-function: var(--ease-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -641,6 +660,7 @@ select:focus-visible {
   transform: scale(1);
   opacity: 1;
   pointer-events: auto;
+  animation: slei-dropdown-open var(--dropdown-open-dur) var(--dropdown-ease);
 }
 
 .t-dropdown[data-state="closed"],
@@ -648,9 +668,34 @@ select:focus-visible {
   transform: scale(var(--dropdown-closing-scale));
   opacity: 0;
   pointer-events: none;
+  animation: slei-dropdown-close var(--dropdown-close-dur) var(--dropdown-ease);
   transition:
     transform var(--dropdown-close-dur) var(--dropdown-ease),
     opacity var(--dropdown-close-dur) var(--dropdown-ease);
+}
+
+@keyframes slei-dropdown-open {
+  from {
+    transform: scale(var(--dropdown-pre-scale));
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slei-dropdown-close {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(var(--dropdown-closing-scale));
+    opacity: 0;
+  }
 }
 
 .t-modal {
@@ -686,7 +731,7 @@ select:focus-visible {
   display: inline-grid;
 }
 
-.t-icon-swap .t-icon {
+.t-icon-swap > .t-icon {
   grid-area: 1 / 1;
   transition:
     opacity var(--icon-swap-dur) var(--icon-swap-ease),
@@ -695,15 +740,15 @@ select:focus-visible {
   will-change: opacity, filter, transform;
 }
 
-.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+.t-icon-swap[data-state="a"] > .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] > .t-icon[data-icon="b"] {
   opacity: 1;
   filter: blur(0);
   transform: scale(1);
 }
 
-.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
-.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+.t-icon-swap[data-state="a"] > .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] > .t-icon[data-icon="a"] {
   opacity: 0;
   filter: blur(var(--icon-swap-blur));
   transform: scale(var(--icon-swap-start-scale));
@@ -754,7 +799,10 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-dropdown { transition: none !important; }
+  .t-dropdown {
+    animation: none !important;
+    transition: none !important;
+  }
   .t-modal { transition: none !important; }
   .t-icon-swap .t-icon { transition: none !important; }
   .t-tabs-pill,
@@ -790,21 +838,11 @@ select:focus-visible {
   margin: 0;
 }
 
-.slei-sort-icon path {
-  opacity: 0.5;
-  transition: opacity var(--duration-interaction) var(--ease-ui), stroke var(--duration-interaction) var(--ease-ui);
-}
-
-.slei-sort-icon[data-sort-direction="default"] path {
-  opacity: 1;
-}
-
-.slei-sort-icon[data-sort-direction="desc"] path:nth-of-type(1),
-.slei-sort-icon[data-sort-direction="desc"] path:nth-of-type(2),
-.slei-sort-icon[data-sort-direction="asc"] path:nth-of-type(3),
-.slei-sort-icon[data-sort-direction="asc"] path:nth-of-type(4) {
-  opacity: 1;
-  stroke: var(--primary);
+.slei-sort-icon-swap,
+.slei-sort-direction-swap {
+  width: 14px;
+  height: 14px;
+  place-items: center;
 }
 
 .slei-crash-screen p {
@@ -852,7 +890,7 @@ select:focus-visible {
 .slei-shell-nav__button--active {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border));
+  border-color: var(--slei-menu-border);
 }
 
 .slei-context-sidebar {
