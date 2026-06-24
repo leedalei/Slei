@@ -123,6 +123,22 @@ describe("SleiAppFrame appearance preferences", () => {
 });
 
 describe("SleiAppFrame global search navigation", () => {
+  it("renders the primary navigation with soft icon buttons", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const navButtons = container.querySelectorAll("[data-nav-icon]");
+
+    expect(navButtons.length).toBeGreaterThan(0);
+    expect(container.querySelector("[data-slei-icon]")).not.toBeNull();
+    expect(container.querySelector('[data-nav-icon="chat"]')?.getAttribute("aria-current")).toBe("page");
+  });
+
   it("renders search as an active far-left rail item", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

@@ -1,6 +1,7 @@
 import type { Icon, IconProps } from "@tabler/icons-react";
 import {
   IconAlertCircleFilled,
+  IconArrowsSort,
   IconBellFilled,
   IconBookmarkFilled,
   IconCheck,
@@ -12,15 +13,21 @@ import {
   IconDeviceDesktopFilled,
   IconFolderPlus,
   IconHash,
+  IconInfoCircle,
+  IconLoader2,
   IconMessageCircleFilled,
   IconPencil,
+  IconPalette,
+  IconPlus,
   IconSearch,
   IconSend,
+  IconServer,
   IconSettingsFilled,
   IconSquareCheckFilled,
   IconTrash,
   IconUsersGroup,
   IconUserCircle,
+  IconWorld,
   IconX,
 } from "@tabler/icons-react";
 
@@ -36,12 +43,19 @@ export type SleiIconName =
   | "copy"
   | "delete"
   | "folderPlus"
+  | "globe"
   | "hash"
+  | "info"
+  | "loader"
   | "members"
   | "pencil"
+  | "palette"
+  | "plus"
   | "search"
   | "send"
+  | "server"
   | "settings"
+  | "sort"
   | "status"
   | "tasks"
   | "user"
@@ -63,12 +77,19 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   copy: IconCopy,
   delete: IconTrash,
   folderPlus: IconFolderPlus,
+  globe: IconWorld,
   hash: IconHash,
+  info: IconInfoCircle,
+  loader: IconLoader2,
   members: IconUsersGroup,
   pencil: IconPencil,
+  palette: IconPalette,
+  plus: IconPlus,
   search: IconSearch,
   send: IconSend,
+  server: IconServer,
   settings: IconSettingsFilled,
+  sort: IconArrowsSort,
   status: IconCircleFilled,
   tasks: IconSquareCheckFilled,
   user: IconUserCircle,

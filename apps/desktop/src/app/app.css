@@ -492,6 +492,48 @@ select:focus-visible {
   text-shadow: 0 2px 0 color-mix(in srgb, var(--color-rail-bg) 64%, transparent);
 }
 
+.slei-shell-nav {
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 58%, transparent),
+    inset -8px 0 18px color-mix(in srgb, var(--slei-shadow-highlight) 36%, transparent);
+}
+
+.slei-shell-nav__button {
+  background: color-mix(in srgb, var(--sidebar) 86%, var(--background) 14%);
+  border: 1px solid color-mix(in srgb, var(--sidebar-border) 68%, transparent);
+  box-shadow: var(--slei-shadow-raised);
+  color: var(--sidebar-foreground);
+  transition:
+    background var(--duration-interaction) var(--ease-ui),
+    box-shadow var(--duration-interaction) var(--ease-ui),
+    color var(--duration-interaction) var(--ease-ui),
+    transform var(--duration-interaction) var(--ease-ui);
+}
+
+.slei-shell-nav__button:hover,
+.slei-shell-nav__button:focus-visible {
+  background: color-mix(in srgb, var(--sidebar-accent) 54%, var(--sidebar) 46%);
+  box-shadow: -4px -4px 10px var(--slei-shadow-highlight), 5px 5px 12px var(--slei-shadow-lowlight);
+}
+
+.slei-shell-nav__button[aria-current="page"],
+.slei-shell-nav__button--active {
+  background: color-mix(in srgb, var(--sidebar-accent) 74%, var(--sidebar) 26%);
+  box-shadow: var(--slei-shadow-inset);
+  color: var(--sidebar-accent-foreground);
+}
+
+.slei-context-sidebar {
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
+    inset 10px 0 24px color-mix(in srgb, var(--slei-shadow-highlight) 24%, transparent);
+}
+
+.slei-soft-dialog {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: var(--slei-shadow-raised), 0 22px 70px color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
 .slei-rail__button {
   align-items: center;
   background: color-mix(in srgb, var(--color-rail-text) 92%, var(--color-accent-subtle) 8%);
@@ -540,22 +582,31 @@ select:focus-visible {
 }
 
 .slei-resize-handle {
-  background: color-mix(in srgb, var(--color-shell-divider) 32%, transparent);
+  background: color-mix(in srgb, var(--sidebar-border) 36%, transparent);
   border: 0;
-  border-right: var(--border-card) solid color-mix(in srgb, var(--color-shell-divider) 60%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--sidebar-border) 52%, transparent);
   cursor: col-resize;
   padding: 0;
   width: 8px;
+  transition:
+    background var(--duration-interaction) var(--ease-ui),
+    box-shadow var(--duration-interaction) var(--ease-ui);
 }
 
 .slei-resize-handle:hover,
 .slei-resize-handle:focus-visible {
-  background: var(--color-accent);
+  background: color-mix(in srgb, var(--sidebar-accent) 46%, transparent);
+}
+
+.slei-resize-handle:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+  outline: 0;
 }
 
 .slei-sidebar__header {
-  background: color-mix(in srgb, var(--color-surface) 62%, transparent);
-  border-bottom: var(--border-card) solid var(--color-border-subtle);
+  background: color-mix(in srgb, var(--sidebar) 72%, var(--background) 28%);
+  border-bottom: 1px solid color-mix(in srgb, var(--sidebar-border) 62%, transparent);
+  box-shadow: inset 0 -1px 0 var(--slei-shadow-highlight);
   display: flex;
   flex-direction: column;
   gap: var(--gap-xs);
