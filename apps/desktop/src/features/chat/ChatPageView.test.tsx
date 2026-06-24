@@ -1583,7 +1583,11 @@ describe("ChatPage mention panel", () => {
     expect(messageHtml).toContain('data-message-id="msg-contract"');
     expect(messageHtml).toContain('data-variant="flat"');
     expect(messageOpenTag).toContain("border-transparent");
-    expect(messageOpenTag).not.toContain("border-border");
+    expect(messageOpenTag).toContain("bg-transparent");
+    expect(messageOpenTag).toContain("hover:border-border/50");
+    expect(messageOpenTag).not.toContain("bg-card");
+    expect(messageOpenTag).not.toContain("bg-muted");
+    expect(messageOpenTag).not.toContain("bg-primary/5");
     expect(messageOpenTag).not.toContain("shadow-");
     expect(messageOpenTag).not.toContain("hover:shadow");
     expect(messageHtml).toContain('data-slot="message-actions"');
@@ -1620,8 +1624,9 @@ describe("ChatPage mention panel", () => {
     const messageHtml = html.slice(html.indexOf('data-message-id="msg-focused"'));
     const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
 
-    expect(messageOpenTag).toContain("border-primary/25");
-    expect(messageOpenTag).not.toContain("border-border");
+    expect(messageOpenTag).toContain("data-[focused=true]:border-primary/35");
+    expect(messageOpenTag).not.toContain("data-[focused=true]:bg-primary/5");
+    expect(messageOpenTag).not.toContain("data-[focused=true]:ring-1");
   });
 
   it("renders create agent and channel cards as flat surfaces", () => {
@@ -1724,7 +1729,9 @@ describe("ChatPage mention panel", () => {
 
     expect(taskRootHtml).toContain('data-task-root-entry="task-msg-task-source"');
     expect(taskRootHtml).toContain('data-source-message-id="msg-task-source"');
-    expect(taskRootHtml).toContain('data-variant="surface"');
+    expect(taskRootHtml).toContain('data-variant="flat"');
+    expect(taskRootOpenTag).toContain("bg-transparent");
+    expect(taskRootOpenTag).toContain("hover:border-border/50");
     expect(taskRootOpenTag).not.toContain("shadow-");
     expect(taskRootOpenTag).not.toContain("hover:shadow");
     expect(taskRootHtml).toContain('data-task-root-entry-status');
@@ -1870,9 +1877,13 @@ describe("ChatPage mention panel", () => {
     expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--color-text-primary);");
   });
 
-  it("keeps task root entries visually aligned with normal messages without a border", () => {
+  it("keeps task root entries visually aligned with normal transparent message rows", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
 
+    expect(source).toContain("bg-transparent");
+    expect(source).toContain("hover:border-border/50");
+    expect(source).toContain('variant="flat"');
+    expect(source).not.toContain('variant="surface"');
     expect(source).not.toContain("border border-primary");
   });
 });

@@ -54,10 +54,10 @@ export function TaskRootEntry(input: {
   };
   return (
     <SoftPanel
-      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2"
+      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50"
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
-      variant="surface"
+      variant="flat"
     >
       <MemberAvatar identity={avatarIdentity} />
       <div className="min-w-0">

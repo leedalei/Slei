@@ -1193,7 +1193,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         >
                           <SoftPanel
                             className={cn(
-                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/25 data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
+                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/35",
                               highlightedMessageId === message.id && "slei-message--blink-border",
                             )}
                             data-focused={highlightedMessageId === message.id ? "true" : undefined}

@@ -118,11 +118,13 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-avatar-size");
     expect(html).toContain("用户");
     expect(html).toContain("data-slei-panel");
-    expect(html).toContain('data-variant="surface"');
+    expect(html).toContain('data-variant="flat"');
     expect(html).toContain("10:00");
     const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
     const taskEntryClose = taskEntryHtml.indexOf("</section>");
     const taskEntryOpenTag = taskEntryHtml.slice(0, taskEntryHtml.indexOf(">"));
+    expect(taskEntryOpenTag).toContain("bg-transparent");
+    expect(taskEntryOpenTag).toContain("hover:border-border/50");
     expect(taskEntryOpenTag).not.toContain("shadow-");
     expect(taskEntryOpenTag).not.toContain("hover:shadow");
     expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="复制"');
