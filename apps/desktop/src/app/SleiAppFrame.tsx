@@ -891,15 +891,12 @@ function ChannelList(input: {
                   data-channel-list-item=""
                   key={channel.id}
                 >
-                  <Button
+                  <button
                     aria-current={input.activeChannelId === channel.id ? "true" : undefined}
-                    className={cn(
-                      "h-auto min-h-12 justify-start whitespace-normal px-2 py-2 text-left hover:bg-transparent hover:text-inherit",
-                      input.activeChannelId === channel.id && "bg-transparent text-inherit",
-                    )}
+                    className="inline-flex min-h-12 w-full min-w-0 items-center justify-start rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                    data-slot="channel-select-trigger"
                     onClick={() => input.onChannelSelect?.(channel.id)}
                     type="button"
-                    variant="ghost"
                   >
                     <span className="grid min-w-0 flex-1 gap-1">
                       <span className="flex min-w-0 items-center gap-2">
@@ -909,7 +906,7 @@ function ChannelList(input: {
                       </span>
                       <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{formatChannelProjectLabel(channel, input.messages)}</small>
                     </span>
-                  </Button>
+                  </button>
                   {channel.id !== "all" ? (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>

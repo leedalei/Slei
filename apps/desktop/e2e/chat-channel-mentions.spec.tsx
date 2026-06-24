@@ -117,6 +117,13 @@ describe("chat search, channel management, and mentions", () => {
     expect(deleteButtonMarkup).not.toContain("mt-1");
     expect(deleteButtonMarkup).not.toContain("mt-2");
     expect(appFrameSource()).toContain("group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto]");
+    expect(appFrameSource()).toContain("data-slot=\"channel-select-trigger\"");
+    expect(appFrameSource()).toContain('input.activeChannelId !== channel.id && "hover:bg-muted/60"');
+    const channelSelectSource = appFrameSource().slice(
+      appFrameSource().indexOf('data-slot="channel-select-trigger"') - 500,
+      appFrameSource().indexOf('data-slot="channel-select-trigger"') + 500,
+    );
+    expect(channelSelectSource).not.toContain("hover:bg-");
     expect(appFrameSource()).toContain('className="space-y-4"');
     expect(appFrameSource()).not.toContain('className="space-y-4 pr-2"');
   });
