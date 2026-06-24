@@ -71,25 +71,33 @@
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.98);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.18);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.16);
-  --slei-shadow-raised-small: -2px -2px 5px var(--slei-shadow-raised-glow), 2px 2px 5px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-medium: -4px -4px 10px var(--slei-shadow-raised-glow), 5px 5px 10px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-large: -9px -9px 24px var(--slei-shadow-raised-glow), 11px 11px 24px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-xs: var(--slei-shadow-raised-small);
-  --slei-shadow-raised-sm: var(--slei-shadow-raised-medium);
-  --slei-shadow-raised-md: var(--slei-shadow-raised-medium);
-  --slei-shadow-raised-lg: var(--slei-shadow-raised-large);
-  --slei-shadow-inset-small: inset 1px 1px 3px var(--slei-shadow-inset-shade), inset -1px -1px 3px var(--slei-shadow-highlight);
-  --slei-shadow-inset-medium: inset 3px 3px 7px var(--slei-shadow-inset-shade), inset -3px -3px 7px var(--slei-shadow-highlight);
-  --slei-shadow-inset-large: inset 7px 7px 16px var(--slei-shadow-inset-shade), inset -7px -7px 16px var(--slei-shadow-highlight);
-  --slei-shadow-inset-xs: var(--slei-shadow-inset-small);
-  --slei-shadow-inset-sm: var(--slei-shadow-inset-small);
-  --slei-shadow-inset-md: var(--slei-shadow-inset-medium);
-  --slei-shadow-inset-lg: var(--slei-shadow-inset-large);
+  --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-m: -4px -4px 4px var(--slei-shadow-raised-glow), 4px 4px 4px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-l: -6px -6px 6px var(--slei-shadow-raised-glow), 6px 6px 6px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-xl: -8px -8px 8px var(--slei-shadow-raised-glow), 8px 8px 8px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-small: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-medium: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-large: var(--slei-shadow-raised-l);
+  --slei-shadow-raised-xs: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-sm: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-md: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-lg: var(--slei-shadow-raised-l);
+  --slei-shadow-inset-s: inset 2px 2px 2px var(--slei-shadow-inset-shade), inset -2px -2px 2px var(--slei-shadow-highlight);
+  --slei-shadow-inset-m: inset 4px 4px 4px var(--slei-shadow-inset-shade), inset -4px -4px 4px var(--slei-shadow-highlight);
+  --slei-shadow-inset-l: inset 6px 6px 6px var(--slei-shadow-inset-shade), inset -6px -6px 6px var(--slei-shadow-highlight);
+  --slei-shadow-inset-xl: inset 8px 8px 8px var(--slei-shadow-inset-shade), inset -8px -8px 8px var(--slei-shadow-highlight);
+  --slei-shadow-inset-small: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-medium: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-large: var(--slei-shadow-inset-l);
+  --slei-shadow-inset-xs: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-sm: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-md: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-lg: var(--slei-shadow-inset-l);
   --slei-shadow-overlay-xs: 0 2px 8px color-mix(in srgb, var(--slei-overlay-shadow-color) 42%, transparent);
   --slei-shadow-overlay-sm: 0 8px 24px color-mix(in srgb, var(--slei-overlay-shadow-color) 48%, transparent);
   --slei-shadow-overlay-md: 0 18px 48px color-mix(in srgb, var(--slei-overlay-shadow-color) 52%, transparent);
-  --slei-shadow-raised: var(--slei-shadow-raised-medium);
-  --slei-shadow-inset: var(--slei-shadow-inset-medium);
+  --slei-shadow-raised: var(--slei-shadow-raised-m);
+  --slei-shadow-inset: var(--slei-shadow-inset-m);
   --slei-shadow-tooltip: var(--slei-shadow-overlay-xs);
   --dropdown-open-dur: 250ms;
   --dropdown-close-dur: 150ms;
@@ -247,26 +255,50 @@
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.28);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.58);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.56);
-  --slei-shadow-raised-small: -2px -2px 6px var(--slei-shadow-raised-glow), 2px 2px 5px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-medium: -4px -4px 10px var(--slei-shadow-raised-glow), 4px 4px 9px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-large: -8px -8px 22px var(--slei-shadow-raised-glow), 8px 8px 18px var(--slei-shadow-raised-shade);
-  --slei-shadow-raised-xs: var(--slei-shadow-raised-small);
-  --slei-shadow-raised-sm: var(--slei-shadow-raised-medium);
-  --slei-shadow-raised-md: var(--slei-shadow-raised-medium);
-  --slei-shadow-raised-lg: var(--slei-shadow-raised-large);
-  --slei-shadow-inset-small: inset 1px 1px 4px var(--slei-shadow-inset-shade), inset -1px -1px 4px var(--slei-shadow-highlight);
-  --slei-shadow-inset-medium: inset 2px 2px 6px var(--slei-shadow-inset-shade), inset -2px -2px 6px var(--slei-shadow-highlight);
-  --slei-shadow-inset-large: inset 6px 6px 13px var(--slei-shadow-inset-shade), inset -6px -6px 13px var(--slei-shadow-highlight);
-  --slei-shadow-inset-xs: var(--slei-shadow-inset-small);
-  --slei-shadow-inset-sm: var(--slei-shadow-inset-small);
-  --slei-shadow-inset-md: var(--slei-shadow-inset-medium);
-  --slei-shadow-inset-lg: var(--slei-shadow-inset-large);
+  --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-m: -4px -4px 4px var(--slei-shadow-raised-glow), 4px 4px 4px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-l: -6px -6px 6px var(--slei-shadow-raised-glow), 6px 6px 6px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-xl: -8px -8px 8px var(--slei-shadow-raised-glow), 8px 8px 8px var(--slei-shadow-raised-shade);
+  --slei-shadow-raised-small: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-medium: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-large: var(--slei-shadow-raised-l);
+  --slei-shadow-raised-xs: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-sm: var(--slei-shadow-raised-s);
+  --slei-shadow-raised-md: var(--slei-shadow-raised-m);
+  --slei-shadow-raised-lg: var(--slei-shadow-raised-l);
+  --slei-shadow-inset-s: inset 2px 2px 2px var(--slei-shadow-inset-shade), inset -2px -2px 2px var(--slei-shadow-highlight);
+  --slei-shadow-inset-m: inset 4px 4px 4px var(--slei-shadow-inset-shade), inset -4px -4px 4px var(--slei-shadow-highlight);
+  --slei-shadow-inset-l: inset 6px 6px 6px var(--slei-shadow-inset-shade), inset -6px -6px 6px var(--slei-shadow-highlight);
+  --slei-shadow-inset-xl: inset 8px 8px 8px var(--slei-shadow-inset-shade), inset -8px -8px 8px var(--slei-shadow-highlight);
+  --slei-shadow-inset-small: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-medium: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-large: var(--slei-shadow-inset-l);
+  --slei-shadow-inset-xs: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-sm: var(--slei-shadow-inset-s);
+  --slei-shadow-inset-md: var(--slei-shadow-inset-m);
+  --slei-shadow-inset-lg: var(--slei-shadow-inset-l);
   --slei-shadow-overlay-xs: 0 4px 10px color-mix(in srgb, var(--slei-overlay-shadow-color) 52%, transparent);
   --slei-shadow-overlay-sm: 0 12px 30px color-mix(in srgb, var(--slei-overlay-shadow-color) 58%, transparent);
   --slei-shadow-overlay-md: 0 24px 60px color-mix(in srgb, var(--slei-overlay-shadow-color) 64%, transparent);
-  --slei-shadow-raised: var(--slei-shadow-raised-medium);
-  --slei-shadow-inset: var(--slei-shadow-inset-medium);
+  --slei-shadow-raised: var(--slei-shadow-raised-m);
+  --slei-shadow-inset: var(--slei-shadow-inset-m);
   --slei-shadow-tooltip: var(--slei-shadow-overlay-xs);
+}
+
+@utility slei-raised-s {
+  box-shadow: var(--slei-shadow-raised-s);
+}
+
+@utility slei-raised-m {
+  box-shadow: var(--slei-shadow-raised-m);
+}
+
+@utility slei-raised-l {
+  box-shadow: var(--slei-shadow-raised-l);
+}
+
+@utility slei-raised-xl {
+  box-shadow: var(--slei-shadow-raised-xl);
 }
 
 @utility slei-raised-small {
@@ -279,6 +311,22 @@
 
 @utility slei-raised-large {
   box-shadow: var(--slei-shadow-raised-large);
+}
+
+@utility slei-inset-s {
+  box-shadow: var(--slei-shadow-inset-s);
+}
+
+@utility slei-inset-m {
+  box-shadow: var(--slei-shadow-inset-m);
+}
+
+@utility slei-inset-l {
+  box-shadow: var(--slei-shadow-inset-l);
+}
+
+@utility slei-inset-xl {
+  box-shadow: var(--slei-shadow-inset-xl);
 }
 
 @utility slei-inset-small {

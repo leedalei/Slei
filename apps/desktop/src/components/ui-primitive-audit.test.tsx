@@ -107,29 +107,53 @@ describe("desktop UI primitive usage", () => {
       expect(themeCss).not.toMatch(/--slei-overlay-shadow-color: oklch\(/);
     }
 
-    for (const size of ["small", "medium", "large"]) {
+    for (const [size, px] of [["s", "2px"], ["m", "4px"], ["l", "6px"], ["xl", "8px"]] as const) {
       const raisedTokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
       expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
       expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
-      expect(raisedTokenMatch?.[1]).toMatch(/-[0-9]+px -[0-9]+px [0-9]+px var\(--slei-shadow-raised-glow\)/);
-      expect(raisedTokenMatch?.[1]).toMatch(/[0-9]+px [0-9]+px [0-9]+px var\(--slei-shadow-raised-shade\)/);
+      expect(raisedTokenMatch?.[1]).toContain(`-${px} -${px} ${px} var(--slei-shadow-raised-glow)`);
+      expect(raisedTokenMatch?.[1]).toContain(`${px} ${px} ${px} var(--slei-shadow-raised-shade)`);
 
       const insetTokenMatch = appCss.match(new RegExp(`--slei-shadow-inset-${size}: ([^;]+);`));
       expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-inset-shade)");
       expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-highlight)");
-      expect(insetTokenMatch?.[1]).toContain("inset");
+      expect(insetTokenMatch?.[1]).toContain(`inset ${px} ${px} ${px} var(--slei-shadow-inset-shade)`);
+      expect(insetTokenMatch?.[1]).toContain(`inset -${px} -${px} ${px} var(--slei-shadow-highlight)`);
     }
 
-    expect(lightThemeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-medium)");
-    expect(lightThemeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-medium)");
-    expect(darkThemeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-medium)");
-    expect(darkThemeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-medium)");
+    for (const themeCss of [lightThemeCss, darkThemeCss]) {
+      expect(themeCss).toContain("--slei-shadow-raised-small: var(--slei-shadow-raised-s)");
+      expect(themeCss).toContain("--slei-shadow-raised-medium: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-raised-large: var(--slei-shadow-raised-l)");
+      expect(themeCss).toContain("--slei-shadow-inset-small: var(--slei-shadow-inset-s)");
+      expect(themeCss).toContain("--slei-shadow-inset-medium: var(--slei-shadow-inset-m)");
+      expect(themeCss).toContain("--slei-shadow-inset-large: var(--slei-shadow-inset-l)");
+      expect(themeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-m)");
+      expect(themeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-m)");
+    }
+
+    expect(appCss).toContain("@utility slei-raised-s");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
+    expect(appCss).toContain("@utility slei-raised-m");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-m)");
+    expect(appCss).toContain("@utility slei-raised-l");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-l)");
+    expect(appCss).toContain("@utility slei-raised-xl");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-xl)");
     expect(appCss).toContain("@utility slei-raised-small");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-small)");
     expect(appCss).toContain("@utility slei-raised-medium");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-medium)");
     expect(appCss).toContain("@utility slei-raised-large");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-large)");
+    expect(appCss).toContain("@utility slei-inset-s");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
+    expect(appCss).toContain("@utility slei-inset-m");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-m)");
+    expect(appCss).toContain("@utility slei-inset-l");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-l)");
+    expect(appCss).toContain("@utility slei-inset-xl");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-xl)");
     expect(appCss).toContain("@utility slei-inset-small");
     expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-small)");
     expect(appCss).toContain("@utility slei-inset-medium");

@@ -23,4 +23,14 @@ describe("SoftPanel", () => {
     expect(html).toContain("slei-inset-small");
     expect(html).not.toContain("slei-inset-large");
   });
+
+  it("uses the medium inset size by default", () => {
+    const html = renderToStaticMarkup(
+      <SoftPanel variant="inset">默认凹陷面板</SoftPanel>,
+    );
+
+    expect(html).toContain("slei-inset-m");
+    expect(html).not.toContain("slei-inset-l");
+    expect(html).not.toContain("slei-inset-xl");
+  });
 });

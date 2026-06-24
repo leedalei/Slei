@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 export type SoftPanelVariant = "surface" | "flat" | "raised" | "inset" | "listItem";
-export type SoftPanelInsetSize = "small" | "medium" | "large";
+export type SoftPanelInsetSize = "s" | "m" | "l" | "xl" | "small" | "medium" | "large";
 
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   surface: "border-border/60 bg-card",
@@ -15,6 +15,10 @@ const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
 };
 
 const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {
+  s: "slei-inset-s",
+  m: "slei-inset-m",
+  l: "slei-inset-l",
+  xl: "slei-inset-xl",
   small: "slei-inset-small",
   medium: "slei-inset-medium",
   large: "slei-inset-large",
@@ -23,7 +27,7 @@ const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {
 export function SoftPanel({
   children,
   className,
-  insetSize = "large",
+  insetSize = "m",
   variant = "surface",
   ...props
 }: ComponentProps<"section"> & {
