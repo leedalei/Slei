@@ -91,6 +91,11 @@ describe("desktop UI primitive usage", () => {
 
   it("defines raised shadows as paired upper-left glow and lower-right shade", () => {
     const appCss = readSource("app/app.css");
+    const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
+    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
+
+    expect(lightThemeCss).toContain("--slei-shadow-raised-glow: oklch(1 0 0 / 1);");
+    expect(darkThemeCss).toContain("--slei-shadow-raised-glow: oklch(0.88 0.012 190 / 0.52);");
 
     for (const size of ["xs", "sm", "md", "lg"]) {
       const tokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
@@ -99,6 +104,9 @@ describe("desktop UI primitive usage", () => {
       expect(tokenMatch?.[1]).toMatch(/-[0-9]+px -[0-9]+px [0-9]+px var\(--slei-shadow-raised-glow\)/);
       expect(tokenMatch?.[1]).toMatch(/[0-9]+px [0-9]+px [0-9]+px var\(--slei-shadow-raised-shade\)/);
     }
+
+    expect(lightThemeCss).toContain("--slei-shadow-raised-md: -6px -6px 16px var(--slei-shadow-raised-glow)");
+    expect(darkThemeCss).toContain("--slei-shadow-raised-md: -6px -6px 15px var(--slei-shadow-raised-glow)");
   });
 
   it("uses inset shadows for input-like and segmented controls", () => {

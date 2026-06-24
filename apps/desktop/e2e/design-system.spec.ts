@@ -113,7 +113,9 @@ describe("shadcn design system wiring", () => {
       expect(overlay).not.toContain("slei-shadow-inset");
     }
 
-    expect(tokenValue(lightTokens, "--slei-shadow-raised-sm")).toContain("-3px -3px 7px");
+    expect(tokenValue(lightTokens, "--slei-shadow-raised-glow")).toBe("oklch(1 0 0 / 1)");
+    expect(tokenValue(darkTokens, "--slei-shadow-raised-glow")).toBe("oklch(0.88 0.012 190 / 0.52)");
+    expect(tokenValue(lightTokens, "--slei-shadow-raised-sm")).toContain("-4px -4px 10px");
     expect(tokenValue(lightTokens, "--slei-shadow-raised-sm")).toContain("5px 5px 10px");
     expect(tokenValue(lightTokens, "--slei-shadow-raised-sm")).toContain("var(--slei-shadow-raised-shade)");
     expect(tokenValue(lightTokens, "--slei-shadow-raised-sm")).not.toContain("var(--slei-shadow-lowlight)");
