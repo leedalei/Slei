@@ -251,11 +251,12 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(appCss).toContain("--slei-glass-nav-bg:");
     expect(appCss).toContain("--slei-glass-sidebar-bg:");
-    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 36%, transparent)");
-    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 32%, transparent)");
-    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--sidebar) 42%, transparent)");
-    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--sidebar) 38%, transparent)");
-    expect(appCss).toContain("--slei-glass-filter: blur(18px) saturate(145%)");
+    expect(appCss).toContain("--glass-bg:");
+    expect(appCss).toContain("--glass-border:");
+    expect(appCss).toContain("--glass-blur:");
+    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent)");
+    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent)");
+    expect(appCss).toContain("--slei-glass-filter: blur(var(--glass-blur)) saturate(145%)");
     expect(navSource).not.toContain("bg-sidebar/");
     expect(asideSource).not.toContain("bg-sidebar/");
     expect(navCss).toContain("background: var(--slei-glass-nav-bg)");
@@ -359,12 +360,13 @@ describe("SleiAppFrame global search navigation", () => {
     expect(iconsSource).toContain("members: IconUsersGroup");
   });
 
-  it("renders the active menubar item with primary glass contrast", () => {
+  it("renders the active menubar item with primary glass gradient contrast", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(navButtonCss).toContain(".slei-shell-nav__button--active");
-    expect(navButtonCss).toContain("background: var(--slei-glass-button-primary-bg)");
+    expect(appCss).toContain("--slei-glass-button-primary-gradient-bg: linear-gradient");
+    expect(navButtonCss).toContain("background: var(--slei-glass-button-primary-gradient-bg)");
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
   });
 

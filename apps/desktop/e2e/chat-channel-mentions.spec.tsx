@@ -24,6 +24,7 @@ const readyRuntime = {
 };
 const searchPageSource = () => readFileSync(new URL("../src/features/search/SearchPageView.tsx", import.meta.url), "utf8");
 const appFrameSource = () => readFileSync(new URL("../src/app/SleiAppFrame.tsx", import.meta.url), "utf8");
+const appCssSource = () => readFileSync(new URL("../src/app/app.css", import.meta.url), "utf8");
 
 describe("chat search, channel management, and mentions", () => {
   it("filters conversation messages by user, channel, and time", () => {
@@ -510,5 +511,9 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("size-5");
     expect(html).not.toContain("text-[11px]");
     expect(html).not.toContain("slei-rail__button");
+
+    const css = appCssSource();
+    expect(css).toContain("--slei-glass-button-primary-gradient-bg: linear-gradient");
+    expect(css).toContain("background: var(--slei-glass-button-primary-gradient-bg)");
   });
 });

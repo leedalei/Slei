@@ -83,6 +83,44 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(themeTokens, "--radius-4xl")).toBe("var(--slei-radius-large)");
   });
 
+  it("maps Slei glass surfaces to Ein UI theming variables", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const lightTokens = cssBlock(appCss, ":root");
+    const darkTokens = cssBlock(appCss, ".dark");
+
+    for (const tokens of [lightTokens, darkTokens]) {
+      for (const token of [
+        "--glass-bg",
+        "--glass-border",
+        "--glass-blur",
+        "--glow-cyan",
+        "--glow-purple",
+        "--glow-pink",
+        "--text-primary",
+        "--text-secondary",
+        "--text-muted",
+      ]) {
+        expect(tokens).toContain(`${token}:`);
+      }
+
+      expect(tokenValue(tokens, "--slei-glass-nav-bg")).toContain("var(--glass-bg)");
+      expect(tokenValue(tokens, "--slei-glass-sidebar-bg")).toContain("var(--glass-bg)");
+      expect(tokenValue(tokens, "--slei-glass-border")).toBe("var(--glass-border)");
+      expect(tokenValue(tokens, "--slei-glass-filter")).toBe("blur(var(--glass-blur)) saturate(145%)");
+      expect(tokenValue(tokens, "--slei-glass-button-bg")).toContain("var(--glass-bg)");
+      expect(tokenValue(tokens, "--slei-glass-button-border")).toBe("var(--glass-border)");
+      expect(tokenValue(tokens, "--slei-glass-button-primary-gradient-bg")).toContain("var(--glow-cyan)");
+      expect(tokenValue(tokens, "--slei-glass-button-primary-gradient-bg")).toContain("var(--glow-purple)");
+    }
+
+    expect(tokenValue(lightTokens, "--glass-bg")).toBe("rgba(0, 0, 0, 0.03)");
+    expect(tokenValue(lightTokens, "--glass-border")).toBe("rgba(0, 0, 0, 0.08)");
+    expect(tokenValue(lightTokens, "--glow-cyan")).toBe("rgba(6, 182, 212, 0.15)");
+    expect(tokenValue(darkTokens, "--glass-bg")).toBe("rgba(255, 255, 255, 0.05)");
+    expect(tokenValue(darkTokens, "--glass-border")).toBe("rgba(255, 255, 255, 0.1)");
+    expect(tokenValue(darkTokens, "--glow-cyan")).toBe("rgba(6, 182, 212, 0.3)");
+  });
+
   it("uses semantic raised, inset, and overlay shadow tokens with compatibility aliases", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
     const lightTokens = cssBlock(appCss, ":root");
