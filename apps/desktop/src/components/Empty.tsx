@@ -6,6 +6,7 @@ import emptyInput from "../assets/empty-states/empty-input.png";
 import emptyOffline from "../assets/empty-states/empty-offline.png";
 import emptyPermission from "../assets/empty-states/empty-permission.png";
 import emptySearch from "../assets/empty-states/empty-search.png";
+import { SoftPanel } from "./SoftPanel";
 
 type EmptyIllustration = "data" | "error" | "input" | "offline" | "permission" | "search";
 
@@ -37,6 +38,7 @@ export function Empty(input: {
     input.centered && "mx-auto max-w-xl",
     input.className,
   );
+  const framed = input.framed === true || input.chrome === "default";
   const content = (
     <div className={cn("grid gap-3 text-center", size === "lg" ? "p-10" : "p-5")}>
       <div className="mx-auto grid place-items-center" aria-hidden="true" data-empty-icon="true">
@@ -56,13 +58,21 @@ export function Empty(input: {
     </div>
   );
 
+  if (framed) {
+    return (
+      <SoftPanel
+        className={rootClassName}
+        data-empty-size={size}
+        data-empty-variant={variant}
+        role="status"
+      >
+        {content}
+      </SoftPanel>
+    );
+  }
+
   return (
-    <div
-      className={rootClassName}
-      data-empty-size={size}
-      data-empty-variant={variant}
-      role="status"
-    >
+    <div className={rootClassName} data-empty-size={size} data-empty-variant={variant} role="status">
       {content}
     </div>
   );

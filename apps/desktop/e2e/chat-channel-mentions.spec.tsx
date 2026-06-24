@@ -117,6 +117,13 @@ describe("chat search, channel management, and mentions", () => {
     expect(deleteButtonMarkup).not.toContain("mt-1");
     expect(deleteButtonMarkup).not.toContain("mt-2");
     expect(appFrameSource()).toContain("group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto]");
+    expect(appFrameSource()).toContain("data-slot=\"channel-select-trigger\"");
+    expect(appFrameSource()).toContain('input.activeChannelId !== channel.id && "hover:bg-muted/60"');
+    const channelSelectSource = appFrameSource().slice(
+      appFrameSource().indexOf('data-slot="channel-select-trigger"') - 500,
+      appFrameSource().indexOf('data-slot="channel-select-trigger"') + 500,
+    );
+    expect(channelSelectSource).not.toContain("hover:bg-");
     expect(appFrameSource()).toContain('className="space-y-4"');
     expect(appFrameSource()).not.toContain('className="space-y-4 pr-2"');
   });
@@ -436,7 +443,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain("@allison");
   });
 
-  it("uses lucide-react icons instead of raw glyph placeholders for controls", () => {
+  it("uses shared Tabler SleiIcon controls instead of raw glyph placeholders", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -453,9 +460,10 @@ describe("chat search, channel management, and mentions", () => {
       />,
     );
 
-    expect(html).toContain("lucide-search");
-    expect(html).toContain("lucide-trash-2");
-    expect(html).toContain("lucide-send");
+    expect(html).toContain('data-slei-icon="search"');
+    expect(html).toContain('data-slei-icon="membersFilled"');
+    expect(html).toContain('data-slei-icon="delete"');
+    expect(html).toContain('data-slei-icon="send"');
     expect(html).not.toContain("⌕");
     expect(html).not.toContain("⌘");
     expect(html).not.toContain("⌫");
@@ -467,8 +475,8 @@ describe("chat search, channel management, and mentions", () => {
   it("uses a loading icon instead of creating copy while submitting a channel", () => {
     const source = appFrameSource();
 
-    expect(source).toContain("LoaderCircle");
-    expect(source).toContain("creatingChannel ? <LoaderCircle");
+    expect(source).toContain('name="loader"');
+    expect(source).toContain("creatingChannel ? <SleiIcon");
     expect(source).not.toContain("createChannelCreating : input.messages.common.create");
   });
 
@@ -498,7 +506,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('data-slot="button"');
     expect(html).toContain("grid h-14 w-14");
     expect(html).toContain('aria-label="聊天"');
-    expect(html).toContain("lucide-message-circle size-5");
+    expect(html).toContain('data-slei-icon="chat"');
+    expect(html).toContain("size-5");
     expect(html).not.toContain("text-[11px]");
     expect(html).not.toContain("slei-rail__button");
   });

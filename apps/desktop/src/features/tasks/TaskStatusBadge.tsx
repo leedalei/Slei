@@ -1,6 +1,6 @@
 import type { DesktopMessages } from "../../i18n";
 import type { SleiTaskStatus } from "../../app/types";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "../../components";
 import { cn } from "@/lib/utils";
 
 const STATUS_CLASS: Record<SleiTaskStatus, string> = {
@@ -11,5 +11,11 @@ const STATUS_CLASS: Record<SleiTaskStatus, string> = {
 };
 
 export function TaskStatusBadge({ className, messages, status }: { className?: string; messages: DesktopMessages; status: SleiTaskStatus }) {
-  return <Badge className={cn("w-fit", STATUS_CLASS[status], className)} variant="outline">{messages.tasks.status[status]}</Badge>;
+  return (
+    <StatusBadge
+      className={cn("w-fit", STATUS_CLASS[status], className)}
+      label={messages.tasks.status[status]}
+      status={status}
+    />
+  );
 }

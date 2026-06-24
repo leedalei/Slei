@@ -1,5 +1,4 @@
 import { type ComponentProps, type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
+import { SleiIcon } from "./SleiIcon";
 
 export function EditableDetailField(input: {
   ariaLabel: string;
@@ -102,7 +102,7 @@ export function EditableDetailField(input: {
             type="button"
             variant="ghost"
           >
-            <Pencil aria-hidden="true" className="size-3.5" />
+            <SleiIcon className="size-3.5" name="pencil" />
           </Button>
         ) : null}
       </div>

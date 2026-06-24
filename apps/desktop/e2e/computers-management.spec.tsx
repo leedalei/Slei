@@ -53,13 +53,13 @@ const readyRuntime = {
 };
 
 describe("computers management page", () => {
-  it("renders the device list and selected device detail with semantic shadcn cards", () => {
+  it("renders the device list and selected device detail with shared soft panels", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame activeView="computers" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
     expect(html).toContain('aria-label="设备"');
-    expect(html).toContain('data-slot="card"');
+    expect(html).toContain("data-slei-panel");
     expect(html).toContain('data-slot="badge"');
     expect(html).toContain('data-slot="scroll-area"');
     expect(html).not.toContain("slei-sidebar__header");

@@ -49,13 +49,15 @@ describe("ComputersPage header", () => {
       />,
     );
     const markerStart = html.indexOf('data-testid="slei-computer-detail-header"');
-    const headerStart = html.lastIndexOf("<header", markerStart);
     const headerEnd = html.indexOf("</header>", markerStart);
-    const headerHtml = html.slice(headerStart, headerEnd);
+    const headerHtml = html.slice(markerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
+    expect(html).toContain("data-slei-page-header");
+    expect(headerHtml).toContain("data-slei-status");
+    expect(html).not.toContain('<header class="select-none border-b px-6 py-5"');
+    expect(html).toContain('<div class="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header"');
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
-    expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Lei MacBook");
     expect(headerHtml).toContain("MateBook-Pro-Max-3.local");
   });
@@ -103,13 +105,13 @@ describe("ComputersPage header", () => {
       />,
     );
     const markerStart = html.indexOf('data-testid="slei-computer-detail-header"');
-    const headerStart = html.lastIndexOf("<header", markerStart);
     const headerEnd = html.indexOf("</header>", markerStart);
-    const headerHtml = html.slice(headerStart, headerEnd);
+    const headerHtml = html.slice(markerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).toContain(messages.computers.connected);
-    expect(headerHtml).toContain("bg-emerald-500");
+    expect(headerHtml).toContain('data-slei-status="connected"');
+    expect(headerHtml).toContain("bg-emerald-500/12");
   });
 
   it("does not duplicate the selected computer identity in a detail list card", () => {
@@ -124,7 +126,7 @@ describe("ComputersPage header", () => {
     expect(html).not.toContain('data-testid="slei-computer-list-card"');
   });
 
-  it("uses compact detail cards and secondary detail blocks in the computer detail page", () => {
+  it("uses shared soft panels and secondary detail blocks in the computer detail page", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(
       <ComputersPage
@@ -134,16 +136,37 @@ describe("ComputersPage header", () => {
       />,
     );
     const deviceNameIndex = html.indexOf(messages.computers.deviceName);
-    const deviceCardStart = html.lastIndexOf('data-slot="card"', deviceNameIndex);
-    const deviceCardEnd = html.indexOf('data-slot="card"', deviceNameIndex + 1);
+    const deviceCardStart = html.lastIndexOf("data-slei-panel", deviceNameIndex);
+    const deviceCardEnd = html.indexOf("data-slei-panel", deviceNameIndex + 1);
     const deviceCardHtml = html.slice(deviceCardStart, deviceCardEnd);
 
-    expect(deviceCardHtml).toContain('data-size="compact"');
-    expect(deviceCardHtml).not.toContain('data-slot="card-content" class="p-4');
-    expect(deviceCardHtml).not.toContain('data-slot="card-content" class="px-4 p-4');
+    expect(deviceCardHtml).toContain("data-slei-panel");
     expect(html).toContain('data-slot="detail-block"');
     expect(html).toContain('data-detail-block-kind="runtime"');
     expect(html).toContain('data-detail-block-kind="hosted-agent"');
+    expect(html).toContain("data-slei-status");
+    expect(html).toContain('data-slei-icon="bot"');
+  });
+
+  it("keeps computer info definition list terms and descriptions as direct grouped children", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={createDesktopMessages("zh-CN")}
+        nodes={[localNode]}
+      />,
+    );
+
+    const definitionList = host.querySelector("dl");
+    const groups = Array.from(definitionList?.children ?? []);
+
+    expect(groups).toHaveLength(4);
+    for (const group of groups) {
+      expect(group.tagName).toBe("DIV");
+      expect(group.querySelector(":scope > dt")).not.toBeNull();
+      expect(group.querySelector(":scope > dd")).not.toBeNull();
+    }
   });
 
   it("labels hosted agents by connection state instead of idle workload state", () => {

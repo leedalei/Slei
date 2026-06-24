@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -150,6 +152,7 @@ describe("TasksPage filters", () => {
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
     const channelSelect = header?.querySelector(`[data-slot="select-trigger"][aria-label="频道"]`);
+    const tabsList = header?.querySelector('[data-slot="tabs-list"]');
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
 
     expect(header).not.toBeNull();
@@ -157,8 +160,26 @@ describe("TasksPage filters", () => {
     expect(header?.className).toContain("select-none");
     expect(channelSelect).not.toBeNull();
     expect(channelSelect?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(tabsList?.getAttribute("data-variant")).toBe("soft");
     expect(boardTab).toBeDefined();
     expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
+  it("uses task-view icons that match board and list semantics", async () => {
+    await mountTasksPage();
+    const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
+
+    const header = container?.querySelector('[data-testid="slei-tasks-header"]');
+    const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
+    const listTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("列表"));
+
+    expect(boardTab?.querySelector('[data-slei-icon="kanban"]')).not.toBeNull();
+    expect(listTab?.querySelector('[data-slei-icon="listDetails"]')).not.toBeNull();
+    expect(iconsSource).toContain("IconLayoutKanban,");
+    expect(iconsSource).toContain("kanban: IconLayoutKanban");
+    expect(iconsSource).not.toContain("kanban: IconLayoutKanbanFilled");
+    expect(boardTab?.querySelector('[data-slei-icon="tasks"]')).toBeNull();
+    expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
   });
 
   it("shows task source channel and assignee metadata on cards", async () => {
@@ -169,6 +190,9 @@ describe("TasksPage filters", () => {
     expect(text).toContain("来自 #AI咨询");
     expect(text).toContain("交给 Coda");
     expect(text).toContain("3 个频道任务");
+    expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
+    expect(container?.querySelector('[data-slei-status="in_progress"]')).not.toBeNull();
+    expect(container?.querySelector('[data-slei-status="done"]')).not.toBeNull();
   });
 
   it("filters tasks by channel and assignee before switching views", async () => {

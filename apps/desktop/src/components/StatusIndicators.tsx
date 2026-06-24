@@ -1,6 +1,7 @@
 import type { SleiMessage } from "../app/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { getSleiStatusIndicatorClassName } from "./StatusBadge";
 
 export function MessageStatusSquare({ status }: { status?: SleiMessage["status"] }) {
   const tone = messageStatusSquare(status);
@@ -12,10 +13,7 @@ export function MessageStatusSquare({ status }: { status?: SleiMessage["status"]
           aria-label={status}
           className={cn(
             "inline-block size-2.5 shrink-0 rounded-[2px]",
-            tone === "running" && "bg-sky-500",
-            tone === "approval" && "bg-amber-500",
-            tone === "failed" && "bg-destructive",
-            tone === "pending" && "bg-muted-foreground/45",
+            getSleiStatusIndicatorClassName(tone),
           )}
           role="img"
         />
@@ -29,12 +27,7 @@ export function StatusDot({ status }: { status: "idle" | "busy" | "offline" }) {
   return (
     <span
       aria-label={status}
-      className={cn(
-        "inline-block size-2 shrink-0 rounded-full align-middle",
-        status === "idle" && "bg-emerald-500",
-        status === "busy" && "bg-amber-500",
-        status === "offline" && "bg-muted-foreground/45",
-      )}
+      className={cn("inline-block size-2 shrink-0 rounded-full align-middle", getSleiStatusIndicatorClassName(status))}
       role="img"
     />
   );

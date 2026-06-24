@@ -2,6 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { Toast, TOAST_VISIBLE_MS, copyToastContent } from "../src/components";
+import { TooltipProvider } from "../src/components/ui/tooltip";
+
+function renderToast(input: Parameters<typeof Toast>[0]) {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <Toast {...input} />
+    </TooltipProvider>,
+  );
+}
 
 describe("shared toast feedback", () => {
   it("keeps toast feedback visible for 2.5 seconds", () => {
@@ -9,7 +18,7 @@ describe("shared toast feedback", () => {
   });
 
   it("renders polite live-region feedback", () => {
-    const html = renderToStaticMarkup(<Toast text="复制成功" />);
+    const html = renderToast({ text: "复制成功" });
 
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
@@ -27,10 +36,10 @@ describe("shared toast feedback", () => {
   });
 
   it("renders typed toast variants above dialogs", () => {
-    const errorHtml = renderToStaticMarkup(<Toast text="频道名称不能为空" type="error" />);
-    const successHtml = renderToStaticMarkup(<Toast text="频道已创建" type="success" />);
-    const infoHtml = renderToStaticMarkup(<Toast text="成员正在加入" type="info" />);
-    const warnHtml = renderToStaticMarkup(<Toast text="后续设置失败" type="warn" />);
+    const errorHtml = renderToast({ text: "频道名称不能为空", type: "error" });
+    const successHtml = renderToast({ text: "频道已创建", type: "success" });
+    const infoHtml = renderToast({ text: "成员正在加入", type: "info" });
+    const warnHtml = renderToast({ text: "后续设置失败", type: "warn" });
 
     expect(errorHtml).toContain('role="alert"');
     expect(errorHtml).toContain('aria-live="assertive"');

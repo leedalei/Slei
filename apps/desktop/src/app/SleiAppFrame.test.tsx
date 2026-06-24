@@ -120,9 +120,59 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(description?.className).toContain("text-sm");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
   });
+
+  it("syncs dark theme to the document root so portal dialogs inherit dark tokens", async () => {
+    document.documentElement.classList.remove("dark");
+
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        appearance={{ theme: "dark", fontSize: "md" }}
+        data={createSleiFixtures()}
+        initialCreateChannelModalOpen
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.body.querySelector('[data-slot="dialog-content"]')).not.toBeNull();
+
+    await act(async () => {
+      mountedRoot?.render(
+        <SleiAppFrame
+          activeView="chat"
+          appearance={{ theme: "light", fontSize: "md" }}
+          data={createSleiFixtures()}
+          initialCreateChannelModalOpen
+          locale="zh-CN"
+          runtimeSetup={runtimeSetup}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
 });
 
 describe("SleiAppFrame global search navigation", () => {
+  it("renders the primary navigation with soft icon buttons", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const navButtons = container.querySelectorAll("[data-nav-icon]");
+
+    expect(navButtons.length).toBeGreaterThan(0);
+    expect(container.querySelector("[data-slei-icon]")).not.toBeNull();
+    expect(container.querySelector('[data-nav-icon="chat"]')?.getAttribute("aria-current")).toBe("page");
+  });
+
   it("renders search as an active far-left rail item", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
@@ -169,7 +219,7 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     expect(html).toContain("grid h-14 w-14 place-items-center");
   });
 
@@ -178,6 +228,102 @@ describe("SleiAppFrame global search navigation", () => {
     const navSource = source.slice(source.indexOf("<nav "), source.indexOf("</nav>"));
 
     expect(navSource).toContain('tooltipSide="right"');
+  });
+
+  it("keeps the menubar right divider as a single thin line", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(navSource).not.toContain("border-r border-sidebar-border/70");
+    expect(navCss).toContain("inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent)");
+    expect(navCss).not.toContain("inset -8px 0 18px");
+  });
+
+  it("renders menu and context sidebar as glass surfaces without solid sidebar fills", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+    const asideSource = frameSource.slice(frameSource.indexOf("<aside "), frameSource.indexOf("<SidebarFrame"));
+    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-shell-nav__button {"));
+    const sidebarCss = appCss.slice(appCss.indexOf(".slei-context-sidebar {"), appCss.indexOf(".slei-resize-handle {"));
+
+    expect(appCss).toContain("--slei-glass-nav-bg:");
+    expect(appCss).toContain("--slei-glass-sidebar-bg:");
+    expect(appCss).toContain("--slei-glass-filter: blur(18px) saturate(145%)");
+    expect(navSource).not.toContain("bg-sidebar/");
+    expect(asideSource).not.toContain("bg-sidebar/");
+    expect(navCss).toContain("background: var(--slei-glass-nav-bg)");
+    expect(navCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
+    expect(navCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain("background: var(--slei-glass-sidebar-bg)");
+    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(sidebarCss).toContain('[data-slot="agent-activity"]');
+    expect(sidebarCss).toContain("background: transparent");
+  });
+
+  it("renders menubar navigation items as raised buttons", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+
+    expect(navSource).toContain("slei-shell-nav flex min-h-0 flex-col items-center gap-4");
+    expect(navSource).toContain("slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0");
+    expect(navSource).toContain('size="icon"');
+    expect(navSource).not.toContain('size="lg"');
+    expect(navSource).toContain('variant={input.activeView === item.id ? "default" : "outline"}');
+    expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "ghost"}');
+  });
+
+  it("keeps search outline while using filled icons for the other menubar items", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("const navItems"), frameSource.indexOf("function isSortDirection"));
+
+    expect(navSource).toContain('{ id: "search", icon: "search" }');
+    expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
+    expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
+    expect(navSource).not.toContain('{ id: "members", icon: "members" }');
+    expect(iconsSource).toContain("IconSearchFilled");
+    expect(iconsSource).toContain("IconAlienFilled");
+    expect(iconsSource).toContain("searchFilled: IconSearchFilled");
+    expect(iconsSource).toContain("membersFilled: IconAlienFilled");
+    expect(iconsSource).toContain("search: IconSearch");
+    expect(iconsSource).toContain("members: IconUsersGroup");
+  });
+
+  it("renders the active menubar item with the same inverse contrast as selected conversations", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(navButtonCss).toContain(".slei-shell-nav__button--active");
+    expect(navButtonCss).toContain("background: var(--primary)");
+    expect(navButtonCss).toContain("color: var(--primary-foreground)");
+  });
+
+  it("keeps menubar button borders only slightly darker than their raised shadows", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
+    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
+    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(lightThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.18)");
+    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.20)");
+    expect(darkThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.58)");
+    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.60)");
+    expect(navButtonCss).toContain("border-color: var(--slei-menu-border)");
+    expect(navButtonCss).toContain("border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
+    expect(navButtonCss).not.toContain("var(--slei-raised-border)");
+  });
+
+  it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");
+    const tooltipRootSource = tooltipSource.slice(tooltipSource.indexOf("function Tooltip("), tooltipSource.indexOf("function TooltipTrigger("));
+
+    expect(frameSource).toContain("<TooltipProvider>");
+    expect(tooltipRootSource).not.toContain("<TooltipProvider>");
   });
 
   it("keeps the macOS traffic lights visually centered in the widened rail", () => {
@@ -229,6 +375,8 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     expect(html).toContain('data-testid="slei-saved-workspace"');
+    expect(html).toContain('data-variant="listItem"');
+    expect(html).toContain('data-slei-icon="bookmark"');
     expect(html).toContain(">频道 1</");
     expect(html).toContain(">私聊 1</");
     expect(html).toContain("这是一条保存消息正文");
@@ -236,6 +384,91 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("Coda");
     expect(html).toContain("发送于 2026-06-22");
     expect(html).toContain("保存于 2026-06-22");
+  });
+
+  it("treats saved messages and channels as one exclusive sidebar selection", async () => {
+    const data = createSleiFixtures({
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev-content", name: "dev-content", description: "频道", unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeChatWorkspace="saved"
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    const sidebar = container.querySelector(".slei-context-sidebar");
+    const currentItems = Array.from(sidebar?.querySelectorAll<HTMLElement>('[aria-current="true"]') ?? []);
+    const savedTrigger = Array.from(sidebar?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find((button) => button.textContent?.includes("已保存"));
+
+    expect(currentItems).toHaveLength(1);
+    expect(currentItems[0]?.textContent).toContain("已保存");
+    expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
+    expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
+    expect(savedTrigger?.className).not.toContain("slei-raised");
+  });
+
+  it("renders saved message rows as soft list items while preserving unavailable and click behavior", async () => {
+    const onSavedMessageSelect = vi.fn();
+    const availableMessage = {
+      id: "saved:available",
+      messageId: "msg_available",
+      sourceId: "all",
+      sourceKind: "channel" as const,
+      savedAt: "2026-06-22T09:00:00Z",
+      body: "可打开的收藏消息",
+      authorId: "a1",
+      authorName: "Coda",
+      messageCreatedAt: "2026-06-22T08:59:00Z",
+      sourceName: "all",
+      sourceLabel: "群聊 · #all",
+      messageDeleted: false,
+    };
+    const deletedMessage = {
+      ...availableMessage,
+      id: "saved:deleted",
+      messageId: "msg_deleted",
+      body: "已删除的收藏消息",
+      messageDeleted: true,
+    };
+    const container = await mount(
+      <SleiAppFrame
+        activeChatWorkspace="saved"
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onSavedMessageSelect={onSavedMessageSelect}
+        runtimeSetup={runtimeSetup}
+        savedMessages={[availableMessage, deletedMessage]}
+      />,
+    );
+
+    const workspace = container.querySelector('[data-testid="slei-saved-workspace"]');
+    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slei-panel][data-variant="listItem"]') ?? []);
+    const availableButton = rows[0]?.querySelector<HTMLButtonElement>("button");
+    const deletedButton = rows[1]?.querySelector<HTMLButtonElement>("button");
+
+    expect(rows).toHaveLength(2);
+    expect(workspace?.querySelector('[data-slei-icon="bookmark"]')).not.toBeNull();
+    expect(availableButton?.disabled).toBe(false);
+    expect(deletedButton?.disabled).toBe(true);
+    expect(deletedButton?.className).toContain("opacity-70");
+
+    await act(async () => {
+      availableButton?.click();
+      deletedButton?.click();
+    });
+
+    expect(onSavedMessageSelect).toHaveBeenCalledTimes(1);
+    expect(onSavedMessageSelect).toHaveBeenCalledWith(availableMessage);
   });
 
   it("shows linked project labels for non-default channels while preserving the all channel description", () => {

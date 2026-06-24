@@ -1,8 +1,6 @@
-import { Bookmark, Copy, MessageSquare } from "lucide-react";
-
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMessage, SleiTask } from "../../app/types";
-import { MemberAvatar, TooltipButton, type MemberAvatarIdentity } from "../../components";
+import { MemberAvatar, SleiIcon, SleiIconSwap, SoftPanel, TooltipButton, type MemberAvatarIdentity } from "../../components";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -55,10 +53,11 @@ export function TaskRootEntry(input: {
     avatar: input.sourceMessage?.avatar ?? author.slice(0, 2),
   };
   return (
-    <article
-      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/20"
-      data-source-message-id={input.sourceMessage?.id}
+    <SoftPanel
+      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50"
       data-task-root-entry={input.task.id}
+      data-source-message-id={input.sourceMessage?.id}
+      variant="flat"
     >
       <MemberAvatar identity={avatarIdentity} />
       <div className="min-w-0">
@@ -78,7 +77,7 @@ export function TaskRootEntry(input: {
               type="button"
               variant="ghost"
             >
-              <MessageSquare aria-hidden="true" className="size-3" />
+              <SleiIcon className="size-3" name="messageSquare" />
               {replyCountLabel}
             </Button>
             <span aria-hidden="true">｜</span>
@@ -88,10 +87,10 @@ export function TaskRootEntry(input: {
             </span>
             <span aria-hidden="true">｜</span>
             <TooltipButton aria-label={copyLabel} onClick={() => void input.onCopy?.()} size="icon-xs" tooltip={copyLabel} type="button" variant="ghost">
-              <Copy aria-hidden="true" size={14} />
+              <SleiIcon name="copy" size={14} />
             </TooltipButton>
             <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} onClick={() => void input.onSaveToggle?.()} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
-              <Bookmark aria-hidden="true" size={14} />
+              <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
             </TooltipButton>
             {timestamp ? (
               <>
@@ -110,6 +109,6 @@ export function TaskRootEntry(input: {
           </div>
         )}
       </div>
-    </article>
+    </SoftPanel>
   );
 }

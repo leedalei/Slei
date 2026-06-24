@@ -1,6 +1,4 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { SleiAppFrame } from "../src/app/SleiApp";
@@ -143,10 +141,42 @@ describe("runtime setup onboarding modal", () => {
   });
 
   it("does not draw a divider above the first runtime row", () => {
-    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const runtimeRowRule = css.match(/\.slei-runtime-row\s*\{(?<body>[^}]+)\}/)?.groups?.body ?? "";
+    const data = createSleiFixtures({
+      nodes: [
+        {
+          id: "local-node",
+          name: "Lei MacBook",
+          status: "connected",
+          daemonVersion: "0.1.0",
+          device: {
+            platform: "darwin",
+            arch: "arm64",
+            hostname: "lei-macbook.local",
+          },
+          runtimes: [
+            { kind: "ClaudeCode", readiness: "unknown" },
+            { kind: "CodexCli", readiness: "ready" },
+          ],
+        },
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          error: undefined,
+          hasClaudeRuntimeReady: false,
+          nodes: data.nodes,
+        }}
+        data={data}
+      />,
+    );
+    const firstRuntimeRow = html.slice(html.indexOf(">ClaudeCode<"));
+    const secondRuntimeRow = html.slice(html.indexOf(">CodexCli<"));
 
-    expect(runtimeRowRule).not.toContain("border-top");
-    expect(css).toContain(".slei-runtime-row + .slei-runtime-row");
+    expect(firstRuntimeRow.slice(0, firstRuntimeRow.indexOf("</div>"))).not.toContain("border-t");
+    expect(secondRuntimeRow.slice(0, secondRuntimeRow.indexOf("</div>"))).toContain("border-t");
   });
 });

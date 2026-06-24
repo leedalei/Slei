@@ -1,6 +1,8 @@
 import { cn } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SleiIcon } from "./SleiIcon";
+import { SoftPanel } from "./SoftPanel";
 
 export const TOAST_VISIBLE_MS = 2500;
 
@@ -43,23 +45,26 @@ export function Toast({ message, text, type }: { message?: string; text?: string
   const content = (text ?? message)?.trim();
   if (!content) return null;
   const urgent = type === "error";
-  const variantClassName = type ? toastVariantClassNames[type] : "border-border text-popover-foreground";
+  const variantClassName = type ? toastVariantClassNames[type] : "border-border bg-popover text-popover-foreground";
 
   return (
     <div aria-live={urgent ? "assertive" : "polite"} className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2" role={urgent ? "alert" : "status"}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className={cn("pointer-events-auto h-auto max-w-[70vw] justify-start rounded-md bg-white px-4 py-3 text-left text-sm whitespace-normal break-words shadow-md hover:bg-white dark:bg-popover dark:hover:bg-popover", variantClassName)}
-            onClick={() => void copyToastContent(content)}
-            type="button"
-            variant="outline"
-          >
-            {content}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>点击复制</TooltipContent>
-      </Tooltip>
+      <SoftPanel className={cn("pointer-events-auto max-w-[70vw] p-0", variantClassName)} variant="raised">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              className="h-auto w-full justify-start rounded-[inherit] border-0 bg-transparent px-4 py-3 text-left text-sm text-inherit whitespace-normal break-words shadow-none hover:bg-transparent"
+              onClick={() => void copyToastContent(content)}
+              type="button"
+              variant="ghost"
+            >
+              <SleiIcon className="size-4" name="copy" />
+              {content}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>点击复制</TooltipContent>
+        </Tooltip>
+      </SoftPanel>
     </div>
   );
 }

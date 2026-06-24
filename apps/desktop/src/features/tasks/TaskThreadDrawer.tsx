@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { Send, X } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiTask, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
+import { SleiIcon, SoftPanel } from "../../components";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
@@ -118,16 +118,16 @@ export function TaskThreadDrawer(input: {
           <SheetTitle>{task.title}</SheetTitle>
           <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(task.replyCount ?? task.replies?.length ?? 0)}</SheetDescription>
           <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3" onClick={input.onClose} size="icon-sm" type="button" variant="ghost">
-            <X aria-hidden="true" className="size-4" />
+            <SleiIcon className="size-4" name="x" />
           </Button>
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid gap-3 p-5">
             {(task.replies ?? []).map((reply) => (
-              <article className="grid gap-2 rounded-lg border bg-muted/30 p-3" data-reply-role={reply.role ?? "human"} key={reply.id}>
+              <SoftPanel className="grid gap-2" data-reply-role={reply.role ?? "human"} key={reply.id} variant="inset">
                 <strong className="text-sm">{reply.sender}</strong>
                 <MarkdownMessage markdown={reply.body} />
-              </article>
+              </SoftPanel>
             ))}
           </div>
         </ScrollArea>
@@ -184,7 +184,7 @@ export function TaskThreadDrawer(input: {
             <div className="flex flex-wrap justify-end gap-2">
               {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
               <Button disabled={replyActionDisabled} type="submit">
-                <Send aria-hidden="true" className="size-4" />
+                <SleiIcon className="size-4" name="send" />
                 {input.messages.tasks.sendReply}
               </Button>
             </div>

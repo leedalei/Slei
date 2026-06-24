@@ -835,12 +835,17 @@ describe("createChannelAgentReplyMessage", () => {
 
   it("renders a thin sidebar resize handle with resize cursor", () => {
     const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
+    const styles = readFileSync(new URL("./app.css", import.meta.url), "utf8");
 
     expect(source).toContain("aria-label={messages.common.resizeSidebar}");
     expect(source).toContain("role=\"separator\"");
-    expect(source).toContain("w-1");
+    expect(source).toContain("3px minmax(0, 1fr)");
+    expect(source).toContain("w-[3px]");
+    expect(styles).toContain("width: 3px;");
     expect(source).toContain("!cursor-col-resize");
-    expect(source).not.toContain("w-2 cursor-col-resize border-x");
+    expect(source).not.toContain("0.5rem minmax(0, 1fr)");
+    expect(source).not.toContain("slei-resize-handle h-full w-2");
+    expect(styles).not.toContain("width: 8px;");
   });
 
   it("surfaces global and daemon diagnostic failures through the app toast", () => {

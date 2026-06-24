@@ -71,6 +71,7 @@ describe("SettingsPage header", () => {
     const headerHtml = html.slice(headerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
+    expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Language");
@@ -79,7 +80,7 @@ describe("SettingsPage header", () => {
     expect(headerHtml).not.toContain(">Settings<");
   });
 
-  it("uses compact cards and secondary detail blocks for settings rows", () => {
+  it("uses shared soft panels and preference rows for settings rows", () => {
     const messages = createDesktopMessages("en-US");
     const notificationsHtml = renderToStaticMarkup(
       <SettingsPage
@@ -106,11 +107,38 @@ describe("SettingsPage header", () => {
       />,
     );
 
-    expect(notificationsHtml).toContain('data-size="compact"');
-    expect(notificationsHtml).toContain('data-slot="detail-block"');
+    expect(notificationsHtml).toContain("data-slei-panel");
+    expect(notificationsHtml).toContain("data-slei-preference-row");
     expect(notificationsHtml).toContain('data-settings-notification="mentions"');
-    expect(aboutHtml).toContain('data-slot="detail-block"');
+    expect(aboutHtml).toContain("data-slei-panel");
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
+  });
+
+  it("uses a 12px vertical rhythm between settings controls across panels", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const shared = {
+      appearance: { theme: "light", fontSize: "md" } as const,
+      locale: "zh-CN" as const,
+      messages,
+      nodes: [localNode],
+      notifications: { approvals: true, humanReplies: false, mentions: true },
+      profile: { displayName: "Lei", handle: "lei", avatar: "pixel-sun" },
+      timeZone: "Asia/Shanghai",
+    };
+
+    for (const activePanel of ["language-region", "appearance", "notifications", "about"] as const) {
+      const html = renderToStaticMarkup(<SettingsPage {...shared} activePanel={activePanel} />);
+      const stackMarker = 'data-settings-control-stack="true"';
+      const stackStart = html.indexOf(stackMarker);
+      const stackOpenTagStart = html.lastIndexOf("<", stackStart);
+      const stackOpenTagEnd = html.indexOf(">", stackStart);
+      const stackOpenTag = html.slice(stackOpenTagStart, stackOpenTagEnd);
+
+      expect(stackStart).toBeGreaterThanOrEqual(0);
+      expect(stackOpenTag).toContain("grid gap-3");
+      expect(stackOpenTag).not.toContain("grid gap-1");
+      expect(stackOpenTag).not.toContain("grid gap-5");
+    }
   });
 
   it("keeps panel titles and descriptions only in the page header", () => {
@@ -131,6 +159,7 @@ describe("SettingsPage header", () => {
       const headerEnd = html.indexOf("</header>", headerStart);
       const headerHtml = html.slice(headerStart, headerEnd);
 
+      expect(html).toContain("data-slei-page-header");
       expect(headerHtml).toContain(messages.settings.panelTitle[activePanel]);
       expect(headerHtml).toContain(messages.settings.panelSubtitle[activePanel]);
       expect(html).not.toContain('data-slot="card-header"');

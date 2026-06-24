@@ -29,4 +29,24 @@ describe("Tabs", () => {
     expect(html).not.toContain(["data", "horizontal:flex-col"].join("-"));
     expect(html).not.toContain(["group", "data", "horizontal/tabs:h-6"].join("-"));
   });
+
+  it("supports the soft segmented tabs variant", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+
+    expect(html).toContain('data-variant="soft"');
+    expect(html).toContain("t-tabs");
+    expect(html).toContain("t-tabs-pill");
+    expect(html).toContain("t-tab");
+    expect(html).toContain("aria-hidden=\"true\"");
+    expect(html).toContain("group-data-[variant=soft]/tabs-list:data-active:bg-transparent");
+    expect(html).toContain("group-data-[variant=soft]/tabs-list:data-active:text-card-foreground");
+    expect(html).not.toContain("group-data-[variant=soft]/tabs-list:data-active:slei-raised-small");
+    expect(html).not.toContain("dark:data-active:bg-input/30");
+  });
 });

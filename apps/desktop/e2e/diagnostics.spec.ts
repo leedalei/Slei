@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
 
 import { renderBasicTimelineBrowse } from "../src/features/search/BasicTimelineBrowse";
 import { renderDiagnosticsPage } from "../src/features/diagnostics/DiagnosticsPage";
@@ -65,6 +66,37 @@ describe("diagnostics and localized recovery", () => {
     expect(exportDialog).toContain("导出日志");
     expect(exportDialog).toContain("[redacted-token]");
     expect(exportDialog).not.toContain("secret-token");
+  });
+
+  it("keeps malicious diagnostics markup as readable text instead of parsed nodes", () => {
+    const maliciousStatus = `MacBook <img onerror="alert(1)" src=x> & "quoted"`;
+    const maliciousFailure = `failure </pre><script>alert("x")</script> & "quoted"`;
+    const maliciousPreview = `log <img onerror="alert(2)" src=x> </pre><script>alert("log")</script> & "quoted"`;
+    const pageHtml = renderDiagnosticsPage({
+      locale: "en-US",
+      status: {
+        node: maliciousStatus,
+        runtime: maliciousStatus,
+        worker: maliciousStatus,
+        protocolVersion: "v1",
+        schemaVersion: maliciousStatus,
+        failureSummary: maliciousFailure,
+      },
+    });
+    const dialogHtml = renderLogExportDialog({
+      locale: "en-US",
+      sanitizedPreview: maliciousPreview,
+    });
+    const dom = new JSDOM(`<main>${pageHtml}${dialogHtml}</main>`, { url: "https://slei.test/diagnostics" });
+    const document = dom.window.document;
+    const preview = document.querySelector("[data-slei-log-export-dialog] pre");
+
+    expect(document.querySelector("script")).toBeNull();
+    expect(document.querySelector("img")).toBeNull();
+    expect(document.body.textContent).toContain(`<img onerror="alert(1)" src=x>`);
+    expect(document.body.textContent).toContain(`</pre><script>alert("x")</script>`);
+    expect(preview?.textContent).toContain(`</pre><script>alert("log")</script>`);
+    expect(preview?.textContent).toContain(`& "quoted"`);
   });
 
   it("creates sanitized frontend crash reports for desktop logs", () => {

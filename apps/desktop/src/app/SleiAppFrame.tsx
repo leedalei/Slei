@@ -1,26 +1,4 @@
 import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowUpDown,
-  Bell,
-  Bookmark,
-  CheckSquare,
-  CircleUserRound,
-  FolderPlus,
-  Globe2,
-  Hash,
-  Info,
-  LoaderCircle,
-  MessageCircle,
-  Monitor,
-  Palette,
-  Plus,
-  Search,
-  Server,
-  Settings,
-  Trash2,
-  X,
-  type LucideIcon,
-} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,7 +47,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, StatusDot, Toast, TooltipButton, type ToastType } from "../components";
+import { Empty, MemberAvatar, PageHeader, SleiIcon, SoftPanel, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -106,13 +84,13 @@ const sidebarSortStorageKeys = {
   directMessages: "slei:sidebar-sort:direct-messages",
 } as const;
 
-const navItems: Array<{ id: AppView; icon: LucideIcon }> = [
-  { id: "search", icon: Search },
-  { id: "chat", icon: MessageCircle },
-  { id: "tasks", icon: CheckSquare },
-  { id: "members", icon: CircleUserRound },
-  { id: "computers", icon: Monitor },
-  { id: "settings", icon: Settings },
+const navItems: Array<{ id: AppView; icon: SleiIconName }> = [
+  { id: "search", icon: "search" },
+  { id: "chat", icon: "chat" },
+  { id: "tasks", icon: "tasks" },
+  { id: "members", icon: "membersFilled" },
+  { id: "computers", icon: "computer" },
+  { id: "settings", icon: "settings" },
 ];
 
 function isSortDirection(value: string | null): value is SortDirection {
@@ -171,7 +149,7 @@ function sortDirectMessagesByName(conversations: ConversationView[], members: Sl
 }
 
 function SortDirectionIcon(input: { direction: SortDirection }) {
-  return <ArrowUpDown aria-hidden="true" className="slei-sort-icon" data-sort-direction={input.direction} size={14} />;
+  return <SleiIcon className="slei-sort-icon" data-sort-direction={input.direction} name="sort" size={14} />;
 }
 
 export type ChatWorkspaceMode = "chat" | "saved";
@@ -300,7 +278,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const shellStyle = {
     "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--slei-font-size": fontSize,
-    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 0.5rem minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
+    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -338,6 +316,18 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   }, [fontSize, textTokenValues]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const root = document.documentElement;
+    const hadDarkClass = root.classList.contains("dark");
+    root.classList.toggle("dark", normalizedTheme === "dark");
+
+    return () => {
+      root.classList.toggle("dark", hadDarkClass);
+    };
+  }, [normalizedTheme]);
+
+  useEffect(() => {
     if (input.runtimeSetup.nodes.some((node) => node.id === activeComputerId)) return;
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
@@ -352,7 +342,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
-      <nav className="flex min-h-0 flex-col items-center gap-2 border-r bg-sidebar px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
+      <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">
             SLei
@@ -363,31 +353,31 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             aria-label={messages.shell.nav[item.id]}
             aria-current={input.activeView === item.id ? "page" : undefined}
             className={cn(
-              "grid h-14 w-14 place-items-center rounded-lg p-0",
-              input.activeView === item.id && "shadow-sm",
+              "slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0",
+              input.activeView === item.id && "slei-shell-nav__button--active",
             )}
             data-nav-icon={item.id}
             key={item.id}
             onClick={() => input.onViewChange?.(item.id)}
-            size="lg"
+            size="icon"
             tooltip={messages.shell.nav[item.id]}
             tooltipSide="right"
             type="button"
-            variant={input.activeView === item.id ? "default" : "ghost"}
+            variant={input.activeView === item.id ? "default" : "outline"}
           >
-            <item.icon aria-hidden="true" className="size-5" strokeWidth={2.8} />
+            <SleiIcon className="size-5" name={item.icon} size={22} stroke={2.4} />
           </TooltipButton>
         ))}
       </nav>
 
       {hasContextSidebar ? (
         <>
-          <aside className="slei-context-sidebar min-h-0 border-r bg-sidebar/70 text-sidebar-foreground max-[760px]:hidden">
+          <aside className="slei-context-sidebar min-h-0 border-r border-sidebar-border/65 text-sidebar-foreground max-[760px]:hidden">
             <SidebarFrame title={sidebarTitle}>
               {input.activeView === "chat" || input.activeView === "search" ? (
                 <ChannelList
-                  activeChannelId={input.activeConversationId ? undefined : activeChannel?.id}
-                  activeConversationId={input.activeConversationId}
+                  activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
+                  activeConversationId={input.activeChatWorkspace === "saved" ? undefined : input.activeConversationId}
                   cardDraftRequest={channelCardDraftRequest}
                   data={input.data}
                   initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
@@ -430,7 +420,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
           <Button
             aria-label={messages.common.resizeSidebar}
             aria-orientation="vertical"
-            className="h-full w-1 !cursor-col-resize rounded-none border-0 bg-border/50 p-0 hover:bg-border focus-visible:ring-offset-0"
+            className="slei-resize-handle h-full w-[3px] !cursor-col-resize rounded-none border-0 p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
             onPointerDown={input.onResizeStart}
             role="separator"
             type="button"
@@ -498,7 +488,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       {input.guideBootstrapping ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm" data-slot="guide-status-overlay" role="presentation">
-          <section aria-live="polite" className="rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-lg" data-slot="guide-status" role="status">
+          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--slei-shadow-overlay-md)]" data-slot="guide-status" role="status">
             <h2 className="text-base font-medium">{messages.onboarding.creatingGuide}</h2>
           </section>
         </div>
@@ -754,7 +744,7 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
     avatarSeed: activity.message.author,
   };
   return (
-    <section aria-live="polite" className="shrink-0 border-t bg-sidebar/80 p-3" data-slot="agent-activity" role="status">
+    <section aria-live="polite" className="shrink-0 border-t p-3" data-slot="agent-activity" role="status">
       <div className={cn("flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2", failed && "border border-destructive/45 bg-destructive/10")}>
         <MemberAvatar identity={identity} />
         <div className="min-w-0 flex-1">
@@ -878,9 +868,25 @@ function ChannelList(input: {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="grid gap-2">
-        <Button aria-pressed={input.savedOpen ? "true" : "false"} className="w-full justify-start" onClick={input.onSavedMessagesOpen} type="button" variant={input.savedOpen ? "secondary" : "ghost"}>
-          <Bookmark aria-hidden="true" size={14} />{input.messages.common.saved}
-        </Button>
+        <div
+          className={cn(
+            "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)] items-start rounded-lg",
+            !input.savedOpen && "hover:bg-muted/60",
+            input.savedOpen && "bg-accent text-accent-foreground",
+          )}
+          data-saved-list-item=""
+        >
+          <button
+            aria-current={input.savedOpen ? "true" : undefined}
+            aria-pressed={input.savedOpen ? "true" : "false"}
+            className="inline-flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+            data-slot="saved-select-trigger"
+            onClick={input.onSavedMessagesOpen}
+            type="button"
+          >
+            <SleiIcon name="bookmark" size={14} />{input.messages.common.saved}
+          </button>
+        </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4">
@@ -899,7 +905,7 @@ function ChannelList(input: {
                 >
                   <SortDirectionIcon direction={channelSortDirection} />
                 </TooltipButton>
-                <Button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
+                <Button aria-label={input.messages.chat.createChannel} onClick={() => setCreateOpen(true)} size="icon-xs" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -914,25 +920,22 @@ function ChannelList(input: {
                   data-channel-list-item=""
                   key={channel.id}
                 >
-                  <Button
+                  <button
                     aria-current={input.activeChannelId === channel.id ? "true" : undefined}
-                    className={cn(
-                      "h-auto min-h-12 justify-start whitespace-normal px-2 py-2 text-left hover:bg-transparent hover:text-inherit",
-                      input.activeChannelId === channel.id && "bg-transparent text-inherit",
-                    )}
+                    className="inline-flex min-h-12 w-full min-w-0 items-center justify-start rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                    data-slot="channel-select-trigger"
                     onClick={() => input.onChannelSelect?.(channel.id)}
                     type="button"
-                    variant="ghost"
                   >
                     <span className="grid min-w-0 flex-1 gap-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <Hash aria-hidden="true" size={14} />
+                        <SleiIcon name="hash" size={14} />
                         <span className="truncate select-none">{stripChannelHash(channel.name)}</span>
                         {channel.unread > 0 ? <Badge className="ml-auto" variant="secondary">{channel.unread}</Badge> : null}
                       </span>
                       <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{formatChannelProjectLabel(channel, input.messages)}</small>
                     </span>
-                  </Button>
+                  </button>
                   {channel.id !== "all" ? (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -943,10 +946,10 @@ function ChannelList(input: {
                           type="button"
                           variant="ghost"
                         >
-                          <Trash2 aria-hidden="true" size={14} />
+                          <SleiIcon name="delete" size={14} />
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent>
+                      <AlertDialogContent className="slei-soft-dialog">
                         <AlertDialogHeader>
                           <AlertDialogTitle>{input.messages.chat.deleteChannel(stripChannelHash(channel.name))}</AlertDialogTitle>
                           <AlertDialogDescription>{input.messages.chat.deleteChannelConfirm(stripChannelHash(channel.name))}</AlertDialogDescription>
@@ -1010,7 +1013,7 @@ function ChannelList(input: {
         else setCreateOpen(true);
       }} className="max-h-[min(90vh,42rem)] overflow-hidden sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Hash aria-hidden="true" size={20} />{input.messages.chat.createChannel}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><SleiIcon name="hash" size={20} />{input.messages.chat.createChannel}</DialogTitle>
             <DialogDescription>{input.messages.chat.createChannelDescription}</DialogDescription>
           </DialogHeader>
           <form className="grid min-h-0 gap-4" onSubmit={submitChannel}>
@@ -1045,7 +1048,7 @@ function ChannelList(input: {
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">
-                    <FolderPlus aria-hidden="true" size={14} />
+                    <SleiIcon name="folderPlus" size={14} />
                     {input.messages.chat.projectFolderPicker}
                   </Button>
                   <span className="text-xs text-muted-foreground">{input.messages.chat.projectFolderHint}</span>
@@ -1056,7 +1059,7 @@ function ChannelList(input: {
                       <Badge className="max-w-full gap-1" key={path} variant="secondary">
                         <span className="truncate">{path}</span>
                         <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 hover:bg-background/70" onClick={() => removeProjectFolder(path)} size="icon-xs" type="button" variant="ghost">
-                          <X aria-hidden="true" className="size-3" />
+                          <SleiIcon className="size-3" name="x" />
                         </Button>
                       </Badge>
                     ))}
@@ -1090,7 +1093,7 @@ function ChannelList(input: {
             <DialogFooter>
               <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
               <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
-                {creatingChannel ? <LoaderCircle aria-hidden="true" className="animate-spin" size={14} /> : <><Plus aria-hidden="true" size={14} />{input.messages.common.create}</>}
+                {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
               </Button>
             </DialogFooter>
           </form>
@@ -1108,12 +1111,12 @@ function SavedMessagesWorkspace(input: {
 
   return (
     <section aria-label={input.messages.common.saved} className="slei-saved-workspace flex h-full min-h-0 flex-col bg-background" data-testid="slei-saved-workspace">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">{input.messages.common.saved}</h1>
-          <p className="text-sm text-muted-foreground">{input.messages.chat.savedMessagesCount(entries.length)}</p>
-        </div>
-      </div>
+      <PageHeader
+        className="border-b px-6 py-4"
+        icon={sleiIcons.bookmark}
+        subtitle={input.messages.chat.savedMessagesCount(entries.length)}
+        title={input.messages.common.saved}
+      />
       {entries.length === 0 ? (
         <div className="grid h-full place-items-center p-6">
           <Empty
@@ -1131,27 +1134,31 @@ function SavedMessagesWorkspace(input: {
             const messageTime = formatSavedDate(savedMessage.messageCreatedAt);
             const savedTime = formatSavedDate(savedMessage.savedAt);
             return (
-            <Button
-              aria-label={input.messages.search.openConversation(savedMessage.messageId)}
-              className={cn("h-auto w-full justify-start whitespace-normal rounded-lg border bg-background px-4 py-3 text-left", isUnavailable && "opacity-70")}
-              disabled={isUnavailable}
-              key={savedMessage.id}
-              onClick={() => input.onSelect?.(savedMessage)}
-              type="button"
-              variant="ghost"
-            >
-              <span className="grid min-w-0 flex-1 gap-2">
-                <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
-                  <span>{savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}</span>
-                  <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
-                  {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
-                  {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
-                </span>
-                <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
-                  {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
-                </strong>
-              </span>
-            </Button>
+              <SoftPanel key={savedMessage.id} variant="listItem">
+                <Button
+                  aria-label={input.messages.search.openConversation(savedMessage.messageId)}
+                  className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
+                  disabled={isUnavailable}
+                  onClick={() => input.onSelect?.(savedMessage)}
+                  type="button"
+                  variant="ghost"
+                >
+                  <span className="grid min-w-0 flex-1 gap-2">
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <SleiIcon className="size-3.5" name="bookmark" />
+                        {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+                      </span>
+                      <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
+                      {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
+                      {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
+                    </span>
+                    <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
+                      {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
+                    </strong>
+                  </span>
+                </Button>
+              </SoftPanel>
             );
           })}
         </div>
@@ -1208,15 +1215,15 @@ function ContextPanel({ activeView, data, messages }: { activeView: AppView; dat
 
 const settingsMenu: Array<{
   title: "person" | "server" | "about";
-  items: Array<{ id: SettingsPanel; labelKey: "account" | "languageRegion" | "appearance" | "notifications" | "about"; icon: LucideIcon }>;
+  items: Array<{ id: SettingsPanel; labelKey: "account" | "languageRegion" | "appearance" | "notifications" | "about"; icon: SleiIconName }>;
 }> = [
   {
     title: "person",
     items: [
-      { id: "account", labelKey: "account", icon: CircleUserRound },
-      { id: "language-region", labelKey: "languageRegion", icon: Globe2 },
-      { id: "appearance", labelKey: "appearance", icon: Palette },
-      { id: "notifications", labelKey: "notifications", icon: Bell },
+      { id: "account", labelKey: "account", icon: "user" },
+      { id: "language-region", labelKey: "languageRegion", icon: "globe" },
+      { id: "appearance", labelKey: "appearance", icon: "palette" },
+      { id: "notifications", labelKey: "notifications", icon: "bell" },
     ],
   },
   {
@@ -1225,7 +1232,7 @@ const settingsMenu: Array<{
   },
   {
     title: "about",
-    items: [{ id: "about", labelKey: "about", icon: Info }],
+    items: [{ id: "about", labelKey: "about", icon: "info" }],
   },
 ];
 
@@ -1243,7 +1250,7 @@ function SettingsNavigator(input: {
             <SidebarSectionTitle>{input.messages.settings.groups[group.title]}</SidebarSectionTitle>
           </div>
           {group.items.length === 0 ? (
-            <p className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground"><Server aria-hidden="true" size={14} />{input.messages.settings.serverReserved}</p>
+            <p className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground"><SleiIcon name="server" size={14} />{input.messages.settings.serverReserved}</p>
           ) : null}
           {group.items.map((item) => (
             <Button
@@ -1254,7 +1261,7 @@ function SettingsNavigator(input: {
               type="button"
               variant="ghost"
             >
-              <item.icon aria-hidden="true" data-settings-icon={item.id} size={15} strokeWidth={2.8} />
+              <SleiIcon data-settings-icon={item.id} name={item.icon} size={15} stroke={2.4} />
               <span>{input.messages.settings[item.labelKey]}</span>
             </Button>
           ))}
@@ -1280,7 +1287,7 @@ function MembersNavigator(input: {
       <div className="grid gap-3 p-3">
         <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <SidebarSectionTitle>{input.messages.members.agents}</SidebarSectionTitle>
-          <Button aria-label={input.messages.members.newAgent} onClick={input.onCreateAgentRequest} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
+          <Button aria-label={input.messages.members.newAgent} onClick={input.onCreateAgentRequest} size="icon-xs" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
         </div>
         <small className="text-muted-foreground">macbookpro m4 max</small>
         {agents.length === 0 ? (
@@ -1327,7 +1334,7 @@ function ComputersNavigator(input: {
       <div className="grid gap-3 p-3">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <SidebarSectionTitle>{input.messages.computers.computers} {input.nodes.length}</SidebarSectionTitle>
-        <Button aria-label={input.messages.computers.newComputer} onClick={input.onAdd} size="icon-xs" type="button" variant="ghost"><Plus aria-hidden="true" size={14} /></Button>
+        <Button aria-label={input.messages.computers.newComputer} onClick={input.onAdd} size="icon-xs" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
       </div>
       {input.nodes.map((node) => (
         <div className="group flex items-start gap-1" key={node.id}>
@@ -1338,7 +1345,7 @@ function ComputersNavigator(input: {
             type="button"
             variant="ghost"
           >
-            <span className="grid size-8 place-items-center rounded-md bg-muted"><Monitor aria-hidden="true" size={16} /></span>
+            <span className="grid size-8 place-items-center rounded-md bg-muted"><SleiIcon name="computer" size={16} /></span>
             <span className="grid min-w-0 flex-1 gap-1">
               <strong className="truncate text-sm">{node.name}</strong>
               <small className="truncate text-xs font-normal text-muted-foreground">daemon {node.daemonVersion}</small>
@@ -1348,9 +1355,9 @@ function ComputersNavigator(input: {
           {node.id !== "local-node" ? (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button aria-label={input.messages.computers.deleteComputer(node.name)} className="mt-1 opacity-80 group-hover:opacity-100" size="icon-xs" type="button" variant="ghost"><Trash2 aria-hidden="true" size={13} /></Button>
+                <Button aria-label={input.messages.computers.deleteComputer(node.name)} className="mt-1 opacity-80 group-hover:opacity-100" size="icon-xs" type="button" variant="ghost"><SleiIcon name="delete" size={13} /></Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="slei-soft-dialog">
                 <AlertDialogHeader>
                   <AlertDialogTitle>{input.messages.computers.deleteComputer(node.name)}</AlertDialogTitle>
                   <AlertDialogDescription>
@@ -1534,7 +1541,7 @@ function ComputerCreateModal(input: {
       if (!open) input.onClose();
     }}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Monitor aria-hidden="true" size={20} />{input.messages.computers.newComputer}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><SleiIcon name="computer" size={20} />{input.messages.computers.newComputer}</DialogTitle>
           <DialogDescription>{input.messages.computers.deviceName} / {input.messages.computers.os}</DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={submitCreate}>
@@ -1548,7 +1555,7 @@ function ComputerCreateModal(input: {
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit"><Plus aria-hidden="true" size={14} />{input.messages.common.create}</Button>
+            <Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -1594,7 +1601,7 @@ function ShellDialog(input: {
           <div className="fixed inset-0 isolate z-50 bg-black/10" data-slot="dialog-overlay" />
           <div
             aria-modal="true"
-            className={cn("fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 sm:max-w-sm", input.className)}
+            className={cn("slei-soft-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 sm:max-w-sm", input.className)}
             data-slot="dialog-content"
             role="dialog"
           >
@@ -1612,7 +1619,7 @@ function ShellDialog(input: {
 
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
-      <DialogContent className={input.className} closeLabel={input.closeLabel} showCloseButton={input.showCloseButton}>
+      <DialogContent className={cn("slei-soft-dialog", input.className)} closeLabel={input.closeLabel} showCloseButton={input.showCloseButton}>
         {input.children}
       </DialogContent>
     </Dialog>

@@ -1,9 +1,8 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { DetailBlock, EditableDetailField, MemberAvatar } from "../../components";
+import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, SoftPanel, sleiIcons } from "../../components";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,6 +36,8 @@ type SelectOption<TValue extends string> = {
   value: TValue;
 };
 
+const settingsControlStackClass = "grid gap-3";
+
 export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
   const activeTheme = normalizeAppearanceTheme(input.appearance.theme);
@@ -62,125 +63,125 @@ export function SettingsPage(input: SettingsPageInput) {
     <section className="h-full min-h-0 overflow-hidden bg-background" data-settings-panel={input.activePanel}>
       <ScrollArea className="h-full min-h-0">
         <div className="mx-auto grid w-full max-w-4xl gap-4 p-4 sm:p-6">
-          <header className="grid select-none gap-1" data-slot="workspace-titlebar" data-testid="slei-settings-panel-header" data-tauri-drag-region="deep">
-            <h1 className="text-2xl font-semibold leading-tight" data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</h1>
-            <p className="max-w-2xl text-sm text-muted-foreground" data-tauri-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</p>
-          </header>
+          <PageHeader
+            className="select-none"
+            data-slot="workspace-titlebar"
+            data-testid="slei-settings-panel-header"
+            data-tauri-drag-region="deep"
+            icon={settingsPanelIcon(input.activePanel)}
+            subtitle={<span data-tauri-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</span>}
+            title={<span data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</span>}
+          />
 
           {input.activePanel === "account" && !profile ? (
-            <Card size="compact">
-              <CardContent className="text-sm text-muted-foreground">
+            <SoftPanel>
+              <div className="text-sm text-muted-foreground">
                 {labels.profileUnavailable}
-              </CardContent>
-            </Card>
+              </div>
+            </SoftPanel>
           ) : null}
 
           {input.activePanel === "account" && profile ? (
-            <Card size="compact">
-              <CardContent className="grid gap-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <EditableDetailField
-                    ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
-                    error={input.profileErrors?.displayName}
-                    label={labels.displayName}
-                    messages={input.messages}
-                    onSave={(value) => input.onProfileChange?.({ displayName: value })}
-                    saving={profilePending}
-                    value={profile.displayName}
-                  />
-                  <DetailBlock
-                    description={labels.handleReadOnly}
-                    title={labels.handle}
-                    value={profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
-                  />
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <EditableDetailField
+                  ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
+                  error={input.profileErrors?.displayName}
+                  label={labels.displayName}
+                  messages={input.messages}
+                  onSave={(value) => input.onProfileChange?.({ displayName: value })}
+                  saving={profilePending}
+                  value={profile.displayName}
+                />
+                <DetailBlock
+                  description={labels.handleReadOnly}
+                  title={labels.handle}
+                  value={profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
+                />
+              </div>
+
+              <Separator />
+
+              <section aria-label={labels.avatarPresets} className="grid gap-3">
+                <div className="grid gap-1">
+                  <h2 className="text-sm font-medium">{labels.avatar}</h2>
+                  <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
                 </div>
-
-                <Separator />
-
-                <section aria-label={labels.avatarPresets} className="grid gap-3">
-                  <div className="grid gap-1">
-                    <h2 className="text-sm font-medium">{labels.avatar}</h2>
-                    <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {profileAvatarPresets.map((preset) => (
-                      <Button
-                        aria-label={preset.name}
-                        aria-pressed={profile.avatar === preset.id ? "true" : "false"}
-                        className={cn("h-auto justify-start gap-3 px-3 py-2", profile.avatar === preset.id && "ring-2 ring-ring")}
-                        data-settings-avatar-option={preset.id}
-                        disabled={profilePending}
-                        key={preset.id}
-                        onClick={() => runSettingsFireAndForgetAction(() => input.onProfileChange?.({ avatar: preset.id }))}
-                        type="button"
-                        variant={profile.avatar === preset.id ? "secondary" : "outline"}
-                      >
-                        <MemberAvatar
-                          identity={{
-                            id: preset.id,
-                            name: preset.name,
-                            handle: `@${preset.id}`,
-                            avatar: preset.name.slice(0, 2),
-                            avatarSeed: preset.id,
-                          }}
-                        />
-                        <span>{preset.name}</span>
-                      </Button>
-                    ))}
-                  </div>
-                  {input.profileErrors?.avatar ? (
-                    <p className="text-sm text-destructive" role="alert">
-                      {input.profileErrors.avatar}
-                    </p>
-                  ) : null}
-                </section>
-              </CardContent>
-            </Card>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {profileAvatarPresets.map((preset) => (
+                    <Button
+                      aria-label={preset.name}
+                      aria-pressed={profile.avatar === preset.id ? "true" : "false"}
+                      className={cn("h-auto justify-start gap-3 px-3 py-2", profile.avatar === preset.id && "ring-2 ring-ring")}
+                      data-settings-avatar-option={preset.id}
+                      disabled={profilePending}
+                      key={preset.id}
+                      onClick={() => runSettingsFireAndForgetAction(() => input.onProfileChange?.({ avatar: preset.id }))}
+                      type="button"
+                      variant={profile.avatar === preset.id ? "secondary" : "outline"}
+                    >
+                      <MemberAvatar
+                        identity={{
+                          id: preset.id,
+                          name: preset.name,
+                          handle: `@${preset.id}`,
+                          avatar: preset.name.slice(0, 2),
+                          avatarSeed: preset.id,
+                        }}
+                      />
+                      <span>{preset.name}</span>
+                    </Button>
+                  ))}
+                </div>
+                {input.profileErrors?.avatar ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {input.profileErrors.avatar}
+                  </p>
+                ) : null}
+              </section>
+            </SoftPanel>
           ) : null}
 
           {input.activePanel === "language-region" ? (
-            <Card size="compact">
-              <CardContent className="grid gap-4">
-                <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
-                  <SettingsSelect
-                    ariaLabel={labels.language}
-                    disabled={preferencePending}
-                    id="language"
-                    label={labels.language}
-                    onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onLocaleChange?.(value))}
-                    options={[
-                      { label: labels.languageNames["zh-CN"], value: "zh-CN" },
-                      { label: labels.languageNames["en-US"], value: "en-US" },
-                    ]}
-                    value={input.locale}
-                  />
-                </div>
-                <div data-preference-pending={input.pendingPreference === "timeZone" ? "timeZone" : undefined}>
-                  <SettingsSelect
-                    ariaLabel={labels.timeZone}
-                    disabled={preferencePending}
-                    id="timezone"
-                    label={labels.timeZone}
-                    onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onTimeZoneChange?.(value))}
-                    options={timeZoneOptions}
-                    value={input.timeZone || defaultTimeZone}
-                  />
-                </div>
-                {input.preferenceError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {input.preferenceError}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+              <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
+                <SettingsSelect
+                  ariaLabel={labels.language}
+                  disabled={preferencePending}
+                  id="language"
+                  label={labels.language}
+                  onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onLocaleChange?.(value))}
+                  options={[
+                    { label: labels.languageNames["zh-CN"], value: "zh-CN" },
+                    { label: labels.languageNames["en-US"], value: "en-US" },
+                  ]}
+                  value={input.locale}
+                />
+              </div>
+              <div data-preference-pending={input.pendingPreference === "timeZone" ? "timeZone" : undefined}>
+                <SettingsSelect
+                  ariaLabel={labels.timeZone}
+                  disabled={preferencePending}
+                  id="timezone"
+                  label={labels.timeZone}
+                  onValueChange={(value) => runSettingsFireAndForgetAction(() => input.onTimeZoneChange?.(value))}
+                  options={timeZoneOptions}
+                  value={input.timeZone || defaultTimeZone}
+                />
+              </div>
+              {input.preferenceError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {input.preferenceError}
+                </p>
+              ) : null}
+            </SoftPanel>
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <Card data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} size="compact">
-              <CardContent className="grid gap-5">
-                <div className="grid gap-2">
-                  <Label>{labels.theme}</Label>
-                  <div aria-label={labels.theme} className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
+            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} data-settings-control-stack="true">
+              <PreferenceRow
+                control={(
+                  <div className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
                     {themeOptions(labels).map((option) => (
                       <Button
                         aria-pressed={activeTheme === option.value ? "true" : "false"}
@@ -196,13 +197,16 @@ export function SettingsPage(input: SettingsPageInput) {
                       </Button>
                     ))}
                   </div>
-                </div>
+                )}
+                label={labels.theme}
+                labelMode="group"
+              />
 
-                <Separator />
+              <Separator />
 
-                <div className="grid gap-2">
-                  <Label>{labels.fontSize}</Label>
-                  <div className="flex flex-wrap gap-2" role="group" aria-label={labels.fontSize}>
+              <PreferenceRow
+                control={(
+                  <div className="flex flex-wrap gap-2" role="group">
                     {(["sm", "md", "lg"] as const).map((size) => (
                       <Button
                         aria-pressed={input.appearance.fontSize === size ? "true" : "false"}
@@ -217,59 +221,55 @@ export function SettingsPage(input: SettingsPageInput) {
                       </Button>
                     ))}
                   </div>
-                </div>
-                {input.preferenceError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {input.preferenceError}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
+                )}
+                label={labels.fontSize}
+                labelMode="group"
+              />
+              {input.preferenceError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {input.preferenceError}
+                </p>
+              ) : null}
+            </SoftPanel>
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <Card data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} size="compact">
-              <CardContent className="grid gap-2">
-                <NotificationSwitch
-                  checked={input.notifications.mentions}
-                  disabled={preferencePending}
-                  label={labels.mentionNotifications}
-                  name="mentions"
-                  onCheckedChange={(checked) => updateNotification("mentions", checked)}
-                />
-                <NotificationSwitch
-                  checked={input.notifications.humanReplies}
-                  disabled={preferencePending}
-                  label={labels.humanReplyNotifications}
-                  name="humanReplies"
-                  onCheckedChange={(checked) => updateNotification("humanReplies", checked)}
-                />
-                <NotificationSwitch
-                  checked={input.notifications.approvals}
-                  disabled={preferencePending}
-                  label={labels.approvalNotifications}
-                  name="approvals"
-                  onCheckedChange={(checked) => updateNotification("approvals", checked)}
-                />
-                {input.preferenceError ? (
-                  <p className="text-sm text-destructive" role="alert">
-                    {input.preferenceError}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
+            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} data-settings-control-stack="true">
+              <NotificationSwitch
+                checked={input.notifications.mentions}
+                disabled={preferencePending}
+                label={labels.mentionNotifications}
+                name="mentions"
+                onCheckedChange={(checked) => updateNotification("mentions", checked)}
+              />
+              <NotificationSwitch
+                checked={input.notifications.humanReplies}
+                disabled={preferencePending}
+                label={labels.humanReplyNotifications}
+                name="humanReplies"
+                onCheckedChange={(checked) => updateNotification("humanReplies", checked)}
+              />
+              <NotificationSwitch
+                checked={input.notifications.approvals}
+                disabled={preferencePending}
+                label={labels.approvalNotifications}
+                name="approvals"
+                onCheckedChange={(checked) => updateNotification("approvals", checked)}
+              />
+              {input.preferenceError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {input.preferenceError}
+                </p>
+              ) : null}
+            </SoftPanel>
           ) : null}
 
           {input.activePanel === "about" ? (
-            <Card size="compact">
-              <CardContent>
-                <div className="grid gap-3">
-                  <AboutRow label={labels.desktopVersion} value={desktopVersion} />
-                  <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
-                  <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
-                </div>
-              </CardContent>
-            </Card>
+            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+              <AboutRow label={labels.desktopVersion} value={desktopVersion} />
+              <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
+              <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
+            </SoftPanel>
           ) : null}
         </div>
       </ScrollArea>
@@ -334,8 +334,8 @@ function NotificationSwitch(input: {
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <DetailBlock
-      action={(
+    <PreferenceRow
+      control={(
         <Switch
           aria-label={input.label}
           checked={input.checked}
@@ -345,7 +345,7 @@ function NotificationSwitch(input: {
         />
       )}
       data-settings-notification={input.name}
-      title={<Label className="text-sm" htmlFor={`settings-notification-${input.name}`}>{input.label}</Label>}
+      label={input.label}
     />
   );
 }
@@ -371,6 +371,21 @@ function themeOptions(labels: DesktopMessages["settings"]): Array<SelectOption<"
     { label: labels.themeLight, value: "light" },
     { label: labels.themeDark, value: "dark" },
   ];
+}
+
+function settingsPanelIcon(panel: SettingsPanel) {
+  switch (panel) {
+    case "account":
+      return sleiIcons.user;
+    case "language-region":
+      return sleiIcons.globe;
+    case "appearance":
+      return sleiIcons.palette;
+    case "notifications":
+      return sleiIcons.bell;
+    case "about":
+      return sleiIcons.info;
+  }
 }
 
 const timeZoneOptions = [
