@@ -27,6 +27,7 @@ describe("Slei product MCP tools", () => {
       slei_request_human_reply: "mcp__slei__slei_request_human_reply",
     });
     expect(SLEI_PRODUCT_TOOL_DEFINITIONS[0].inputSchema).toHaveProperty("type", "object");
+    expect(SLEI_PRODUCT_TOOL_DEFINITIONS[0].description).toContain("createChannel");
     expect(isSleiProductToolName("slei_request_human_reply")).toBe(true);
     expect(isSleiProductToolName("unknown_tool")).toBe(false);
   });

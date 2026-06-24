@@ -308,6 +308,48 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("已完成");
   });
 
+  it("renders compact create channel interactive cards", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures({
+          members,
+          nodes,
+          messages: [
+            {
+              id: "m-channel-card",
+              author: "Yeal",
+              role: "agent",
+              time: "10:00",
+              body: "",
+              channelId: "all",
+              status: "done",
+              cards: [
+                {
+                  id: "card_channel_1",
+                  kind: "createChannel",
+                  state: "pending",
+                  title: "创建 #qa",
+                  summary: "#qa",
+                  draft: { name: "qa", description: "QA 协作频道", projectPaths: [], agentIds: [] },
+                  actionLabel: "创建",
+                  doneLabel: "DONE",
+                },
+              ],
+            },
+          ],
+        })}
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain('data-card-kind="createChannel"');
+    expect(html).toContain("创建 #qa");
+    expect(html).toContain("#qa");
+    expect(html).toContain('data-slot="card-action"');
+  });
+
   it("renders multiple persisted guide card messages separately", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

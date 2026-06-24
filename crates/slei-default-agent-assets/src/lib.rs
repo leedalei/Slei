@@ -158,7 +158,7 @@ mod tests {
         let memory = initial_memory(&guide_input());
 
         assert!(memory.contains("# Yeal"));
-        assert!(memory.contains("创建成员时通过 guide-create Skill 生成产品交互卡"));
+        assert!(memory.contains("创建成员或频道时通过 guide-create Skill 生成产品交互卡"));
         assert!(!memory.contains("主频道：#all"));
         assert!(!memory.contains("已加入频道：#all、#zeta"));
         assert!(memory.contains("频道信息请读取 `notes/channels.md`"));
@@ -218,7 +218,9 @@ mod tests {
         let body = guide_create_skill();
 
         assert!(body.contains("slei_propose_interactive_card"));
-        assert!(body.contains("Multiple requested agents require multiple tool calls"));
+        assert!(body.contains("\"kind\": \"createChannel\""));
+        assert!(body.contains("If the user asks for only a channel"));
+        assert!(body.contains("Multiple requested agents and channels require multiple tool calls"));
         assert!(body.contains("assign a simple random unused English name"));
         assert!(body.contains("Do not use role-only labels such as"));
         assert!(body.contains("已准备创建卡片，请确认。"));

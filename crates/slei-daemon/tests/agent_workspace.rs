@@ -1246,25 +1246,6 @@ async fn guide_product_tool_rejects_invalid_card_payloads() {
         .handle_worker_event(json!({
             "type": "product_tool_requested",
             "run_id": run_id,
-            "tool_use_id": "tool_card_invalid_kind",
-            "agent_id": "agent_guide_local_node",
-            "tool_name": "slei_propose_interactive_card",
-            "payload": {
-                "kind": "createChannel",
-                "title": "创建频道草案",
-                "summary": "#qa",
-                "draft": { "name": "qa" },
-                "actionLabel": "创建",
-                "doneLabel": "DONE"
-            }
-        }))
-        .await
-        .is_err());
-
-    assert!(state
-        .handle_worker_event(json!({
-            "type": "product_tool_requested",
-            "run_id": run_id,
             "tool_use_id": "tool_card_missing_name",
             "agent_id": "agent_guide_local_node",
             "tool_name": "slei_propose_interactive_card",
@@ -1302,6 +1283,101 @@ async fn guide_product_tool_rejects_invalid_card_payloads() {
         .all(|message| !message["id"]
             .as_str()
             .is_some_and(|id| id.starts_with("card_message_"))));
+}
+
+#[tokio::test]
+async fn guide_product_tool_appends_create_channel_card_message() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("interactive-channel-card-tool");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    state.nodes().set_runtime_ready_for_tests("1.2.3");
+    let app = build_router(state.clone());
+    let guide = post_json(
+        &app,
+        &token,
+        "/v1/agents/guide/bootstrap",
+        Some("bootstrap-guide-channel-card-tool"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(guide.status(), StatusCode::CREATED);
+
+    let conversations = response_json(get_json(&app, &token, "/v1/conversations").await).await;
+    let conversation_id = conversations["conversations"][0]["id"].as_str().unwrap();
+    let sent = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("message-product-tool-channel-card"),
+        json!({ "body": "帮我创建一个 QA 频道", "authorId": "human:local" }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::CREATED);
+    let run_id = state.worker_commands()[0]["run_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    state
+        .handle_worker_event(json!({
+            "type": "product_tool_requested",
+            "run_id": run_id,
+            "tool_use_id": "tool_channel_card_1",
+            "agent_id": "agent_guide_local_node",
+            "tool_name": "slei_propose_interactive_card",
+            "payload": {
+                "kind": "createChannel",
+                "title": "创建频道草案",
+                "summary": "#qa",
+                "draft": {
+                    "name": "qa",
+                    "description": "QA 协作频道",
+                    "projectName": "Slei",
+                    "projectPaths": ["/workspace/slei"],
+                    "agentIds": []
+                },
+                "actionLabel": "创建",
+                "doneLabel": "DONE"
+            }
+        }))
+        .await
+        .expect("createChannel card payload is accepted");
+
+    let messages = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{conversation_id}/messages"),
+        )
+        .await,
+    )
+    .await;
+    let card_message = messages["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|message| {
+            message["id"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("card_message_"))
+        })
+        .expect("card message is created");
+    let card = &card_message["cards"][0];
+    assert_eq!(card["kind"], "createChannel");
+    assert_eq!(card["state"], "pending");
+    assert_eq!(card["draft"]["name"], "qa");
+    assert_eq!(card["draft"]["projectPaths"], json!(["/workspace/slei"]));
+    let stored_card = state
+        .cards()
+        .card(card["id"].as_str().unwrap())
+        .await
+        .expect("createChannel product card is stored");
+    assert_eq!(
+        stored_card.action,
+        slei_daemon::services::card_service::CardAction::CreateChannel {
+            name: "qa".to_string(),
+        }
+    );
 }
 
 #[tokio::test]

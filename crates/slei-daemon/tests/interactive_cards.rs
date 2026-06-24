@@ -353,6 +353,67 @@ async fn product_tool_card_reload_restores_full_payload_and_message_id() {
     assert!(!root.join("cards/index.json").exists());
 }
 
+#[tokio::test]
+async fn product_tool_create_channel_card_uses_channel_action_and_payload() {
+    let state = AppState::for_tests_with_agent_root_async(
+        AuthToken::from_static("product-channel-card-token"),
+        temp_data_root(),
+    )
+    .await;
+    let payload = json!({
+        "kind": "createChannel",
+        "title": "创建频道",
+        "summary": "#qa",
+        "draft": {
+            "name": "qa",
+            "description": "质量协作频道",
+            "projectName": "Slei",
+            "projectPaths": ["/workspace/slei"],
+            "agentIds": ["agent_coda"]
+        },
+        "actionLabel": "创建",
+        "doneLabel": "DONE"
+    });
+
+    let view = state
+        .cards()
+        .propose_product_tool_card(
+            "run_channel_tool",
+            "agent_guide_local_node",
+            "conv_guide",
+            &payload,
+            "product-channel-card",
+        )
+        .await
+        .expect("product channel card is proposed");
+
+    assert_eq!(view.kind, "createChannel");
+    assert_eq!(view.title, "创建频道");
+    assert_eq!(view.draft, payload["draft"]);
+    let stored = state
+        .cards()
+        .card(&view.id)
+        .await
+        .expect("channel card is stored");
+    assert_eq!(
+        stored.action,
+        CardAction::CreateChannel {
+            name: "qa".to_string(),
+        }
+    );
+    assert_eq!(
+        stored.view,
+        Some(InteractiveCardTemplate {
+            kind: "createChannel".to_string(),
+            title: "创建频道".to_string(),
+            summary: "#qa".to_string(),
+            draft: payload["draft"].clone(),
+            action_label: "创建".to_string(),
+            done_label: "DONE".to_string(),
+        })
+    );
+}
+
 fn temp_data_root() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("slei-interactive-cards-{}", Uuid::new_v4()))
 }

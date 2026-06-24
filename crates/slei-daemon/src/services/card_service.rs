@@ -155,11 +155,7 @@ impl CardService {
         let idempotency_key = namespaced_key("card:product_tool", idempotency_key)
             .ok_or(CardError::MissingIdempotencyKey)?;
         let template = product_tool_template(payload)?;
-        let name = required_string(&template.draft, "name")?.to_string();
-        let action = CardAction::CreateAgent {
-            name,
-            permission: "Controlled".to_string(),
-        };
+        let action = product_tool_action(&template)?;
         let proposal = CardProposal {
             run_id: run_id.to_string(),
             agent_id: agent_id.to_string(),
@@ -574,7 +570,7 @@ fn card_state_label(state: CardState) -> String {
 
 fn product_tool_template(payload: &Value) -> Result<InteractiveCardTemplate, CardError> {
     let kind = required_string(payload, "kind")?;
-    if kind != "createAgent" {
+    if !matches!(kind, "createAgent" | "createChannel") {
         return Err(CardError::UnsupportedProductToolCardKind(kind.to_string()));
     }
 
@@ -583,16 +579,7 @@ fn product_tool_template(payload: &Value) -> Result<InteractiveCardTemplate, Car
         .filter(|value| value.is_object())
         .cloned()
         .ok_or(CardError::InvalidProductToolPayload("draft"))?;
-    for key in [
-        "name",
-        "handle",
-        "runtimeKind",
-        "model",
-        "nodeId",
-        "description",
-    ] {
-        required_string(&draft, key)?;
-    }
+    validate_product_tool_draft(kind, &draft)?;
 
     Ok(InteractiveCardTemplate {
         kind: kind.to_string(),
@@ -604,12 +591,81 @@ fn product_tool_template(payload: &Value) -> Result<InteractiveCardTemplate, Car
     })
 }
 
+fn validate_product_tool_draft(kind: &str, draft: &Value) -> Result<(), CardError> {
+    match kind {
+        "createAgent" => {
+            for key in [
+                "name",
+                "handle",
+                "runtimeKind",
+                "model",
+                "nodeId",
+                "description",
+            ] {
+                required_string(draft, key)?;
+            }
+        }
+        "createChannel" => {
+            required_string(draft, "name")?;
+            optional_string(draft, "description")?;
+            optional_string(draft, "projectName")?;
+            optional_string_array(draft, "projectPaths")?;
+            optional_string_array(draft, "agentIds")?;
+        }
+        _ => return Err(CardError::UnsupportedProductToolCardKind(kind.to_string())),
+    }
+    Ok(())
+}
+
+fn product_tool_action(template: &InteractiveCardTemplate) -> Result<CardAction, CardError> {
+    match template.kind.as_str() {
+        "createAgent" => Ok(CardAction::CreateAgent {
+            name: required_string(&template.draft, "name")?.to_string(),
+            permission: "Controlled".to_string(),
+        }),
+        "createChannel" => {
+            let name = required_string(&template.draft, "name")?
+                .trim_start_matches('#')
+                .trim();
+            if name.is_empty() {
+                return Err(CardError::InvalidProductToolPayload("name"));
+            }
+            Ok(CardAction::CreateChannel {
+                name: name.to_string(),
+            })
+        }
+        kind => Err(CardError::UnsupportedProductToolCardKind(kind.to_string())),
+    }
+}
+
 fn required_string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, CardError> {
     value
         .get(key)
         .and_then(Value::as_str)
         .filter(|candidate| !candidate.trim().is_empty())
         .ok_or(CardError::InvalidProductToolPayload(key))
+}
+
+fn optional_string(value: &Value, key: &'static str) -> Result<(), CardError> {
+    if let Some(candidate) = value.get(key) {
+        if !(candidate.is_null() || candidate.as_str().is_some()) {
+            return Err(CardError::InvalidProductToolPayload(key));
+        }
+    }
+    Ok(())
+}
+
+fn optional_string_array(value: &Value, key: &'static str) -> Result<(), CardError> {
+    if let Some(candidate) = value.get(key) {
+        let valid = candidate.is_null()
+            || candidate
+                .as_array()
+                .is_some_and(|items| items.iter().all(Value::is_string));
+        if !valid {
+            return Err(CardError::InvalidProductToolPayload(key));
+        }
+    }
+    Ok(())
 }
 
 fn normalize_handle_seed(name: &str) -> String {

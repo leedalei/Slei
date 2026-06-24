@@ -5402,8 +5402,8 @@ fn local_card_from_product_tool_event(
         .as_object()
         .ok_or_else(|| "slei_propose_interactive_card payload must be an object".to_string())?;
     let kind = required_payload_string(payload, "kind")?;
-    if kind != "createAgent" {
-        return Err("local Slei interactive cards only support createAgent".to_string());
+    if kind != "createAgent" && kind != "createChannel" {
+        return Err("local Slei interactive cards only support createAgent and createChannel".to_string());
     }
     Ok(InteractiveCardView {
         id: format!(

@@ -20,7 +20,7 @@ export const SLEI_PRODUCT_TOOL_DEFINITIONS: readonly SleiProductToolDefinition[]
   {
     name: "slei_propose_interactive_card",
     description:
-      "Propose a typed Slei interactive card for user confirmation. Use kind createAgent when Yeal should create a real member/agent.",
+      "Propose a typed Slei interactive card for user confirmation. Use kind createAgent when Yeal should create a real member/agent, or kind createChannel when Yeal should create a real channel.",
     inputSchema: {
       type: "object",
       required: ["kind", "title", "summary", "draft", "actionLabel", "doneLabel"],

@@ -13,7 +13,7 @@ describe("default agent assets", () => {
     });
 
     expect(memory).toContain("# Yeal");
-    expect(memory).toContain("创建成员时通过 guide-create Skill 生成产品交互卡");
+    expect(memory).toContain("创建成员或频道时通过 guide-create Skill 生成产品交互卡");
     expect(memory).not.toContain("主频道：#all");
     expect(memory).not.toContain("已加入频道：#all、#zeta");
     expect(memory).toContain("频道信息请读取 `notes/channels.md`");
@@ -26,6 +26,7 @@ describe("default agent assets", () => {
     expect(skills.map((skill) => skill.id)).toEqual(["guide-create", "memory"]);
     expect(skills[0].path).toBe("/tmp/yeal/.claude/skills/guide-create/SKILL.md");
     expect(defaultSkillContent({ skillId: "guide-create", handle: "@yeal" })).toContain("slei_propose_interactive_card");
+    expect(defaultSkillContent({ skillId: "guide-create", handle: "@yeal" })).toContain('"kind": "createChannel"');
     expect(defaultSkillContent({ skillId: "memory", handle: "@yeal" })).toContain("curated working memory, not as a chat log");
   });
 

@@ -177,18 +177,17 @@ async fn channel_agent_replies_and_cards_inherit_source_message_session() {
             "tool_name": "slei_propose_interactive_card",
             "tool_use_id": "tool-1",
             "payload": {
-                "kind": "createAgent",
-                "title": "创建临时 Agent",
-                "summary": "用于 session 继承测试",
+                "kind": "createChannel",
+                "title": "创建 #qa",
+                "summary": "#qa",
                 "actionLabel": "创建",
                 "doneLabel": "已创建",
                 "draft": {
-                    "name": "Temp",
-                    "handle": "@temp",
-                    "runtimeKind": "ClaudeCode",
-                    "model": "Sonnet",
-                    "nodeId": "local-node",
-                    "description": "临时测试 Agent"
+                    "name": "qa",
+                    "description": "QA 协作频道",
+                    "projectName": "Slei",
+                    "projectPaths": [],
+                    "agentIds": []
                 }
             }
         }))
@@ -227,6 +226,8 @@ async fn channel_agent_replies_and_cards_inherit_source_message_session() {
     assert!(agent_messages
         .iter()
         .all(|message| message.session_id.as_deref() == Some(second_session.id.as_str())));
+    assert_eq!(agent_messages[0].cards[0].kind, "createChannel");
+    assert_eq!(agent_messages[0].cards[0].draft["name"], "qa");
 }
 
 #[tokio::test]
