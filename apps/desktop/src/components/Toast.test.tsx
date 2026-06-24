@@ -4,17 +4,17 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 
-import { Toast } from "./Toast";
+import { Toast, type ToastType } from "./Toast";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function renderToast(message = "保存成功") {
+function renderToast(input: { message?: string; type?: ToastType } = {}) {
   const host = document.createElement("div");
   document.body.append(host);
   const root = createRoot(host);
 
   act(() => {
-    root.render(<Toast message={message} type="success" />);
+    root.render(<Toast message={input.message ?? "保存成功"} type={input.type} />);
   });
 
   return { host, root };
@@ -29,7 +29,7 @@ function cleanupToast(root: Root, host: HTMLElement) {
 
 describe("Toast", () => {
   it("renders on a shared soft panel surface so page content does not show through", () => {
-    const { host, root } = renderToast();
+    const { host, root } = renderToast({ type: "success" });
 
     try {
       const panel = host.querySelector("[data-slei-panel]");
@@ -42,7 +42,10 @@ describe("Toast", () => {
   });
 
   it("limits long messages to 70 percent of the app width and wraps overflow text", () => {
-    const { host, root } = renderToast("backend service failed while processing a long diagnostic message with many details");
+    const { host, root } = renderToast({
+      message: "backend service failed while processing a long diagnostic message with many details",
+      type: "success",
+    });
 
     try {
       const panel = host.querySelector("[data-slei-panel]");
@@ -51,6 +54,18 @@ describe("Toast", () => {
       expect(panel?.className).toContain("max-w-[70vw]");
       expect(button?.className).toContain("whitespace-normal");
       expect(button?.className).toContain("break-words");
+    } finally {
+      cleanupToast(root, host);
+    }
+  });
+
+  it("preserves the neutral popover surface contract", () => {
+    const { host, root } = renderToast();
+
+    try {
+      const panel = host.querySelector("[data-slei-panel]");
+
+      expect(panel?.className).toContain("bg-popover");
     } finally {
       cleanupToast(root, host);
     }

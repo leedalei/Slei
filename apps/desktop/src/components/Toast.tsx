@@ -44,7 +44,7 @@ export function Toast({ message, text, type }: { message?: string; text?: string
   const content = (text ?? message)?.trim();
   if (!content) return null;
   const urgent = type === "error";
-  const variantClassName = type ? toastVariantClassNames[type] : "border-border text-popover-foreground";
+  const variantClassName = type ? toastVariantClassNames[type] : "border-border bg-popover text-popover-foreground";
 
   return (
     <div aria-live={urgent ? "assertive" : "polite"} className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2" role={urgent ? "alert" : "status"}>
