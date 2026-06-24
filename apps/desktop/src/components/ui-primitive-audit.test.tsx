@@ -94,8 +94,16 @@ describe("desktop UI primitive usage", () => {
     const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
     const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
 
-    expect(lightThemeCss).toContain("--slei-shadow-raised-glow: oklch(1 0 0 / 1);");
-    expect(darkThemeCss).toContain("--slei-shadow-raised-glow: oklch(0.88 0.012 190 / 0.52);");
+    for (const themeCss of [lightThemeCss, darkThemeCss]) {
+      expect(themeCss).toContain("--slei-shadow-highlight: rgb(255 255 255 /");
+      expect(themeCss).toContain("--slei-shadow-lowlight: rgb(0 0 0 /");
+      expect(themeCss).toContain("--slei-overlay-shadow-color: rgb(0 0 0 /");
+      expect(themeCss).toContain("--slei-shadow-raised-glow: rgb(255 255 255 /");
+      expect(themeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 /");
+      expect(themeCss).toContain("--slei-shadow-inset-shade: rgb(0 0 0 /");
+      expect(themeCss).not.toMatch(/--slei-shadow-(?:highlight|lowlight|raised-glow|raised-shade|inset-shade): oklch\(/);
+      expect(themeCss).not.toMatch(/--slei-overlay-shadow-color: oklch\(/);
+    }
 
     for (const size of ["xs", "sm", "md", "lg"]) {
       const tokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
