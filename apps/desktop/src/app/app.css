@@ -73,6 +73,7 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.24);
   --slei-raised-border: oklch(0.91 0.012 190 / 0.86);
+  --slei-menu-border: rgb(0 0 0 / 0.24);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.98);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.18);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.16);
@@ -263,6 +264,7 @@
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: rgb(0 0 0 / 0.54);
   --slei-raised-border: oklch(0.18 0.035 210 / 0.82);
+  --slei-menu-border: rgb(0 0 0 / 0.66);
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.28);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.58);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.56);
@@ -828,13 +830,14 @@ select:focus-visible {
 }
 
 .slei-shell-nav__button {
+  border-color: var(--slei-menu-border);
   color: color-mix(in srgb, var(--sidebar-foreground) 76%, transparent);
 }
 
 .slei-shell-nav__button--active {
   background: var(--primary);
   color: var(--primary-foreground);
-  border-color: color-mix(in srgb, var(--primary) 34%, var(--slei-raised-border));
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border));
 }
 
 .slei-context-sidebar {

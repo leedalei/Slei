@@ -302,6 +302,19 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
   });
 
+  it("keeps menubar button borders darker than their raised shadows", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
+    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
+    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+
+    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.24)");
+    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.66)");
+    expect(navButtonCss).toContain("border-color: var(--slei-menu-border)");
+    expect(navButtonCss).toContain("border-color: color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
+    expect(navButtonCss).not.toContain("var(--slei-raised-border)");
+  });
+
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");
