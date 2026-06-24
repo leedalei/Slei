@@ -333,75 +333,73 @@ export function MembersPage(input: {
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <Toast message={toast.message} type={toast.type} />
       <div className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
-        <PageHeader
-          className="grid-cols-[minmax(0,1fr)_auto]"
-          data-slot="workspace-titlebar"
-          data-tauri-drag-region="deep"
-          icon={undefined}
-          title={(
-            <span className="flex min-w-0 items-center gap-3" data-tauri-drag-region="deep">
-              <span className="inline-flex" data-tauri-drag-region="deep">
-                <MemberAvatar identity={selectedMember} large />
+        <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
+          <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
+            <MemberAvatar identity={selectedMember} large />
+          </span>
+          <PageHeader
+            className="min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto]"
+            data-slot="workspace-titlebar"
+            data-tauri-drag-region="deep"
+            icon={undefined}
+            title={<span className="min-w-0 truncate" data-tauri-drag-region="deep">{memberDetails.name}</span>}
+            subtitle={(
+              <span className="grid min-w-0 gap-2" data-tauri-drag-region="deep">
+                <span className="flex min-w-0 flex-wrap items-center gap-2" data-tauri-drag-region="deep">
+                  {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
+                  <StatusBadge
+                    className="w-fit"
+                    data-tauri-drag-region="deep"
+                    label={input.messages.members.online}
+                    status={selectedMember.runtimeStatus}
+                  />
+                </span>
+                <span className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
+                  <span className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</span>
+                  <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                    <SleiIcon className="size-3.5" name="copy" />
+                  </TooltipButton>
+                </span>
               </span>
-              <span className="min-w-0 truncate" data-tauri-drag-region="deep">{memberDetails.name}</span>
-            </span>
-          )}
-          subtitle={(
-            <span className="grid min-w-0 gap-2" data-tauri-drag-region="deep">
-              <span className="flex min-w-0 flex-wrap items-center gap-2" data-tauri-drag-region="deep">
-                {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
-                <StatusBadge
-                  className="w-fit"
-                  data-tauri-drag-region="deep"
-                  label={input.messages.members.online}
-                  status={selectedMember.runtimeStatus}
-                />
-              </span>
-              <span className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
-                <span className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</span>
-                <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
-                  <SleiIcon className="size-3.5" name="copy" />
-                </TooltipButton>
-              </span>
-            </span>
-          )}
-          actions={canMessage ? (
-            <>
-              <Button onClick={() => input.onMessage?.(selectedMember.id)} type="button">
-                <SleiIcon name="chat" />
-                {input.messages.members.message}
-              </Button>
-              {canDelete ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      disabled={deleting}
-                      type="button"
-                      variant="destructive"
-                    >
-                      <SleiIcon name="delete" />
-                      {input.messages.members.deleteAgent}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{input.messages.members.deleteAgent}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {input.messages.members.deleteAgentConfirm(selectedMember.name)}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => void deleteSelectedAgent()} variant="destructive">
-                        {input.messages.common.delete}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              ) : null}
-            </>
-          ) : null}
-        />
+            )}
+            actions={canMessage ? (
+              <>
+                <Button onClick={() => input.onMessage?.(selectedMember.id)} type="button">
+                  <SleiIcon name="chat" />
+                  {input.messages.members.message}
+                </Button>
+                {canDelete ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        disabled={deleting}
+                        type="button"
+                        variant="destructive"
+                      >
+                        <SleiIcon name="delete" />
+                        {input.messages.members.deleteAgent}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{input.messages.members.deleteAgent}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {input.messages.members.deleteAgentConfirm(selectedMember.name)}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => void deleteSelectedAgent()} variant="destructive">
+                          {input.messages.common.delete}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : null}
+              </>
+            ) : null}
+          />
+        </div>
         {deleteError ? (
           <Alert className="mt-4" variant="destructive">
             <AlertDescription>{deleteError}</AlertDescription>

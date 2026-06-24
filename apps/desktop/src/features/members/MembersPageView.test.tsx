@@ -162,6 +162,12 @@ describe("MembersPage agent details", () => {
     expect(onMessage).toHaveBeenCalledWith("agent_coda");
   });
 
+  it("keeps the page title text free of avatar fallback glyphs", async () => {
+    const host = await mount(renderMembersPage());
+
+    expect(host.querySelector("[data-slei-page-header-title]")?.textContent).toBe("Coda");
+  });
+
   it("uses the shared channel tab bar height for member detail tabs", () => {
     const html = renderToStaticMarkup(renderMembersPage());
     const marker = 'data-testid="slei-member-detail-tabs"';
