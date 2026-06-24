@@ -13,6 +13,7 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Checkbox } from "../../components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -384,17 +385,55 @@ function ChannelMemberPanel(input: {
   onRemove?: (agentId: string) => Promise<void> | void;
 }) {
   const [mutatingMemberId, setMutatingMemberId] = useState<string | undefined>(undefined);
-  const [confirmingAddId, setConfirmingAddId] = useState<string | undefined>(undefined);
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
+  const [addingSelected, setAddingSelected] = useState(false);
+  const availableAddMemberIds = input.availableMembers.map((member) => member.id).join("|");
+
+  useEffect(() => {
+    const availableIds = new Set(input.availableMembers.map((member) => member.id));
+    setSelectedAddIds((current) => {
+      const next = current.filter((memberId) => availableIds.has(memberId));
+      return next.length === current.length ? current : next;
+    });
+  }, [availableAddMemberIds]);
+
+  function closeAddDialog() {
+    setAddDialogOpen(false);
+    setSelectedAddIds([]);
+  }
+
+  function toggleSelectedAddMember(memberId: string) {
+    if (addingSelected) return;
+    setSelectedAddIds((current) =>
+      current.includes(memberId)
+        ? current.filter((selectedId) => selectedId !== memberId)
+        : [...current, memberId],
+    );
+  }
+
+  async function addSelectedMembers() {
+    if (selectedAddIds.length === 0) return;
+    const selectedIds = input.availableMembers
+      .map((member) => member.id)
+      .filter((memberId) => selectedAddIds.includes(memberId));
+    setAddingSelected(true);
+    try {
+      for (const memberId of selectedIds) {
+        await input.onAdd?.(memberId);
+      }
+      closeAddDialog();
+    } finally {
+      setAddingSelected(false);
+    }
+  }
 
   async function mutate(memberId: string, action: "add" | "remove") {
     setMutatingMemberId(memberId);
     try {
       if (action === "add") {
         await input.onAdd?.(memberId);
-        setConfirmingAddId(undefined);
-        setAddMenuOpen(false);
       } else {
         await input.onRemove?.(memberId);
         setConfirmingRemoveId(undefined);
@@ -417,62 +456,104 @@ function ChannelMemberPanel(input: {
             <span className="truncate">{input.messages.chat.channelMembers}({input.members.length})</span>
           </h2>
         </div>
-        <Popover open={addMenuOpen} onOpenChange={(open) => {
-          setAddMenuOpen(open);
-          if (!open) setConfirmingAddId(undefined);
+        <Dialog open={addDialogOpen} onOpenChange={(open) => {
+          setAddDialogOpen(open);
+          if (!open) setSelectedAddIds([]);
         }}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
+              <DialogTrigger asChild>
                 <Button aria-label={input.messages.chat.addChannelMember} size="icon-xs" type="button" variant="ghost">
                   <Plus aria-hidden="true" size={18} />
                 </Button>
-              </PopoverTrigger>
+              </DialogTrigger>
             </TooltipTrigger>
             <TooltipContent>{input.messages.chat.addChannelMember}</TooltipContent>
           </Tooltip>
-          <PopoverContent align="end" className="grid w-64 gap-1" data-testid="slei-channel-member-add-popover">
-            {input.availableMembers.length > 0 ? input.availableMembers.map((member) => {
-                const confirming = confirmingAddId === member.id;
-                return (
-                  <div className="grid gap-1 rounded-md px-1 py-1" key={member.id}>
-                    <Button
-                      className="h-auto w-full justify-start gap-2 px-2 py-2"
-                      data-testid="slei-channel-member-add-candidate"
-                      disabled={mutatingMemberId === member.id}
-                      onClick={() => setConfirmingAddId(member.id)}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <MemberAvatar identity={member} />
-                      <span className="grid min-w-0 flex-1 gap-0.5 overflow-hidden text-left">
-                        <span className="flex min-w-0 items-baseline gap-1.5">
-                          <strong className="truncate text-sm">{member.name}</strong>
-                          <small className="shrink-0 text-xs font-normal text-muted-foreground">{member.handle}</small>
-                        </span>
-                        <small className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-normal text-muted-foreground" data-testid="slei-channel-member-add-candidate-description">
-                          {member.description}
-                        </small>
-                      </span>
-                    </Button>
-                    {confirming ? (
-                      <div className="flex justify-end gap-2 px-1">
-                        <Button onClick={() => setConfirmingAddId(undefined)} size="sm" type="button" variant="ghost">{input.messages.common.cancel}</Button>
-                        <Button disabled={mutatingMemberId === member.id} onClick={() => void mutate(member.id, "add")} size="sm" type="button">{input.messages.chat.addChannelMember}</Button>
-                      </div>
-                    ) : null}
+          <DialogContent className="w-[min(42rem,calc(100vw-2rem))] sm:max-w-2xl" closeLabel={input.messages.common.cancel} data-testid="slei-channel-member-add-dialog">
+            <DialogHeader>
+              <DialogTitle>{input.messages.chat.addChannelMember}</DialogTitle>
+              <DialogDescription>{input.messages.chat.addChannelMemberDescription}</DialogDescription>
+            </DialogHeader>
+            <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
+              <ScrollArea className="max-h-[22rem] min-h-0 rounded-lg border bg-background">
+                <div aria-multiselectable="true" className="grid gap-1 p-2" role="listbox">
+                  {input.availableMembers.length > 0 ? (
+                    input.availableMembers.map((member) => {
+                      const selected = selectedAddIds.includes(member.id);
+                      return (
+                        <div
+                          aria-selected={selected ? "true" : "false"}
+                          className={cn(
+                            "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            selected && "bg-primary/10 text-primary hover:bg-primary/15",
+                          )}
+                          data-testid="slei-channel-member-add-candidate"
+                          key={member.id}
+                          onClick={() => toggleSelectedAddMember(member.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleSelectedAddMember(member.id);
+                            }
+                          }}
+                          role="option"
+                          tabIndex={0}
+                        >
+                          <Checkbox
+                            aria-label={member.name}
+                            checked={selected}
+                            data-testid="slei-channel-member-add-candidate-checkbox"
+                            disabled={addingSelected}
+                            onCheckedChange={() => toggleSelectedAddMember(member.id)}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                          <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden text-left">
+                            <MemberAvatar identity={member} />
+                            <span className="grid min-w-0 gap-0.5 overflow-hidden">
+                              <span className="flex min-w-0 items-baseline gap-1.5">
+                                <strong className="truncate text-sm text-foreground">{member.name}</strong>
+                                <small className="shrink-0 text-xs font-normal text-muted-foreground">{member.handle}</small>
+                              </span>
+                              <small className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-normal text-muted-foreground" data-testid="slei-channel-member-add-candidate-description">
+                                {member.description}
+                              </small>
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <Empty
+                      framed={false}
+                      size="sm"
+                      title={input.messages.chat.noAvailableChannelMembers}
+                      variant="nodata"
+                    />
+                  )}
+                </div>
+              </ScrollArea>
+              <div className="grid min-h-40 content-start gap-2 rounded-lg border bg-muted/30 p-3">
+                <strong className="text-sm">{input.messages.chat.selectedChannelMembers(selectedAddIds.length)}</strong>
+                {selectedAddIds.length > 0 ? (
+                  <div className="grid gap-1">
+                    {input.availableMembers.filter((member) => selectedAddIds.includes(member.id)).map((member) => (
+                      <span className="truncate text-sm text-muted-foreground" key={member.id}>{member.name} {member.handle}</span>
+                    ))}
                   </div>
-                );
-              }) : (
-                <Empty
-                  framed={false}
-                  size="sm"
-                  title={input.messages.chat.noAvailableChannelMembers}
-                  variant="nodata"
-                />
-              )}
-          </PopoverContent>
-        </Popover>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{input.messages.chat.noSelectedChannelMembers}</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button disabled={addingSelected} onClick={closeAddDialog} type="button" variant="outline">{input.messages.common.cancel}</Button>
+              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button">
+                {input.messages.chat.confirmAddChannelMembers(selectedAddIds.length)}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       <ScrollArea className="min-h-0 pr-2">
         <div className="grid gap-1">

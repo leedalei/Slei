@@ -1135,13 +1135,14 @@ describe("ChatPage mention panel", () => {
     expect(panelOpenTag).not.toContain("top-16");
     expect(html).not.toContain("top-[calc(4rem+1px)]");
     expect(panelHtml).toContain("w-80");
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-popover"');
-    expect(readChatPageSource()).toContain("PopoverContent");
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-dialog"');
+    expect(readChatPageSource()).toContain("DialogContent");
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('width="18"');
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('height="18"');
     expect(readChatPageSource()).not.toContain("absolute right-2 top-8");
     expect(html).toContain("lucide-plus");
     expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate"');
+    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate-checkbox"');
     expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate-description"');
     expect(readChatPageSource()).toContain("block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap");
     expect(readChatPageSource()).toContain("{member.name}</strong>");
@@ -1329,9 +1330,9 @@ describe("ChatPage mention panel", () => {
   it("keeps channel member add and remove mutations behind confirmation UI", () => {
     const source = readChatPageSource();
 
-    expect(source).toContain("confirmingAddId");
-    expect(source).toContain("setConfirmingAddId(member.id)");
-    expect(source).toContain("mutate(member.id, \"add\")");
+    expect(source).toContain("selectedAddIds");
+    expect(source).toContain("data-testid=\"slei-channel-member-add-confirm\"");
+    expect(source).toContain("addSelectedMembers");
     expect(source).toContain("confirmingRemoveId");
     expect(source).toContain("setConfirmingRemoveId(member.id)");
     expect(source).toContain("mutate(member.id, \"remove\")");
@@ -1386,8 +1387,9 @@ describe("ChatPage mention panel", () => {
     }
   });
 
-  it("closes the channel member add menu when the user clicks outside the panel", async () => {
+  it("adds multiple selected channel members from a modal", async () => {
     const messages = createDesktopMessages("zh-CN");
+    const onChannelMemberAdd = vi.fn().mockResolvedValue(undefined);
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
       members: [
@@ -1399,6 +1401,12 @@ describe("ChatPage mention panel", () => {
           handle: "@coda",
           channelReadiness: { all: "ready" },
         },
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+        },
       ],
     });
 
@@ -1408,6 +1416,7 @@ describe("ChatPage mention panel", () => {
         data={data}
         initialChannelMembersOpen
         messages={messages}
+        onChannelMemberAdd={onChannelMemberAdd}
         profile={defaultProfile}
       />,
     );
@@ -1417,13 +1426,29 @@ describe("ChatPage mention panel", () => {
       addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(document.body.querySelector('[data-testid="slei-channel-member-add-popover"]')).not.toBeNull();
+    const dialog = document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute("role")).toBe("dialog");
 
+    const candidateButtons = [...document.body.querySelectorAll<HTMLButtonElement>('[data-testid="slei-channel-member-add-candidate"]')];
+    expect(candidateButtons).toHaveLength(2);
     await act(async () => {
-      document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+      candidateButtons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      candidateButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(document.body.querySelector('[data-testid="slei-channel-member-add-popover"]')).toBeNull();
+    const checkedBoxes = [...document.body.querySelectorAll('[data-testid="slei-channel-member-add-candidate-checkbox"]')]
+      .filter((checkbox) => checkbox.getAttribute("data-state") === "checked");
+    expect(checkedBoxes).toHaveLength(2);
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-confirm"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChannelMemberAdd).toHaveBeenCalledTimes(2);
+    expect(onChannelMemberAdd).toHaveBeenNthCalledWith(1, "agent_architect");
+    expect(onChannelMemberAdd).toHaveBeenNthCalledWith(2, "agent_luna");
+    expect(document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]')).toBeNull();
   });
 
   it("renders channel tabs without new-session or history controls", () => {
