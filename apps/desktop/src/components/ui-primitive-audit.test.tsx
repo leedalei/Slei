@@ -193,6 +193,9 @@ describe("desktop UI primitive usage", () => {
     expect(tabsSource).toContain('getPropertyValue("--tabs-dur")');
     expect(appCss).toContain("--tabs-dur: 250ms");
     expect(appCss).toContain(".t-tabs-pill");
+    expect(appCss).toContain("border: 1px solid color-mix(in srgb, var(--slei-shadow-highlight) 72%, var(--border));");
+    expect(appCss).toContain("border-radius: var(--slei-radius-medium)");
+    expect(appCss).not.toContain(".t-tabs-pill {\n  position: absolute;\n  top: 4px;\n  left: 0;\n  height: calc(100% - 8px);\n  width: 0;\n  background: var(--tabs-pill-bg);\n  border-radius: var(--slei-radius-large)");
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(appCss).toContain(".t-tabs-pill,");
     expect(appCss).toContain(".t-tab {");

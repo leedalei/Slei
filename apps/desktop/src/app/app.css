@@ -655,7 +655,8 @@ select:focus-visible {
   height: calc(100% - 8px);
   width: 0;
   background: var(--tabs-pill-bg);
-  border-radius: var(--slei-radius-large);
+  border: 1px solid color-mix(in srgb, var(--slei-shadow-highlight) 72%, var(--border));
+  border-radius: var(--slei-radius-medium);
   box-shadow: var(--slei-shadow-raised-small);
   transform: translateX(0);
   transition:
