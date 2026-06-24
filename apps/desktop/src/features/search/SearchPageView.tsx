@@ -45,6 +45,7 @@ type SelectOption = {
 };
 
 const filterSelectTriggerClassName = "min-w-36 rounded-lg border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/40";
+const searchResultPanelClassName = "shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25";
 
 export function SearchPage({
   data,
@@ -362,7 +363,7 @@ function AgentResultButton(input: {
 }) {
   const title = input.result.title || input.result.agentId;
   return (
-    <SoftPanel variant="listItem">
+    <SoftPanel className={searchResultPanelClassName} variant="surface">
       <Button
         aria-label={input.messages.search.navigation.openAgent(title)}
         className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"
@@ -394,7 +395,7 @@ function ChannelResultButton(input: {
   const channel = input.data.channels.find((candidate) => candidate.id === input.result.channelId);
   const subtitle = channelResultSubtitle(input.result, channel?.description, input.messages);
   return (
-    <SoftPanel variant="listItem">
+    <SoftPanel className={searchResultPanelClassName} variant="surface">
       <Button
         aria-label={input.messages.search.navigation.openChannel(title)}
         className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"
@@ -431,7 +432,7 @@ function MessageResultButton(input: {
     profile: input.profile,
   });
   return (
-    <SoftPanel variant="listItem">
+    <SoftPanel className={searchResultPanelClassName} variant="surface">
       <Button
         aria-label={input.messages.search.navigation.openMessage(input.result.messageId)}
         className="h-auto min-h-16 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"

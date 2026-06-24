@@ -291,9 +291,15 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).toContain("Messages");
     expect(rootElement.textContent).toContain("Coda");
     expect(rootElement.querySelectorAll("mark").length).toBeGreaterThan(0);
-    expect(rootElement.querySelector('[data-search-result-kind="agent"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
-    expect(rootElement.querySelector('[data-search-result-kind="channel"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
-    expect(rootElement.querySelector('[data-search-result-kind="message"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
+    for (const kind of ["agent", "channel", "message"]) {
+      const panel = rootElement.querySelector(`[data-search-result-kind="${kind}"]`)?.closest("[data-slei-panel]");
+      expect(panel?.getAttribute("data-variant")).toBe("surface");
+      expect(panel?.className).toContain("shadow-none");
+      expect(panel?.className).toContain("transition-colors");
+      expect(panel?.className).toContain("hover:bg-muted/35");
+      expect(panel?.className).not.toContain("slei-raised");
+      expect(panel?.className).not.toContain("hover:slei-raised");
+    }
   });
 
   it("renders result sections as a non-exclusive accordion", async () => {
