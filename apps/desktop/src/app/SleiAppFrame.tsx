@@ -375,8 +375,8 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             <SidebarFrame title={sidebarTitle}>
               {input.activeView === "chat" || input.activeView === "search" ? (
                 <ChannelList
-                  activeChannelId={input.activeConversationId ? undefined : activeChannel?.id}
-                  activeConversationId={input.activeConversationId}
+                  activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
+                  activeConversationId={input.activeChatWorkspace === "saved" ? undefined : input.activeConversationId}
                   cardDraftRequest={channelCardDraftRequest}
                   data={input.data}
                   initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
@@ -867,9 +867,25 @@ function ChannelList(input: {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="grid gap-2">
-        <Button aria-pressed={input.savedOpen ? "true" : "false"} className="w-full justify-start" onClick={input.onSavedMessagesOpen} type="button" variant={input.savedOpen ? "secondary" : "ghost"}>
-          <SleiIcon name="bookmark" size={14} />{input.messages.common.saved}
-        </Button>
+        <div
+          className={cn(
+            "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)] items-start rounded-lg",
+            !input.savedOpen && "hover:bg-muted/60",
+            input.savedOpen && "bg-accent text-accent-foreground",
+          )}
+          data-saved-list-item=""
+        >
+          <button
+            aria-current={input.savedOpen ? "true" : undefined}
+            aria-pressed={input.savedOpen ? "true" : "false"}
+            className="inline-flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+            data-slot="saved-select-trigger"
+            onClick={input.onSavedMessagesOpen}
+            type="button"
+          >
+            <SleiIcon name="bookmark" size={14} />{input.messages.common.saved}
+          </button>
+        </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4">

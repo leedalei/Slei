@@ -348,6 +348,36 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("保存于 2026-06-22");
   });
 
+  it("treats saved messages and channels as one exclusive sidebar selection", async () => {
+    const data = createSleiFixtures({
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev-content", name: "dev-content", description: "频道", unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeChatWorkspace="saved"
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    const sidebar = container.querySelector(".slei-context-sidebar");
+    const currentItems = Array.from(sidebar?.querySelectorAll<HTMLElement>('[aria-current="true"]') ?? []);
+    const savedTrigger = Array.from(sidebar?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+      .find((button) => button.textContent?.includes("已保存"));
+
+    expect(currentItems).toHaveLength(1);
+    expect(currentItems[0]?.textContent).toContain("已保存");
+    expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
+    expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
+    expect(savedTrigger?.className).not.toContain("slei-raised");
+  });
+
   it("renders saved message rows as soft list items while preserving unavailable and click behavior", async () => {
     const onSavedMessageSelect = vi.fn();
     const availableMessage = {
