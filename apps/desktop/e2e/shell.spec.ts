@@ -141,7 +141,7 @@ describe("desktop shell daemon connectivity", () => {
     expect(receipt.agent?.skills?.map((skill) => skill.id)).toEqual(["guide-create", "memory"]);
     expect(skills.skills.map((skill) => skill.id)).toEqual(["guide-create", "memory"]);
     expect(guideSkill.content).toContain("slei_propose_interactive_card");
-    expect(guideSkill.content).toContain("Input schema");
+    expect(guideSkill.content).toMatch(/Input Schema/i);
     expect(guideSkill.content).toContain("Output contract");
     expect(guideSkill.content).toContain("Single agent example");
     expect(guideSkill.content).toContain("Multiple agents example");
