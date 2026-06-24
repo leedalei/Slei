@@ -76,6 +76,7 @@ describe("shadcn design system wiring", () => {
       "--slei-overlay-shadow-color",
       "--slei-shadow-raised-shade",
       "--slei-shadow-inset-shade",
+      "--slei-raised-border",
       "--slei-shadow-raised-xs",
       "--slei-shadow-raised-sm",
       "--slei-shadow-raised-md",

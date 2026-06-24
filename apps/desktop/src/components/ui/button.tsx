@@ -10,15 +10,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-[var(--slei-shadow-raised-sm)] hover:bg-primary/90",
+          "border-[var(--slei-raised-border)] bg-primary text-primary-foreground shadow-[var(--slei-shadow-raised-sm)] hover:bg-primary/90",
         outline:
-          "border-border/70 bg-card shadow-[var(--slei-shadow-raised-xs)] hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-border/70 dark:bg-muted/30 dark:hover:bg-muted/50",
+          "border-[var(--slei-raised-border)] bg-card shadow-[var(--slei-shadow-raised-xs)] hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-muted/30 dark:hover:bg-muted/50",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-[var(--slei-shadow-raised-xs)] hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "border-[var(--slei-raised-border)] bg-secondary text-secondary-foreground shadow-[var(--slei-shadow-raised-xs)] hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
           "hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-[var(--slei-shadow-raised-xs)] hover:bg-destructive/90 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
+          "border-[var(--slei-raised-border)] bg-destructive text-destructive-foreground shadow-[var(--slei-shadow-raised-xs)] hover:bg-destructive/90 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

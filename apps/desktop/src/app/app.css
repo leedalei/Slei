@@ -64,6 +64,7 @@
   --slei-shadow-inner-shade: var(--slei-shadow-lowlight);
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: oklch(0.48 0.035 210 / 0.28);
+  --slei-raised-border: oklch(0.91 0.012 190 / 0.86);
   --slei-shadow-raised-shade: oklch(0.46 0.035 210 / 0.24);
   --slei-shadow-inset-shade: oklch(0.46 0.035 210 / 0.22);
   --slei-shadow-raised-xs: -1px -1px 3px var(--slei-shadow-highlight), 2px 2px 5px var(--slei-shadow-raised-shade);
@@ -209,6 +210,7 @@
   --slei-shadow-inner-shade: var(--slei-shadow-lowlight);
   --slei-shadow-outer-glow: var(--slei-shadow-highlight);
   --slei-overlay-shadow-color: oklch(0 0 0 / 0.54);
+  --slei-raised-border: oklch(0.18 0.035 210 / 0.82);
   --slei-shadow-raised-shade: oklch(0.03 0.02 220 / 0.58);
   --slei-shadow-inset-shade: oklch(0.03 0.02 220 / 0.56);
   --slei-shadow-raised-xs: -1px -1px 4px var(--slei-shadow-highlight), 2px 2px 5px var(--slei-shadow-raised-shade);

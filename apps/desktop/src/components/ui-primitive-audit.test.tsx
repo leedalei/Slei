@@ -79,7 +79,10 @@ describe("desktop UI primitive usage", () => {
     const panelSource = readSource("components/SoftPanel.tsx");
 
     expect(buttonSource).toContain("shadow-[var(--slei-shadow-raised-sm)]");
+    expect(buttonSource).toContain("border-[var(--slei-raised-border)]");
     expect(buttonSource).not.toContain("shadow-sm");
+    expect(buttonSource).toContain('ghost:\n          "hover:bg-muted/70 hover:text-foreground');
+    expect(buttonSource).toContain('link: "text-primary underline-offset-4 hover:underline"');
     expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
     expect(cardSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
     expect(panelSource).toContain('raised: "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
