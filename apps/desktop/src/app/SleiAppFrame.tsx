@@ -47,7 +47,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, SleiIcon, StatusDot, Toast, TooltipButton, type SleiIconName, type ToastType } from "../components";
+import { Empty, MemberAvatar, PageHeader, SleiIcon, SoftPanel, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -1085,12 +1085,12 @@ function SavedMessagesWorkspace(input: {
 
   return (
     <section aria-label={input.messages.common.saved} className="slei-saved-workspace flex h-full min-h-0 flex-col bg-background" data-testid="slei-saved-workspace">
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div className="grid gap-1">
-          <h1 className="text-xl font-semibold">{input.messages.common.saved}</h1>
-          <p className="text-sm text-muted-foreground">{input.messages.chat.savedMessagesCount(entries.length)}</p>
-        </div>
-      </div>
+      <PageHeader
+        className="border-b px-6 py-4"
+        icon={sleiIcons.bookmark}
+        subtitle={input.messages.chat.savedMessagesCount(entries.length)}
+        title={input.messages.common.saved}
+      />
       {entries.length === 0 ? (
         <div className="grid h-full place-items-center p-6">
           <Empty
@@ -1108,27 +1108,31 @@ function SavedMessagesWorkspace(input: {
             const messageTime = formatSavedDate(savedMessage.messageCreatedAt);
             const savedTime = formatSavedDate(savedMessage.savedAt);
             return (
-            <Button
-              aria-label={input.messages.search.openConversation(savedMessage.messageId)}
-              className={cn("h-auto w-full justify-start whitespace-normal rounded-lg border bg-background px-4 py-3 text-left", isUnavailable && "opacity-70")}
-              disabled={isUnavailable}
-              key={savedMessage.id}
-              onClick={() => input.onSelect?.(savedMessage)}
-              type="button"
-              variant="ghost"
-            >
-              <span className="grid min-w-0 flex-1 gap-2">
-                <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
-                  <span>{savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}</span>
-                  <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
-                  {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
-                  {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
-                </span>
-                <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
-                  {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
-                </strong>
-              </span>
-            </Button>
+              <SoftPanel key={savedMessage.id} variant="listItem">
+                <Button
+                  aria-label={input.messages.search.openConversation(savedMessage.messageId)}
+                  className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
+                  disabled={isUnavailable}
+                  onClick={() => input.onSelect?.(savedMessage)}
+                  type="button"
+                  variant="ghost"
+                >
+                  <span className="grid min-w-0 flex-1 gap-2">
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
+                      <span className="inline-flex items-center gap-1">
+                        <SleiIcon className="size-3.5" name="bookmark" />
+                        {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+                      </span>
+                      <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
+                      {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
+                      {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
+                    </span>
+                    <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
+                      {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
+                    </strong>
+                  </span>
+                </Button>
+              </SoftPanel>
             );
           })}
         </div>

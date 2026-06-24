@@ -150,6 +150,7 @@ describe("TasksPage filters", () => {
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
     const channelSelect = header?.querySelector(`[data-slot="select-trigger"][aria-label="频道"]`);
+    const tabsList = header?.querySelector('[data-slot="tabs-list"]');
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
 
     expect(header).not.toBeNull();
@@ -157,6 +158,7 @@ describe("TasksPage filters", () => {
     expect(header?.className).toContain("select-none");
     expect(channelSelect).not.toBeNull();
     expect(channelSelect?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(tabsList?.getAttribute("data-variant")).toBe("soft");
     expect(boardTab).toBeDefined();
     expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
   });
@@ -169,6 +171,9 @@ describe("TasksPage filters", () => {
     expect(text).toContain("来自 #AI咨询");
     expect(text).toContain("交给 Coda");
     expect(text).toContain("3 个频道任务");
+    expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
+    expect(container?.querySelector('[data-slei-status="in_progress"]')).not.toBeNull();
+    expect(container?.querySelector('[data-slei-status="done"]')).not.toBeNull();
   });
 
   it("filters tasks by channel and assignee before switching views", async () => {

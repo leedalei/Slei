@@ -245,6 +245,8 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     expect(html).toContain('data-testid="slei-saved-workspace"');
+    expect(html).toContain('data-variant="listItem"');
+    expect(html).toContain('data-slei-icon="bookmark"');
     expect(html).toContain(">频道 1</");
     expect(html).toContain(">私聊 1</");
     expect(html).toContain("这是一条保存消息正文");
@@ -252,6 +254,61 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("Coda");
     expect(html).toContain("发送于 2026-06-22");
     expect(html).toContain("保存于 2026-06-22");
+  });
+
+  it("renders saved message rows as soft list items while preserving unavailable and click behavior", async () => {
+    const onSavedMessageSelect = vi.fn();
+    const availableMessage = {
+      id: "saved:available",
+      messageId: "msg_available",
+      sourceId: "all",
+      sourceKind: "channel" as const,
+      savedAt: "2026-06-22T09:00:00Z",
+      body: "可打开的收藏消息",
+      authorId: "a1",
+      authorName: "Coda",
+      messageCreatedAt: "2026-06-22T08:59:00Z",
+      sourceName: "all",
+      sourceLabel: "群聊 · #all",
+      messageDeleted: false,
+    };
+    const deletedMessage = {
+      ...availableMessage,
+      id: "saved:deleted",
+      messageId: "msg_deleted",
+      body: "已删除的收藏消息",
+      messageDeleted: true,
+    };
+    const container = await mount(
+      <SleiAppFrame
+        activeChatWorkspace="saved"
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onSavedMessageSelect={onSavedMessageSelect}
+        runtimeSetup={runtimeSetup}
+        savedMessages={[availableMessage, deletedMessage]}
+      />,
+    );
+
+    const workspace = container.querySelector('[data-testid="slei-saved-workspace"]');
+    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slei-panel][data-variant="listItem"]') ?? []);
+    const availableButton = rows[0]?.querySelector<HTMLButtonElement>("button");
+    const deletedButton = rows[1]?.querySelector<HTMLButtonElement>("button");
+
+    expect(rows).toHaveLength(2);
+    expect(workspace?.querySelector('[data-slei-icon="bookmark"]')).not.toBeNull();
+    expect(availableButton?.disabled).toBe(false);
+    expect(deletedButton?.disabled).toBe(true);
+    expect(deletedButton?.className).toContain("opacity-70");
+
+    await act(async () => {
+      availableButton?.click();
+      deletedButton?.click();
+    });
+
+    expect(onSavedMessageSelect).toHaveBeenCalledTimes(1);
+    expect(onSavedMessageSelect).toHaveBeenCalledWith(availableMessage);
   });
 
   it("shows linked project labels for non-default channels while preserving the all channel description", () => {

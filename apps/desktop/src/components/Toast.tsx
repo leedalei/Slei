@@ -1,6 +1,7 @@
 import { cn } from "../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { SleiIcon } from "./SleiIcon";
 import { SoftPanel } from "./SoftPanel";
 
 export const TOAST_VISIBLE_MS = 2500;
@@ -57,6 +58,7 @@ export function Toast({ message, text, type }: { message?: string; text?: string
               type="button"
               variant="ghost"
             >
+              <SleiIcon className="size-4" name="copy" />
               {content}
             </Button>
           </TooltipTrigger>

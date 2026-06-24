@@ -5,8 +5,7 @@ export function renderConnectionStep(input: {
   daemonConnected: boolean;
 }): string {
   const messages = createDesktopMessages(input.locale).onboarding;
-  if (input.daemonConnected) {
-    return messages.connectionConnected;
-  }
-  return messages.connectionUnavailable;
+  const status = input.daemonConnected ? "connected" : "offline";
+  const message = input.daemonConnected ? messages.connectionConnected : messages.connectionUnavailable;
+  return `<section class="rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-slei-panel data-variant="surface" data-onboarding-step="connection" data-slei-status="${status}">${message}</section>`;
 }

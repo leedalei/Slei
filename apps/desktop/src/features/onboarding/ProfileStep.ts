@@ -1,5 +1,5 @@
 import { createDesktopMessages } from "../../i18n";
 
 export function renderProfileStep(locale: "zh-CN" | "en-US"): string {
-  return createDesktopMessages(locale).onboarding.profileStep;
+  return `<section class="rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-slei-panel data-variant="surface" data-onboarding-step="profile">${createDesktopMessages(locale).onboarding.profileStep}</section>`;
 }

@@ -7,5 +7,5 @@ export function renderLogExportDialog(input: {
   const messages = createDesktopMessages(input.locale).diagnostics;
   const title = messages.exportLogs;
   const hint = messages.sanitizedHint;
-  return [title, hint, input.sanitizedPreview].join("\n");
+  return `<section class="slei-soft-dialog grid gap-3 rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-border shadow-lg" data-slei-log-export-dialog><header class="grid gap-1" data-slei-page-header><h1>${title}</h1><p>${hint}</p></header><pre class="rounded-lg bg-muted/40 p-3 text-xs" data-slei-panel data-variant="inset">${input.sanitizedPreview}</pre></section>`;
 }

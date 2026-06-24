@@ -229,8 +229,12 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
     const results = rootElement.querySelector('[data-slot="search-results"]');
     const emptyState = searchEmptyState(rootElement);
+    const searchSurface = rootElement.querySelector('[data-slot="search-input-surface"]');
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
+    expect(searchSurface).toBeInstanceOf(HTMLElement);
+    expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
+    expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
     expect(results?.className).not.toContain("p-6");
@@ -274,6 +278,9 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).toContain("Messages");
     expect(rootElement.textContent).toContain("Coda");
     expect(rootElement.querySelectorAll("mark").length).toBeGreaterThan(0);
+    expect(rootElement.querySelector('[data-search-result-kind="agent"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
+    expect(rootElement.querySelector('[data-search-result-kind="channel"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
+    expect(rootElement.querySelector('[data-search-result-kind="message"]')?.closest("[data-slei-panel]")?.getAttribute("data-variant")).toBe("listItem");
   });
 
   it("renders result sections as a non-exclusive accordion", async () => {

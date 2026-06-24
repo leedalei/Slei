@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Hash, Kanban, List as ListIcon, MessageSquare, UserRound } from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures, SleiTask } from "../../app/types";
-import { Empty } from "../../components";
+import { Empty, SleiIcon, SoftPanel, StatusBadge } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -69,7 +67,7 @@ export function TasksPage({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3" data-tauri-drag-region="deep">
             <div className="flex flex-wrap items-center gap-2">
               <TaskFilterSelect
-                icon={<Hash aria-hidden="true" className="size-3.5" />}
+                icon={<SleiIcon className="size-3.5" name="hash" />}
                 label={messages.tasks.channelFilter}
                 onChange={setChannelFilter}
                 options={[
@@ -79,7 +77,7 @@ export function TasksPage({
                 value={channelFilter}
               />
               <TaskFilterSelect
-                icon={<UserRound aria-hidden="true" className="size-3.5" />}
+                icon={<SleiIcon className="size-3.5" name="user" />}
                 label={messages.tasks.assigneeFilter}
                 onChange={setAssigneeFilter}
                 options={[
@@ -89,13 +87,13 @@ export function TasksPage({
                 value={assigneeFilter}
               />
             </div>
-            <TabsList aria-label={messages.tasks.title} className="shrink-0" variant="line">
+            <TabsList aria-label={messages.tasks.title} className="shrink-0" variant="soft">
               <TabsTrigger onClick={() => setView("board")} value="board">
-                <Kanban aria-hidden="true" className="size-3.5" />
+                <SleiIcon className="size-3.5" name="tasks" />
                 {messages.tasks.board}
               </TabsTrigger>
               <TabsTrigger onClick={() => setView("list")} value="list">
-                <ListIcon aria-hidden="true" className="size-3.5" />
+                <SleiIcon className="size-3.5" name="file" />
                 {messages.tasks.list}
               </TabsTrigger>
             </TabsList>
@@ -108,7 +106,7 @@ export function TasksPage({
               {columns.map((column) => {
                 const columnTasks = filteredTasks.filter((task) => task.status === column);
                 return (
-                  <section aria-label={taskStatusLabel(column, messages)} className="grid min-h-40 content-start gap-3 rounded-lg border bg-muted/20 p-3" key={column}>
+                  <SoftPanel aria-label={taskStatusLabel(column, messages)} className="grid min-h-40 content-start gap-3 p-3" key={column}>
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="text-sm font-medium">{taskStatusLabel(column, messages)}</h2>
                       {columnTasks.length > 0 ? <Badge variant="outline">{columnTasks.length}</Badge> : null}
@@ -130,7 +128,7 @@ export function TasksPage({
                         variant="nodata"
                       />
                     )}
-                  </section>
+                  </SoftPanel>
                 );
               })}
             </div>
@@ -222,31 +220,31 @@ function TaskCard(input: {
   const row = input.layout === "row";
 
   return (
-    <Card className={row ? "grid gap-0 sm:grid-cols-[1fr_auto]" : ""} size="sm">
-      <CardHeader className={row ? "min-w-0" : ""}>
-        <CardTitle className="break-words">{input.task.title}</CardTitle>
-        <CardDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+    <SoftPanel className={row ? "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" : "grid gap-3"} variant="listItem">
+      <div className={row ? "min-w-0" : ""}>
+        <h3 className="break-words text-sm font-semibold">{input.task.title}</h3>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
-            <Hash aria-hidden="true" className="size-3" />
+            <SleiIcon className="size-3" name="hash" />
             {input.messages.tasks.taskChannelLabel(input.channelName)}
           </span>
           <span className="inline-flex items-center gap-1">
-            <UserRound aria-hidden="true" className="size-3" />
+            <SleiIcon className="size-3" name="user" />
             {input.messages.tasks.taskAssigneeLabel(input.assigneeName)}
           </span>
-        </CardDescription>
-        <CardAction>
-          <Button aria-label={input.messages.tasks.commentThread} onClick={input.onSelect} size="sm" type="button" variant="outline">
-            <MessageSquare aria-hidden="true" className="size-3.5" />
-            {replyCount}
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-center gap-2">
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline">{input.task.id}</Badge>
         <TaskStatusBadge messages={input.messages} status={input.task.status} />
-        {input.task.attention ? <Badge variant="destructive">{input.task.attention}</Badge> : null}
-      </CardContent>
-    </Card>
+        {input.task.attention ? <StatusBadge label={input.task.attention} status="warn" /> : null}
+        <div className={row ? "sm:ml-auto" : "ml-auto"}>
+          <Button aria-label={input.messages.tasks.commentThread} onClick={input.onSelect} size="sm" type="button" variant="outline">
+            <SleiIcon className="size-3.5" name="chat" />
+            {replyCount}
+          </Button>
+        </div>
+      </div>
+    </SoftPanel>
   );
 }
