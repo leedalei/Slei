@@ -89,6 +89,18 @@ describe("desktop UI primitive usage", () => {
     expect(panelSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
   });
 
+  it("defines raised shadows as paired upper-left glow and lower-right shade", () => {
+    const appCss = readSource("app/app.css");
+
+    for (const size of ["xs", "sm", "md", "lg"]) {
+      const tokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
+      expect(tokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
+      expect(tokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
+      expect(tokenMatch?.[1]).toMatch(/-[0-9]+px -[0-9]+px [0-9]+px var\(--slei-shadow-raised-glow\)/);
+      expect(tokenMatch?.[1]).toMatch(/[0-9]+px [0-9]+px [0-9]+px var\(--slei-shadow-raised-shade\)/);
+    }
+  });
+
   it("uses inset shadows for input-like and segmented controls", () => {
     for (const file of [
       "components/ui/input.tsx",

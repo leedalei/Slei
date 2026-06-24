@@ -207,6 +207,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navCss).not.toContain("inset -8px 0 18px");
   });
 
+  it("renders menubar navigation items as raised buttons", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+
+    expect(navSource).toContain('variant={input.activeView === item.id ? "default" : "outline"}');
+    expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "ghost"}');
+  });
+
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const tooltipSource = readFileSync(join(process.cwd(), "src/components/ui/tooltip.tsx"), "utf8");

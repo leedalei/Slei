@@ -350,7 +350,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             tooltip={messages.shell.nav[item.id]}
             tooltipSide="right"
             type="button"
-            variant={input.activeView === item.id ? "default" : "ghost"}
+            variant={input.activeView === item.id ? "default" : "outline"}
           >
             <SleiIcon className="size-5" name={item.icon} size={22} stroke={2.4} />
           </TooltipButton>
