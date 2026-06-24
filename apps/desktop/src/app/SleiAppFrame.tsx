@@ -315,6 +315,18 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   }, [fontSize, textTokenValues]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const root = document.documentElement;
+    const hadDarkClass = root.classList.contains("dark");
+    root.classList.toggle("dark", normalizedTheme === "dark");
+
+    return () => {
+      root.classList.toggle("dark", hadDarkClass);
+    };
+  }, [normalizedTheme]);
+
+  useEffect(() => {
     if (input.runtimeSetup.nodes.some((node) => node.id === activeComputerId)) return;
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);

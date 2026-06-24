@@ -120,6 +120,40 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(description?.className).toContain("text-sm");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
   });
+
+  it("syncs dark theme to the document root so portal dialogs inherit dark tokens", async () => {
+    document.documentElement.classList.remove("dark");
+
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        appearance={{ theme: "dark", fontSize: "md" }}
+        data={createSleiFixtures()}
+        initialCreateChannelModalOpen
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.body.querySelector('[data-slot="dialog-content"]')).not.toBeNull();
+
+    await act(async () => {
+      mountedRoot?.render(
+        <SleiAppFrame
+          activeView="chat"
+          appearance={{ theme: "light", fontSize: "md" }}
+          data={createSleiFixtures()}
+          initialCreateChannelModalOpen
+          locale="zh-CN"
+          runtimeSetup={runtimeSetup}
+        />,
+      );
+    });
+    await act(async () => undefined);
+
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
 });
 
 describe("SleiAppFrame global search navigation", () => {
