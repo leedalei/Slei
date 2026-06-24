@@ -138,6 +138,32 @@ describe("desktop UI primitive usage", () => {
     expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-large)");
   });
 
+  it("keeps shared control radii on the 6px, 8px, and 10px scale", () => {
+    const buttonSource = readSource("components/ui/button.tsx");
+    const selectSource = readSource("components/ui/select.tsx");
+    const badgeSource = readSource("components/ui/badge.tsx");
+    const searchSource = readSource("features/search/SearchPageView.tsx");
+
+    expect(buttonSource).not.toContain("rounded-[min(");
+    expect(buttonSource).toContain('xs: "h-6 gap-1 rounded-sm');
+    expect(buttonSource).toContain('sm: "h-7 gap-1 rounded-sm');
+    expect(buttonSource).toContain('"icon-xs":\n          "size-6 rounded-sm');
+    expect(buttonSource).toContain('"icon-sm":\n          "size-7 rounded-sm');
+
+    expect(selectSource).toContain("rounded-lg");
+    expect(selectSource).toContain("data-[size=sm]:rounded-sm");
+    expect(selectSource).toContain("overflow-y-auto rounded-xl");
+    expect(selectSource).toContain("gap-2 rounded-md");
+    expect(selectSource).not.toContain("rounded-[12px]");
+    expect(selectSource).not.toContain("rounded-[14px]");
+    expect(selectSource).not.toContain("rounded-[10px]");
+
+    expect(searchSource).toContain("const filterSelectTriggerClassName = \"min-w-36 rounded-lg");
+    expect(searchSource).not.toContain("rounded-[12px]");
+    expect(badgeSource).toContain("rounded-sm");
+    expect(badgeSource).not.toContain("rounded-4xl");
+  });
+
   it("uses inset shadows for text input-like and segmented controls", () => {
     expect(readSource("components/ui/input.tsx")).toContain("slei-inset-small");
     expect(readSource("components/ui/textarea.tsx")).toContain("slei-inset-medium");
@@ -211,7 +237,7 @@ describe("desktop UI primitive usage", () => {
 
     expect(selectSource).toContain("shadow-none");
     expect(selectSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
-    expect(selectSource).toContain("rounded-[14px]");
+    expect(selectSource).toContain("rounded-xl");
     expect(selectSource).toContain("data-[highlighted]:bg-muted/70");
     expect(selectSource).toContain("data-[state=checked]:font-semibold");
     expect(selectSource).toContain("data-[state=open]:[&_svg:last-child]:rotate-180");

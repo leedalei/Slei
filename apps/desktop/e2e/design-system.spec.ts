@@ -61,6 +61,28 @@ describe("shadcn design system wiring", () => {
     }
   });
 
+  it("uses a compact three-step radius scale for neumorphic controls", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const lightTokens = cssBlock(appCss, ":root");
+    const darkTokens = cssBlock(appCss, ".dark");
+    const themeTokens = cssBlock(appCss, "@theme inline");
+
+    for (const tokens of [lightTokens, darkTokens]) {
+      expect(tokenValue(tokens, "--slei-radius-small")).toBe("6px");
+      expect(tokenValue(tokens, "--slei-radius-medium")).toBe("8px");
+      expect(tokenValue(tokens, "--slei-radius-large")).toBe("10px");
+      expect(tokenValue(tokens, "--radius")).toBe("var(--slei-radius-medium)");
+    }
+
+    expect(tokenValue(themeTokens, "--radius-sm")).toBe("var(--slei-radius-small)");
+    expect(tokenValue(themeTokens, "--radius-md")).toBe("var(--slei-radius-medium)");
+    expect(tokenValue(themeTokens, "--radius-lg")).toBe("var(--slei-radius-medium)");
+    expect(tokenValue(themeTokens, "--radius-xl")).toBe("var(--slei-radius-large)");
+    expect(tokenValue(themeTokens, "--radius-2xl")).toBe("var(--slei-radius-large)");
+    expect(tokenValue(themeTokens, "--radius-3xl")).toBe("var(--slei-radius-large)");
+    expect(tokenValue(themeTokens, "--radius-4xl")).toBe("var(--slei-radius-large)");
+  });
+
   it("uses semantic raised, inset, and overlay shadow tokens with compatibility aliases", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
     const lightTokens = cssBlock(appCss, ":root");

@@ -44,7 +44,7 @@ type SelectOption = {
   subtitle?: string;
 };
 
-const filterSelectTriggerClassName = "min-w-36 rounded-[12px] border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/40";
+const filterSelectTriggerClassName = "min-w-36 rounded-lg border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/40";
 
 export function SearchPage({
   data,

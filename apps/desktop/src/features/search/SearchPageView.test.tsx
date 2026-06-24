@@ -388,7 +388,7 @@ describe("SearchPage global search UI", () => {
     expect(filterTriggers.every((trigger) => trigger.querySelector("svg"))).toBe(true);
     for (const trigger of filterTriggers) {
       expect(trigger.getAttribute("data-filter-select-trigger")).toBe("true");
-      expect(trigger.className).toContain("rounded-[12px]");
+      expect(trigger.className).toContain("rounded-lg");
       expect(trigger.className).toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
       expect(trigger.className).not.toContain("shadow-[var(--slei-shadow-inset-sm)]");
