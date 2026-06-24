@@ -2,10 +2,11 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-export type SoftPanelVariant = "surface" | "raised" | "inset" | "listItem";
+export type SoftPanelVariant = "surface" | "flat" | "raised" | "inset" | "listItem";
 
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   surface: "border-border/60 bg-card",
+  flat: "border-transparent bg-card",
   raised: "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]",
   inset: "border-border/60 bg-muted/40 shadow-[var(--slei-shadow-inset-md)]",
   listItem:

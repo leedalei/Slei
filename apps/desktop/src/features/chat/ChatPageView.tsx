@@ -87,7 +87,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
   const done = card.state !== "pending";
   const doneLabel = card.doneLabel === "DONE" ? messages.common.done : card.doneLabel || messages.common.done;
   return (
-    <SoftPanel className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3" data-card-kind={card.kind} data-state={card.state} variant="raised">
+    <SoftPanel className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3" data-card-kind={card.kind} data-state={card.state} variant="surface">
       <div className="grid min-w-0 gap-1">
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
@@ -1190,13 +1190,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         >
                           <SoftPanel
                             className={cn(
-                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
+                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/25 data-[focused=true]:bg-primary/5 data-[focused=true]:ring-1 data-[focused=true]:ring-primary/25",
                               highlightedMessageId === message.id && "slei-message--blink-border",
                             )}
                             data-focused={highlightedMessageId === message.id ? "true" : undefined}
                             data-message-id={message.id}
                             tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                            variant="surface"
+                            variant="flat"
                           >
                             <MemberAvatar identity={memberFromMessage(message, data.members)} />
                             <div className="min-w-0">

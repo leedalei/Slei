@@ -1581,13 +1581,105 @@ describe("ChatPage mention panel", () => {
     const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
 
     expect(messageHtml).toContain('data-message-id="msg-contract"');
-    expect(messageHtml).toContain('data-variant="surface"');
+    expect(messageHtml).toContain('data-variant="flat"');
+    expect(messageOpenTag).toContain("border-transparent");
+    expect(messageOpenTag).not.toContain("border-border");
     expect(messageOpenTag).not.toContain("shadow-");
     expect(messageOpenTag).not.toContain("hover:shadow");
     expect(messageHtml).toContain('data-slot="message-actions"');
     expect(messageHtml).toContain('data-message-thread-open="msg-contract"');
     expect(messageHtml).toContain(`aria-label="${messages.chat.copyMessage}"`);
     expect(messageHtml).toContain(`aria-label="${messages.chat.saveMessage}"`);
+  });
+
+  it("adds a border only to the focused timeline message", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-focused",
+          author: "Lei",
+          role: "human",
+          time: "10:00",
+          body: "搜索定位到这一条。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        focusedMessageId="msg-focused"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const messageHtml = html.slice(html.indexOf('data-message-id="msg-focused"'));
+    const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
+
+    expect(messageOpenTag).toContain("border-primary/25");
+    expect(messageOpenTag).not.toContain("border-border");
+  });
+
+  it("renders create agent and channel cards as flat surfaces", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-cards",
+          author: "Yeal",
+          role: "agent",
+          time: "10:00",
+          body: "已准备创建卡片。",
+          channelId: "all",
+          cards: [
+            {
+              id: "card_agent",
+              kind: "createAgent",
+              state: "pending",
+              title: "创建 Coda",
+              summary: "Coda · ClaudeCode / Sonnet",
+              draft: { name: "Coda" },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            },
+            {
+              id: "card_channel",
+              kind: "createChannel",
+              state: "pending",
+              title: "创建 #qa",
+              summary: "#qa",
+              draft: { name: "qa", description: "QA 协作频道", projectPaths: [], agentIds: [] },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            },
+          ],
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    for (const kind of ["createAgent", "createChannel"]) {
+      const cardHtml = html.slice(html.indexOf(`data-card-kind="${kind}"`));
+      const cardOpenTag = cardHtml.slice(0, cardHtml.indexOf(">"));
+
+      expect(cardHtml).toContain(`data-card-kind="${kind}"`);
+      expect(cardHtml).toContain('data-variant="surface"');
+      expect(cardOpenTag).not.toContain("shadow-");
+      expect(cardOpenTag).not.toContain("hover:shadow");
+    }
   });
 
   it("keeps task root entry status and source message behavior on flat rows", () => {

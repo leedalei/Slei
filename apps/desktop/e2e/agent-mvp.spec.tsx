@@ -299,7 +299,7 @@ describe("agent creation, device association, and memory MVP", () => {
 
     expect(html).toContain('data-card-kind="createAgent"');
     expect(html).toContain('data-slei-panel="true"');
-    expect(html).toContain('data-variant="raised"');
+    expect(html).toContain('data-variant="surface"');
     expect(html).toContain("Nancy · ClaudeCode / Sonnet");
     expect(html).not.toContain('data-variant="destructive"');
     expect(html).toContain('data-slot="button"');
@@ -349,7 +349,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("创建 #qa");
     expect(html).toContain("#qa");
     expect(html).toContain('data-slei-panel="true"');
-    expect(html).toContain('data-variant="raised"');
+    expect(html).toContain('data-variant="surface"');
     expect(html).toContain("grid-cols-[minmax(0,1fr)_auto]");
   });
 
