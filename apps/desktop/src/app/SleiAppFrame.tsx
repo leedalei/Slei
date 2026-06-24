@@ -475,7 +475,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       {input.guideBootstrapping ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm" data-slot="guide-status-overlay" role="presentation">
-          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-lg" data-slot="guide-status" role="status">
+          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--slei-shadow-overlay-md)]" data-slot="guide-status" role="status">
             <h2 className="text-base font-medium">{messages.onboarding.creatingGuide}</h2>
           </section>
         </div>

@@ -8,5 +8,5 @@ export function renderRuntimeStep(input: {
   const messages = createDesktopMessages(input.locale).onboarding;
   const status = input.runtimeReady ? "connected" : "offline";
   const message = input.runtimeReady ? messages.runtimeReady : messages.runtimeUnavailableNoGuide;
-  return `<section class="rounded-xl border border-border/60 bg-card p-4 shadow-sm" data-slei-panel data-variant="surface" data-onboarding-step="runtime" data-slei-status="${escapeHtmlAttribute(status)}">${escapeHtmlText(message)}</section>`;
+  return `<section class="rounded-xl border border-border/60 bg-card p-4" data-slei-panel data-variant="surface" data-onboarding-step="runtime" data-slei-status="${escapeHtmlAttribute(status)}">${escapeHtmlText(message)}</section>`;
 }

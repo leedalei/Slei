@@ -73,33 +73,89 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("absolute right-2 top-8 z-30");
   });
 
-  it("uses a compact tooltip shadow instead of the raised panel shadow", () => {
-    const source = readSource("components/ui/tooltip.tsx");
+  it("uses raised shadows only for clickable control surfaces", () => {
+    const buttonSource = readSource("components/ui/button.tsx");
+    const cardSource = readSource("components/ui/card.tsx");
+    const panelSource = readSource("components/SoftPanel.tsx");
 
-    expect(source).toContain("shadow-[var(--slei-shadow-tooltip)]");
-    expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
+    expect(buttonSource).toContain("shadow-[var(--slei-shadow-raised-sm)]");
+    expect(buttonSource).not.toContain("shadow-sm");
+    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
+    expect(cardSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
+    expect(panelSource).toContain('raised: "border-transparent bg-card shadow-[var(--slei-shadow-raised-md)]"');
+    expect(panelSource).toContain("hover:shadow-[var(--slei-shadow-raised-md)]");
   });
 
-  it("uses sized soft shadows for floating primitives instead of the raised panel alias", () => {
+  it("uses inset shadows for input-like and segmented controls", () => {
+    for (const file of [
+      "components/ui/input.tsx",
+      "components/ui/textarea.tsx",
+      "components/ui/select.tsx",
+      "components/ui/tabs.tsx",
+    ]) {
+      expect(readSource(file)).toContain("shadow-[var(--slei-shadow-inset");
+    }
+  });
+
+  it("keeps static surfaces and badges flat", () => {
+    const panelSource = readSource("components/SoftPanel.tsx");
+    const cardSource = readSource("components/ui/card.tsx");
+    const badgeSource = readSource("components/ui/badge.tsx");
+
+    expect(panelSource).toContain('surface: "border-border/60 bg-card"');
+    expect(panelSource).not.toContain('surface: "border-border/60 bg-card shadow');
+    expect(cardSource).toContain('variant === "surface" && "border-border/60 bg-card"');
+    expect(cardSource).not.toContain('variant === "surface" && "border-border/60 bg-card shadow');
+    expect(badgeSource).not.toContain("shadow-sm");
+    expect(badgeSource).not.toContain("slei-shadow");
+
+    for (const file of [
+      "features/onboarding/ProfileStep.ts",
+      "features/onboarding/ConnectionStep.ts",
+      "features/onboarding/RuntimeStep.ts",
+      "features/diagnostics/DiagnosticsPage.ts",
+      "features/diagnostics/ErrorPanel.ts",
+    ]) {
+      expect(readSource(file)).not.toContain("shadow-sm");
+    }
+  });
+
+  it("uses a compact overlay shadow for tooltip instead of raised or inset shadows", () => {
+    const source = readSource("components/ui/tooltip.tsx");
+
+    expect(source).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
+    expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
+    expect(source).not.toContain("shadow-[var(--slei-shadow-inset)]");
+  });
+
+  it("uses regular overlay shadows for floating primitives", () => {
     const floatingPrimitiveFiles = [
       "components/ui/dialog.tsx",
       "components/ui/alert-dialog.tsx",
       "components/ui/sheet.tsx",
       "components/ui/popover.tsx",
-      "components/ui/select.tsx",
       "components/ui/dropdown-menu.tsx",
     ];
 
     for (const file of floatingPrimitiveFiles) {
       const source = readSource(file);
       expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
+      expect(source).not.toContain("shadow-[var(--slei-shadow-inset)]");
     }
 
-    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
-    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
-    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[var(--slei-shadow-soft-md)]");
-    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
-    expect(readSource("components/ui/select.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
-    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[var(--slei-shadow-soft-sm)]");
+    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
+    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
+    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
+    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
+    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
+
+    const selectSource = readSource("components/ui/select.tsx");
+    const selectContentSource = selectSource.slice(
+      selectSource.indexOf("function SelectContent"),
+      selectSource.indexOf("function SelectLabel"),
+    );
+    expect(selectContentSource).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
+    expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-raised");
+    expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-inset");
   });
 });
