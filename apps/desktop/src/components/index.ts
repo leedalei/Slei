@@ -11,4 +11,5 @@ export { TooltipButton } from "./TooltipButton";
 export { Toast, TOAST_VISIBLE_MS, copyToastContent, type ToastType } from "./Toast";
 export { createMemberAvatar, memberFromMessage, type AvatarIdentity, type MemberAvatarIdentity } from "./member-avatar";
 export { SleiIcon, type SleiIconProps } from "./SleiIcon";
+export { SleiIconSwap } from "./SleiIconSwap";
 export { sleiIcons, type SleiIconName, type SleiTablerIcon, type SleiTablerIconProps } from "./icons";

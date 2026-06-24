@@ -1,6 +1,6 @@
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMessage, SleiTask } from "../../app/types";
-import { MemberAvatar, SleiIcon, SoftPanel, TooltipButton, type MemberAvatarIdentity } from "../../components";
+import { MemberAvatar, SleiIcon, SleiIconSwap, SoftPanel, TooltipButton, type MemberAvatarIdentity } from "../../components";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -90,7 +90,7 @@ export function TaskRootEntry(input: {
               <SleiIcon name="copy" size={14} />
             </TooltipButton>
             <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} onClick={() => void input.onSaveToggle?.()} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
-              <SleiIcon name={input.saved ? "bookmark" : "bookmarkOutline"} size={14} />
+              <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
             </TooltipButton>
             {timestamp ? (
               <>

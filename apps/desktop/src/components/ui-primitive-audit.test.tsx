@@ -173,4 +173,74 @@ describe("desktop UI primitive usage", () => {
     expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-raised");
     expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-inset");
   });
+
+  it("installs transitions-dev dropdown, modal, and icon swap snippets", () => {
+    const appCss = readSource("app/app.css");
+
+    for (const token of [
+      "--dropdown-open-dur: 250ms",
+      "--dropdown-close-dur: 150ms",
+      "--modal-open-dur: 250ms",
+      "--modal-close-dur: 150ms",
+      "--icon-swap-dur: 250ms",
+      "--icon-swap-blur: 2px",
+    ]) {
+      expect(appCss).toContain(token);
+    }
+
+    expect(appCss).toContain(".t-dropdown");
+    expect(appCss).toContain(".t-modal");
+    expect(appCss).toContain(".t-icon-swap");
+    expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(appCss).toContain(".t-dropdown { transition: none !important; }");
+    expect(appCss).toContain(".t-modal { transition: none !important; }");
+    expect(appCss).toContain(".t-icon-swap .t-icon { transition: none !important; }");
+  });
+
+  it("uses transitions-dev classes for dropdown and modal primitives", () => {
+    for (const file of [
+      "components/ui/dropdown-menu.tsx",
+      "components/ui/popover.tsx",
+      "components/ui/select.tsx",
+    ]) {
+      const source = readSource(file);
+      expect(source).toContain("t-dropdown");
+      expect(source).not.toContain("data-open:animate-in");
+      expect(source).not.toContain("data-open:zoom-in-95");
+      expect(source).not.toContain("data-closed:zoom-out-95");
+    }
+
+    for (const file of [
+      "components/ui/dialog.tsx",
+      "components/ui/alert-dialog.tsx",
+    ]) {
+      const source = readSource(file);
+      expect(source).toContain("t-modal");
+      expect(source).not.toContain("data-open:zoom-in-95");
+      expect(source).not.toContain("data-closed:zoom-out-95");
+    }
+  });
+
+  it("routes stateful icon changes through the transitions-dev icon swap component", () => {
+    const iconSwapSource = readSource("components/SleiIconSwap.tsx");
+
+    expect(iconSwapSource).toContain("t-icon-swap");
+    expect(iconSwapSource).toContain('data-icon="a"');
+    expect(iconSwapSource).toContain('data-icon="b"');
+
+    for (const file of [
+      "features/chat/ChatPageView.tsx",
+      "features/chat/TaskRootEntry.tsx",
+      "features/members/MembersPageView.tsx",
+    ]) {
+      const source = readSource(file);
+      expect(source).toContain("SleiIconSwap");
+    }
+
+    expect(readSource("features/chat/ChatPageView.tsx")).not.toContain('name={showChannelMembersPanel ? "panelClose" : "panelOpen"}');
+    expect(readSource("features/chat/ChatPageView.tsx")).not.toContain('name={saved ? "bookmark" : "bookmarkOutline"}');
+    expect(readSource("features/chat/TaskRootEntry.tsx")).not.toContain('name={input.saved ? "bookmark" : "bookmarkOutline"}');
+    expect(readSource("features/members/MembersPageView.tsx")).not.toContain('name={expanded ? "chevronDown" : "chevronRight"}');
+    expect(readSource("features/members/MembersPageView.tsx")).not.toContain('name={input.expanded ? "chevronDown" : "chevronRight"}');
+  });
 });

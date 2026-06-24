@@ -6,7 +6,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage } from "./MarkdownMessage";
 import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SoftPanel, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
+import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SleiIconSwap, SoftPanel, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -1092,7 +1092,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
               variant="outline"
               size="icon-sm"
             >
-              <SleiIcon name={showChannelMembersPanel ? "panelClose" : "panelOpen"} size={15} />
+              <SleiIconSwap active={showChannelMembersPanel} activeName="panelClose" inactiveName="panelOpen" size={15} />
             </TooltipButton>
           </div>
         )}
@@ -1215,7 +1215,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                     <SleiIcon name="copy" size={14} />
                                   </TooltipButton>
                                   <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
-                                    <SleiIcon name={saved ? "bookmark" : "bookmarkOutline"} size={14} />
+                                    <SleiIconSwap active={saved} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
                                   </TooltipButton>
                                   <span aria-hidden="true">｜</span>
                                   <span className="inline-flex items-center gap-1">

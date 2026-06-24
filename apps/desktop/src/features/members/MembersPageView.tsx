@@ -19,6 +19,7 @@ import {
   MemberAvatar,
   PageHeader,
   SleiIcon,
+  SleiIconSwap,
   SoftPanel,
   StatusBadge,
   Toast,
@@ -523,7 +524,7 @@ export function MembersPage(input: {
                             variant={activeWorkspaceFile?.relativePath === entry.relativePath ? "secondary" : "ghost"}
                           >
                             {entry.kind === "directory" ? (
-                              <SleiIcon className="size-3 text-muted-foreground" name={expanded ? "chevronDown" : "chevronRight"} />
+                              <SleiIconSwap active={expanded} activeName="chevronDown" iconClassName="size-3 text-muted-foreground" inactiveName="chevronRight" />
                             ) : (
                               <span className="size-3 shrink-0" />
                             )}
@@ -696,7 +697,7 @@ function ActivityLogRow(input: {
             type="button"
             variant="ghost"
           >
-            <SleiIcon className="size-4" name={input.expanded ? "chevronDown" : "chevronRight"} />
+            <SleiIconSwap active={input.expanded} activeName="chevronDown" iconClassName="size-4" inactiveName="chevronRight" />
             {input.expanded ? input.messages.members.collapsePayload : input.messages.members.expandPayload}
           </Button>
           {input.expanded ? (
