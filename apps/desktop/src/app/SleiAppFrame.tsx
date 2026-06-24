@@ -85,7 +85,7 @@ const sidebarSortStorageKeys = {
 } as const;
 
 const navItems: Array<{ id: AppView; icon: SleiIconName }> = [
-  { id: "search", icon: "searchFilled" },
+  { id: "search", icon: "search" },
   { id: "chat", icon: "chat" },
   { id: "tasks", icon: "tasks" },
   { id: "members", icon: "membersFilled" },

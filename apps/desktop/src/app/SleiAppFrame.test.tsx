@@ -249,14 +249,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "ghost"}');
   });
 
-  it("uses filled icons for every menubar item without changing shared outline icons", () => {
+  it("keeps search outline while using filled icons for the other menubar items", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("const navItems"), frameSource.indexOf("function isSortDirection"));
 
-    expect(navSource).toContain('{ id: "search", icon: "searchFilled" }');
+    expect(navSource).toContain('{ id: "search", icon: "search" }');
     expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
-    expect(navSource).not.toContain('{ id: "search", icon: "search" }');
+    expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
     expect(navSource).not.toContain('{ id: "members", icon: "members" }');
     expect(iconsSource).toContain("IconSearchFilled");
     expect(iconsSource).toContain("IconUserFilled");
