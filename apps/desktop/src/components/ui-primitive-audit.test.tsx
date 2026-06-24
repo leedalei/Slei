@@ -182,6 +182,22 @@ describe("desktop UI primitive usage", () => {
     expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-small");
   });
 
+  it("uses transitions-dev sliding pills for soft tabs", () => {
+    const appCss = readSource("app/app.css");
+    const tabsSource = readSource("components/ui/tabs.tsx");
+
+    expect(tabsSource).toContain('className="t-tabs-pill"');
+    expect(tabsSource).toContain("data-slei-tabs-pill");
+    expect(tabsSource).toContain("requestAnimationFrame(() => moveTo(active(), false))");
+    expect(tabsSource).toContain('window.addEventListener("resize", syncWithoutAnimation)');
+    expect(tabsSource).toContain('getPropertyValue("--tabs-dur")');
+    expect(appCss).toContain("--tabs-dur: 250ms");
+    expect(appCss).toContain(".t-tabs-pill");
+    expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(appCss).toContain(".t-tabs-pill,");
+    expect(appCss).toContain(".t-tab {");
+  });
+
   it("keeps static surfaces and badges flat", () => {
     const panelSource = readSource("components/SoftPanel.tsx");
     const cardSource = readSource("components/ui/card.tsx");
