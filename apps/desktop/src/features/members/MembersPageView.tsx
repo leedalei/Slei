@@ -1,20 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  CalendarDays,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Cpu,
-  ExternalLink,
-  FileText,
-  FolderOpen,
-  MessageCircle,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
 
 import type { DesktopMessages } from "../../i18n";
 import type {
@@ -28,7 +12,21 @@ import type {
 } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember } from "../../app/types";
 import { formatLocalRecordDateTime, formatMemberCreatedDate, type AgentDraftInput } from "../../app/model";
-import { DetailBlock, EditableDetailField, Empty, MemberAvatar, StatusDot, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
+import {
+  DetailBlock,
+  EditableDetailField,
+  Empty,
+  MemberAvatar,
+  PageHeader,
+  SleiIcon,
+  SoftPanel,
+  StatusBadge,
+  Toast,
+  TOAST_VISIBLE_MS,
+  TooltipButton,
+  type SleiIconName,
+  type ToastType,
+} from "../../components";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -41,15 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -343,30 +333,42 @@ export function MembersPage(input: {
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <Toast message={toast.message} type={toast.type} />
       <header className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3" data-tauri-drag-region="deep">
-          <span className="inline-flex" data-tauri-drag-region="deep">
-            <MemberAvatar identity={selectedMember} large />
-          </span>
-          <div className="min-w-0 space-y-2" data-tauri-drag-region="deep">
-            <div className="flex min-w-0 flex-wrap items-center gap-2" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
-              <h1 className="truncate text-2xl font-semibold" data-tauri-drag-region="deep">{memberDetails.name}</h1>
-              {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
-              <Badge variant="outline" className="gap-1" data-tauri-drag-region="deep">
-                <StatusDot status={selectedMember.runtimeStatus} />
-                {input.messages.members.online}
-              </Badge>
-            </div>
-            <div className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
-              <p className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</p>
-              <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
-                <Copy aria-hidden="true" size={14} />
-              </TooltipButton>
-            </div>
-          </div>
-          {canMessage ? (
-            <div className="col-start-3 row-start-1 flex flex-wrap items-center justify-end gap-2 self-start">
+        <PageHeader
+          className="grid-cols-[minmax(0,1fr)_auto]"
+          data-slot="workspace-titlebar"
+          data-tauri-drag-region="deep"
+          icon={undefined}
+          title={(
+            <span className="flex min-w-0 items-center gap-3" data-tauri-drag-region="deep">
+              <span className="inline-flex" data-tauri-drag-region="deep">
+                <MemberAvatar identity={selectedMember} large />
+              </span>
+              <span className="min-w-0 truncate" data-tauri-drag-region="deep">{memberDetails.name}</span>
+            </span>
+          )}
+          subtitle={(
+            <span className="grid min-w-0 gap-2" data-tauri-drag-region="deep">
+              <span className="flex min-w-0 flex-wrap items-center gap-2" data-tauri-drag-region="deep">
+                {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
+                <StatusBadge
+                  className="w-fit"
+                  data-tauri-drag-region="deep"
+                  label={input.messages.members.online}
+                  status={selectedMember.runtimeStatus}
+                />
+              </span>
+              <span className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
+                <span className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</span>
+                <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                  <SleiIcon className="size-3.5" name="copy" />
+                </TooltipButton>
+              </span>
+            </span>
+          )}
+          actions={canMessage ? (
+            <>
               <Button onClick={() => input.onMessage?.(selectedMember.id)} type="button">
-                <MessageCircle aria-hidden="true" />
+                <SleiIcon name="chat" />
                 {input.messages.members.message}
               </Button>
               {canDelete ? (
@@ -377,7 +379,7 @@ export function MembersPage(input: {
                       type="button"
                       variant="destructive"
                     >
-                      <Trash2 aria-hidden="true" />
+                      <SleiIcon name="delete" />
                       {input.messages.members.deleteAgent}
                     </Button>
                   </AlertDialogTrigger>
@@ -397,9 +399,9 @@ export function MembersPage(input: {
                   </AlertDialogContent>
                 </AlertDialog>
               ) : null}
-            </div>
+            </>
           ) : null}
-        </div>
+        />
         {deleteError ? (
           <Alert className="mt-4" variant="destructive">
             <AlertDescription>{deleteError}</AlertDescription>
@@ -421,63 +423,62 @@ export function MembersPage(input: {
         <ScrollArea className="min-h-0">
           <div className="grid gap-4 p-6">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card size="compact">
-                <CardHeader>
-                  <CardTitle>{input.messages.members.profile}</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <EditableDetailField
-                      ariaLabel={input.messages.members.editDisplayName}
-                      error={fieldError.name}
-                      label={input.messages.members.displayName}
-                      messages={input.messages}
-                      onSave={(value) => updateMemberDetail("name", value)}
-                      saving={effectiveSavingField === "name"}
-                      sectionClassName="grid gap-2"
-                      value={memberDetails.name}
-                    />
-                    <ControlledFieldAlert message={input.memberFieldErrors?.name} />
-                    <EditableDetailField
-                      allowEmpty
-                      ariaLabel={input.messages.members.editDescription}
-                      error={fieldError.description}
-                      label={input.messages.members.description}
-                      messages={input.messages}
-                      multiline
-                      onSave={(value) => updateMemberDetail("description", value)}
-                      saving={effectiveSavingField === "description"}
-                      sectionClassName="grid gap-2"
-                      value={memberDetails.description}
-                    />
-                    <ControlledFieldAlert message={input.memberFieldErrors?.description} />
-                  </div>
-                  <Separator />
-                  <h2 className="text-base font-semibold">{input.messages.members.info}</h2>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <InfoItem blockId="computer" icon={Cpu} label={input.messages.members.computer}>
-                      <span>{selectedNode?.name ?? selectedMember.computer}</span>
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        <StatusDot status={nodeDotStatus} />
-                        {nodeStatus} · daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
-                      </span>
-                    </InfoItem>
-                    <InfoItem blockId="created" icon={CalendarDays} label={input.messages.members.created}>
-                      {formatMemberCreatedDate(selectedMember.created)}
-                    </InfoItem>
-                    <InfoItem blockId="creator" icon={UserRound} label={input.messages.members.creator}>
-                      {selectedMember.creator}
-                    </InfoItem>
-                  </div>
-                </CardContent>
-              </Card>
+              <SoftPanel className="grid gap-4">
+                <h2 className="text-base font-semibold">{input.messages.members.profile}</h2>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <EditableDetailField
+                    ariaLabel={input.messages.members.editDisplayName}
+                    error={fieldError.name}
+                    label={input.messages.members.displayName}
+                    messages={input.messages}
+                    onSave={(value) => updateMemberDetail("name", value)}
+                    saving={effectiveSavingField === "name"}
+                    sectionClassName="grid gap-2"
+                    value={memberDetails.name}
+                  />
+                  <ControlledFieldAlert message={input.memberFieldErrors?.name} />
+                  <EditableDetailField
+                    allowEmpty
+                    ariaLabel={input.messages.members.editDescription}
+                    error={fieldError.description}
+                    label={input.messages.members.description}
+                    messages={input.messages}
+                    multiline
+                    onSave={(value) => updateMemberDetail("description", value)}
+                    saving={effectiveSavingField === "description"}
+                    sectionClassName="grid gap-2"
+                    value={memberDetails.description}
+                  />
+                  <ControlledFieldAlert message={input.memberFieldErrors?.description} />
+                </div>
+                <Separator />
+                <h2 className="text-base font-semibold">{input.messages.members.info}</h2>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <InfoItem blockId="computer" icon="cpu" label={input.messages.members.computer}>
+                    <span>{selectedNode?.name ?? selectedMember.computer}</span>
+                    <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <StatusBadge label={nodeStatus} status={nodeDotStatus} />
+                      daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
+                    </span>
+                  </InfoItem>
+                  <InfoItem blockId="created" icon="calendar" label={input.messages.members.created}>
+                    {formatMemberCreatedDate(selectedMember.created)}
+                  </InfoItem>
+                  <InfoItem blockId="creator" icon="user" label={input.messages.members.creator}>
+                    {selectedMember.creator}
+                  </InfoItem>
+                </div>
+              </SoftPanel>
 
-              <Card size="compact">
-                <CardHeader>
-                  <CardTitle>{input.messages.members.runtimeConfig}</CardTitle>
-                  <CardDescription>{input.messages.status.runtime[selectedMember.runtimeStatus]}</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+              <SoftPanel className="grid gap-4">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold">{input.messages.members.runtimeConfig}</h2>
+                  <StatusBadge
+                    label={input.messages.status.runtime[selectedMember.runtimeStatus]}
+                    status={selectedMember.runtimeStatus}
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
                   <EditableDetailField
                     ariaLabel={input.messages.members.editRuntime}
                     error={fieldError.runtime}
@@ -502,19 +503,17 @@ export function MembersPage(input: {
                     value={memberDetails.model}
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.model} />
-                </CardContent>
-              </Card>
+                </div>
+              </SoftPanel>
             </TabsContent>
 
             <TabsContent forceMount value="workspace" className="grid gap-4 data-[state=inactive]:hidden">
-              <section className="grid min-h-[28rem] overflow-hidden rounded-lg border bg-background md:grid-cols-[16rem_minmax(0,1fr)]" aria-label={input.messages.members.workspace}>
+              <SoftPanel className="grid min-h-[28rem] overflow-hidden p-0 md:grid-cols-[16rem_minmax(0,1fr)]" aria-label={input.messages.members.workspace}>
                 <aside className="grid min-h-0 overflow-hidden border-b bg-muted/20 md:border-b-0 md:border-r">
                   <ScrollArea className="min-h-0">
                     <div className="grid gap-1 p-2">
                       {workspaceRows.map(({ depth, entry }) => {
-                        const Icon = entry.kind === "directory" ? FolderOpen : FileText;
                         const expanded = expandedWorkspaceDirectories.has(entry.relativePath);
-                        const DisclosureIcon = expanded ? ChevronDown : ChevronRight;
                         return (
                           <Button
                             aria-current={activeWorkspaceFile?.relativePath === entry.relativePath ? "true" : undefined}
@@ -526,11 +525,11 @@ export function MembersPage(input: {
                             variant={activeWorkspaceFile?.relativePath === entry.relativePath ? "secondary" : "ghost"}
                           >
                             {entry.kind === "directory" ? (
-                              <DisclosureIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                              <SleiIcon className="size-3 text-muted-foreground" name={expanded ? "chevronDown" : "chevronRight"} />
                             ) : (
                               <span className="size-3 shrink-0" />
                             )}
-                            <Icon aria-hidden="true" className="size-4 shrink-0" />
+                            <SleiIcon className="size-4" name={entry.kind === "directory" ? "folderOpen" : "file"} />
                             <span className="block min-w-0 flex-1 truncate">
                               {entry.name}{entry.kind === "directory" ? "/" : ""}
                             </span>
@@ -547,7 +546,7 @@ export function MembersPage(input: {
                       <p className="truncate text-xs text-muted-foreground">{activeWorkspaceFile?.relativePath}</p>
                     </div>
                     <Button onClick={() => openAgentPath(pathTargetForWorkspaceFile(activeWorkspaceFile, memoryPath, docsPath))} type="button" variant="outline">
-                      <ExternalLink aria-hidden="true" />
+                      <SleiIcon name="externalLink" />
                       {input.messages.members.openInFileManager}
                     </Button>
                   </header>
@@ -555,7 +554,7 @@ export function MembersPage(input: {
                     <pre className="min-h-full whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-foreground">{activeWorkspaceFile?.content}</pre>
                   </ScrollArea>
                 </article>
-              </section>
+              </SoftPanel>
               {workspaceOpenError ? (
                 <Alert variant="destructive">
                   <AlertDescription>{workspaceOpenError}</AlertDescription>
@@ -564,83 +563,69 @@ export function MembersPage(input: {
             </TabsContent>
 
             <TabsContent forceMount value="capabilities" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card size="compact">
-                <CardHeader>
-                  <CardTitle>{input.messages.members.skills}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {memberSkills.length ? (
-                    <div className="grid gap-2" role="list">
-                      {memberSkills.map((skill) => (
-                        <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id} role="listitem">
-                          <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                            <Sparkles aria-hidden="true" className="size-3 shrink-0 text-muted-foreground opacity-60" />
-                            <span className="truncate">{skill.name}</span>
-                          </div>
-                          {skill.trigger ? (
-                            <p className="break-words text-xs text-muted-foreground">{skill.trigger}</p>
-                          ) : null}
+              <SoftPanel className="grid gap-4">
+                <h2 className="text-base font-semibold">{input.messages.members.skills}</h2>
+                {memberSkills.length ? (
+                  <div className="grid gap-2" role="list">
+                    {memberSkills.map((skill) => (
+                      <div className="grid gap-1 rounded-lg border bg-muted/20 p-3" key={skill.id} role="listitem">
+                        <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                          <SleiIcon className="size-3 text-muted-foreground opacity-60" name="sparkles" />
+                          <span className="truncate">{skill.name}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <InlineEmpty
-                      description={input.messages.members.noSkillsDescription}
-                      title={input.messages.members.noSkills}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+                        {skill.trigger ? (
+                          <p className="break-words text-xs text-muted-foreground">{skill.trigger}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <InlineEmpty
+                    description={input.messages.members.noSkillsDescription}
+                    title={input.messages.members.noSkills}
+                  />
+                )}
+              </SoftPanel>
             </TabsContent>
 
             <TabsContent forceMount value="permissions" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{input.messages.members.capabilities}</CardTitle>
-                  <CardDescription>{input.messages.members.readOnly}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {selectedMember.capabilities.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMember.capabilities.map((capability) => (
-                        <Badge className="gap-1" key={capability} variant="secondary">
-                          <Sparkles aria-hidden="true" />
-                          {capability}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <InlineEmpty
-                      description={input.messages.members.capabilityScanUnavailable}
-                      title={input.messages.members.noCapabilities}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+              <SoftPanel className="grid gap-4">
+                <div className="grid gap-1">
+                  <h2 className="text-base font-semibold">{input.messages.members.capabilities}</h2>
+                  <p className="text-sm text-muted-foreground">{input.messages.members.readOnly}</p>
+                </div>
+                {selectedMember.capabilities.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMember.capabilities.map((capability) => (
+                      <StatusBadge key={capability} label={capability} status="info" />
+                    ))}
+                  </div>
+                ) : (
+                  <InlineEmpty
+                    description={input.messages.members.capabilityScanUnavailable}
+                    title={input.messages.members.noCapabilities}
+                  />
+                )}
+              </SoftPanel>
 
-              <Card size="compact">
-                <CardHeader>
-                  <CardTitle>{input.messages.members.workspacePermission}</CardTitle>
-                  <CardDescription>{input.messages.members.readOnly}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {selectedMember.permissions.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMember.permissions.map((permission) => (
-                        <Badge className="gap-1" key={permission} variant="outline">
-                          <ShieldCheck aria-hidden="true" />
-                          {permission}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <InlineEmpty
-                      description={input.messages.members.noWorkspacePermissions}
-                      title={input.messages.members.workspacePermission}
-                    />
-                  )}
-                </CardContent>
-              </Card>
+              <SoftPanel className="grid gap-4">
+                <div className="grid gap-1">
+                  <h2 className="text-base font-semibold">{input.messages.members.workspacePermission}</h2>
+                  <p className="text-sm text-muted-foreground">{input.messages.members.readOnly}</p>
+                </div>
+                {selectedMember.permissions.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMember.permissions.map((permission) => (
+                      <StatusBadge key={permission} label={permission} status="approval" />
+                    ))}
+                  </div>
+                ) : (
+                  <InlineEmpty
+                    description={input.messages.members.noWorkspacePermissions}
+                    title={input.messages.members.workspacePermission}
+                  />
+                )}
+              </SoftPanel>
             </TabsContent>
 
             <TabsContent forceMount value="activity" className="grid gap-2 data-[state=inactive]:hidden">
@@ -691,8 +676,6 @@ function ActivityLogRow(input: {
     activityResultLabel(input.log, input.messages),
     input.log.channelId ? channelActivityLabel(input.log.channelId) : undefined,
   ].filter((item): item is string => Boolean(item));
-  const PayloadIcon = input.expanded ? ChevronDown : ChevronRight;
-
   return (
     <article className="grid gap-2 rounded-lg border bg-muted/20 p-3" data-activity-log-row={input.log.id} role="listitem">
       <div className="grid gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
@@ -715,7 +698,7 @@ function ActivityLogRow(input: {
             type="button"
             variant="ghost"
           >
-            <PayloadIcon aria-hidden="true" className="size-4" />
+            <SleiIcon className="size-4" name={input.expanded ? "chevronDown" : "chevronRight"} />
             {input.expanded ? input.messages.members.collapsePayload : input.messages.members.expandPayload}
           </Button>
           {input.expanded ? (
@@ -771,13 +754,13 @@ function InlineEmpty(input: { description: string; title: string }) {
 function InfoItem(input: {
   blockId?: string;
   children: ReactNode;
-  icon: LucideIcon;
+  icon: SleiIconName;
   label: string;
 }) {
   return (
     <DetailBlock data-member-detail-block={input.blockId}>
       <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        <input.icon aria-hidden="true" className="size-3.5" />
+        <SleiIcon className="size-3.5" name={input.icon} />
         {input.label}
       </div>
       <div className="grid gap-1 text-sm">{input.children}</div>

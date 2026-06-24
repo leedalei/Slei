@@ -137,6 +137,8 @@ describe("MembersPage agent details", () => {
     const deleteButtonStart = headerHtml.indexOf(`>${messages.members.deleteAgent}<`);
 
     expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(html).toContain("data-slei-page-header");
+    expect(headerHtml).toContain("data-slei-status");
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(headerHtml).toContain("select-none");
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
@@ -246,10 +248,11 @@ describe("MembersPage agent details", () => {
     expect(html).toContain(`>${messages.members.message}<`);
   });
 
-  it("uses compact cards and secondary detail blocks in member profile details", () => {
+  it("uses shared soft panels and secondary detail blocks in member profile details", () => {
     const html = renderToStaticMarkup(renderMembersPage());
 
-    expect(html).toContain('data-size="compact"');
+    expect(html).toContain("data-slei-panel");
+    expect(html).toContain("data-slei-status");
     expect(html).toContain('data-slot="detail-block"');
     expect(html).toContain('data-member-detail-block="computer"');
   });
@@ -312,8 +315,7 @@ describe("MembersPage agent details", () => {
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('data-slot="alert-dialog-trigger"');
-    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)_auto]");
-    expect(html).toContain("col-start-3 row-start-1");
+    expect(html).toContain("data-slei-page-header-actions");
     expect(html).not.toContain(messages.members.deleteAgentConfirm("Coda"));
     expect(html).toContain("Capabilities");
     expect(html).toContain("ClaudeCode");
@@ -583,7 +585,7 @@ describe("MembersPage agent details", () => {
 
     const row = container.querySelector(`[data-activity-log-row="${log.id}"]`);
     expect(row).toBeTruthy();
-    expect(row?.closest('[data-slot="card"]')).toBeNull();
+    expect(row?.closest("[data-slei-panel]")).toBeNull();
     expect(row?.className).toContain("rounded-lg");
     expect(row?.className).toContain("border");
     expect(row?.querySelector('[data-activity-log-line="meta"]')?.textContent).toBe("info | run.started | 成功 | #内容营销开发");
@@ -685,10 +687,10 @@ describe("MembersPage agent details", () => {
 
     await clickTab(host, messages.members.capabilities);
     const panel = activeTabPanel(host);
-    const skillsCard = panel.querySelector('[data-slot="card"]');
+    const skillsCard = panel.querySelector("[data-slei-panel]");
 
-    expect(skillsCard?.querySelector('[data-slot="card-title"]')?.textContent).toBe(messages.members.skills);
-    expect(skillsCard?.querySelector('[data-slot="card-description"]')).toBeNull();
+    expect(skillsCard?.querySelector("h2")?.textContent).toBe(messages.members.skills);
+    expect(skillsCard?.textContent).not.toContain(messages.members.readOnly);
   });
 
   it("renders workspace skill icons small and visually muted", async () => {

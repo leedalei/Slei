@@ -71,6 +71,7 @@ describe("SettingsPage header", () => {
     const headerHtml = html.slice(headerStart, headerEnd);
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
+    expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Language");
@@ -79,7 +80,7 @@ describe("SettingsPage header", () => {
     expect(headerHtml).not.toContain(">Settings<");
   });
 
-  it("uses compact cards and secondary detail blocks for settings rows", () => {
+  it("uses shared soft panels and preference rows for settings rows", () => {
     const messages = createDesktopMessages("en-US");
     const notificationsHtml = renderToStaticMarkup(
       <SettingsPage
@@ -106,10 +107,10 @@ describe("SettingsPage header", () => {
       />,
     );
 
-    expect(notificationsHtml).toContain('data-size="compact"');
-    expect(notificationsHtml).toContain('data-slot="detail-block"');
+    expect(notificationsHtml).toContain("data-slei-panel");
+    expect(notificationsHtml).toContain("data-slei-preference-row");
     expect(notificationsHtml).toContain('data-settings-notification="mentions"');
-    expect(aboutHtml).toContain('data-slot="detail-block"');
+    expect(aboutHtml).toContain("data-slei-panel");
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 
@@ -131,6 +132,7 @@ describe("SettingsPage header", () => {
       const headerEnd = html.indexOf("</header>", headerStart);
       const headerHtml = html.slice(headerStart, headerEnd);
 
+      expect(html).toContain("data-slei-page-header");
       expect(headerHtml).toContain(messages.settings.panelTitle[activePanel]);
       expect(headerHtml).toContain(messages.settings.panelSubtitle[activePanel]);
       expect(html).not.toContain('data-slot="card-header"');

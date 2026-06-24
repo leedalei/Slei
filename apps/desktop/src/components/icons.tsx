@@ -4,13 +4,18 @@ import {
   IconArrowsSort,
   IconBellFilled,
   IconBookmarkFilled,
+  IconCalendar,
   IconCheck,
   IconChevronDown,
   IconChevronRight,
   IconChevronUp,
   IconCircleFilled,
   IconCopy,
+  IconCpu,
   IconDeviceDesktopFilled,
+  IconExternalLink,
+  IconFileText,
+  IconFolderOpen,
   IconFolderPlus,
   IconHash,
   IconInfoCircle,
@@ -23,6 +28,8 @@ import {
   IconSend,
   IconServer,
   IconSettingsFilled,
+  IconShieldCheck,
+  IconSparkles,
   IconSquareCheckFilled,
   IconTrash,
   IconUsersGroup,
@@ -35,13 +42,18 @@ export type SleiIconName =
   | "approval"
   | "bell"
   | "bookmark"
+  | "calendar"
   | "check"
   | "chat"
   | "chevronDown"
   | "chevronRight"
   | "chevronUp"
   | "copy"
+  | "cpu"
   | "delete"
+  | "externalLink"
+  | "file"
+  | "folderOpen"
   | "folderPlus"
   | "globe"
   | "hash"
@@ -55,6 +67,8 @@ export type SleiIconName =
   | "send"
   | "server"
   | "settings"
+  | "shield"
+  | "sparkles"
   | "sort"
   | "status"
   | "tasks"
@@ -69,13 +83,18 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   approval: IconAlertCircleFilled,
   bell: IconBellFilled,
   bookmark: IconBookmarkFilled,
+  calendar: IconCalendar,
   check: IconCheck,
   chat: IconMessageCircleFilled,
   chevronDown: IconChevronDown,
   chevronRight: IconChevronRight,
   chevronUp: IconChevronUp,
   copy: IconCopy,
+  cpu: IconCpu,
   delete: IconTrash,
+  externalLink: IconExternalLink,
+  file: IconFileText,
+  folderOpen: IconFolderOpen,
   folderPlus: IconFolderPlus,
   globe: IconWorld,
   hash: IconHash,
@@ -89,6 +108,8 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   send: IconSend,
   server: IconServer,
   settings: IconSettingsFilled,
+  shield: IconShieldCheck,
+  sparkles: IconSparkles,
   sort: IconArrowsSort,
   status: IconCircleFilled,
   tasks: IconSquareCheckFilled,
