@@ -23,8 +23,10 @@ import {
   IconFolderPlus,
   IconHash,
   IconInfoCircle,
+  IconLayoutKanbanFilled,
   IconLayoutSidebarRightCollapse,
   IconLayoutSidebarRightExpand,
+  IconListDetails,
   IconLoader2,
   IconMessage,
   IconMessageCircleFilled,
@@ -74,6 +76,8 @@ export type SleiIconName =
   | "globe"
   | "hash"
   | "info"
+  | "kanban"
+  | "listDetails"
   | "loader"
   | "members"
   | "membersFilled"
@@ -126,6 +130,8 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   globe: IconWorld,
   hash: IconHash,
   info: IconInfoCircle,
+  kanban: IconLayoutKanbanFilled,
+  listDetails: IconListDetails,
   loader: IconLoader2,
   members: IconUsersGroup,
   membersFilled: IconAlienFilled,

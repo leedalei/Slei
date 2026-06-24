@@ -89,11 +89,11 @@ export function TasksPage({
             </div>
             <TabsList aria-label={messages.tasks.title} className="shrink-0" variant="soft">
               <TabsTrigger onClick={() => setView("board")} value="board">
-                <SleiIcon className="size-3.5" name="tasks" />
+                <SleiIcon className="size-3.5" name="kanban" />
                 {messages.tasks.board}
               </TabsTrigger>
               <TabsTrigger onClick={() => setView("list")} value="list">
-                <SleiIcon className="size-3.5" name="file" />
+                <SleiIcon className="size-3.5" name="listDetails" />
                 {messages.tasks.list}
               </TabsTrigger>
             </TabsList>

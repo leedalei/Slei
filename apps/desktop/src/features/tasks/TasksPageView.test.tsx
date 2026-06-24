@@ -163,6 +163,19 @@ describe("TasksPage filters", () => {
     expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
   });
 
+  it("uses task-view icons that match board and list semantics", async () => {
+    await mountTasksPage();
+
+    const header = container?.querySelector('[data-testid="slei-tasks-header"]');
+    const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
+    const listTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("列表"));
+
+    expect(boardTab?.querySelector('[data-slei-icon="kanban"]')).not.toBeNull();
+    expect(listTab?.querySelector('[data-slei-icon="listDetails"]')).not.toBeNull();
+    expect(boardTab?.querySelector('[data-slei-icon="tasks"]')).toBeNull();
+    expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
+  });
+
   it("shows task source channel and assignee metadata on cards", async () => {
     await mountTasksPage();
 
