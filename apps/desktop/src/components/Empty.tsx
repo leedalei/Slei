@@ -38,7 +38,7 @@ export function Empty(input: {
     input.centered && "mx-auto max-w-xl",
     input.className,
   );
-  const framed = input.framed ?? input.chrome !== "none";
+  const framed = input.framed === true || input.chrome === "default";
   const content = (
     <div className={cn("grid gap-3 text-center", size === "lg" ? "p-10" : "p-5")}>
       <div className="mx-auto grid place-items-center" aria-hidden="true" data-empty-icon="true">
