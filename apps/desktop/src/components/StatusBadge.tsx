@@ -18,16 +18,16 @@ export type SleiStatusTone =
   | "warn";
 
 export const sleiStatusBadgeClassNames: Record<SleiStatusTone, string> = {
-  approval: "bg-amber-500 text-white",
-  busy: "bg-amber-500 text-white",
+  approval: "border-amber-500/35 bg-amber-500/12 text-amber-900 dark:text-amber-200",
+  busy: "border-amber-500/35 bg-amber-500/12 text-amber-900 dark:text-amber-200",
   failed: "bg-destructive text-destructive-foreground",
-  idle: "bg-emerald-500 text-white",
-  info: "bg-sky-500 text-white",
+  idle: "border-emerald-500/35 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200",
+  info: "border-sky-500/35 bg-sky-500/12 text-sky-900 dark:text-sky-200",
   offline: "bg-muted-foreground text-background",
   pending: "bg-muted-foreground/75 text-background",
-  running: "bg-sky-500 text-white",
-  success: "bg-emerald-500 text-white",
-  warn: "bg-amber-500 text-white",
+  running: "border-sky-500/35 bg-sky-500/12 text-sky-900 dark:text-sky-200",
+  success: "border-emerald-500/35 bg-emerald-500/12 text-emerald-900 dark:text-emerald-200",
+  warn: "border-amber-500/35 bg-amber-500/12 text-amber-900 dark:text-amber-200",
 };
 
 export const sleiStatusIndicatorClassNames: Record<SleiStatusTone, string> = {
