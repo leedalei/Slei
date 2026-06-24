@@ -971,6 +971,7 @@ describe("ChatPage mention panel", () => {
     expect(button?.className).toContain("border-primary");
     expect(button?.className).toContain("bg-white");
     expect(button?.className).toContain("text-primary");
+    expect(button?.className).toContain("text-xs");
 
     setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 401 });
     await act(async () => {
