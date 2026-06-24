@@ -28,13 +28,14 @@ function cleanupToast(root: Root, host: HTMLElement) {
 }
 
 describe("Toast", () => {
-  it("renders on an opaque white surface so page content does not show through", () => {
+  it("renders on a shared soft panel surface so page content does not show through", () => {
     const { host, root } = renderToast();
 
     try {
-      const button = host.querySelector("button");
+      const panel = host.querySelector("[data-slei-panel]");
 
-      expect(button?.className).toContain("bg-white");
+      expect(panel?.getAttribute("data-variant")).toBe("raised");
+      expect(panel?.className).toContain("bg-card");
     } finally {
       cleanupToast(root, host);
     }
@@ -44,9 +45,10 @@ describe("Toast", () => {
     const { host, root } = renderToast("backend service failed while processing a long diagnostic message with many details");
 
     try {
+      const panel = host.querySelector("[data-slei-panel]");
       const button = host.querySelector("button");
 
-      expect(button?.className).toContain("max-w-[70vw]");
+      expect(panel?.className).toContain("max-w-[70vw]");
       expect(button?.className).toContain("whitespace-normal");
       expect(button?.className).toContain("break-words");
     } finally {

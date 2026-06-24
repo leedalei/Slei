@@ -217,6 +217,16 @@ describe("EditableDetailField", () => {
     }
   });
 
+  it("renders the edit action with the shared Slei pencil icon", () => {
+    const { host, root } = renderEditableDetailField({ initialEditing: false });
+
+    try {
+      expect(host.querySelector('[data-slei-icon="pencil"]')).not.toBeNull();
+    } finally {
+      cleanupEditableDetailField(root, host);
+    }
+  });
+
   it("keeps the real editor and draft value visible when DOM save rejects", async () => {
     const onSave = vi.fn(async () => {
       throw new Error("保存失败");
