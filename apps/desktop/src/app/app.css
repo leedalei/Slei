@@ -120,6 +120,8 @@
   --icon-swap-blur: 2px;
   --icon-swap-start-scale: 0.25;
   --icon-swap-ease: ease-in-out;
+  --focus-in-dur: 250ms;
+  --focus-in-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-dur: 250ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: color-mix(in srgb, var(--foreground) 62%, transparent);
@@ -371,6 +373,19 @@
 
   .slei-composer-input:focus-visible {
     box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+  }
+
+  .slei-search-input-surface {
+    border-color: var(--slei-inset-border);
+    transition:
+      border-color var(--focus-in-dur) var(--focus-in-ease),
+      box-shadow var(--focus-in-dur) var(--focus-in-ease),
+      background-color var(--focus-in-dur) var(--focus-in-ease);
+  }
+
+  .slei-search-input-surface:focus-within {
+    border-color: var(--slei-inset-border);
+    box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--slei-inset-border) 88%, transparent);
   }
 }
 

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -231,6 +233,7 @@ describe("SearchPage global search UI", () => {
     const emptyState = searchEmptyState(rootElement);
     const searchSurface = rootElement.querySelector('[data-slot="search-input-surface"]');
     const searchInput = inputByLabel(rootElement, "Global search input");
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(searchSurface).toBeInstanceOf(HTMLElement);
@@ -238,9 +241,17 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
     expect(searchSurface?.className).toContain("rounded-full");
     expect(searchSurface?.className).toContain("slei-inset-small");
-    expect(searchSurface?.className).toContain("focus-within:shadow-[var(--slei-shadow-inset-s)]");
+    expect(searchSurface?.className).toContain("slei-search-input-surface");
+    expect(searchSurface?.className).not.toContain("focus-within:ring-ring");
+    expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--slei-shadow-inset-s)]");
     expect(searchSurface?.className).not.toContain("slei-inset-m");
     expect(searchSurface?.className).not.toContain("slei-inset-large");
+    expect(appCss).toContain(".slei-search-input-surface {");
+    expect(appCss).toContain("border-color: var(--slei-inset-border);");
+    expect(appCss).toContain("transition:");
+    expect(appCss).toContain("border-color var(--focus-in-dur) var(--focus-in-ease)");
+    expect(appCss).toContain(".slei-search-input-surface:focus-within {");
+    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--slei-inset-border) 88%, transparent);");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
