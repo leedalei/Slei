@@ -269,6 +269,7 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).toContain("data-[highlighted]:bg-muted/70");
     expect(selectSource).toContain("data-[state=checked]:font-semibold");
     expect(selectSource).toContain("data-[state=open]:[&_svg:last-child]:rotate-180");
+    expect(readSource("app/app.css")).toContain('[data-slot="select-item"]:focus-visible');
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
   });

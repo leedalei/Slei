@@ -499,6 +499,11 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+[data-slot="select-item"]:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
 ::selection {
   background: var(--color-accent);
   color: var(--color-text-primary);
