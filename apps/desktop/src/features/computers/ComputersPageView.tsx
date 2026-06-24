@@ -141,7 +141,10 @@ export function ComputersPage(input: {
           <SoftPanel className="grid gap-4">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <h2 className="text-base font-semibold">{input.messages.computers.agentsOnThisComputer}</h2>
-              <StatusBadge label={String(hostedAgents.length)} status="info" />
+              <div className="inline-flex items-center gap-1.5">
+                <SleiIcon className="size-3.5 text-muted-foreground" name="bot" />
+                <StatusBadge label={String(hostedAgents.length)} status="info" />
+              </div>
             </div>
             {hostedAgents.length ? (
               <div className="grid gap-3 md:grid-cols-2">

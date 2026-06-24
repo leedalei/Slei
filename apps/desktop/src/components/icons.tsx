@@ -24,6 +24,7 @@ import {
   IconPencil,
   IconPalette,
   IconPlus,
+  IconRobot,
   IconSearch,
   IconSend,
   IconServer,
@@ -42,6 +43,7 @@ export type SleiIconName =
   | "approval"
   | "bell"
   | "bookmark"
+  | "bot"
   | "calendar"
   | "check"
   | "chat"
@@ -83,6 +85,7 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   approval: IconAlertCircleFilled,
   bell: IconBellFilled,
   bookmark: IconBookmarkFilled,
+  bot: IconRobot,
   calendar: IconCalendar,
   check: IconCheck,
   chat: IconMessageCircleFilled,

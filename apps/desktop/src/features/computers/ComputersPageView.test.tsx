@@ -145,6 +145,7 @@ describe("ComputersPage header", () => {
     expect(html).toContain('data-detail-block-kind="runtime"');
     expect(html).toContain('data-detail-block-kind="hosted-agent"');
     expect(html).toContain("data-slei-status");
+    expect(html).toContain('data-slei-icon="bot"');
   });
 
   it("labels hosted agents by connection state instead of idle workload state", () => {
