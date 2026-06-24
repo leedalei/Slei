@@ -76,6 +76,7 @@
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.98);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.18);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.16);
+  --slei-inset-border: rgb(0 0 0 / 0.24);
   --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-m: -4px -4px 2px var(--slei-shadow-raised-glow), 4px 4px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-l: -6px -6px 2px var(--slei-shadow-raised-glow), 6px 6px 2px var(--slei-shadow-raised-shade);
@@ -265,6 +266,7 @@
   --slei-shadow-raised-glow: rgb(255 255 255 / 0.28);
   --slei-shadow-raised-shade: rgb(0 0 0 / 0.58);
   --slei-shadow-inset-shade: rgb(0 0 0 / 0.56);
+  --slei-inset-border: rgb(0 0 0 / 0.66);
   --slei-shadow-raised-s: -2px -2px 2px var(--slei-shadow-raised-glow), 2px 2px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-m: -4px -4px 2px var(--slei-shadow-raised-glow), 4px 4px 2px var(--slei-shadow-raised-shade);
   --slei-shadow-raised-l: -6px -6px 2px var(--slei-shadow-raised-glow), 6px 6px 2px var(--slei-shadow-raised-shade);
@@ -361,6 +363,7 @@
   }
 
   .slei-composer-input {
+    border-color: var(--slei-inset-border);
     box-shadow: var(--slei-shadow-inset-small);
   }
 

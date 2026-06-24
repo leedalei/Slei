@@ -193,11 +193,16 @@ describe("desktop UI primitive usage", () => {
     const inputSource = readSource("components/ui/input.tsx");
     const textareaSource = readSource("components/ui/textarea.tsx");
 
+    expect(appCss).toContain("--slei-inset-border: rgb(0 0 0 /");
     expect(inputSource).toContain("slei-inset-small");
     expect(inputSource).toContain("slei-inset-focus-small");
+    expect(inputSource).toContain("border-[var(--slei-inset-border)]");
+    expect(inputSource).not.toContain("border-input bg-muted/40");
     expect(inputSource).not.toContain("focus-visible:ring-3");
     expect(textareaSource).toContain("slei-inset-medium");
     expect(textareaSource).toContain("slei-inset-focus-medium");
+    expect(textareaSource).toContain("border-[var(--slei-inset-border)]");
+    expect(textareaSource).not.toContain("border-input bg-muted/40");
     expect(textareaSource).not.toContain("focus-visible:ring-3");
     expect(appCss).toContain(".slei-inset-focus-small:focus-visible");
     expect(appCss).toContain("var(--slei-shadow-inset-small), 0 0 0 1px");
