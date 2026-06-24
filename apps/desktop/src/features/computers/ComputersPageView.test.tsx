@@ -148,6 +148,27 @@ describe("ComputersPage header", () => {
     expect(html).toContain('data-slei-icon="bot"');
   });
 
+  it("keeps computer info definition list terms and descriptions as direct grouped children", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <ComputersPage
+        members={[]}
+        messages={createDesktopMessages("zh-CN")}
+        nodes={[localNode]}
+      />,
+    );
+
+    const definitionList = host.querySelector("dl");
+    const groups = Array.from(definitionList?.children ?? []);
+
+    expect(groups).toHaveLength(4);
+    for (const group of groups) {
+      expect(group.tagName).toBe("DIV");
+      expect(group.querySelector(":scope > dt")).not.toBeNull();
+      expect(group.querySelector(":scope > dd")).not.toBeNull();
+    }
+  });
+
   it("labels hosted agents by connection state instead of idle workload state", () => {
     const html = renderToStaticMarkup(
       <ComputersPage

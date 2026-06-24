@@ -179,7 +179,7 @@ export function SettingsPage(input: SettingsPageInput) {
             <SoftPanel className="grid gap-5" data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined}>
               <PreferenceRow
                 control={(
-                  <div aria-label={labels.theme} className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
+                  <div className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
                     {themeOptions(labels).map((option) => (
                       <Button
                         aria-pressed={activeTheme === option.value ? "true" : "false"}
@@ -197,13 +197,14 @@ export function SettingsPage(input: SettingsPageInput) {
                   </div>
                 )}
                 label={labels.theme}
+                labelMode="group"
               />
 
               <Separator />
 
               <PreferenceRow
                 control={(
-                  <div className="flex flex-wrap gap-2" role="group" aria-label={labels.fontSize}>
+                  <div className="flex flex-wrap gap-2" role="group">
                     {(["sm", "md", "lg"] as const).map((size) => (
                       <Button
                         aria-pressed={input.appearance.fontSize === size ? "true" : "false"}
@@ -220,6 +221,7 @@ export function SettingsPage(input: SettingsPageInput) {
                   </div>
                 )}
                 label={labels.fontSize}
+                labelMode="group"
               />
               {input.preferenceError ? (
                 <p className="text-sm text-destructive" role="alert">

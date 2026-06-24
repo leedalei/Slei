@@ -90,4 +90,26 @@ describe("PreferenceRow", () => {
       cleanupPreferenceRow(root, host);
     }
   });
+
+  it("labels composite group controls with aria-labelledby instead of htmlFor", () => {
+    const { host, root } = renderPreferenceRow(
+      <PreferenceRow
+        control={<div role="group"><button type="button">浅色</button><button type="button">深色</button></div>}
+        label="主题"
+        labelMode="group"
+      />,
+    );
+
+    try {
+      const label = host.querySelector("[data-slei-preference-row-label]");
+      const group = host.querySelector('[role="group"]');
+
+      expect(label?.tagName).not.toBe("LABEL");
+      expect(label?.id).toBeTruthy();
+      expect(group?.getAttribute("aria-labelledby")).toBe(label?.id);
+      expect(group?.hasAttribute("aria-label")).toBe(false);
+    } finally {
+      cleanupPreferenceRow(root, host);
+    }
+  });
 });

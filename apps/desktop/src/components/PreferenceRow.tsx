@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 type PreferenceControlProps = {
   "aria-describedby"?: string;
+  "aria-labelledby"?: string;
   id?: string;
 };
 
@@ -15,6 +16,7 @@ export function PreferenceRow({
   description,
   error,
   label,
+  labelMode = "control",
   ...props
 }: Omit<ComponentProps<"div">, "children"> & {
   control: ReactNode;
@@ -22,19 +24,23 @@ export function PreferenceRow({
   description?: ReactNode;
   error?: ReactNode;
   label: ReactNode;
+  labelMode?: "control" | "group";
 }) {
   const generatedId = useId();
   const controlElement = isValidElement(control)
     ? (control as ReactElement<PreferenceControlProps>)
     : undefined;
   const id = controlElement?.props.id ?? controlId ?? generatedId;
+  const labelId = `${id}-label`;
   const descriptionId = description ? `${id}-description` : undefined;
   const errorId = error ? `${id}-error` : undefined;
   const ariaDescribedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
   const renderedControl = controlElement
     ? cloneElement(controlElement, {
         "aria-describedby": controlElement.props["aria-describedby"] ?? ariaDescribedBy,
-        id,
+        ...(labelMode === "group"
+          ? { "aria-labelledby": controlElement.props["aria-labelledby"] ?? labelId }
+          : { id }),
       })
     : control;
 
@@ -46,9 +52,15 @@ export function PreferenceRow({
       data-slei-preference-row-invalid={error ? "true" : undefined}
     >
       <div className="min-w-0 space-y-1">
-        <label className="block text-sm font-medium" data-slei-preference-row-label htmlFor={id}>
-          {label}
-        </label>
+        {labelMode === "group" ? (
+          <span className="block text-sm font-medium" data-slei-preference-row-label id={labelId}>
+            {label}
+          </span>
+        ) : (
+          <label className="block text-sm font-medium" data-slei-preference-row-label htmlFor={id}>
+            {label}
+          </label>
+        )}
         {description ? (
           <div className="text-sm text-muted-foreground" data-slei-preference-row-description id={descriptionId}>
             {description}

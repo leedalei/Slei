@@ -194,12 +194,12 @@ function runtimeStatusLabel(status: "idle" | "busy" | "offline", messages: Deskt
 
 function InfoItem(input: { children: ReactNode; icon: SleiIconName; label: string }) {
   return (
-    <DetailBlock>
+    <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-sm" data-slot="detail-block">
       <dt className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <SleiIcon className="size-3.5" name={input.icon} />
         {input.label}
       </dt>
       <dd className="break-words text-sm">{input.children}</dd>
-    </DetailBlock>
+    </div>
   );
 }

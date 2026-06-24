@@ -258,7 +258,10 @@ describe("settings preferences", () => {
     );
 
     expect(appearanceHtml).toContain("字体大小");
-    expect(appearanceHtml).toContain('aria-label="主题"');
+    expect(appearanceHtml).toContain('data-slei-preference-row-label');
+    expect(appearanceHtml).toContain(">主题</span>");
+    expect(appearanceHtml).toContain('role="group" aria-labelledby=');
+    expect(appearanceHtml).not.toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
     expect(appearanceHtml).toContain('data-font-size="lg"');
     expect(appearanceHtml).toContain("--slei-font-size:16px");
