@@ -4,7 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
-import { MarkdownMessage } from "./MarkdownMessage";
+import { MarkdownMessage, markdownForegroundStyle } from "./MarkdownMessage";
 import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SleiIconSwap, SoftPanel, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
@@ -363,7 +363,10 @@ function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnTy
   const rest = skillToken.rest;
   const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
   return (
-    <div className={cn("slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-card-foreground", inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline")}>
+    <div
+      className={cn("slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-card-foreground", inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline")}
+      style={markdownForegroundStyle("card")}
+    >
       <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
         {skillToken.token}
       </span>

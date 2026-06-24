@@ -1,23 +1,34 @@
-import { Children, type ReactNode } from "react";
+import { Children, type CSSProperties, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
 
-export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: string; tone?: "foreground" | "card" }) {
+type MarkdownTone = "foreground" | "card";
+type MarkdownForegroundStyle = CSSProperties & {
+  "--slei-markdown-foreground"?: string;
+};
+
+export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: string; tone?: MarkdownTone }) {
   return (
     <div
       className={cn(
         "slei-markdown-message mt-1 max-w-none text-sm leading-relaxed [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_hr]:my-3 [&_hr]:border-border [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:bg-muted/60 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-semibold [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc",
         tone === "card" ? "text-card-foreground" : "text-foreground",
       )}
+      style={markdownForegroundStyle(tone)}
     >
       <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeMarkdownUrl}>
         {sanitizeMarkdown(markdown)}
       </ReactMarkdown>
     </div>
   );
+}
+
+export function markdownForegroundStyle(tone: MarkdownTone): MarkdownForegroundStyle | undefined {
+  if (tone === "card") return { "--slei-markdown-foreground": "var(--card-foreground)" };
+  return undefined;
 }
 
 function safeMarkdownUrl(url: string): string {

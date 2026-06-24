@@ -700,7 +700,7 @@ select:focus-visible {
 }
 
 .slei-markdown-message {
-  color: var(--color-text-primary);
+  color: var(--slei-markdown-foreground, var(--color-text-primary));
   display: grid;
   gap: var(--gap-sm);
   line-height: 1.55;

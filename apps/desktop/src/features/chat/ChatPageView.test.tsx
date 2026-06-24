@@ -1859,11 +1859,15 @@ describe("ChatPage mention panel", () => {
     const messageStart = html.indexOf('data-message-id="msg-dark-contrast"');
     const markdownStart = html.indexOf("slei-markdown-message", messageStart);
     const markdownHtml = html.slice(markdownStart, html.indexOf("</section>", markdownStart));
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(messageStart).toBeGreaterThanOrEqual(0);
     expect(markdownStart).toBeGreaterThan(messageStart);
     expect(markdownHtml).toContain("text-card-foreground");
+    expect(markdownHtml).toContain("--slei-markdown-foreground:var(--card-foreground)");
     expect(markdownHtml).not.toContain("text-foreground");
+    expect(appCss).toContain("color: var(--slei-markdown-foreground, var(--color-text-primary));");
+    expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--color-text-primary);");
   });
 
   it("keeps task root entries visually aligned with normal messages without a border", () => {
