@@ -1,4 +1,4 @@
-import { Monitor, Pencil } from "lucide-react";
+import { IconDeviceDesktop, IconPencil } from "@tabler/icons-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -28,9 +28,9 @@ describe("DetailBlock", () => {
   it("renders secondary detail content without nesting another card", () => {
     const html = renderToStaticMarkup(
       <DetailBlock
-        action={<Pencil aria-label="编辑" />}
+        action={<IconPencil aria-label="编辑" />}
         description="MateBook-Pro-Max-3.local"
-        icon={Monitor}
+        icon={IconDeviceDesktop}
         title="Hostname"
         value={<strong>darwin arm64</strong>}
       >
