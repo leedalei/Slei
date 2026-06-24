@@ -379,11 +379,14 @@ describe("desktop UI primitive usage", () => {
   it("keeps select menus flat with compact rounded corners and soft item states", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
-    expect(selectSource).toContain("shadow-none");
+    expect(selectSource).toContain("backdrop-blur-xl");
+    expect(selectSource).toContain("border-white/20");
+    expect(selectSource).toContain("bg-white/10");
+    expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(selectSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
     expect(selectSource).toContain("rounded-xl");
-    expect(selectSource).toContain("data-[highlighted]:bg-muted/70");
-    expect(selectSource).toContain("data-[state=checked]:font-semibold");
+    expect(selectSource).toContain("focus:bg-white/10");
+    expect(selectSource).toContain("data-[state=checked]:text-foreground");
     expect(selectSource).toContain("data-[state=open]:[&_svg:last-child]:rotate-180");
     expect(readSource("app/app.css")).toContain('[data-slot="select-item"]:focus-visible');
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
