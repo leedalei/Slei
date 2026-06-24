@@ -284,26 +284,27 @@ describe("desktop UI primitive usage", () => {
     expect(textareaSource).not.toContain("focus-visible:ring-3");
     expect(appCss).toContain(".slei-inset-focus-small:focus-visible");
     expect(appCss).toContain("var(--slei-shadow-inset-s), 0 0 0 1px");
-    expect(readSource("components/ui/tabs.tsx")).toContain("slei-inset-small");
+    expect(readSource("components/ui/tabs.tsx")).toContain("data-slei-glass-tabs-list");
     expect(readSource("components/ui/tabs.tsx")).not.toContain("slei-inset-medium");
   });
 
-  it("uses transitions-dev sliding pills for soft tabs", () => {
+  it("uses shared glass-tabs styling for all tab variants", () => {
     const appCss = readSource("app/app.css");
     const tabsSource = readSource("components/ui/tabs.tsx");
 
-    expect(tabsSource).toContain('className="t-tabs-pill"');
-    expect(tabsSource).toContain("data-slei-tabs-pill");
-    expect(tabsSource).toContain("requestAnimationFrame(() => moveTo(active(), false))");
-    expect(tabsSource).toContain('window.addEventListener("resize", syncWithoutAnimation)');
-    expect(tabsSource).toContain('getPropertyValue("--tabs-dur")');
+    expect(tabsSource).toContain("data-slei-glass-tabs-list");
+    expect(tabsSource).toContain("data-slei-glass-tabs-glow");
+    expect(tabsSource).toContain("backdrop-blur");
+    expect(tabsSource).toContain("data-[state=active]:bg-white/20");
+    expect(tabsSource).toContain("data-[state=active]:before:bg-gradient-to-b");
+    expect(tabsSource).not.toContain("data-slei-tabs-pill");
+    expect(tabsSource).not.toContain("requestAnimationFrame(() => moveTo(active(), false))");
     expect(appCss).toContain("--tabs-dur: 250ms");
-    expect(appCss).toContain(".t-tabs-pill");
-    expect(appCss).toContain("border: 1px solid color-mix(in srgb, var(--slei-shadow-highlight) 72%, var(--border));");
-    expect(appCss).toContain("border-radius: var(--slei-radius-medium)");
-    expect(appCss).not.toContain(".t-tabs-pill {\n  position: absolute;\n  top: 4px;\n  left: 0;\n  height: calc(100% - 8px);\n  width: 0;\n  background: var(--tabs-pill-bg);\n  border-radius: var(--slei-radius-large)");
+    expect(appCss).toContain("--tabs-glass-bg:");
+    expect(appCss).toContain("--tabs-glass-border:");
+    expect(appCss).toContain("--tabs-glass-glow:");
+    expect(appCss).not.toContain(".t-tabs-pill");
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(appCss).toContain(".t-tabs-pill,");
     expect(appCss).toContain(".t-tab {");
   });
 

@@ -34,13 +34,13 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center rounded-lg text-muted-foreground group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list relative inline-flex w-fit items-center justify-center rounded-xl border border-white/20 bg-white/10 text-muted-foreground shadow-[var(--tabs-glass-shadow)] backdrop-blur-xl group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
   {
     variants: {
       variant: {
-        default: "bg-muted p-[3px] group-data-[orientation=horizontal]/tabs:h-8",
-        line: "gap-4 bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-8",
-        soft: "bg-muted/70 p-1 slei-inset-small group-data-[orientation=horizontal]/tabs:h-9",
+        default: "gap-1 p-1 group-data-[orientation=horizontal]/tabs:h-10",
+        line: "gap-4 p-0 group-data-[orientation=horizontal]/tabs:h-8",
+        soft: "gap-1 p-1 group-data-[orientation=horizontal]/tabs:h-9",
       },
     },
     defaultVariants: {
@@ -56,75 +56,22 @@ function TabsList({
   ...props
 }: React.ComponentPropsWithRef<typeof TabsPrimitive.List> &
   VariantProps<typeof tabsListVariants>) {
-  const listRef = React.useRef<HTMLDivElement | null>(null)
-  const isSliding = variant === "soft"
-
-  React.useEffect(() => {
-    if (!isSliding) return
-
-    const list = listRef.current
-    if (!list) return
-
-    const pill = list.querySelector<HTMLElement>("[data-slei-tabs-pill]")
-    const tabs = Array.from(list.querySelectorAll<HTMLElement>("[role='tab']"))
-    if (!pill || tabs.length === 0) return
-    const currentList = list
-    const currentPill = pill
-
-    function active() {
-      return tabs.find((tab) => tab.getAttribute("aria-selected") === "true") ?? tabs[0]
-    }
-
-    function moveTo(tab: HTMLElement, animate: boolean) {
-      const duration = getComputedStyle(currentList).getPropertyValue("--tabs-dur").trim()
-      if (!animate) {
-        const prev = currentPill.style.transition
-        currentPill.style.transition = "none"
-        currentPill.style.transform = `translateX(${tab.offsetLeft}px)`
-        currentPill.style.width = `${tab.offsetWidth}px`
-        void currentPill.offsetWidth
-        currentPill.style.transition = prev
-        return
-      }
-
-      currentPill.style.transitionDuration = duration || ""
-      currentPill.style.transform = `translateX(${tab.offsetLeft}px)`
-      currentPill.style.width = `${tab.offsetWidth}px`
-    }
-
-    const syncWithoutAnimation = () => moveTo(active(), false)
-    const syncWithAnimation = () => moveTo(active(), true)
-    const frame = requestAnimationFrame(() => moveTo(active(), false))
-    const observer = new MutationObserver(syncWithAnimation)
-
-    observer.observe(list, {
-      attributeFilter: ["aria-selected", "data-state"],
-      attributes: true,
-      subtree: true,
-    })
-    window.addEventListener("resize", syncWithoutAnimation)
-
-    return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-      window.removeEventListener("resize", syncWithoutAnimation)
-    }
-  }, [isSliding])
-
   return (
-    <TabsPrimitive.List
-      ref={(node) => {
-        listRef.current = node
-        assignRef(ref, node)
-      }}
-      data-slot="tabs-list"
-      data-variant={variant}
-      className={cn(tabsListVariants({ variant }), isSliding && "t-tabs", className)}
-      {...props}
-    >
-      {isSliding ? <span aria-hidden="true" className="t-tabs-pill" data-slei-tabs-pill /> : null}
-      {props.children}
-    </TabsPrimitive.List>
+    <div className="relative inline-flex w-fit">
+      <span
+        aria-hidden="true"
+        className="t-tabs-glow pointer-events-none absolute -inset-1 rounded-2xl bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 opacity-60 blur-lg"
+        data-slei-glass-tabs-glow
+      />
+      <TabsPrimitive.List
+        ref={(node) => assignRef(ref, node)}
+        data-slot="tabs-list"
+        data-slei-glass-tabs-list
+        data-variant={variant}
+        className={cn(tabsListVariants({ variant }), "t-tabs", className)}
+        {...props}
+      />
+    </div>
   )
 }
 
@@ -136,11 +83,10 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "t-tab relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground/60 transition-all group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:slei-raised-small group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:py-0 group-data-[variant=line]/tabs-list:data-active:bg-transparent group-data-[variant=line]/tabs-list:data-active:font-bold group-data-[variant=line]/tabs-list:data-active:text-primary dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
-        "group-data-[variant=soft]/tabs-list:z-10 group-data-[variant=soft]/tabs-list:data-active:bg-transparent group-data-[variant=soft]/tabs-list:data-active:text-card-foreground dark:group-data-[variant=soft]/tabs-list:data-active:text-card-foreground",
-        "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:text-foreground",
-        "after:absolute after:bg-primary after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-8px] group-data-[orientation=horizontal]/tabs:after:h-[3px] group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-[3px] group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
+        "t-tab relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent px-3 py-2 text-sm font-medium text-white/60 transition-colors duration-200 group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "hover:bg-white/5 hover:text-white/80",
+        "data-[state=active]:bg-white/20 data-[state=active]:text-white data-[state=active]:shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+        "data-[state=active]:before:absolute data-[state=active]:before:inset-0 data-[state=active]:before:rounded-lg data-[state=active]:before:bg-gradient-to-b data-[state=active]:before:from-white/20 data-[state=active]:before:to-transparent data-[state=active]:before:pointer-events-none",
         className
       )}
       {...props}
@@ -155,7 +101,10 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      className={cn(
+        "mt-4 flex-1 text-sm outline-none data-[state=active]:animate-in data-[state=active]:fade-in data-[state=active]:slide-in-from-bottom-1 data-[state=inactive]:animate-out data-[state=inactive]:fade-out focus-visible:ring-2 focus-visible:ring-white/50",
+        className
+      )}
       {...props}
     />
   )

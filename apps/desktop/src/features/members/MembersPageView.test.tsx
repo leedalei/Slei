@@ -175,8 +175,10 @@ describe("MembersPage agent details", () => {
 
     expect(markerIndex).toBeGreaterThanOrEqual(0);
     expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
-    expect(html.slice(markerIndex, markerIndex + 600)).toContain('data-variant="line"');
-    expect(html.slice(markerIndex, markerIndex + 600)).toContain("group-data-[orientation=horizontal]/tabs:h-8");
+    const tabsHtml = html.slice(markerIndex, markerIndex + 1200);
+    expect(tabsHtml).toContain('data-variant="line"');
+    expect(tabsHtml).toContain("data-slei-glass-tabs-list");
+    expect(tabsHtml).toContain("group-data-[orientation=horizontal]/tabs:h-8");
   });
 
   it("renders a dedicated permissions tab label between capabilities and activity", async () => {

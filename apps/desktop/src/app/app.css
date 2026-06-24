@@ -149,9 +149,14 @@
   --tabs-dur: 250ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: color-mix(in srgb, var(--foreground) 62%, transparent);
+  --tabs-text-hover: color-mix(in srgb, var(--foreground) 84%, transparent);
   --tabs-text-active: var(--card-foreground);
-  --tabs-bar-bg: color-mix(in srgb, var(--muted) 82%, transparent);
-  --tabs-pill-bg: var(--card);
+  --tabs-glass-bg: color-mix(in srgb, var(--card) 42%, transparent);
+  --tabs-glass-hover-bg: color-mix(in srgb, white 18%, transparent);
+  --tabs-glass-active-bg: color-mix(in srgb, white 28%, var(--card) 18%);
+  --tabs-glass-border: color-mix(in srgb, white 28%, var(--border));
+  --tabs-glass-glow: color-mix(in srgb, var(--primary) 24%, transparent);
+  --tabs-glass-shadow: 0 4px 16px color-mix(in srgb, var(--slei-overlay-shadow-color) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
 }
 
 @theme inline {
@@ -809,44 +814,44 @@ select:focus-visible {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px;
-  border-radius: var(--slei-radius-large);
-  background: var(--tabs-bar-bg);
+  background: var(--tabs-glass-bg);
+  border-color: var(--tabs-glass-border);
 }
 
 .t-tabs .t-tab {
   position: relative;
   appearance: none;
-  background: transparent;
   color: var(--tabs-text-muted);
   cursor: pointer;
   z-index: 1;
-  transition: color var(--tabs-dur) var(--tabs-ease);
+  transition:
+    background-color var(--tabs-dur) var(--tabs-ease),
+    border-color var(--tabs-dur) var(--tabs-ease),
+    color var(--tabs-dur) var(--tabs-ease),
+    box-shadow var(--tabs-dur) var(--tabs-ease);
 }
 
-.t-tabs .t-tab:not([aria-selected="true"]):hover,
+.t-tabs .t-tab:not([aria-selected="true"]):hover {
+  background: var(--tabs-glass-hover-bg);
+  color: var(--tabs-text-hover);
+}
+
 .t-tabs .t-tab[aria-selected="true"] {
+  background: var(--tabs-glass-active-bg);
+  border-color: color-mix(in srgb, white 36%, var(--tabs-glass-border));
   color: var(--tabs-text-active);
 }
 
-.t-tabs-pill {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  height: calc(100% - 8px);
-  width: 0;
-  background: var(--tabs-pill-bg);
-  border: 1px solid color-mix(in srgb, var(--slei-shadow-highlight) 72%, var(--border));
-  border-radius: var(--slei-radius-medium);
-  box-shadow: var(--slei-shadow-raised-s);
-  transform: translateX(0);
-  transition:
-    transform var(--tabs-dur) var(--tabs-ease),
-    width var(--tabs-dur) var(--tabs-ease);
-  will-change: transform, width;
-  z-index: 0;
-  pointer-events: none;
+.t-tabs-glow {
+  background:
+    radial-gradient(circle at 20% 20%, var(--tabs-glass-glow), transparent 54%),
+    linear-gradient(90deg, color-mix(in srgb, var(--primary) 18%, transparent), color-mix(in srgb, var(--accent) 16%, transparent));
+  animation: t-tabs-glow-pulse 3s var(--tabs-ease) infinite;
+}
+
+@keyframes t-tabs-glow-pulse {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.66; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -856,7 +861,7 @@ select:focus-visible {
   }
   .t-modal { transition: none !important; }
   .t-icon-swap .t-icon { transition: none !important; }
-  .t-tabs-pill,
+  .t-tabs-glow { animation: none !important; }
   .t-tabs .t-tab { transition: none !important; }
 }
 
