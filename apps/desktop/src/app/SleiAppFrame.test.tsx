@@ -328,12 +328,14 @@ describe("SleiAppFrame global search navigation", () => {
     }
   });
 
-  it("renders menubar navigation items as raised buttons", () => {
+  it("renders menubar navigation items as glass ripple buttons", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
 
     expect(navSource).toContain("slei-shell-nav flex min-h-0 flex-col items-center gap-4");
     expect(navSource).toContain("slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0");
+    expect(navSource).toContain("ripple");
+    expect(navSource).toContain('rippleColor={input.activeView === item.id ? "white" : "cyan"}');
     expect(navSource).toContain('size="icon"');
     expect(navSource).not.toContain('size="lg"');
     expect(navSource).toContain('variant={input.activeView === item.id ? "default" : "outline"}');
@@ -357,26 +359,21 @@ describe("SleiAppFrame global search navigation", () => {
     expect(iconsSource).toContain("members: IconUsersGroup");
   });
 
-  it("renders the active menubar item with the same inverse contrast as selected conversations", () => {
+  it("renders the active menubar item with primary glass contrast", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(navButtonCss).toContain(".slei-shell-nav__button--active");
-    expect(navButtonCss).toContain("background: var(--primary)");
+    expect(navButtonCss).toContain("background: var(--slei-glass-button-primary-bg)");
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
   });
 
-  it("keeps menubar button borders lighter than their raised shadows", () => {
+  it("keeps menubar button borders on the glass token contract", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
-    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
-    expect(lightThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.18)");
-    expect(lightThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.15)");
-    expect(darkThemeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 / 0.58)");
-    expect(darkThemeCss).toContain("--slei-menu-border: rgb(0 0 0 / 0.55)");
-    expect(navButtonCss).toContain("border-color: var(--slei-menu-border)");
+    expect(navButtonCss).toContain("border-color: var(--slei-glass-button-border)");
+    expect(navButtonCss).toContain("box-shadow: var(--slei-glass-button-shadow)");
     expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
     expect(navButtonCss).not.toContain("var(--slei-raised-border)");
   });

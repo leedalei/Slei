@@ -5,21 +5,22 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap slei-hover-transition outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative isolate inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--slei-glass-button-border)] bg-clip-padding text-sm font-medium whitespace-nowrap shadow-[var(--slei-glass-button-shadow)] backdrop-blur-xl slei-hover-transition outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-linear-to-b before:from-white/35 before:to-transparent before:opacity-35 hover:border-[var(--slei-glass-button-hover-border)] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:before:from-white/18 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "border-[var(--slei-raised-border)] bg-primary text-primary-foreground hover:bg-primary/90",
+          "bg-[var(--slei-glass-button-primary-bg)] text-primary-foreground hover:bg-[var(--slei-glass-button-primary-hover-bg)]",
         outline:
-          "border-[var(--slei-raised-border)] bg-card hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-muted/30 dark:hover:bg-muted/50",
+          "bg-[var(--slei-glass-button-bg)] text-foreground hover:bg-[var(--slei-glass-button-hover-bg)] hover:text-foreground aria-expanded:bg-[var(--slei-glass-button-hover-bg)] aria-expanded:text-foreground",
         secondary:
-          "border-[var(--slei-raised-border)] bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-[var(--slei-glass-button-secondary-bg)] text-secondary-foreground hover:bg-[var(--slei-glass-button-secondary-hover-bg)] aria-expanded:bg-[var(--slei-glass-button-secondary-hover-bg)] aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "border-transparent bg-transparent shadow-none text-foreground/80 before:opacity-0 hover:border-[var(--slei-glass-button-border)] hover:bg-[var(--slei-glass-button-hover-bg)] hover:text-foreground aria-expanded:border-[var(--slei-glass-button-border)] aria-expanded:bg-[var(--slei-glass-button-hover-bg)] aria-expanded:text-foreground",
         destructive:
-          "border-[var(--slei-raised-border)] bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-[var(--slei-glass-button-destructive-bg)] text-destructive-foreground hover:bg-[var(--slei-glass-button-destructive-hover-bg)] focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
+        link:
+          "border-transparent bg-transparent text-primary underline-offset-4 shadow-none before:opacity-0 hover:bg-[var(--slei-glass-button-hover-bg)] hover:underline",
       },
       size: {
         default:
@@ -35,18 +36,6 @@ const buttonVariants = cva(
         "icon-lg": "size-9",
       },
     },
-    compoundVariants: [
-      {
-        variant: ["default", "outline", "secondary", "destructive"],
-        size: ["xs", "sm", "default", "icon-xs", "icon-sm", "icon"],
-        class: "slei-raised-small",
-      },
-      {
-        variant: ["default", "outline", "secondary", "destructive"],
-        size: ["lg", "icon-lg"],
-        class: "slei-raised-small",
-      },
-    ],
     defaultVariants: {
       variant: "default",
       size: "default",
