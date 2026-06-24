@@ -1,7 +1,9 @@
 import type { Icon, IconProps } from "@tabler/icons-react";
 import {
   IconAlertCircleFilled,
+  IconArrowDown,
   IconArrowsSort,
+  IconBookmark,
   IconBellFilled,
   IconBookmarkFilled,
   IconCalendar,
@@ -14,15 +16,21 @@ import {
   IconCpu,
   IconDeviceDesktopFilled,
   IconExternalLink,
+  IconFile,
   IconFileText,
   IconFolderOpen,
   IconFolderPlus,
   IconHash,
   IconInfoCircle,
+  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRightExpand,
   IconLoader2,
+  IconMessage,
   IconMessageCircleFilled,
   IconPencil,
   IconPalette,
+  IconPaperclip,
+  IconPhoto,
   IconPlus,
   IconRobot,
   IconSearch,
@@ -41,8 +49,11 @@ import {
 
 export type SleiIconName =
   | "approval"
+  | "arrowDown"
+  | "attachment"
   | "bell"
   | "bookmark"
+  | "bookmarkOutline"
   | "bot"
   | "calendar"
   | "check"
@@ -55,6 +66,7 @@ export type SleiIconName =
   | "delete"
   | "externalLink"
   | "file"
+  | "fileText"
   | "folderOpen"
   | "folderPlus"
   | "globe"
@@ -62,6 +74,10 @@ export type SleiIconName =
   | "info"
   | "loader"
   | "members"
+  | "messageSquare"
+  | "image"
+  | "panelClose"
+  | "panelOpen"
   | "pencil"
   | "palette"
   | "plus"
@@ -83,8 +99,11 @@ export type SleiTablerIconProps = IconProps;
 
 export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   approval: IconAlertCircleFilled,
+  arrowDown: IconArrowDown,
+  attachment: IconPaperclip,
   bell: IconBellFilled,
   bookmark: IconBookmarkFilled,
+  bookmarkOutline: IconBookmark,
   bot: IconRobot,
   calendar: IconCalendar,
   check: IconCheck,
@@ -96,7 +115,8 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   cpu: IconCpu,
   delete: IconTrash,
   externalLink: IconExternalLink,
-  file: IconFileText,
+  file: IconFile,
+  fileText: IconFileText,
   folderOpen: IconFolderOpen,
   folderPlus: IconFolderPlus,
   globe: IconWorld,
@@ -104,6 +124,10 @@ export const sleiIcons: Record<SleiIconName, SleiTablerIcon> = {
   info: IconInfoCircle,
   loader: IconLoader2,
   members: IconUsersGroup,
+  messageSquare: IconMessage,
+  image: IconPhoto,
+  panelClose: IconLayoutSidebarRightCollapse,
+  panelOpen: IconLayoutSidebarRightExpand,
   pencil: IconPencil,
   palette: IconPalette,
   plus: IconPlus,
