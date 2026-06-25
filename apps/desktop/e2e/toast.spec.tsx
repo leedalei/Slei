@@ -24,14 +24,14 @@ describe("shared toast feedback", () => {
     expect(html).toContain('aria-live="polite"');
     expect(html).toContain("<button");
     expect(html).toContain('type="button"');
-    expect(html).toContain('data-slot="tooltip-trigger"');
+    expect(html).toContain('data-slot="notification-action"');
     expect(html).toContain("fixed");
     expect(html).toContain("top-4");
     expect(html).toContain("left-1/2");
     expect(html).toContain("-translate-x-1/2");
     expect(html).not.toContain("bottom-4");
     expect(html).not.toContain("right-4");
-    expect(html).toContain("bg-popover");
+    expect(html).toContain("bg-white/10");
     expect(html).toContain("复制成功");
   });
 
@@ -44,10 +44,14 @@ describe("shared toast feedback", () => {
     expect(errorHtml).toContain('role="alert"');
     expect(errorHtml).toContain('aria-live="assertive"');
     expect(errorHtml).toContain("z-[80]");
-    expect(errorHtml).toContain("border-destructive");
-    expect(successHtml).toContain("border-emerald-500");
-    expect(infoHtml).toContain("border-sky-500");
-    expect(warnHtml).toContain("border-amber-500");
+    expect(errorHtml).toContain('data-type="error"');
+    expect(errorHtml).toContain("border-red-400/30");
+    expect(successHtml).toContain('data-type="success"');
+    expect(successHtml).toContain("border-emerald-400/30");
+    expect(infoHtml).toContain('data-type="info"');
+    expect(infoHtml).toContain("border-cyan-400/30");
+    expect(warnHtml).toContain('data-type="warning"');
+    expect(warnHtml).toContain("border-amber-400/30");
   });
 
   it("copies toast content when requested", async () => {
