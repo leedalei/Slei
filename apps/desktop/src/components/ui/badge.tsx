@@ -1,53 +1,63 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-sm border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap slei-hover-transition focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_a]:slei-hover-transition [&>svg]:pointer-events-none [&>svg]:size-3!",
+  cn(
+    "inline-flex w-fit shrink-0 items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
+    "border backdrop-blur-xl transition-all duration-300",
+    "[&>svg]:pointer-events-none [&>svg]:size-3",
+  ),
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        filled:
-          "bg-primary text-primary-foreground [a]:hover:bg-primary/90",
-        soft:
-          "border-border/60 bg-muted/60 text-foreground [a]:hover:bg-muted",
-        secondary:
-          "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
-        destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
-        outline:
-          "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
-        ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "border-white/25 bg-white/15 text-white",
+        primary: "border-cyan-400/30 bg-linear-to-r from-cyan-500/30 to-blue-500/30 text-cyan-100",
+        filled: "border-cyan-400/30 bg-linear-to-r from-cyan-500/30 to-blue-500/30 text-cyan-100",
+        secondary: "border-white/20 bg-white/10 text-white/80",
+        soft: "border-white/20 bg-white/10 text-white/80",
+        success: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
+        warning: "border-amber-400/30 bg-amber-500/20 text-amber-100",
+        destructive: "border-red-400/30 bg-red-500/20 text-red-100",
+        outline: "border-white/30 bg-transparent text-white/80",
+        ghost: "border-transparent bg-transparent text-white/70 hover:bg-white/10",
+        link: "border-transparent bg-transparent text-cyan-200 underline-offset-4 hover:underline",
+      },
+      size: {
+        sm: "px-2 py-0.5 text-xs",
+        md: "px-3 py-1 text-sm",
+        lg: "px-4 py-2 text-base",
       },
     },
     defaultVariants: {
       variant: "default",
+      size: "sm",
     },
-  }
+  },
 )
 
-function Badge({
-  className,
-  variant = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"span"> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
+type BadgeProps = React.ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & {
+    asChild?: boolean
+  }
 
+function Badge({ className, variant, size, asChild = false, ...props }: BadgeProps) {
+  const Comp = asChild ? Slot : "span"
   return (
     <Comp
       data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
+      data-variant={variant ?? "default"}
+      className={cn(badgeVariants({ variant, size }), className)}
       {...props}
     />
   )
 }
 
-export { Badge, badgeVariants }
+const GlassBadge = Badge
+const glassBadgeVariants = badgeVariants
+
+export { Badge, GlassBadge, badgeVariants, glassBadgeVariants }

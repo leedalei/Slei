@@ -1,18 +1,43 @@
+"use client"
+
 import * as React from "react"
+import { motion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
-function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
-  return (
-    <textarea
-      data-slot="textarea"
-      className={cn(
-        "flex field-sizing-content min-h-16 w-full rounded-lg border border-[var(--slei-inset-border)] bg-muted/40 px-2.5 py-2 text-base slei-inset-small slei-inset-focus-small transition-[background-color,border-color,box-shadow,color] outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-muted/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-        className
-      )}
-      {...props}
-    />
-  )
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  glowEffect?: boolean
 }
 
-export { Textarea }
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className, glowEffect = false, ...props }, ref) => (
+    <div className="relative w-full">
+      {glowEffect ? (
+        <motion.div
+          className="absolute -inset-0.5 rounded-xl bg-linear-to-r from-cyan-500/30 to-blue-500/30 blur-md"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.6 }}
+          transition={{ duration: 0.2 }}
+        />
+      ) : null}
+      <textarea
+        ref={ref}
+        data-slot="textarea"
+        className={cn(
+          "relative flex min-h-16 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white backdrop-blur-xl",
+          "placeholder:text-white/40 shadow-[0_4px_16px_rgba(0,0,0,0.2)] transition-all duration-300",
+          "focus:border-white/40 focus:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 focus:ring-offset-0",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          "aria-invalid:border-red-400/50 aria-invalid:ring-red-400/30",
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  ),
+)
+Textarea.displayName = "Textarea"
+
+const GlassTextarea = Textarea
+
+export { GlassTextarea, Textarea }

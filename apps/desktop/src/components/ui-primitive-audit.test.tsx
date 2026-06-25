@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 const SRC_ROOT = resolve(__dirname, "..");
@@ -7,7 +7,7 @@ const DESKTOP_ROOT = resolve(SRC_ROOT, "..");
 const AUDIT_TEST_SOURCE_PATH = "components/ui-primitive-audit.test.tsx";
 
 const enabledAuditCategories = {
-  radixAggregate: false,
+  radixAggregate: true,
   icons: false,
   themeTokens: false,
   softPanel: false,
@@ -417,6 +417,33 @@ function readSource(file: string) {
   return readFileSync(resolve(SRC_ROOT, file), "utf8");
 }
 
+const einUiRegistryPrimitiveFiles = [
+  "components/ui/accordion.tsx",
+  "components/ui/alert-dialog.tsx",
+  "components/ui/avatar.tsx",
+  "components/ui/badge.tsx",
+  "components/ui/button.tsx",
+  "components/ui/card.tsx",
+  "components/ui/checkbox.tsx",
+  "components/ui/dialog.tsx",
+  "components/ui/dropdown-menu.tsx",
+  "components/ui/glass-avatar.tsx",
+  "components/ui/input.tsx",
+  "components/ui/label.tsx",
+  "components/ui/notification.tsx",
+  "components/ui/popover.tsx",
+  "components/ui/radio.tsx",
+  "components/ui/scroll-area.tsx",
+  "components/ui/select.tsx",
+  "components/ui/separator.tsx",
+  "components/ui/sheet.tsx",
+  "components/ui/skeleton.tsx",
+  "components/ui/switch.tsx",
+  "components/ui/tabs.tsx",
+  "components/ui/textarea.tsx",
+  "components/ui/tooltip.tsx",
+] as const;
+
 describe("desktop UI primitive usage", () => {
   it("excludes docs, plan, and spec directories from source audit scans", () => {
     for (const file of [
@@ -459,6 +486,30 @@ describe("desktop UI primitive usage", () => {
         source: JSON.stringify({ dependencies: { "radix-ui": "^1.4.3" } }),
       }),
     ).toThrow();
+  });
+
+  it("uses EinUI registry primitives instead of the old Slei primitive baseline", () => {
+    const violations: string[] = [];
+
+    for (const file of einUiRegistryPrimitiveFiles) {
+      const absolute = resolve(SRC_ROOT, file);
+      if (!existsSync(absolute)) {
+        violations.push(`${file}: missing required EinUI registry primitive`);
+        continue;
+      }
+
+      const source = readSource(file);
+      if (/\bslei-[\w-]+/.test(source)) violations.push(`${file}: contains old Slei utility classes`);
+      if (/--slei-[\w-]+/.test(source)) violations.push(`${file}: contains old Slei CSS variables`);
+      if (file === "components/ui/input.tsx" && /\bchrome\b/.test(source)) {
+        violations.push(`${file}: exposes old chrome prop`);
+      }
+      if (file === "components/ui/card.tsx" && /\b(?:variant|size)\?:/.test(source)) {
+        violations.push(`${file}: exposes old size/variant props`);
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 
   it("detects Tabler icon usage in both source imports and package dependencies", () => {
@@ -616,29 +667,22 @@ describe("desktop UI primitive usage", () => {
     const cardSource = readSource("components/ui/card.tsx");
     const panelSource = readSource("components/SoftPanel.tsx");
 
-    expect(buttonSource).not.toMatch(/\bslei-raised-/);
-    expect(buttonSource).not.toMatch(/\bslei-inset-/);
-    expect(buttonSource).not.toContain("slei-raised-medium");
-    expect(buttonSource).not.toContain("slei-raised-large");
-    expect(buttonSource).not.toContain("shadow-[var(--slei-shadow-raised-");
-    expect(buttonSource).not.toContain("border-[var(--slei-raised-border)]");
+    expect(buttonSource).not.toContain("slei-");
+    expect(buttonSource).not.toContain("--slei-");
     expect(buttonSource).toContain("backdrop-blur-xl");
-    expect(buttonSource).toContain("border-[var(--slei-glass-button-border)]");
-    expect(buttonSource).toContain("bg-[var(--slei-glass-button-bg)]");
-    expect(buttonSource).toContain("hover:bg-[var(--slei-glass-button-hover-bg)]");
-    expect(buttonSource).toContain("shadow-[var(--slei-glass-button-shadow)]");
-    expect(buttonSource).toContain("bg-[var(--slei-glass-button-primary-bg)]");
-    expect(buttonSource).toContain("bg-[var(--slei-glass-button-destructive-bg)]");
+    expect(buttonSource).toContain("border-white/30 bg-white/20");
+    expect(buttonSource).toContain("from-cyan-500/80");
+    expect(buttonSource).toContain("bg-red-500/30");
+    expect(buttonSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(buttonSource).not.toMatch(/\bhover:[^\s"]*scale/);
     expect(buttonSource).not.toMatch(/\bactive:[^\s"]*scale/);
     expect(buttonSource).not.toContain("shadow-sm");
-    expect(buttonSource).toContain("hover:bg-[var(--slei-glass-button-hover-bg)]");
     expect(buttonSource).toContain("link:");
-    expect(buttonSource).toContain("border-transparent bg-transparent text-primary underline-offset-4 shadow-none");
-    expect(cardSource).toContain('variant === "raised" && "border-transparent bg-card slei-raised-small"');
-    expect(cardSource).toContain("hover:slei-raised-small");
-    expect(cardSource).not.toContain("slei-raised-medium");
-    expect(cardSource).not.toContain("slei-raised-large");
+    expect(buttonSource).toContain("border-transparent bg-transparent text-cyan-200 underline-offset-4");
+    expect(cardSource).not.toContain("slei-");
+    expect(cardSource).toContain("bg-white/10");
+    expect(cardSource).toContain("backdrop-blur-xl");
+    expect(cardSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.37)]");
     expect(panelSource).toContain('raised: "border-transparent bg-card slei-raised-small"');
     expect(panelSource).toContain("hover:slei-raised-small");
     expect(panelSource).not.toContain("slei-raised-medium");
@@ -676,10 +720,9 @@ describe("desktop UI primitive usage", () => {
     expect(appCss).toContain("transition-duration: var(--duration-hover)");
     expect(appCss).toContain("transition-timing-function: var(--ease-hover)");
 
-    expect(buttonSource).toContain("slei-hover-transition");
-    expect(cardSource).toContain("slei-hover-transition");
-    expect(badgeSource).toContain("slei-hover-transition");
-    expect(badgeSource).toContain("[&_a]:slei-hover-transition");
+    expect(buttonSource).toContain("transition-all duration-300");
+    expect(cardSource).not.toContain("slei-hover-transition");
+    expect(badgeSource).toContain("transition-all duration-300");
     expect(panelSource).toContain("slei-hover-transition");
   });
 
@@ -783,58 +826,51 @@ describe("desktop UI primitive usage", () => {
     const searchSource = readSource("features/search/SearchPageView.tsx");
 
     expect(buttonSource).not.toContain("rounded-[min(");
-    expect(buttonSource).toContain('xs: "h-6 gap-1 rounded-sm');
-    expect(buttonSource).toContain('sm: "h-7 gap-1 rounded-sm');
-    expect(buttonSource).toContain('"icon-xs":\n          "size-6 rounded-sm');
-    expect(buttonSource).toContain('"icon-sm":\n          "size-7 rounded-sm');
+    expect(buttonSource).toContain('xs: "h-6 rounded-lg');
+    expect(buttonSource).toContain('sm: "h-8 rounded-lg');
+    expect(buttonSource).toContain('"icon-xs": "h-6 w-6 rounded-lg');
+    expect(buttonSource).toContain('"icon-sm": "h-8 w-8 rounded-lg');
 
+    expect(selectSource).toContain("rounded-xl");
     expect(selectSource).toContain("rounded-lg");
-    expect(selectSource).toContain("data-[size=sm]:rounded-sm");
-    expect(selectSource).toContain("overflow-y-auto rounded-xl");
-    expect(selectSource).toContain("gap-2 rounded-md");
     expect(selectSource).not.toContain("rounded-[12px]");
     expect(selectSource).not.toContain("rounded-[14px]");
     expect(selectSource).not.toContain("rounded-[10px]");
 
     expect(searchSource).toContain("const filterSelectTriggerClassName = \"min-w-36 rounded-lg");
     expect(searchSource).not.toContain("rounded-[12px]");
-    expect(badgeSource).toContain("rounded-sm");
+    expect(badgeSource).toContain("rounded-full");
     expect(badgeSource).not.toContain("rounded-4xl");
   });
 
-  it("uses inset shadows for text input-like and segmented controls", () => {
-    const appCss = readSource("app/app.css");
+  it("uses EinUI glass styling for text input-like and segmented controls", () => {
     const inputSource = readSource("components/ui/input.tsx");
     const textareaSource = readSource("components/ui/textarea.tsx");
 
-    expect(appCss).toContain("--slei-inset-border: rgb(0 0 0 /");
-    expect(inputSource).toContain("slei-inset-small");
-    expect(inputSource).toContain("slei-inset-focus-small");
-    expect(inputSource).not.toContain("slei-inset-medium");
-    expect(inputSource).not.toContain("slei-inset-focus-medium");
-    expect(inputSource).toContain("border-[var(--slei-inset-border)]");
-    expect(inputSource).not.toContain("border-input bg-muted/40");
+    expect(inputSource).toContain("border-white/20 bg-white/10");
+    expect(inputSource).toContain("backdrop-blur-xl");
+    expect(inputSource).toContain("focus:ring-cyan-400/30");
+    expect(inputSource).not.toContain("slei-inset");
+    expect(inputSource).not.toContain("--slei-");
     expect(inputSource).not.toContain("focus-visible:ring-3");
-    expect(textareaSource).toContain("slei-inset-small");
-    expect(textareaSource).toContain("slei-inset-focus-small");
-    expect(textareaSource).toContain("border-[var(--slei-inset-border)]");
-    expect(textareaSource).not.toContain("border-input bg-muted/40");
+    expect(textareaSource).toContain("border-white/20 bg-white/10");
+    expect(textareaSource).toContain("backdrop-blur-xl");
+    expect(textareaSource).not.toContain("slei-inset");
+    expect(textareaSource).not.toContain("--slei-");
     expect(textareaSource).not.toContain("focus-visible:ring-3");
-    expect(appCss).toContain(".slei-inset-focus-small:focus-visible");
-    expect(appCss).toContain("var(--slei-shadow-inset-s), 0 0 0 1px");
-    expect(readSource("components/ui/tabs.tsx")).toContain("data-slei-glass-tabs-list");
-    expect(readSource("components/ui/tabs.tsx")).not.toContain("slei-inset-medium");
+    expect(readSource("components/ui/tabs.tsx")).toContain("bg-white/10");
+    expect(readSource("components/ui/tabs.tsx")).not.toContain("slei-");
   });
 
   it("uses shared glass-tabs styling for all tab variants", () => {
     const appCss = readSource("app/app.css");
     const tabsSource = readSource("components/ui/tabs.tsx");
 
-    expect(tabsSource).toContain("data-slei-glass-tabs-list");
-    expect(tabsSource).toContain("data-slei-glass-tabs-glow");
     expect(tabsSource).toContain("backdrop-blur");
     expect(tabsSource).toContain("data-[state=active]:bg-white/20");
     expect(tabsSource).toContain("data-[state=active]:before:bg-gradient-to-b");
+    expect(tabsSource).toContain("from-cyan-500/20");
+    expect(tabsSource).not.toContain("data-slei-");
     expect(tabsSource).not.toContain("data-slei-tabs-pill");
     expect(tabsSource).not.toContain("requestAnimationFrame(() => moveTo(active(), false))");
     expect(appCss).toContain("--tabs-dur: 250ms");
@@ -853,10 +889,10 @@ describe("desktop UI primitive usage", () => {
 
     expect(panelSource).toContain('surface: "border-border/60 bg-card"');
     expect(panelSource).not.toContain('surface: "border-border/60 bg-card shadow');
-    expect(cardSource).toContain('variant === "surface" && "border-border/60 bg-card"');
-    expect(cardSource).not.toContain('variant === "surface" && "border-border/60 bg-card shadow');
+    expect(cardSource).toContain("bg-white/10");
+    expect(cardSource).not.toContain("variant ===");
     expect(badgeSource).not.toContain("shadow-sm");
-    expect(badgeSource).not.toContain("slei-shadow");
+    expect(badgeSource).not.toContain("slei-");
 
     for (const file of [
       "features/onboarding/ProfileStep.ts",
@@ -872,9 +908,8 @@ describe("desktop UI primitive usage", () => {
   it("uses a compact overlay shadow for tooltip instead of raised or inset shadows", () => {
     const source = readSource("components/ui/tooltip.tsx");
 
-    expect(source).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
-    expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
-    expect(source).not.toContain("shadow-[var(--slei-shadow-inset)]");
+    expect(source).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.3)]");
+    expect(source).not.toContain("--slei-");
   });
 
   it("renders tooltip as a bubble without an arrow pointer", () => {
@@ -895,24 +930,22 @@ describe("desktop UI primitive usage", () => {
 
     for (const file of floatingPrimitiveFiles) {
       const source = readSource(file);
-      expect(source).not.toContain("shadow-[var(--slei-shadow-raised)]");
-      expect(source).not.toContain("shadow-[var(--slei-shadow-inset)]");
+      expect(source).not.toContain("--slei-");
     }
 
-    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
-    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
-    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[var(--slei-shadow-overlay-md)]");
-    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
-    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[var(--slei-shadow-overlay-sm)]");
+    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
+    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
+    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
+    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
+    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
 
     const selectSource = readSource("components/ui/select.tsx");
     const selectContentSource = selectSource.slice(
-      selectSource.indexOf("function SelectContent"),
-      selectSource.indexOf("function SelectLabel"),
+      selectSource.indexOf("const SelectContent"),
+      selectSource.indexOf("const SelectLabel"),
     );
-    expect(selectContentSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
-    expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-raised");
-    expect(selectContentSource).not.toContain("shadow-[var(--slei-shadow-inset");
+    expect(selectContentSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
+    expect(selectContentSource).not.toContain("--slei-");
   });
 
   it("keeps select menus flat with compact rounded corners and soft item states", () => {
@@ -922,11 +955,11 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).toContain("border-white/20");
     expect(selectSource).toContain("bg-white/10");
     expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
-    expect(selectSource).toContain("shadow-[var(--slei-shadow-overlay-xs)]");
+    expect(selectSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
     expect(selectSource).toContain("rounded-xl");
+    expect(selectSource).toContain("focus:bg-white/15");
     expect(selectSource).toContain("focus:bg-white/10");
-    expect(selectSource).toContain("data-[state=checked]:text-foreground");
-    expect(selectSource).toContain("data-[state=open]:[&_svg:last-child]:rotate-180");
+    expect(selectSource).toContain("text-cyan-400");
     expect(readSource("app/app.css")).toContain('[data-slot="select-item"]:focus-visible');
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
@@ -982,8 +1015,8 @@ describe("desktop UI primitive usage", () => {
 
     const selectSource = readSource("components/ui/select.tsx");
     const selectContentSource = selectSource.slice(
-      selectSource.indexOf("function SelectContent"),
-      selectSource.indexOf("function SelectLabel"),
+      selectSource.indexOf("const SelectContent"),
+      selectSource.indexOf("const SelectLabel"),
     );
     expect(selectContentSource).toContain("t-dropdown");
     expect(selectContentSource).not.toContain("forceMount");

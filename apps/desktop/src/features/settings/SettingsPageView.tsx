@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { Select as SelectPrimitive } from "radix-ui";
+import * as SelectPrimitive from "@radix-ui/react-select";
 
 type SettingsPageInput = {
   activePanel: SettingsPanel;

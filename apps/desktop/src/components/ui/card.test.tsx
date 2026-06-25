@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { IconDeviceDesktop, IconPencil } from "@tabler/icons-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -5,10 +6,32 @@ import { describe, expect, it } from "vitest";
 import { DetailBlock } from "../DetailBlock";
 import { Card, CardContent, CardHeader, CardTitle } from "./card";
 
-describe("Card compact density", () => {
-  it("renders compact cards with the shared compact spacing contract", () => {
+describe("Card", () => {
+  it("keeps layout classes and card sections on the card root", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <Card className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" glowEffect={false}>
+        <CardHeader>Header</CardHeader>
+        <CardContent>Content</CardContent>
+      </Card>,
+    );
+
+    const card = host.querySelector<HTMLElement>('[data-slot="card"]');
+
+    expect(card).not.toBeNull();
+    expect(card?.parentElement).toBe(host);
+    expect(card?.className).toContain("grid");
+    expect(card?.className).toContain("h-full");
+    expect(card?.className).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(Array.from(card?.children ?? []).map((child) => child.getAttribute("data-slot"))).toEqual([
+      "card-header",
+      "card-content",
+    ]);
+  });
+
+  it("renders the EinUI glass card structure through the stable Card exports", () => {
     const html = renderToStaticMarkup(
-      <Card size="compact">
+      <Card>
         <CardHeader>
           <CardTitle>设备名称</CardTitle>
         </CardHeader>
@@ -17,18 +40,13 @@ describe("Card compact density", () => {
     );
 
     expect(html).toContain('data-slot="card"');
-    expect(html).toContain('data-size="compact"');
-    expect(html).toContain("gap-3");
-    expect(html).toContain("py-3");
-    expect(html).toContain("px-4");
-  });
-
-  it("renders raised and inset card variants", () => {
-    const raised = renderToStaticMarkup(<Card variant="raised">Raised</Card>);
-    const inset = renderToStaticMarkup(<Card variant="inset">Inset</Card>);
-
-    expect(raised).toContain('data-variant="raised"');
-    expect(inset).toContain('data-variant="inset"');
+    expect(html).toContain("bg-white/10");
+    expect(html).toContain("backdrop-blur-xl");
+    expect(html).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.37)");
+    expect(html).toContain('data-slot="card-header"');
+    expect(html).toContain('data-slot="card-content"');
+    expect(html).not.toContain("data-size=");
+    expect(html).not.toContain("data-variant=");
   });
 });
 

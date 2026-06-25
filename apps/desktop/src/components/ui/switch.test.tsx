@@ -44,14 +44,14 @@ describe("Switch", () => {
     expect(html).toContain("data-[state=checked]:translate-x-5");
   });
 
-  it("keeps size variants stable for compact settings rows", () => {
-    const html = renderToStaticMarkup(<Switch aria-label="紧凑通知" size="sm" />);
+  it("keeps the registry switch dimensions stable for settings rows", () => {
+    const html = renderToStaticMarkup(<Switch aria-label="紧凑通知" />);
 
-    expect(html).toContain('data-size="sm"');
-    expect(html).toContain("data-[size=sm]:h-5");
-    expect(html).toContain("data-[size=sm]:w-9");
-    expect(html).toContain("group-data-[size=sm]/switch:h-4");
-    expect(html).toContain("group-data-[size=sm]/switch:data-[state=checked]:translate-x-4");
+    expect(html).toContain("h-6");
+    expect(html).toContain("w-11");
+    expect(html).toContain("h-5");
+    expect(html).toContain("w-5");
+    expect(html).toContain("data-[state=checked]:translate-x-5");
   });
 
   it("notifies callers when toggled from the rendered DOM", () => {
