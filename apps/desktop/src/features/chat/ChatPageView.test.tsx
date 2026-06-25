@@ -533,12 +533,14 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    const headerStart = html.indexOf('data-testid="slei-channel-header"');
-    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerMarker = html.indexOf('data-testid="slei-channel-header"');
+    const headerStart = html.lastIndexOf("<header", headerMarker);
+    const headerEnd = html.indexOf("</header>", headerMarker);
     const headerHtml = html.slice(headerStart, headerEnd);
     const copyButtonStart = headerHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
     const membersButtonStart = headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"');
 
+    expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(headerHtml).toContain("select-none");
@@ -694,6 +696,54 @@ describe("ChatPage mention panel", () => {
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
     expect(timestampIndex).toBeGreaterThan(saveIndex);
+  });
+
+  it("lets the real chat toast close control clear a copied-message toast", async () => {
+    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
+    vi.stubGlobal("navigator", { clipboard });
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_copy_toast",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          body: "复制后显示 toast。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const message = host.querySelector<HTMLElement>('[data-message-id="msg_copy_toast"]');
+
+      await act(async () => {
+        message?.querySelector<HTMLButtonElement>(`button[aria-label="${messages.chat.copyMessage}"]`)?.click();
+      });
+      await act(async () => undefined);
+
+      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain(messages.chat.copySuccess);
+      expect(host.querySelector('[data-slot="notification-close"]')).not.toBeNull();
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+      });
+
+      expect(host.querySelector('[data-slot="notification"]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {

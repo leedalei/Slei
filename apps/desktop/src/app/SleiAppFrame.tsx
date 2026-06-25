@@ -212,6 +212,7 @@ export type SleiAppFrameProps = {
   runtimeSetup: RuntimeSetupState;
   runtimeErrorToastMessage?: string;
   runtimeToastType?: ToastType;
+  onRuntimeToastDismiss?: () => void;
   computerRenameError?: string;
   renamingComputerId?: string;
   sessionDrawerOpen?: boolean;
@@ -369,7 +370,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       data-theme={normalizedTheme}
       style={shellStyle}
     >
-      <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
+      <Toast message={input.runtimeErrorToastMessage} onDismiss={input.onRuntimeToastDismiss} type={input.runtimeToastType} />
       <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <span className="slei-brand__mark" aria-hidden="true">

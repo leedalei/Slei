@@ -176,9 +176,9 @@ describe("MembersPage agent details", () => {
     expect(markerIndex).toBeGreaterThanOrEqual(0);
     expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
     const tabsHtml = html.slice(markerIndex, markerIndex + 1200);
+    expect(tabsHtml).toContain('data-slot="tabs-list"');
     expect(tabsHtml).toContain('data-variant="line"');
-    expect(tabsHtml).toContain("data-slei-glass-tabs-list");
-    expect(tabsHtml).toContain("group-data-[orientation=horizontal]/tabs:h-8");
+    expect(tabsHtml).toContain("h-12");
   });
 
   it("renders a dedicated permissions tab label between capabilities and activity", async () => {
@@ -345,7 +345,7 @@ describe("MembersPage agent details", () => {
     expect(html).toContain('<span class="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
-    expect(html).toContain('data-slot="alert-dialog-trigger"');
+    expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain("data-slei-page-header-actions");
     expect(html).not.toContain(messages.members.deleteAgentConfirm("Coda"));
     expect(html).toContain("Capabilities");

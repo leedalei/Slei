@@ -1059,6 +1059,12 @@ export function SleiApp() {
     appToastTimerRef.current = setTimeout(() => setAppToast((current) => ({ ...current, message: "" })), 4_000);
   }
 
+  function dismissAppToast() {
+    if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
+    appToastTimerRef.current = undefined;
+    setAppToast((current) => ({ ...current, message: "" }));
+  }
+
   function markCachedNodesOfflineForDaemonUnavailable(error: unknown) {
     if (!isDaemonUnavailableError(error)) return;
     setData((current) => {
@@ -2432,6 +2438,7 @@ export function SleiApp() {
       profile={profile}
       runtimeSetup={runtimeSetup}
       runtimeErrorToastMessage={appToast.message}
+      onRuntimeToastDismiss={dismissAppToast}
       runtimeToastType={appToast.type}
       savedMessages={savedMessages}
       sessionDrawerOpen={sessionDrawerOpen}

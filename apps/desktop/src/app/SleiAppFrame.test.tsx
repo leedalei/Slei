@@ -54,6 +54,29 @@ afterEach(async () => {
 });
 
 describe("SleiAppFrame appearance preferences", () => {
+  it("wires the runtime toast close control to the prop-owned dismiss callback", async () => {
+    const onRuntimeToastDismiss = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onRuntimeToastDismiss={onRuntimeToastDismiss}
+        runtimeErrorToastMessage="运行时错误"
+        runtimeSetup={runtimeSetup}
+        runtimeToastType="error"
+      />,
+    );
+
+    expect(container.querySelector('[data-slot="notification"]')?.textContent).toContain("运行时错误");
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+    });
+
+    expect(onRuntimeToastDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("syncs the font size preference to the document root and restores it on unmount", async () => {
     document.documentElement.style.fontSize = "13px";
     document.documentElement.style.setProperty("--app-font-size", "13px");

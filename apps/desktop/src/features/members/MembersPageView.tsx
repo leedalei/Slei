@@ -207,6 +207,12 @@ export function MembersPage(input: {
     toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
   }
 
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = undefined;
+    setToast((current) => ({ ...current, message: "" }));
+  }
+
   async function copyDescription() {
     const copied = await copyPlainText(memberDetails.description);
     if (!copied) return;
@@ -332,7 +338,7 @@ export function MembersPage(input: {
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
-      <Toast message={toast.message} type={toast.type} />
+      <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <div className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
         <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
           <span className="inline-flex shrink-0" data-tauri-drag-region="deep">

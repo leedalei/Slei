@@ -1,8 +1,7 @@
 import { cn } from "../lib/utils";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { GlassNotificationItem, type NotificationType } from "@/components/ui/notification";
 import { SleiIcon } from "./SleiIcon";
-import { SoftPanel } from "./SoftPanel";
 
 export const TOAST_VISIBLE_MS = 2500;
 
@@ -12,11 +11,11 @@ type ToastClipboard = {
   writeText: (text: string) => Promise<void> | void;
 };
 
-const toastVariantClassNames: Record<ToastType, string> = {
-  success: "border-emerald-500/50 text-emerald-950 dark:text-emerald-50",
-  info: "border-sky-500/50 text-sky-950 dark:text-sky-50",
-  warn: "border-amber-500/60 text-amber-950 dark:text-amber-50",
-  error: "border-destructive/60 text-destructive",
+const toastTypeToNotificationType: Record<ToastType, NotificationType> = {
+  success: "success",
+  info: "info",
+  warn: "warning",
+  error: "error",
 };
 
 export async function copyToastContent(text: string, environment?: { clipboard?: ToastClipboard }) {
@@ -41,30 +40,45 @@ export async function copyToastContent(text: string, environment?: { clipboard?:
   return copied;
 }
 
-export function Toast({ message, text, type }: { message?: string; text?: string; type?: ToastType }) {
+export function Toast({ message, onDismiss, text, type = "info" }: { message?: string; onDismiss?: () => void; text?: string; type?: ToastType }) {
   const content = (text ?? message)?.trim();
   if (!content) return null;
   const urgent = type === "error";
-  const variantClassName = type ? toastVariantClassNames[type] : "border-border bg-popover text-popover-foreground";
+  const notificationType = toastTypeToNotificationType[type];
 
   return (
-    <div aria-live={urgent ? "assertive" : "polite"} className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2" role={urgent ? "alert" : "status"}>
-      <SoftPanel className={cn("pointer-events-auto max-w-[70vw] p-0", variantClassName)} variant="raised">
-        <Tooltip>
-          <TooltipTrigger asChild>
+    <div className="pointer-events-none fixed top-4 left-1/2 z-[80] -translate-x-1/2">
+      <GlassNotificationItem
+        animationClass="slide-in-from-top-full"
+        ariaLive={urgent ? "assertive" : "polite"}
+        className="max-w-[70vw]"
+        closeLabel="关闭通知"
+        notification={{
+          action: (
             <Button
-              className="h-auto w-full justify-start rounded-[inherit] border-0 bg-transparent px-4 py-3 text-left text-sm text-inherit whitespace-normal break-words shadow-none hover:bg-transparent"
+              aria-label="复制通知内容"
+              className={cn(
+                "h-auto justify-start rounded-md border-white/10 bg-white/5 px-2 py-1.5 text-left text-xs text-white/70 shadow-none hover:bg-white/10 hover:text-white",
+                "focus-visible:ring-white/40",
+              )}
+              data-slot="notification-action"
               onClick={() => void copyToastContent(content)}
               type="button"
               variant="ghost"
             >
-              <SleiIcon className="size-4" name="copy" />
-              {content}
+              <SleiIcon className="size-3.5 shrink-0" name="copy" />
+              复制
             </Button>
-          </TooltipTrigger>
-          <TooltipContent>点击复制</TooltipContent>
-        </Tooltip>
-      </SoftPanel>
+          ),
+          duration: 0,
+          id: "toast",
+          title: content,
+          type: notificationType,
+        }}
+        onClose={onDismiss}
+        role={urgent ? "alert" : "status"}
+        toast
+      />
     </div>
   );
 }

@@ -866,6 +866,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
   }
 
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = undefined;
+    setToast((current) => ({ ...current, message: "" }));
+  }
+
   function openTaskThread(taskId: string) {
     setSelectedTaskId(taskId);
     void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
@@ -1002,7 +1008,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
 
   return (
     <section className={cn("relative grid h-full min-h-0 bg-transparent", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
-      <Toast message={toast.message} type={toast.type} />
+      <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
         <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
           <div className="min-w-0" data-tauri-drag-region="deep">

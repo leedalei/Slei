@@ -13,6 +13,7 @@ type Notification = {
   type: NotificationType
   title: string
   description?: string
+  action?: React.ReactNode
   duration?: number
 }
 
@@ -146,9 +147,14 @@ function GlassNotificationContainer({ position = "bottom-right" }: { position?: 
 
 type GlassNotificationItemProps = {
   notification: Notification
-  onClose: () => void
+  onClose?: () => void
   style?: React.CSSProperties
   animationClass?: string
+  ariaLive?: "assertive" | "polite" | "off"
+  className?: string
+  closeLabel?: string
+  role?: "alert" | "status"
+  toast?: boolean
 }
 
 function GlassNotificationItem({
@@ -156,6 +162,11 @@ function GlassNotificationItem({
   onClose,
   style,
   animationClass = "slide-in-from-right-full",
+  ariaLive,
+  className,
+  closeLabel = "Dismiss notification",
+  role = "alert",
+  toast = false,
 }: GlassNotificationItemProps) {
   const config = typeConfig[notification.type]
   const Icon = config.icon
@@ -176,7 +187,15 @@ function GlassNotificationItem({
   }, [duration])
 
   return (
-    <div className={cn("pointer-events-auto animate-in fade-in duration-300", animationClass)} style={style} role="alert">
+    <div
+      aria-live={ariaLive}
+      className={cn("pointer-events-auto animate-in fade-in duration-300", animationClass, className)}
+      data-slot="notification"
+      data-toast-notification={toast ? "true" : undefined}
+      data-type={notification.type}
+      role={role}
+      style={style}
+    >
       <div className="relative">
         <div className={cn("absolute -inset-1.5 rounded-xl bg-linear-to-r opacity-60 blur-xl", config.gradient)} />
         <div
@@ -200,17 +219,22 @@ function GlassNotificationItem({
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 className="font-medium text-white">{notification.title}</h4>
-              {notification.description ? <p className="mt-1 text-sm text-white/60">{notification.description}</p> : null}
+              <h4 className="font-medium text-white whitespace-normal break-words" data-slot="notification-title">{notification.title}</h4>
+              {notification.description ? <p className="mt-1 text-sm text-white/60" data-slot="notification-description">{notification.description}</p> : null}
+              {notification.action ? <div className="mt-2" data-slot="notification-action-container">{notification.action}</div> : null}
             </div>
 
-            <button
-              onClick={onClose}
-              aria-label="Dismiss notification"
-              className="shrink-0 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {onClose ? (
+              <button
+                onClick={onClose}
+                aria-label={closeLabel}
+                className="shrink-0 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+                data-slot="notification-close"
+                type="button"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
 
           {duration !== 0 ? (
@@ -246,7 +270,7 @@ function GlassNotification({
   const Icon = config.icon
 
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative", className)} data-slot="notification" data-type={type}>
       <div className={cn("absolute -inset-1.5 rounded-xl bg-linear-to-r opacity-60 blur-xl", config.gradient)} />
       <div
         className={cn(
@@ -266,8 +290,8 @@ function GlassNotification({
             <Icon className={cn("h-5 w-5", config.iconColor)} />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-medium text-white">{title}</h4>
-            {description ? <p className="mt-1 text-sm text-white/60">{description}</p> : null}
+            <h4 className="font-medium text-white whitespace-normal break-words" data-slot="notification-title">{title}</h4>
+            {description ? <p className="mt-1 text-sm text-white/60" data-slot="notification-description">{description}</p> : null}
           </div>
         </div>
       </div>
