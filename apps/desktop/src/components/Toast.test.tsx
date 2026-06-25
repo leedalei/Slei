@@ -40,7 +40,8 @@ describe("Toast", () => {
       expect(notification?.getAttribute("data-toast-notification")).toBe("true");
       expect(title?.textContent).toBe("保存成功");
       expect(title?.querySelector("button")).toBeNull();
-      expect(host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')).not.toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')).toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('[aria-label="复制通知内容"]')).toBeNull();
       expect(host.querySelector("[data-slei-panel]")).toBeNull();
     } finally {
       cleanupToast(root, host);
@@ -65,6 +66,34 @@ describe("Toast", () => {
     }
   });
 
+  it("centers compact toast content vertically on a 70 percent frosted surface", () => {
+    const { host, root } = renderToast({ message: "复制成功", type: "success" });
+
+    try {
+      const content = host.querySelector<HTMLElement>('[data-slot="notification-content"]');
+      const iconContainer = host.querySelector<HTMLElement>('[data-slot="notification-icon-container"]');
+      const icon = host.querySelector<SVGElement>('[data-slot="notification-icon"]');
+      const surface = host.querySelector<HTMLElement>('[data-slot="notification-surface"]');
+
+      expect(content).not.toBeNull();
+      expect(iconContainer).not.toBeNull();
+      expect(icon).not.toBeNull();
+      expect(surface).not.toBeNull();
+      expect(content?.className).toContain("items-center");
+      expect(content?.className).toContain("px-3.5");
+      expect(content?.className).toContain("py-2.5");
+      expect(iconContainer?.className).toContain("h-7");
+      expect(iconContainer?.className).toContain("w-7");
+      expect(icon?.className.baseVal).toContain("h-4");
+      expect(icon?.className.baseVal).toContain("w-4");
+      expect(surface?.className).toContain("bg-white/70");
+      expect(surface?.className).toContain("backdrop-blur-2xl");
+      expect(surface?.className).toContain("backdrop-saturate-150");
+    } finally {
+      cleanupToast(root, host);
+    }
+  });
+
   it.each([
     ["success", "success"],
     ["error", "error"],
@@ -83,19 +112,14 @@ describe("Toast", () => {
     }
   });
 
-  it("preserves click-to-copy behavior for the toast message", () => {
-    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
-    vi.stubGlobal("navigator", { clipboard });
+  it("does not render a copy action for toast messages", () => {
     const { host, root } = renderToast({ message: "  copied text  ", type: "info" });
 
     try {
-      act(() => {
-        host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')?.click();
-      });
-
-      expect(clipboard.writeText).toHaveBeenCalledWith("copied text");
+      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("copied text");
+      expect(host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')).toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('[aria-label="复制通知内容"]')).toBeNull();
     } finally {
-      vi.unstubAllGlobals();
       cleanupToast(root, host);
     }
   });

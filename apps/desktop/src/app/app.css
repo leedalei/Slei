@@ -163,7 +163,7 @@
   --tabs-glass-shadow: 0 4px 16px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
   --tabs-pill-bg: var(--tabs-glass-active-bg);
   --tabs-pill-border: color-mix(in srgb, white 36%, var(--tabs-glass-border));
-  --tabs-pill-shadow: 0 2px 8px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent);
+  --tabs-pill-shadow: 0 4px 10px color-mix(in srgb, var(--overlay-shadow-color) 32%, transparent);
 }
 
 @theme inline {

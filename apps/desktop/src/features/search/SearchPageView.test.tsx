@@ -413,7 +413,7 @@ describe("SearchPage global search UI", () => {
       expect(triggerClasses).toContain("w-auto");
       expect(triggerClasses).not.toContain("w-full");
       expect(trigger.className).toContain("rounded-lg");
-      expect(trigger.className).toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
+      expect(trigger.className).toContain("shadow-[var(--tabs-pill-shadow)]");
       expect(trigger.className).not.toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
       expect(trigger.className).not.toContain("shadow-[var(--overlay-shadow");

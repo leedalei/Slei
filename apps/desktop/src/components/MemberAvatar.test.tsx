@@ -114,7 +114,7 @@ describe("MemberAvatar", () => {
     }
   });
 
-  it("uses a compact global avatar shadow no larger than 6px blur", async () => {
+  it("uses a tight global avatar shadow no larger than 3px blur", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
       avatar: "LW",
@@ -129,7 +129,8 @@ describe("MemberAvatar", () => {
     try {
       const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
 
-      expect(avatar?.className).toContain("shadow-[0_2px_6px_rgba(0,0,0,0.16)]");
+      expect(avatar?.className).toContain("shadow-[0_1px_3px_rgba(0,0,0,0.14)]");
+      expect(avatar?.className).not.toContain("shadow-[0_2px_6px");
       expect(avatar?.className).not.toContain("shadow-[0_4px_16px");
     } finally {
       cleanupMemberAvatar(root, host);

@@ -790,6 +790,82 @@ describe("ChatPage mention panel", () => {
     }
   });
 
+  it("shows a success toast after saving a message", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_save_success_toast",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          body: "收藏后显示 toast。",
+          channelId: "all",
+        },
+      ],
+    });
+    const onMessageSaveToggle = vi.fn<() => Promise<void>>(() => Promise.resolve());
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMessageSaveToggle={onMessageSaveToggle}
+        profile={defaultProfile}
+      />,
+    );
+    const message = host.querySelector<HTMLElement>('[data-message-id="msg_save_success_toast"]');
+
+    await act(async () => {
+      message?.querySelector<HTMLButtonElement>(`button[aria-label="${messages.chat.saveMessage}"]`)?.click();
+    });
+    await act(async () => undefined);
+
+    expect(onMessageSaveToggle).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("收藏成功");
+  });
+
+  it("shows an error toast when saving a message fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_save_failure_toast",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          body: "收藏失败后显示 toast。",
+          channelId: "all",
+        },
+      ],
+    });
+    const onMessageSaveToggle = vi.fn<() => Promise<void>>(() => Promise.reject(new Error("daemon offline")));
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMessageSaveToggle={onMessageSaveToggle}
+        profile={defaultProfile}
+      />,
+    );
+    const message = host.querySelector<HTMLElement>('[data-message-id="msg_save_failure_toast"]');
+
+    await act(async () => {
+      message?.querySelector<HTMLButtonElement>(`button[aria-label="${messages.chat.saveMessage}"]`)?.click();
+    });
+    await act(async () => undefined);
+
+    expect(onMessageSaveToggle).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("收藏失败：daemon offline");
+  });
+
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {
     const source = readChatPageSource();
 
@@ -1303,6 +1379,9 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("添加成员");
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain("频道成员(2)");
     expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).not.toContain('data-slot="badge"');
+    expect(panelHtml).toContain('data-testid="slei-channel-member-header-separator"');
+    expect(panelHtml).toContain('aria-hidden="true"');
+    expect(panelHtml).toContain("border-border/60");
     expect(panelHtml).toContain('data-testid="slei-channel-member-status-dot"');
     expect(panelHtml).toContain("bg-emerald-500");
     expect(panelHtml).toContain("bg-muted-foreground/40");

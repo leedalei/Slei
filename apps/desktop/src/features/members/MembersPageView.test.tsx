@@ -803,6 +803,15 @@ describe("MembersPage agent details", () => {
     expect(panel.textContent).toContain("ClaudeCode");
     expect(panel.textContent).toContain("文件读取");
     expect(panel.textContent).not.toContain("长期记忆");
+
+    for (const label of ["ClaudeCode", "文件读取"]) {
+      const badge = Array.from(panel.querySelectorAll<HTMLElement>('[data-slot="badge"]')).find((element) => element.textContent === label);
+
+      expect(badge).not.toBeNull();
+      expect(badge?.getAttribute("data-slei-status")).toBeNull();
+      expect(badge?.querySelector('[data-slot="status-badge-dot"]')).toBeNull();
+      expect(badge?.querySelector("svg")).toBeNull();
+    }
   });
 
   it("shows the empty skills state on the capabilities tab without runtime capabilities", async () => {

@@ -27,6 +27,20 @@ const badgeVariants = cva(
         ghost: "border-transparent bg-transparent text-muted-foreground hover:bg-white/10 hover:text-foreground",
         link: "border-transparent bg-transparent text-cyan-200 underline-offset-4 hover:underline",
       },
+      status: {
+        approval: "border-amber-400/30 bg-amber-500/20 text-amber-100",
+        busy: "border-amber-400/30 bg-amber-500/20 text-amber-100",
+        connected: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
+        failed: "border-red-400/30 bg-red-500/20 text-red-100",
+        idle: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
+        info: "border-sky-400/30 bg-sky-500/20 text-sky-100",
+        offline: "border-white/20 bg-white/10 text-muted-foreground",
+        pending: "border-white/20 bg-white/10 text-muted-foreground",
+        running: "border-sky-400/30 bg-sky-500/20 text-sky-100",
+        success: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
+        warn: "border-amber-400/30 bg-amber-500/20 text-amber-100",
+        warning: "border-amber-400/30 bg-amber-500/20 text-amber-100",
+      },
       size: {
         sm: "px-2 py-0.5 text-xs",
         md: "px-3 py-1 text-sm",
@@ -45,13 +59,14 @@ type BadgeProps = React.ComponentProps<"span"> &
     asChild?: boolean
   }
 
-function Badge({ className, variant, size, asChild = false, ...props }: BadgeProps) {
+function Badge({ className, status, variant, size, asChild = false, ...props }: BadgeProps) {
   const Comp = asChild ? Slot : "span"
   return (
     <Comp
       data-slot="badge"
+      data-status={status ?? undefined}
       data-variant={variant ?? "default"}
-      className={cn(badgeVariants({ variant, size }), className)}
+      className={cn(badgeVariants({ status, variant, size }), className)}
       {...props}
     />
   )
@@ -61,3 +76,4 @@ const GlassBadge = Badge
 const glassBadgeVariants = badgeVariants
 
 export { Badge, GlassBadge, badgeVariants, glassBadgeVariants }
+export type { BadgeProps }

@@ -5,6 +5,7 @@ import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/types";
 import { agentsForComputerNode, deviceOsLabel, formatCreatedDate } from "../../app/model";
 import { DetailBlock, EditableDetailField, Empty, MemberAvatar, PageHeader, SleiIcon, StatusBadge, sleiIcons, type SleiIconName } from "../../components";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -149,7 +150,7 @@ export function ComputersPage(input: {
                 <h2 className="text-base font-semibold">{input.messages.computers.agentsOnThisComputer}</h2>
                 <div className="inline-flex items-center gap-1.5">
                   <SleiIcon className="size-3.5 text-muted-foreground" name="bot" />
-                  <StatusBadge label={String(hostedAgents.length)} status="info" />
+                  <Badge variant="outline">{hostedAgents.length}</Badge>
                 </div>
               </div>
               {hostedAgents.length ? (

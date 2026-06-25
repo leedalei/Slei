@@ -1,7 +1,8 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { getSleiStatusBadgeClassName, StatusBadge } from "./StatusBadge";
+import { getSleiStatusBadgeClassName, getSleiStatusIndicatorClassName, StatusBadge } from "./StatusBadge";
 
 describe("StatusBadge", () => {
   it("renders a filled task status badge with a semantic data attribute", () => {
@@ -9,7 +10,26 @@ describe("StatusBadge", () => {
 
     expect(html).toContain('data-slei-status="running"');
     expect(html).toContain("运行中");
-    expect(html).toContain("<svg");
+    expect(html).not.toContain("<svg");
+    expect(html).toContain('data-slot="status-badge-dot"');
+  });
+
+  it("uses a solid colored dot as the status indicator", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(<StatusBadge label="在线" status="connected" />);
+
+    const dot = host.querySelector<HTMLElement>('[data-slot="status-badge-dot"]');
+
+    expect(dot).not.toBeNull();
+    expect(dot?.className).toContain("rounded-full");
+    expect(dot?.className).toContain("bg-emerald-500");
+    expect(dot?.querySelector("svg")).toBeNull();
+  });
+
+  it("maps common status dots to green, yellow, and gray", () => {
+    expect(getSleiStatusIndicatorClassName("connected")).toBe("bg-emerald-500");
+    expect(getSleiStatusIndicatorClassName("running")).toBe("bg-amber-500");
+    expect(getSleiStatusIndicatorClassName("offline")).toBe("bg-muted-foreground/45");
   });
 
   it("avoids risky white text on 500-level status backgrounds for common tones", () => {

@@ -116,6 +116,30 @@ describe("SettingsPage header", () => {
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 
+  it("renders about value tags without status dots or status metadata", () => {
+    const messages = createDesktopMessages("en-US");
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="about"
+        appearance={{ theme: "system", fontSize: "md" }}
+        locale="en-US"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        profile={null}
+        timeZone="America/Los_Angeles"
+      />,
+    );
+
+    expect(html.match(/data-slot="badge"/g)?.length).toBe(3);
+    expect(html).not.toContain('data-slot="status-badge-dot"');
+    expect(html).toContain('data-settings-about-row="desktopVersion"');
+    expect(html).toContain('data-settings-about-row="daemonVersion"');
+    expect(html).toContain('data-settings-about-row="connectedComputers"');
+    expect(html).not.toContain("data-slei-status");
+    expect(html).not.toContain("data-status");
+  });
+
   it("uses a 12px vertical rhythm between settings controls across panels", () => {
     const messages = createDesktopMessages("zh-CN");
     const shared = {

@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
+import { Separator } from "../../components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
@@ -62,6 +63,11 @@ function projectPathFromPickedFile(file: File) {
     }
   }
   return rootFolder ?? metadata.path ?? file.name;
+}
+
+function formatToastError(prefix: string, error: unknown) {
+  const detail = error instanceof Error ? error.message.trim() : String(error ?? "").trim();
+  return detail ? `${prefix}：${detail}` : prefix;
 }
 
 function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { card: InteractiveCardView; messages: DesktopMessages; onCreate?: () => void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void }) {
@@ -482,7 +488,7 @@ function ChannelMemberPanel(input: {
   return (
     <aside
       aria-label={input.messages.chat.channelMembers}
-      className="grid h-full min-h-0 w-80 grid-rows-[auto_minmax(0,1fr)] gap-3 border-l bg-background/55 p-4 backdrop-blur-xl"
+      className="grid h-full min-h-0 w-80 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 border-l bg-background/55 p-4 backdrop-blur-xl"
       data-testid="slei-channel-member-panel"
     >
       <div className="flex items-center justify-between gap-2 pr-2">
@@ -589,6 +595,7 @@ function ChannelMemberPanel(input: {
           </DialogContent>
         </Dialog>
       </div>
+      <Separator className="border-border/60" data-testid="slei-channel-member-header-separator" />
       <ScrollArea className="min-h-0 pr-2">
         <div className="grid gap-1">
           {input.members.length > 0 ? input.members.map((member) => {
@@ -924,6 +931,16 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     showToast(messages.chat.copySuccess, "success");
   }
 
+  async function toggleMessageSave(message: SleiMessage, currentlySaved: boolean) {
+    if (!onMessageSaveToggle) return;
+    try {
+      await onMessageSaveToggle(message);
+      showToast(currentlySaved ? messages.chat.unsaveMessageSuccess : messages.chat.saveMessageSuccess, "success");
+    } catch (error) {
+      showToast(formatToastError(currentlySaved ? messages.chat.unsaveMessageFailed : messages.chat.saveMessageFailed, error), "error");
+    }
+  }
+
   function showToast(message: string, type: ToastType = "info") {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
@@ -1249,7 +1266,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               messages={messages}
                               onCopy={() => copyMessage(message)}
                               onOpen={() => openTaskThread(sourceTask.id)}
-                              onSaveToggle={() => onMessageSaveToggle?.(message)}
+                              onSaveToggle={() => toggleMessageSave(message, saved)}
                               avatarIdentity={memberFromMessage(message, data.members)}
                               roleDescription={messageRoleDescription(message, data.members, messages)}
                               saved={saved}
@@ -1295,7 +1312,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                                     <SleiIcon name="copy" size={14} />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void onMessageSaveToggle?.(message)} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
+                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void toggleMessageSave(message, saved)} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
                                     <SleiIconSwap active={saved} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
                                   </TooltipButton>
                                   <span aria-hidden="true">｜</span>

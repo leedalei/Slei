@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -605,7 +606,7 @@ export function MembersPage(input: {
                 {selectedMember.capabilities.length ? (
                   <div className="flex flex-wrap gap-2">
                     {selectedMember.capabilities.map((capability) => (
-                      <StatusBadge key={capability} label={capability} status="info" />
+                      <Badge key={capability} variant="outline">{capability}</Badge>
                     ))}
                   </div>
                 ) : (
@@ -624,7 +625,7 @@ export function MembersPage(input: {
                 {selectedMember.permissions.length ? (
                   <div className="flex flex-wrap gap-2">
                     {selectedMember.permissions.map((permission) => (
-                      <StatusBadge key={permission} label={permission} status="approval" />
+                      <Badge key={permission} variant="outline">{permission}</Badge>
                     ))}
                   </div>
                 ) : (

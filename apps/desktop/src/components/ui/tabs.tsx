@@ -85,7 +85,6 @@ const TabsList = React.forwardRef<
       data-variant={variant}
       className={cn(
         "t-tabs relative inline-flex h-12 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xl",
-        "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
         className,
       )}
       {...props}

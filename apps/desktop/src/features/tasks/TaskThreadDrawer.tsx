@@ -155,7 +155,7 @@ export function TaskThreadDrawer(input: {
             <div className="relative rounded-xl shadow-[0_12px_28px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
               <Textarea
                 aria-label={input.messages.tasks.replyPlaceholder}
-                className="min-h-20 bg-white/55 pr-16 shadow-none"
+                className="min-h-20 border border-slate-300/90 bg-white/55 pr-16 shadow-none"
                 disabled={replySubmitting || statusSubmitting}
                 onChange={(event) => setReplyDraft(event.currentTarget.value)}
                 onCompositionEnd={() => setIsComposing(false)}

@@ -1008,6 +1008,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(agentCheckbox?.className).toContain("bg-white/10");
     expect(agentCheckbox?.className).toContain("border-white/20");
     expect(agentCheckbox?.className).not.toContain("bg-transparent");
+
+    await act(async () => {
+      agentCheckbox?.click();
+    });
+
+    const selectedAgentOption = agentCheckbox?.closest<HTMLElement>('[data-testid="slei-create-channel-agent-option"]');
+    expect(selectedAgentOption?.dataset.selected).toBe("true");
+    expect(selectedAgentOption?.className).toContain("bg-white/20");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
   });

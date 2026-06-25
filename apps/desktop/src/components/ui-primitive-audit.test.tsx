@@ -893,6 +893,15 @@ describe("desktop UI primitive usage", () => {
     expect(appCss).toContain(".t-tabs-pill");
   });
 
+  it("keeps tab list shadowless while sizing the inner pill shadow token", () => {
+    const appCss = readSource("app/app.css");
+    const tabsSource = readSource("components/ui/tabs.tsx");
+
+    expect(tabsSource).not.toContain("shadow-[");
+    expect(appCss).toContain("--tabs-pill-shadow: 0 4px 10px color-mix(in srgb, var(--overlay-shadow-color) 32%, transparent)");
+    expect(appCss).toContain("box-shadow: var(--tabs-pill-shadow)");
+  });
+
   it("keeps static surfaces and badges free of old elevated variants", () => {
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
@@ -974,8 +983,15 @@ describe("desktop UI primitive usage", () => {
   it("keeps select trigger and menu shadows compact", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
-    expect(selectSource).toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
+    expect(selectSource).toContain("rounded-xl border border-[var(--tabs-glass-border)] bg-white/10");
+    expect(selectSource).toContain("rounded-xl border border-white/20 bg-white/10 text-popover-foreground");
+    expect(selectSource).toContain("focus:bg-white/15");
+    expect(selectSource).not.toContain("focus:border-white/40");
+    expect(selectSource).not.toContain("focus:ring-2");
+    expect(selectSource).not.toContain("focus:ring-cyan-400/30");
+    expect(selectSource).toContain("shadow-[var(--tabs-pill-shadow)]");
     expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.18)]");
+    expect(selectSource).not.toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
   });

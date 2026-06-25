@@ -199,8 +199,10 @@ function GlassNotificationItem({
       <div className="relative">
         <div className={cn("absolute -inset-1.5 rounded-xl bg-linear-to-r opacity-60 blur-xl", config.gradient)} />
         <div
+          data-slot="notification-surface"
           className={cn(
-            "relative overflow-hidden rounded-xl border bg-white/10 backdrop-blur-2xl",
+            "relative overflow-hidden rounded-xl border backdrop-blur-2xl",
+            toast ? "bg-white/70 backdrop-saturate-150" : "bg-white/10",
             "shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.15)]",
             config.border,
           )}
@@ -208,14 +210,19 @@ function GlassNotificationItem({
           <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-b from-white/15 to-transparent" />
           <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent to-white/10" />
 
-          <div className="relative flex items-start gap-3 p-4">
+          <div
+            className={cn("relative flex gap-3", toast ? "items-center px-3.5 py-2.5" : "items-start p-4")}
+            data-slot="notification-content"
+          >
             <div
+              data-slot="notification-icon-container"
               className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10",
+                "flex shrink-0 items-center justify-center rounded-lg border border-white/10",
+                toast ? "h-7 w-7" : "h-8 w-8",
                 `bg-linear-to-br ${config.gradient}`,
               )}
             >
-              <Icon className={cn("h-5 w-5", config.iconColor)} aria-hidden="true" />
+              <Icon className={cn(toast ? "h-4 w-4" : "h-5 w-5", config.iconColor)} aria-hidden="true" data-slot="notification-icon" />
             </div>
 
             <div className="min-w-0 flex-1">

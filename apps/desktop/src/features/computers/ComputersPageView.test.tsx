@@ -235,4 +235,25 @@ describe("ComputersPage header", () => {
     expect(html).toContain("在线");
     expect(html).not.toContain("空闲");
   });
+
+  it("renders hosted agent count as a plain non-status badge", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <ComputersPage
+        members={[hostedAgent]}
+        messages={messages}
+        nodes={[localNode]}
+      />,
+    );
+
+    const agentsHeading = Array.from(host.querySelectorAll("h2")).find((heading) => heading.textContent === messages.computers.agentsOnThisComputer);
+    const agentsHeader = agentsHeading?.parentElement;
+    const countBadge = Array.from(agentsHeader?.querySelectorAll<HTMLElement>('[data-slot="badge"]') ?? []).find((badge) => badge.textContent === "1");
+
+    expect(countBadge).not.toBeNull();
+    expect(countBadge?.getAttribute("data-slei-status")).toBeNull();
+    expect(countBadge?.querySelector('[data-slot="status-badge-dot"]')).toBeNull();
+    expect(countBadge?.querySelector("svg")).toBeNull();
+  });
 });

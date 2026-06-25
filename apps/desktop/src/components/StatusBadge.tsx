@@ -3,8 +3,6 @@ import type { ComponentProps } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-import { SleiIcon } from "./SleiIcon";
-
 export type SleiStatusTone =
   | "approval"
   | "busy"
@@ -38,10 +36,10 @@ export const sleiStatusIndicatorClassNames: Record<SleiStatusTone, string> = {
   connected: "bg-emerald-500",
   failed: "bg-destructive",
   idle: "bg-emerald-500",
-  info: "bg-sky-500",
+  info: "bg-amber-500",
   offline: "bg-muted-foreground/45",
   pending: "bg-muted-foreground/45",
-  running: "bg-sky-500",
+  running: "bg-amber-500",
   success: "bg-emerald-500",
   warn: "bg-amber-500",
 };
@@ -59,7 +57,7 @@ export function StatusBadge({
   label,
   status,
   ...props
-}: Omit<ComponentProps<typeof Badge>, "children" | "variant"> & {
+}: Omit<ComponentProps<typeof Badge>, "children" | "status" | "variant"> & {
   label: string;
   status: string;
 }) {
@@ -70,7 +68,11 @@ export function StatusBadge({
       data-slei-status={status}
       variant="filled"
     >
-      <SleiIcon className="size-3" name="status" />
+      <span
+        aria-hidden="true"
+        className={cn("size-2 shrink-0 rounded-full", getSleiStatusIndicatorClassName(status))}
+        data-slot="status-badge-dot"
+      />
       {label}
     </Badge>
   );

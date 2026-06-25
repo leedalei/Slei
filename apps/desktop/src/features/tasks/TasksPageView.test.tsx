@@ -330,6 +330,8 @@ describe("TasksPage filters", () => {
     expect(composer?.className).toContain("shadow");
     expect(textarea).not.toBeNull();
     expect(textarea?.getAttribute("placeholder")).toBe("请输入回复");
+    expect(textarea?.className).toContain("border");
+    expect(textarea?.className).toContain("border-slate-300/90");
     expect(textarea?.className).toContain("pr-16");
     expect(sendButton).toBeDefined();
     expect(sendButton?.textContent?.trim()).toBe("");

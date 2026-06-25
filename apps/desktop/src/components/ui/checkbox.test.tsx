@@ -34,11 +34,12 @@ describe("Checkbox", () => {
     expect(html).toContain('data-slot="checkbox"');
     expect(html).toContain('role="checkbox"');
     expect(html).toContain("size-5");
-    expect(html).toContain("rounded-md");
+    expect(html).toContain("rounded-[4px]");
     expect(html).toContain("border-white/20");
     expect(html).toContain("bg-white/10");
     expect(html).toContain("backdrop-blur-xl");
-    expect(html).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
+    expect(html).toContain("shadow-[0_2px_4px_rgba(0,0,0,0.16)]");
+    expect(html).not.toContain("shadow-[0_4px_16px");
     expect(html).toContain("hover:bg-white/15");
     expect(html).toContain("focus-visible:border-white/40");
     expect(html).toContain("focus-visible:ring-cyan-400/30");
@@ -47,14 +48,16 @@ describe("Checkbox", () => {
     expect(html).not.toContain("dark:bg-input/30");
   });
 
-  it("keeps checked state styling on the shared primary tokens", () => {
+  it("keeps checked state styling aligned with the EinUI switch gradient", () => {
     const html = renderToStaticMarkup(<Checkbox aria-label="选择 Agent" checked />);
 
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('data-state="checked"');
-    expect(html).toContain("data-[state=checked]:border-primary");
-    expect(html).toContain("data-[state=checked]:bg-primary");
-    expect(html).toContain("data-[state=checked]:text-primary-foreground");
+    expect(html).toContain("data-[state=checked]:border-cyan-400/40");
+    expect(html).toContain("data-[state=checked]:bg-linear-to-r");
+    expect(html).toContain("data-[state=checked]:from-cyan-500/60");
+    expect(html).toContain("data-[state=checked]:to-blue-500/60");
+    expect(html).not.toContain("data-[state=checked]:bg-primary");
   });
 
   it("notifies callers when toggled from the rendered DOM", () => {

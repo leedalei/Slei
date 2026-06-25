@@ -98,12 +98,16 @@ export type DesktopMessages = {
     agentRunningCommand: string;
     agentRunFailed: string;
     saveMessage: string;
+    saveMessageFailed: string;
+    saveMessageSuccess: string;
     savedMessageUnavailable: string;
     savedMessagesCount: (count: number) => string;
     savedMessagesEmpty: string;
     savedTimeLabel: (date: string) => string;
     messageTimeLabel: (date: string) => string;
     unsaveMessage: string;
+    unsaveMessageFailed: string;
+    unsaveMessageSuccess: string;
     history: string;
     newSession: string;
     resetSession: string;

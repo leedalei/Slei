@@ -2,6 +2,7 @@ import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPre
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -366,7 +367,7 @@ function NotificationSwitch(input: {
 function AboutRow(input: { label: string; value: string }) {
   return (
     <DetailBlock
-      action={<span className="font-medium">{input.value}</span>}
+      action={<Badge variant="outline">{input.value}</Badge>}
       data-settings-about-row={aboutRowKey(input.label)}
       title={<span className="text-sm font-normal text-muted-foreground">{input.label}</span>}
     />

@@ -117,6 +117,24 @@ describe("Tabs", () => {
     expect(list?.firstElementChild?.getAttribute("data-slot")).toBe("tabs-pill");
   });
 
+  it("keeps outer tabs free of shadow while preserving the inner pill", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const list = host.querySelector<HTMLElement>('[data-slot="tabs-list"]');
+    const pill = host.querySelector<HTMLElement>('[data-slot="tabs-pill"]');
+
+    expect(list?.className).not.toContain("shadow-[");
+    expect(pill?.className.split(/\s+/)).toContain("t-tabs-pill");
+  });
+
   it("does not render decorative gradient glow classes behind tab controls", () => {
     const html = renderToStaticMarkup(
       <Tabs defaultValue="chat">

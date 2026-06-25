@@ -13,14 +13,14 @@ const Avatar = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.Root>, A
   ({ className, glowEffect = true, ...props }, ref) => (
     <div className="relative inline-flex">
       {glowEffect ? (
-        <div className="absolute -inset-0.5 rounded-full bg-linear-to-r from-cyan-500/30 via-blue-500/30 to-purple-500/30 opacity-55 blur-[6px]" />
+        <div className="absolute -inset-px rounded-full bg-linear-to-r from-cyan-500/30 via-blue-500/30 to-purple-500/30 opacity-45 blur-[3px]" />
       ) : null}
       <AvatarPrimitive.Root
         ref={ref}
         data-slot="avatar"
         className={cn(
           "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-white/30",
-          "shadow-[0_2px_6px_rgba(0,0,0,0.16)]",
+          "shadow-[0_1px_3px_rgba(0,0,0,0.14)]",
           className,
         )}
         {...props}
