@@ -70,6 +70,7 @@ export type DesktopMessages = {
     addChannelMemberSuccess: string;
     addChannelMemberFailed: string;
     noSelectedChannelMembers: string;
+    removeChannelMemberConfirm: (name: string) => string;
     removeChannelMemberSuccess: string;
     removeChannelMemberFailed: string;
     directMessage: string;

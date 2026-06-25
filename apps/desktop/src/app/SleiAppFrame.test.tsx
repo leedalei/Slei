@@ -315,7 +315,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navCss).not.toContain("inset -8px 0 18px");
   });
 
-  it("renders menu and context sidebar as glass surfaces without solid sidebar fills", () => {
+  it("renders menu and context sidebar without background fills", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
@@ -323,20 +323,18 @@ describe("SleiAppFrame global search navigation", () => {
     const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-shell-nav__button {"));
     const sidebarCss = appCss.slice(appCss.indexOf(".slei-context-sidebar {"), appCss.indexOf(".slei-resize-handle {"));
 
-    expect(appCss).toContain("--glass-nav-bg:");
-    expect(appCss).toContain("--glass-sidebar-bg:");
     expect(appCss).toContain("--glass-bg:");
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
-    expect(appCss).toContain("--glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent)");
-    expect(appCss).toContain("--glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent)");
     expect(appCss).toContain("--glass-surface-filter: blur(var(--glass-blur)) saturate(145%)");
     expect(navSource).not.toContain("bg-sidebar/");
     expect(asideSource).not.toContain("bg-sidebar/");
-    expect(navCss).toContain("background: var(--glass-nav-bg)");
+    expect(navCss).toContain("background: transparent");
+    expect(navCss).not.toContain("background: var(--glass-nav-bg)");
     expect(navCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
     expect(navCss).toContain("backdrop-filter: var(--glass-surface-filter)");
-    expect(sidebarCss).toContain("background: var(--glass-sidebar-bg)");
+    expect(sidebarCss).toContain("background: transparent");
+    expect(sidebarCss).not.toContain("background: var(--glass-sidebar-bg)");
     expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
     expect(sidebarCss).toContain("backdrop-filter: var(--glass-surface-filter)");
     expect(sidebarCss).toContain('[data-slot="agent-activity"]');
@@ -380,9 +378,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
     expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
+    expect(appCss).toContain("--background: oklch(0.18 0.045 255 / 0.8)");
+    expect(appCss).toContain("--background: oklch(0.94 0.006 220 / 0.8)");
+    expect(appCss).toContain("body {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: var(--background);");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
-    expect(appCss).toContain("linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a)");
+    expect(appCss).not.toContain("linear-gradient(to bottom right");
+    expect(appCss).not.toContain("background: color-mix(in srgb, var(--background) 20%, transparent)");
+    expect(appCss).toContain(".slei-glass-workspace {\n  -webkit-backdrop-filter: var(--glass-surface-filter);\n  backdrop-filter: var(--glass-surface-filter);\n  background: transparent;");
     expect(appCss).not.toContain("#app {\n  background: var(--background)");
     expect(appCss).not.toContain("#root {");
   });
@@ -435,24 +438,46 @@ describe("SleiAppFrame global search navigation", () => {
     expect(iconsSource).toContain("members: Users");
   });
 
-  it("renders the active menubar item with primary glass gradient contrast", () => {
+  it("renders the active menubar item with solid primary contrast", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(navButtonCss).toContain(".slei-shell-nav__button--active");
-    expect(appCss).toContain("--glass-button-primary-gradient-bg: linear-gradient");
-    expect(navButtonCss).toContain("background: var(--glass-button-primary-gradient-bg)");
+    expect(appCss).toContain("--glass-button-primary-bg: var(--primary)");
+    expect(appCss).not.toContain("--glass-button-primary-gradient-bg");
+    expect(navButtonCss).toContain("background: var(--glass-button-primary-bg)");
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
+  });
+
+  it("keeps the accent token in the teal family instead of purple", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const accentDeclarations = Array.from(appCss.matchAll(/--accent:\s*oklch\(([^;]+)\);/g), (match) => match[1]);
+
+    expect(accentDeclarations).toHaveLength(3);
+    expect(accentDeclarations.every((value) => value.endsWith("185") || value.endsWith("190"))).toBe(true);
+    expect(accentDeclarations.some((value) => value.endsWith("285"))).toBe(false);
   });
 
   it("keeps menubar button borders on the glass token contract", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
+    expect(navButtonCss).toContain("border-width: 1px");
     expect(navButtonCss).toContain("border-color: var(--glass-button-border)");
     expect(navButtonCss).toContain("box-shadow: var(--glass-button-shadow)");
     expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
     expect(navButtonCss).not.toContain("var(--raised-border)");
+  });
+
+  it("uses primary buttons for modal confirmation actions", () => {
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+
+    expect(frameSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
+    expect(frameSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
+    expect(frameSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary"');
+    expect(frameSource).toContain('<Button type="submit" variant="primary"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>');
+    expect(frameSource).toContain('<Button type="submit" variant="primary">{input.messages.common.create}</Button>');
+    expect(frameSource).toContain('disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button" variant="primary"');
   });
 
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
@@ -550,6 +575,10 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(currentItems).toHaveLength(1);
     expect(currentItems[0]?.textContent).toContain("已保存");
+    expect(currentItems[0]?.parentElement?.className).toContain("bg-white/20");
+    expect(currentItems[0]?.parentElement?.className).toContain("backdrop-blur-xl");
+    expect(currentItems[0]?.parentElement?.className).not.toContain("bg-accent");
+    expect(currentItems[0]?.parentElement?.className).not.toContain("text-accent-foreground");
     expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
     expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
   });
@@ -600,6 +629,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(availableButton?.disabled).toBe(false);
     expect(deletedButton?.disabled).toBe(true);
     expect(deletedButton?.className).toContain("opacity-70");
+    expect(availableButton?.className).toContain("hover:border-transparent");
+    expect(availableButton?.className).not.toContain("hover:border-white/40");
 
     await act(async () => {
       availableButton?.click();
@@ -632,6 +663,126 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("关联项目：暂无");
     expect(html).toContain("关联项目：/workspace/kol");
     expect(html).not.toContain(">频道</small>");
+  });
+
+  it("uses liquid glass selected states for sidebar channels and direct messages", () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev-content", name: "dev-content", description: "频道", projectPaths: [], unread: 0, activeSessionId: "session:dev" },
+      ],
+      conversations: [
+        { id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" },
+      ],
+    });
+
+    const channelHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeChannelId="dev-content"
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const channelHost = document.createElement("div");
+    channelHost.innerHTML = channelHtml;
+    const selectedChannel = channelHost.querySelector<HTMLElement>('[data-channel-id="dev-content"]');
+
+    expect(selectedChannel?.className).toContain("bg-white/20");
+    expect(selectedChannel?.className).toContain("backdrop-blur-xl");
+    expect(selectedChannel?.className).toContain("shadow-[0_10px_28px");
+    expect(selectedChannel?.className).not.toContain("bg-accent");
+    expect(selectedChannel?.className).not.toContain("text-accent-foreground");
+    expect(selectedChannel?.closest('[data-slot="scroll-area"]')?.className).toContain("-mx-2");
+    expect(selectedChannel?.closest('[data-slot="scroll-area"]')?.className).toContain("-my-2");
+    expect(selectedChannel?.closest('[data-slot="scroll-area"]')?.querySelector('[data-channel-scroll-content]')?.className).toContain("px-2");
+    expect(selectedChannel?.closest('[data-slot="scroll-area"]')?.querySelector('[data-channel-scroll-content]')?.className).toContain("py-2");
+
+    const dmHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeConversationId="dm:a1"
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const dmHost = document.createElement("div");
+    dmHost.innerHTML = dmHtml;
+    const selectedDm = dmHost.querySelector<HTMLElement>('[data-conversation-id="dm:a1"]');
+
+    expect(selectedDm?.className).toContain("bg-white/20");
+    expect(selectedDm?.className).toContain("backdrop-blur-xl");
+    expect(selectedDm?.className).not.toContain("bg-accent");
+    expect(selectedDm?.className).not.toContain("text-accent-foreground");
+  });
+
+  it("uses the shared selectable card selected state for secondary sidebars", () => {
+    const data = createSleiFixtures({ members: createDemoMembers() });
+    const nodes = [
+      {
+        id: "local-node",
+        name: "Mac Studio",
+        status: "connected" as const,
+        daemonVersion: "0.1.0",
+        created: "2026-06-22",
+        device: { arch: "arm64", hostname: "mac-studio", platform: "darwin" },
+        runtimes: [],
+      },
+    ];
+
+    const membersHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeMemberId="a2"
+        activeView="members"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes }}
+      />,
+    );
+    const membersHost = document.createElement("div");
+    membersHost.innerHTML = membersHtml;
+    const selectedMember = membersHost.querySelector<HTMLElement>('[aria-current="true"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
+
+    expect(selectedMember?.getAttribute("data-selected")).toBe("true");
+    expect(selectedMember?.className).toContain("bg-white/20");
+    expect(selectedMember?.className).not.toContain("bg-accent");
+
+    const computersHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="computers"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes }}
+      />,
+    );
+    const computersHost = document.createElement("div");
+    computersHost.innerHTML = computersHtml;
+    const selectedComputer = computersHost.querySelector<HTMLElement>('[aria-current="true"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
+
+    expect(selectedComputer?.getAttribute("data-selected")).toBe("true");
+    expect(selectedComputer?.className).toContain("bg-white/20");
+    expect(selectedComputer?.className).not.toContain("bg-accent");
+
+    const settingsHtml = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={data}
+        initialSettingsPanel="appearance"
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes }}
+      />,
+    );
+    const settingsHost = document.createElement("div");
+    settingsHost.innerHTML = settingsHtml;
+    const selectedSettingsPanel = settingsHost.querySelector<HTMLElement>('[data-settings-icon="appearance"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
+
+    expect(selectedSettingsPanel?.getAttribute("data-selected")).toBe("true");
+    expect(selectedSettingsPanel?.className).toContain("bg-white/20");
+    expect(selectedSettingsPanel?.className).not.toContain("bg-accent");
   });
 
   it("cycles channel and direct message sorting independently by name", async () => {
@@ -813,6 +964,11 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(document.body.textContent).toContain("选择 Agent");
     expect(document.body.textContent).toContain("Coda");
+    const agentCheckbox = document.body.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
+    const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
+    expect(agentList?.className).toContain("bg-transparent");
+    expect(agentList?.className).toContain("border-white/20");
+    expect(agentCheckbox?.className).toContain("bg-transparent");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
   });

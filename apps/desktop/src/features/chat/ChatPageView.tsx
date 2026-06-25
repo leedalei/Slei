@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
@@ -6,12 +6,13 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage, markdownForegroundStyle } from "./MarkdownMessage";
 import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SleiIconSwap, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
+import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SelectableCard, SleiIcon, SleiIconSwap, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -28,8 +29,15 @@ export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 200;
 const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
 const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
+const COMPOSER_RESERVE_PX = 184;
+const COMPOSER_EXPANDED_RESERVE_PX = 256;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/35";
+
+type ChatComposerReserveStyle = CSSProperties & {
+  "--chat-composer-reserve": string;
+};
 
 type ChannelFileEntry = {
   attachment: ConversationAttachmentView;
@@ -73,7 +81,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
           <p className="text-xs">仅影响当前会话；新会话会重新申请。</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_once")} size="sm" type="button">
+          <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_once")} size="sm" type="button" variant="primary">
             允许一次
           </Button>
           <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_session")} size="sm" type="button" variant="outline">
@@ -94,10 +102,36 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
       </div>
-      <Button disabled={done} onClick={onCreate} size="sm" type="button">
+      <Button disabled={done} onClick={onCreate} size="sm" type="button" variant="primary">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
     </Card>
+  );
+}
+
+function MessageRow({
+  children,
+  className,
+  focused,
+  messageId,
+  tabIndex,
+}: {
+  children: ReactNode;
+  className?: string;
+  focused?: boolean;
+  messageId: string;
+  tabIndex?: number;
+}) {
+  return (
+    <article
+      className={cn(MESSAGE_ROW_CLASS, className)}
+      data-focused={focused ? "true" : undefined}
+      data-message-id={messageId}
+      data-slot="message-row"
+      tabIndex={tabIndex}
+    >
+      {children}
+    </article>
   );
 }
 
@@ -185,23 +219,24 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
       <ScrollArea className="h-full min-h-0 rounded-lg border bg-card/40">
         <div className="grid gap-1 p-2">
           {tasks.map((task) => (
-            <Button
-              aria-current={selectedTask?.id === task.id ? "true" : undefined}
-              className={cn("h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left", selectedTask?.id === task.id && "bg-accent text-accent-foreground")}
-              key={task.id}
-              onClick={() => selectTask(task.id)}
-              type="button"
-              variant="ghost"
-            >
-              <span className="grid min-w-0 gap-1">
-                <span className="flex min-w-0 flex-wrap items-center gap-2">
-                  <Badge variant="outline">{taskStatusLabel(task.status, messages)}</Badge>
-                  {task.attention ? <Badge variant="secondary">{task.attention}</Badge> : null}
+            <SelectableCard asChild key={task.id} selected={selectedTask?.id === task.id}>
+              <Button
+                aria-current={selectedTask?.id === task.id ? "true" : undefined}
+                className="h-auto min-h-16 justify-start whitespace-normal px-3 py-2 text-left text-inherit hover:text-inherit"
+                onClick={() => selectTask(task.id)}
+                type="button"
+                variant="ghost"
+              >
+                <span className="grid min-w-0 gap-1">
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <Badge variant="outline">{taskStatusLabel(task.status, messages)}</Badge>
+                    {task.attention ? <Badge variant="secondary">{task.attention}</Badge> : null}
+                  </span>
+                  <strong className="truncate text-sm">{task.title}</strong>
+                  <small className="text-xs font-normal text-muted-foreground">{task.owner} · {messages.chat.replyCount(task.replies?.length ?? 0)}</small>
                 </span>
-                <strong className="truncate text-sm">{task.title}</strong>
-                <small className="text-xs font-normal text-muted-foreground">{task.owner} · {messages.chat.replyCount(task.replies?.length ?? 0)}</small>
-              </span>
-            </Button>
+              </Button>
+            </SelectableCard>
           ))}
         </div>
       </ScrollArea>
@@ -483,12 +518,9 @@ function ChannelMemberPanel(input: {
                     input.availableMembers.map((member) => {
                       const selected = selectedAddIds.includes(member.id);
                       return (
-                        <div
+                        <SelectableCard
                           aria-selected={selected ? "true" : "false"}
-                          className={cn(
-                            "grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            selected && "bg-primary/10 text-primary hover:bg-primary/15",
-                          )}
+                          className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           data-testid="slei-channel-member-add-candidate"
                           key={member.id}
                           onClick={() => toggleSelectedAddMember(member.id)}
@@ -499,6 +531,7 @@ function ChannelMemberPanel(input: {
                             }
                           }}
                           role="option"
+                          selected={selected}
                           tabIndex={0}
                         >
                           <Checkbox
@@ -521,7 +554,7 @@ function ChannelMemberPanel(input: {
                               </small>
                             </span>
                           </span>
-                        </div>
+                        </SelectableCard>
                       );
                     })
                   ) : (
@@ -549,7 +582,7 @@ function ChannelMemberPanel(input: {
             </div>
             <DialogFooter>
               <Button disabled={addingSelected} onClick={closeAddDialog} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button">
+              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button" variant="primary">
                 {input.messages.chat.confirmAddChannelMembers(selectedAddIds.length)}
               </Button>
             </DialogFooter>
@@ -574,16 +607,39 @@ function ChannelMemberPanel(input: {
                     <strong className="truncate text-sm">{member.name}</strong>
                     <small className="truncate text-xs text-muted-foreground">{member.handle}</small>
                   </span>
-                  <Button aria-label={input.messages.chat.removeChannelMember(member.name)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={mutatingMemberId === member.id} onClick={() => setConfirmingRemoveId(member.id)} size="icon-xs" type="button" variant="ghost">
-                    <SleiIcon name="delete" size={14} />
-                  </Button>
+                  <AlertDialog
+                    open={confirming}
+                    onOpenChange={(open) => {
+                      setConfirmingRemoveId(open ? member.id : undefined);
+                    }}
+                  >
+                    <AlertDialogTrigger asChild>
+                      <Button aria-label={input.messages.chat.removeChannelMember(member.name)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={mutatingMemberId === member.id} size="icon-xs" type="button" variant="ghost">
+                        <SleiIcon name="delete" size={14} />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent data-testid="slei-channel-member-remove-dialog">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{input.messages.chat.removeChannelMember(member.name)}</AlertDialogTitle>
+                        <AlertDialogDescription>{input.messages.chat.removeChannelMemberConfirm(member.name)}</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={mutatingMemberId === member.id}>{input.messages.common.cancel}</AlertDialogCancel>
+                        <AlertDialogAction
+                          data-testid="slei-channel-member-remove-confirm"
+                          disabled={mutatingMemberId === member.id}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            void mutate(member.id, "remove");
+                          }}
+                          variant="destructive"
+                        >
+                          {input.messages.common.delete}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
-                {confirming ? (
-                  <div className="flex justify-end gap-2">
-                    <Button onClick={() => setConfirmingRemoveId(undefined)} size="sm" type="button" variant="ghost">{input.messages.common.cancel}</Button>
-                    <Button disabled={mutatingMemberId === member.id} onClick={() => void mutate(member.id, "remove")} size="sm" type="button" variant="destructive">{input.messages.common.delete}</Button>
-                  </div>
-                ) : null}
               </div>
             );
           }) : (
@@ -676,6 +732,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
+  const composerReservePx = attachments.length > 0 || (mention && mentionTargets.length > 0) || (skillSlash && skillSlashTargets.length > 0)
+    ? COMPOSER_EXPANDED_RESERVE_PX
+    : COMPOSER_RESERVE_PX;
+  const composerReserveStyle: ChatComposerReserveStyle = {
+    "--chat-composer-reserve": `${composerReservePx}px`,
+  };
   const channelFiles: ChannelFileEntry[] = visibleMessages
     .flatMap((message) =>
       (message.attachments ?? []).map((attachment) => ({
@@ -951,7 +1013,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         return;
       }
       if (timelineUsesVirtualization && timelineMessages.length > 0) {
-        timelineVirtualizer.scrollToIndex(timelineMessages.length - 1, {
+        timelineVirtualizer.scrollToOffset(timelineVirtualizer.getTotalSize() + composerReservePx, {
           align: "end",
           behavior: "smooth",
         });
@@ -1064,7 +1126,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       />
                       <div className="flex items-center justify-between gap-2">
                         <strong className="text-sm text-foreground">{messages.chat.project}</strong>
-                        <Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">
+                        <Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">
                           <SleiIcon name="folderPlus" size={14} />
                           {messages.chat.projectFolderPicker}
                         </Button>
@@ -1085,7 +1147,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       )}
                       <div className="flex justify-end gap-2">
                         <Button disabled={projectSaving} onClick={() => setProjectEditorOpen(false)} size="sm" type="button" variant="ghost">{messages.common.cancel}</Button>
-                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button">{messages.common.save}</Button>
+                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button" variant="primary">{messages.common.save}</Button>
                       </div>
                     </div>
                   </PopoverContent>
@@ -1143,8 +1205,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       >
         <div className="grid min-h-0" data-testid="slei-channel-workspace">
           {effectiveChannelView === "chat" ? (
-            <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto]" data-testid="slei-channel-chat-column">
-              <div className="relative min-h-0">
+            <div className="relative h-full min-h-0 overflow-visible" data-testid="slei-channel-chat-column" style={composerReserveStyle}>
+              <div className="relative h-full min-h-0">
                 {olderMessagesLoading ? (
                   <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-transparent px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
                     {messages.chat.loadingOlderMessages}
@@ -1152,8 +1214,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
                 <div className="h-full min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" onScroll={handleTimelineScroll} ref={timelineViewportRef}>
                   <div
-                    className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3")}
-                    style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize()}px` } : undefined}
+                    className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3 pb-[var(--chat-composer-reserve)]")}
+                    data-testid="slei-chat-timeline-content"
+                    style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize() + composerReservePx}px` } : undefined}
                   >
                     {renderedTimelineItems.length === 0 ? (
                       <div className="grid min-h-60 place-items-center px-4 py-8">
@@ -1210,14 +1273,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                           style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                         >
-                          <Card
-                            className={cn(
-                              CARD_FLAT_CLASS,
-                              "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/35",
-                              highlightedMessageId === message.id && "slei-message--blink-border",
-                            )}
-                            data-focused={highlightedMessageId === message.id ? "true" : undefined}
-                            data-message-id={message.id}
+                          <MessageRow
+                            className={highlightedMessageId === message.id ? "slei-message--blink-border" : undefined}
+                            focused={highlightedMessageId === message.id}
+                            messageId={message.id}
                             tabIndex={focusedMessageId === message.id ? -1 : undefined}
                           >
                             <MemberAvatar identity={memberFromMessage(message, data.members)} />
@@ -1270,7 +1329,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                 />
                               ))}
                             </div>
-                          </Card>
+                          </MessageRow>
                         </div>
                       );
                     })}
@@ -1278,21 +1337,22 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </div>
                 {showScrollToBottom ? (
                   <Button
-                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-xs text-primary shadow-[0_8px_24px_rgba(0,0,0,0.24)] hover:bg-white hover:text-primary"
+                    className="absolute bottom-[var(--chat-composer-reserve)] left-1/2 z-20 h-8 -translate-x-1/2 border-white/25 bg-white/85 px-3.5 text-xs shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur-xl hover:bg-white/95"
                     data-testid="slei-scroll-to-bottom"
                     onClick={requestTimelineScrollToBottom}
                     size="sm"
                     type="button"
-                    variant="outline"
+                    variant="ghost"
                   >
                     <SleiIcon className="size-3.5" name="arrowDown" />
                     {messages.chat.backToBottom}
                   </Button>
                 ) : null}
               </div>
-              <footer className="border-t bg-transparent">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-3" data-testid="slei-composer-shell">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 rounded-2xl border border-transparent p-3 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl">
                 {mention && mentionTargets.length > 0 ? (
-                  <div className="px-4 pt-3">
+                  <div className="min-w-0">
                     <MentionPicker
                       members={mentionTargets}
                       messages={messages}
@@ -1305,7 +1365,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </div>
                 ) : null}
                 {skillSlash && skillSlashTargets.length > 0 ? (
-                  <div className="px-4 pt-3">
+                  <div className="min-w-0">
                     <SkillSlashPicker
                       messages={messages}
                       onSelect={selectSkillSlash}
@@ -1317,8 +1377,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
-                <form className="px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-                  <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 p-3")} data-testid="slei-composer-surface">
+                <form className="grid gap-0" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
+                  <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 overflow-visible p-1")} data-testid="slei-composer-surface">
                     {attachments.length > 0 ? (
                       <AttachmentList
                         attachments={attachments}
@@ -1327,7 +1387,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     ) : null}
                     <Textarea
                       aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-                      className="slei-composer-input min-h-20 resize-none bg-transparent"
+                      className="slei-composer-input min-h-20 resize-none px-3 py-3"
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -1402,12 +1462,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
                         <Button aria-label={messages.common.addImage} onClick={() => imageInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>
                         <Button aria-label={messages.common.addAttachment} onClick={() => fileInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
-                        <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
+                        <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit" variant="primary"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>
                   </Card>
                 </form>
-              </footer>
+                </div>
+              </div>
             </div>
           ) : effectiveChannelView === "tasks" ? (
             <ChannelTaskList messages={messages} onTaskThreadOpen={onTaskThreadOpen} tasks={channelTasks} />

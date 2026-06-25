@@ -12,7 +12,7 @@ export const tasks = {
   list: "列表",
   replies: "回复",
   replyCountButton: (count: number) => `${count} 条回复`,
-  replyPlaceholder: "回复任务线程",
+  replyPlaceholder: "请输入回复",
   sendReply: "发送回复",
   markInReview: "标记待评审",
   markDone: "标记已完成",

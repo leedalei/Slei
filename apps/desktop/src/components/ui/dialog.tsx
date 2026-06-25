@@ -42,9 +42,9 @@ const DialogContent = React.forwardRef<
       ref={ref}
       data-slot="dialog-content"
       className={cn(
-        "t-modal fixed left-1/2 top-1/2 z-50 grid w-full max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-white/20 bg-white/10 p-6 text-white backdrop-blur-2xl",
+        "t-modal fixed left-1/2 top-1/2 z-50 grid w-full max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-white/25 bg-white/30 p-6 text-popover-foreground backdrop-blur-2xl supports-[backdrop-filter]:bg-white/35",
         "shadow-[0_8px_32px_rgba(0,0,0,0.4)] outline-none",
-        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/15 before:to-transparent",
+        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/45 before:to-transparent",
         className,
       )}
       {...props}
@@ -93,7 +93,7 @@ const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title ref={ref} data-slot="dialog-title" className={cn("relative z-10 text-lg font-semibold text-white", className)} {...props} />
+  <DialogPrimitive.Title ref={ref} data-slot="dialog-title" className={cn("relative z-10 text-lg font-semibold text-popover-foreground", className)} {...props} />
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
@@ -101,7 +101,7 @@ const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} data-slot="dialog-description" className={cn("relative z-10 text-sm text-white/60", className)} {...props} />
+  <DialogPrimitive.Description ref={ref} data-slot="dialog-description" className={cn("relative z-10 text-sm text-muted-foreground", className)} {...props} />
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName
 

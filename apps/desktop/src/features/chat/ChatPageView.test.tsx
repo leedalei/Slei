@@ -556,7 +556,7 @@ describe("ChatPage mention panel", () => {
     expect(headerHtml.slice(membersButtonStart, membersButtonStart + 260)).not.toContain("data-tauri-drag-region");
   });
 
-  it("keeps the full chat workspace transparent so native window material remains visible", () => {
+  it("keeps the chat workspace transparent while the composer floats in a frosted shell", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/ChatPageView.tsx"), "utf8");
 
     expect(source).toContain('"relative grid h-full min-h-0 bg-transparent"');
@@ -564,10 +564,46 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain('border-b bg-transparent px-4 py-3');
     expect(source).not.toContain('border-b bg-background/95 px-4 py-3');
     expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
-    expect(source).toContain('<footer className="border-t bg-transparent">');
+    expect(source).not.toContain('<footer className="border-t bg-transparent">');
     expect(source).not.toContain('<footer className="border-t bg-background/95">');
-    expect(source).toContain('className="slei-composer-input min-h-20 resize-none bg-transparent"');
+    expect(source).toContain('data-testid="slei-composer-shell"');
+    expect(source).toContain("absolute inset-x-0 bottom-0 z-30 p-3");
+    expect(source).not.toContain("absolute inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3");
+    expect(source).toContain("slei-composer-glass");
+    expect(source).toContain("backdrop-blur-xl");
+    expect(source).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
+    expect(source).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
+    expect(source).toContain('className="slei-composer-input min-h-20 resize-none px-3 py-3"');
+    expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-transparent px-3 py-3"');
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
+  });
+
+  it("renders the composer input as the EinUI glass textarea surface", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const composerInput = host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]');
+
+    expect(composerInput?.tagName).toBe("TEXTAREA");
+    expect(composerInput?.className).toContain("slei-composer-input");
+    expect(composerInput?.className).toContain("bg-white/10");
+    expect(composerInput?.className).toContain("backdrop-blur-xl");
+    expect(composerInput?.className).toContain("focus:bg-white/15");
+    expect(composerInput?.className).toContain("focus:ring-cyan-400/30");
+    expect(composerInput?.className).not.toContain("bg-transparent");
+    expect(composerInput?.parentElement?.className).toContain("group");
+    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')?.className).toContain("bg-linear-to-r");
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
@@ -803,12 +839,43 @@ describe("ChatPage mention panel", () => {
     }
   });
 
+  it("renders the composer send action as the primary button", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+    });
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="需要发送"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.dataset.variant).toBe("primary");
+  });
+
   it("uses the virtualizer last item when scrolling to the latest message", () => {
     const source = readChatPageSource();
 
-    expect(source).toContain("timelineVirtualizer.scrollToIndex(timelineMessages.length - 1");
+    expect(source).not.toContain("timelineVirtualizer.scrollToIndex(timelineMessages.length - 1");
+    expect(source).toContain("timelineVirtualizer.scrollToOffset(timelineVirtualizer.getTotalSize() + composerReservePx");
     expect(source).toContain("align: \"end\"");
     expect(source).toContain("behavior: \"smooth\"");
+  });
+
+  it("reserves bottom space so the floating composer does not cover timeline messages", () => {
+    const source = readChatPageSource();
+
+    expect(source).toContain("const COMPOSER_RESERVE_PX");
+    expect(source).toContain("const COMPOSER_EXPANDED_RESERVE_PX");
+    expect(source).toContain("composerReservePx");
+    expect(source).toContain('"--chat-composer-reserve"');
+    expect(source).toContain('data-testid="slei-chat-timeline-content"');
+    expect(source).toContain("timelineVirtualizer.getTotalSize() + composerReservePx");
+    expect(source).toContain("pb-[var(--chat-composer-reserve)]");
   });
 
   it("enables timeline virtualization only when there are more than 50 messages", () => {
@@ -1036,11 +1103,19 @@ describe("ChatPage mention panel", () => {
     const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
     expect(button?.textContent).toContain("滚动到底部");
     expect(button?.querySelector('[data-slei-icon="arrowDown"]')).not.toBeNull();
+    expect(button?.getAttribute("data-variant")).toBe("ghost");
     expect(button?.className).toContain("h-8");
     expect(button?.className).toContain("px-3.5");
-    expect(button?.className).toContain("border-primary");
-    expect(button?.className).toContain("bg-white");
-    expect(button?.className).toContain("text-primary");
+    expect(button?.className).toContain("border-white/25");
+    expect(button?.className).toContain("bg-white/85");
+    expect(button?.className).toContain("backdrop-blur-xl");
+    expect(button?.className).toContain("hover:bg-white/95");
+    expect(button?.className).toContain("bottom-[var(--chat-composer-reserve)]");
+    expect(button?.className).not.toContain("bottom-[calc(var(--chat-composer-reserve)+0.75rem)]");
+    expect(button?.className).not.toContain("bottom-2.5");
+    const buttonClasses = button?.className.split(/\s+/) ?? [];
+    expect(buttonClasses).not.toContain("border-primary");
+    expect(buttonClasses).not.toContain("text-primary");
     expect(button?.className).toContain("text-xs");
 
     setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 401 });
@@ -1075,7 +1150,7 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("initialTimelineScrollTargetRef");
     expect(source).toContain("const timelineScrollTarget =");
     expect(source).toContain("if (timelineUsesVirtualization && timelineMessages.length > 0)");
-    expect(source).toContain("timelineVirtualizer.scrollToIndex(timelineMessages.length - 1");
+    expect(source).toContain("timelineVirtualizer.scrollToOffset(timelineVirtualizer.getTotalSize() + composerReservePx");
     expect(source).toContain("top: viewport.scrollHeight");
     expect(source).toContain("behavior: \"smooth\"");
     expect(source).toContain("pendingScrollToBottomRef.current = true");
@@ -1351,7 +1426,10 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("transition-[grid-template-columns]");
     expect(html).toContain("transition-[opacity,transform]");
     expect(html).toContain("translate-x-0 opacity-100");
-    expect(html).toContain("grid-rows-[minmax(0,1fr)_auto]");
+    expect(html).toContain("relative h-full min-h-0 overflow-visible");
+    expect(html).toContain('data-testid="slei-chat-timeline"');
+    expect(html).toContain("h-full min-h-0 overflow-y-auto");
+    expect(html).toContain("--chat-composer-reserve:184px");
     expect(html).not.toContain("pointer-events-none translate-x-full");
   });
 
@@ -1429,9 +1507,12 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("data-testid=\"slei-channel-member-add-confirm\"");
     expect(source).toContain("addSelectedMembers");
     expect(source).toContain("confirmingRemoveId");
-    expect(source).toContain("setConfirmingRemoveId(member.id)");
+    expect(source).toContain("AlertDialogContent");
+    expect(source).toContain("data-testid=\"slei-channel-member-remove-dialog\"");
+    expect(source).toContain("removeChannelMemberConfirm");
     expect(source).toContain("mutate(member.id, \"remove\")");
     expect(source).toContain("text-destructive");
+    expect(source).not.toContain("<Button onClick={() => setConfirmingRemoveId(undefined)}");
   });
 
   it("automatically collapses the inline member panel below the compact breakpoint", async () => {
@@ -1546,6 +1627,52 @@ describe("ChatPage mention panel", () => {
     expect(document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]')).toBeNull();
   });
 
+  it("removes a channel member only after confirming in a dialog", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onChannelMemberRemove = vi.fn().mockResolvedValue(undefined);
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelMembersOpen
+        messages={messages}
+        onChannelMemberRemove={onChannelMemberRemove}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const dialog = document.body.querySelector('[data-testid="slei-channel-member-remove-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute("role")).toBe("alertdialog");
+    expect(dialog?.textContent).toContain(messages.chat.removeChannelMember("Luna"));
+    expect(dialog?.textContent).toContain(messages.chat.removeChannelMemberConfirm("Luna"));
+    expect(onChannelMemberRemove).not.toHaveBeenCalled();
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-remove-confirm"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChannelMemberRemove).toHaveBeenCalledTimes(1);
+    expect(onChannelMemberRemove).toHaveBeenCalledWith("agent_luna");
+  });
+
   it("renders channel tabs without new-session or history controls", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
@@ -1622,7 +1749,7 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.chat.asTask);
   });
 
-  it("keeps timeline message selectors and actions available on flat rows", () => {
+  it("keeps timeline message selectors and actions available on transparent message rows", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1649,23 +1776,24 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const host = staticMarkupHost(html);
-    const messageCard = host.querySelector<HTMLElement>('[data-message-id="msg-contract"]');
+    const messageRow = host.querySelector<HTMLElement>('[data-message-id="msg-contract"]');
 
-    expect(messageCard).not.toBeNull();
-    expect(messageCard?.dataset.slot).toBe("card");
-    expect(messageCard?.className).toContain("border-transparent");
-    expect(messageCard?.className).toContain("bg-transparent");
-    expect(messageCard?.className).toContain("hover:border-border/50");
-    expect(messageCard?.className).not.toContain("bg-card");
-    expect(messageCard?.className).not.toContain("bg-muted");
-    expect(messageCard?.className).not.toContain("bg-primary/5");
-    expect(messageCard?.className).toContain("shadow-none");
-    expect(messageCard?.className).toContain("after:hidden");
-    expect(messageCard?.className).not.toContain("hover:shadow");
-    expect(messageCard?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
-    expect(messageCard?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
-    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.copyMessage}"]`)).not.toBeNull();
-    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.saveMessage}"]`)).not.toBeNull();
+    expect(messageRow).not.toBeNull();
+    expect(messageRow?.dataset.slot).toBe("message-row");
+    expect(host.querySelector('[data-slot="card"][data-message-id="msg-contract"]')).toBeNull();
+    expect(messageRow?.className).toContain("border-transparent");
+    expect(messageRow?.className).toContain("bg-transparent");
+    expect(messageRow?.className).toContain("hover:border-border/50");
+    expect(messageRow?.className).not.toContain("bg-white/10");
+    expect(messageRow?.className).not.toContain("backdrop-blur-xl");
+    expect(messageRow?.className).not.toContain("bg-card");
+    expect(messageRow?.className).not.toContain("bg-muted");
+    expect(messageRow?.className).not.toContain("bg-primary/5");
+    expect(messageRow?.className).not.toContain("hover:shadow");
+    expect(messageRow?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
+    expect(messageRow?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
+    expect(messageRow?.querySelector(`button[aria-label="${messages.chat.copyMessage}"]`)).not.toBeNull();
+    expect(messageRow?.querySelector(`button[aria-label="${messages.chat.saveMessage}"]`)).not.toBeNull();
   });
 
   it("adds a border only to the focused timeline message", () => {
@@ -1832,6 +1960,10 @@ describe("ChatPage mention panel", () => {
     );
 
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-slot")).toBe("card");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("overflow-visible");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("overflow-hidden");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("p-1");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("p-3");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
@@ -1843,6 +1975,19 @@ describe("ChatPage mention panel", () => {
     expect(appCss).toContain(".slei-composer-input {");
     expect(appCss).toContain("border-color: var(--glass-border);");
     expect(appCss).toContain("box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);");
+    expect(appCss).toContain(".slei-composer-glass {");
+    expect(appCss).toContain("-webkit-backdrop-filter: blur(24px) saturate(180%);");
+    expect(appCss).toContain("backdrop-filter: blur(24px) saturate(180%);");
+    expect(appCss).toContain("--composer-glass-bg: rgba(28, 35, 50, 0.7);");
+    expect(appCss).toContain("--composer-glass-bg: rgba(244, 253, 250, 0.8);");
+    expect(appCss).toContain(".slei-composer-glass::before {");
+    expect(appCss).toContain("-webkit-backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
+    expect(appCss).toContain("backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
+    expect(appCss).toContain("background: var(--composer-glass-bg);");
+    expect(appCss).toContain(".slei-composer-glass > * {");
+    const composerGlassCss = appCss.slice(appCss.indexOf(".slei-composer-glass {"), appCss.indexOf(".slei-composer-input {"));
+    expect(composerGlassCss).not.toContain("color-mix");
+    expect(composerGlassCss).not.toContain("isolation");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
     expect(appCss).toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
 
@@ -1926,7 +2071,8 @@ describe("ChatPage mention panel", () => {
       replyInput.dispatchEvent(new Event("input", { bubbles: true }));
       replyInput.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const sendButton = Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.tasks.sendReply));
+    const sendButton = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${messages.tasks.sendReply}"]`);
+    expect(sendButton).toBeTruthy();
     await act(async () => {
       sendButton?.click();
     });
@@ -1997,16 +2143,16 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    const messageStart = html.indexOf('data-message-id="msg-dark-contrast"');
-    const markdownStart = html.indexOf("slei-markdown-message", messageStart);
-    const markdownHtml = html.slice(markdownStart, html.indexOf("</section>", markdownStart));
+    const host = staticMarkupHost(html);
+    const messageElement = host.querySelector<HTMLElement>('[data-message-id="msg-dark-contrast"]');
+    const markdownElement = messageElement?.querySelector<HTMLElement>(".slei-markdown-message");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(messageStart).toBeGreaterThanOrEqual(0);
-    expect(markdownStart).toBeGreaterThan(messageStart);
-    expect(markdownHtml).toContain("text-card-foreground");
-    expect(markdownHtml).toContain("--markdown-foreground:var(--card-foreground)");
-    expect(markdownHtml).not.toContain("text-foreground");
+    expect(messageElement).not.toBeNull();
+    expect(markdownElement).not.toBeNull();
+    expect(markdownElement?.classList.contains("text-card-foreground")).toBe(true);
+    expect(markdownElement?.getAttribute("style")).toContain("--markdown-foreground:var(--card-foreground)");
+    expect(markdownElement?.classList.contains("text-foreground")).toBe(false);
     expect(appCss).toContain("color: var(--markdown-foreground, var(--text-primary));");
     expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--text-primary);");
   });

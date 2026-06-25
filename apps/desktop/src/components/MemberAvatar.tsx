@@ -11,6 +11,7 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
       className={large ? "size-16" : "size-8"}
       data-avatar-image-rendering="pixelated"
       data-avatar-size={large ? "large" : "default"}
+      glowEffect={false}
     >
       <AvatarImage alt="" className="[image-rendering:pixelated]" src={createMemberAvatar(identity)} />
       <AvatarFallback>{fallback}</AvatarFallback>

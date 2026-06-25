@@ -12,7 +12,7 @@ export const tasks = {
   list: "List",
   replies: "Replies",
   replyCountButton: (count: number) => `${count} replies`,
-  replyPlaceholder: "Reply to task thread",
+  replyPlaceholder: "Enter a reply",
   sendReply: "Send reply",
   markInReview: "Mark in review",
   markDone: "Mark done",

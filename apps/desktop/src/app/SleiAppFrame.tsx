@@ -49,7 +49,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, PageHeader, SleiIcon, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
+import { Empty, MemberAvatar, PageHeader, SelectableCard, SleiIcon, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -899,12 +899,9 @@ function ChannelList(input: {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-3">
       <div className="grid gap-2">
-        <div
-          className={cn(
-            "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)] items-start rounded-lg",
-            !input.savedOpen && "hover:bg-muted/60",
-            input.savedOpen && "bg-accent text-accent-foreground",
-          )}
+        <SelectableCard
+          selected={input.savedOpen}
+          className="group/channel grid min-h-12 grid-cols-[minmax(0,1fr)] items-start"
           data-saved-list-item=""
         >
           <button
@@ -917,10 +914,10 @@ function ChannelList(input: {
           >
             <SleiIcon name="bookmark" size={14} />{input.messages.common.saved}
           </button>
-        </div>
+        </SelectableCard>
       </div>
-      <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-4">
+      <ScrollArea className="-mx-2 -my-2 min-h-0 flex-1">
+            <div className="space-y-4 px-2 py-2" data-channel-scroll-content="">
               <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <SidebarSectionTitle>{input.messages.chat.channels} {input.data.channels.length}</SidebarSectionTitle>
               <div className="flex items-center gap-1">
@@ -942,12 +939,9 @@ function ChannelList(input: {
             </div>
             <div className="space-y-1">
               {sortedChannels.map((channel) => (
-                <div
-                  className={cn(
-                    "group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start rounded-lg",
-                    input.activeChannelId !== channel.id && "hover:bg-muted/60",
-                    input.activeChannelId === channel.id && "bg-accent text-accent-foreground",
-                  )}
+                <SelectableCard
+                  selected={input.activeChannelId === channel.id}
+                  className="group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start"
                   data-channel-id={channel.id}
                   data-channel-list-item=""
                   key={channel.id}
@@ -993,7 +987,7 @@ function ChannelList(input: {
                       </AlertDialogContent>
                     </AlertDialog>
                   ) : null}
-                </div>
+                </SelectableCard>
               ))}
             </div>
             <Separator />
@@ -1019,22 +1013,23 @@ function ChannelList(input: {
                 if (!member) return null;
                 const conversationId = conversation.id;
                 return (
-                  <Button
-                    aria-current={input.activeConversationId === conversationId ? "true" : undefined}
-                    className={cn("slei-channel slei-channel--dm h-auto min-h-14 w-full justify-start whitespace-normal px-2 py-2 text-left", input.activeConversationId === conversationId && "bg-accent text-accent-foreground")}
-                    data-conversation-id={conversation.id}
-                    data-direct-message-list-item=""
-                    key={conversation.id}
-                    onClick={() => input.onConversationSelect?.(conversationId)}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <MemberAvatar identity={member} />
-                    <span className="slei-channel__dm-copy grid min-w-0 flex-1 gap-1">
-                      <strong>{member.name}</strong>
-                      <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{member.description}</small>
-                    </span>
-                  </Button>
+                  <SelectableCard asChild key={conversation.id} selected={input.activeConversationId === conversationId}>
+                    <Button
+                      aria-current={input.activeConversationId === conversationId ? "true" : undefined}
+                      className="slei-channel slei-channel--dm h-auto min-h-14 w-full justify-start whitespace-normal px-2 py-2 text-left text-inherit hover:text-inherit"
+                      data-conversation-id={conversation.id}
+                      data-direct-message-list-item=""
+                      onClick={() => input.onConversationSelect?.(conversationId)}
+                      type="button"
+                      variant="ghost"
+                    >
+                      <MemberAvatar identity={member} />
+                      <span className="slei-channel__dm-copy grid min-w-0 flex-1 gap-1">
+                        <strong>{member.name}</strong>
+                        <small className="line-clamp-2 text-xs font-normal text-muted-foreground">{member.description}</small>
+                      </span>
+                    </Button>
+                  </SelectableCard>
                 );
               })}
             </div>
@@ -1080,7 +1075,7 @@ function ChannelList(input: {
                   {...{ directory: "", webkitdirectory: "" }}
                 />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">
+                  <Button onClick={() => projectFolderInputRef.current?.click()} type="button">
                     <SleiIcon name="folderPlus" size={14} />
                     {input.messages.chat.projectFolderPicker}
                   </Button>
@@ -1103,10 +1098,10 @@ function ChannelList(input: {
             {agentMembers.length > 0 ? (
               <fieldset className="grid gap-2">
                 <legend className="text-sm font-medium">{input.messages.chat.selectAgents}</legend>
-                <ScrollArea className="max-h-60 rounded-lg border">
+                <ScrollArea className="max-h-60 rounded-lg border border-white/20 bg-transparent">
                   <div className="grid gap-1 p-2">
                     {agentMembers.map((member) => (
-                      <Label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted" key={member.id}>
+                      <Label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-white/10" key={member.id}>
                         <Checkbox
                           aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
                           checked={channelDraft.selectedAgentIds.includes(member.id)}
@@ -1125,7 +1120,7 @@ function ChannelList(input: {
             ) : null}
             <DialogFooter>
               <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
+              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary">
                 {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
               </Button>
             </DialogFooter>
@@ -1175,7 +1170,7 @@ function SavedMessagesWorkspace(input: {
                 <CardContent className="p-3">
                   <Button
                     aria-label={input.messages.search.openConversation(savedMessage.messageId)}
-                    className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
+                    className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:border-transparent hover:bg-transparent", isUnavailable && "opacity-70")}
                     disabled={isUnavailable}
                     onClick={() => input.onSelect?.(savedMessage)}
                     type="button"
@@ -1292,17 +1287,18 @@ function SettingsNavigator(input: {
             <p className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground"><SleiIcon name="server" size={14} />{input.messages.settings.serverReserved}</p>
           ) : null}
           {group.items.map((item) => (
-            <Button
-              aria-current={input.activePanel === item.id ? "page" : undefined}
-              className={cn("w-full justify-start", input.activePanel === item.id && "bg-accent text-accent-foreground")}
-              key={item.id}
-              onClick={() => input.onSelect?.(item.id)}
-              type="button"
-              variant="ghost"
-            >
-              <SleiIcon data-settings-icon={item.id} name={item.icon} size={15} stroke={2.4} />
-              <span>{input.messages.settings[item.labelKey]}</span>
-            </Button>
+            <SelectableCard asChild key={item.id} selected={input.activePanel === item.id}>
+              <Button
+                aria-current={input.activePanel === item.id ? "page" : undefined}
+                className="w-full justify-start text-inherit hover:text-inherit"
+                onClick={() => input.onSelect?.(item.id)}
+                type="button"
+                variant="ghost"
+              >
+                <SleiIcon data-settings-icon={item.id} name={item.icon} size={15} stroke={2.4} />
+                <span>{input.messages.settings[item.labelKey]}</span>
+              </Button>
+            </SelectableCard>
           ))}
         </div>
       ))}
@@ -1339,21 +1335,22 @@ function MembersNavigator(input: {
           />
         ) : null}
         {agents.map((member) => (
-          <Button
-            aria-current={(input.activeMemberId ?? agents[0]?.id) === member.id ? "true" : undefined}
-            className={cn("h-auto w-full justify-start px-2 py-2 text-left", (input.activeMemberId ?? agents[0]?.id) === member.id && "bg-accent text-accent-foreground")}
-            key={member.id}
-            onClick={() => input.onSelect?.(member.id)}
-            type="button"
-            variant="ghost"
-          >
-            <MemberAvatar identity={member} />
-            <span className="grid min-w-0 flex-1 gap-1">
-              <strong className="truncate text-sm">{member.name}</strong>
-              <small className="truncate text-xs font-normal text-muted-foreground">{member.role}</small>
-            </span>
-            <StatusDot status={member.runtimeStatus} />
-          </Button>
+          <SelectableCard asChild key={member.id} selected={(input.activeMemberId ?? agents[0]?.id) === member.id}>
+            <Button
+              aria-current={(input.activeMemberId ?? agents[0]?.id) === member.id ? "true" : undefined}
+              className="h-auto w-full justify-start px-2 py-2 text-left text-inherit hover:text-inherit"
+              onClick={() => input.onSelect?.(member.id)}
+              type="button"
+              variant="ghost"
+            >
+              <MemberAvatar identity={member} />
+              <span className="grid min-w-0 flex-1 gap-1">
+                <strong className="truncate text-sm">{member.name}</strong>
+                <small className="truncate text-xs font-normal text-muted-foreground">{member.role}</small>
+              </span>
+              <StatusDot status={member.runtimeStatus} />
+            </Button>
+          </SelectableCard>
         ))}
       </div>
     </ScrollArea>
@@ -1376,10 +1373,10 @@ function ComputersNavigator(input: {
         <Button aria-label={input.messages.computers.newComputer} onClick={input.onAdd} size="icon-xs" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
       </div>
       {input.nodes.map((node) => (
-        <div className="group flex items-start gap-1" key={node.id}>
+        <SelectableCard className="group flex items-start gap-1" key={node.id} selected={input.activeNodeId === node.id}>
           <Button
             aria-current={input.activeNodeId === node.id ? "true" : undefined}
-            className={cn("h-auto min-h-12 flex-1 justify-start px-2 py-2 text-left", input.activeNodeId === node.id && "bg-accent text-accent-foreground")}
+            className="h-auto min-h-12 flex-1 justify-start px-2 py-2 text-left text-inherit hover:text-inherit"
             onClick={() => input.onSelect?.(node.id)}
             type="button"
             variant="ghost"
@@ -1412,7 +1409,7 @@ function ComputersNavigator(input: {
               </AlertDialogContent>
             </AlertDialog>
           ) : null}
-        </div>
+        </SelectableCard>
       ))}
       </div>
     </ScrollArea>
@@ -1594,7 +1591,7 @@ function ComputerCreateModal(input: {
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
+            <Button type="submit" variant="primary"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -1758,7 +1755,7 @@ function AgentCreateModal(input: {
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit">{input.messages.common.create}</Button>
+            <Button type="submit" variant="primary">{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -1808,7 +1805,7 @@ function RuntimeOnboardingModal(input: {
         </div>
         <DialogFooter>
           <Button onClick={() => input.onRenameLocalNode?.(name)} type="button" variant="outline">{input.messages.onboarding.saveDeviceName}</Button>
-          <Button disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button">{input.messages.onboarding.refreshRuntime}</Button>
+          <Button disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button" variant="primary">{input.messages.onboarding.refreshRuntime}</Button>
         </DialogFooter>
     </ShellDialog>
   );

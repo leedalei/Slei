@@ -9,37 +9,37 @@ import { cn } from "@/lib/utils"
 const buttonVariants = cva(
   cn(
     "relative inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl",
-    "border text-sm font-medium transition-all duration-300 ease-out",
+    "border text-sm font-medium text-foreground transition-all duration-300 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
     "disabled:pointer-events-none disabled:opacity-50",
-    "hover:border-white/40 hover:bg-white/20",
+    "hover:border-white/40 hover:bg-white/10",
     "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   ),
   {
     variants: {
       variant: {
         default: cn(
-          "border-white/30 bg-white/20 text-white backdrop-blur-xl",
-          "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
+          "border-white/30 bg-transparent backdrop-blur-xl",
+          "shadow-[0_2px_10px_rgba(0,0,0,0.12)]",
           "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
-          "before:bg-linear-to-b before:from-white/20 before:to-transparent",
+          "before:bg-linear-to-b before:from-white/10 before:to-transparent",
         ),
         primary: cn(
-          "border-white/30 bg-linear-to-r from-cyan-500/80 via-blue-500/80 to-purple-500/80 text-white backdrop-blur-xl",
+          "border-white/30 bg-linear-to-r from-cyan-500/80 via-blue-500/80 to-purple-500/80 text-accent-foreground backdrop-blur-xl",
           "shadow-[0_4px_20px_rgba(59,130,246,0.4)] hover:shadow-[0_4px_30px_rgba(59,130,246,0.6)]",
           "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
           "before:bg-linear-to-b before:from-white/30 before:to-transparent",
         ),
-        secondary: "border-white/25 bg-white/15 text-white backdrop-blur-xl shadow-[0_4px_16px_rgba(0,0,0,0.18)]",
-        outline: "border-2 border-white/40 bg-transparent text-white backdrop-blur-sm hover:border-white/60 hover:bg-white/10",
-        ghost: "border-transparent bg-transparent text-white/70 hover:bg-white/10 hover:text-white",
+        secondary: "border-white/25 bg-transparent backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.1)] hover:bg-white/10",
+        outline: "border-2 border-white/40 bg-transparent backdrop-blur-sm hover:border-white/60 hover:bg-white/10",
+        ghost: "border-transparent bg-transparent hover:bg-white/10",
         destructive: cn(
-          "border-red-400/40 bg-red-500/30 text-red-100 backdrop-blur-xl",
+          "border-red-400/40 bg-red-500/30 backdrop-blur-xl",
           "shadow-[0_4px_16px_rgba(239,68,68,0.3)] hover:border-red-400/60 hover:bg-red-500/40",
           "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
           "before:bg-linear-to-b before:from-white/10 before:to-transparent",
         ),
-        link: "border-transparent bg-transparent text-cyan-200 underline-offset-4 hover:bg-white/10 hover:underline",
+        link: "border-transparent bg-transparent underline-offset-4 hover:bg-white/10 hover:underline",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -13,14 +13,14 @@ const Avatar = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.Root>, A
   ({ className, glowEffect = true, ...props }, ref) => (
     <div className="relative inline-flex">
       {glowEffect ? (
-        <div className="absolute -inset-1 rounded-full bg-linear-to-r from-cyan-500/40 via-blue-500/40 to-purple-500/40 opacity-70 blur-md" />
+        <div className="absolute -inset-0.5 rounded-full bg-linear-to-r from-cyan-500/30 via-blue-500/30 to-purple-500/30 opacity-55 blur-[6px]" />
       ) : null}
       <AvatarPrimitive.Root
         ref={ref}
         data-slot="avatar"
         className={cn(
           "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-white/30",
-          "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
+          "shadow-[0_2px_6px_rgba(0,0,0,0.16)]",
           className,
         )}
         {...props}
@@ -51,7 +51,7 @@ const AvatarFallback = React.forwardRef<
     ref={ref}
     data-slot="avatar-fallback"
     className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-white/10 text-sm font-medium text-white/80 backdrop-blur-xl",
+      "flex h-full w-full items-center justify-center rounded-full bg-white/10 text-sm font-medium text-foreground backdrop-blur-xl",
       className,
     )}
     {...props}
@@ -64,7 +64,7 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
     <span
       data-slot="avatar-badge"
       className={cn(
-        "absolute bottom-0 right-0 z-10 inline-flex h-3 w-3 items-center justify-center rounded-full border border-white/30 bg-cyan-400 text-white ring-2 ring-black/20",
+        "absolute bottom-0 right-0 z-10 inline-flex h-3 w-3 items-center justify-center rounded-full border border-white/30 bg-cyan-400 text-primary-foreground ring-2 ring-black/20",
         className,
       )}
       {...props}
@@ -82,7 +82,7 @@ function AvatarGroupCount({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="avatar-group-count"
-      className={cn("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-sm text-white/70 backdrop-blur-xl", className)}
+      className={cn("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-sm text-muted-foreground backdrop-blur-xl", className)}
       {...props}
     />
   )

@@ -5,6 +5,7 @@ export { MemberAvatar } from "./MemberAvatar";
 export { MessageStatusSquare, StatusDot } from "./StatusIndicators";
 export { PageHeader } from "./PageHeader";
 export { PreferenceRow } from "./PreferenceRow";
+export { SelectableCard, selectableCardSelectedClassName } from "./SelectableCard";
 export { StatusBadge } from "./StatusBadge";
 export { TooltipButton } from "./TooltipButton";
 export { Toast, TOAST_VISIBLE_MS, copyToastContent, type ToastType } from "./Toast";

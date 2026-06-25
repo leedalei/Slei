@@ -114,6 +114,48 @@ describe("MemberAvatar", () => {
     }
   });
 
+  it("uses a compact global avatar shadow no larger than 6px blur", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "LW",
+      avatarSeed: "lin-wen-shadow",
+      handle: "lin",
+      id: "member-shadow",
+      name: "Lin Wen",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} />);
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+
+      expect(avatar?.className).toContain("shadow-[0_2px_6px_rgba(0,0,0,0.16)]");
+      expect(avatar?.className).not.toContain("shadow-[0_4px_16px");
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
+  it("does not render the decorative gradient glow behind member portraits", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "YG",
+      avatarSeed: "yeal-glow-check",
+      handle: "yeal",
+      id: "member-glow-check",
+      name: "Yeal",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} />);
+
+    try {
+      expect(host.querySelector('[class*="bg-linear-to-r"]')).toBeNull();
+      expect(host.querySelector('[class*="blur-md"]')).toBeNull();
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
   it("uses the explicit avatar initials as fallback while preserving the large size marker", async () => {
     installImageMock("error");
     const identity: MemberAvatarIdentity = {

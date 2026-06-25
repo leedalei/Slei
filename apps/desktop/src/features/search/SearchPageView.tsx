@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type {
@@ -31,6 +31,7 @@ import {
 } from "./globalSearch";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
+const SEARCH_DEBOUNCE_MS = 350;
 const RESET_FILTER_VALUE = "__slei_filter_reset__";
 
 type SearchFromOption = {
@@ -45,7 +46,7 @@ type SelectOption = {
   subtitle?: string;
 };
 
-const filterSelectTriggerClassName = "min-w-36 rounded-lg border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/35";
+const filterSelectTriggerClassName = "w-auto min-w-36 max-w-full rounded-lg border-border/55 bg-muted/45 transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/35";
 const searchResultPanelClassName = "shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25";
 
 export function SearchPage({
@@ -78,6 +79,7 @@ export function SearchPage({
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [activeRequestKey, setActiveRequestKey] = useState("");
   const requestSequenceRef = useRef(0);
+  const debounceTimerRef = useRef<number | null>(null);
 
   const fromOptions = useMemo(() => createFromOptions(data, profile ?? null, messages), [data, messages, profile]);
   const channelOptions = useMemo(() => data.channels.map((channel) => ({
@@ -99,7 +101,21 @@ export function SearchPage({
   const hasResults = sections.some((section) => section.items.length > 0);
   const currentRequest = buildCurrentSearchRequest();
   const currentRequestKey = currentRequest ? stableGlobalSearchRequestKey(currentRequest) : "";
-  const submitDisabled = status === "loading" && currentRequestKey === activeRequestKey;
+
+  useEffect(() => {
+    requestSequenceRef.current += 1;
+    clearDebouncedSearch();
+    if (!currentRequest) {
+      resetSearchState();
+      return undefined;
+    }
+    const request = currentRequest;
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      void runSearch(request);
+    }, SEARCH_DEBOUNCE_MS);
+    return clearDebouncedSearch;
+  }, [currentRequestKey]);
 
   function buildCurrentSearchRequest() {
     return buildGlobalSearchRequest({
@@ -111,15 +127,22 @@ export function SearchPage({
     });
   }
 
-  async function submitSearch(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    const request = buildCurrentSearchRequest();
+  function clearDebouncedSearch() {
+    if (debounceTimerRef.current === null) return;
+    window.clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = null;
+  }
+
+  function resetSearchState() {
+    setActiveRequestKey("");
+    setStatus("idle");
+    setReceipt(undefined);
+    setSubmittedQuery("");
+  }
+
+  async function runSearch(request = buildCurrentSearchRequest()) {
     if (!request) {
-      requestSequenceRef.current += 1;
-      setActiveRequestKey("");
-      setStatus("idle");
-      setReceipt(undefined);
-      setSubmittedQuery("");
+      resetSearchState();
       return;
     }
 
@@ -145,13 +168,24 @@ export function SearchPage({
     }
   }
 
+  async function submitSearch(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    clearDebouncedSearch();
+    await runSearch();
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    clearDebouncedSearch();
+    void runSearch();
+  }
+
   function clearQuery() {
     requestSequenceRef.current += 1;
+    clearDebouncedSearch();
     setQuery("");
-    setReceipt(undefined);
-    setSubmittedQuery("");
-    setStatus("idle");
-    setActiveRequestKey("");
+    resetSearchState();
   }
 
   return (
@@ -159,15 +193,17 @@ export function SearchPage({
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
           <Card
-            className="rounded-full text-card-foreground shadow-none transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_32%,transparent)]"
+            className="rounded-full border border-border/55 text-card-foreground shadow-none transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_32%,transparent)]"
             data-search-input-surface="true"
           >
             <CardContent className="flex min-h-12 items-center gap-3 px-3 py-0">
               <SleiIcon className="size-5 text-muted-foreground" name="search" />
               <Input
                 aria-label={messages.search.navigation.searchInput}
-                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
+                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none backdrop-blur-none focus:bg-transparent focus-visible:ring-0 dark:bg-transparent"
+                glowEffect={false}
                 onChange={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={handleSearchKeyDown}
                 placeholder={messages.search.placeholderTitle}
                 value={query}
               />
@@ -176,10 +212,6 @@ export function SearchPage({
                   <SleiIcon className="size-4" name="x" />
                 </Button>
               ) : null}
-              <Button className="min-w-20" disabled={submitDisabled} type="submit">
-                {status === "loading" ? <SleiIcon className="size-4 animate-spin" name="loader" /> : <SleiIcon className="size-4" name="search" />}
-                {messages.search.submit}
-              </Button>
             </CardContent>
           </Card>
 

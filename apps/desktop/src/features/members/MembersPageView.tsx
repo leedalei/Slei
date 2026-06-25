@@ -47,7 +47,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MemberTab = "profile" | "workspace" | "capabilities" | "permissions" | "activity";
 type MemberEditableField = "description" | "model" | "name" | "runtime";
-const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card/30 text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 
 type ClipboardWriter = {
   writeText?: (text: string) => Promise<void>;
@@ -338,9 +338,9 @@ export function MembersPage(input: {
   const memberSkills = selectedMember.skills ?? [];
 
   return (
-    <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
+    <section className="!grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-      <div className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
+      <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
         <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
           <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
             <MemberAvatar identity={selectedMember} large />
@@ -414,9 +414,10 @@ export function MembersPage(input: {
           </Alert>
         ) : null}
       </div>
+      <Separator />
 
-      <Tabs className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-0" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
-        <div className="border-b px-4 py-2" data-testid="slei-member-detail-tabs">
+      <Tabs className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-0" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
+        <div className="px-4 py-2" data-testid="slei-member-detail-tabs">
           <TabsList aria-label={input.messages.members.memberConfig} variant="line">
             <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
             <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
@@ -425,6 +426,7 @@ export function MembersPage(input: {
             <TabsTrigger value="activity">{input.messages.members.activity}</TabsTrigger>
           </TabsList>
         </div>
+        <Separator />
 
         <ScrollArea className="min-h-0">
           <div className="grid gap-4 p-6">

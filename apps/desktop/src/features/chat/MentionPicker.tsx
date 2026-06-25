@@ -1,11 +1,10 @@
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
-import { MemberAvatar, StatusDot } from "../../components";
+import { MemberAvatar, SelectableCard, StatusDot } from "../../components";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
-import { cn } from "../../lib/utils";
 
 export function MentionPicker({
   messages,
@@ -28,31 +27,32 @@ export function MentionPicker({
         <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
           <div className="grid min-w-0 gap-1">
             {members.map((member, index) => (
-              <Button
-                aria-current={index === selectedIndex ? "true" : undefined}
-                className={cn("h-auto min-h-12 w-full min-w-0 max-w-full overflow-hidden justify-start gap-2 px-2 py-2 text-left", index === selectedIndex && "bg-accent text-accent-foreground")}
-                data-mention-option-index={index}
-                key={member.id}
-                onClick={() => onSelect(index)}
-                ref={(node) => optionRef?.(index, node)}
-                type="button"
-                variant="ghost"
-              >
-                <MemberAvatar identity={member} />
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <strong className="truncate text-sm">{member.name}</strong>
-                    <StatusDot status={member.runtimeStatus} />
+              <SelectableCard asChild key={member.id} selected={index === selectedIndex}>
+                <Button
+                  aria-current={index === selectedIndex ? "true" : undefined}
+                  className="h-auto min-h-12 w-full min-w-0 max-w-full overflow-hidden justify-start gap-2 px-2 py-2 text-left text-inherit hover:text-inherit"
+                  data-mention-option-index={index}
+                  onClick={() => onSelect(index)}
+                  ref={(node) => optionRef?.(index, node)}
+                  type="button"
+                  variant="ghost"
+                >
+                  <MemberAvatar identity={member} />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <strong className="truncate text-sm">{member.name}</strong>
+                      <StatusDot status={member.runtimeStatus} />
+                    </span>
+                    <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
                   </span>
-                  <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
-                </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground">{member.handle}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>{member.handle}</TooltipContent>
-                </Tooltip>
-              </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="max-w-[35%] truncate text-xs font-normal text-muted-foreground">{member.handle}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>{member.handle}</TooltipContent>
+                  </Tooltip>
+                </Button>
+              </SelectableCard>
             ))}
           </div>
         </ScrollArea>

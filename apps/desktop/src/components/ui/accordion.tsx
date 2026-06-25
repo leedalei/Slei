@@ -30,15 +30,15 @@ function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "flex flex-1 items-center justify-between gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-white/80 outline-none",
-          "transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50",
+          "flex flex-1 items-center justify-between gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-foreground outline-none",
+          "transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-2 focus-visible:ring-white/50",
           "[&[data-state=open]>svg]:rotate-180",
           className,
         )}
         {...props}
       >
         {children}
-        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-white/60 transition-transform duration-200" />
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200" />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )
@@ -52,7 +52,7 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="overflow-hidden text-sm text-white/70 data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+      className="overflow-hidden text-sm text-muted-foreground data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
       {...props}
     >
       <div className={cn("px-4 pb-4 pt-0", className)}>{children}</div>

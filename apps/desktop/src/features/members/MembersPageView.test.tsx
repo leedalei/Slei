@@ -140,7 +140,10 @@ describe("MembersPage agent details", () => {
     expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain("data-slei-status");
     expect(html).not.toContain('<header class="select-none border-b bg-background px-6 py-5"');
-    expect(html).toContain('<div class="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header"');
+    expect(html).not.toContain('<div class="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header"');
+    expect(html).not.toContain('<div class="select-none border-b bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
+    expect(html).toContain('<div class="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
+    expect(html.slice(headerEnd, headerEnd + 260)).toContain('data-slot="separator"');
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml.slice(messageButtonStart - 160, messageButtonStart + 80)).not.toContain("data-tauri-drag-region");
@@ -174,11 +177,13 @@ describe("MembersPage agent details", () => {
     const markerIndex = html.indexOf(marker);
 
     expect(markerIndex).toBeGreaterThanOrEqual(0);
-    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
-    const tabsHtml = html.slice(markerIndex, markerIndex + 1200);
+    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).not.toContain("border-b px-4 py-2");
+    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("px-4 py-2");
+    const tabsHtml = html.slice(markerIndex, markerIndex + 3200);
     expect(tabsHtml).toContain('data-slot="tabs-list"');
     expect(tabsHtml).toContain('data-variant="line"');
     expect(tabsHtml).toContain("h-12");
+    expect(html.indexOf('data-slot="separator"', markerIndex)).toBeGreaterThan(markerIndex);
   });
 
   it("renders a dedicated permissions tab label between capabilities and activity", async () => {
@@ -275,7 +280,9 @@ describe("MembersPage agent details", () => {
     expect(profileCards).toHaveLength(2);
     for (const card of profileCards) {
       expect(card.className).toContain("grid");
+      expect(card.className).toContain("bg-card/30");
       expect(card.className).toContain("text-card-foreground");
+      expect(card.className.split(/\s+/)).not.toContain("bg-card");
       expect(card.className).not.toContain("bg-card/80");
       expect(card.className).not.toContain("bg-muted/40");
     }

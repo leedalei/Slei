@@ -1,0 +1,70 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+
+import { Checkbox } from "./checkbox";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+function mountCheckbox(element: React.ReactElement) {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+
+  act(() => {
+    root.render(element);
+  });
+
+  return { host, root };
+}
+
+function cleanupCheckbox(root: Root, host: HTMLElement) {
+  act(() => {
+    root.unmount();
+  });
+  host.remove();
+}
+
+describe("Checkbox", () => {
+  it("uses transparent glass checkbox defaults", () => {
+    const html = renderToStaticMarkup(<Checkbox aria-label="选择 Agent" />);
+
+    expect(html).toContain('data-slot="checkbox"');
+    expect(html).toContain('role="checkbox"');
+    expect(html).toContain("size-5");
+    expect(html).toContain("rounded-md");
+    expect(html).toContain("border-white/35");
+    expect(html).toContain("bg-transparent");
+    expect(html).toContain("backdrop-blur-xl");
+    expect(html).toContain("shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]");
+    expect(html).not.toContain("border-input");
+    expect(html).not.toContain("dark:bg-input/30");
+  });
+
+  it("keeps checked state styling on the shared primary tokens", () => {
+    const html = renderToStaticMarkup(<Checkbox aria-label="选择 Agent" checked />);
+
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('data-state="checked"');
+    expect(html).toContain("data-[state=checked]:border-primary");
+    expect(html).toContain("data-[state=checked]:bg-primary");
+    expect(html).toContain("data-[state=checked]:text-primary-foreground");
+  });
+
+  it("notifies callers when toggled from the rendered DOM", () => {
+    const onCheckedChange = vi.fn();
+    const { host, root } = mountCheckbox(<Checkbox aria-label="选择 Agent" onCheckedChange={onCheckedChange} />);
+
+    try {
+      act(() => {
+        host.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click();
+      });
+
+      expect(onCheckedChange).toHaveBeenCalledWith(true);
+    } finally {
+      cleanupCheckbox(root, host);
+    }
+  });
+});

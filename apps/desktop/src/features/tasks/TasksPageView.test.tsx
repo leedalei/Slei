@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -81,13 +81,16 @@ function pageData() {
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
-async function mountTasksPage() {
+async function mountTasksPage(
+  activeTaskId?: string,
+  handlers: Pick<ComponentProps<typeof TasksPage>, "onTaskReply"> = {},
+) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
 
   await act(async () => {
-    root?.render(<TasksPage data={pageData()} messages={createDesktopMessages("zh-CN")} />);
+    root?.render(<TasksPage activeTaskId={activeTaskId} data={pageData()} messages={createDesktopMessages("zh-CN")} {...handlers} />);
   });
   await act(async () => undefined);
 
@@ -165,6 +168,29 @@ describe("TasksPage filters", () => {
     expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
   });
 
+  it("keeps task toolbar filters compact and lets view tabs use the default translucent surface", async () => {
+    await mountTasksPage();
+
+    const header = container?.querySelector('[data-testid="slei-tasks-header"]');
+    const filterTriggers = Array.from(header?.querySelectorAll<HTMLElement>('[data-slot="select-trigger"]') ?? []);
+    const tabsList = header?.querySelector<HTMLElement>('[data-slot="tabs-list"]');
+    const boardTab = Array.from(header?.querySelectorAll<HTMLElement>('[data-slot="tabs-trigger"]') ?? [])
+      .find((button) => button.textContent?.includes("看板"));
+
+    expect(filterTriggers).toHaveLength(2);
+    for (const trigger of filterTriggers) {
+      const classes = trigger.className.split(/\s+/);
+      expect(classes).toContain("w-56");
+      expect(classes).not.toContain("w-full");
+    }
+    expect(tabsList?.className).toContain("bg-white/10");
+    expect(tabsList?.className).toContain("backdrop-blur-xl");
+    expect(tabsList?.className).not.toContain("bg-card/70");
+    expect(tabsList?.className).not.toContain("backdrop-blur-none");
+    expect(tabsList?.className).not.toContain("shadow-none");
+    expect(boardTab?.className).not.toContain("data-[state=active]:before:hidden");
+  });
+
   it("uses task-view icons that match board and list semantics", async () => {
     await mountTasksPage();
     const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
@@ -193,6 +219,17 @@ describe("TasksPage filters", () => {
     expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
     expect(container?.querySelector('[data-slei-status="in_progress"]')).not.toBeNull();
     expect(container?.querySelector('[data-slei-status="done"]')).not.toBeNull();
+  });
+
+  it("uses the shared selectable card state for the active task card", async () => {
+    await mountTasksPage("task_ai_coda");
+
+    const selectedTask = container?.querySelector<HTMLElement>('[data-task-id="task_ai_coda"]');
+
+    expect(selectedTask?.getAttribute("data-slot")).toBe("selectable-card");
+    expect(selectedTask?.getAttribute("data-selected")).toBe("true");
+    expect(selectedTask?.className).toContain("bg-white/20");
+    expect(selectedTask?.className).not.toContain("bg-accent");
   });
 
   it("filters tasks by channel and assignee before switching views", async () => {
@@ -242,8 +279,80 @@ describe("TasksPage filters", () => {
     expect(container?.textContent).not.toContain("待指派 0");
     const pendingColumn = container?.querySelector('[data-slot="card"][aria-label="待指派"]');
     expect(pendingColumn?.getAttribute("role")).toBe("region");
+    expect(pendingColumn?.className.split(/\s+/)).toContain("bg-card/45");
+    expect(pendingColumn?.className.split(/\s+/)).not.toContain("bg-card");
     const pendingEmptyTitle = pendingColumn?.querySelector('[data-empty-variant="nodata"] h2');
     expect(pendingEmptyTitle?.textContent).toBe("暂无数据");
     expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);
+  });
+
+  it("keeps board status columns arranged horizontally with overflow instead of stacking vertically", async () => {
+    await mountTasksPage();
+
+    const statusColumns = ["待指派", "进行中", "待评审", "已完成"].map((label) =>
+      container?.querySelector<HTMLElement>(`[data-slot="card"][aria-label="${label}"]`),
+    );
+    const boardGrid = statusColumns[0]?.parentElement;
+    const boardClasses = boardGrid?.className.split(/\s+/) ?? [];
+    const columnClasses = statusColumns[0]?.className.split(/\s+/) ?? [];
+
+    expect(statusColumns.every(Boolean)).toBe(true);
+    expect(new Set(statusColumns.map((column) => column?.parentElement)).size).toBe(1);
+    expect(boardClasses).toContain("grid-flow-col");
+    expect(boardClasses).toContain("auto-cols-[minmax(17rem,1fr)]");
+    expect(boardClasses).toContain("overflow-x-auto");
+    expect(boardClasses).not.toContain("xl:grid-cols-4");
+    expect(columnClasses).toContain("min-w-0");
+  });
+
+  it("opens the task thread as an unmasked right slide-over with a bottom reply composer", async () => {
+    await mountTasksPage("task_ai_coda", { onTaskReply: async () => undefined });
+
+    const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
+    const footer = drawer?.querySelector<HTMLElement>('[data-slot="sheet-footer"]');
+    const composer = footer?.querySelector<HTMLElement>('[data-slot="task-thread-composer"]');
+    const textarea = drawer?.querySelector<HTMLTextAreaElement>('textarea[placeholder="请输入回复"]');
+    const sendButton = drawer?.querySelector<HTMLButtonElement>('button[aria-label="发送回复"]');
+
+    expect(drawer).not.toBeNull();
+    expect(drawer?.getAttribute("data-side")).toBe("right");
+    expect(drawer?.className).toContain("data-[state=open]:slide-in-from-right");
+    expect(drawer?.className).toContain("bg-white/70");
+    expect(drawer?.className).toContain("before:hidden");
+    expect(document.body.querySelector('[data-slot="sheet-overlay"]')).toBeNull();
+
+    expect(footer).not.toBeNull();
+    expect(footer?.className).toContain("sticky");
+    expect(footer?.className).toContain("bottom-0");
+    expect(footer?.className).not.toContain("border-t");
+    expect(composer).not.toBeNull();
+    expect(composer?.className).toContain("relative");
+    expect(composer?.className).toContain("shadow");
+    expect(textarea).not.toBeNull();
+    expect(textarea?.getAttribute("placeholder")).toBe("请输入回复");
+    expect(textarea?.className).toContain("pr-16");
+    expect(sendButton).toBeDefined();
+    expect(sendButton?.textContent?.trim()).toBe("");
+    expect(sendButton?.className).toContain("absolute");
+    expect(sendButton?.className).toContain("rounded-full");
+    expect(sendButton?.className).toContain("right-3");
+    expect(sendButton?.getAttribute("data-size")).toBe("icon");
+    expect(sendButton?.querySelector('[data-slei-icon="send"]')).not.toBeNull();
+    expect(sendButton?.disabled).toBe(true);
+
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(textarea!), "value")?.set;
+      if (valueSetter) {
+        valueSetter.call(textarea, "继续处理");
+      } else {
+        textarea!.value = "继续处理";
+      }
+      textarea?.dispatchEvent(new Event("input", { bubbles: true }));
+      textarea?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(sendButton?.disabled).toBe(false);
+
+    expect(composer?.contains(textarea!)).toBe(true);
+    expect(composer?.contains(sendButton!)).toBe(true);
   });
 });

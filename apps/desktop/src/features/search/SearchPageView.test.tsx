@@ -117,6 +117,7 @@ async function mount(element: React.ReactElement) {
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (root) {
     await act(async () => {
       root?.unmount();
@@ -181,16 +182,6 @@ async function clickButton(rootElement: HTMLElement, label: string | RegExp) {
   return button as HTMLButtonElement;
 }
 
-async function clickButtonWithExactText(rootElement: HTMLElement, text: string) {
-  const button = Array.from(rootElement.querySelectorAll("button")).find((candidate) => candidate.textContent?.trim() === text);
-  expect(button).toBeInstanceOf(HTMLButtonElement);
-  await act(async () => {
-    button?.click();
-  });
-  await act(async () => undefined);
-  return button as HTMLButtonElement;
-}
-
 async function openSelect(rootElement: HTMLElement, label: string) {
   const trigger = Array.from(rootElement.querySelectorAll<HTMLButtonElement>('[data-slot="select-trigger"]')).find((candidate) => {
     const name = `${candidate.getAttribute("aria-label") ?? ""} ${candidate.textContent ?? ""}`;
@@ -223,6 +214,13 @@ async function submitSearchForm(rootElement: HTMLElement) {
   await act(async () => undefined);
 }
 
+async function pressEnter(input: HTMLInputElement) {
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+  });
+  await act(async () => undefined);
+}
+
 describe("SearchPage global search UI", () => {
   it("renders the empty query placeholder and does not call daemon search", async () => {
     const onGlobalSearch = vi.fn();
@@ -237,12 +235,21 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface?.getAttribute("data-slot")).toBe("card");
     expect(searchSurface?.querySelector('[data-slot="card-content"]')).not.toBeNull();
     expect(searchSurface?.className).toContain("rounded-full");
+    expect(searchSurface?.className).toContain("border");
+    expect(searchSurface?.className).toContain("border-border/55");
+    expect(searchSurface?.className).toContain("focus-within:border-primary");
     expect(searchSurface?.className).not.toContain("focus-within:ring-ring");
     expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--overlay-shadow");
     expect(searchInput.className).toContain("bg-transparent");
+    expect(searchInput.className).toContain("focus:bg-transparent");
+    expect(searchInput.className).toContain("backdrop-blur-none");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
+    expect(searchInput.parentElement?.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(searchInput.className).not.toContain("bg-white/10");
+    expect(searchInput.className).not.toContain("focus:bg-white/15");
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
+    expect(Array.from(rootElement.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Search")).toBe(false);
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
     expect(results?.className).not.toContain("p-6");
@@ -260,7 +267,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "   ");
-    await clickButton(rootElement, "Search");
+    await pressEnter(inputByLabel(rootElement, "Global search input"));
 
     expect(onGlobalSearch).not.toHaveBeenCalled();
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
@@ -272,7 +279,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), " coda ");
-    await clickButton(rootElement, "Search");
+    await pressEnter(inputByLabel(rootElement, "Global search input"));
 
     expect(onGlobalSearch).toHaveBeenCalledWith({
       q: "coda",
@@ -306,7 +313,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), " coda ");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
 
     const accordion = rootElement.querySelector('[data-slot="search-results-accordion"]');
     const items = Array.from(rootElement.querySelectorAll<HTMLElement>('[data-slot="accordion-item"]'));
@@ -337,7 +344,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
     await clickButton(rootElement, "Clear search query");
 
     await act(async () => {
@@ -356,7 +363,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
     await submitSearchForm(rootElement);
 
     expect(onGlobalSearch).toHaveBeenCalledTimes(1);
@@ -372,9 +379,9 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "alpha");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
     await changeInput(inputByLabel(rootElement, "Global search input"), "beta");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
 
     await act(async () => {
       second.resolve(searchReceipt("beta", "Fresh Beta"));
@@ -401,9 +408,13 @@ describe("SearchPage global search UI", () => {
     expect(filterTriggers.length).toBe(3);
     expect(filterTriggers.every((trigger) => trigger.querySelector("svg"))).toBe(true);
     for (const trigger of filterTriggers) {
+      const triggerClasses = trigger.className.split(/\s+/);
       expect(trigger.getAttribute("data-filter-select-trigger")).toBe("true");
+      expect(triggerClasses).toContain("w-auto");
+      expect(triggerClasses).not.toContain("w-full");
       expect(trigger.className).toContain("rounded-lg");
-      expect(trigger.className).toContain("shadow-none");
+      expect(trigger.className).toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
+      expect(trigger.className).not.toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
       expect(trigger.className).not.toContain("shadow-[var(--overlay-shadow");
     }
@@ -421,7 +432,7 @@ describe("SearchPage global search UI", () => {
     await clickSelectItem("Last 7 days");
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
 
     expect(onGlobalSearch).toHaveBeenLastCalledWith({
       q: "coda",
@@ -433,6 +444,48 @@ describe("SearchPage global search UI", () => {
       channelLimit: 20,
       messageLimit: 80,
     });
+  });
+
+  it("debounces query changes and lets Enter search immediately", async () => {
+    vi.useFakeTimers();
+    const onGlobalSearch = vi.fn(async (_query: GlobalSearchQuery) => receipt);
+    const rootElement = await renderSearchPage({ onGlobalSearch });
+    const searchInput = inputByLabel(rootElement, "Global search input");
+
+    await changeInput(searchInput, "co");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(349);
+    });
+    expect(onGlobalSearch).not.toHaveBeenCalled();
+
+    await changeInput(searchInput, "coda");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
+    expect(onGlobalSearch).toHaveBeenCalledTimes(1);
+    expect(onGlobalSearch).toHaveBeenLastCalledWith({
+      q: "coda",
+      timeZone: "Asia/Shanghai",
+      agentLimit: 20,
+      channelLimit: 20,
+      messageLimit: 80,
+    });
+
+    await changeInput(searchInput, "release");
+    await pressEnter(searchInput);
+    expect(onGlobalSearch).toHaveBeenCalledTimes(2);
+    expect(onGlobalSearch).toHaveBeenLastCalledWith({
+      q: "release",
+      timeZone: "Asia/Shanghai",
+      agentLimit: 20,
+      channelLimit: 20,
+      messageLimit: 80,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350);
+    });
+    expect(onGlobalSearch).toHaveBeenCalledTimes(2);
   });
 
   it("does not render a Relevant filter", async () => {
@@ -449,7 +502,7 @@ describe("SearchPage global search UI", () => {
     });
 
     await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "不存在");
-    await clickButtonWithExactText(rootElement, "搜索");
+    await submitSearchForm(rootElement);
 
     const emptyState = searchEmptyState(rootElement);
     expect(rootElement.textContent).toContain(messages.search.noResultTitle);
@@ -469,7 +522,7 @@ describe("SearchPage global search UI", () => {
     });
 
     await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "coda");
-    await clickButtonWithExactText(rootElement, "搜索");
+    await submitSearchForm(rootElement);
 
     expect(rootElement.textContent).toContain(messages.search.errorDescription);
     expect(searchEmptyState(rootElement)?.dataset.emptySize).toBe("lg");
@@ -522,7 +575,7 @@ describe("SearchPage global search UI", () => {
     });
 
     await changeInput(inputByLabel(rootElement, "全局搜索输入框"), "发布");
-    await clickButtonWithExactText(rootElement, "搜索");
+    await submitSearchForm(rootElement);
 
     expect(rootElement.textContent).toContain("发布频道");
     expect(rootElement.textContent).toContain("李雷");
@@ -557,7 +610,7 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch: async () => dmReceipt });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "hello");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
 
     const resultButton = Array.from(rootElement.querySelectorAll("button")).find((button) => button.textContent?.includes("hello from epoch seconds"));
     expect(resultButton?.textContent).toMatch(/\d{2}[-/]\d{2}/);
@@ -577,7 +630,7 @@ describe("SearchPage global search UI", () => {
     });
 
     await changeInput(inputByLabel(rootElement, "Global search input"), "coda");
-    await clickButton(rootElement, "Search");
+    await submitSearchForm(rootElement);
     await clickButton(rootElement, /Open agent Coda/);
     await clickButton(rootElement, /Open channel #release/);
     await clickButton(rootElement, /Open message msg_coda/);

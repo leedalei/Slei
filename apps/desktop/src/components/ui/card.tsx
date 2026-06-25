@@ -14,7 +14,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       ref={ref}
       data-slot="card"
       className={cn(
-        "relative overflow-hidden rounded-2xl border border-white/20 bg-white/10 text-white backdrop-blur-xl",
+        "relative overflow-hidden rounded-2xl border border-white/20 bg-white/10 text-card-foreground backdrop-blur-xl",
         "shadow-[0_8px_32px_rgba(0,0,0,0.37)]",
         glowEffect && "shadow-[0_8px_32px_rgba(0,0,0,0.37),0_0_32px_rgba(59,130,246,0.22)]",
         "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-linear-to-b before:from-white/20 before:to-transparent",
@@ -38,14 +38,14 @@ CardHeader.displayName = "CardHeader"
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} data-slot="card-title" className={cn("text-xl font-semibold leading-none text-white", className)} {...props} />
+    <h3 ref={ref} data-slot="card-title" className={cn("text-xl font-semibold leading-none text-card-foreground", className)} {...props} />
   ),
 )
 CardTitle.displayName = "CardTitle"
 
 const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} data-slot="card-description" className={cn("text-sm text-white/60", className)} {...props} />
+    <p ref={ref} data-slot="card-description" className={cn("text-sm text-muted-foreground", className)} {...props} />
   ),
 )
 CardDescription.displayName = "CardDescription"

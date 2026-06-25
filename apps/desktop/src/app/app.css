@@ -6,19 +6,33 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.18 0.045 255);
-  --foreground: oklch(0.96 0.018 230);
+  --n10: #1F1F1F;
+  --n20: #292929;
+  --n30: #424242;
+  --n40: #5C5C5C;
+  --n50: #757575;
+  --n60: #8F8F8F;
+  --n70: #A8A8A8;
+  --n80: #C2C2C2;
+  --n90: #DBDBDB;
+  --n100: #F5F5F5;
+  --text-color-1: var(--n100);
+  --text-color-2: var(--n80);
+  --text-color-3: var(--n60);
+  --text-color-4: var(--n50);
+  --background: oklch(0.18 0.045 255 / 0.8);
+  --foreground: var(--text-color-1);
   --card: oklch(0.24 0.045 255 / 0.72);
-  --card-foreground: var(--foreground);
+  --card-foreground: var(--text-color-1);
   --popover: oklch(0.22 0.045 255 / 0.96);
-  --popover-foreground: var(--foreground);
+  --popover-foreground: var(--text-color-1);
   --primary: oklch(0.78 0.13 205);
   --primary-foreground: oklch(0.12 0.035 255);
   --secondary: oklch(0.34 0.07 275 / 0.78);
   --secondary-foreground: oklch(0.93 0.025 260);
   --muted: oklch(0.30 0.035 255 / 0.72);
-  --muted-foreground: oklch(0.76 0.032 235);
-  --accent: oklch(0.62 0.13 285);
+  --muted-foreground: var(--text-color-3);
+  --accent: oklch(0.58 0.12 185);
   --accent-foreground: oklch(0.98 0.012 250);
   --destructive: oklch(0.64 0.21 25);
   --destructive-foreground: oklch(1 0 0);
@@ -31,7 +45,7 @@
   --chart-4: oklch(0.72 0.16 45);
   --chart-5: oklch(0.70 0.18 335);
   --sidebar: oklch(0.16 0.04 255 / 0.62);
-  --sidebar-foreground: var(--foreground);
+  --sidebar-foreground: var(--text-color-1);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--accent);
@@ -44,9 +58,12 @@
   --glow-cyan: rgba(6, 182, 212, 0.3);
   --glow-purple: rgba(147, 51, 234, 0.3);
   --glow-pink: rgba(236, 72, 153, 0.24);
-  --text-primary: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-muted: rgba(255, 255, 255, 0.5);
+  --text-primary: var(--text-color-1);
+  --text-secondary: var(--text-color-2);
+  --text-muted: var(--text-color-3);
+  --composer-glass-bg: rgba(28, 35, 50, 0.7);
+  --composer-glass-shadow: rgb(0 0 0 / 0.18);
+  --composer-glass-highlight: rgb(255 255 255 / 0.18);
   --radius-xs: 6px;
   --radius-sm: 6px;
   --radius-base: 8px;
@@ -108,7 +125,7 @@
   --glass-button-border: var(--glass-border);
   --glass-button-hover-border: color-mix(in srgb, var(--glass-border) 52%, var(--glow-cyan));
   --glass-button-shadow: 0 10px 26px color-mix(in srgb, var(--overlay-shadow-color) 36%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
-  --glass-button-primary-gradient-bg: linear-gradient(135deg, var(--glow-cyan), color-mix(in srgb, var(--glow-cyan) 55%, var(--glow-purple)), var(--glow-purple));
+  --glass-button-primary-bg: var(--primary);
   --dropdown-open-dur: 250ms;
   --dropdown-close-dur: 150ms;
   --dropdown-pre-scale: 0.97;
@@ -211,57 +228,89 @@
 }
 
 .dark {
-  --background: oklch(0.18 0.045 255);
-  --foreground: oklch(0.96 0.018 230);
+  --n10: #1F1F1F;
+  --n20: #292929;
+  --n30: #424242;
+  --n40: #5C5C5C;
+  --n50: #757575;
+  --n60: #8F8F8F;
+  --n70: #A8A8A8;
+  --n80: #C2C2C2;
+  --n90: #DBDBDB;
+  --n100: #F5F5F5;
+  --text-color-1: var(--n100);
+  --text-color-2: var(--n80);
+  --text-color-3: var(--n60);
+  --text-color-4: var(--n50);
+  --background: oklch(0.18 0.045 255 / 0.8);
+  --foreground: var(--text-color-1);
   --card: oklch(0.24 0.045 255 / 0.72);
-  --card-foreground: var(--foreground);
+  --card-foreground: var(--text-color-1);
   --popover: oklch(0.22 0.045 255 / 0.96);
-  --popover-foreground: var(--foreground);
+  --popover-foreground: var(--text-color-1);
   --primary: oklch(0.78 0.13 205);
   --primary-foreground: oklch(0.12 0.035 255);
   --secondary: oklch(0.34 0.07 275 / 0.78);
   --secondary-foreground: oklch(0.93 0.025 260);
   --muted: oklch(0.30 0.035 255 / 0.72);
-  --muted-foreground: oklch(0.76 0.032 235);
-  --accent: oklch(0.62 0.13 285);
+  --muted-foreground: var(--text-color-3);
+  --accent: oklch(0.58 0.12 185);
   --accent-foreground: oklch(0.98 0.012 250);
   --destructive: oklch(0.64 0.21 25);
   --border: oklch(0.42 0.045 250 / 0.72);
   --input: oklch(0.36 0.04 250 / 0.82);
   --ring: oklch(0.75 0.13 205);
   --sidebar: oklch(0.16 0.04 255 / 0.62);
+  --sidebar-foreground: var(--text-color-1);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 16px;
   --glow-cyan: rgba(6, 182, 212, 0.3);
   --glow-purple: rgba(147, 51, 234, 0.3);
   --glow-pink: rgba(236, 72, 153, 0.3);
-  --text-primary: rgba(255, 255, 255, 0.95);
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-muted: rgba(255, 255, 255, 0.5);
+  --text-primary: var(--text-color-1);
+  --text-secondary: var(--text-color-2);
+  --text-muted: var(--text-color-3);
+  --composer-glass-bg: rgba(28, 35, 50, 0.7);
+  --composer-glass-shadow: rgb(0 0 0 / 0.18);
+  --composer-glass-highlight: rgb(255 255 255 / 0.18);
 }
 
 .light {
-  --background: oklch(0.985 0.006 220);
-  --foreground: oklch(0.22 0.035 250);
+  --n10: #FAFAFA;
+  --n20: #F5F5F5;
+  --n30: #E6E6E6;
+  --n40: #D1D1D1;
+  --n50: #ADADAD;
+  --n60: #8A8A8A;
+  --n70: #707070;
+  --n80: #525252;
+  --n90: #383838;
+  --n100: #292929;
+  --text-color-1: var(--n100);
+  --text-color-2: var(--n80);
+  --text-color-3: var(--n60);
+  --text-color-4: var(--n50);
+  --background: oklch(0.94 0.006 220 / 0.8);
+  --foreground: var(--text-color-1);
   --card: oklch(1 0 0 / 0.76);
-  --card-foreground: var(--foreground);
+  --card-foreground: var(--text-color-1);
   --popover: oklch(0.99 0.004 220 / 0.96);
-  --popover-foreground: var(--foreground);
-  --primary: oklch(0.55 0.13 205);
-  --primary-foreground: oklch(0.99 0.005 220);
+  --popover-foreground: var(--text-color-1);
+  --primary: oklch(0.72 0.095 190);
+  --primary-foreground: oklch(0.21 0.06 205);
   --secondary: oklch(0.92 0.025 250 / 0.78);
   --secondary-foreground: oklch(0.28 0.04 255);
   --muted: oklch(0.94 0.014 235 / 0.78);
-  --muted-foreground: oklch(0.47 0.035 250);
-  --accent: oklch(0.62 0.12 285);
-  --accent-foreground: oklch(0.98 0.005 250);
+  --muted-foreground: var(--text-color-3);
+  --accent: oklch(0.84 0.07 190);
+  --accent-foreground: oklch(0.21 0.06 205);
   --destructive: oklch(0.58 0.21 25);
   --border: oklch(0.82 0.02 240 / 0.72);
   --input: oklch(0.84 0.018 240 / 0.82);
-  --ring: oklch(0.58 0.12 205);
+  --ring: oklch(0.74 0.09 190);
   --sidebar: oklch(0.99 0.004 220 / 0.68);
-  --sidebar-foreground: var(--foreground);
+  --sidebar-foreground: var(--text-color-1);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: var(--accent);
@@ -274,14 +323,45 @@
   --glow-cyan: rgba(6, 182, 212, 0.15);
   --glow-purple: rgba(147, 51, 234, 0.15);
   --glow-pink: rgba(236, 72, 153, 0.12);
-  --text-primary: rgba(0, 0, 0, 0.9);
-  --text-secondary: rgba(0, 0, 0, 0.62);
-  --text-muted: rgba(0, 0, 0, 0.5);
+  --text-primary: var(--text-color-1);
+  --text-secondary: var(--text-color-2);
+  --text-muted: var(--text-color-3);
   --overlay-shadow-color: rgb(15 23 42 / 0.20);
   --glass-highlight: color-mix(in srgb, white 72%, transparent);
+  --composer-glass-bg: rgba(244, 253, 250, 0.8);
+  --composer-glass-shadow: rgb(15 23 42 / 0.14);
+  --composer-glass-highlight: rgb(255 255 255 / 0.72);
 }
 
 @layer utilities {
+  .slei-composer-glass {
+    position: relative;
+    overflow: hidden;
+    background: var(--composer-glass-bg);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow:
+      0 18px 48px var(--composer-glass-shadow),
+      inset 0 1px 0 var(--composer-glass-highlight);
+  }
+
+  .slei-composer-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: transparent;
+    -webkit-backdrop-filter: blur(28px) saturate(185%) contrast(1.05);
+    backdrop-filter: blur(28px) saturate(185%) contrast(1.05);
+  }
+
+  .slei-composer-glass > * {
+    position: relative;
+    z-index: 1;
+  }
+
   .slei-composer-input {
     border-color: var(--glass-border);
     box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);
@@ -336,22 +416,11 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
-  color: var(--text-primary);
+  background: var(--background);
+  color: var(--text-color-1);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--app-leading-ui);
-}
-
-html.dark body {
-  background:
-    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
-}
-
-html.light body {
-  background:
-    linear-gradient(to bottom right, oklch(0.985 0.006 220), oklch(0.955 0.026 235), oklch(0.985 0.006 220));
 }
 
 button,
@@ -384,11 +453,6 @@ select:focus-visible {
 [data-slot="select-item"]:focus-visible {
   outline: none;
   outline-offset: 0;
-}
-
-::selection {
-  background: var(--accent);
-  color: var(--text-primary);
 }
 
 :where([class*="hover:"], [class*="group-hover"]) {
@@ -666,20 +730,21 @@ select:focus-visible {
 .slei-shell-nav {
   -webkit-backdrop-filter: var(--glass-surface-filter);
   backdrop-filter: var(--glass-surface-filter);
-  background: var(--glass-nav-bg);
+  background: transparent;
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent),
     inset 1px 0 0 var(--glass-highlight);
 }
 
 .slei-shell-nav__button {
+  border-width: 1px;
   border-color: var(--glass-button-border);
   box-shadow: var(--glass-button-shadow);
   color: color-mix(in srgb, var(--sidebar-foreground) 76%, transparent);
 }
 
 .slei-shell-nav__button--active {
-  background: var(--glass-button-primary-gradient-bg);
+  background: var(--glass-button-primary-bg);
   color: var(--primary-foreground);
   border-color: var(--glass-button-hover-border);
 }
@@ -687,7 +752,7 @@ select:focus-visible {
 .slei-context-sidebar {
   -webkit-backdrop-filter: var(--glass-surface-filter);
   backdrop-filter: var(--glass-surface-filter);
-  background: var(--glass-sidebar-bg);
+  background: transparent;
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
     inset 10px 0 24px color-mix(in srgb, var(--glass-highlight) 24%, transparent);
@@ -700,7 +765,7 @@ select:focus-visible {
 .slei-glass-workspace {
   -webkit-backdrop-filter: var(--glass-surface-filter);
   backdrop-filter: var(--glass-surface-filter);
-  background: color-mix(in srgb, var(--background) 20%, transparent);
+  background: transparent;
 }
 
 .slei-resize-handle {

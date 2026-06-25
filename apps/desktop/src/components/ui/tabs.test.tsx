@@ -96,6 +96,35 @@ describe("Tabs", () => {
     expect(html).not.toContain("data-slei-tabs-pill");
   });
 
+  it("does not render decorative gradient glow classes behind tab controls", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+
+    expect(html).not.toContain("before:bg-linear-to-r");
+    expect(html).not.toContain("before:blur-lg");
+    expect(html).not.toContain("before:bg-gradient-to-b");
+  });
+
+  it("keeps icon and label spacing at 6px on tab triggers", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const trigger = host.querySelector<HTMLElement>('[data-slot="tabs-trigger"]');
+
+    expect(trigger?.className.split(/\s+/)).toContain("gap-1.5");
+  });
+
   it("switches glass tab content when a trigger is clicked", async () => {
     const { host, root } = renderTabs();
 

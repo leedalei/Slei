@@ -142,7 +142,7 @@ export function EditableDetailField(input: {
             </p>
           ) : null}
           <div className="slei-editable-field__actions flex flex-wrap gap-2">
-            <Button aria-disabled={isSaving ? true : undefined} disabled={isSaving} size="sm" type="submit">
+            <Button aria-disabled={isSaving ? true : undefined} disabled={isSaving} size="sm" type="submit" variant="primary">
               {messages.common.save}
             </Button>
             <Button

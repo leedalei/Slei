@@ -51,8 +51,8 @@ const RadioGroupItem = React.forwardRef<
         data-slot="radio-group-item"
         className={cn(
           "aspect-square h-5 w-5 rounded-full",
-          "border border-white/30 bg-white/10 backdrop-blur-xl",
-          "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+          "border border-white/35 bg-transparent backdrop-blur-xl",
+          "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
           "transition-all duration-200",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
           "disabled:cursor-not-allowed disabled:opacity-50",
@@ -71,7 +71,7 @@ const RadioGroupItem = React.forwardRef<
         </RadioGroupPrimitive.Indicator>
       </RadioGroupPrimitive.Item>
       {label ? (
-        <label htmlFor={radioId} className="cursor-pointer select-none text-sm font-medium text-white/80">
+        <label htmlFor={radioId} className="cursor-pointer select-none text-sm font-medium text-foreground">
           {label}
         </label>
       ) : null}

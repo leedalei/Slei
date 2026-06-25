@@ -219,8 +219,8 @@ function GlassNotificationItem({
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 className="font-medium text-white whitespace-normal break-words" data-slot="notification-title">{notification.title}</h4>
-              {notification.description ? <p className="mt-1 text-sm text-white/60" data-slot="notification-description">{notification.description}</p> : null}
+              <h4 className="font-medium text-foreground whitespace-normal break-words" data-slot="notification-title">{notification.title}</h4>
+              {notification.description ? <p className="mt-1 text-sm text-muted-foreground" data-slot="notification-description">{notification.description}</p> : null}
               {notification.action ? <div className="mt-2" data-slot="notification-action-container">{notification.action}</div> : null}
             </div>
 
@@ -228,7 +228,7 @@ function GlassNotificationItem({
               <button
                 onClick={onClose}
                 aria-label={closeLabel}
-                className="shrink-0 rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/10 hover:text-white"
+                className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
                 data-slot="notification-close"
                 type="button"
               >
@@ -290,8 +290,8 @@ function GlassNotification({
             <Icon className={cn("h-5 w-5", config.iconColor)} />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-medium text-white whitespace-normal break-words" data-slot="notification-title">{title}</h4>
-            {description ? <p className="mt-1 text-sm text-white/60" data-slot="notification-description">{description}</p> : null}
+            <h4 className="font-medium text-foreground whitespace-normal break-words" data-slot="notification-title">{title}</h4>
+            {description ? <p className="mt-1 text-sm text-muted-foreground" data-slot="notification-description">{description}</p> : null}
           </div>
         </div>
       </div>

@@ -726,6 +726,23 @@ describe("desktop UI primitive usage", () => {
     expect(violations).toEqual([]);
   });
 
+  it("does not hard-code white foreground text in production UI", () => {
+    const violations: string[] = [];
+    const hardCodedWhiteForeground = /(?:^|[\s"'`])(?:placeholder:|hover:|focus:|data-\[[^\]]+\]:|aria-\[[^\]]+\]:|disabled:|[&_[^\]]+\]:)?text-white(?:\/\d+)?\b/g;
+
+    for (const file of [...sourceFiles(), ...einUiRegistryPrimitiveFiles]) {
+      const source = readSource(file);
+      for (const [index, line] of source.split("\n").entries()) {
+        if (hardCodedWhiteForeground.test(line)) {
+          violations.push(`${file}:${index + 1}: ${line.trim()}`);
+        }
+        hardCodedWhiteForeground.lastIndex = 0;
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
   it("does not move shared buttons on press", () => {
     const source = readSource("components/ui/button.tsx");
 
@@ -754,8 +771,12 @@ describe("desktop UI primitive usage", () => {
     expect(buttonSource).toContain('data-size={size ?? "default"}');
     expect(buttonSource).toContain("const buttonVariants");
     expect(buttonSource).toContain("buttonVariants({ variant, size, className })");
-    expect(buttonSource).toContain("border-white/30 bg-white/20");
+    expect(buttonSource).toContain("border-white/30 bg-transparent");
     expect(buttonSource).toContain("bg-linear-to-r from-cyan-500/80");
+    expect(buttonSource).toContain("via-blue-500/80");
+    expect(buttonSource).toContain("to-purple-500/80");
+    expect(buttonSource).toContain("text-accent-foreground");
+    expect(buttonSource).not.toContain("bg-primary text-primary-foreground");
     expect(buttonSource).toContain("bg-red-500/30");
     expect(cardSource).not.toContain("slei-");
     expect(cardSource).not.toContain("--slei-");
@@ -834,7 +855,8 @@ describe("desktop UI primitive usage", () => {
     expect(switchSource).toContain("data-[state=checked]:translate-x-5");
     expect(separatorSource).toContain('data-slot="separator"');
     expect(separatorSource).toContain('orientation = "horizontal"');
-    expect(separatorSource).toContain('orientation === "horizontal" ? "h-px w-full" : "h-full w-px"');
+    expect(separatorSource).toContain('"shrink-0 border-border bg-transparent"');
+    expect(separatorSource).toContain('orientation === "horizontal" ? "h-0 w-full border-t" : "h-full w-0 border-l"');
   });
 
   it("keeps text input-like and segmented controls free of legacy inset styling", () => {
@@ -854,7 +876,9 @@ describe("desktop UI primitive usage", () => {
     expect(tabsSource).toContain("data-variant={variant}");
     expect(tabsSource).toContain("variant?: \"line\" | \"soft\"");
     expect(tabsSource).toContain("data-[state=active]:bg-white/20");
-    expect(tabsSource).toContain("data-[state=active]:before:bg-gradient-to-b");
+    expect(tabsSource).not.toContain("before:bg-linear-to-r");
+    expect(tabsSource).not.toContain("before:blur-lg");
+    expect(tabsSource).not.toContain("before:bg-gradient-to-b");
   });
 
   it("does not keep the old tab implementation markers", () => {
@@ -943,6 +967,15 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).toContain("data-[disabled]:pointer-events-none");
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
+  });
+
+  it("keeps select trigger and menu shadows compact", () => {
+    const selectSource = readSource("components/ui/select.tsx");
+
+    expect(selectSource).toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
+    expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.18)]");
+    expect(selectSource).not.toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
+    expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
   });
 
   it("keeps transition hooks wired through neutral dropdown, modal, and icon-swap contracts", () => {

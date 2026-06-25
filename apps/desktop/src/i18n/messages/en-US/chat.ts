@@ -28,6 +28,7 @@ export const chat = {
   addChannelMemberSuccess: "Member added",
   addChannelMemberFailed: "Add member failed",
   noSelectedChannelMembers: "No members selected",
+  removeChannelMemberConfirm: (name: string) => `Remove ${name} from this channel? They can be added again later.`,
   removeChannelMemberSuccess: "Member removed",
   removeChannelMemberFailed: "Remove member failed",
   directMessage: "Direct message",

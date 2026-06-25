@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures, SleiTask } from "../../app/types";
-import { Empty, SleiIcon, StatusBadge } from "../../components";
+import { Empty, SelectableCard, SleiIcon, StatusBadge } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskThreadDrawer } from "./TaskThreadDrawer";
 
-const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card/45 text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_LIST_ITEM_CLASS = "rounded-lg border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden transition-colors hover:bg-card";
 
 export function TasksPage({
@@ -106,11 +106,11 @@ export function TasksPage({
 
         <ScrollArea className="min-h-0">
           <TabsContent className="m-0 data-[state=inactive]:hidden" value="board">
-            <div className="grid gap-4 p-6 xl:grid-cols-4">
+            <div className="grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-4 overflow-x-auto p-6">
               {columns.map((column) => {
                 const columnTasks = filteredTasks.filter((task) => task.status === column);
                 return (
-                  <Card aria-label={taskStatusLabel(column, messages)} className={`${CARD_SURFACE_CLASS} grid min-h-40 content-start gap-3 p-3`} key={column} role="region">
+                  <Card aria-label={taskStatusLabel(column, messages)} className={`${CARD_SURFACE_CLASS} grid min-h-40 min-w-0 content-start gap-3 p-3`} key={column} role="region">
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="text-sm font-medium">{taskStatusLabel(column, messages)}</h2>
                       {columnTasks.length > 0 ? <Badge variant="outline">{columnTasks.length}</Badge> : null}
@@ -122,6 +122,7 @@ export function TasksPage({
                         key={task.id}
                         messages={messages}
                         onSelect={() => openTask(task.id)}
+                        selected={selectedTaskId === task.id}
                         task={task}
                       />
                     )) : (
@@ -148,6 +149,7 @@ export function TasksPage({
                   key={task.id}
                   messages={messages}
                   onSelect={() => openTask(task.id)}
+                  selected={selectedTaskId === task.id}
                   task={task}
                 />
               ))}
@@ -186,7 +188,7 @@ function TaskFilterSelect(input: {
   const selectedLabel = input.options.find((option) => option.value === input.value)?.label ?? input.label;
   return (
     <Select value={input.value} onValueChange={input.onChange}>
-      <SelectTrigger aria-label={input.label} className="min-w-36">
+      <SelectTrigger aria-label={input.label} className="w-56 min-w-0 max-w-full">
         {input.icon}
         <span data-slot="select-value" className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
       </SelectTrigger>
@@ -218,13 +220,18 @@ function TaskCard(input: {
   layout?: "card" | "row";
   messages: DesktopMessages;
   onSelect: () => void;
+  selected?: boolean;
   task: SleiTask;
 }) {
   const replyCount = input.task.replyCount ?? input.task.replies?.length ?? 0;
   const row = input.layout === "row";
 
   return (
-    <Card className={row ? `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start` : `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3`}>
+    <SelectableCard
+      selected={input.selected}
+      data-task-id={input.task.id}
+      className={row ? `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start` : `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3`}
+    >
       <div className={row ? "min-w-0" : ""}>
         <h3 className="break-words text-sm font-semibold">{input.task.title}</h3>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -249,6 +256,6 @@ function TaskCard(input: {
           </Button>
         </div>
       </div>
-    </Card>
+    </SelectableCard>
   );
 }

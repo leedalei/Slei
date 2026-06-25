@@ -39,7 +39,7 @@ export function TaskThreadDrawer(input: {
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mention = activeMentionQuery(replyDraft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, input.mentionMembers ?? []) : [];
-  const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply;
+  const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply || !replyDraft.trim();
   const statusActionDisabled = replySubmitting || statusSubmitting || !input.onStatusChange;
   openRef.current = input.open;
   activeTaskIdRef.current = taskId;
@@ -134,8 +134,8 @@ export function TaskThreadDrawer(input: {
             ))}
           </div>
         </ScrollArea>
-        <SheetFooter className="border-t p-4">
-          <form className="grid gap-3" onSubmit={submitReply}>
+        <SheetFooter className="sticky bottom-0 z-20 block shrink-0 bg-transparent px-5 pb-5 pt-3">
+          <form className="grid w-full gap-3" onSubmit={submitReply}>
             {mention && mentionTargets.length > 0 ? (
               <MentionPicker
                 members={mentionTargets}
@@ -147,50 +147,54 @@ export function TaskThreadDrawer(input: {
                 selectedIndex={selectedMentionIndex}
               />
             ) : null}
-            <Textarea
-              aria-label={input.messages.tasks.replyPlaceholder}
-              disabled={replySubmitting || statusSubmitting}
-              onChange={(event) => setReplyDraft(event.currentTarget.value)}
-              onCompositionEnd={() => setIsComposing(false)}
-              onCompositionStart={() => setIsComposing(true)}
-              onKeyDown={(event) => {
-                const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
-                const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                if (!composing && mention && mentionTargets.length > 0) {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
-                    return;
+            {task.status === "in_review" ? (
+              <div className="flex justify-end">
+                <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button>
+              </div>
+            ) : null}
+            <div className="relative rounded-xl shadow-[0_12px_28px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
+              <Textarea
+                aria-label={input.messages.tasks.replyPlaceholder}
+                className="min-h-20 bg-white/55 pr-16 shadow-none"
+                disabled={replySubmitting || statusSubmitting}
+                onChange={(event) => setReplyDraft(event.currentTarget.value)}
+                onCompositionEnd={() => setIsComposing(false)}
+                onCompositionStart={() => setIsComposing(true)}
+                onKeyDown={(event) => {
+                  const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
+                  const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
+                  if (!composing && mention && mentionTargets.length > 0) {
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
+                      return;
+                    }
+                    if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      setReplyDraft(replyDraft.slice(0, mention.start));
+                      return;
+                    }
                   }
-                  if (event.key === "ArrowUp") {
+                  const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
+                  if (action === "selectMention") {
                     event.preventDefault();
-                    setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
-                    return;
+                    selectMention();
                   }
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    setReplyDraft(replyDraft.slice(0, mention.start));
-                    return;
-                  }
-                }
-                const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
-                if (action === "selectMention") {
-                  event.preventDefault();
-                  selectMention();
-                }
-              }}
-              placeholder={input.messages.tasks.replyPlaceholder}
-              value={replyDraft}
-            />
-            {replyError ? <p className="text-sm text-destructive" role="alert">{replyError}</p> : null}
-            {statusError ? <p className="text-sm text-destructive" role="alert">{statusError}</p> : null}
-            <div className="flex flex-wrap justify-end gap-2">
-              {task.status === "in_review" ? <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button> : null}
-              <Button disabled={replyActionDisabled} type="submit">
+                }}
+                placeholder={input.messages.tasks.replyPlaceholder}
+                value={replyDraft}
+              />
+              <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit" variant="primary">
                 <SleiIcon className="size-4" name="send" />
-                {input.messages.tasks.sendReply}
               </Button>
             </div>
+            {replyError ? <p className="text-sm text-destructive" role="alert">{replyError}</p> : null}
+            {statusError ? <p className="text-sm text-destructive" role="alert">{statusError}</p> : null}
           </form>
         </SheetFooter>
       </>
@@ -201,7 +205,12 @@ export function TaskThreadDrawer(input: {
     <Sheet open={input.open} onOpenChange={(open) => !open && input.onClose()}>
       {/* Radix portal content is omitted from renderToStaticMarkup; keep static tests observing the drawer body. */}
       {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
-      <SheetContent aria-label={input.messages.tasks.thread} className="w-[min(100vw,680px)] gap-0 p-0 sm:max-w-[680px]" showCloseButton={false}>
+      <SheetContent
+        aria-label={input.messages.tasks.thread}
+        className="w-[min(100vw,680px)] gap-0 border-white/35 bg-white/70 p-0 text-foreground shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl before:hidden sm:max-w-[680px]"
+        showCloseButton={false}
+        showOverlay={false}
+      >
         {renderContent()}
       </SheetContent>
     </Sheet>

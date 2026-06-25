@@ -15,6 +15,30 @@ describe("shadcn design system wiring", () => {
   }
 
   const legacyThemeLeakagePattern = /--slei-|var\(--slei-|@utility\s+slei-|slei-(?:raised|inset|hover-transition)/;
+  const darkNeutralTokens = {
+    "--n10": "#1F1F1F",
+    "--n20": "#292929",
+    "--n30": "#424242",
+    "--n40": "#5C5C5C",
+    "--n50": "#757575",
+    "--n60": "#8F8F8F",
+    "--n70": "#A8A8A8",
+    "--n80": "#C2C2C2",
+    "--n90": "#DBDBDB",
+    "--n100": "#F5F5F5",
+  };
+  const lightNeutralTokens = {
+    "--n10": "#FAFAFA",
+    "--n20": "#F5F5F5",
+    "--n30": "#E6E6E6",
+    "--n40": "#D1D1D1",
+    "--n50": "#ADADAD",
+    "--n60": "#8A8A8A",
+    "--n70": "#707070",
+    "--n80": "#525252",
+    "--n90": "#383838",
+    "--n100": "#292929",
+  };
 
   it("uses desktop-local shadcn configuration and EinUI theme tokens", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
@@ -59,7 +83,7 @@ describe("shadcn design system wiring", () => {
     for (const source of titleSources) {
       expect(source).toContain("text-lg");
       expect(source).toContain("font-semibold");
-      expect(source).toContain("text-white");
+      expect(source).toContain("text-popover-foreground");
       expect(source).not.toContain("font-heading text-base font-medium");
       expect(source).not.toContain("font-heading text-base leading-none font-medium");
     }
@@ -82,8 +106,8 @@ describe("shadcn design system wiring", () => {
     expect(darkTokens).not.toContain("--radius-");
     expect(appCss).not.toContain("--slei-radius");
 
-    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.985 0.006 220)");
-    expect(tokenValue(lightTokens, "--foreground")).toBe("oklch(0.22 0.035 250)");
+    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.8)");
+    expect(tokenValue(lightTokens, "--foreground")).toBe("var(--text-color-1)");
     expect(tokenValue(themeTokens, "--radius-sm")).toBe("var(--radius-xs)");
     expect(tokenValue(themeTokens, "--radius-md")).toBe("var(--radius-base)");
     expect(tokenValue(themeTokens, "--radius-lg")).toBe("var(--radius-md)");
@@ -92,6 +116,48 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(themeTokens, "--radius-3xl")).toBe("var(--radius-xl)");
     expect(tokenValue(themeTokens, "--radius-4xl")).toBe("var(--radius-xl)");
     expect(tokenValue(themeTokens, "--radius")).toBe("var(--radius-base)");
+  });
+
+  it("maps global text colors through four neutral depth tokens", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const rootTokens = cssBlock(appCss, ":root");
+    const darkTokens = cssBlock(appCss, ".dark");
+    const lightTokens = cssBlock(appCss, ".light");
+    const themeTokens = cssBlock(appCss, "@theme inline");
+
+    for (const [token, value] of Object.entries(darkNeutralTokens)) {
+      expect(tokenValue(rootTokens, token)).toBe(value);
+      expect(tokenValue(darkTokens, token)).toBe(value);
+    }
+
+    for (const [token, value] of Object.entries(lightNeutralTokens)) {
+      expect(tokenValue(lightTokens, token)).toBe(value);
+    }
+
+    for (const tokens of [rootTokens, darkTokens, lightTokens]) {
+      expect(tokenValue(tokens, "--text-color-1")).toBe("var(--n100)");
+      expect(tokenValue(tokens, "--text-color-2")).toBe("var(--n80)");
+      expect(tokenValue(tokens, "--text-color-3")).toBe("var(--n60)");
+      expect(tokenValue(tokens, "--text-color-4")).toBe("var(--n50)");
+      expect(tokenValue(tokens, "--foreground")).toBe("var(--text-color-1)");
+      expect(tokenValue(tokens, "--card-foreground")).toBe("var(--text-color-1)");
+      expect(tokenValue(tokens, "--popover-foreground")).toBe("var(--text-color-1)");
+      expect(tokenValue(tokens, "--sidebar-foreground")).toBe("var(--text-color-1)");
+      expect(tokenValue(tokens, "--muted-foreground")).toBe("var(--text-color-3)");
+      expect(tokenValue(tokens, "--text-primary")).toBe("var(--text-color-1)");
+      expect(tokenValue(tokens, "--text-secondary")).toBe("var(--text-color-2)");
+      expect(tokenValue(tokens, "--text-muted")).toBe("var(--text-color-3)");
+    }
+
+    expect(tokenValue(themeTokens, "--color-foreground")).toBe("var(--foreground)");
+    expect(tokenValue(themeTokens, "--color-card-foreground")).toBe("var(--card-foreground)");
+    expect(tokenValue(themeTokens, "--color-muted-foreground")).toBe("var(--muted-foreground)");
+    expect(appCss).toContain(`body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text-color-1);`);
   });
 
   it("uses dark-first EinUI glass surface tokens with light overrides", () => {
@@ -125,8 +191,8 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(rootTokens, "--glass-button-border")).toBe("var(--glass-border)");
     expect(tokenValue(rootTokens, "--glass-button-hover-border")).toContain("var(--glow-cyan)");
     expect(tokenValue(rootTokens, "--glass-button-shadow")).toContain("var(--overlay-shadow-color)");
-    expect(tokenValue(rootTokens, "--glass-button-primary-gradient-bg")).toContain("var(--glow-cyan)");
-    expect(tokenValue(rootTokens, "--glass-button-primary-gradient-bg")).toContain("var(--glow-purple)");
+    expect(tokenValue(rootTokens, "--glass-button-primary-bg")).toBe("var(--primary)");
+    expect(tokenValue(rootTokens, "--glass-button-primary-gradient-bg")).toBe("");
 
     expect(tokenValue(lightTokens, "--glass-bg")).toBe("rgba(0, 0, 0, 0.03)");
     expect(tokenValue(lightTokens, "--glass-border")).toBe("rgba(0, 0, 0, 0.08)");
@@ -137,18 +203,33 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(darkTokens, "--glow-cyan")).toBe("rgba(6, 182, 212, 0.3)");
   });
 
-  it("uses neutral overlay shadows and theme-aware body backgrounds", () => {
+  it("uses a light cyan primary palette in light mode", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
     const rootTokens = cssBlock(appCss, ":root");
     const darkTokens = cssBlock(appCss, ".dark");
     const lightTokens = cssBlock(appCss, ".light");
 
-    expect(tokenValue(rootTokens, "--background")).toBe("oklch(0.18 0.045 255)");
-    expect(tokenValue(rootTokens, "--foreground")).toBe("oklch(0.96 0.018 230)");
+    expect(tokenValue(rootTokens, "--primary")).toBe("oklch(0.78 0.13 205)");
+    expect(tokenValue(darkTokens, "--primary")).toBe(tokenValue(rootTokens, "--primary"));
+    expect(tokenValue(lightTokens, "--primary")).toBe("oklch(0.72 0.095 190)");
+    expect(tokenValue(lightTokens, "--primary-foreground")).toBe("oklch(0.21 0.06 205)");
+    expect(tokenValue(lightTokens, "--accent")).toBe("oklch(0.84 0.07 190)");
+    expect(tokenValue(lightTokens, "--accent-foreground")).toBe("oklch(0.21 0.06 205)");
+    expect(tokenValue(lightTokens, "--ring")).toBe("oklch(0.74 0.09 190)");
+  });
+
+  it("uses neutral overlay shadows while keeping body and workspace backgrounds transparent", () => {
+    const appCss = readFileSync("src/app/app.css", "utf8");
+    const rootTokens = cssBlock(appCss, ":root");
+    const darkTokens = cssBlock(appCss, ".dark");
+    const lightTokens = cssBlock(appCss, ".light");
+
+    expect(tokenValue(rootTokens, "--background")).toBe("oklch(0.18 0.045 255 / 0.8)");
+    expect(tokenValue(rootTokens, "--foreground")).toBe("var(--text-color-1)");
     expect(tokenValue(rootTokens, "--card")).toBe("oklch(0.24 0.045 255 / 0.72)");
     expect(tokenValue(darkTokens, "--background")).toBe(tokenValue(rootTokens, "--background"));
     expect(tokenValue(darkTokens, "--foreground")).toBe(tokenValue(rootTokens, "--foreground"));
-    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.985 0.006 220)");
+    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.8)");
 
     expect(tokenValue(rootTokens, "--overlay-shadow-color")).toBe("rgb(0 0 0 / 0.54)");
     expect(tokenValue(rootTokens, "--overlay-shadow-xs")).toContain("var(--overlay-shadow-color)");
@@ -159,15 +240,15 @@ describe("shadcn design system wiring", () => {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);`);
-    expect(appCss).toContain(`html.dark body {
-  background:
-    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
-}`);
-    expect(appCss).toContain(`html.light body {
-  background:
-    linear-gradient(to bottom right, oklch(0.985 0.006 220), oklch(0.955 0.026 235), oklch(0.985 0.006 220));
-}`);
+  background: var(--background);
+  color: var(--text-color-1);`);
+    expect(appCss).not.toContain("linear-gradient(to bottom right");
+    expect(appCss).not.toContain("html.dark body");
+    expect(appCss).not.toContain("html.light body");
+    expect(appCss).not.toContain("::selection");
+    expect(appCss).toContain(`.slei-glass-workspace {
+  -webkit-backdrop-filter: var(--glass-surface-filter);
+  backdrop-filter: var(--glass-surface-filter);
+  background: transparent;`);
   });
 });

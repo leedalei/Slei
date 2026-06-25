@@ -14,7 +14,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
 const menuContentClassName = cn(
-  "t-dropdown z-50 min-w-36 overflow-hidden rounded-xl border border-white/20 bg-white/10 p-1 text-white backdrop-blur-2xl",
+  "t-dropdown z-50 min-w-36 overflow-hidden rounded-xl border border-white/20 bg-white/10 p-1 text-popover-foreground backdrop-blur-2xl",
   "shadow-[0_8px_32px_rgba(0,0,0,0.4)] outline-none",
 )
 
@@ -51,8 +51,8 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-white/80 outline-none",
-        "transition-colors focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white",
+        "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset=true]:pl-8",
         "data-[variant=destructive]:text-red-200 data-[variant=destructive]:focus:bg-red-500/20",
         "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -73,8 +73,8 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-white/80 outline-none",
-        "transition-colors focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white",
+        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -100,8 +100,8 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-white/80 outline-none",
-        "transition-colors focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white",
+        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -128,7 +128,7 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn("px-2 py-1.5 text-xs font-medium text-white/60 data-[inset=true]:pl-8", className)}
+      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground data-[inset=true]:pl-8", className)}
       {...props}
     />
   )
@@ -144,7 +144,7 @@ function DropdownMenuSeparator({
 }
 
 function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<"span">) {
-  return <span data-slot="dropdown-menu-shortcut" className={cn("ml-auto text-xs tracking-widest text-white/50", className)} {...props} />
+  return <span data-slot="dropdown-menu-shortcut" className={cn("ml-auto text-xs tracking-widest text-muted-foreground", className)} {...props} />
 }
 
 function DropdownMenuSubTrigger({
@@ -160,8 +160,8 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-white/80 outline-none",
-        "transition-colors focus:bg-white/10 focus:text-white data-[highlighted]:bg-white/10 data-[highlighted]:text-white data-[inset=true]:pl-8",
+        "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground data-[inset=true]:pl-8",
         className,
       )}
       {...props}

@@ -58,7 +58,7 @@ export function Toast({ message, onDismiss, text, type = "info" }: { message?: s
             <Button
               aria-label="复制通知内容"
               className={cn(
-                "h-auto justify-start rounded-md border-white/10 bg-white/5 px-2 py-1.5 text-left text-xs text-white/70 shadow-none hover:bg-white/10 hover:text-white",
+                "h-auto justify-start rounded-md border-white/10 bg-white/5 px-2 py-1.5 text-left text-xs text-muted-foreground shadow-none hover:bg-white/10 hover:text-foreground",
                 "focus-visible:ring-white/40",
               )}
               data-slot="notification-action"

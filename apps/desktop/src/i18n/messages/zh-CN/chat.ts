@@ -28,6 +28,7 @@ export const chat = {
   addChannelMemberSuccess: "成员已添加",
   addChannelMemberFailed: "添加成员失败",
   noSelectedChannelMembers: "尚未选择成员",
+  removeChannelMemberConfirm: (name: string) => `确定将 ${name} 移出当前频道？之后仍可重新添加。`,
   removeChannelMemberSuccess: "成员已移除",
   removeChannelMemberFailed: "移除成员失败",
   directMessage: "私聊",
