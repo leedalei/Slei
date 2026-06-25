@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { IconDeviceDesktop, IconPencil } from "@tabler/icons-react";
+import { Monitor, Pencil } from "lucide-react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -54,9 +54,9 @@ describe("DetailBlock", () => {
   it("renders secondary detail content without nesting another card", () => {
     const html = renderToStaticMarkup(
       <DetailBlock
-        action={<IconPencil aria-label="编辑" />}
+        action={<Pencil aria-label="编辑" />}
         description="MateBook-Pro-Max-3.local"
-        icon={IconDeviceDesktop}
+        icon={Monitor}
         title="Hostname"
         value={<strong>darwin arm64</strong>}
       >

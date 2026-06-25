@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-import type { SleiTablerIcon } from "./icons";
+import type { SleiLucideIcon } from "./icons";
 
 export function PageHeader({
   actions,
@@ -13,7 +13,7 @@ export function PageHeader({
   ...props
 }: Omit<ComponentProps<"header">, "title"> & {
   actions?: ReactNode;
-  icon?: SleiTablerIcon;
+  icon?: SleiLucideIcon;
   subtitle?: ReactNode;
   title: ReactNode;
 }) {

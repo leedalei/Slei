@@ -4,11 +4,13 @@ import { resolve } from "node:path";
 
 const SRC_ROOT = resolve(__dirname, "..");
 const DESKTOP_ROOT = resolve(SRC_ROOT, "..");
+const WORKSPACE_ROOT = resolve(DESKTOP_ROOT, "../..");
 const AUDIT_TEST_SOURCE_PATH = "components/ui-primitive-audit.test.tsx";
+const forbiddenTablerPackageName = ["@tabler", "icons-react"].join("/");
 
 const enabledAuditCategories = {
   radixAggregate: true,
-  icons: false,
+  icons: true,
   themeTokens: true,
   softPanel: false,
   oldUtilities: false,
@@ -199,7 +201,14 @@ function packageAuditFiles() {
 }
 
 function dependencyAuditFiles() {
-  return [...packageAuditFiles(), ...sourceAuditFiles()];
+  return [
+    ...packageAuditFiles(),
+    {
+      filePath: "pnpm-lock.yaml",
+      source: readFileSync(resolve(WORKSPACE_ROOT, "pnpm-lock.yaml"), "utf8"),
+    },
+    ...sourceAuditFiles(),
+  ];
 }
 
 function legacySourceAuditFiles() {
@@ -404,7 +413,7 @@ const dependencyAuditCategories = [
     name: "Tabler icon package usage",
     files: dependencyAuditFiles,
     assert: ({ source }) => {
-      expect(source).not.toContain("@tabler/icons-react");
+      expect(source).not.toContain(forbiddenTablerPackageName);
     },
   },
 ] satisfies readonly AuditCategoryCheck[];
@@ -554,20 +563,26 @@ describe("desktop UI primitive usage", () => {
     expect(violations).toEqual([]);
   });
 
-  it("detects Tabler icon usage in both source imports and package dependencies", () => {
+  it("detects Tabler icon usage in source imports, package dependencies, and lockfiles", () => {
     const iconsAudit = dependencyAuditCategories.find((category) => category.category === "icons");
 
     expect(iconsAudit).toBeDefined();
     expect(() =>
       iconsAudit?.assert({
         filePath: "components/icons.tsx",
-        source: 'import { IconCheck } from "@tabler/icons-react";',
+        source: `import { IconCheck } from "${forbiddenTablerPackageName}";`,
       }),
     ).toThrow();
     expect(() =>
       iconsAudit?.assert({
         filePath: "package.json",
-        source: JSON.stringify({ dependencies: { "@tabler/icons-react": "^3.44.0" } }),
+        source: JSON.stringify({ dependencies: { [forbiddenTablerPackageName]: "^3.44.0" } }),
+      }),
+    ).toThrow();
+    expect(() =>
+      iconsAudit?.assert({
+        filePath: "pnpm-lock.yaml",
+        source: `${forbiddenTablerPackageName}@3.44.0:`,
       }),
     ).toThrow();
   });

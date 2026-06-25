@@ -374,12 +374,12 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
     expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
     expect(navSource).not.toContain('{ id: "members", icon: "members" }');
-    expect(iconsSource).toContain("IconSearchFilled");
-    expect(iconsSource).toContain("IconAlienFilled");
-    expect(iconsSource).toContain("searchFilled: IconSearchFilled");
-    expect(iconsSource).toContain("membersFilled: IconAlienFilled");
-    expect(iconsSource).toContain("search: IconSearch");
-    expect(iconsSource).toContain("members: IconUsersGroup");
+    expect(iconsSource).toContain("SearchCheck");
+    expect(iconsSource).toContain("UsersRound");
+    expect(iconsSource).toContain("searchFilled: SearchCheck");
+    expect(iconsSource).toContain("membersFilled: UsersRound");
+    expect(iconsSource).toContain("search: Search");
+    expect(iconsSource).toContain("members: Users");
   });
 
   it("renders the active menubar item with primary glass gradient contrast", () => {

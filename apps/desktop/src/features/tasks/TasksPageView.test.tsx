@@ -175,9 +175,9 @@ describe("TasksPage filters", () => {
 
     expect(boardTab?.querySelector('[data-slei-icon="kanban"]')).not.toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="listDetails"]')).not.toBeNull();
-    expect(iconsSource).toContain("IconLayoutKanban,");
-    expect(iconsSource).toContain("kanban: IconLayoutKanban");
-    expect(iconsSource).not.toContain("kanban: IconLayoutKanbanFilled");
+    expect(iconsSource).toContain("Kanban");
+    expect(iconsSource).toContain("kanban: Kanban");
+    expect(iconsSource).not.toContain("kanban: SquareKanban");
     expect(boardTab?.querySelector('[data-slei-icon="tasks"]')).toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
   });

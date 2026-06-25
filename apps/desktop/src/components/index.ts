@@ -12,4 +12,4 @@ export { Toast, TOAST_VISIBLE_MS, copyToastContent, type ToastType } from "./Toa
 export { createMemberAvatar, memberFromMessage, type AvatarIdentity, type MemberAvatarIdentity } from "./member-avatar";
 export { SleiIcon, type SleiIconProps } from "./SleiIcon";
 export { SleiIconSwap } from "./SleiIconSwap";
-export { sleiIcons, type SleiIconName, type SleiTablerIcon, type SleiTablerIconProps } from "./icons";
+export { sleiIcons, type SleiIconName, type SleiLucideIcon, type SleiLucideIconProps } from "./icons";

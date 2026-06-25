@@ -35,7 +35,6 @@
     "@radix-ui/react-tooltip": "^1.2.10",
     "@slei/i18n": "workspace:*",
     "@slei/protocol-client": "workspace:*",
-    "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-virtual": "^3.14.3",
     "@tauri-apps/api": "2.11.0",
     "class-variance-authority": "^0.7.1",
