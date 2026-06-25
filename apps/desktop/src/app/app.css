@@ -918,15 +918,13 @@ select:focus-visible {
   width: 56px;
 }
 
-.slei-brand__mark {
-  color: var(--color-warning);
+.slei-brand__logo {
   display: block;
-  font-family: "Brush Script MT", "Segoe Script", "Snell Roundhand", "Apple Chancery", cursive;
-  font-size: 24px;
-  font-style: italic;
-  font-weight: var(--weight-bold);
-  line-height: 1;
-  text-shadow: 0 2px 0 color-mix(in srgb, var(--color-rail-bg) 64%, transparent);
+  height: 40px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  width: 40px;
 }
 
 .slei-shell-nav {
