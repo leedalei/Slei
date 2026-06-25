@@ -80,7 +80,7 @@ describe("SettingsPage header", () => {
     expect(headerHtml).not.toContain(">Settings<");
   });
 
-  it("uses shared soft panels and preference rows for settings rows", () => {
+  it("uses card surfaces and preference rows for settings rows", () => {
     const messages = createDesktopMessages("en-US");
     const notificationsHtml = renderToStaticMarkup(
       <SettingsPage
@@ -107,10 +107,12 @@ describe("SettingsPage header", () => {
       />,
     );
 
-    expect(notificationsHtml).toContain("data-slei-panel");
+    expect(notificationsHtml).toContain('data-slot="card"');
+    expect(notificationsHtml).toContain('data-slot="card-content"');
     expect(notificationsHtml).toContain("data-slei-preference-row");
     expect(notificationsHtml).toContain('data-settings-notification="mentions"');
-    expect(aboutHtml).toContain("data-slei-panel");
+    expect(aboutHtml).toContain('data-slot="card"');
+    expect(aboutHtml).toContain('data-slot="card-content"');
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 

@@ -2,6 +2,7 @@ import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEv
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -47,7 +48,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, PageHeader, SleiIcon, SoftPanel, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
+import { Empty, MemberAvatar, PageHeader, SleiIcon, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -1167,31 +1168,37 @@ function SavedMessagesWorkspace(input: {
             const messageTime = formatSavedDate(savedMessage.messageCreatedAt);
             const savedTime = formatSavedDate(savedMessage.savedAt);
             return (
-              <SoftPanel key={savedMessage.id} variant="listItem">
-                <Button
-                  aria-label={input.messages.search.openConversation(savedMessage.messageId)}
-                  className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
-                  disabled={isUnavailable}
-                  onClick={() => input.onSelect?.(savedMessage)}
-                  type="button"
-                  variant="ghost"
-                >
-                  <span className="grid min-w-0 flex-1 gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <SleiIcon className="size-3.5" name="bookmark" />
-                        {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+              <Card
+                className="rounded-lg text-card-foreground shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25"
+                data-saved-message-row
+                key={savedMessage.id}
+              >
+                <CardContent className="p-3">
+                  <Button
+                    aria-label={input.messages.search.openConversation(savedMessage.messageId)}
+                    className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
+                    disabled={isUnavailable}
+                    onClick={() => input.onSelect?.(savedMessage)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <span className="grid min-w-0 flex-1 gap-2">
+                      <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <SleiIcon className="size-3.5" name="bookmark" />
+                          {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+                        </span>
+                        <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
+                        {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
+                        {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
                       </span>
-                      <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
-                      {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
-                      {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
+                      <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
+                        {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
+                      </strong>
                     </span>
-                    <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
-                      {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
-                    </strong>
-                  </span>
-                </Button>
-              </SoftPanel>
+                  </Button>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

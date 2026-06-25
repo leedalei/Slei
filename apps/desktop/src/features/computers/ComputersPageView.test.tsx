@@ -126,7 +126,7 @@ describe("ComputersPage header", () => {
     expect(html).not.toContain('data-testid="slei-computer-list-card"');
   });
 
-  it("uses shared soft panels and secondary detail blocks in the computer detail page", () => {
+  it("uses card surfaces and secondary detail blocks in the computer detail page", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(
       <ComputersPage
@@ -136,11 +136,12 @@ describe("ComputersPage header", () => {
       />,
     );
     const deviceNameIndex = html.indexOf(messages.computers.deviceName);
-    const deviceCardStart = html.lastIndexOf("data-slei-panel", deviceNameIndex);
-    const deviceCardEnd = html.indexOf("data-slei-panel", deviceNameIndex + 1);
+    const deviceCardStart = html.lastIndexOf('data-slot="card"', deviceNameIndex);
+    const deviceCardEnd = html.indexOf('data-slot="card"', deviceNameIndex + 1);
     const deviceCardHtml = html.slice(deviceCardStart, deviceCardEnd);
 
-    expect(deviceCardHtml).toContain("data-slei-panel");
+    expect(deviceCardHtml).toContain('data-slot="card"');
+    expect(deviceCardHtml).toContain('data-slot="card-content"');
     expect(html).toContain('data-slot="detail-block"');
     expect(html).toContain('data-detail-block-kind="runtime"');
     expect(html).toContain('data-detail-block-kind="hosted-agent"');

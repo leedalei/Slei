@@ -23,8 +23,6 @@ const runtimeSetup = {
   nodes: [],
 };
 
-const legacyRaisedClassPrefix = ["slei", "raised"].join("-");
-
 let mountedRoot: Root | undefined;
 let mountedContainer: HTMLDivElement | undefined;
 
@@ -483,7 +481,8 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     expect(html).toContain('data-testid="slei-saved-workspace"');
-    expect(html).toContain('data-variant="listItem"');
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('data-slot="card-content"');
     expect(html).toContain('data-slei-icon="bookmark"');
     expect(html).toContain(">频道 1</");
     expect(html).toContain(">私聊 1</");
@@ -521,10 +520,9 @@ describe("SleiAppFrame global search navigation", () => {
     expect(currentItems[0]?.textContent).toContain("已保存");
     expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
     expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
-    expect(savedTrigger?.className).not.toContain(legacyRaisedClassPrefix);
   });
 
-  it("renders saved message rows as soft list items while preserving unavailable and click behavior", async () => {
+  it("renders saved message rows as cards while preserving unavailable and click behavior", async () => {
     const onSavedMessageSelect = vi.fn();
     const availableMessage = {
       id: "saved:available",
@@ -560,11 +558,12 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     const workspace = container.querySelector('[data-testid="slei-saved-workspace"]');
-    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slei-panel][data-variant="listItem"]') ?? []);
+    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slot="card"][data-saved-message-row]') ?? []);
     const availableButton = rows[0]?.querySelector<HTMLButtonElement>("button");
     const deletedButton = rows[1]?.querySelector<HTMLButtonElement>("button");
 
     expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.querySelector('[data-slot="card-content"]'))).toBe(true);
     expect(workspace?.querySelector('[data-slei-icon="bookmark"]')).not.toBeNull();
     expect(availableButton?.disabled).toBe(false);
     expect(deletedButton?.disabled).toBe(true);

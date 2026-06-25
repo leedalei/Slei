@@ -15,9 +15,10 @@ import {
   stripChannelHash,
   type UserProfile,
 } from "../../app/model";
-import { Empty, MemberAvatar, SleiIcon, SoftPanel } from "../../components";
+import { Empty, MemberAvatar, SleiIcon } from "../../components";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
@@ -44,7 +45,7 @@ type SelectOption = {
   subtitle?: string;
 };
 
-const filterSelectTriggerClassName = "min-w-36 rounded-lg border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/40";
+const filterSelectTriggerClassName = "min-w-36 rounded-lg border-border/55 bg-muted/45 shadow-none transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/35";
 const searchResultPanelClassName = "shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25";
 
 export function SearchPage({
@@ -157,25 +158,30 @@ export function SearchPage({
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
-          <SoftPanel className="slei-search-input-surface flex min-h-12 items-center gap-3 rounded-full px-3 py-0" data-slot="search-input-surface" insetSize="small" variant="inset">
-            <SleiIcon className="size-5 text-muted-foreground" name="search" />
-            <Input
-              aria-label={messages.search.navigation.searchInput}
-              className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder={messages.search.placeholderTitle}
-              value={query}
-            />
-            {query ? (
-              <Button aria-label={messages.search.navigation.clearQuery} onClick={clearQuery} size="icon-sm" type="button" variant="ghost">
-                <SleiIcon className="size-4" name="x" />
+          <Card
+            className="rounded-full text-card-foreground shadow-none transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_32%,transparent)]"
+            data-search-input-surface="true"
+          >
+            <CardContent className="flex min-h-12 items-center gap-3 px-3 py-0">
+              <SleiIcon className="size-5 text-muted-foreground" name="search" />
+              <Input
+                aria-label={messages.search.navigation.searchInput}
+                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder={messages.search.placeholderTitle}
+                value={query}
+              />
+              {query ? (
+                <Button aria-label={messages.search.navigation.clearQuery} onClick={clearQuery} size="icon-sm" type="button" variant="ghost">
+                  <SleiIcon className="size-4" name="x" />
+                </Button>
+              ) : null}
+              <Button className="min-w-20" disabled={submitDisabled} type="submit">
+                {status === "loading" ? <SleiIcon className="size-4 animate-spin" name="loader" /> : <SleiIcon className="size-4" name="search" />}
+                {messages.search.submit}
               </Button>
-            ) : null}
-            <Button className="min-w-20" disabled={submitDisabled} type="submit">
-              {status === "loading" ? <SleiIcon className="size-4 animate-spin" name="loader" /> : <SleiIcon className="size-4" name="search" />}
-              {messages.search.submit}
-            </Button>
-          </SoftPanel>
+            </CardContent>
+          </Card>
 
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2">
             <FilterSelect
@@ -362,24 +368,26 @@ function AgentResultButton(input: {
 }) {
   const title = input.result.title || input.result.agentId;
   return (
-    <SoftPanel className={searchResultPanelClassName} variant="surface">
-      <Button
-        aria-label={input.messages.search.navigation.openAgent(title)}
-        className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"
-        data-search-result-kind="agent"
-        onClick={() => input.onSelect?.(input.result.agentId)}
-        type="button"
-        variant="ghost"
-      >
-        <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-          <MemberAvatar identity={{ id: input.result.agentId, name: title, handle: input.result.subtitle, avatar: title.slice(0, 2).toUpperCase(), avatarSeed: input.result.avatarSeed }} />
-          <span className="grid min-w-0 gap-1">
-            <strong className="truncate text-sm">{highlighted(title, input.query)}</strong>
-            <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(input.result.subtitle, input.query)}</span>
+    <Card className={searchResultPanelClassName}>
+      <CardContent className="p-0">
+        <Button
+          aria-label={input.messages.search.navigation.openAgent(title)}
+          className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-3 text-left hover:bg-transparent"
+          data-search-result-kind="agent"
+          onClick={() => input.onSelect?.(input.result.agentId)}
+          type="button"
+          variant="ghost"
+        >
+          <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+            <MemberAvatar identity={{ id: input.result.agentId, name: title, handle: input.result.subtitle, avatar: title.slice(0, 2).toUpperCase(), avatarSeed: input.result.avatarSeed }} />
+            <span className="grid min-w-0 gap-1">
+              <strong className="truncate text-sm">{highlighted(title, input.query)}</strong>
+              <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(input.result.subtitle, input.query)}</span>
+            </span>
           </span>
-        </span>
-      </Button>
-    </SoftPanel>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -394,24 +402,26 @@ function ChannelResultButton(input: {
   const channel = input.data.channels.find((candidate) => candidate.id === input.result.channelId);
   const subtitle = channelResultSubtitle(input.result, channel?.description, input.messages);
   return (
-    <SoftPanel className={searchResultPanelClassName} variant="surface">
-      <Button
-        aria-label={input.messages.search.navigation.openChannel(title)}
-        className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"
-        data-search-result-kind="channel"
-        onClick={() => input.onSelect?.(input.result.channelId)}
-        type="button"
-        variant="ghost"
-      >
-        <span className="grid min-w-0 gap-1">
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <SleiIcon className="size-4 text-muted-foreground" name="hash" />
-            <strong className="truncate text-sm">{highlighted(title, input.query)}</strong>
+    <Card className={searchResultPanelClassName}>
+      <CardContent className="p-0">
+        <Button
+          aria-label={input.messages.search.navigation.openChannel(title)}
+          className="h-auto min-h-12 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-3 text-left hover:bg-transparent"
+          data-search-result-kind="channel"
+          onClick={() => input.onSelect?.(input.result.channelId)}
+          type="button"
+          variant="ghost"
+        >
+          <span className="grid min-w-0 gap-1">
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <SleiIcon className="size-4 text-muted-foreground" name="hash" />
+              <strong className="truncate text-sm">{highlighted(title, input.query)}</strong>
+            </span>
+            <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(subtitle, input.query)}</span>
           </span>
-          <span className="truncate text-xs font-normal text-muted-foreground">{highlighted(subtitle, input.query)}</span>
-        </span>
-      </Button>
-    </SoftPanel>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -431,31 +441,33 @@ function MessageResultButton(input: {
     profile: input.profile,
   });
   return (
-    <SoftPanel className={searchResultPanelClassName} variant="surface">
-      <Button
-        aria-label={input.messages.search.navigation.openMessage(input.result.messageId)}
-        className="h-auto min-h-16 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent"
-        data-search-result-kind="message"
-        onClick={() => {
-          if (input.onSelect) {
-            input.onSelect(input.result);
-          } else if (input.result.channelId) {
-            input.onLegacySelect?.(input.result.channelId, input.result.messageId);
-          }
-        }}
-        type="button"
-        variant="ghost"
-      >
-        <span className="grid min-w-0 gap-1">
-          <span className="flex min-w-0 items-center gap-2 text-xs font-normal text-muted-foreground">
-            <span className="truncate">{labels.subtitle}</span>
-            <span className="shrink-0">{formatResultDate(input.result.createdAt, input.timeZone)}</span>
+    <Card className={searchResultPanelClassName}>
+      <CardContent className="p-0">
+        <Button
+          aria-label={input.messages.search.navigation.openMessage(input.result.messageId)}
+          className="h-auto min-h-16 w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-3 text-left hover:bg-transparent"
+          data-search-result-kind="message"
+          onClick={() => {
+            if (input.onSelect) {
+              input.onSelect(input.result);
+            } else if (input.result.channelId) {
+              input.onLegacySelect?.(input.result.channelId, input.result.messageId);
+            }
+          }}
+          type="button"
+          variant="ghost"
+        >
+          <span className="grid min-w-0 gap-1">
+            <span className="flex min-w-0 items-center gap-2 text-xs font-normal text-muted-foreground">
+              <span className="truncate">{labels.subtitle}</span>
+              <span className="shrink-0">{formatResultDate(input.result.createdAt, input.timeZone)}</span>
+            </span>
+            <strong className="truncate text-sm">{highlighted(labels.title, input.query)}</strong>
+            <span className="line-clamp-2 text-sm font-normal text-muted-foreground">{highlighted(input.result.snippet, input.query)}</span>
           </span>
-          <strong className="truncate text-sm">{highlighted(labels.title, input.query)}</strong>
-          <span className="line-clamp-2 text-sm font-normal text-muted-foreground">{highlighted(input.result.snippet, input.query)}</span>
-        </span>
-      </Button>
-    </SoftPanel>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
