@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentProps, type PointerEvent, ty
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 type TooltipButtonProps = ComponentProps<typeof Button> & {
   ripple?: boolean;
@@ -32,6 +33,7 @@ export function TooltipButton({
   rippleColor = "white",
   tooltip,
   tooltipSide,
+  className,
   ...buttonProps
 }: TooltipButtonProps) {
   const [ripples, setRipples] = useState<Ripple[]>([]);
@@ -69,7 +71,7 @@ export function TooltipButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button {...buttonProps} disabled={disabled} onPointerDown={handlePointerDown}>
+        <Button {...buttonProps} className={cn(ripple && "overflow-hidden", className)} disabled={disabled} onPointerDown={handlePointerDown} wrapContent={!ripple}>
           {ripple ? (
             <>
               {ripples.map((item) => (

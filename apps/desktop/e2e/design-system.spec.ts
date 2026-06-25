@@ -137,7 +137,7 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(darkTokens, "--glow-cyan")).toBe("rgba(6, 182, 212, 0.3)");
   });
 
-  it("uses neutral overlay shadows and dark-first body background", () => {
+  it("uses neutral overlay shadows and theme-aware body backgrounds", () => {
     const appCss = readFileSync("src/app/app.css", "utf8");
     const rootTokens = cssBlock(appCss, ":root");
     const darkTokens = cssBlock(appCss, ".dark");
@@ -161,5 +161,13 @@ describe("shadcn design system wiring", () => {
   min-height: 100vh;
   background:
     linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);`);
+    expect(appCss).toContain(`html.dark body {
+  background:
+    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
+}`);
+    expect(appCss).toContain(`html.light body {
+  background:
+    linear-gradient(to bottom right, oklch(0.985 0.006 220), oklch(0.955 0.026 235), oklch(0.985 0.006 220));
+}`);
   });
 });

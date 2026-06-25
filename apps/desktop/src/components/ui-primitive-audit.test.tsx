@@ -451,6 +451,7 @@ const legacyUiAuditCategories = [
     assert: ({ source }) => {
       expect(source).not.toContain("slei-raised");
       expect(source).not.toContain("slei-inset");
+      expect(source).not.toContain("slei-soft-dialog");
       expect(source).not.toContain("shadow-[var(--slei-");
     },
   },
@@ -869,6 +870,7 @@ describe("desktop UI primitive usage", () => {
   it("keeps static surfaces and badges free of old elevated variants", () => {
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
+    const appFrameSource = readSource("app/SleiAppFrame.tsx");
 
     expect(cardSource).not.toContain("variant ===");
     expect(badgeSource).not.toContain("shadow-sm");
@@ -887,8 +889,13 @@ describe("desktop UI primitive usage", () => {
       expect(source).not.toContain("shadow-sm");
       expect(source).not.toContain("data-slei-panel");
       expect(source).not.toContain("data-variant=");
+      expect(source).not.toContain("slei-soft-dialog");
       expect(source).not.toContain("bg-muted/40");
     }
+
+    expect(appFrameSource).not.toContain("slei-soft-dialog");
+    expect(appFrameSource).not.toContain('"t-modal fixed');
+    expect(appFrameSource).not.toContain('"t-modal rounded');
   });
 
   it("keeps tooltip free of legacy overlay shadow tokens", () => {

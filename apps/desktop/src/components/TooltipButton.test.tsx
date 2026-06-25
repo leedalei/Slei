@@ -54,6 +54,8 @@ describe("TooltipButton", () => {
 
       const ripple = button?.querySelector('[data-slot="button-ripple"]') as HTMLSpanElement | null;
       expect(ripple).not.toBeNull();
+      expect(ripple?.parentElement).toBe(button);
+      expect(button?.className).toContain("overflow-hidden");
       expect(ripple?.className).toContain("bg-cyan-400/30");
       expect(ripple?.style.width).toBe("112px");
       expect(ripple?.style.height).toBe("112px");

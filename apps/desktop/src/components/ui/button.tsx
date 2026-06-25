@@ -63,12 +63,13 @@ type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
     glowEffect?: boolean
+    wrapContent?: boolean
   }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, glowEffect = false, children, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, glowEffect = false, wrapContent = true, children, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
-    const content = asChild ? children : <span className="relative z-10 flex min-w-0 items-center gap-2">{children}</span>
+    const content = asChild || !wrapContent ? children : <span className="relative z-10 flex min-w-0 items-center gap-2">{children}</span>
 
     return (
       <Comp

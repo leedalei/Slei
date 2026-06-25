@@ -344,6 +344,16 @@ body {
   line-height: var(--app-leading-ui);
 }
 
+html.dark body {
+  background:
+    linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a);
+}
+
+html.light body {
+  background:
+    linear-gradient(to bottom right, oklch(0.985 0.006 220), oklch(0.955 0.026 235), oklch(0.985 0.006 220));
+}
+
 button,
 input,
 textarea,
