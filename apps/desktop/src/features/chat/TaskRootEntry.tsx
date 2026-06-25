@@ -1,9 +1,12 @@
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMessage, SleiTask } from "../../app/types";
-import { MemberAvatar, SleiIcon, SleiIconSwap, SoftPanel, TooltipButton, type MemberAvatarIdentity } from "../../components";
+import { MemberAvatar, SleiIcon, SleiIconSwap, TooltipButton, type MemberAvatarIdentity } from "../../components";
 import { Button } from "../../components/ui/button";
+import { Card } from "../../components/ui/card";
 import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
+
+const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 
 const STATUS_CLASS: Record<SleiTask["status"], string> = {
   pending_assignment: "text-amber-700 dark:text-amber-300",
@@ -53,11 +56,10 @@ export function TaskRootEntry(input: {
     avatar: input.sourceMessage?.avatar ?? author.slice(0, 2),
   };
   return (
-    <SoftPanel
-      className="group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50"
+    <Card
+      className={cn(CARD_FLAT_CLASS, "group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50")}
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
-      variant="flat"
     >
       <MemberAvatar identity={avatarIdentity} />
       <div className="min-w-0">
@@ -109,6 +111,6 @@ export function TaskRootEntry(input: {
           </div>
         )}
       </div>
-    </SoftPanel>
+    </Card>
   );
 }

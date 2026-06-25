@@ -12,7 +12,7 @@ const enabledAuditCategories = {
   radixAggregate: true,
   icons: true,
   themeTokens: true,
-  softPanel: false,
+  softPanel: true,
   oldUtilities: false,
 } as const;
 
@@ -867,11 +867,9 @@ describe("desktop UI primitive usage", () => {
   });
 
   it("keeps static surfaces and badges free of old elevated variants", () => {
-    const panelSource = readSource("components/SoftPanel.tsx");
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
 
-    expect(panelSource).not.toContain('surface: "border-border/60 bg-card shadow');
     expect(cardSource).not.toContain("variant ===");
     expect(badgeSource).not.toContain("shadow-sm");
     expect(badgeSource).not.toContain("slei-");

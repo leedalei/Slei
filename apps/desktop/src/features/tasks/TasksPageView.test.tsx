@@ -240,7 +240,8 @@ describe("TasksPage filters", () => {
 
     expect(container?.textContent).toContain("待指派");
     expect(container?.textContent).not.toContain("待指派 0");
-    const pendingColumn = container?.querySelector('section[aria-label="待指派"]');
+    const pendingColumn = container?.querySelector('[data-slot="card"][aria-label="待指派"]');
+    expect(pendingColumn?.getAttribute("role")).toBe("region");
     const pendingEmptyTitle = pendingColumn?.querySelector('[data-empty-variant="nodata"] h2');
     expect(pendingEmptyTitle?.textContent).toBe("暂无数据");
     expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);

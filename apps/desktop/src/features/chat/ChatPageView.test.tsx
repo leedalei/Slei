@@ -90,6 +90,12 @@ async function mountChatPage(element: React.ReactElement) {
   return mountedContainer;
 }
 
+function staticMarkupHost(html: string) {
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  return host;
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -1642,23 +1648,24 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const messageHtml = html.slice(html.indexOf('data-message-id="msg-contract"'));
-    const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
+    const host = staticMarkupHost(html);
+    const messageCard = host.querySelector<HTMLElement>('[data-message-id="msg-contract"]');
 
-    expect(messageHtml).toContain('data-message-id="msg-contract"');
-    expect(messageHtml).toContain('data-variant="flat"');
-    expect(messageOpenTag).toContain("border-transparent");
-    expect(messageOpenTag).toContain("bg-transparent");
-    expect(messageOpenTag).toContain("hover:border-border/50");
-    expect(messageOpenTag).not.toContain("bg-card");
-    expect(messageOpenTag).not.toContain("bg-muted");
-    expect(messageOpenTag).not.toContain("bg-primary/5");
-    expect(messageOpenTag).not.toContain("shadow-");
-    expect(messageOpenTag).not.toContain("hover:shadow");
-    expect(messageHtml).toContain('data-slot="message-actions"');
-    expect(messageHtml).toContain('data-message-thread-open="msg-contract"');
-    expect(messageHtml).toContain(`aria-label="${messages.chat.copyMessage}"`);
-    expect(messageHtml).toContain(`aria-label="${messages.chat.saveMessage}"`);
+    expect(messageCard).not.toBeNull();
+    expect(messageCard?.dataset.slot).toBe("card");
+    expect(messageCard?.className).toContain("border-transparent");
+    expect(messageCard?.className).toContain("bg-transparent");
+    expect(messageCard?.className).toContain("hover:border-border/50");
+    expect(messageCard?.className).not.toContain("bg-card");
+    expect(messageCard?.className).not.toContain("bg-muted");
+    expect(messageCard?.className).not.toContain("bg-primary/5");
+    expect(messageCard?.className).toContain("shadow-none");
+    expect(messageCard?.className).toContain("after:hidden");
+    expect(messageCard?.className).not.toContain("hover:shadow");
+    expect(messageCard?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
+    expect(messageCard?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
+    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.copyMessage}"]`)).not.toBeNull();
+    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.saveMessage}"]`)).not.toBeNull();
   });
 
   it("adds a border only to the focused timeline message", () => {
@@ -1686,7 +1693,8 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const messageHtml = html.slice(html.indexOf('data-message-id="msg-focused"'));
+    const messageAttrIndex = html.indexOf('data-message-id="msg-focused"');
+    const messageHtml = html.slice(html.lastIndexOf("<", messageAttrIndex));
     const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
 
     expect(messageOpenTag).toContain("data-[focused=true]:border-primary/35");
@@ -1746,8 +1754,8 @@ describe("ChatPage mention panel", () => {
       const cardOpenTag = cardHtml.slice(0, cardHtml.indexOf(">"));
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
-      expect(cardHtml).toContain('data-variant="surface"');
-      expect(cardOpenTag).not.toContain("shadow-");
+      expect(cardHtml).toContain('data-slot="card"');
+      expect(cardOpenTag).not.toContain("shadow-[");
       expect(cardOpenTag).not.toContain("hover:shadow");
     }
   });
@@ -1789,20 +1797,20 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const taskRootHtml = html.slice(html.indexOf('data-task-root-entry="task-msg-task-source"'));
-    const taskRootOpenTag = taskRootHtml.slice(0, taskRootHtml.indexOf(">"));
+    const host = staticMarkupHost(html);
+    const taskRootCard = host.querySelector<HTMLElement>('[data-task-root-entry="task-msg-task-source"]');
 
-    expect(taskRootHtml).toContain('data-task-root-entry="task-msg-task-source"');
-    expect(taskRootHtml).toContain('data-source-message-id="msg-task-source"');
-    expect(taskRootHtml).toContain('data-variant="flat"');
-    expect(taskRootOpenTag).toContain("bg-transparent");
-    expect(taskRootOpenTag).toContain("hover:border-border/50");
-    expect(taskRootOpenTag).not.toContain("shadow-");
-    expect(taskRootOpenTag).not.toContain("hover:shadow");
-    expect(taskRootHtml).toContain('data-task-root-entry-status');
-    expect(taskRootHtml).toContain(messages.tasks.status.in_progress);
-    expect(taskRootHtml).toContain('data-task-root-entry-replies');
-    expect(taskRootHtml).toContain("把这条变成任务。");
+    expect(taskRootCard).not.toBeNull();
+    expect(taskRootCard?.dataset.sourceMessageId).toBe("msg-task-source");
+    expect(taskRootCard?.dataset.slot).toBe("card");
+    expect(taskRootCard?.className).toContain("bg-transparent");
+    expect(taskRootCard?.className).toContain("hover:border-border/50");
+    expect(taskRootCard?.className).toContain("shadow-none");
+    expect(taskRootCard?.className).toContain("after:hidden");
+    expect(taskRootCard?.className).not.toContain("hover:shadow");
+    expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
+    expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
+    expect(taskRootCard?.textContent).toContain("把这条变成任务。");
   });
 
   it("keeps only the composer input recessed while the outer surface stays flat", async () => {
@@ -1823,7 +1831,7 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-variant")).toBe("flat");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-slot")).toBe("card");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
@@ -2008,8 +2016,8 @@ describe("ChatPage mention panel", () => {
 
     expect(source).toContain("bg-transparent");
     expect(source).toContain("hover:border-border/50");
-    expect(source).toContain('variant="flat"');
-    expect(source).not.toContain('variant="surface"');
+    expect(source).toContain("CARD_FLAT_CLASS");
+    expect(source).toContain("<Card");
     expect(source).not.toContain("border border-primary");
   });
 });

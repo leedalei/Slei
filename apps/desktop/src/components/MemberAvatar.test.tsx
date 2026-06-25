@@ -108,7 +108,6 @@ describe("MemberAvatar", () => {
       expect(image).not.toBeNull();
       expect(image?.getAttribute("src")).toBe(createMemberAvatar(identity));
       expect(image?.getAttribute("alt")).toBe("");
-      expect(host.innerHTML).not.toContain("SoftPanel");
       expect(host.querySelector("[data-slei-panel]")).toBeNull();
     } finally {
       cleanupMemberAvatar(root, host);
@@ -155,7 +154,6 @@ describe("MemberAvatar", () => {
 
       expect(fallback).not.toBeNull();
       expect(fallback?.textContent).toBe("QI");
-      expect(host.innerHTML).not.toContain("SoftPanel");
       expect(host.querySelector("[data-slei-panel]")).toBeNull();
     } finally {
       cleanupMemberAvatar(root, host);

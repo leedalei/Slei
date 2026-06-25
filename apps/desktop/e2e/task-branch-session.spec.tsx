@@ -27,6 +27,31 @@ function findTaskReplyButton(node: unknown): any {
   return findTaskReplyButton(props.children);
 }
 
+function extractHtmlElementByAttribute(html: string, attribute: string) {
+  const attributeIndex = html.indexOf(attribute);
+  expect(attributeIndex).toBeGreaterThanOrEqual(0);
+  const tagStart = html.lastIndexOf("<", attributeIndex);
+  const openTagEnd = html.indexOf(">", tagStart);
+  const openTag = html.slice(tagStart, openTagEnd + 1);
+  const tagName = /^<([a-z][a-z0-9-]*)\b/i.exec(openTag)?.[1];
+  expect(tagName).toBeTruthy();
+
+  const tagPattern = new RegExp(`</?${tagName}\\b[^>]*>`, "gi");
+  tagPattern.lastIndex = openTagEnd + 1;
+  let depth = 1;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(html))) {
+    depth += match[0].startsWith("</") ? -1 : 1;
+    if (depth === 0) {
+      return {
+        html: html.slice(tagStart, tagPattern.lastIndex),
+        openTag,
+      };
+    }
+  }
+  throw new Error(`Could not extract element for ${attribute}`);
+}
+
 describe("task branch sessions", () => {
   it("keeps drawer reply persistence wiring connected at the source level", () => {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -117,19 +142,19 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-task-root-entry-replies");
     expect(html).toContain("data-avatar-size");
     expect(html).toContain("用户");
-    expect(html).toContain("data-slei-panel");
-    expect(html).toContain('data-variant="flat"');
+    expect(html).toContain('data-slot="card"');
     expect(html).toContain("10:00");
-    const taskEntryHtml = html.slice(html.indexOf("data-task-root-entry"));
-    const taskEntryClose = taskEntryHtml.indexOf("</section>");
-    const taskEntryOpenTag = taskEntryHtml.slice(0, taskEntryHtml.indexOf(">"));
+    const taskEntry = extractHtmlElementByAttribute(html, 'data-task-root-entry="task_1"');
+    const taskEntryHtml = taskEntry.html;
+    const taskEntryOpenTag = taskEntry.openTag;
     expect(taskEntryOpenTag).toContain("bg-transparent");
     expect(taskEntryOpenTag).toContain("hover:border-border/50");
-    expect(taskEntryOpenTag).not.toContain("shadow-");
+    expect(taskEntryOpenTag).toContain("shadow-none");
+    expect(taskEntryOpenTag).toContain("after:hidden");
     expect(taskEntryOpenTag).not.toContain("hover:shadow");
-    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="复制"');
-    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="收藏"');
-    expect(taskEntryHtml.slice(0, taskEntryClose)).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
+    expect(taskEntryHtml).toContain('aria-label="复制"');
+    expect(taskEntryHtml).toContain('aria-label="收藏"');
+    expect(taskEntryHtml).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
     expect(taskEntryHtml.indexOf("data-task-root-entry-replies")).toBeLessThan(taskEntryHtml.indexOf("data-task-root-entry-status"));
     expect(html).not.toContain('data-message-id="msg_root"');
   });
