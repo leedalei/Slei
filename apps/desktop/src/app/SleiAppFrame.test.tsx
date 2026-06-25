@@ -315,7 +315,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navCss).not.toContain("inset -8px 0 18px");
   });
 
-  it("renders menu and context sidebar without background fills", () => {
+  it("keeps menu and context sidebar transparent while giving workspace a light glass fill", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
@@ -326,17 +326,20 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--glass-bg:");
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
+    expect(appCss).toContain("--workspace-glass-bg: oklch(0.18 0.045 255 / 1)");
+    expect(appCss).toContain("--workspace-glass-bg: oklch(0.94 0.006 220 / 1)");
     expect(appCss).toContain("--glass-surface-filter: blur(var(--glass-blur)) saturate(145%)");
+    expect(appCss).toContain("--chrome-surface-filter: blur(6px) saturate(112%)");
     expect(navSource).not.toContain("bg-sidebar/");
     expect(asideSource).not.toContain("bg-sidebar/");
     expect(navCss).toContain("background: transparent");
     expect(navCss).not.toContain("background: var(--glass-nav-bg)");
-    expect(navCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
-    expect(navCss).toContain("backdrop-filter: var(--glass-surface-filter)");
+    expect(navCss).toContain("-webkit-backdrop-filter: var(--chrome-surface-filter)");
+    expect(navCss).toContain("backdrop-filter: var(--chrome-surface-filter)");
     expect(sidebarCss).toContain("background: transparent");
     expect(sidebarCss).not.toContain("background: var(--glass-sidebar-bg)");
-    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
-    expect(sidebarCss).toContain("backdrop-filter: var(--glass-surface-filter)");
+    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--chrome-surface-filter)");
+    expect(sidebarCss).toContain("backdrop-filter: var(--chrome-surface-filter)");
     expect(sidebarCss).toContain('[data-slot="agent-activity"]');
     expect(sidebarCss).toContain("background: transparent");
   });
@@ -378,14 +381,14 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
     expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
-    expect(appCss).toContain("--background: oklch(0.18 0.045 255 / 0.8)");
-    expect(appCss).toContain("--background: oklch(0.94 0.006 220 / 0.8)");
-    expect(appCss).toContain("body {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: var(--background);");
+    expect(appCss).toContain("--background: oklch(0.18 0.045 255 / 0.5)");
+    expect(appCss).toContain("--background: oklch(0.94 0.006 220 / 0.5)");
+    expect(appCss).toContain("body {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
     expect(appCss).not.toContain("linear-gradient(to bottom right");
     expect(appCss).not.toContain("background: color-mix(in srgb, var(--background) 20%, transparent)");
-    expect(appCss).toContain(".slei-glass-workspace {\n  -webkit-backdrop-filter: var(--glass-surface-filter);\n  backdrop-filter: var(--glass-surface-filter);\n  background: transparent;");
+    expect(appCss).toContain(".slei-glass-workspace {\n  -webkit-backdrop-filter: var(--glass-surface-filter);\n  backdrop-filter: var(--glass-surface-filter);\n  background: var(--workspace-glass-bg);");
     expect(appCss).not.toContain("#app {\n  background: var(--background)");
     expect(appCss).not.toContain("#root {");
   });

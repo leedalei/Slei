@@ -20,7 +20,7 @@
   --text-color-2: var(--n80);
   --text-color-3: var(--n60);
   --text-color-4: var(--n50);
-  --background: oklch(0.18 0.045 255 / 0.8);
+  --background: oklch(0.18 0.045 255 / 0.5);
   --foreground: var(--text-color-1);
   --card: oklch(0.24 0.045 255 / 0.72);
   --card-foreground: var(--text-color-1);
@@ -120,8 +120,10 @@
   --overlay-shadow-md: 0 24px 60px color-mix(in srgb, var(--overlay-shadow-color) 64%, transparent);
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
+  --workspace-glass-bg: oklch(0.18 0.045 255 / 1);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
   --glass-surface-filter: blur(var(--glass-blur)) saturate(145%);
+  --chrome-surface-filter: blur(6px) saturate(112%);
   --glass-button-border: var(--glass-border);
   --glass-button-hover-border: color-mix(in srgb, var(--glass-border) 52%, var(--glow-cyan));
   --glass-button-shadow: 0 10px 26px color-mix(in srgb, var(--overlay-shadow-color) 36%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
@@ -242,7 +244,7 @@
   --text-color-2: var(--n80);
   --text-color-3: var(--n60);
   --text-color-4: var(--n50);
-  --background: oklch(0.18 0.045 255 / 0.8);
+  --background: oklch(0.18 0.045 255 / 0.5);
   --foreground: var(--text-color-1);
   --card: oklch(0.24 0.045 255 / 0.72);
   --card-foreground: var(--text-color-1);
@@ -262,6 +264,7 @@
   --ring: oklch(0.75 0.13 205);
   --sidebar: oklch(0.16 0.04 255 / 0.62);
   --sidebar-foreground: var(--text-color-1);
+  --workspace-glass-bg: oklch(0.18 0.045 255 / 1);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 16px;
@@ -291,7 +294,7 @@
   --text-color-2: var(--n80);
   --text-color-3: var(--n60);
   --text-color-4: var(--n50);
-  --background: oklch(0.94 0.006 220 / 0.8);
+  --background: oklch(0.94 0.006 220 / 0.5);
   --foreground: var(--text-color-1);
   --card: oklch(1 0 0 / 0.76);
   --card-foreground: var(--text-color-1);
@@ -317,6 +320,7 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+  --workspace-glass-bg: oklch(0.94 0.006 220 / 1);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-blur: 16px;
@@ -416,7 +420,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--background);
+  background: transparent;
   color: var(--text-color-1);
   font-family: var(--font-sans);
   font-size: var(--text-base);
@@ -728,8 +732,8 @@ select:focus-visible {
 }
 
 .slei-shell-nav {
-  -webkit-backdrop-filter: var(--glass-surface-filter);
-  backdrop-filter: var(--glass-surface-filter);
+  -webkit-backdrop-filter: var(--chrome-surface-filter);
+  backdrop-filter: var(--chrome-surface-filter);
   background: transparent;
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent),
@@ -750,8 +754,8 @@ select:focus-visible {
 }
 
 .slei-context-sidebar {
-  -webkit-backdrop-filter: var(--glass-surface-filter);
-  backdrop-filter: var(--glass-surface-filter);
+  -webkit-backdrop-filter: var(--chrome-surface-filter);
+  backdrop-filter: var(--chrome-surface-filter);
   background: transparent;
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
@@ -765,7 +769,7 @@ select:focus-visible {
 .slei-glass-workspace {
   -webkit-backdrop-filter: var(--glass-surface-filter);
   backdrop-filter: var(--glass-surface-filter);
-  background: transparent;
+  background: var(--workspace-glass-bg);
 }
 
 .slei-resize-handle {
