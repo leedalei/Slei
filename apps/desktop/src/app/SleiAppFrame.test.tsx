@@ -173,6 +173,38 @@ describe("SleiAppFrame global search navigation", () => {
     expect(container.querySelector('[data-nav-icon="chat"]')?.getAttribute("aria-current")).toBe("page");
   });
 
+  it("renders the top-left brand with the transparent bubble icon asset", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const brandIcon = container.querySelector<HTMLImageElement>(".slei-brand__icon");
+    const asset = readFileSync(join(process.cwd(), "src/assets/brand/slei-bubble.svg"), "utf8");
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+
+    expect(brandIcon).not.toBeNull();
+    expect(brandIcon?.getAttribute("alt")).toBe("");
+    expect(brandIcon?.getAttribute("src")).toMatch(/^(data:image\/svg\+xml|.*slei-bubble\.svg)/);
+    expect(container.querySelector(".slei-brand__mark")).toBeNull();
+    expect(frameSource).toContain("../assets/brand/slei-bubble.svg");
+    expect(asset).toContain("<path");
+    expect(asset).not.toContain("<rect");
+    expect(asset).toContain('stop-color="#0B9C67"');
+    expect(asset).toContain('stop-color="#16C78A"');
+    expect(asset).toContain('fill="#A5F3FC"');
+    expect(asset).toContain('fill="#C4B5FD"');
+    expect(asset).toContain('fill="#FDA4AF"');
+    expect(asset).toContain('stroke="#FFFFFF"');
+    expect(asset).toContain('stroke-opacity="0.62"');
+    expect(asset).toContain('fill-opacity="0.88"');
+    expect(asset).toContain('r="2.55"');
+    expect(asset).not.toContain('r="3.05"');
+  });
+
   it("renders search as an active far-left rail item", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

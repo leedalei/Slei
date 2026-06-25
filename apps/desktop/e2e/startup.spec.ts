@@ -202,18 +202,27 @@ describe("desktop startup contract", () => {
       "icons/icon.icns",
       "icons/icon.ico",
     ]);
-    await expect(sha256(join(iconRoot, "slei-icon.svg"))).resolves.toBe("433ad3018e5e3eece898b97df8d6755b1aca547846c93ce2eb833e9b0effb466");
-    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("d472343f6349f587b9fb6e03e48fd433438e1386ac7300083778369131f5af60");
-    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("be7371e940f9c3a58eb16c7f1d19b37edbc70e0e628843a741d72d46ba6f955e");
-    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("5f374cee2996b6705988f7cbb27d60823d72ad57ed82c2cf6d4a9d505c67dd88");
-    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("35df1b72fe831fe34f4b1e504a95d9c25bc42fc8043374da79c1256576aa0f4a");
-    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("f0bc45eea86f56c707c58ceabf975c1a452f3d61280d6a4d5993b8009f468b2e");
+    const sourceIcon = await readFile(join(iconRoot, "slei-icon.svg"), "utf8");
+
+    expect(sourceIcon).toContain('stop-color="#0B9C67"');
+    expect(sourceIcon).toContain('stop-color="#16C78A"');
+    expect(sourceIcon).toContain('stroke="#FFFFFF"');
+    expect(sourceIcon).toContain('stroke-opacity="0.62"');
+    expect(sourceIcon).toContain('r="2.55"');
+    expect(sourceIcon).toContain('fill-opacity="0.88"');
+    expect(sourceIcon).not.toContain('r="3.05"');
+    await expect(sha256(join(iconRoot, "slei-icon.svg"))).resolves.toBe("362ce08df11fe71bd6a1c69a64ccd53b0d231ad0359b2a528275914384310c3e");
+    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("4d186b83834748fd3305539e29480276471e3ce550f411cdbbfb0bc3416fbc7d");
+    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("e39158aa973ce8dd95dfa3ea6b2a7e3caaa8d82a47016d19271a13c42ff2f023");
+    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("1999254eced9f512326d46615f0afd46d95c1fe439f4cfeaac3a9394fff650ed");
+    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("e30988843d2253fab15c26e5b3fadc4a55a0778b2e85a551dbfd5dfff52a9700");
+    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("280bd0dcd391d3ef4eb048c171f1de1dd49402869c4d251deed85141304d2770");
     await expect(icnsPngHashes(join(iconRoot, "icon.icns"))).resolves.toEqual(
       expect.arrayContaining([
-        "5f374cee2996b6705988f7cbb27d60823d72ad57ed82c2cf6d4a9d505c67dd88",
-        "35df1b72fe831fe34f4b1e504a95d9c25bc42fc8043374da79c1256576aa0f4a",
-        "f0bc45eea86f56c707c58ceabf975c1a452f3d61280d6a4d5993b8009f468b2e",
-        "d472343f6349f587b9fb6e03e48fd433438e1386ac7300083778369131f5af60",
+        "1999254eced9f512326d46615f0afd46d95c1fe439f4cfeaac3a9394fff650ed",
+        "e30988843d2253fab15c26e5b3fadc4a55a0778b2e85a551dbfd5dfff52a9700",
+        "280bd0dcd391d3ef4eb048c171f1de1dd49402869c4d251deed85141304d2770",
+        "4d186b83834748fd3305539e29480276471e3ce550f411cdbbfb0bc3416fbc7d",
       ]),
     );
   });
