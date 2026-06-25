@@ -37,7 +37,7 @@ describe("settings preferences", () => {
     expect(html).toContain("关于");
     expect(html).toContain('data-settings-icon="account"');
     expect(html).toContain('data-font-size="md"');
-    expect(html).toContain("--slei-font-size:15px");
+    expect(html).toContain("--app-font-size:15px");
     expect(html).toContain('data-settings-icon="language-region"');
     expect(html).toContain('data-settings-icon="appearance"');
     expect(html).toContain('data-settings-icon="notifications"');
@@ -264,7 +264,7 @@ describe("settings preferences", () => {
     expect(appearanceHtml).not.toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
     expect(appearanceHtml).toContain('data-font-size="lg"');
-    expect(appearanceHtml).toContain("--slei-font-size:16px");
+    expect(appearanceHtml).toContain("--app-font-size:16px");
     expect(appearanceHtml).toContain('data-settings-font-size-option="lg"');
     expect(appearanceHtml).toContain('data-settings-theme-option="light"');
     expect(appearanceHtml).toContain('data-settings-theme-option="dark"');

@@ -8,21 +8,21 @@ export type SoftPanelInsetSize = "s" | "m" | "l" | "xl" | "small" | "medium" | "
 const softPanelVariantClassNames: Record<SoftPanelVariant, string> = {
   surface: "border-border/60 bg-card",
   flat: "border-transparent bg-card",
-  raised: "border-transparent bg-card slei-raised-small",
+  raised: "border-transparent bg-card shadow-[0_8px_24px_rgba(0,0,0,0.24)]",
   inset: "border-border/60 bg-muted/40",
   listItem:
-    "rounded-lg border-border/60 bg-card/80 slei-raised-small slei-hover-transition hover:bg-card hover:slei-raised-small",
+    "rounded-lg border-border/60 bg-card/80 shadow-[0_6px_18px_rgba(0,0,0,0.18)] transition-[background-color,border-color,box-shadow,color] duration-300 hover:bg-card hover:shadow-[0_10px_26px_rgba(0,0,0,0.22)]",
   outline: "border-border/60",
 };
 
 const softPanelInsetClassNames: Record<SoftPanelInsetSize, string> = {
-  s: "slei-inset-small",
-  m: "slei-inset-small",
-  l: "slei-inset-small",
-  xl: "slei-inset-small",
-  small: "slei-inset-small",
-  medium: "slei-inset-small",
-  large: "slei-inset-small",
+  s: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  m: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  l: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  xl: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  small: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  medium: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
+  large: "shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]",
 };
 
 export function SoftPanel({

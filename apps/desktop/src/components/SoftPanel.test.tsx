@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { SoftPanel } from "./SoftPanel";
 
+const legacyInsetClassPrefix = ["slei", "inset"].join("-");
+
 describe("SoftPanel", () => {
   it("renders a soft panel with stable semantic attributes", () => {
     const html = renderToStaticMarkup(
@@ -31,9 +33,8 @@ describe("SoftPanel", () => {
     );
 
     expect(html).toContain('data-variant="inset"');
-    expect(html).toContain("slei-inset-small");
-    expect(html).not.toContain("slei-inset-m");
-    expect(html).not.toContain("slei-inset-large");
+    expect(html).toContain("shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]");
+    expect(html).not.toContain(legacyInsetClassPrefix);
   });
 
   it("uses the small inset size by default", () => {
@@ -41,9 +42,7 @@ describe("SoftPanel", () => {
       <SoftPanel variant="inset">默认凹陷面板</SoftPanel>,
     );
 
-    expect(html).toContain("slei-inset-small");
-    expect(html).not.toContain("slei-inset-m");
-    expect(html).not.toContain("slei-inset-l");
-    expect(html).not.toContain("slei-inset-xl");
+    expect(html).toContain("shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]");
+    expect(html).not.toContain(legacyInsetClassPrefix);
   });
 });

@@ -301,9 +301,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const fontSize = fontSizeValue(appearance.fontSize);
   const textTokenValues = useMemo(() => fontSizeTextTokenValues(appearance.fontSize), [appearance.fontSize]);
   const shellStyle = {
-    "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
-    "--slei-font-size": fontSize,
-    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
+    "--app-sidebar-width": `${input.sidebarWidth ?? 240}px`,
+    "--app-font-size": fontSize,
+    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -311,23 +311,23 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
     const root = document.documentElement;
     const previousFontSize = root.style.fontSize;
-    const previousSleiFontSize = root.style.getPropertyValue("--slei-font-size");
+    const previousAppFontSize = root.style.getPropertyValue("--app-font-size");
     const previousTextTokenValues = Object.fromEntries(
       Object.keys(textTokenValues).map((key) => [key, root.style.getPropertyValue(key)]),
     );
 
     root.style.fontSize = fontSize;
-    root.style.setProperty("--slei-font-size", fontSize);
+    root.style.setProperty("--app-font-size", fontSize);
     for (const [key, value] of Object.entries(textTokenValues)) {
       root.style.setProperty(key, value);
     }
 
     return () => {
       root.style.fontSize = previousFontSize;
-      if (previousSleiFontSize) {
-        root.style.setProperty("--slei-font-size", previousSleiFontSize);
+      if (previousAppFontSize) {
+        root.style.setProperty("--app-font-size", previousAppFontSize);
       } else {
-        root.style.removeProperty("--slei-font-size");
+        root.style.removeProperty("--app-font-size");
       }
       for (const key of Object.keys(textTokenValues)) {
         const previousValue = previousTextTokenValues[key];
@@ -345,10 +345,13 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
     const root = document.documentElement;
     const hadDarkClass = root.classList.contains("dark");
+    const hadLightClass = root.classList.contains("light");
     root.classList.toggle("dark", normalizedTheme === "dark");
+    root.classList.toggle("light", normalizedTheme === "light");
 
     return () => {
       root.classList.toggle("dark", hadDarkClass);
+      root.classList.toggle("light", hadLightClass);
     };
   }, [normalizedTheme]);
 
@@ -360,7 +363,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   return (
     <TooltipProvider>
     <div
-      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme === "dark" && "dark")}
+      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme)}
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
@@ -515,7 +518,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       {input.guideBootstrapping ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm" data-slot="guide-status-overlay" role="presentation">
-          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--slei-shadow-overlay-md)]" data-slot="guide-status" role="status">
+          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--overlay-shadow-md)]" data-slot="guide-status" role="status">
             <h2 className="text-base font-medium">{messages.onboarding.creatingGuide}</h2>
           </section>
         </div>

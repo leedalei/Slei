@@ -1783,10 +1783,10 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).toContain("slei-composer-input");
     expect(composerInput?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
-    expect(appCss).toContain("border-color: var(--slei-inset-border);");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s);");
+    expect(appCss).toContain("border-color: var(--glass-border);");
+    expect(appCss).toContain("box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px");
+    expect(appCss).toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
@@ -1947,10 +1947,10 @@ describe("ChatPage mention panel", () => {
     expect(messageStart).toBeGreaterThanOrEqual(0);
     expect(markdownStart).toBeGreaterThan(messageStart);
     expect(markdownHtml).toContain("text-card-foreground");
-    expect(markdownHtml).toContain("--slei-markdown-foreground:var(--card-foreground)");
+    expect(markdownHtml).toContain("--markdown-foreground:var(--card-foreground)");
     expect(markdownHtml).not.toContain("text-foreground");
-    expect(appCss).toContain("color: var(--slei-markdown-foreground, var(--color-text-primary));");
-    expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--color-text-primary);");
+    expect(appCss).toContain("color: var(--markdown-foreground, var(--text-primary));");
+    expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--text-primary);");
   });
 
   it("keeps task root entries visually aligned with normal transparent message rows", () => {

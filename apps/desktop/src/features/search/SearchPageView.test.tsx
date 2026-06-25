@@ -14,6 +14,9 @@ import { SearchPage } from "./SearchPageView";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 HTMLElement.prototype.scrollIntoView ??= function scrollIntoView() {};
 
+const legacyInsetClassPrefix = ["slei", "inset"].join("-");
+const legacyRaisedClassPrefix = ["slei", "raised"].join("-");
+
 function agentMember(id: string, name: string): SleiMember {
   return {
     id,
@@ -240,25 +243,23 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
     expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
     expect(searchSurface?.className).toContain("rounded-full");
-    expect(searchSurface?.className).toContain("slei-inset-small");
+    expect(searchSurface?.className).toContain("shadow-[inset_0_1px_2px_rgba(0,0,0,0.18)]");
     expect(searchSurface?.className).toContain("slei-search-input-surface");
     expect(searchSurface?.className).not.toContain("focus-within:ring-ring");
-    expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--slei-shadow-inset-s)]");
-    expect(searchSurface?.className).not.toContain("slei-inset-m");
-    expect(searchSurface?.className).not.toContain("slei-inset-large");
+    expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--overlay-shadow");
+    expect(searchSurface?.className).not.toContain(legacyInsetClassPrefix);
     expect(appCss).toContain(".slei-search-input-surface {");
-    expect(appCss).toContain("border-color: var(--slei-inset-border);");
+    expect(appCss).toContain("border-color: var(--glass-border);");
     expect(appCss).toContain("transition:");
     expect(appCss).toContain("border-color var(--focus-in-dur) var(--focus-in-ease)");
     expect(appCss).toContain(".slei-search-input-surface:focus-within {");
     expect(appCss).toContain("border-color: var(--primary);");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);");
+    expect(appCss).toContain("box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
     expect(searchInput.className).not.toContain("bg-muted/40");
-    expect(searchInput.className).not.toContain("slei-inset-small");
-    expect(searchInput.className).not.toContain("slei-inset-focus-small");
+    expect(searchInput.className).not.toContain(legacyInsetClassPrefix);
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
@@ -309,8 +310,8 @@ describe("SearchPage global search UI", () => {
       expect(panel?.className).toContain("shadow-none");
       expect(panel?.className).toContain("transition-colors");
       expect(panel?.className).toContain("hover:bg-muted/35");
-      expect(panel?.className).not.toContain("slei-raised");
-      expect(panel?.className).not.toContain("hover:slei-raised");
+      expect(panel?.className).not.toContain(legacyRaisedClassPrefix);
+      expect(panel?.className).not.toContain(`hover:${legacyRaisedClassPrefix}`);
     }
   });
 
@@ -418,7 +419,7 @@ describe("SearchPage global search UI", () => {
       expect(trigger.className).toContain("rounded-lg");
       expect(trigger.className).toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
-      expect(trigger.className).not.toContain("shadow-[var(--slei-shadow-inset-sm)]");
+      expect(trigger.className).not.toContain("shadow-[var(--overlay-shadow");
     }
 
     await openSelect(rootElement, "From");

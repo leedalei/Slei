@@ -513,7 +513,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).not.toContain("slei-rail__button");
 
     const css = appCssSource();
-    expect(css).toContain("--slei-glass-button-primary-gradient-bg: linear-gradient");
-    expect(css).toContain("background: var(--slei-glass-button-primary-gradient-bg)");
+    expect(css).toContain("--glass-button-primary-gradient-bg: linear-gradient");
+    expect(css).toContain("background: var(--glass-button-primary-gradient-bg)");
   });
 });

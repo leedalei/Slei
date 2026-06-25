@@ -9,7 +9,7 @@ const AUDIT_TEST_SOURCE_PATH = "components/ui-primitive-audit.test.tsx";
 const enabledAuditCategories = {
   radixAggregate: true,
   icons: false,
-  themeTokens: false,
+  themeTokens: true,
   softPanel: false,
   oldUtilities: false,
 } as const;
@@ -82,10 +82,13 @@ const allowedTailwindV4ThemeMappings = new Set([
   "--shadow-xs",
 ]);
 
-const allowedSleiRadiusThemeVariables = new Set([
-  "--slei-radius-small",
-  "--slei-radius-medium",
-  "--slei-radius-large",
+const allowedRadiusThemeVariables = new Set([
+  "--radius-xs",
+  "--radius-sm",
+  "--radius-base",
+  "--radius-md",
+  "--radius-lg",
+  "--radius-xl",
 ]);
 
 const legacyRootThemeTokens = new Set([
@@ -150,6 +153,12 @@ const allowedGenericAnimationTokenPatterns = [
   /^--modal-/,
   /^--tabs-/,
 ];
+
+const disallowedSelfReferenceThemeMappings = new Set([
+  "--letter-spacing",
+  "--spacing",
+  "--tracking-normal",
+]);
 
 const excludedSourceAuditDirectories = new Set(["docs", "plan", "plans", "spec", "specs"]);
 
@@ -244,7 +253,7 @@ function isAllowedThemeInlineMapping(token: string, value: string) {
 
   if (token.startsWith("--radius")) {
     const referencedToken = value.trim().match(/^var\((--[\w-]+)\)$/)?.[1];
-    return referencedToken ? allowedSleiRadiusThemeVariables.has(referencedToken) : false;
+    return referencedToken ? allowedRadiusThemeVariables.has(referencedToken) && referencedToken !== token : false;
   }
 
   if (token.startsWith("--shadow")) {
@@ -291,12 +300,36 @@ function legacyThemeTokenViolations(file: AuditFile) {
   const violations: string[] = [];
   const sourceOutsideThemeInline = sourceWithoutThemeInlineBlocks(file.source);
   const lines = sourceOutsideThemeInline.split("\n");
+  const themeScopeStack: Array<{ depth: number; isThemeScope: boolean }> = [];
+  let depth = 0;
 
   for (const [index, line] of lines.entries()) {
+    const selector = line.match(/^\s*(:root|\.dark|\.light)\s*\{/);
+    if (selector) {
+      themeScopeStack.push({ depth, isThemeScope: true });
+    }
+
+    const inThemeScope = themeScopeStack.some((scope) => scope.isThemeScope);
     for (const declaration of line.matchAll(/(--[\w-]+)\s*:/g)) {
       const [, token] = declaration;
-      if (legacyRootThemeTokens.has(token) || allowedTailwindV4ThemeMappings.has(token)) {
+      const isSemanticThemeToken = legacyRootThemeTokens.has(token);
+      const isCompatibilityToken =
+        /^--(?:color|padding|gap|indent|z|scrollbar)-/.test(token) ||
+        /^--(?:border|radius)-(?!xs$|sm$|base$|md$|lg$|xl$|2xl$|3xl$|4xl$)/.test(token) ||
+        /^--shadow-soft$/.test(token);
+
+      if ((isSemanticThemeToken && !inThemeScope) || isCompatibilityToken) {
         violations.push(`${file.filePath}:${index + 1}: legacy compatibility token ${token}`);
+      }
+    }
+
+    for (const char of line) {
+      if (char === "{") depth += 1;
+      if (char === "}") {
+        depth -= 1;
+        while (themeScopeStack.length > 0 && depth <= themeScopeStack[themeScopeStack.length - 1].depth) {
+          themeScopeStack.pop();
+        }
       }
     }
   }
@@ -312,6 +345,9 @@ function themeInlineMappingViolations(file: AuditFile) {
     for (const [index, line] of block.split("\n").entries()) {
       for (const declaration of line.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
         const [, token, value] = declaration;
+        if (disallowedSelfReferenceThemeMappings.has(token) && valueIsVarReference(value, token)) {
+          violations.push(`${file.filePath}:${index + 1}: self-referential @theme inline mapping ${token}: ${value}`);
+        }
         if (allowedTailwindV4ThemeMappings.has(token) && !isAllowedThemeInlineMapping(token, value)) {
           violations.push(`${file.filePath}:${index + 1}: invalid @theme inline mapping ${token}: ${value}`);
         }
@@ -389,6 +425,12 @@ const legacyUiAuditCategories = [
     files: legacySourceAuditFiles,
     assert: (file) => {
       expect(themeInlineMappingViolations(file)).toEqual([]);
+      if (file.filePath === "app/app.css") {
+        for (const token of ["--glass-bg", "--glass-border", "--glass-blur", "--glow-cyan", "--glow-purple", "--text-primary"]) {
+          expect(file.source).toContain(`${token}:`);
+        }
+        expect(file.source).not.toContain("Temporary legacy app compatibility styles");
+      }
       expect(sourceWithoutAllowedThemeTokens(file.source)).not.toContain("--slei-");
       expect(legacyThemeTokenViolations(file)).toEqual([]);
     },
@@ -550,12 +592,13 @@ describe("desktop UI primitive usage", () => {
 
   it("detects legacy raised, inset, and Slei variable shadow utilities", () => {
     const oldUtilitiesAudit = legacyUiAuditCategories.find((category) => category.category === "oldUtilities");
+    const legacyArbitraryShadowClass = ["shadow-[var(", "--slei-shadow-overlay-xs", ")]"].join("");
 
     expect(oldUtilitiesAudit).toBeDefined();
     for (const source of [
       '"slei-raised-small"',
       '"slei-inset-small"',
-      '"shadow-[var(--slei-shadow-overlay-xs)]"',
+      `"${legacyArbitraryShadowClass}"`,
     ]) {
       expect(() =>
         oldUtilitiesAudit?.assert({
@@ -564,6 +607,14 @@ describe("desktop UI primitive usage", () => {
         }),
       ).toThrow();
     }
+  });
+
+  it("keeps legacy arbitrary class fixtures hidden from Tailwind static scanning", () => {
+    const auditSource = readSource(AUDIT_TEST_SOURCE_PATH);
+    const legacyArbitraryShadowClass = ["shadow-[var(", "--slei-shadow-overlay-xs", ")]"].join("");
+
+    expect(auditSource).not.toContain(`"${legacyArbitraryShadowClass}"`);
+    expect(auditSource).not.toContain(`'${legacyArbitraryShadowClass}'`);
   });
 
   it("allows scoped Tailwind theme mappings and generic animation tokens", () => {
@@ -578,11 +629,19 @@ describe("desktop UI primitive usage", () => {
   --color-background: var(--background);
   --color-card: var(--card);
   --color-foreground: var(--foreground);
-  --radius-lg: var(--slei-radius-medium);
+  --radius-lg: var(--radius-base);
   --shadow-lg: var(--shadow-lg);
 }
 
 :root {
+  --background: oklch(0.15 0.03 250);
+  --radius-base: 8px;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: 16px;
+  --glow-cyan: rgba(6, 182, 212, 0.3);
+  --glow-purple: rgba(147, 51, 234, 0.3);
+  --text-primary: rgba(255, 255, 255, 0.95);
   --dropdown-open-dur: 250ms;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -599,7 +658,9 @@ describe("desktop UI primitive usage", () => {
       "@theme inline { --color-background: red; }",
       "@theme inline { --shadow-lg: var(--old-shadow); }",
       "@theme inline { --color-background: var(--slei-background); }",
-      ":root { --background: oklch(0 0 0); }",
+      "@theme inline { --letter-spacing: var(--letter-spacing); }",
+      ":root { --color-bg: var(--background); }",
+      ".workspace { --background: oklch(0 0 0); }",
       ":root { --dropdown-open-dur: var(--slei-duration); }",
     ]) {
       expect(() =>
@@ -662,10 +723,9 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("absolute right-2 top-8 z-30");
   });
 
-  it("uses glass styling for shared buttons while preserving raised surfaces elsewhere", () => {
+  it("uses glass styling for shared buttons and cards without Slei token dependencies", () => {
     const buttonSource = readSource("components/ui/button.tsx");
     const cardSource = readSource("components/ui/card.tsx");
-    const panelSource = readSource("components/SoftPanel.tsx");
 
     expect(buttonSource).not.toContain("slei-");
     expect(buttonSource).not.toContain("--slei-");
@@ -683,10 +743,6 @@ describe("desktop UI primitive usage", () => {
     expect(cardSource).toContain("bg-white/10");
     expect(cardSource).toContain("backdrop-blur-xl");
     expect(cardSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.37)]");
-    expect(panelSource).toContain('raised: "border-transparent bg-card slei-raised-small"');
-    expect(panelSource).toContain("hover:slei-raised-small");
-    expect(panelSource).not.toContain("slei-raised-medium");
-    expect(panelSource).not.toContain("slei-raised-large");
   });
 
   it("applies a shared hover transition contract across global hover utilities and primitives", () => {
@@ -694,11 +750,10 @@ describe("desktop UI primitive usage", () => {
     const buttonSource = readSource("components/ui/button.tsx");
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
-    const panelSource = readSource("components/SoftPanel.tsx");
 
     expect(appCss).toContain("--duration-hover: 0.35s");
     expect(appCss).toContain("--ease-hover: cubic-bezier(0.22, 1, 0.36, 1)");
-    expect(appCss).toContain("--slei-hover-transition-property:");
+    expect(appCss).toContain("--hover-transition-property:");
     for (const property of [
       "background-color",
       "border-color",
@@ -713,101 +768,30 @@ describe("desktop UI primitive usage", () => {
     ]) {
       expect(appCss).toContain(property);
     }
-    expect(appCss).toContain("@utility slei-hover-transition");
     expect(appCss).toContain('[class*="hover:"]');
     expect(appCss).toContain('[class*="group-hover"]');
-    expect(appCss).toContain("transition-property: var(--slei-hover-transition-property)");
+    expect(appCss).toContain("transition-property: var(--hover-transition-property)");
     expect(appCss).toContain("transition-duration: var(--duration-hover)");
     expect(appCss).toContain("transition-timing-function: var(--ease-hover)");
 
     expect(buttonSource).toContain("transition-all duration-300");
     expect(cardSource).not.toContain("slei-hover-transition");
     expect(badgeSource).toContain("transition-all duration-300");
-    expect(panelSource).toContain("slei-hover-transition");
   });
 
-  it("defines reusable raised and inset neumorphic shadow size tokens", () => {
+  it("removes old Slei raised and inset token definitions from app.css", () => {
     const appCss = readSource("app/app.css");
-    const lightThemeCss = appCss.slice(0, appCss.indexOf(".dark {"));
-    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf("@layer base"));
 
-    for (const themeCss of [lightThemeCss, darkThemeCss]) {
-      expect(themeCss).toContain("--slei-shadow-highlight: rgb(255 255 255 /");
-      expect(themeCss).toContain("--slei-shadow-lowlight: rgb(0 0 0 /");
-      expect(themeCss).toContain("--slei-overlay-shadow-color: rgb(0 0 0 /");
-      expect(themeCss).toContain("--slei-shadow-raised-glow: rgb(255 255 255 /");
-      expect(themeCss).toContain("--slei-shadow-raised-shade: rgb(0 0 0 /");
-      expect(themeCss).toContain("--slei-shadow-inset-shade: rgb(0 0 0 /");
-      expect(themeCss).not.toMatch(/--slei-shadow-(?:highlight|lowlight|raised-glow|raised-shade|inset-shade): oklch\(/);
-      expect(themeCss).not.toMatch(/--slei-overlay-shadow-color: oklch\(/);
-    }
-
-    for (const [size, px] of [["s", "2px"], ["m", "4px"], ["l", "6px"], ["xl", "8px"]] as const) {
-      const raisedTokenMatch = appCss.match(new RegExp(`--slei-shadow-raised-${size}: ([^;]+);`));
-      expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-glow)");
-      expect(raisedTokenMatch?.[1]).toContain("var(--slei-shadow-raised-shade)");
-      expect(raisedTokenMatch?.[1]).toContain(`-${px} -${px} 2px var(--slei-shadow-raised-glow)`);
-      expect(raisedTokenMatch?.[1]).toContain(`${px} ${px} 2px var(--slei-shadow-raised-shade)`);
-
-      const insetTokenMatch = appCss.match(new RegExp(`--slei-shadow-inset-${size}: ([^;]+);`));
-      expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-inset-shade)");
-      expect(insetTokenMatch?.[1]).toContain("var(--slei-shadow-highlight)");
-      expect(insetTokenMatch?.[1]).toContain(`inset ${px} ${px} 2px var(--slei-shadow-inset-shade)`);
-      expect(insetTokenMatch?.[1]).toContain(`inset -${px} -${px} 2px var(--slei-shadow-highlight)`);
-    }
-
-    for (const themeCss of [lightThemeCss, darkThemeCss]) {
-      expect(themeCss).toContain("--slei-shadow-raised-small: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-medium: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-large: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-xs: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-sm: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-md: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-raised-lg: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-small: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-medium: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-large: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-xs: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-sm: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-md: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-inset-lg: var(--slei-shadow-inset-s)");
-      expect(themeCss).toContain("--slei-shadow-raised: var(--slei-shadow-raised-s)");
-      expect(themeCss).toContain("--slei-shadow-inset: var(--slei-shadow-inset-s)");
-    }
-
-    expect(appCss).toContain("@utility slei-raised-s");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-m");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-l");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-xl");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-small");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-medium");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-raised-large");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-raised-s)");
-    expect(appCss).toContain("@utility slei-inset-s");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-m");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-l");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-xl");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-small");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-medium");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
-    expect(appCss).toContain("@utility slei-inset-large");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s)");
+    expect(appCss).not.toContain("--slei-shadow-");
+    expect(appCss).not.toContain("--slei-overlay-shadow-color");
+    expect(appCss).not.toContain("@utility slei-raised");
+    expect(appCss).not.toContain("@utility slei-inset");
+    expect(appCss).not.toContain("@utility slei-hover-transition");
   });
 
-  it("keeps production neumorphic classes on the small size", () => {
+  it("does not emit old raised, inset, or hover-transition utility classes in live source", () => {
     const violations: string[] = [];
-    const disallowed = /\bslei-(?:raised|inset)-(?:m|medium|l|xl|large)\b/g;
+    const disallowed = /\bslei-(?:raised|inset|hover-transition)(?:-[\w]+)?\b/g;
 
     for (const file of sourceFiles()) {
       const source = readSource(file);

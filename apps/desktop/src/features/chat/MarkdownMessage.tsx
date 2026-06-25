@@ -7,7 +7,7 @@ import { sanitizeMarkdown } from "../../lib/markdown";
 
 type MarkdownTone = "foreground" | "card";
 type MarkdownForegroundStyle = CSSProperties & {
-  "--slei-markdown-foreground"?: string;
+  "--markdown-foreground"?: string;
 };
 
 export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: string; tone?: MarkdownTone }) {
@@ -27,7 +27,7 @@ export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: s
 }
 
 export function markdownForegroundStyle(tone: MarkdownTone): MarkdownForegroundStyle | undefined {
-  if (tone === "card") return { "--slei-markdown-foreground": "var(--card-foreground)" };
+  if (tone === "card") return { "--markdown-foreground": "var(--card-foreground)" };
   return undefined;
 }
 
