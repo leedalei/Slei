@@ -89,8 +89,8 @@ export function ComputersPage(input: {
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
-          <Card className="text-card-foreground shadow-none">
-            <CardContent className="p-4">
+          <Card className="overflow-visible text-card-foreground shadow-none">
+            <CardContent className="p-5">
               <EditableDetailField
                 ariaLabel={input.messages.computers.editDeviceName}
                 error={renameError}

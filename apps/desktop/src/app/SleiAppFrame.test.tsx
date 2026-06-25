@@ -327,7 +327,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
     expect(appCss).toContain("--workspace-glass-bg: oklch(0.18 0.045 255 / 1)");
-    expect(appCss).toContain("--workspace-glass-bg: oklch(0.94 0.006 220 / 1)");
+    expect(appCss).toContain("--workspace-glass-bg: oklch(0.955 0.003 220 / 1)");
     expect(appCss).toContain("--glass-surface-filter: blur(var(--glass-blur)) saturate(145%)");
     expect(appCss).toContain("--chrome-surface-filter: blur(6px) saturate(112%)");
     expect(navSource).not.toContain("bg-sidebar/");
@@ -378,7 +378,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).not.toContain("overflow-hidden bg-background text-foreground");
     expect(frameSource).toContain("overflow-hidden bg-transparent text-foreground");
     expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
-    expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
+    expect(frameSource).not.toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
+    expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-visible bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
     expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
     expect(appCss).toContain("--background: oklch(0.18 0.045 255 / 0.5)");
@@ -410,7 +411,7 @@ describe("SleiAppFrame global search navigation", () => {
     }
   });
 
-  it("renders menubar navigation items as stable glass icon buttons without click ripple", () => {
+  it("renders menubar navigation items as stable einui icon buttons without click ripple", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
 
@@ -420,8 +421,28 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).not.toContain("rippleColor");
     expect(navSource).toContain('size="icon"');
     expect(navSource).not.toContain('size="lg"');
-    expect(navSource).toContain('variant={input.activeView === item.id ? "default" : "outline"}');
-    expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "ghost"}');
+    expect(navSource).toContain('variant={input.activeView === item.id ? "primary" : "outline"}');
+    expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "outline"}');
+  });
+
+  it("renders the active menubar icon as the einui primary button variant", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    const chatButtonIndex = html.indexOf('data-nav-icon="chat"');
+    const chatButtonOpenTag = html.slice(html.lastIndexOf("<button", chatButtonIndex), html.indexOf(">", chatButtonIndex));
+    const searchButtonIndex = html.indexOf('data-nav-icon="search"');
+    const searchButtonOpenTag = html.slice(html.lastIndexOf("<button", searchButtonIndex), html.indexOf(">", searchButtonIndex));
+
+    expect(chatButtonOpenTag).toContain('data-variant="primary"');
+    expect(chatButtonOpenTag).toContain("slei-shell-nav__button--flow");
+    expect(searchButtonOpenTag).not.toContain("slei-shell-nav__button--flow");
   });
 
   it("keeps search outline while using filled icons for the other menubar items", () => {
@@ -441,15 +462,28 @@ describe("SleiAppFrame global search navigation", () => {
     expect(iconsSource).toContain("members: Users");
   });
 
-  it("renders the active menubar item with solid primary contrast", () => {
+  it("adds the flowing gradient only to active menubar items", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const buttonSource = readFileSync(join(process.cwd(), "src/components/ui/button.tsx"), "utf8");
+    const flowCss = appCss.slice(
+      appCss.indexOf('.slei-shell-nav__button--flow[data-variant="primary"]'),
+      appCss.indexOf("@media (prefers-reduced-motion: reduce)", appCss.indexOf("@keyframes slei-shell-nav-gradient-flow")),
+    );
 
-    expect(navButtonCss).toContain(".slei-shell-nav__button--active");
     expect(appCss).toContain("--glass-button-primary-bg: var(--primary)");
     expect(appCss).not.toContain("--glass-button-primary-gradient-bg");
-    expect(navButtonCss).toContain("background: var(--glass-button-primary-bg)");
-    expect(navButtonCss).toContain("color: var(--primary-foreground)");
+    expect(appCss).toContain('.slei-shell-nav__button--flow[data-variant="primary"]');
+    expect(appCss).toContain("@keyframes slei-shell-nav-gradient-flow");
+    expect(flowCss).toContain("background-size: 260% 260%, 260% 260%");
+    expect(flowCss).toContain("0%, 100%");
+    expect(flowCss).toContain("24%");
+    expect(flowCss).toContain("52%");
+    expect(flowCss).toContain("76%");
+    expect(flowCss).not.toContain("220% 50%");
+    expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(frameSource).toContain("slei-shell-nav__button--flow");
+    expect(buttonSource).not.toContain("slei-shell-nav__button--flow");
   });
 
   it("keeps the accent token in the teal family instead of purple", () => {
@@ -461,15 +495,15 @@ describe("SleiAppFrame global search navigation", () => {
     expect(accentDeclarations.some((value) => value.endsWith("285"))).toBe(false);
   });
 
-  it("keeps menubar button borders on the glass token contract", () => {
+  it("keeps menubar button chrome on einui button variants", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
+    const navChromeCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-context-sidebar {"));
 
-    expect(navButtonCss).toContain("border-width: 1px");
-    expect(navButtonCss).toContain("border-color: var(--glass-button-border)");
-    expect(navButtonCss).toContain("box-shadow: var(--glass-button-shadow)");
-    expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
-    expect(navButtonCss).not.toContain("var(--raised-border)");
+    expect(navChromeCss).not.toContain(".slei-shell-nav__button {");
+    expect(navChromeCss).not.toContain("border-color: var(--glass-button-border)");
+    expect(navChromeCss).not.toContain("box-shadow: var(--glass-button-shadow)");
+    expect(navChromeCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
+    expect(navChromeCss).not.toContain("var(--raised-border)");
   });
 
   it("uses primary buttons for modal confirmation actions", () => {
@@ -971,7 +1005,9 @@ describe("SleiAppFrame global search navigation", () => {
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
     expect(agentList?.className).toContain("bg-transparent");
     expect(agentList?.className).toContain("border-white/20");
-    expect(agentCheckbox?.className).toContain("bg-transparent");
+    expect(agentCheckbox?.className).toContain("bg-white/10");
+    expect(agentCheckbox?.className).toContain("border-white/20");
+    expect(agentCheckbox?.className).not.toContain("bg-transparent");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
   });

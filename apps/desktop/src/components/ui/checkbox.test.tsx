@@ -28,17 +28,21 @@ function cleanupCheckbox(root: Root, host: HTMLElement) {
 }
 
 describe("Checkbox", () => {
-  it("uses transparent glass checkbox defaults", () => {
+  it("uses EinUI glass checkbox defaults", () => {
     const html = renderToStaticMarkup(<Checkbox aria-label="选择 Agent" />);
 
     expect(html).toContain('data-slot="checkbox"');
     expect(html).toContain('role="checkbox"');
     expect(html).toContain("size-5");
     expect(html).toContain("rounded-md");
-    expect(html).toContain("border-white/35");
-    expect(html).toContain("bg-transparent");
+    expect(html).toContain("border-white/20");
+    expect(html).toContain("bg-white/10");
     expect(html).toContain("backdrop-blur-xl");
-    expect(html).toContain("shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]");
+    expect(html).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
+    expect(html).toContain("hover:bg-white/15");
+    expect(html).toContain("focus-visible:border-white/40");
+    expect(html).toContain("focus-visible:ring-cyan-400/30");
+    expect(html).not.toContain("bg-transparent");
     expect(html).not.toContain("border-input");
     expect(html).not.toContain("dark:bg-input/30");
   });

@@ -14,11 +14,11 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     const shouldGlow = glowOnFocus ?? glowEffect ?? true
 
     return (
-      <div className="group relative w-full">
+      <div className="group relative w-full overflow-visible">
         {shouldGlow ? (
           <div
             aria-hidden="true"
-            className="absolute -inset-0.5 rounded-xl bg-linear-to-r from-cyan-500/0 via-blue-500/0 to-purple-500/0 blur-md transition-all duration-300 group-focus-within:from-cyan-500/30 group-focus-within:via-blue-500/30 group-focus-within:to-purple-500/30"
+            className="absolute -inset-0.5 overflow-visible rounded-xl bg-linear-to-r from-transparent via-transparent to-transparent blur-md transition-all duration-300 group-focus-within:from-[var(--input-focus-glow-from)] group-focus-within:via-[var(--input-focus-glow-via)] group-focus-within:to-[var(--input-focus-glow-to)]"
           />
         ) : null}
         <textarea

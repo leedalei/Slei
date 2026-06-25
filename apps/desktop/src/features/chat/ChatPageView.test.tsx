@@ -567,7 +567,7 @@ describe("ChatPage mention panel", () => {
     expect(source).not.toContain('<footer className="border-t bg-transparent">');
     expect(source).not.toContain('<footer className="border-t bg-background/95">');
     expect(source).toContain('data-testid="slei-composer-shell"');
-    expect(source).toContain("absolute inset-x-0 bottom-0 z-30 p-3");
+    expect(source).toContain("absolute inset-x-0 bottom-0 z-30 overflow-visible p-3");
     expect(source).not.toContain("absolute inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3");
     expect(source).toContain("slei-composer-glass");
     expect(source).toContain("backdrop-blur-xl");
@@ -603,7 +603,9 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).toContain("focus:ring-cyan-400/30");
     expect(composerInput?.className).not.toContain("bg-transparent");
     expect(composerInput?.parentElement?.className).toContain("group");
+    expect(composerInput?.parentElement?.className).toContain("overflow-visible");
     expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')?.className).toContain("bg-linear-to-r");
+    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')?.className).toContain("overflow-visible");
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
@@ -1745,8 +1747,13 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
+    const host = staticMarkupHost(html);
+    const asTaskCheckbox = host.querySelector<HTMLElement>('[data-slot="checkbox"]');
 
     expect(html).toContain(messages.chat.asTask);
+    expect(asTaskCheckbox?.className).toContain("bg-white/10");
+    expect(asTaskCheckbox?.className).toContain("border-white/20");
+    expect(asTaskCheckbox?.className).not.toContain("bg-transparent");
   });
 
   it("keeps timeline message selectors and actions available on transparent message rows", () => {
@@ -1883,6 +1890,7 @@ describe("ChatPage mention panel", () => {
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
       expect(cardHtml).toContain('data-slot="card"');
+      expect(cardHtml).toContain('data-size="xs"');
       expect(cardOpenTag).not.toContain("shadow-[");
       expect(cardOpenTag).not.toContain("hover:shadow");
     }
@@ -1967,19 +1975,43 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
+    expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).toContain("overflow-visible");
+    expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).not.toContain("overflow-hidden");
+    expect(host.querySelector('[data-testid="slei-composer-shell"] > .slei-composer-glass')?.className).toContain("overflow-visible");
+    expect(host.querySelector('[data-testid="slei-composer-shell"] > .slei-composer-glass')?.className).not.toContain("overflow-hidden");
+    expect(host.querySelector('[data-testid="slei-composer-shell"] form')?.className).toContain("overflow-visible");
+    expect(host.querySelector('[data-testid="slei-composer-shell"] form')?.className).not.toContain("overflow-hidden");
+    const composerFooterDivs = [
+      host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"]'),
+      ...Array.from(host.querySelectorAll<HTMLElement>('[data-testid="slei-composer-shell"] div')),
+    ].filter((element): element is HTMLElement => Boolean(element));
+    expect(composerFooterDivs.length).toBeGreaterThanOrEqual(6);
+    for (const element of composerFooterDivs) {
+      expect(element.className).toContain("overflow-visible");
+      expect(element.className).not.toContain("overflow-hidden");
+    }
     const composerInput = host.querySelector('[data-testid="slei-composer-input"]');
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(composerInput?.className).toContain("slei-composer-input");
+    expect(composerInput?.parentElement?.className).toContain("overflow-visible");
+    expect(composerInput?.parentElement?.className).not.toContain("overflow-hidden");
+    expect(composerInput?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(composerInput?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
     expect(composerInput?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
     expect(appCss).toContain("border-color: var(--glass-border);");
+    expect(appCss).not.toContain("--composer-input-bg");
+    expect(appCss).not.toContain("background: var(--composer-input-bg);");
     expect(appCss).toContain("box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);");
     expect(appCss).toContain(".slei-composer-glass {");
+    expect(appCss).toContain("overflow: visible;");
     expect(appCss).toContain("-webkit-backdrop-filter: blur(24px) saturate(180%);");
     expect(appCss).toContain("backdrop-filter: blur(24px) saturate(180%);");
     expect(appCss).toContain("--composer-glass-bg: rgba(28, 35, 50, 0.7);");
-    expect(appCss).toContain("--composer-glass-bg: rgba(244, 253, 250, 0.8);");
+    expect(appCss).toContain("--composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);");
     expect(appCss).toContain(".slei-composer-glass::before {");
     expect(appCss).toContain("-webkit-backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
     expect(appCss).toContain("backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
@@ -1988,6 +2020,7 @@ describe("ChatPage mention panel", () => {
     const composerGlassCss = appCss.slice(appCss.indexOf(".slei-composer-glass {"), appCss.indexOf(".slei-composer-input {"));
     expect(composerGlassCss).not.toContain("color-mix");
     expect(composerGlassCss).not.toContain("isolation");
+    expect(composerGlassCss).not.toContain("overflow: hidden;");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
     expect(appCss).toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
 

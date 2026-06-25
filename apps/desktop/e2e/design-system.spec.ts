@@ -106,7 +106,7 @@ describe("shadcn design system wiring", () => {
     expect(darkTokens).not.toContain("--radius-");
     expect(appCss).not.toContain("--slei-radius");
 
-    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.8)");
+    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.5)");
     expect(tokenValue(lightTokens, "--foreground")).toBe("var(--text-color-1)");
     expect(tokenValue(themeTokens, "--radius-sm")).toBe("var(--radius-xs)");
     expect(tokenValue(themeTokens, "--radius-md")).toBe("var(--radius-base)");
@@ -156,7 +156,7 @@ describe("shadcn design system wiring", () => {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--background);
+  background: transparent;
   color: var(--text-color-1);`);
   });
 
@@ -224,12 +224,12 @@ describe("shadcn design system wiring", () => {
     const darkTokens = cssBlock(appCss, ".dark");
     const lightTokens = cssBlock(appCss, ".light");
 
-    expect(tokenValue(rootTokens, "--background")).toBe("oklch(0.18 0.045 255 / 0.8)");
+    expect(tokenValue(rootTokens, "--background")).toBe("oklch(0.18 0.045 255 / 0.5)");
     expect(tokenValue(rootTokens, "--foreground")).toBe("var(--text-color-1)");
     expect(tokenValue(rootTokens, "--card")).toBe("oklch(0.24 0.045 255 / 0.72)");
     expect(tokenValue(darkTokens, "--background")).toBe(tokenValue(rootTokens, "--background"));
     expect(tokenValue(darkTokens, "--foreground")).toBe(tokenValue(rootTokens, "--foreground"));
-    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.8)");
+    expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.5)");
 
     expect(tokenValue(rootTokens, "--overlay-shadow-color")).toBe("rgb(0 0 0 / 0.54)");
     expect(tokenValue(rootTokens, "--overlay-shadow-xs")).toContain("var(--overlay-shadow-color)");
@@ -240,7 +240,7 @@ describe("shadcn design system wiring", () => {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--background);
+  background: transparent;
   color: var(--text-color-1);`);
     expect(appCss).not.toContain("linear-gradient(to bottom right");
     expect(appCss).not.toContain("html.dark body");
@@ -249,6 +249,6 @@ describe("shadcn design system wiring", () => {
     expect(appCss).toContain(`.slei-glass-workspace {
   -webkit-backdrop-filter: var(--glass-surface-filter);
   backdrop-filter: var(--glass-surface-filter);
-  background: transparent;`);
+  background: var(--workspace-glass-bg);`);
   });
 });

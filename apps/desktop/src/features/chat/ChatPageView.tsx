@@ -102,7 +102,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
       </div>
-      <Button disabled={done} onClick={onCreate} size="sm" type="button" variant="primary">
+      <Button disabled={done} onClick={onCreate} size="xs" type="button" variant="primary">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
     </Card>
@@ -138,7 +138,7 @@ function MessageRow({
 function AttachmentList({ attachments, messageAttachments = false, onRemove }: { attachments: ConversationAttachmentView[]; messageAttachments?: boolean; onRemove?: (attachmentId: string) => void }) {
   if (attachments.length === 0) return null;
   return (
-    <div className={cn("flex flex-wrap gap-2", messageAttachments ? "mt-2" : "")} data-message-attachments={messageAttachments ? "true" : undefined} data-slot="attachment-list">
+    <div className={cn("flex flex-wrap gap-2 overflow-visible", messageAttachments ? "mt-2" : "")} data-message-attachments={messageAttachments ? "true" : undefined} data-slot="attachment-list">
       {attachments.map((attachment) => {
         const isImage = attachment.mimeType.startsWith("image/");
         return (
@@ -1203,10 +1203,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         )}
         data-testid="slei-channel-main-region"
       >
-        <div className="grid min-h-0" data-testid="slei-channel-workspace">
+        <div className="grid min-h-0 overflow-visible" data-testid="slei-channel-workspace">
           {effectiveChannelView === "chat" ? (
             <div className="relative h-full min-h-0 overflow-visible" data-testid="slei-channel-chat-column" style={composerReserveStyle}>
-              <div className="relative h-full min-h-0">
+              <div className="relative h-full min-h-0 overflow-visible">
                 {olderMessagesLoading ? (
                   <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-transparent px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
                     {messages.chat.loadingOlderMessages}
@@ -1349,10 +1349,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </Button>
                 ) : null}
               </div>
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 rounded-2xl border border-transparent p-3 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl">
                 {mention && mentionTargets.length > 0 ? (
-                  <div className="min-w-0">
+                  <div className="min-w-0 overflow-visible">
                     <MentionPicker
                       members={mentionTargets}
                       messages={messages}
@@ -1365,7 +1365,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </div>
                 ) : null}
                 {skillSlash && skillSlashTargets.length > 0 ? (
-                  <div className="min-w-0">
+                  <div className="min-w-0 overflow-visible">
                     <SkillSlashPicker
                       messages={messages}
                       onSelect={selectSkillSlash}
@@ -1377,7 +1377,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
-                <form className="grid gap-0" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
+                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
                   <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 overflow-visible p-1")} data-testid="slei-composer-surface">
                     {attachments.length > 0 ? (
                       <AttachmentList
@@ -1450,14 +1450,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
                       value={draft}
                     />
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible">
                       {allowAsTask ? (
                         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                           <Checkbox checked={asTask} onCheckedChange={(checked) => setAsTask(checked === true)} />
                           <span>{messages.chat.asTask}</span>
                         </label>
                       ) : <span />}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 overflow-visible">
                         <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
                         <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
                         <Button aria-label={messages.common.addImage} onClick={() => imageInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>

@@ -18,7 +18,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {shouldGlow ? (
           <div
             aria-hidden="true"
-            className="absolute -inset-0.5 rounded-xl bg-linear-to-r from-cyan-500/0 via-blue-500/0 to-purple-500/0 opacity-0 blur-md transition-all duration-300 group-focus-within:from-cyan-500/30 group-focus-within:via-blue-500/30 group-focus-within:to-purple-500/30 group-focus-within:opacity-70"
+            className="absolute -inset-0.5 rounded-xl bg-linear-to-r from-transparent via-transparent to-transparent opacity-0 blur-md transition-all duration-300 group-focus-within:from-[var(--input-focus-glow-from)] group-focus-within:via-[var(--input-focus-glow-via)] group-focus-within:to-[var(--input-focus-glow-to)] group-focus-within:opacity-70"
           />
         ) : null}
         <input

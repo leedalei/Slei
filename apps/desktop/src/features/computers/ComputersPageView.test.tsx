@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +8,8 @@ import { createDesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/types";
 import { ComputersPage } from "./ComputersPageView";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const localNode: DesktopNodeView = {
   id: "local-node",
@@ -38,6 +42,31 @@ const hostedAgent: SleiMember = {
   activity: "Idle",
   capabilities: ["ClaudeCode"],
 };
+
+function renderComputersPage() {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+
+  act(() => {
+    root.render(
+      <ComputersPage
+        members={[]}
+        messages={createDesktopMessages("zh-CN")}
+        nodes={[localNode]}
+      />,
+    );
+  });
+
+  return { host, root };
+}
+
+function cleanupComputersPage(root: Root, host: HTMLElement) {
+  act(() => {
+    root.unmount();
+  });
+  host.remove();
+}
 
 describe("ComputersPage header", () => {
   it("makes the computer detail header draggable and text unselectable", () => {
@@ -147,6 +176,30 @@ describe("ComputersPage header", () => {
     expect(html).toContain('data-detail-block-kind="hosted-agent"');
     expect(html).toContain("data-slei-status");
     expect(html).toContain('data-slei-icon="bot"');
+  });
+
+  it("keeps the device-name editor glow visible inside the glass card", () => {
+    const { host, root } = renderComputersPage();
+
+    try {
+      const editButton = host.querySelector<HTMLButtonElement>(".slei-editable-field__edit");
+      act(() => {
+        editButton?.click();
+      });
+
+      const input = host.querySelector<HTMLInputElement>('[data-slot="input"]');
+      const deviceCard = input?.closest<HTMLElement>('[data-slot="card"]');
+      const cardContent = input?.closest<HTMLElement>('[data-slot="card-content"]');
+      const glow = input?.parentElement?.querySelector<HTMLElement>('[aria-hidden="true"]');
+
+      expect(input?.value).toBe(localNode.name);
+      expect(deviceCard?.className).toContain("overflow-visible");
+      expect(cardContent?.className).toContain("p-5");
+      expect(glow?.className).toContain("-inset-0.5");
+      expect(glow?.className).toContain("group-focus-within:opacity-70");
+    } finally {
+      cleanupComputersPage(root, host);
+    }
   });
 
   it("keeps computer info definition list terms and descriptions as direct grouped children", () => {

@@ -772,9 +772,10 @@ describe("desktop UI primitive usage", () => {
     expect(buttonSource).toContain("const buttonVariants");
     expect(buttonSource).toContain("buttonVariants({ variant, size, className })");
     expect(buttonSource).toContain("border-white/30 bg-transparent");
-    expect(buttonSource).toContain("bg-linear-to-r from-cyan-500/80");
-    expect(buttonSource).toContain("via-blue-500/80");
-    expect(buttonSource).toContain("to-purple-500/80");
+    expect(buttonSource).toContain("border-transparent [background:linear-gradient");
+    expect(buttonSource).not.toContain("bg-[linear-gradient");
+    expect(buttonSource).toContain("padding-box");
+    expect(buttonSource).toContain("border-box");
     expect(buttonSource).toContain("text-accent-foreground");
     expect(buttonSource).not.toContain("bg-primary text-primary-foreground");
     expect(buttonSource).toContain("bg-red-500/30");

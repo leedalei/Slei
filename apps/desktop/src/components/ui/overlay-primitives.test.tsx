@@ -151,6 +151,8 @@ describe("overlay UI primitives", () => {
       expect(content?.textContent).toContain("Review channel metadata.");
       expect(content?.className.split(/\s+/)).toContain("bg-white/30");
       expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:bg-white/35");
+      expect(content?.className.split(/\s+/)).toContain("[.light_&]:bg-white/70");
+      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:[.light_&]:bg-white/80");
       expect(content?.className.split(/\s+/)).not.toContain("bg-white/20");
       expect(content?.className.split(/\s+/)).toContain("backdrop-blur-2xl");
       expect(content?.className).toContain("before:from-white/45");
@@ -192,6 +194,8 @@ describe("overlay UI primitives", () => {
       expect(content?.textContent).toContain("This action removes the member from the channel.");
       expect(content?.className.split(/\s+/)).toContain("bg-white/30");
       expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:bg-white/35");
+      expect(content?.className.split(/\s+/)).toContain("[.light_&]:bg-white/70");
+      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:[.light_&]:bg-white/80");
       expect(content?.className.split(/\s+/)).not.toContain("bg-white/20");
       expect(content?.className.split(/\s+/)).toContain("backdrop-blur-2xl");
       expect(content?.className).toContain("before:from-white/45");

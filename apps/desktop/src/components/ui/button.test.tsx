@@ -25,19 +25,18 @@ describe("Button", () => {
     }
   });
 
-  it("keeps non-primary button surfaces transparent until interaction", () => {
+  it("keeps quiet non-primary button surfaces transparent until interaction", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(
       <>
         <Button>Default</Button>
         <Button variant="secondary">Secondary</Button>
-        <Button variant="outline">Outline</Button>
       </>,
     );
 
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="button"]'));
 
-    expect(buttons).toHaveLength(3);
+    expect(buttons).toHaveLength(2);
     for (const button of buttons) {
       const classes = button.className.split(/\s+/);
       expect(classes).toContain("bg-transparent");
@@ -46,26 +45,43 @@ describe("Button", () => {
     }
   });
 
-  it("keeps the primary button edge on the original EinUI glass border", () => {
+  it("renders outline buttons with an even 2px glass border and no top highlight", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(<Button variant="outline">取消</Button>);
+
+    const classes = host.querySelector<HTMLElement>('[data-slot="button"]')?.className.split(/\s+/) ?? [];
+
+    expect(classes).toContain("overflow-hidden");
+    expect(classes).toContain("border-2");
+    expect(classes).not.toContain("border");
+    expect(classes.some((className) => className.includes("inset_0_1px_0"))).toBe(false);
+    expect(classes).toContain("bg-white/[0.08]");
+    expect(classes).toContain("hover:bg-white/[0.14]");
+    expect(classes).toContain("border-white/35");
+  });
+
+  it("renders the primary button edge as a dedicated gradient border layer", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(<Button variant="primary">Send</Button>);
 
     const classes = host.querySelector<HTMLElement>('[data-slot="button"]')?.className.split(/\s+/) ?? [];
 
-    expect(classes).toContain("border-white/30");
-    expect(classes).not.toContain("border-transparent");
+    expect(classes).toContain("border-transparent");
+    expect(classes).not.toContain("border-white/30");
   });
 
-  it("renders primary buttons with the original EinUI gradient color", () => {
+  it("renders primary buttons with paired fill and border gradients", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(<Button variant="primary">Create</Button>);
 
     const classes = host.querySelector<HTMLElement>('[data-slot="button"]')?.className.split(/\s+/) ?? [];
 
-    expect(classes).toContain("bg-linear-to-r");
-    expect(classes).toContain("from-cyan-500/80");
-    expect(classes).toContain("via-blue-500/80");
-    expect(classes).toContain("to-purple-500/80");
+    expect(classes).not.toContain("bg-linear-to-r");
+    expect(classes).not.toContain("bg-clip-padding");
+    expect(classes.some((className) => className.startsWith("[background:linear-gradient"))).toBe(true);
+    expect(classes.some((className) => className.startsWith("bg-[linear-gradient"))).toBe(false);
+    expect(classes.some((className) => className.includes("padding-box"))).toBe(true);
+    expect(classes.some((className) => className.includes("border-box"))).toBe(true);
     expect(classes).toContain("text-accent-foreground");
     expect(classes).not.toContain("bg-primary");
   });

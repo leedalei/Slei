@@ -507,6 +507,7 @@ describe("chat search, channel management, and mentions", () => {
 
     expect(html).toContain('data-nav-icon="chat"');
     expect(html).toContain('data-slot="button"');
+    expect(html).toContain('data-variant="primary"');
     expect(html).toContain("grid h-14 w-14");
     expect(html).toContain('aria-label="聊天"');
     expect(html).toContain('data-slei-icon="chat"');
@@ -517,6 +518,6 @@ describe("chat search, channel management, and mentions", () => {
     const css = appCssSource();
     expect(css).toContain("--glass-button-primary-bg: var(--primary)");
     expect(css).not.toContain("--glass-button-primary-gradient-bg");
-    expect(css).toContain("background: var(--glass-button-primary-bg)");
+    expect(css).not.toContain("background: var(--glass-button-primary-bg)");
   });
 });

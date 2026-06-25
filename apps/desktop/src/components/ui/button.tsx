@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
   cn(
-    "relative inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl",
+    "relative inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-xl",
     "border text-sm font-medium text-foreground transition-all duration-300 ease-out",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
     "disabled:pointer-events-none disabled:opacity-50",
@@ -25,13 +25,17 @@ const buttonVariants = cva(
           "before:bg-linear-to-b before:from-white/10 before:to-transparent",
         ),
         primary: cn(
-          "border-white/30 bg-linear-to-r from-cyan-500/80 via-blue-500/80 to-purple-500/80 text-accent-foreground backdrop-blur-xl",
+          "border-transparent [background:linear-gradient(90deg,rgba(6,182,212,0.60),rgba(59,130,246,0.60),rgba(168,85,247,0.60))_padding-box,linear-gradient(90deg,rgba(34,211,238,0.56),rgba(96,165,250,0.48),rgba(192,132,252,0.56))_border-box] text-accent-foreground backdrop-blur-xl",
           "shadow-[0_4px_20px_rgba(59,130,246,0.4)] hover:shadow-[0_4px_30px_rgba(59,130,246,0.6)]",
           "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
           "before:bg-linear-to-b before:from-white/30 before:to-transparent",
         ),
         secondary: "border-white/25 bg-transparent backdrop-blur-xl shadow-[0_2px_10px_rgba(0,0,0,0.1)] hover:bg-white/10",
-        outline: "border-2 border-white/40 bg-transparent backdrop-blur-sm hover:border-white/60 hover:bg-white/10",
+        outline: cn(
+          "border-2 border-white/35 bg-white/[0.08] backdrop-blur-sm",
+          "shadow-[0_1px_10px_rgba(15,23,42,0.1)]",
+          "hover:border-white/55 hover:bg-white/[0.14]",
+        ),
         ghost: "border-transparent bg-transparent hover:bg-white/10",
         destructive: cn(
           "border-red-400/40 bg-red-500/30 backdrop-blur-xl",

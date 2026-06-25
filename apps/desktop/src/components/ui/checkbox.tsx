@@ -12,9 +12,9 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer relative flex size-5 shrink-0 items-center justify-center rounded-md border border-white/35 bg-transparent text-foreground backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
-        "transition-all duration-200 outline-none hover:bg-white/10 group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2",
-        "focus-visible:border-cyan-400/60 focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+        "peer relative flex size-5 shrink-0 items-center justify-center rounded-md border border-white/20 bg-white/10 text-foreground backdrop-blur-xl shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
+        "transition-all duration-300 outline-none hover:border-white/40 hover:bg-white/15 group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2",
+        "focus-visible:border-white/40 focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
         "disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/30",
         "data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:shadow-[0_0_12px_rgba(6,182,212,0.35)]",
         className
