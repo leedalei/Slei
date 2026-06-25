@@ -6,7 +6,7 @@ import emptyInput from "../assets/empty-states/empty-input.png";
 import emptyOffline from "../assets/empty-states/empty-offline.png";
 import emptyPermission from "../assets/empty-states/empty-permission.png";
 import emptySearch from "../assets/empty-states/empty-search.png";
-import { SoftPanel } from "./SoftPanel";
+import { Card } from "./ui/card";
 
 type EmptyIllustration = "data" | "error" | "input" | "offline" | "permission" | "search";
 
@@ -60,14 +60,14 @@ export function Empty(input: {
 
   if (framed) {
     return (
-      <SoftPanel
+      <Card
         className={rootClassName}
         data-empty-size={size}
         data-empty-variant={variant}
         role="status"
       >
         {content}
-      </SoftPanel>
+      </Card>
     );
   }
 
