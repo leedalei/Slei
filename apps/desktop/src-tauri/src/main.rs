@@ -1,3 +1,3 @@
 fn main() {
-    slei_desktop::run()
+    slei::run()
 }

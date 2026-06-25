@@ -1,12 +1,91 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 const desktopRoot = new URL("..", import.meta.url).pathname;
 
 async function sha256(path: string) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
+}
+
+async function readRgbaPng(path: string) {
+  const png = await readFile(path);
+  expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatChunks: Buffer[] = [];
+  let offset = 8;
+
+  while (offset + 8 <= png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("latin1");
+    const data = png.subarray(offset + 8, offset + 8 + length);
+
+    if (type === "IHDR") {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      bitDepth = data[8];
+      colorType = data[9];
+    } else if (type === "IDAT") {
+      idatChunks.push(Buffer.from(data));
+    }
+
+    offset += length + 12;
+  }
+
+  expect(bitDepth).toBe(8);
+  expect(colorType).toBe(6);
+
+  const bytesPerPixel = 4;
+  const stride = width * bytesPerPixel;
+  const inflated = inflateSync(Buffer.concat(idatChunks));
+  const pixels = Buffer.alloc(width * height * bytesPerPixel);
+  let inputOffset = 0;
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[inputOffset];
+    inputOffset += 1;
+    const row = inflated.subarray(inputOffset, inputOffset + stride);
+    inputOffset += stride;
+
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= bytesPerPixel ? pixels[y * stride + x - bytesPerPixel] : 0;
+      const up = y > 0 ? pixels[(y - 1) * stride + x] : 0;
+      const upLeft = x >= bytesPerPixel && y > 0 ? pixels[(y - 1) * stride + x - bytesPerPixel] : 0;
+      let value = row[x];
+
+      if (filter === 1) {
+        value = (value + left) & 0xff;
+      } else if (filter === 2) {
+        value = (value + up) & 0xff;
+      } else if (filter === 3) {
+        value = (value + Math.floor((left + up) / 2)) & 0xff;
+      } else if (filter === 4) {
+        const p = left + up - upLeft;
+        const pa = Math.abs(p - left);
+        const pb = Math.abs(p - up);
+        const pc = Math.abs(p - upLeft);
+        value = (value + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft)) & 0xff;
+      } else {
+        expect(filter).toBe(0);
+      }
+
+      pixels[y * stride + x] = value;
+    }
+  }
+
+  return {
+    alphaAt(x: number, y: number) {
+      return pixels[(y * width + x) * bytesPerPixel + 3];
+    },
+    height,
+    width,
+  };
 }
 
 async function icnsPngHashes(path: string) {
@@ -95,6 +174,13 @@ describe("desktop startup contract", () => {
     expect(tauriConfig.app?.macOSPrivateApi).toBe(true);
   });
 
+  it("uses slei as the native app executable name", async () => {
+    const cargoToml = await readFile(join(desktopRoot, "src-tauri/Cargo.toml"), "utf8");
+
+    expect(cargoToml).toContain('name = "slei"');
+    expect(cargoToml).not.toContain('name = "slei-desktop"');
+  });
+
   it("allows only the window permission needed by overlay drag regions", async () => {
     const capability = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/capabilities/default.json"), "utf8"),
@@ -116,18 +202,33 @@ describe("desktop startup contract", () => {
       "icons/icon.icns",
       "icons/icon.ico",
     ]);
-    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("85da67ea7fc3c939cc551871cfc4dbedff0ee88f9c946456f14144ea6167cb8d");
-    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("8b24ae6c9c5daa8a6d5834fdae0898a6cf9c1b04dca57f727f608815e80d574f");
-    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("59270eceb92a21d0fb06aa216899aee8c66fd7fde7790085bd0ad0033a7e0bca");
-    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("2ed557cecbc314ff8790a75107feabdac9926f05a890561bdec61a926e603c31");
-    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("e3c5b43f001dbea6f725077cb31980fdc761373e6688ed732fecf74ca49dd560");
+    await expect(sha256(join(iconRoot, "slei-icon.svg"))).resolves.toBe("433ad3018e5e3eece898b97df8d6755b1aca547846c93ce2eb833e9b0effb466");
+    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("d472343f6349f587b9fb6e03e48fd433438e1386ac7300083778369131f5af60");
+    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("be7371e940f9c3a58eb16c7f1d19b37edbc70e0e628843a741d72d46ba6f955e");
+    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("5f374cee2996b6705988f7cbb27d60823d72ad57ed82c2cf6d4a9d505c67dd88");
+    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("35df1b72fe831fe34f4b1e504a95d9c25bc42fc8043374da79c1256576aa0f4a");
+    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("f0bc45eea86f56c707c58ceabf975c1a452f3d61280d6a4d5993b8009f468b2e");
     await expect(icnsPngHashes(join(iconRoot, "icon.icns"))).resolves.toEqual(
       expect.arrayContaining([
-        "59270eceb92a21d0fb06aa216899aee8c66fd7fde7790085bd0ad0033a7e0bca",
-        "2ed557cecbc314ff8790a75107feabdac9926f05a890561bdec61a926e603c31",
-        "e3c5b43f001dbea6f725077cb31980fdc761373e6688ed732fecf74ca49dd560",
-        "85da67ea7fc3c939cc551871cfc4dbedff0ee88f9c946456f14144ea6167cb8d",
+        "5f374cee2996b6705988f7cbb27d60823d72ad57ed82c2cf6d4a9d505c67dd88",
+        "35df1b72fe831fe34f4b1e504a95d9c25bc42fc8043374da79c1256576aa0f4a",
+        "f0bc45eea86f56c707c58ceabf975c1a452f3d61280d6a4d5993b8009f468b2e",
+        "d472343f6349f587b9fb6e03e48fd433438e1386ac7300083778369131f5af60",
       ]),
     );
+  });
+
+  it("keeps app icon PNGs rounded with transparent corners", async () => {
+    const iconRoot = join(desktopRoot, "src-tauri/icons");
+
+    for (const fileName of ["icon.png", "128x128.png", "32x32.png"]) {
+      const icon = await readRgbaPng(join(iconRoot, fileName));
+
+      expect(icon.alphaAt(0, 0)).toBe(0);
+      expect(icon.alphaAt(icon.width - 1, 0)).toBe(0);
+      expect(icon.alphaAt(0, icon.height - 1)).toBe(0);
+      expect(icon.alphaAt(icon.width - 1, icon.height - 1)).toBe(0);
+      expect(icon.alphaAt(Math.floor(icon.width / 2), Math.floor(icon.height / 2))).toBe(255);
+    }
   });
 });
