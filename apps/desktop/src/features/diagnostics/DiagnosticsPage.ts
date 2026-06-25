@@ -31,10 +31,10 @@ export function renderDiagnosticsPage(input: {
     .filter(Boolean)
     .map((row) => {
       const [label, value] = row as [string, string];
-      return `<div class="grid gap-1 rounded-lg bg-muted/40 p-3" data-slei-diagnostics-row><strong>${escapeHtmlText(label)}</strong><span>${escapeHtmlText(value)}</span></div>`;
+      return `<div class="grid gap-1 rounded-lg border border-border/60 bg-background/50 p-3" data-slei-diagnostics-row><strong>${escapeHtmlText(label)}</strong><span>${escapeHtmlText(value)}</span></div>`;
     })
     .join("");
-  const content = `<section class="grid gap-4 p-6" data-slei-diagnostics-page><header class="grid gap-1" data-slei-page-header><h1>${escapeHtmlText(title)}</h1></header><section class="rounded-xl border border-border/60 bg-card p-4" data-slei-panel data-variant="surface"><div class="grid gap-2">${rows}</div></section></section>`;
+  const content = `<section class="grid gap-4 p-6" data-slei-diagnostics-page><header class="grid gap-1" data-slei-page-header><h1>${escapeHtmlText(title)}</h1></header><section class="rounded-xl border border-border bg-card p-4 text-card-foreground" data-slot="card"><div class="grid gap-2">${rows}</div></section></section>`;
 
   return renderFeatureShell({ active: "settings", locale: input.locale, content });
 }

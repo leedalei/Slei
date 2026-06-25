@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { sleiIcons } from "./icons";
 import { PageHeader } from "./PageHeader";
 
 describe("PageHeader", () => {
@@ -15,5 +16,12 @@ describe("PageHeader", () => {
     expect(html).toContain("data-slei-page-header");
     expect(html).toContain("频道设置");
     expect(html).toContain("新建");
+  });
+
+  it("renders the optional icon without the old muted surface treatment", () => {
+    const html = renderToStaticMarkup(<PageHeader icon={sleiIcons.settings} title="设置" />);
+
+    expect(html).toContain("data-slei-page-header-icon");
+    expect(html).not.toContain("bg-muted/40");
   });
 });

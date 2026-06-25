@@ -27,7 +27,7 @@ export function PageHeader({
         {Icon ? (
           <span
             aria-hidden="true"
-            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-border/60 bg-muted/40 text-muted-foreground"
+            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-border/60 text-muted-foreground"
             data-slei-page-header-icon
           >
             <Icon className="size-4" />

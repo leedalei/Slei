@@ -13,7 +13,7 @@ const enabledAuditCategories = {
   icons: true,
   themeTokens: true,
   softPanel: true,
-  oldUtilities: false,
+  oldUtilities: true,
 } as const;
 
 type AuditCategory = keyof typeof enabledAuditCategories;
@@ -880,8 +880,14 @@ describe("desktop UI primitive usage", () => {
       "features/onboarding/RuntimeStep.ts",
       "features/diagnostics/DiagnosticsPage.ts",
       "features/diagnostics/ErrorPanel.ts",
+      "features/diagnostics/LogExportDialog.ts",
+      "components/PageHeader.tsx",
     ]) {
-      expect(readSource(file)).not.toContain("shadow-sm");
+      const source = readSource(file);
+      expect(source).not.toContain("shadow-sm");
+      expect(source).not.toContain("data-slei-panel");
+      expect(source).not.toContain("data-variant=");
+      expect(source).not.toContain("bg-muted/40");
     }
   });
 

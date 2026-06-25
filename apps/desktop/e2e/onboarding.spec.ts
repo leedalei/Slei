@@ -14,6 +14,9 @@ describe("first-run onboarding", () => {
     expect(html).toContain("欢迎使用 Slei");
     expect(html).toContain("昵称");
     expect(html).toContain("创建你的身份");
+    expect(html).toContain('data-slot="card"');
+    expect(html).not.toContain("data-slei-panel");
+    expect(html).not.toContain("data-variant=");
   });
 
   it("can switch to English before identity is saved", () => {
@@ -38,6 +41,8 @@ describe("first-run onboarding", () => {
     });
     expect(offline).toContain("Daemon 未启动");
     expect(offline).toContain("无法完成");
+    expect(offline).not.toContain("data-slei-panel");
+    expect(offline).not.toContain("data-variant=");
 
     const runtimeUnavailable = renderOnboardingPage({
       locale: "zh-CN",
@@ -47,5 +52,7 @@ describe("first-run onboarding", () => {
     });
     expect(runtimeUnavailable).toContain("运行时不可用");
     expect(runtimeUnavailable).toContain("不会创建引导员");
+    expect(runtimeUnavailable).not.toContain("data-slei-panel");
+    expect(runtimeUnavailable).not.toContain("data-variant=");
   });
 });
