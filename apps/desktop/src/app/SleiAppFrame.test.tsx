@@ -410,14 +410,14 @@ describe("SleiAppFrame global search navigation", () => {
     }
   });
 
-  it("renders menubar navigation items as glass ripple buttons", () => {
+  it("renders menubar navigation items as stable glass icon buttons without click ripple", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
 
     expect(navSource).toContain("slei-shell-nav flex min-h-0 flex-col items-center gap-4");
     expect(navSource).toContain("slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0");
-    expect(navSource).toContain("ripple");
-    expect(navSource).toContain('rippleColor={input.activeView === item.id ? "white" : "cyan"}');
+    expect(navSource).not.toContain("ripple");
+    expect(navSource).not.toContain("rippleColor");
     expect(navSource).toContain('size="icon"');
     expect(navSource).not.toContain('size="lg"');
     expect(navSource).toContain('variant={input.activeView === item.id ? "default" : "outline"}');
