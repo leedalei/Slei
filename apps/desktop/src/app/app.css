@@ -158,6 +158,9 @@
   --tabs-glass-border: color-mix(in srgb, white 28%, var(--border));
   --tabs-glass-glow: color-mix(in srgb, var(--primary) 24%, transparent);
   --tabs-glass-shadow: 0 4px 16px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+  --tabs-pill-bg: var(--tabs-glass-active-bg);
+  --tabs-pill-border: color-mix(in srgb, white 36%, var(--tabs-glass-border));
+  --tabs-pill-shadow: 0 2px 8px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent);
 }
 
 @theme inline {
@@ -638,14 +641,31 @@ select:focus-visible {
     box-shadow var(--tabs-dur) var(--tabs-ease);
 }
 
+.t-tabs-pill {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: calc(100% - 8px);
+  width: 0;
+  background: var(--tabs-pill-bg);
+  border: 1px solid var(--tabs-pill-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--tabs-pill-shadow);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .t-tabs .t-tab:not([aria-selected="true"]):hover {
   background: var(--tabs-glass-hover-bg);
   color: var(--tabs-text-hover);
 }
 
 .t-tabs .t-tab[aria-selected="true"] {
-  background: var(--tabs-glass-active-bg);
-  border-color: color-mix(in srgb, white 36%, var(--tabs-glass-border));
   color: var(--tabs-text-active);
 }
 
@@ -669,6 +689,7 @@ select:focus-visible {
   .t-modal { transition: none !important; }
   .t-icon-swap .t-icon { transition: none !important; }
   .t-tabs-glow { animation: none !important; }
+  .t-tabs-pill { transition: none !important; }
   .t-tabs .t-tab { transition: none !important; }
 }
 

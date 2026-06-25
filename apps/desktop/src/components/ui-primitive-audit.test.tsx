@@ -875,7 +875,8 @@ describe("desktop UI primitive usage", () => {
     expect(tabsSource).toContain('data-slot="tabs-trigger"');
     expect(tabsSource).toContain("data-variant={variant}");
     expect(tabsSource).toContain("variant?: \"line\" | \"soft\"");
-    expect(tabsSource).toContain("data-[state=active]:bg-white/20");
+    expect(tabsSource).toContain("t-tabs-pill");
+    expect(tabsSource).toContain("data-[state=active]:text-foreground");
     expect(tabsSource).not.toContain("before:bg-linear-to-r");
     expect(tabsSource).not.toContain("before:blur-lg");
     expect(tabsSource).not.toContain("before:bg-gradient-to-b");
@@ -887,8 +888,8 @@ describe("desktop UI primitive usage", () => {
 
     expect(tabsSource).not.toContain("data-slei-");
     expect(tabsSource).not.toContain("data-slei-tabs-pill");
-    expect(tabsSource).not.toContain("requestAnimationFrame(() => moveTo(active(), false))");
-    expect(appCss).not.toContain(".t-tabs-pill");
+    expect(tabsSource).toContain("requestAnimationFrame(() => moveToActiveTab(false))");
+    expect(appCss).toContain(".t-tabs-pill");
   });
 
   it("keeps static surfaces and badges free of old elevated variants", () => {

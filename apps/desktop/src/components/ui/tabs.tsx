@@ -7,24 +7,94 @@ import { cn } from "@/lib/utils"
 
 const Tabs = TabsPrimitive.Root
 
+function setForwardedRef<T>(ref: React.ForwardedRef<T>, value: T) {
+  if (typeof ref === "function") {
+    ref(value)
+  } else if (ref) {
+    ref.current = value
+  }
+}
+
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
     variant?: "line" | "soft"
   }
->(({ className, variant = "soft", ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    data-slot="tabs-list"
-    data-variant={variant}
-    className={cn(
-      "relative inline-flex h-12 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xl",
-      "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
-      className,
-    )}
-    {...props}
-  />
-))
+>(({ className, children, variant = "soft", ...props }, ref) => {
+  const listRef = React.useRef<React.ElementRef<typeof TabsPrimitive.List> | null>(null)
+  const pillRef = React.useRef<HTMLSpanElement | null>(null)
+
+  const setListRef = React.useCallback(
+    (node: React.ElementRef<typeof TabsPrimitive.List> | null) => {
+      listRef.current = node
+      setForwardedRef(ref, node)
+    },
+    [ref],
+  )
+
+  const moveToActiveTab = React.useCallback((animate: boolean) => {
+    const list = listRef.current
+    const pill = pillRef.current
+    if (!list || !pill) return
+
+    const tabs = Array.from(list.querySelectorAll<HTMLElement>('[data-slot="tabs-trigger"]'))
+    const activeTab = tabs.find((tab) => tab.getAttribute("aria-selected") === "true" || tab.getAttribute("data-state") === "active") ?? tabs[0]
+    if (!activeTab) return
+
+    if (!animate) {
+      const previousTransition = pill.style.transition
+      pill.style.transition = "none"
+      pill.style.transform = `translateX(${activeTab.offsetLeft}px)`
+      pill.style.width = `${activeTab.offsetWidth}px`
+      void pill.offsetWidth
+      pill.style.transition = previousTransition
+      return
+    }
+
+    pill.style.transform = `translateX(${activeTab.offsetLeft}px)`
+    pill.style.width = `${activeTab.offsetWidth}px`
+  }, [])
+
+  React.useLayoutEffect(() => {
+    const list = listRef.current
+    if (!list) return
+
+    const view = list.ownerDocument.defaultView ?? window
+    const frame = view.requestAnimationFrame(() => moveToActiveTab(false))
+    const observer = new view.MutationObserver(() => moveToActiveTab(true))
+    observer.observe(list, {
+      attributeFilter: ["aria-selected", "data-state"],
+      attributes: true,
+      subtree: true,
+    })
+
+    const handleResize = () => moveToActiveTab(false)
+    view.addEventListener("resize", handleResize)
+
+    return () => {
+      view.cancelAnimationFrame(frame)
+      observer.disconnect()
+      view.removeEventListener("resize", handleResize)
+    }
+  }, [moveToActiveTab])
+
+  return (
+    <TabsPrimitive.List
+      ref={setListRef}
+      data-slot="tabs-list"
+      data-variant={variant}
+      className={cn(
+        "t-tabs relative inline-flex h-12 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xl",
+        "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
+        className,
+      )}
+      {...props}
+    >
+      <span ref={pillRef} aria-hidden="true" className="t-tabs-pill" data-slot="tabs-pill" />
+      {children}
+    </TabsPrimitive.List>
+  )
+})
 TabsList.displayName = TabsPrimitive.List.displayName
 
 const TabsTrigger = React.forwardRef<
@@ -35,12 +105,11 @@ const TabsTrigger = React.forwardRef<
     ref={ref}
     data-slot="tabs-trigger"
     className={cn(
-      "relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground",
+      "t-tab relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground",
       "transition-colors duration-200 hover:bg-white/5 hover:text-foreground",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
       "disabled:pointer-events-none disabled:opacity-50",
-      "data-[state=active]:bg-white/20 data-[state=active]:text-foreground",
-      "data-[state=active]:shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+      "data-[state=active]:text-foreground",
       className,
     )}
     {...props}

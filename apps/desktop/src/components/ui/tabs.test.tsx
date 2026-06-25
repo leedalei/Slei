@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
@@ -73,6 +73,7 @@ describe("Tabs", () => {
     expect(list?.parentElement?.getAttribute("data-orientation")).toBe("horizontal");
     expect(list?.className).toContain("custom-tabs-list");
     expect(Array.from(list?.children ?? []).map((child) => child.getAttribute("data-slot"))).toEqual([
+      "tabs-pill",
       "tabs-trigger",
       "tabs-trigger",
     ]);
@@ -90,10 +91,30 @@ describe("Tabs", () => {
 
     expect(html).toContain('data-variant="soft"');
     expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-slot="tabs-pill"');
     expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain("Chat");
-    expect(html).not.toContain("t-tabs-pill");
     expect(html).not.toContain("data-slei-tabs-pill");
+  });
+
+  it("renders the sliding pill before tab triggers", () => {
+    const html = renderToStaticMarkup(
+      <Tabs defaultValue="chat">
+        <TabsList variant="soft">
+          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const list = host.querySelector<HTMLElement>('[data-slot="tabs-list"]');
+    const pill = host.querySelector<HTMLElement>('[data-slot="tabs-pill"]');
+
+    expect(list?.className.split(/\s+/)).toContain("t-tabs");
+    expect(pill).not.toBeNull();
+    expect(pill?.className.split(/\s+/)).toContain("t-tabs-pill");
+    expect(list?.firstElementChild?.getAttribute("data-slot")).toBe("tabs-pill");
   });
 
   it("does not render decorative gradient glow classes behind tab controls", () => {
@@ -151,6 +172,54 @@ describe("Tabs", () => {
       expect(host.textContent).not.toContain("资料内容");
       expect(host.textContent).toContain("活动内容");
     } finally {
+      cleanup(root, host);
+    }
+  });
+
+  it("positions the sliding pill without animation on first paint and animates to the selected tab after interaction", async () => {
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    const originalCancelAnimationFrame = window.cancelAnimationFrame;
+    const frameCallbacks: FrameRequestCallback[] = [];
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback);
+      return frameCallbacks.length;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = vi.fn() as typeof window.cancelAnimationFrame;
+
+    const { host, root } = renderTabs();
+
+    try {
+      const tabs = Array.from(host.querySelectorAll<HTMLElement>('[role="tab"]'));
+      const [profileTab, activityTab] = tabs;
+      const pill = host.querySelector<HTMLElement>('[data-slot="tabs-pill"]');
+      expect(pill).not.toBeNull();
+
+      vi.spyOn(profileTab, "offsetLeft", "get").mockReturnValue(8);
+      vi.spyOn(profileTab, "offsetWidth", "get").mockReturnValue(72);
+      vi.spyOn(activityTab, "offsetLeft", "get").mockReturnValue(88);
+      vi.spyOn(activityTab, "offsetWidth", "get").mockReturnValue(96);
+
+      await act(async () => {
+        frameCallbacks.splice(0).forEach((callback) => callback(0));
+      });
+
+      expect(pill?.style.transform).toBe("translateX(8px)");
+      expect(pill?.style.width).toBe("72px");
+      expect(pill?.style.transition).toBe("");
+
+      const view = host.ownerDocument.defaultView!;
+      await act(async () => {
+        activityTab.dispatchEvent(new view.MouseEvent("mousedown", { bubbles: true, button: 0, ctrlKey: false }));
+        activityTab.dispatchEvent(new view.MouseEvent("mouseup", { bubbles: true, button: 0, ctrlKey: false }));
+        (activityTab as HTMLButtonElement).click();
+      });
+      await act(async () => undefined);
+
+      expect(pill?.style.transform).toBe("translateX(88px)");
+      expect(pill?.style.width).toBe("96px");
+    } finally {
+      window.requestAnimationFrame = originalRequestAnimationFrame;
+      window.cancelAnimationFrame = originalCancelAnimationFrame;
       cleanup(root, host);
     }
   });
