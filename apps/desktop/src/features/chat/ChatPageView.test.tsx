@@ -90,6 +90,12 @@ async function mountChatPage(element: React.ReactElement) {
   return mountedContainer;
 }
 
+function staticMarkupHost(html: string) {
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  return host;
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -533,12 +539,14 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    const headerStart = html.indexOf('data-testid="slei-channel-header"');
-    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerMarker = html.indexOf('data-testid="slei-channel-header"');
+    const headerStart = html.lastIndexOf("<header", headerMarker);
+    const headerEnd = html.indexOf("</header>", headerMarker);
     const headerHtml = html.slice(headerStart, headerEnd);
     const copyButtonStart = headerHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
     const membersButtonStart = headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"');
 
+    expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(headerHtml).toContain("select-none");
@@ -694,6 +702,54 @@ describe("ChatPage mention panel", () => {
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
     expect(timestampIndex).toBeGreaterThan(saveIndex);
+  });
+
+  it("lets the real chat toast close control clear a copied-message toast", async () => {
+    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
+    vi.stubGlobal("navigator", { clipboard });
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_copy_toast",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          body: "复制后显示 toast。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const message = host.querySelector<HTMLElement>('[data-message-id="msg_copy_toast"]');
+
+      await act(async () => {
+        message?.querySelector<HTMLButtonElement>(`button[aria-label="${messages.chat.copyMessage}"]`)?.click();
+      });
+      await act(async () => undefined);
+
+      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain(messages.chat.copySuccess);
+      expect(host.querySelector('[data-slot="notification-close"]')).not.toBeNull();
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+      });
+
+      expect(host.querySelector('[data-slot="notification"]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {
@@ -1592,23 +1648,24 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const messageHtml = html.slice(html.indexOf('data-message-id="msg-contract"'));
-    const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
+    const host = staticMarkupHost(html);
+    const messageCard = host.querySelector<HTMLElement>('[data-message-id="msg-contract"]');
 
-    expect(messageHtml).toContain('data-message-id="msg-contract"');
-    expect(messageHtml).toContain('data-variant="flat"');
-    expect(messageOpenTag).toContain("border-transparent");
-    expect(messageOpenTag).toContain("bg-transparent");
-    expect(messageOpenTag).toContain("hover:border-border/50");
-    expect(messageOpenTag).not.toContain("bg-card");
-    expect(messageOpenTag).not.toContain("bg-muted");
-    expect(messageOpenTag).not.toContain("bg-primary/5");
-    expect(messageOpenTag).not.toContain("shadow-");
-    expect(messageOpenTag).not.toContain("hover:shadow");
-    expect(messageHtml).toContain('data-slot="message-actions"');
-    expect(messageHtml).toContain('data-message-thread-open="msg-contract"');
-    expect(messageHtml).toContain(`aria-label="${messages.chat.copyMessage}"`);
-    expect(messageHtml).toContain(`aria-label="${messages.chat.saveMessage}"`);
+    expect(messageCard).not.toBeNull();
+    expect(messageCard?.dataset.slot).toBe("card");
+    expect(messageCard?.className).toContain("border-transparent");
+    expect(messageCard?.className).toContain("bg-transparent");
+    expect(messageCard?.className).toContain("hover:border-border/50");
+    expect(messageCard?.className).not.toContain("bg-card");
+    expect(messageCard?.className).not.toContain("bg-muted");
+    expect(messageCard?.className).not.toContain("bg-primary/5");
+    expect(messageCard?.className).toContain("shadow-none");
+    expect(messageCard?.className).toContain("after:hidden");
+    expect(messageCard?.className).not.toContain("hover:shadow");
+    expect(messageCard?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
+    expect(messageCard?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
+    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.copyMessage}"]`)).not.toBeNull();
+    expect(messageCard?.querySelector(`button[aria-label="${messages.chat.saveMessage}"]`)).not.toBeNull();
   });
 
   it("adds a border only to the focused timeline message", () => {
@@ -1636,7 +1693,8 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const messageHtml = html.slice(html.indexOf('data-message-id="msg-focused"'));
+    const messageAttrIndex = html.indexOf('data-message-id="msg-focused"');
+    const messageHtml = html.slice(html.lastIndexOf("<", messageAttrIndex));
     const messageOpenTag = messageHtml.slice(0, messageHtml.indexOf(">"));
 
     expect(messageOpenTag).toContain("data-[focused=true]:border-primary/35");
@@ -1696,8 +1754,8 @@ describe("ChatPage mention panel", () => {
       const cardOpenTag = cardHtml.slice(0, cardHtml.indexOf(">"));
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
-      expect(cardHtml).toContain('data-variant="surface"');
-      expect(cardOpenTag).not.toContain("shadow-");
+      expect(cardHtml).toContain('data-slot="card"');
+      expect(cardOpenTag).not.toContain("shadow-[");
       expect(cardOpenTag).not.toContain("hover:shadow");
     }
   });
@@ -1739,20 +1797,20 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
-    const taskRootHtml = html.slice(html.indexOf('data-task-root-entry="task-msg-task-source"'));
-    const taskRootOpenTag = taskRootHtml.slice(0, taskRootHtml.indexOf(">"));
+    const host = staticMarkupHost(html);
+    const taskRootCard = host.querySelector<HTMLElement>('[data-task-root-entry="task-msg-task-source"]');
 
-    expect(taskRootHtml).toContain('data-task-root-entry="task-msg-task-source"');
-    expect(taskRootHtml).toContain('data-source-message-id="msg-task-source"');
-    expect(taskRootHtml).toContain('data-variant="flat"');
-    expect(taskRootOpenTag).toContain("bg-transparent");
-    expect(taskRootOpenTag).toContain("hover:border-border/50");
-    expect(taskRootOpenTag).not.toContain("shadow-");
-    expect(taskRootOpenTag).not.toContain("hover:shadow");
-    expect(taskRootHtml).toContain('data-task-root-entry-status');
-    expect(taskRootHtml).toContain(messages.tasks.status.in_progress);
-    expect(taskRootHtml).toContain('data-task-root-entry-replies');
-    expect(taskRootHtml).toContain("把这条变成任务。");
+    expect(taskRootCard).not.toBeNull();
+    expect(taskRootCard?.dataset.sourceMessageId).toBe("msg-task-source");
+    expect(taskRootCard?.dataset.slot).toBe("card");
+    expect(taskRootCard?.className).toContain("bg-transparent");
+    expect(taskRootCard?.className).toContain("hover:border-border/50");
+    expect(taskRootCard?.className).toContain("shadow-none");
+    expect(taskRootCard?.className).toContain("after:hidden");
+    expect(taskRootCard?.className).not.toContain("hover:shadow");
+    expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
+    expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
+    expect(taskRootCard?.textContent).toContain("把这条变成任务。");
   });
 
   it("keeps only the composer input recessed while the outer surface stays flat", async () => {
@@ -1773,7 +1831,7 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-variant")).toBe("flat");
+    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-slot")).toBe("card");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
     expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
@@ -1783,10 +1841,10 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).toContain("slei-composer-input");
     expect(composerInput?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
-    expect(appCss).toContain("border-color: var(--slei-inset-border);");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s);");
+    expect(appCss).toContain("border-color: var(--glass-border);");
+    expect(appCss).toContain("box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px");
+    expect(appCss).toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
@@ -1947,10 +2005,10 @@ describe("ChatPage mention panel", () => {
     expect(messageStart).toBeGreaterThanOrEqual(0);
     expect(markdownStart).toBeGreaterThan(messageStart);
     expect(markdownHtml).toContain("text-card-foreground");
-    expect(markdownHtml).toContain("--slei-markdown-foreground:var(--card-foreground)");
+    expect(markdownHtml).toContain("--markdown-foreground:var(--card-foreground)");
     expect(markdownHtml).not.toContain("text-foreground");
-    expect(appCss).toContain("color: var(--slei-markdown-foreground, var(--color-text-primary));");
-    expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--color-text-primary);");
+    expect(appCss).toContain("color: var(--markdown-foreground, var(--text-primary));");
+    expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--text-primary);");
   });
 
   it("keeps task root entries visually aligned with normal transparent message rows", () => {
@@ -1958,8 +2016,8 @@ describe("ChatPage mention panel", () => {
 
     expect(source).toContain("bg-transparent");
     expect(source).toContain("hover:border-border/50");
-    expect(source).toContain('variant="flat"');
-    expect(source).not.toContain('variant="surface"');
+    expect(source).toContain("CARD_FLAT_CLASS");
+    expect(source).toContain("<Card");
     expect(source).not.toContain("border border-primary");
   });
 });

@@ -28,30 +28,22 @@ function cleanupSwitch(root: Root, host: HTMLElement) {
 }
 
 describe("Switch", () => {
-  it("uses Ein UI glass-switch styling while preserving the shared switch contract", () => {
+  it("preserves the shared switch DOM contract", () => {
     const html = renderToStaticMarkup(<Switch aria-label="通知" checked />);
 
     expect(html).toContain('data-slot="switch"');
     expect(html).toContain('data-slot="switch-thumb"');
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
-    expect(html).toContain("bg-white/10");
-    expect(html).toContain("backdrop-blur-xl");
-    expect(html).toContain("border-white/20");
-    expect(html).toContain("data-[state=checked]:from-cyan-500/60");
-    expect(html).toContain("data-[state=checked]:to-blue-500/60");
-    expect(html).toContain("data-[state=checked]:shadow-[0_0_12px_rgba(6,182,212,0.4)]");
-    expect(html).toContain("data-[state=checked]:translate-x-5");
+    expect(html).toContain('data-state="checked"');
   });
 
-  it("keeps size variants stable for compact settings rows", () => {
-    const html = renderToStaticMarkup(<Switch aria-label="紧凑通知" size="sm" />);
+  it("passes disabled state through to the rendered switch", () => {
+    const html = renderToStaticMarkup(<Switch aria-label="紧凑通知" disabled />);
 
-    expect(html).toContain('data-size="sm"');
-    expect(html).toContain("data-[size=sm]:h-5");
-    expect(html).toContain("data-[size=sm]:w-9");
-    expect(html).toContain("group-data-[size=sm]/switch:h-4");
-    expect(html).toContain("group-data-[size=sm]/switch:data-[state=checked]:translate-x-4");
+    expect(html).toContain('data-slot="switch"');
+    expect(html).toContain("disabled");
+    expect(html).toContain('aria-label="紧凑通知"');
   });
 
   it("notifies callers when toggled from the rendered DOM", () => {

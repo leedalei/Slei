@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
-import type { SleiTablerIcon } from "./icons";
+import type { SleiLucideIcon } from "./icons";
 
 export function DetailBlock({
   action,
@@ -15,7 +15,7 @@ export function DetailBlock({
 }: Omit<React.ComponentProps<"div">, "title"> & {
   action?: ReactNode;
   description?: ReactNode;
-  icon?: SleiTablerIcon;
+  icon?: SleiLucideIcon;
   title?: ReactNode;
   value?: ReactNode;
 }) {

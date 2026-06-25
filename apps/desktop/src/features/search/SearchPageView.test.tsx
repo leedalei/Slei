@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -231,34 +229,19 @@ describe("SearchPage global search UI", () => {
     const rootElement = await renderSearchPage({ onGlobalSearch });
     const results = rootElement.querySelector('[data-slot="search-results"]');
     const emptyState = searchEmptyState(rootElement);
-    const searchSurface = rootElement.querySelector('[data-slot="search-input-surface"]');
+    const searchSurface = rootElement.querySelector('[data-search-input-surface="true"]');
     const searchInput = inputByLabel(rootElement, "Global search input");
-    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(searchSurface).toBeInstanceOf(HTMLElement);
-    expect(searchSurface?.hasAttribute("data-slei-panel")).toBe(true);
-    expect(searchSurface?.getAttribute("data-variant")).toBe("inset");
+    expect(searchSurface?.getAttribute("data-slot")).toBe("card");
+    expect(searchSurface?.querySelector('[data-slot="card-content"]')).not.toBeNull();
     expect(searchSurface?.className).toContain("rounded-full");
-    expect(searchSurface?.className).toContain("slei-inset-small");
-    expect(searchSurface?.className).toContain("slei-search-input-surface");
     expect(searchSurface?.className).not.toContain("focus-within:ring-ring");
-    expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--slei-shadow-inset-s)]");
-    expect(searchSurface?.className).not.toContain("slei-inset-m");
-    expect(searchSurface?.className).not.toContain("slei-inset-large");
-    expect(appCss).toContain(".slei-search-input-surface {");
-    expect(appCss).toContain("border-color: var(--slei-inset-border);");
-    expect(appCss).toContain("transition:");
-    expect(appCss).toContain("border-color var(--focus-in-dur) var(--focus-in-ease)");
-    expect(appCss).toContain(".slei-search-input-surface:focus-within {");
-    expect(appCss).toContain("border-color: var(--primary);");
-    expect(appCss).toContain("box-shadow: var(--slei-shadow-inset-s), 0 0 0 1px color-mix(in srgb, var(--primary) 32%, transparent);");
+    expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--overlay-shadow");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
-    expect(searchInput.className).not.toContain("bg-muted/40");
-    expect(searchInput.className).not.toContain("slei-inset-small");
-    expect(searchInput.className).not.toContain("slei-inset-focus-small");
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(results).toBeInstanceOf(HTMLDivElement);
     expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
@@ -304,13 +287,17 @@ describe("SearchPage global search UI", () => {
     expect(rootElement.textContent).toContain("Coda");
     expect(rootElement.querySelectorAll("mark").length).toBeGreaterThan(0);
     for (const kind of ["agent", "channel", "message"]) {
-      const panel = rootElement.querySelector(`[data-search-result-kind="${kind}"]`)?.closest("[data-slei-panel]");
-      expect(panel?.getAttribute("data-variant")).toBe("surface");
+      const button = rootElement.querySelector<HTMLButtonElement>(`[data-search-result-kind="${kind}"]`);
+      const panel = button?.closest('[data-slot="card"]');
+      const content = panel?.querySelector<HTMLElement>('[data-slot="card-content"]');
+      expect(panel).toBeInstanceOf(HTMLElement);
+      expect(content).not.toBeNull();
+      expect(content?.className).toContain("p-0");
+      expect(button?.className).toContain("w-full");
+      expect(button?.className).toContain("p-3");
       expect(panel?.className).toContain("shadow-none");
       expect(panel?.className).toContain("transition-colors");
       expect(panel?.className).toContain("hover:bg-muted/35");
-      expect(panel?.className).not.toContain("slei-raised");
-      expect(panel?.className).not.toContain("hover:slei-raised");
     }
   });
 
@@ -327,7 +314,7 @@ describe("SearchPage global search UI", () => {
     const agentsTrigger = triggers.find((trigger) => trigger.textContent?.includes("Agents"));
     const channelsTrigger = triggers.find((trigger) => trigger.textContent?.includes("Channels"));
 
-    expect(accordion?.getAttribute("data-type")).toBe("multiple");
+    expect(accordion).toBeInstanceOf(HTMLElement);
     expect(items.length).toBe(3);
     expect(items[0]?.className).toContain("border-b");
     expect(items[0]?.className).not.toContain("border-0");
@@ -418,7 +405,7 @@ describe("SearchPage global search UI", () => {
       expect(trigger.className).toContain("rounded-lg");
       expect(trigger.className).toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
-      expect(trigger.className).not.toContain("shadow-[var(--slei-shadow-inset-sm)]");
+      expect(trigger.className).not.toContain("shadow-[var(--overlay-shadow");
     }
 
     await openSelect(rootElement, "From");

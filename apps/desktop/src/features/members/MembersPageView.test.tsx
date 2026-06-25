@@ -176,9 +176,9 @@ describe("MembersPage agent details", () => {
     expect(markerIndex).toBeGreaterThanOrEqual(0);
     expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("border-b px-4 py-2");
     const tabsHtml = html.slice(markerIndex, markerIndex + 1200);
+    expect(tabsHtml).toContain('data-slot="tabs-list"');
     expect(tabsHtml).toContain('data-variant="line"');
-    expect(tabsHtml).toContain("data-slei-glass-tabs-list");
-    expect(tabsHtml).toContain("group-data-[orientation=horizontal]/tabs:h-8");
+    expect(tabsHtml).toContain("h-12");
   });
 
   it("renders a dedicated permissions tab label between capabilities and activity", async () => {
@@ -257,34 +257,34 @@ describe("MembersPage agent details", () => {
     expect(html).toContain(`>${messages.members.message}<`);
   });
 
-  it("uses shared soft panels and secondary detail blocks in member profile details", () => {
+  it("uses EinUI card slots and secondary detail blocks in member profile details", () => {
     const html = renderToStaticMarkup(renderMembersPage());
 
-    expect(html).toContain("data-slei-panel");
+    expect(html).toContain('data-slot="card"');
     expect(html).toContain("data-slei-status");
     expect(html).toContain('data-slot="detail-block"');
     expect(html).toContain('data-member-detail-block="computer"');
   });
 
-  it("renders member profile cards as outline-only surfaces", async () => {
+  it("renders member profile sections as content cards", async () => {
     const host = await mount(renderMembersPage());
     const panel = activeTabPanel(host);
-    const profileCards = Array.from(panel.querySelectorAll<HTMLElement>("[data-slei-panel]"));
+    const profileCards = Array.from(panel.querySelectorAll<HTMLElement>('[data-slot="card"]'));
     const detailBlocks = Array.from(panel.querySelectorAll<HTMLElement>("[data-member-detail-block]"));
 
     expect(profileCards).toHaveLength(2);
     for (const card of profileCards) {
-      expect(card.dataset.variant).toBe("outline");
-      expect(card.className).toContain("border-border/60");
-      expect(card.className).not.toContain("bg-card");
-      expect(card.className).not.toContain("bg-muted");
+      expect(card.className).toContain("grid");
+      expect(card.className).toContain("text-card-foreground");
+      expect(card.className).not.toContain("bg-card/80");
+      expect(card.className).not.toContain("bg-muted/40");
     }
 
     expect(detailBlocks).toHaveLength(3);
     for (const block of detailBlocks) {
       expect(block.className).toContain("border");
-      expect(block.className).not.toContain("bg-muted");
-      expect(block.className).not.toContain("bg-card");
+      expect(block.className).not.toContain("bg-muted/40");
+      expect(block.className).not.toContain("bg-card/80");
     }
   });
 
@@ -345,7 +345,7 @@ describe("MembersPage agent details", () => {
     expect(html).toContain('<span class="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
-    expect(html).toContain('data-slot="alert-dialog-trigger"');
+    expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain("data-slei-page-header-actions");
     expect(html).not.toContain(messages.members.deleteAgentConfirm("Coda"));
     expect(html).toContain("Capabilities");
@@ -486,11 +486,11 @@ describe("MembersPage agent details", () => {
       />,
     );
 
-    const workspaceContentStart = html.indexOf("content-workspace");
-    const capabilitiesContentStart = html.indexOf("content-capabilities");
-    expect(workspaceContentStart).toBeGreaterThanOrEqual(0);
-    expect(capabilitiesContentStart).toBeGreaterThan(workspaceContentStart);
-    const workspaceHtml = html.slice(workspaceContentStart, capabilitiesContentStart);
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const workspaceRegion = host.querySelector<HTMLElement>('[aria-label="工作区"][role="region"]');
+    expect(workspaceRegion).not.toBeNull();
+    const workspaceHtml = workspaceRegion?.outerHTML ?? "";
 
     expect(html).toContain("文件预览");
     expect(html).not.toContain("<h2 class=\"text-sm font-semibold\">文件</h2>");
@@ -624,7 +624,7 @@ describe("MembersPage agent details", () => {
 
     const row = container.querySelector(`[data-activity-log-row="${log.id}"]`);
     expect(row).toBeTruthy();
-    expect(row?.closest("[data-slei-panel]")).toBeNull();
+    expect(row?.closest('[data-slot="card"]')).toBeNull();
     expect(row?.className).toContain("rounded-lg");
     expect(row?.className).toContain("border");
     expect(row?.querySelector('[data-activity-log-line="meta"]')?.textContent).toBe("info | run.started | 成功 | #内容营销开发");
@@ -726,7 +726,7 @@ describe("MembersPage agent details", () => {
 
     await clickTab(host, messages.members.capabilities);
     const panel = activeTabPanel(host);
-    const skillsCard = panel.querySelector("[data-slei-panel]");
+    const skillsCard = panel.querySelector('[data-slot="card"]');
 
     expect(skillsCard?.querySelector("h2")?.textContent).toBe(messages.members.skills);
     expect(skillsCard?.textContent).not.toContain(messages.members.readOnly);

@@ -2,14 +2,18 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiFixtures, SleiTask } from "../../app/types";
-import { Empty, SleiIcon, SoftPanel, StatusBadge } from "../../components";
+import { Empty, SleiIcon, StatusBadge } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskThreadDrawer } from "./TaskThreadDrawer";
+
+const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const CARD_LIST_ITEM_CLASS = "rounded-lg border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden transition-colors hover:bg-card";
 
 export function TasksPage({
   activeTaskId,
@@ -106,7 +110,7 @@ export function TasksPage({
               {columns.map((column) => {
                 const columnTasks = filteredTasks.filter((task) => task.status === column);
                 return (
-                  <SoftPanel aria-label={taskStatusLabel(column, messages)} className="grid min-h-40 content-start gap-3 p-3" key={column}>
+                  <Card aria-label={taskStatusLabel(column, messages)} className={`${CARD_SURFACE_CLASS} grid min-h-40 content-start gap-3 p-3`} key={column} role="region">
                     <div className="flex items-center justify-between gap-2">
                       <h2 className="text-sm font-medium">{taskStatusLabel(column, messages)}</h2>
                       {columnTasks.length > 0 ? <Badge variant="outline">{columnTasks.length}</Badge> : null}
@@ -128,7 +132,7 @@ export function TasksPage({
                         variant="nodata"
                       />
                     )}
-                  </SoftPanel>
+                  </Card>
                 );
               })}
             </div>
@@ -220,7 +224,7 @@ function TaskCard(input: {
   const row = input.layout === "row";
 
   return (
-    <SoftPanel className={row ? "grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" : "grid gap-3"} variant="listItem">
+    <Card className={row ? `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start` : `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3`}>
       <div className={row ? "min-w-0" : ""}>
         <h3 className="break-words text-sm font-semibold">{input.task.title}</h3>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -245,6 +249,6 @@ function TaskCard(input: {
           </Button>
         </div>
       </div>
-    </SoftPanel>
+    </Card>
   );
 }

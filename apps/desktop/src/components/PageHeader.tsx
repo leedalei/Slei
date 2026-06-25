@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-import type { SleiTablerIcon } from "./icons";
+import type { SleiLucideIcon } from "./icons";
 
 export function PageHeader({
   actions,
@@ -13,7 +13,7 @@ export function PageHeader({
   ...props
 }: Omit<ComponentProps<"header">, "title"> & {
   actions?: ReactNode;
-  icon?: SleiTablerIcon;
+  icon?: SleiLucideIcon;
   subtitle?: ReactNode;
   title: ReactNode;
 }) {
@@ -27,7 +27,7 @@ export function PageHeader({
         {Icon ? (
           <span
             aria-hidden="true"
-            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-border/60 bg-muted/40 text-muted-foreground"
+            className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-border/60 text-muted-foreground"
             data-slei-page-header-icon
           >
             <Icon className="size-4" />

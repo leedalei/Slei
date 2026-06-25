@@ -12,11 +12,13 @@ describe("Empty", () => {
     expect(html).not.toContain("data-slei-panel");
   });
 
-  it("uses a soft panel when the framed shell is requested", () => {
+  it("uses an EinUI card when the framed shell is requested", () => {
     const html = renderToStaticMarkup(<Empty framed title="暂无数据" />);
 
-    expect(html).toContain("data-slei-panel");
-    expect(html).toContain('data-variant="surface"');
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('data-empty-size="md"');
+    expect(html).toContain('data-empty-variant="nodata"');
+    expect(html).not.toContain("data-slei-panel");
     expect(html).toContain("暂无数据");
   });
 });

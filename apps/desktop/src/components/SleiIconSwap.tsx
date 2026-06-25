@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 import { SleiIcon } from "./SleiIcon";
-import type { SleiIconName, SleiTablerIconProps } from "./icons";
+import type { SleiIconName, SleiLucideIconProps } from "./icons";
 
-type SleiIconSwapProps = Omit<SleiTablerIconProps, "aria-hidden" | "aria-label" | "data-slei-icon" | "name"> & {
+type SleiIconSwapProps = Omit<SleiLucideIconProps, "aria-hidden" | "aria-label" | "data-slei-icon" | "name"> & {
   active: boolean;
   inactiveName: SleiIconName;
   activeName: SleiIconName;

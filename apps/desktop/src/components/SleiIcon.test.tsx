@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { SleiIcon } from "./SleiIcon";
+import { SleiIconSwap } from "./SleiIconSwap";
 
 describe("SleiIcon", () => {
   it("renders decorative product icons as hidden svg elements", () => {
@@ -29,6 +30,30 @@ describe("SleiIcon", () => {
 
     expect(html).toContain("data-slei-icon=\"searchFilled\"");
     expect(html).toContain("data-slei-icon=\"membersFilled\"");
+  });
+
+  it("keeps saved and unsaved bookmark states visually distinct", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <SleiIcon name="bookmark" />
+        <SleiIcon name="bookmarkOutline" />
+      </>,
+    );
+
+    expect(html).toContain('data-slei-icon="bookmark"');
+    expect(html).toContain('data-slei-icon="bookmarkOutline"');
+    const bookmarkSvg = html.match(/<svg\b(?=[^>]*data-slei-icon="bookmark")[^>]*>/)?.[0] ?? "";
+    const bookmarkOutlineSvg = html.match(/<svg\b(?=[^>]*data-slei-icon="bookmarkOutline")[^>]*>/)?.[0] ?? "";
+    expect(bookmarkSvg).toContain('fill="currentColor"');
+    expect(bookmarkOutlineSvg).toContain('fill="none"');
+  });
+
+  it("passes strokeWidth through animated icon swaps", () => {
+    const html = renderToStaticMarkup(
+      <SleiIconSwap active activeName="chevronDown" inactiveName="chevronRight" strokeWidth={2.75} />,
+    );
+
+    expect(html.match(/stroke-width="2.75"/g)).toHaveLength(2);
   });
 
   it("owns accessibility and semantic identity attributes", () => {

@@ -20,7 +20,6 @@ import {
   PageHeader,
   SleiIcon,
   SleiIconSwap,
-  SoftPanel,
   StatusBadge,
   Toast,
   TOAST_VISIBLE_MS,
@@ -41,12 +40,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MemberTab = "profile" | "workspace" | "capabilities" | "permissions" | "activity";
 type MemberEditableField = "description" | "model" | "name" | "runtime";
+const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 
 type ClipboardWriter = {
   writeText?: (text: string) => Promise<void>;
@@ -207,6 +208,12 @@ export function MembersPage(input: {
     toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
   }
 
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = undefined;
+    setToast((current) => ({ ...current, message: "" }));
+  }
+
   async function copyDescription() {
     const copied = await copyPlainText(memberDetails.description);
     if (!copied) return;
@@ -332,7 +339,7 @@ export function MembersPage(input: {
 
   return (
     <section className="!grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
-      <Toast message={toast.message} type={toast.type} />
+      <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <div className="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
         <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
           <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
@@ -422,7 +429,7 @@ export function MembersPage(input: {
         <ScrollArea className="min-h-0">
           <div className="grid gap-4 p-6">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
-              <SoftPanel className="grid gap-4" variant="outline">
+              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
                 <h2 className="text-base font-semibold">{input.messages.members.profile}</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <EditableDetailField
@@ -467,9 +474,9 @@ export function MembersPage(input: {
                     {selectedMember.creator}
                   </InfoItem>
                 </div>
-              </SoftPanel>
+              </Card>
 
-              <SoftPanel className="grid gap-4" variant="outline">
+              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
                   <h2 className="text-base font-semibold">{input.messages.members.runtimeConfig}</h2>
                   <StatusBadge
@@ -503,11 +510,11 @@ export function MembersPage(input: {
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.model} />
                 </div>
-              </SoftPanel>
+              </Card>
             </TabsContent>
 
             <TabsContent forceMount value="workspace" className="grid gap-4 data-[state=inactive]:hidden">
-              <SoftPanel className="grid min-h-[28rem] overflow-hidden p-0 md:grid-cols-[16rem_minmax(0,1fr)]" aria-label={input.messages.members.workspace}>
+              <Card className={`${CARD_SURFACE_CLASS} grid min-h-[28rem] overflow-hidden p-0 md:grid-cols-[16rem_minmax(0,1fr)]`} aria-label={input.messages.members.workspace} role="region">
                 <aside className="grid min-h-0 overflow-hidden border-b bg-muted/20 md:border-b-0 md:border-r">
                   <ScrollArea className="min-h-0">
                     <div className="grid gap-1 p-2">
@@ -553,7 +560,7 @@ export function MembersPage(input: {
                     <pre className="min-h-full whitespace-pre-wrap break-words p-4 font-mono text-xs leading-6 text-foreground">{activeWorkspaceFile?.content}</pre>
                   </ScrollArea>
                 </article>
-              </SoftPanel>
+              </Card>
               {workspaceOpenError ? (
                 <Alert variant="destructive">
                   <AlertDescription>{workspaceOpenError}</AlertDescription>
@@ -562,7 +569,7 @@ export function MembersPage(input: {
             </TabsContent>
 
             <TabsContent forceMount value="capabilities" className="grid gap-4 data-[state=inactive]:hidden">
-              <SoftPanel className="grid gap-4">
+              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
                 <h2 className="text-base font-semibold">{input.messages.members.skills}</h2>
                 {memberSkills.length ? (
                   <div className="grid gap-2" role="list">
@@ -584,11 +591,11 @@ export function MembersPage(input: {
                     title={input.messages.members.noSkills}
                   />
                 )}
-              </SoftPanel>
+              </Card>
             </TabsContent>
 
             <TabsContent forceMount value="permissions" className="grid gap-4 data-[state=inactive]:hidden">
-              <SoftPanel className="grid gap-4">
+              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
                 <div className="grid gap-1">
                   <h2 className="text-base font-semibold">{input.messages.members.capabilities}</h2>
                   <p className="text-sm text-muted-foreground">{input.messages.members.readOnly}</p>
@@ -605,9 +612,9 @@ export function MembersPage(input: {
                     title={input.messages.members.noCapabilities}
                   />
                 )}
-              </SoftPanel>
+              </Card>
 
-              <SoftPanel className="grid gap-4">
+              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
                 <div className="grid gap-1">
                   <h2 className="text-base font-semibold">{input.messages.members.workspacePermission}</h2>
                   <p className="text-sm text-muted-foreground">{input.messages.members.readOnly}</p>
@@ -624,7 +631,7 @@ export function MembersPage(input: {
                     title={input.messages.members.workspacePermission}
                   />
                 )}
-              </SoftPanel>
+              </Card>
             </TabsContent>
 
             <TabsContent forceMount value="activity" className="grid gap-2 data-[state=inactive]:hidden">

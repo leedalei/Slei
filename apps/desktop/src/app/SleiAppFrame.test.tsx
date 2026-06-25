@@ -46,14 +46,38 @@ afterEach(async () => {
   mountedContainer?.remove();
   mountedRoot = undefined;
   mountedContainer = undefined;
+  document.documentElement.classList.remove("dark", "light");
   document.body.innerHTML = "";
   window.localStorage.clear();
 });
 
 describe("SleiAppFrame appearance preferences", () => {
+  it("wires the runtime toast close control to the prop-owned dismiss callback", async () => {
+    const onRuntimeToastDismiss = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onRuntimeToastDismiss={onRuntimeToastDismiss}
+        runtimeErrorToastMessage="运行时错误"
+        runtimeSetup={runtimeSetup}
+        runtimeToastType="error"
+      />,
+    );
+
+    expect(container.querySelector('[data-slot="notification"]')?.textContent).toContain("运行时错误");
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+    });
+
+    expect(onRuntimeToastDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("syncs the font size preference to the document root and restores it on unmount", async () => {
     document.documentElement.style.fontSize = "13px";
-    document.documentElement.style.setProperty("--slei-font-size", "13px");
+    document.documentElement.style.setProperty("--app-font-size", "13px");
     document.documentElement.style.setProperty("--text-sm", "12px");
 
     const container = await mount(
@@ -69,7 +93,7 @@ describe("SleiAppFrame appearance preferences", () => {
 
     expect(container.querySelector("[data-font-size='lg']")).not.toBeNull();
     expect(document.documentElement.style.fontSize).toBe("16px");
-    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("16px");
+    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("16px");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
     expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("16px");
 
@@ -88,7 +112,7 @@ describe("SleiAppFrame appearance preferences", () => {
     await act(async () => undefined);
 
     expect(document.documentElement.style.fontSize).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("14px");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
     expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("14px");
 
@@ -98,7 +122,7 @@ describe("SleiAppFrame appearance preferences", () => {
     mountedRoot = undefined;
 
     expect(document.documentElement.style.fontSize).toBe("13px");
-    expect(document.documentElement.style.getPropertyValue("--slei-font-size")).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("13px");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
   });
 
@@ -121,8 +145,24 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
   });
 
-  it("syncs dark theme to the document root so portal dialogs inherit dark tokens", async () => {
-    document.documentElement.classList.remove("dark");
+  it("defaults to dark theme when appearance is omitted", async () => {
+    document.documentElement.classList.remove("dark", "light");
+
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.classList.contains("light")).toBe(false);
+  });
+
+  it("syncs dark and light theme classes to the document root so portal dialogs inherit tokens", async () => {
+    document.documentElement.classList.remove("dark", "light");
 
     await mount(
       <SleiAppFrame
@@ -136,6 +176,7 @@ describe("SleiAppFrame appearance preferences", () => {
     );
 
     expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.classList.contains("light")).toBe(false);
     expect(document.body.querySelector('[data-slot="dialog-content"]')).not.toBeNull();
 
     await act(async () => {
@@ -153,6 +194,7 @@ describe("SleiAppFrame appearance preferences", () => {
     await act(async () => undefined);
 
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(document.documentElement.classList.contains("light")).toBe(true);
   });
 });
 
@@ -251,7 +293,7 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     expect(html).toContain("grid h-14 w-14 place-items-center");
   });
 
@@ -281,22 +323,22 @@ describe("SleiAppFrame global search navigation", () => {
     const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-shell-nav__button {"));
     const sidebarCss = appCss.slice(appCss.indexOf(".slei-context-sidebar {"), appCss.indexOf(".slei-resize-handle {"));
 
-    expect(appCss).toContain("--slei-glass-nav-bg:");
-    expect(appCss).toContain("--slei-glass-sidebar-bg:");
+    expect(appCss).toContain("--glass-nav-bg:");
+    expect(appCss).toContain("--glass-sidebar-bg:");
     expect(appCss).toContain("--glass-bg:");
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
-    expect(appCss).toContain("--slei-glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent)");
-    expect(appCss).toContain("--slei-glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent)");
-    expect(appCss).toContain("--slei-glass-filter: blur(var(--glass-blur)) saturate(145%)");
+    expect(appCss).toContain("--glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent)");
+    expect(appCss).toContain("--glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent)");
+    expect(appCss).toContain("--glass-surface-filter: blur(var(--glass-blur)) saturate(145%)");
     expect(navSource).not.toContain("bg-sidebar/");
     expect(asideSource).not.toContain("bg-sidebar/");
-    expect(navCss).toContain("background: var(--slei-glass-nav-bg)");
-    expect(navCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
-    expect(navCss).toContain("backdrop-filter: var(--slei-glass-filter)");
-    expect(sidebarCss).toContain("background: var(--slei-glass-sidebar-bg)");
-    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--slei-glass-filter)");
-    expect(sidebarCss).toContain("backdrop-filter: var(--slei-glass-filter)");
+    expect(navCss).toContain("background: var(--glass-nav-bg)");
+    expect(navCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
+    expect(navCss).toContain("backdrop-filter: var(--glass-surface-filter)");
+    expect(sidebarCss).toContain("background: var(--glass-sidebar-bg)");
+    expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--glass-surface-filter)");
+    expect(sidebarCss).toContain("backdrop-filter: var(--glass-surface-filter)");
     expect(sidebarCss).toContain('[data-slot="agent-activity"]');
     expect(sidebarCss).toContain("background: transparent");
   });
@@ -337,10 +379,11 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
     expect(frameSource).toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
-    expect(appCss).toContain("backdrop-filter: var(--slei-glass-filter)");
-    expect(appCss).toContain("html,\nbody,\n#app {\n  background: transparent;");
-    expect(appCss).toContain("html,\nbody,\n#app {\n  margin: 0;");
-    expect(appCss).not.toContain("#app {\n  background: var(--color-bg)");
+    expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
+    expect(appCss).toContain("html,\n#app {\n  margin: 0;");
+    expect(appCss).toContain("html,\n#app {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
+    expect(appCss).toContain("linear-gradient(to bottom right, #0f172a, #1e1b4b, #0f172a)");
+    expect(appCss).not.toContain("#app {\n  background: var(--background)");
     expect(appCss).not.toContain("#root {");
   });
 
@@ -384,12 +427,12 @@ describe("SleiAppFrame global search navigation", () => {
     expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
     expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
     expect(navSource).not.toContain('{ id: "members", icon: "members" }');
-    expect(iconsSource).toContain("IconSearchFilled");
-    expect(iconsSource).toContain("IconAlienFilled");
-    expect(iconsSource).toContain("searchFilled: IconSearchFilled");
-    expect(iconsSource).toContain("membersFilled: IconAlienFilled");
-    expect(iconsSource).toContain("search: IconSearch");
-    expect(iconsSource).toContain("members: IconUsersGroup");
+    expect(iconsSource).toContain("SearchCheck");
+    expect(iconsSource).toContain("UsersRound");
+    expect(iconsSource).toContain("searchFilled: SearchCheck");
+    expect(iconsSource).toContain("membersFilled: UsersRound");
+    expect(iconsSource).toContain("search: Search");
+    expect(iconsSource).toContain("members: Users");
   });
 
   it("renders the active menubar item with primary glass gradient contrast", () => {
@@ -397,8 +440,8 @@ describe("SleiAppFrame global search navigation", () => {
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
     expect(navButtonCss).toContain(".slei-shell-nav__button--active");
-    expect(appCss).toContain("--slei-glass-button-primary-gradient-bg: linear-gradient");
-    expect(navButtonCss).toContain("background: var(--slei-glass-button-primary-gradient-bg)");
+    expect(appCss).toContain("--glass-button-primary-gradient-bg: linear-gradient");
+    expect(navButtonCss).toContain("background: var(--glass-button-primary-gradient-bg)");
     expect(navButtonCss).toContain("color: var(--primary-foreground)");
   });
 
@@ -406,10 +449,10 @@ describe("SleiAppFrame global search navigation", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const navButtonCss = appCss.slice(appCss.indexOf(".slei-shell-nav__button {"), appCss.indexOf(".slei-context-sidebar {"));
 
-    expect(navButtonCss).toContain("border-color: var(--slei-glass-button-border)");
-    expect(navButtonCss).toContain("box-shadow: var(--slei-glass-button-shadow)");
-    expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--slei-menu-border))");
-    expect(navButtonCss).not.toContain("var(--slei-raised-border)");
+    expect(navButtonCss).toContain("border-color: var(--glass-button-border)");
+    expect(navButtonCss).toContain("box-shadow: var(--glass-button-shadow)");
+    expect(navButtonCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
+    expect(navButtonCss).not.toContain("var(--raised-border)");
   });
 
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
@@ -470,7 +513,8 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     expect(html).toContain('data-testid="slei-saved-workspace"');
-    expect(html).toContain('data-variant="listItem"');
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('data-slot="card-content"');
     expect(html).toContain('data-slei-icon="bookmark"');
     expect(html).toContain(">频道 1</");
     expect(html).toContain(">私聊 1</");
@@ -508,10 +552,9 @@ describe("SleiAppFrame global search navigation", () => {
     expect(currentItems[0]?.textContent).toContain("已保存");
     expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
     expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
-    expect(savedTrigger?.className).not.toContain("slei-raised");
   });
 
-  it("renders saved message rows as soft list items while preserving unavailable and click behavior", async () => {
+  it("renders saved message rows as cards while preserving unavailable and click behavior", async () => {
     const onSavedMessageSelect = vi.fn();
     const availableMessage = {
       id: "saved:available",
@@ -547,11 +590,12 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     const workspace = container.querySelector('[data-testid="slei-saved-workspace"]');
-    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slei-panel][data-variant="listItem"]') ?? []);
+    const rows = Array.from(workspace?.querySelectorAll<HTMLElement>('[data-slot="card"][data-saved-message-row]') ?? []);
     const availableButton = rows[0]?.querySelector<HTMLButtonElement>("button");
     const deletedButton = rows[1]?.querySelector<HTMLButtonElement>("button");
 
     expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.querySelector('[data-slot="card-content"]'))).toBe(true);
     expect(workspace?.querySelector('[data-slei-icon="bookmark"]')).not.toBeNull();
     expect(availableButton?.disabled).toBe(false);
     expect(deletedButton?.disabled).toBe(true);

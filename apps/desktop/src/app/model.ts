@@ -81,7 +81,7 @@ export function normalizeAppearance(appearance: AppearancePreferences): Appearan
 }
 
 export const defaultAppearance: AppearancePreferences = {
-  theme: "light",
+  theme: "dark",
   fontSize: "md",
 };
 

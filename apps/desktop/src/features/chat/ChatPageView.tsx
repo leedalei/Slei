@@ -6,7 +6,7 @@ import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, C
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage, markdownForegroundStyle } from "./MarkdownMessage";
 import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
-import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SleiIconSwap, SoftPanel, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
+import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SleiIcon, SleiIconSwap, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -28,6 +28,8 @@ export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 200;
 const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
 const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
+const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 
 type ChannelFileEntry = {
   attachment: ConversationAttachmentView;
@@ -61,7 +63,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
     const targetPath = typeof card.draft.targetPath === "string" ? card.draft.targetPath : card.summary;
     const toolName = typeof card.draft.toolName === "string" ? card.draft.toolName : "Write";
     return (
-      <SoftPanel className="mt-2 grid gap-2 border-amber-500/30 bg-amber-500/5 p-3" data-card-kind={card.kind} data-state={card.state} variant="raised">
+      <Card className={cn(CARD_SURFACE_CLASS, "mt-2 grid gap-2 border-amber-500/30 bg-amber-500/5 p-3")} data-card-kind={card.kind} data-state={card.state}>
         <div className="flex flex-wrap items-center gap-2 font-medium">
           <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-300">权限申请</Badge>
           <span>{card.title}</span>
@@ -81,13 +83,13 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
             拒绝
           </Button>
         </div>
-      </SoftPanel>
+      </Card>
     );
   }
   const done = card.state !== "pending";
   const doneLabel = card.doneLabel === "DONE" ? messages.common.done : card.doneLabel || messages.common.done;
   return (
-    <SoftPanel className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3" data-card-kind={card.kind} data-state={card.state} variant="surface">
+    <Card className={cn(CARD_SURFACE_CLASS, "mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3")} data-card-kind={card.kind} data-state={card.state}>
       <div className="grid min-w-0 gap-1">
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
@@ -95,7 +97,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
       <Button disabled={done} onClick={onCreate} size="sm" type="button">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
-    </SoftPanel>
+    </Card>
   );
 }
 
@@ -866,6 +868,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
   }
 
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = undefined;
+    setToast((current) => ({ ...current, message: "" }));
+  }
+
   function openTaskThread(taskId: string) {
     setSelectedTaskId(taskId);
     void Promise.resolve(onTaskThreadOpen?.(taskId)).catch(() => undefined);
@@ -1002,7 +1010,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
 
   return (
     <section className={cn("relative grid h-full min-h-0 bg-transparent", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
-      <Toast message={toast.message} type={toast.type} />
+      <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
         <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
           <div className="min-w-0" data-tauri-drag-region="deep">
@@ -1202,15 +1210,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                           style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                         >
-                          <SoftPanel
+                          <Card
                             className={cn(
+                              CARD_FLAT_CLASS,
                               "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/35",
                               highlightedMessageId === message.id && "slei-message--blink-border",
                             )}
                             data-focused={highlightedMessageId === message.id ? "true" : undefined}
                             data-message-id={message.id}
                             tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                            variant="flat"
                           >
                             <MemberAvatar identity={memberFromMessage(message, data.members)} />
                             <div className="min-w-0">
@@ -1262,7 +1270,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                 />
                               ))}
                             </div>
-                          </SoftPanel>
+                          </Card>
                         </div>
                       );
                     })}
@@ -1270,7 +1278,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </div>
                 {showScrollToBottom ? (
                   <Button
-                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-xs text-primary slei-raised-small hover:bg-white hover:text-primary"
+                    className="absolute bottom-2.5 left-1/2 z-10 h-8 -translate-x-1/2 border-primary bg-white px-3.5 text-xs text-primary shadow-[0_8px_24px_rgba(0,0,0,0.24)] hover:bg-white hover:text-primary"
                     data-testid="slei-scroll-to-bottom"
                     onClick={requestTimelineScrollToBottom}
                     size="sm"
@@ -1310,7 +1318,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </div>
                 ) : null}
                 <form className="px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-                  <SoftPanel className="grid gap-2 p-3" data-testid="slei-composer-surface" variant="flat">
+                  <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 p-3")} data-testid="slei-composer-surface">
                     {attachments.length > 0 ? (
                       <AttachmentList
                         attachments={attachments}
@@ -1397,7 +1405,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>
-                  </SoftPanel>
+                  </Card>
                 </form>
               </footer>
             </div>

@@ -1,113 +1,95 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Card({
-  className,
-  size = "default",
-  variant = "surface",
-  ...props
-}: React.ComponentProps<"div"> & {
-  size?: "default" | "sm" | "compact"
-  variant?: "surface" | "raised" | "inset" | "interactive"
-}) {
-  return (
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  glowEffect?: boolean
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, glowEffect = true, children, ...props }, ref) => (
     <div
+      ref={ref}
       data-slot="card"
-      data-size={size}
-      data-variant={variant}
       className={cn(
-        "group/card flex flex-col gap-4 overflow-hidden rounded-xl border py-4 text-sm text-card-foreground has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 data-[size=compact]:gap-3 data-[size=compact]:py-3 data-[size=compact]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        variant === "surface" && "border-border/60 bg-card",
-        variant === "raised" && "border-transparent bg-card slei-raised-small",
-        variant === "inset" && "border-border/60 bg-muted/40 slei-inset-small",
-        variant === "interactive" &&
-          "cursor-pointer border-border/70 bg-card slei-raised-small slei-hover-transition hover:slei-raised-small",
-        className
+        "relative overflow-hidden rounded-2xl border border-white/20 bg-white/10 text-white backdrop-blur-xl",
+        "shadow-[0_8px_32px_rgba(0,0,0,0.37)]",
+        glowEffect && "shadow-[0_8px_32px_rgba(0,0,0,0.37),0_0_32px_rgba(59,130,246,0.22)]",
+        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-linear-to-b before:from-white/20 before:to-transparent",
+        "after:pointer-events-none after:absolute after:inset-px after:rounded-[calc(1rem-1px)] after:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]",
+        className,
       )}
       {...props}
-    />
-  )
-}
+    >
+      {children}
+    </div>
+  ),
+)
+Card.displayName = "Card"
 
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3 group-data-[size=compact]/card:[.border-b]:pb-3",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} data-slot="card-header" className={cn("flex flex-col gap-1.5 p-6", className)} {...props} />
+  ),
+)
+CardHeader.displayName = "CardHeader"
 
-function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
+  ({ className, ...props }, ref) => (
+    <h3 ref={ref} data-slot="card-title" className={cn("text-xl font-semibold leading-none text-white", className)} {...props} />
+  ),
+)
+CardTitle.displayName = "CardTitle"
 
-function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
-}
+const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => (
+    <p ref={ref} data-slot="card-description" className={cn("text-sm text-white/60", className)} {...props} />
+  ),
+)
+CardDescription.displayName = "CardDescription"
 
-function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const CardAction = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} data-slot="card-action" className={cn("self-start justify-self-end", className)} {...props} />
+  ),
+)
+CardAction.displayName = "CardAction"
 
-function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-4 group-data-[size=sm]/card:px-3", className)}
-      {...props}
-    />
-  )
-}
+const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} data-slot="card-content" className={cn("p-6 pt-0", className)} {...props} />
+  ),
+)
+CardContent.displayName = "CardContent"
 
-function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn(
-        "flex items-center rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <div ref={ref} data-slot="card-footer" className={cn("flex items-center p-6 pt-0", className)} {...props} />
+  ),
+)
+CardFooter.displayName = "CardFooter"
+
+const GlassCard = Card
+const GlassCardHeader = CardHeader
+const GlassCardTitle = CardTitle
+const GlassCardDescription = CardDescription
+const GlassCardContent = CardContent
+const GlassCardFooter = CardFooter
 
 export {
   Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
   CardAction,
-  CardDescription,
   CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  GlassCard,
+  GlassCardContent,
+  GlassCardDescription,
+  GlassCardFooter,
+  GlassCardHeader,
+  GlassCardTitle,
 }

@@ -4,8 +4,9 @@ import type { DesktopMessages } from "../../i18n";
 import type { DesktopNodeView } from "../../lib/daemon-bridge";
 import type { SleiMember } from "../../app/types";
 import { agentsForComputerNode, deviceOsLabel, formatCreatedDate } from "../../app/model";
-import { DetailBlock, EditableDetailField, Empty, MemberAvatar, PageHeader, SleiIcon, SoftPanel, StatusBadge, sleiIcons, type SleiIconName } from "../../components";
+import { DetailBlock, EditableDetailField, Empty, MemberAvatar, PageHeader, SleiIcon, StatusBadge, sleiIcons, type SleiIconName } from "../../components";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ComputersPage(input: {
@@ -88,87 +89,93 @@ export function ComputersPage(input: {
 
       <ScrollArea className="min-h-0">
         <div className="mx-auto grid w-full max-w-5xl gap-4 p-6">
-          <SoftPanel>
-            <EditableDetailField
-              ariaLabel={input.messages.computers.editDeviceName}
-              error={renameError}
-              key={selectedNode.id}
-              label={input.messages.computers.deviceName}
-              messages={input.messages}
-              onSave={renameSelectedComputer}
-              saving={effectiveRenamingNodeId === selectedNode.id}
-              sectionClassName="grid gap-2"
-              titleTag="h2"
-              value={selectedNode.name}
-            />
-            <ControlledFieldAlert message={input.computerRenameError} />
-          </SoftPanel>
-
-          <SoftPanel className="grid gap-4">
-            <div className="grid gap-1">
-              <h2 className="text-base font-semibold">{input.messages.computers.info}</h2>
-              <p className="text-sm text-muted-foreground">{input.messages.computers.systemInfo}</p>
-            </div>
-            <dl className="grid gap-3 md:grid-cols-2">
-              <InfoItem icon="cpu" label={input.messages.computers.os}>
-                {deviceOsLabel(selectedNode.device)}
-              </InfoItem>
-              <InfoItem icon="server" label={input.messages.computers.hostname}>
-                {selectedNode.device.hostname}
-              </InfoItem>
-              <InfoItem icon="computer" label={input.messages.computers.daemonVersion}>
-                <strong>{selectedNode.daemonVersion}</strong>
-              </InfoItem>
-              <InfoItem icon="calendar" label={input.messages.computers.created}>
-                {formatCreatedDate(selectedNode.created) || "-"}
-              </InfoItem>
-            </dl>
-
-            <DetailBlock aria-label={input.messages.computers.detectedRuntimes} data-detail-block-kind="runtime" title={input.messages.computers.detectedRuntimes}>
-              <div className="flex flex-wrap gap-2">
-                {selectedNode.runtimes.map((runtime) => (
-                  <StatusBadge
-                    data-runtime-readiness={runtime.readiness}
-                    key={runtime.kind}
-                    label={`${runtime.kind}${runtime.version ? ` ${runtime.version}` : runtime.readiness === "ready" ? "" : ` (${input.messages.computers.offline})`}`}
-                    status={runtime.readiness === "ready" ? "success" : "offline"}
-                  />
-                ))}
-              </div>
-            </DetailBlock>
-          </SoftPanel>
-
-          <SoftPanel className="grid gap-4">
-            <div className="flex min-w-0 items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">{input.messages.computers.agentsOnThisComputer}</h2>
-              <div className="inline-flex items-center gap-1.5">
-                <SleiIcon className="size-3.5 text-muted-foreground" name="bot" />
-                <StatusBadge label={String(hostedAgents.length)} status="info" />
-              </div>
-            </div>
-            {hostedAgents.length ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {hostedAgents.map((member) => (
-                  <DetailBlock data-detail-block-kind="hosted-agent" key={member.id}>
-                    <article className="grid grid-cols-[auto_1fr] gap-3">
-                      <MemberAvatar identity={member} />
-                      <div className="min-w-0">
-                        <strong className="block truncate text-sm">{member.name}</strong>
-                        <p className="truncate text-sm text-muted-foreground">{member.runtime}</p>
-                        <StatusBadge className="mt-1 w-fit" label={runtimeStatusLabel(member.runtimeStatus, input.messages)} status={member.runtimeStatus} />
-                      </div>
-                    </article>
-                  </DetailBlock>
-                ))}
-              </div>
-            ) : (
-              <Empty
-                framed={false}
-                title={input.messages.computers.noAgents}
-                variant="nodata"
+          <Card className="text-card-foreground shadow-none">
+            <CardContent className="p-4">
+              <EditableDetailField
+                ariaLabel={input.messages.computers.editDeviceName}
+                error={renameError}
+                key={selectedNode.id}
+                label={input.messages.computers.deviceName}
+                messages={input.messages}
+                onSave={renameSelectedComputer}
+                saving={effectiveRenamingNodeId === selectedNode.id}
+                sectionClassName="grid gap-2"
+                titleTag="h2"
+                value={selectedNode.name}
               />
-            )}
-          </SoftPanel>
+              <ControlledFieldAlert message={input.computerRenameError} />
+            </CardContent>
+          </Card>
+
+          <Card className="text-card-foreground shadow-none">
+            <CardContent className="grid gap-4 p-4">
+              <div className="grid gap-1">
+                <h2 className="text-base font-semibold">{input.messages.computers.info}</h2>
+                <p className="text-sm text-muted-foreground">{input.messages.computers.systemInfo}</p>
+              </div>
+              <dl className="grid gap-3 md:grid-cols-2">
+                <InfoItem icon="cpu" label={input.messages.computers.os}>
+                  {deviceOsLabel(selectedNode.device)}
+                </InfoItem>
+                <InfoItem icon="server" label={input.messages.computers.hostname}>
+                  {selectedNode.device.hostname}
+                </InfoItem>
+                <InfoItem icon="computer" label={input.messages.computers.daemonVersion}>
+                  <strong>{selectedNode.daemonVersion}</strong>
+                </InfoItem>
+                <InfoItem icon="calendar" label={input.messages.computers.created}>
+                  {formatCreatedDate(selectedNode.created) || "-"}
+                </InfoItem>
+              </dl>
+
+              <DetailBlock aria-label={input.messages.computers.detectedRuntimes} data-detail-block-kind="runtime" title={input.messages.computers.detectedRuntimes}>
+                <div className="flex flex-wrap gap-2">
+                  {selectedNode.runtimes.map((runtime) => (
+                    <StatusBadge
+                      data-runtime-readiness={runtime.readiness}
+                      key={runtime.kind}
+                      label={`${runtime.kind}${runtime.version ? ` ${runtime.version}` : runtime.readiness === "ready" ? "" : ` (${input.messages.computers.offline})`}`}
+                      status={runtime.readiness === "ready" ? "success" : "offline"}
+                    />
+                  ))}
+                </div>
+              </DetailBlock>
+            </CardContent>
+          </Card>
+
+          <Card className="text-card-foreground shadow-none">
+            <CardContent className="grid gap-4 p-4">
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h2 className="text-base font-semibold">{input.messages.computers.agentsOnThisComputer}</h2>
+                <div className="inline-flex items-center gap-1.5">
+                  <SleiIcon className="size-3.5 text-muted-foreground" name="bot" />
+                  <StatusBadge label={String(hostedAgents.length)} status="info" />
+                </div>
+              </div>
+              {hostedAgents.length ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {hostedAgents.map((member) => (
+                    <DetailBlock data-detail-block-kind="hosted-agent" key={member.id}>
+                      <article className="grid grid-cols-[auto_1fr] gap-3">
+                        <MemberAvatar identity={member} />
+                        <div className="min-w-0">
+                          <strong className="block truncate text-sm">{member.name}</strong>
+                          <p className="truncate text-sm text-muted-foreground">{member.runtime}</p>
+                          <StatusBadge className="mt-1 w-fit" label={runtimeStatusLabel(member.runtimeStatus, input.messages)} status={member.runtimeStatus} />
+                        </div>
+                      </article>
+                    </DetailBlock>
+                  ))}
+                </div>
+              ) : (
+                <Empty
+                  framed={false}
+                  title={input.messages.computers.noAgents}
+                  variant="nodata"
+                />
+              )}
+            </CardContent>
+          </Card>
         </div>
       </ScrollArea>
     </section>

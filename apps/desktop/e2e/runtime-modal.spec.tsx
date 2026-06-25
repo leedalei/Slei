@@ -173,10 +173,10 @@ describe("runtime setup onboarding modal", () => {
         data={data}
       />,
     );
-    const firstRuntimeRow = html.slice(html.indexOf(">ClaudeCode<"));
-    const secondRuntimeRow = html.slice(html.indexOf(">CodexCli<"));
+    const firstRuntimeRow = html.match(/<div class="[^"]*">\s*<span>ClaudeCode<\/span>/)?.[0] ?? "";
+    const secondRuntimeRow = html.match(/<div class="[^"]*">\s*<span>CodexCli<\/span>/)?.[0] ?? "";
 
-    expect(firstRuntimeRow.slice(0, firstRuntimeRow.indexOf("</div>"))).not.toContain("border-t");
-    expect(secondRuntimeRow.slice(0, secondRuntimeRow.indexOf("</div>"))).toContain("border-t");
+    expect(firstRuntimeRow).not.toContain("border-t");
+    expect(secondRuntimeRow).toContain("border-t");
   });
 });

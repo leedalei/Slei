@@ -178,14 +178,14 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain("创建智能体");
     const title = agentCreateTitleMarkup(html);
-    expect(title).toContain("text-[16px]");
-    expect(title).toContain("font-bold");
+    expect(title).toContain("text-lg");
+    expect(title).toContain("font-semibold");
     expect(title).not.toContain("<svg");
     expect(html).toContain(">名字<");
     expect(html).toContain(">@handle<");
     expect(html).toContain(">关联设备<");
     expect(html).toContain(">描述<");
-    expect(html).toContain(">创建</button>");
+    expect(html).toMatch(/<button\b[^>]*type="submit"[\s\S]*?>创建<\/span><\/button>/);
   });
 
   it("moves running and pending agent activity to the sidebar while keeping terminal replies in chat", () => {

@@ -1,31 +1,20 @@
+"use client"
+
 import * as React from "react"
-import { IconChevronDown } from "@tabler/icons-react"
-import { Accordion as AccordionPrimitive } from "radix-ui"
+import * as AccordionPrimitive from "@radix-ui/react-accordion"
+import { ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-function Accordion({
-  className,
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Root>) {
-  return (
-    <AccordionPrimitive.Root
-      data-slot="accordion"
-      data-type={"type" in props ? props.type : undefined}
-      className={cn("w-full", className)}
-      {...props}
-    />
-  )
+function Accordion({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Root>) {
+  return <AccordionPrimitive.Root data-slot="accordion" className={cn("w-full", className)} {...props} />
 }
 
-function AccordionItem({
-  className,
-  ...props
-}: React.ComponentProps<typeof AccordionPrimitive.Item>) {
+function AccordionItem({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Item>) {
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn("border-b", className)}
+      className={cn("rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl", className)}
       {...props}
     />
   )
@@ -41,13 +30,15 @@ function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "flex flex-1 items-center justify-between gap-3 py-4 text-left text-sm font-medium transition-all outline-none hover:underline focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&[data-state=open]>svg]:rotate-180",
+          "flex flex-1 items-center justify-between gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-white/80 outline-none",
+          "transition-colors hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50",
+          "[&[data-state=open]>svg]:rotate-180",
           className,
         )}
         {...props}
       >
         {children}
-        <IconChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground transition-transform duration-200" />
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-white/60 transition-transform duration-200" />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )
@@ -61,10 +52,10 @@ function AccordionContent({
   return (
     <AccordionPrimitive.Content
       data-slot="accordion-content"
-      className="overflow-hidden text-sm data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+      className="overflow-hidden text-sm text-white/70 data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
       {...props}
     >
-      <div className={cn("pb-4 pt-0", className)}>{children}</div>
+      <div className={cn("px-4 pb-4 pt-0", className)}>{children}</div>
     </AccordionPrimitive.Content>
   )
 }

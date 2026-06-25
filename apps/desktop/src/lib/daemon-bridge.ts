@@ -725,7 +725,7 @@ function defaultUserPreferences(): UserPreferences {
     locale: defaultAppLocale(),
     timeZone: defaultAppTimeZone(),
     appearance: {
-      theme: "light",
+      theme: "dark",
       fontSize: "md",
     },
     notifications: {

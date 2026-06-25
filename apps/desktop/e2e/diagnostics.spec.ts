@@ -24,6 +24,10 @@ describe("diagnostics and localized recovery", () => {
     expect(html).toContain("诊断");
     expect(html).toContain("MacBookPro M4 MAX");
     expect(html).toContain("Claude Code");
+    expect(html).toContain('data-slot="card"');
+    expect(html).not.toContain("data-slei-panel");
+    expect(html).not.toContain("data-variant=");
+    expect(html).not.toContain("bg-muted/40");
     expect(html).not.toContain("secret-token");
     expect(html).not.toContain("/Users/leelei");
 
@@ -58,12 +62,19 @@ describe("diagnostics and localized recovery", () => {
     expect(renderErrorPanel({ locale: "en-US", code: "E201" })).toContain("Check runtime permissions");
     expect(renderErrorPanel({ locale: "zh-CN", code: "E301" })).toContain("重新连接");
     expect(renderErrorPanel({ locale: "en-US", code: "E401" })).toContain("Review workspace access");
+    expect(renderErrorPanel({ locale: "en-US", code: "E201" })).toContain('data-slot="card"');
+    expect(renderErrorPanel({ locale: "en-US", code: "E201" })).not.toContain("data-slei-panel");
+    expect(renderErrorPanel({ locale: "en-US", code: "E201" })).not.toContain("data-variant=");
 
     const exportDialog = renderLogExportDialog({
       locale: "zh-CN",
       sanitizedPreview: "token=[redacted-token] body=[redacted-body]",
     });
     expect(exportDialog).toContain("导出日志");
+    expect(exportDialog).toContain('data-slot="log-preview"');
+    expect(exportDialog).not.toContain("data-slei-panel");
+    expect(exportDialog).not.toContain("data-variant=");
+    expect(exportDialog).not.toContain("bg-muted/40");
     expect(exportDialog).toContain("[redacted-token]");
     expect(exportDialog).not.toContain("secret-token");
   });

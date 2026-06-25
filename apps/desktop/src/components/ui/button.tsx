@@ -1,69 +1,96 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button relative isolate inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--slei-glass-button-border)] bg-clip-padding text-sm font-medium whitespace-nowrap shadow-[var(--slei-glass-button-shadow)] backdrop-blur-xl slei-hover-transition outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit] before:bg-linear-to-b before:from-white/35 before:to-transparent before:opacity-35 hover:border-[var(--slei-glass-button-hover-border)] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:before:from-white/18 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  cn(
+    "relative inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl",
+    "border text-sm font-medium transition-all duration-300 ease-out",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+    "disabled:pointer-events-none disabled:opacity-50",
+    "hover:border-white/40 hover:bg-white/20",
+    "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  ),
   {
     variants: {
       variant: {
-        default:
-          "bg-[var(--slei-glass-button-primary-bg)] text-primary-foreground hover:bg-[var(--slei-glass-button-primary-hover-bg)]",
-        outline:
-          "bg-[var(--slei-glass-button-bg)] text-foreground hover:bg-[var(--slei-glass-button-hover-bg)] hover:text-foreground aria-expanded:bg-[var(--slei-glass-button-hover-bg)] aria-expanded:text-foreground",
-        secondary:
-          "bg-[var(--slei-glass-button-secondary-bg)] text-secondary-foreground hover:bg-[var(--slei-glass-button-secondary-hover-bg)] aria-expanded:bg-[var(--slei-glass-button-secondary-hover-bg)] aria-expanded:text-secondary-foreground",
-        ghost:
-          "border-transparent bg-transparent shadow-none text-foreground/80 before:opacity-0 hover:border-[var(--slei-glass-button-border)] hover:bg-[var(--slei-glass-button-hover-bg)] hover:text-foreground aria-expanded:border-[var(--slei-glass-button-border)] aria-expanded:bg-[var(--slei-glass-button-hover-bg)] aria-expanded:text-foreground",
-        destructive:
-          "bg-[var(--slei-glass-button-destructive-bg)] text-destructive-foreground hover:bg-[var(--slei-glass-button-destructive-hover-bg)] focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
-        link:
-          "border-transparent bg-transparent text-primary underline-offset-4 shadow-none before:opacity-0 hover:bg-[var(--slei-glass-button-hover-bg)] hover:underline",
+        default: cn(
+          "border-white/30 bg-white/20 text-white backdrop-blur-xl",
+          "shadow-[0_4px_16px_rgba(0,0,0,0.2)]",
+          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
+          "before:bg-linear-to-b before:from-white/20 before:to-transparent",
+        ),
+        primary: cn(
+          "border-white/30 bg-linear-to-r from-cyan-500/80 via-blue-500/80 to-purple-500/80 text-white backdrop-blur-xl",
+          "shadow-[0_4px_20px_rgba(59,130,246,0.4)] hover:shadow-[0_4px_30px_rgba(59,130,246,0.6)]",
+          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
+          "before:bg-linear-to-b before:from-white/30 before:to-transparent",
+        ),
+        secondary: "border-white/25 bg-white/15 text-white backdrop-blur-xl shadow-[0_4px_16px_rgba(0,0,0,0.18)]",
+        outline: "border-2 border-white/40 bg-transparent text-white backdrop-blur-sm hover:border-white/60 hover:bg-white/10",
+        ghost: "border-transparent bg-transparent text-white/70 hover:bg-white/10 hover:text-white",
+        destructive: cn(
+          "border-red-400/40 bg-red-500/30 text-red-100 backdrop-blur-xl",
+          "shadow-[0_4px_16px_rgba(239,68,68,0.3)] hover:border-red-400/60 hover:bg-red-500/40",
+          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
+          "before:bg-linear-to-b before:from-white/10 before:to-transparent",
+        ),
+        link: "border-transparent bg-transparent text-cyan-200 underline-offset-4 hover:bg-white/10 hover:underline",
       },
       size: {
-        default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-sm px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-sm px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-sm in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-sm in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+        default: "h-10 px-4 py-2",
+        xs: "h-6 rounded-lg px-2 text-xs [&_svg]:size-3",
+        sm: "h-8 rounded-lg px-3 text-xs [&_svg]:size-3.5",
+        lg: "h-12 px-6 text-base",
+        icon: "h-10 w-10",
+        "icon-xs": "h-6 w-6 rounded-lg [&_svg]:size-3",
+        "icon-sm": "h-8 w-8 rounded-lg [&_svg]:size-3.5",
+        "icon-lg": "h-12 w-12 [&_svg]:size-5",
       },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
     },
-  }
+  },
 )
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
+type ButtonProps = React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+    glowEffect?: boolean
+    wrapContent?: boolean
+  }
 
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
-}
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, glowEffect = false, wrapContent = true, children, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    const content = asChild || !wrapContent ? children : <span className="relative z-10 flex min-w-0 items-center gap-2">{children}</span>
 
-export { Button, buttonVariants }
+    return (
+      <Comp
+        ref={ref}
+        data-slot="button"
+        data-variant={variant ?? "default"}
+        data-size={size ?? "default"}
+        className={cn(
+          glowEffect && "shadow-[0_0_24px_rgba(34,211,238,0.35)]",
+          buttonVariants({ variant, size, className }),
+        )}
+        {...props}
+      >
+        {content}
+      </Comp>
+    )
+  },
+)
+Button.displayName = "Button"
+
+const GlassButton = Button
+const glassButtonVariants = buttonVariants
+
+export { Button, GlassButton, buttonVariants, glassButtonVariants }

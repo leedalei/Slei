@@ -31,7 +31,7 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('data-active-view="chat"');
-    expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     expect(html).toContain('aria-label="主导航"');
     expect(html).toContain("pt-10");
     expect(html).toContain('data-slot="button"');
@@ -214,7 +214,7 @@ describe("Slei React desktop shell", () => {
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
     expect(sendButton).not.toContain(' disabled=""');
-    expect(html).toContain(">发送</button>");
+    expect(html).toMatch(/<button\b(?=[^>]*data-testid="slei-send-button")[\s\S]*?>[\s\S]*发送[\s\S]*?<\/button>/);
   });
 
   it("renders broadcast-delivered agent activity feedback in the shell", () => {
@@ -282,7 +282,7 @@ describe("Slei React desktop shell", () => {
         expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
         expect(html).toContain('class="slei-context-sidebar');
         expect(html).toContain('aria-label="调整侧栏宽度"');
-        expect(html).toContain('grid-template-columns:5.25rem var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+        expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
       }
     }
   });

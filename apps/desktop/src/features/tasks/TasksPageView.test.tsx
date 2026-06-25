@@ -175,9 +175,9 @@ describe("TasksPage filters", () => {
 
     expect(boardTab?.querySelector('[data-slei-icon="kanban"]')).not.toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="listDetails"]')).not.toBeNull();
-    expect(iconsSource).toContain("IconLayoutKanban,");
-    expect(iconsSource).toContain("kanban: IconLayoutKanban");
-    expect(iconsSource).not.toContain("kanban: IconLayoutKanbanFilled");
+    expect(iconsSource).toContain("Kanban");
+    expect(iconsSource).toContain("kanban: Kanban");
+    expect(iconsSource).not.toContain("kanban: SquareKanban");
     expect(boardTab?.querySelector('[data-slei-icon="tasks"]')).toBeNull();
     expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
   });
@@ -240,7 +240,8 @@ describe("TasksPage filters", () => {
 
     expect(container?.textContent).toContain("待指派");
     expect(container?.textContent).not.toContain("待指派 0");
-    const pendingColumn = container?.querySelector('section[aria-label="待指派"]');
+    const pendingColumn = container?.querySelector('[data-slot="card"][aria-label="待指派"]');
+    expect(pendingColumn?.getAttribute("role")).toBe("region");
     const pendingEmptyTitle = pendingColumn?.querySelector('[data-empty-variant="nodata"] h2');
     expect(pendingEmptyTitle?.textContent).toBe("暂无数据");
     expect(container?.querySelectorAll('[data-empty-illustration="nodata"]').length).toBeGreaterThan(0);

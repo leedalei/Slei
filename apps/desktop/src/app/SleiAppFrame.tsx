@@ -2,6 +2,7 @@ import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEv
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
@@ -48,7 +49,7 @@ import {
 } from "../lib/daemon-bridge";
 import { createDesktopMessages, type DesktopMessages } from "../i18n";
 import type { ChannelEmbeddedView } from "../features/chat/ChatPageView";
-import { Empty, MemberAvatar, PageHeader, SleiIcon, SoftPanel, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
+import { Empty, MemberAvatar, PageHeader, SleiIcon, StatusDot, Toast, TooltipButton, sleiIcons, type SleiIconName, type ToastType } from "../components";
 import { ChatRoute } from "./routes/ChatRoute";
 import { ComputersRoute } from "./routes/ComputersRoute";
 import { MembersRoute } from "./routes/MembersRoute";
@@ -213,6 +214,7 @@ export type SleiAppFrameProps = {
   runtimeSetup: RuntimeSetupState;
   runtimeErrorToastMessage?: string;
   runtimeToastType?: ToastType;
+  onRuntimeToastDismiss?: () => void;
   computerRenameError?: string;
   renamingComputerId?: string;
   sessionDrawerOpen?: boolean;
@@ -302,9 +304,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const fontSize = fontSizeValue(appearance.fontSize);
   const textTokenValues = useMemo(() => fontSizeTextTokenValues(appearance.fontSize), [appearance.fontSize]);
   const shellStyle = {
-    "--slei-sidebar-width": `${input.sidebarWidth ?? 240}px`,
-    "--slei-font-size": fontSize,
-    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--slei-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
+    "--app-sidebar-width": `${input.sidebarWidth ?? 240}px`,
+    "--app-font-size": fontSize,
+    gridTemplateColumns: hasContextSidebar ? `${primaryRailWidth} var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)` : `${primaryRailWidth} minmax(0, 1fr)`,
   } as CSSProperties;
 
   useEffect(() => {
@@ -312,23 +314,23 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
     const root = document.documentElement;
     const previousFontSize = root.style.fontSize;
-    const previousSleiFontSize = root.style.getPropertyValue("--slei-font-size");
+    const previousAppFontSize = root.style.getPropertyValue("--app-font-size");
     const previousTextTokenValues = Object.fromEntries(
       Object.keys(textTokenValues).map((key) => [key, root.style.getPropertyValue(key)]),
     );
 
     root.style.fontSize = fontSize;
-    root.style.setProperty("--slei-font-size", fontSize);
+    root.style.setProperty("--app-font-size", fontSize);
     for (const [key, value] of Object.entries(textTokenValues)) {
       root.style.setProperty(key, value);
     }
 
     return () => {
       root.style.fontSize = previousFontSize;
-      if (previousSleiFontSize) {
-        root.style.setProperty("--slei-font-size", previousSleiFontSize);
+      if (previousAppFontSize) {
+        root.style.setProperty("--app-font-size", previousAppFontSize);
       } else {
-        root.style.removeProperty("--slei-font-size");
+        root.style.removeProperty("--app-font-size");
       }
       for (const key of Object.keys(textTokenValues)) {
         const previousValue = previousTextTokenValues[key];
@@ -346,10 +348,13 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
     const root = document.documentElement;
     const hadDarkClass = root.classList.contains("dark");
+    const hadLightClass = root.classList.contains("light");
     root.classList.toggle("dark", normalizedTheme === "dark");
+    root.classList.toggle("light", normalizedTheme === "light");
 
     return () => {
       root.classList.toggle("dark", hadDarkClass);
+      root.classList.toggle("light", hadLightClass);
     };
   }, [normalizedTheme]);
 
@@ -361,13 +366,13 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   return (
     <TooltipProvider>
     <div
-      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme === "dark" && "dark")}
+      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme)}
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
       style={shellStyle}
     >
-      <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
+      <Toast message={input.runtimeErrorToastMessage} onDismiss={input.onRuntimeToastDismiss} type={input.runtimeToastType} />
       <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
           <img alt="" aria-hidden="true" className="slei-brand__icon" src={sleiBubbleIcon} />
@@ -514,7 +519,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       {input.guideBootstrapping ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-background/70 backdrop-blur-sm" data-slot="guide-status-overlay" role="presentation">
-          <section aria-live="polite" className="slei-soft-dialog rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--slei-shadow-overlay-md)]" data-slot="guide-status" role="status">
+          <section aria-live="polite" className="rounded-xl bg-popover p-6 text-popover-foreground ring-1 ring-border shadow-[var(--overlay-shadow-md)]" data-slot="guide-status" role="status">
             <h2 className="text-base font-medium">{messages.onboarding.creatingGuide}</h2>
           </section>
         </div>
@@ -976,7 +981,7 @@ function ChannelList(input: {
                           <SleiIcon name="delete" size={14} />
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent className="slei-soft-dialog">
+                      <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>{input.messages.chat.deleteChannel(stripChannelHash(channel.name))}</AlertDialogTitle>
                           <AlertDialogDescription>{input.messages.chat.deleteChannelConfirm(stripChannelHash(channel.name))}</AlertDialogDescription>
@@ -1162,31 +1167,37 @@ function SavedMessagesWorkspace(input: {
             const messageTime = formatSavedDate(savedMessage.messageCreatedAt);
             const savedTime = formatSavedDate(savedMessage.savedAt);
             return (
-              <SoftPanel key={savedMessage.id} variant="listItem">
-                <Button
-                  aria-label={input.messages.search.openConversation(savedMessage.messageId)}
-                  className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
-                  disabled={isUnavailable}
-                  onClick={() => input.onSelect?.(savedMessage)}
-                  type="button"
-                  variant="ghost"
-                >
-                  <span className="grid min-w-0 flex-1 gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
-                      <span className="inline-flex items-center gap-1">
-                        <SleiIcon className="size-3.5" name="bookmark" />
-                        {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+              <Card
+                className="rounded-lg text-card-foreground shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25"
+                data-saved-message-row
+                key={savedMessage.id}
+              >
+                <CardContent className="p-3">
+                  <Button
+                    aria-label={input.messages.search.openConversation(savedMessage.messageId)}
+                    className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:bg-transparent", isUnavailable && "opacity-70")}
+                    disabled={isUnavailable}
+                    onClick={() => input.onSelect?.(savedMessage)}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <span className="grid min-w-0 flex-1 gap-2">
+                      <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <SleiIcon className="size-3.5" name="bookmark" />
+                          {savedMessage.sourceLabel || savedMessage.sourceName || savedMessage.sourceId}
+                        </span>
+                        <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
+                        {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
+                        {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
                       </span>
-                      <span>{savedMessage.authorName || savedMessage.authorId || input.messages.common.system}</span>
-                      {messageTime ? <span>{input.messages.chat.messageTimeLabel(messageTime)}</span> : null}
-                      {savedTime ? <span>{input.messages.chat.savedTimeLabel(savedTime)}</span> : null}
+                      <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
+                        {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
+                      </strong>
                     </span>
-                    <strong className={cn("line-clamp-3 text-sm font-medium", isUnavailable && "text-muted-foreground")}>
-                      {isUnavailable ? input.messages.chat.savedMessageUnavailable : savedMessage.body}
-                    </strong>
-                  </span>
-                </Button>
-              </SoftPanel>
+                  </Button>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
@@ -1385,7 +1396,7 @@ function ComputersNavigator(input: {
               <AlertDialogTrigger asChild>
                 <Button aria-label={input.messages.computers.deleteComputer(node.name)} className="mt-1 opacity-80 group-hover:opacity-100" size="icon-xs" type="button" variant="ghost"><SleiIcon name="delete" size={13} /></Button>
               </AlertDialogTrigger>
-              <AlertDialogContent className="slei-soft-dialog">
+              <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>{input.messages.computers.deleteComputer(node.name)}</AlertDialogTitle>
                   <AlertDialogDescription>
@@ -1629,7 +1640,7 @@ function ShellDialog(input: {
           <div className="fixed inset-0 isolate z-50 bg-black/10" data-slot="dialog-overlay" />
           <div
             aria-modal="true"
-            className={cn("slei-soft-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 sm:max-w-sm", input.className)}
+            className={cn("fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 sm:max-w-sm", input.className)}
             data-slot="dialog-content"
             role="dialog"
           >
@@ -1647,7 +1658,7 @@ function ShellDialog(input: {
 
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
-      <DialogContent className={cn("slei-soft-dialog", input.className)} closeLabel={input.closeLabel} showCloseButton={input.showCloseButton}>
+      <DialogContent className={input.className} closeLabel={input.closeLabel} showCloseButton={input.showCloseButton}>
         {input.children}
       </DialogContent>
     </Dialog>

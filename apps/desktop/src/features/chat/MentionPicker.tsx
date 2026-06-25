@@ -23,7 +23,7 @@ export function MentionPicker({
   if (members.length === 0) return null;
 
   return (
-    <Card aria-label={messages.chat.chooseMentionMember} className="max-h-[12.5rem] w-full max-w-full gap-2 overflow-hidden py-2" data-testid="slei-mention-panel" size="sm">
+    <Card aria-label={messages.chat.chooseMentionMember} className="max-h-[12.5rem] w-full max-w-full gap-2 overflow-hidden py-2" data-testid="slei-mention-panel">
       <CardContent className="grid min-h-0 gap-1 px-2">
         <ScrollArea className="max-h-[10.5rem] min-h-0 pr-2">
           <div className="grid min-w-0 gap-1">

@@ -54,34 +54,32 @@ function cleanup(root: Root, host: HTMLElement) {
 }
 
 describe("Tabs", () => {
-  it("renders line tabs through the shared glass-tabs primitive", () => {
+  it("renders line tabs through the shared primitive API", () => {
     const html = renderToStaticMarkup(
       <Tabs defaultValue="profile">
-        <TabsList aria-label="成员配置" variant="line">
+        <TabsList aria-label="成员配置" className="custom-tabs-list" variant="line">
           <TabsTrigger value="profile">资料</TabsTrigger>
           <TabsTrigger value="activity">活动</TabsTrigger>
         </TabsList>
       </Tabs>,
     );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const list = host.querySelector<HTMLElement>('[data-slot="tabs-list"]');
 
     expect(html).toContain('data-orientation="horizontal"');
-    expect(html).toContain("data-[orientation=horizontal]:flex-col");
-    expect(html).toContain('data-slei-glass-tabs-list');
-    expect(html).toContain('data-slei-glass-tabs-glow');
-    expect(html).toContain("backdrop-blur");
-    expect(html).toContain("bg-white/10");
-    expect(html).toContain("border-white/20");
-    expect(html).toContain("group-data-[orientation=horizontal]/tabs:h-8");
-    expect(html).toContain("gap-4");
-    expect(html).toContain("p-0");
-    expect(html).not.toContain("border-b");
-    expect(html).not.toContain("group-data-[variant=line]/tabs-list:data-active:font-bold");
-    expect(html).not.toContain("after:bg-primary");
-    expect(html).not.toContain(["data", "horizontal:flex-col"].join("-"));
-    expect(html).not.toContain(["group", "data", "horizontal/tabs:h-6"].join("-"));
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-variant="line"');
+    expect(list?.parentElement?.getAttribute("data-orientation")).toBe("horizontal");
+    expect(list?.className).toContain("custom-tabs-list");
+    expect(Array.from(list?.children ?? []).map((child) => child.getAttribute("data-slot"))).toEqual([
+      "tabs-trigger",
+      "tabs-trigger",
+    ]);
+    expect(html).not.toContain("data-slei-glass-tabs-list");
   });
 
-  it("renders soft tabs with glass-tabs active highlights", () => {
+  it("renders soft tabs through the shared primitive API", () => {
     const html = renderToStaticMarkup(
       <Tabs defaultValue="chat">
         <TabsList variant="soft">
@@ -91,17 +89,11 @@ describe("Tabs", () => {
     );
 
     expect(html).toContain('data-variant="soft"');
-    expect(html).toContain("t-tabs");
-    expect(html).toContain("t-tab");
-    expect(html).toContain('data-slei-glass-tabs-list');
-    expect(html).toContain("data-[state=active]:bg-white/20");
-    expect(html).toContain("data-[state=active]:before:bg-gradient-to-b");
-    expect(html).toContain("data-[state=active]:shadow-[0_2px_8px_rgba(0,0,0,0.2)]");
+    expect(html).toContain('data-slot="tabs-list"');
+    expect(html).toContain('data-slot="tabs-trigger"');
+    expect(html).toContain("Chat");
     expect(html).not.toContain("t-tabs-pill");
     expect(html).not.toContain("data-slei-tabs-pill");
-    expect(html).not.toContain("group-data-[variant=soft]/tabs-list:data-active:bg-transparent");
-    expect(html).not.toContain("group-data-[variant=soft]/tabs-list:data-active:slei-raised-small");
-    expect(html).not.toContain("dark:data-active:bg-input/30");
   });
 
   it("switches glass tab content when a trigger is clicked", async () => {
@@ -132,5 +124,26 @@ describe("Tabs", () => {
     } finally {
       cleanup(root, host);
     }
+  });
+
+  it("keeps TabsContent layout classes on the content root with direct children", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <Tabs defaultValue="profile">
+        <TabsContent className="custom-tabs-content" forceMount value="profile">
+          <section data-testid="profile-panel">资料</section>
+          <section data-testid="activity-panel">活动</section>
+        </TabsContent>
+      </Tabs>,
+    );
+
+    const content = host.querySelector<HTMLElement>('[data-slot="tabs-content"]');
+
+    expect(content).not.toBeNull();
+    expect(content?.className).toContain("custom-tabs-content");
+    expect(Array.from(content?.children ?? []).map((child) => child.getAttribute("data-testid"))).toEqual([
+      "profile-panel",
+      "activity-panel",
+    ]);
   });
 });

@@ -1,15 +1,16 @@
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, SoftPanel, sleiIcons } from "../../components";
+import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { Select as SelectPrimitive } from "radix-ui";
+import * as SelectPrimitive from "@radix-ui/react-select";
 
 type SettingsPageInput = {
   activePanel: SettingsPanel;
@@ -74,15 +75,18 @@ export function SettingsPage(input: SettingsPageInput) {
           />
 
           {input.activePanel === "account" && !profile ? (
-            <SoftPanel>
-              <div className="text-sm text-muted-foreground">
-                {labels.profileUnavailable}
-              </div>
-            </SoftPanel>
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className="p-4">
+                <div className="text-sm text-muted-foreground">
+                  {labels.profileUnavailable}
+                </div>
+              </CardContent>
+            </Card>
           ) : null}
 
           {input.activePanel === "account" && profile ? (
-            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableDetailField
                   ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
@@ -139,11 +143,13 @@ export function SettingsPage(input: SettingsPageInput) {
                   </p>
                 ) : null}
               </section>
-            </SoftPanel>
+              </CardContent>
+            </Card>
           ) : null}
 
           {input.activePanel === "language-region" ? (
-            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
                 <SettingsSelect
                   ariaLabel={labels.language}
@@ -174,11 +180,13 @@ export function SettingsPage(input: SettingsPageInput) {
                   {input.preferenceError}
                 </p>
               ) : null}
-            </SoftPanel>
+              </CardContent>
+            </Card>
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} data-settings-control-stack="true">
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className={cn("p-4", settingsControlStackClass)} data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} data-settings-control-stack="true">
               <PreferenceRow
                 control={(
                   <div className="grid gap-2 sm:grid-cols-2" data-settings-theme-selected={activeTheme} role="group">
@@ -230,11 +238,13 @@ export function SettingsPage(input: SettingsPageInput) {
                   {input.preferenceError}
                 </p>
               ) : null}
-            </SoftPanel>
+              </CardContent>
+            </Card>
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <SoftPanel className={settingsControlStackClass} data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} data-settings-control-stack="true">
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className={cn("p-4", settingsControlStackClass)} data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} data-settings-control-stack="true">
               <NotificationSwitch
                 checked={input.notifications.mentions}
                 disabled={preferencePending}
@@ -261,15 +271,18 @@ export function SettingsPage(input: SettingsPageInput) {
                   {input.preferenceError}
                 </p>
               ) : null}
-            </SoftPanel>
+              </CardContent>
+            </Card>
           ) : null}
 
           {input.activePanel === "about" ? (
-            <SoftPanel className={settingsControlStackClass} data-settings-control-stack="true">
+            <Card className="text-card-foreground shadow-none">
+              <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <AboutRow label={labels.desktopVersion} value={desktopVersion} />
               <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
               <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
-            </SoftPanel>
+              </CardContent>
+            </Card>
           ) : null}
         </div>
       </ScrollArea>

@@ -1,29 +1,37 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({
-  chrome = "inset",
-  className,
-  type,
-  ...props
-}: React.ComponentProps<"input"> & {
-  chrome?: "inset" | "plain"
-}) {
-  return (
-    <input
-      type={type}
-      data-slot="input"
-      className={cn(
-        "h-8 w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-[background-color,border-color,box-shadow,color] outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
-        chrome === "inset"
-          ? "border-[var(--slei-inset-border)] bg-muted/40 slei-inset-small slei-inset-focus-small focus-visible:border-ring disabled:bg-input/50 dark:bg-muted/30 dark:disabled:bg-input/80"
-          : "border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:shadow-none disabled:bg-transparent dark:bg-transparent dark:disabled:bg-transparent",
-        className
-      )}
-      {...props}
-    />
-  )
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+  glowEffect?: boolean
 }
 
-export { Input }
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, glowEffect = false, ...props }, ref) => (
+    <div className="group relative w-full">
+      {glowEffect ? (
+        <div className="absolute -inset-0.5 rounded-xl bg-linear-to-r from-cyan-500/30 to-blue-500/30 opacity-0 blur-md transition-opacity group-focus-within:opacity-100" />
+      ) : null}
+      <input
+        ref={ref}
+        data-slot="input"
+        className={cn(
+          "peer flex h-10 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm text-white backdrop-blur-xl",
+          "placeholder:text-white/40 shadow-[0_4px_16px_rgba(0,0,0,0.2)] transition-all duration-300",
+          "focus:border-white/40 focus:bg-white/15 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 focus:ring-offset-0",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          "aria-invalid:border-red-400/50 aria-invalid:ring-red-400/30",
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  ),
+)
+Input.displayName = "Input"
+
+const GlassInput = Input
+
+export { GlassInput, Input }

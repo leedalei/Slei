@@ -3,14 +3,17 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiTask, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
-import { SleiIcon, SoftPanel } from "../../components";
+import { SleiIcon } from "../../components";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { TaskStatusBadge } from "./TaskStatusBadge";
+
+const CARD_INSET_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 
 export function TaskThreadDrawer(input: {
   initialReplyDraft?: string;
@@ -124,10 +127,10 @@ export function TaskThreadDrawer(input: {
         <ScrollArea className="min-h-0 flex-1">
           <div className="grid gap-3 p-5">
             {(task.replies ?? []).map((reply) => (
-              <SoftPanel className="grid gap-2" data-reply-role={reply.role ?? "human"} key={reply.id} variant="inset">
+              <Card className={`${CARD_INSET_CLASS} grid gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
                 <strong className="text-sm">{reply.sender}</strong>
                 <MarkdownMessage markdown={reply.body} />
-              </SoftPanel>
+              </Card>
             ))}
           </div>
         </ScrollArea>
