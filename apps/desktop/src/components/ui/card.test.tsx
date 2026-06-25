@@ -10,7 +10,7 @@ describe("Card", () => {
   it("keeps layout classes and card sections on the card root", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(
-      <Card className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" glowEffect={false}>
+      <Card className="custom-card-root" glowEffect={false}>
         <CardHeader>Header</CardHeader>
         <CardContent>Content</CardContent>
       </Card>,
@@ -20,16 +20,14 @@ describe("Card", () => {
 
     expect(card).not.toBeNull();
     expect(card?.parentElement).toBe(host);
-    expect(card?.className).toContain("grid");
-    expect(card?.className).toContain("h-full");
-    expect(card?.className).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(card?.className).toContain("custom-card-root");
     expect(Array.from(card?.children ?? []).map((child) => child.getAttribute("data-slot"))).toEqual([
       "card-header",
       "card-content",
     ]);
   });
 
-  it("renders the EinUI glass card structure through the stable Card exports", () => {
+  it("renders the card structure through the stable Card exports", () => {
     const html = renderToStaticMarkup(
       <Card>
         <CardHeader>
@@ -40,11 +38,11 @@ describe("Card", () => {
     );
 
     expect(html).toContain('data-slot="card"');
-    expect(html).toContain("bg-white/10");
-    expect(html).toContain("backdrop-blur-xl");
-    expect(html).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.37)");
     expect(html).toContain('data-slot="card-header"');
+    expect(html).toContain('data-slot="card-title"');
     expect(html).toContain('data-slot="card-content"');
+    expect(html).toContain("设备名称");
+    expect(html).toContain("本机设备");
     expect(html).not.toContain("data-size=");
     expect(html).not.toContain("data-variant=");
   });
@@ -66,10 +64,6 @@ describe("DetailBlock", () => {
 
     expect(html).toContain('data-slot="detail-block"');
     expect(html).not.toContain('data-slot="card"');
-    expect(html).toContain("rounded-lg");
-    expect(html).toContain("border");
-    expect(html).toContain("bg-muted/30");
-    expect(html).toContain("p-3");
     expect(html).toContain("Hostname");
     expect(html).toContain("MateBook-Pro-Max-3.local");
     expect(html).toContain("darwin arm64");

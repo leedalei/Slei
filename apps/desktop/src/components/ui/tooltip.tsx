@@ -43,6 +43,7 @@ const TooltipContent = React.forwardRef<
     <TooltipPrimitive.Content
       ref={ref}
       data-slot="tooltip-content"
+      role="tooltip"
       sideOffset={sideOffset}
       className={cn(
         "z-50 max-w-xs rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white backdrop-blur-xl",

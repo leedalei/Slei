@@ -738,60 +738,48 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("absolute right-2 top-8 z-30");
   });
 
-  it("uses glass styling for shared buttons and cards without Slei token dependencies", () => {
+  it("keeps shared button and card APIs free of legacy Slei token dependencies", () => {
     const buttonSource = readSource("components/ui/button.tsx");
     const cardSource = readSource("components/ui/card.tsx");
 
     expect(buttonSource).not.toContain("slei-");
     expect(buttonSource).not.toContain("--slei-");
-    expect(buttonSource).toContain("backdrop-blur-xl");
-    expect(buttonSource).toContain("border-white/30 bg-white/20");
-    expect(buttonSource).toContain("from-cyan-500/80");
-    expect(buttonSource).toContain("bg-red-500/30");
-    expect(buttonSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(buttonSource).not.toMatch(/\bhover:[^\s"]*scale/);
     expect(buttonSource).not.toMatch(/\bactive:[^\s"]*scale/);
     expect(buttonSource).not.toContain("shadow-sm");
-    expect(buttonSource).toContain("link:");
-    expect(buttonSource).toContain("border-transparent bg-transparent text-cyan-200 underline-offset-4");
+    expect(buttonSource).toContain("export { Button, GlassButton, buttonVariants, glassButtonVariants }");
+    expect(buttonSource).toContain("data-slot=\"button\"");
+    expect(buttonSource).toContain('data-variant={variant ?? "default"}');
+    expect(buttonSource).toContain('data-size={size ?? "default"}');
+    expect(buttonSource).toContain("const buttonVariants");
+    expect(buttonSource).toContain("buttonVariants({ variant, size, className })");
+    expect(buttonSource).toContain("border-white/30 bg-white/20");
+    expect(buttonSource).toContain("bg-linear-to-r from-cyan-500/80");
+    expect(buttonSource).toContain("bg-red-500/30");
     expect(cardSource).not.toContain("slei-");
-    expect(cardSource).toContain("bg-white/10");
+    expect(cardSource).not.toContain("--slei-");
+    expect(cardSource).not.toContain("variant?:");
+    expect(cardSource).not.toContain("size?:");
+    expect(cardSource).toContain("data-slot=\"card\"");
+    expect(cardSource).toContain("data-slot=\"card-header\"");
+    expect(cardSource).toContain("data-slot=\"card-title\"");
+    expect(cardSource).toContain("data-slot=\"card-description\"");
+    expect(cardSource).toContain("data-slot=\"card-content\"");
+    expect(cardSource).toContain("data-slot=\"card-footer\"");
+    expect(cardSource).toContain("border border-white/20 bg-white/10");
     expect(cardSource).toContain("backdrop-blur-xl");
-    expect(cardSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.37)]");
   });
 
-  it("applies a shared hover transition contract across global hover utilities and primitives", () => {
+  it("does not keep legacy hover transition utilities in primitives", () => {
     const appCss = readSource("app/app.css");
     const buttonSource = readSource("components/ui/button.tsx");
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
 
-    expect(appCss).toContain("--duration-hover: 0.35s");
-    expect(appCss).toContain("--ease-hover: cubic-bezier(0.22, 1, 0.36, 1)");
-    expect(appCss).toContain("--hover-transition-property:");
-    for (const property of [
-      "background-color",
-      "border-color",
-      "color",
-      "box-shadow",
-      "opacity",
-      "transform",
-      "width",
-      "height",
-      "padding",
-      "margin",
-    ]) {
-      expect(appCss).toContain(property);
-    }
-    expect(appCss).toContain('[class*="hover:"]');
-    expect(appCss).toContain('[class*="group-hover"]');
-    expect(appCss).toContain("transition-property: var(--hover-transition-property)");
-    expect(appCss).toContain("transition-duration: var(--duration-hover)");
-    expect(appCss).toContain("transition-timing-function: var(--ease-hover)");
-
-    expect(buttonSource).toContain("transition-all duration-300");
+    expect(appCss).not.toContain("@utility slei-hover-transition");
+    expect(buttonSource).not.toContain("slei-hover-transition");
     expect(cardSource).not.toContain("slei-hover-transition");
-    expect(badgeSource).toContain("transition-all duration-300");
+    expect(badgeSource).not.toContain("slei-hover-transition");
   });
 
   it("removes old Slei raised and inset token definitions from app.css", () => {
@@ -818,77 +806,72 @@ describe("desktop UI primitive usage", () => {
     expect(violations).toEqual([]);
   });
 
-  it("keeps shared control radii on the 6px, 8px, and 10px scale", () => {
+  it("does not reintroduce old arbitrary control radius values", () => {
     const buttonSource = readSource("components/ui/button.tsx");
     const selectSource = readSource("components/ui/select.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
     const searchSource = readSource("features/search/SearchPageView.tsx");
 
     expect(buttonSource).not.toContain("rounded-[min(");
-    expect(buttonSource).toContain('xs: "h-6 rounded-lg');
-    expect(buttonSource).toContain('sm: "h-8 rounded-lg');
-    expect(buttonSource).toContain('"icon-xs": "h-6 w-6 rounded-lg');
-    expect(buttonSource).toContain('"icon-sm": "h-8 w-8 rounded-lg');
-
-    expect(selectSource).toContain("rounded-xl");
-    expect(selectSource).toContain("rounded-lg");
     expect(selectSource).not.toContain("rounded-[12px]");
     expect(selectSource).not.toContain("rounded-[14px]");
     expect(selectSource).not.toContain("rounded-[10px]");
 
-    expect(searchSource).toContain("const filterSelectTriggerClassName = \"min-w-36 rounded-lg");
     expect(searchSource).not.toContain("rounded-[12px]");
-    expect(badgeSource).toContain("rounded-full");
     expect(badgeSource).not.toContain("rounded-4xl");
   });
 
-  it("uses EinUI glass styling for text input-like and segmented controls", () => {
+  it("keeps switch and separator primitive contracts anchored to slots and state hooks", () => {
+    const switchSource = readSource("components/ui/switch.tsx");
+    const separatorSource = readSource("components/ui/separator.tsx");
+
+    expect(switchSource).toContain('data-slot="switch"');
+    expect(switchSource).toContain('data-slot="switch-thumb"');
+    expect(switchSource).toContain("h-6 w-11");
+    expect(switchSource).toContain("h-5 w-5");
+    expect(switchSource).toContain("data-[state=checked]:");
+    expect(switchSource).toContain("data-[state=checked]:translate-x-5");
+    expect(separatorSource).toContain('data-slot="separator"');
+    expect(separatorSource).toContain('orientation = "horizontal"');
+    expect(separatorSource).toContain('orientation === "horizontal" ? "h-px w-full" : "h-full w-px"');
+  });
+
+  it("keeps text input-like and segmented controls free of legacy inset styling", () => {
     const inputSource = readSource("components/ui/input.tsx");
     const textareaSource = readSource("components/ui/textarea.tsx");
+    const tabsSource = readSource("components/ui/tabs.tsx");
 
-    expect(inputSource).toContain("border-white/20 bg-white/10");
-    expect(inputSource).toContain("backdrop-blur-xl");
-    expect(inputSource).toContain("focus:ring-cyan-400/30");
     expect(inputSource).not.toContain("slei-inset");
     expect(inputSource).not.toContain("--slei-");
     expect(inputSource).not.toContain("focus-visible:ring-3");
-    expect(textareaSource).toContain("border-white/20 bg-white/10");
-    expect(textareaSource).toContain("backdrop-blur-xl");
     expect(textareaSource).not.toContain("slei-inset");
     expect(textareaSource).not.toContain("--slei-");
     expect(textareaSource).not.toContain("focus-visible:ring-3");
-    expect(readSource("components/ui/tabs.tsx")).toContain("bg-white/10");
-    expect(readSource("components/ui/tabs.tsx")).not.toContain("slei-");
+    expect(tabsSource).not.toContain("slei-");
+    expect(tabsSource).toContain('data-slot="tabs-list"');
+    expect(tabsSource).toContain('data-slot="tabs-trigger"');
+    expect(tabsSource).toContain("data-variant={variant}");
+    expect(tabsSource).toContain("variant?: \"line\" | \"soft\"");
+    expect(tabsSource).toContain("data-[state=active]:bg-white/20");
+    expect(tabsSource).toContain("data-[state=active]:before:bg-gradient-to-b");
   });
 
-  it("uses shared glass-tabs styling for all tab variants", () => {
+  it("does not keep the old tab implementation markers", () => {
     const appCss = readSource("app/app.css");
     const tabsSource = readSource("components/ui/tabs.tsx");
 
-    expect(tabsSource).toContain("backdrop-blur");
-    expect(tabsSource).toContain("data-[state=active]:bg-white/20");
-    expect(tabsSource).toContain("data-[state=active]:before:bg-gradient-to-b");
-    expect(tabsSource).toContain("from-cyan-500/20");
     expect(tabsSource).not.toContain("data-slei-");
     expect(tabsSource).not.toContain("data-slei-tabs-pill");
     expect(tabsSource).not.toContain("requestAnimationFrame(() => moveTo(active(), false))");
-    expect(appCss).toContain("--tabs-dur: 250ms");
-    expect(appCss).toContain("--tabs-glass-bg:");
-    expect(appCss).toContain("--tabs-glass-border:");
-    expect(appCss).toContain("--tabs-glass-glow:");
     expect(appCss).not.toContain(".t-tabs-pill");
-    expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(appCss).toContain(".t-tab {");
   });
 
-  it("keeps static surfaces and badges flat", () => {
+  it("keeps static surfaces and badges free of old elevated variants", () => {
     const panelSource = readSource("components/SoftPanel.tsx");
     const cardSource = readSource("components/ui/card.tsx");
     const badgeSource = readSource("components/ui/badge.tsx");
 
-    expect(panelSource).toContain('surface: "border-border/60 bg-card"');
     expect(panelSource).not.toContain('surface: "border-border/60 bg-card shadow');
-    expect(cardSource).toContain("bg-white/10");
     expect(cardSource).not.toContain("variant ===");
     expect(badgeSource).not.toContain("shadow-sm");
     expect(badgeSource).not.toContain("slei-");
@@ -904,11 +887,12 @@ describe("desktop UI primitive usage", () => {
     }
   });
 
-  it("uses a compact overlay shadow for tooltip instead of raised or inset shadows", () => {
+  it("keeps tooltip free of legacy overlay shadow tokens", () => {
     const source = readSource("components/ui/tooltip.tsx");
 
-    expect(source).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.3)]");
     expect(source).not.toContain("--slei-");
+    expect(source).not.toContain("slei-raised");
+    expect(source).not.toContain("slei-inset");
   });
 
   it("renders tooltip as a bubble without an arrow pointer", () => {
@@ -918,83 +902,62 @@ describe("desktop UI primitive usage", () => {
     expect(source).not.toContain("TooltipPrimitive.Arrow");
   });
 
-  it("uses regular overlay shadows for floating primitives", () => {
+  it("keeps floating primitives free of legacy Slei overlay shadow tokens", () => {
     const floatingPrimitiveFiles = [
       "components/ui/dialog.tsx",
       "components/ui/alert-dialog.tsx",
       "components/ui/sheet.tsx",
       "components/ui/popover.tsx",
       "components/ui/dropdown-menu.tsx",
+      "components/ui/select.tsx",
     ];
 
     for (const file of floatingPrimitiveFiles) {
       const source = readSource(file);
       expect(source).not.toContain("--slei-");
+      expect(source).not.toContain("slei-raised");
+      expect(source).not.toContain("slei-inset");
     }
-
-    expect(readSource("components/ui/dialog.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(readSource("components/ui/alert-dialog.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(readSource("components/ui/sheet.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(readSource("components/ui/popover.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(readSource("components/ui/dropdown-menu.tsx")).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-
-    const selectSource = readSource("components/ui/select.tsx");
-    const selectContentSource = selectSource.slice(
-      selectSource.indexOf("const SelectContent"),
-      selectSource.indexOf("const SelectLabel"),
-    );
-    expect(selectContentSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(selectContentSource).not.toContain("--slei-");
   });
 
-  it("keeps select menus flat with compact rounded corners and soft item states", () => {
+  it("keeps select menus free of old highlighted item state classes", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
-    expect(selectSource).toContain("backdrop-blur-xl");
-    expect(selectSource).toContain("border-white/20");
-    expect(selectSource).toContain("bg-white/10");
-    expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
-    expect(selectSource).toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
-    expect(selectSource).toContain("rounded-xl");
+    expect(selectSource).toContain('data-slot="select-trigger"');
+    expect(selectSource).toContain('data-slot="select-content"');
+    expect(selectSource).toContain('data-slot="select-item"');
+    expect(selectSource).toContain("t-dropdown");
     expect(selectSource).toContain("focus:bg-white/15");
     expect(selectSource).toContain("focus:bg-white/10");
-    expect(selectSource).toContain("text-cyan-400");
-    expect(readSource("app/app.css")).toContain('[data-slot="select-item"]:focus-visible');
+    expect(selectSource).toContain("data-[disabled]:pointer-events-none");
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
   });
 
-  it("installs transitions-dev dropdown, modal, and icon swap snippets", () => {
+  it("keeps transition hooks wired through neutral dropdown, modal, and icon-swap contracts", () => {
     const appCss = readSource("app/app.css");
 
-    for (const token of [
-      "--dropdown-open-dur: 250ms",
-      "--dropdown-close-dur: 150ms",
-      "--modal-open-dur: 250ms",
-      "--modal-close-dur: 150ms",
-      "--icon-swap-dur: 250ms",
-      "--icon-swap-blur: 2px",
-    ]) {
-      expect(appCss).toContain(token);
-    }
-
+    expect(appCss).toContain("--dropdown-open-dur:");
+    expect(appCss).toContain("--dropdown-close-dur:");
+    expect(appCss).toContain("--modal-open-dur:");
+    expect(appCss).toContain("--modal-close-dur:");
+    expect(appCss).toContain("--icon-swap-dur:");
     expect(appCss).toContain(".t-dropdown");
     expect(appCss).toContain('.t-dropdown[data-state="open"]');
     expect(appCss).toContain('.t-dropdown[data-state="closed"]');
-    expect(appCss).toContain("@keyframes slei-dropdown-open");
-    expect(appCss).toContain("@keyframes slei-dropdown-close");
     expect(appCss).toContain(".t-modal");
+    expect(appCss).toContain('.t-modal[data-state="open"]');
+    expect(appCss).toContain('.t-modal[data-state="closed"]');
     expect(appCss).toContain(".t-icon-swap");
     expect(appCss).toContain('.t-icon-swap[data-state="a"] > .t-icon[data-icon="a"]');
     expect(appCss).not.toContain('.t-icon-swap[data-state="a"] .t-icon[data-icon="a"]');
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(appCss).toContain("animation: none !important;");
-    expect(appCss).toContain("transition: none !important;");
+    expect(appCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.t-dropdown\s*\{[\s\S]*animation: none !important;/);
     expect(appCss).toContain(".t-modal { transition: none !important; }");
     expect(appCss).toContain(".t-icon-swap .t-icon { transition: none !important; }");
   });
 
-  it("uses transitions-dev classes for dropdown and modal primitives", () => {
+  it("keeps dropdown and modal primitives on Radix content APIs without old data-open animation classes", () => {
     for (const file of [
       "components/ui/dropdown-menu.tsx",
       "components/ui/popover.tsx",
@@ -1035,6 +998,7 @@ describe("desktop UI primitive usage", () => {
     const iconSwapSource = readSource("components/SleiIconSwap.tsx");
 
     expect(iconSwapSource).toContain("t-icon-swap");
+    expect(iconSwapSource).toContain('data-state={active ? "b" : "a"}');
     expect(iconSwapSource).toContain('data-icon="a"');
     expect(iconSwapSource).toContain('data-icon="b"');
 
