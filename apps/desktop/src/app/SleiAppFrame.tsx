@@ -24,7 +24,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import sleiLogo from "../assets/slei-logo.png";
 import {
   type AppearancePreferences,
   type AppLocale,
@@ -370,7 +369,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       <Toast message={input.runtimeErrorToastMessage} type={input.runtimeToastType} />
       <nav className="slei-shell-nav flex min-h-0 flex-col items-center gap-4 px-2 pb-3 pt-10 text-sidebar-foreground" data-tauri-drag-region="deep" aria-label={messages.shell.mainNavigation}>
         <div className="slei-brand">
-          <img alt="Slei" className="slei-brand__logo" data-testid="slei-app-logo" src={sleiLogo} />
+          <span className="slei-brand__mark" aria-hidden="true">
+            SLei
+          </span>
         </div>
         {navItems.map((item) => (
           <TooltipButton

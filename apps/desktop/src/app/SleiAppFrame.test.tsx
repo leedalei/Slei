@@ -157,24 +157,6 @@ describe("SleiAppFrame appearance preferences", () => {
 });
 
 describe("SleiAppFrame global search navigation", () => {
-  it("renders the app logo from the bundled logo asset", async () => {
-    const container = await mount(
-      <SleiAppFrame
-        activeView="chat"
-        data={createSleiFixtures()}
-        locale="zh-CN"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
-    const logo = container.querySelector<HTMLImageElement>('img[data-testid="slei-app-logo"]');
-    const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-
-    expect(logo).not.toBeNull();
-    expect(logo?.getAttribute("alt")).toBe("Slei");
-    expect(logo?.getAttribute("src")).toContain("slei-logo.png");
-    expect(source).toContain("../assets/slei-logo.png");
-  });
-
   it("renders the primary navigation with soft icon buttons", async () => {
     const container = await mount(
       <SleiAppFrame
