@@ -186,7 +186,10 @@ describe("desktop startup contract", () => {
       await readFile(join(desktopRoot, "src-tauri/capabilities/default.json"), "utf8"),
     ) as { permissions?: string[] };
 
-    expect(capability.permissions).toEqual(["core:window:allow-start-dragging"]);
+    expect(capability.permissions).toEqual([
+      "core:window:allow-start-dragging",
+      "core:window:allow-internal-toggle-maximize",
+    ]);
   });
 
   it("bundles the generated external app icon set", async () => {
