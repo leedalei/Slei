@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前频道消息偶发出现“发送后没有 Agent 回复，也没有任何动静”的体验。Slei 已经有 `agent_activity_logs`、`/v1/agents/{agent_id}/activity` 和 `slei agent status`，但这条链路主要记录 Agent 主动上报的状态，例如 `working / reading_history`。当 Agent 没有回复时，用户仍难以判断：
+当前频道消息偶发出现“发送后没有 Agent 回复，也没有任何动静”的体验。Slei 已经有 `agent_activity_logs`、`/v1/agents/{agent_id}/activity` 和 `slei-cli agent status`，但这条链路主要记录 Agent 主动上报的状态，例如 `working / reading_history`。当 Agent 没有回复时，用户仍难以判断：
 
 - Agent 是否被 daemon 唤醒。
 - Agent 收到了哪条触发消息。
@@ -22,7 +22,7 @@
    - worker 输出片段。
    - tool / CLI 开始与完成。
    - run 完成或失败。
-   - `slei agent status` 状态更新。
+   - `slei-cli agent status` 状态更新。
 4. 日志生产、截断、脱敏和保留策略全部在 daemon / SQLite 层完成。
 5. 每个 Agent 只保留最近 200 条日志；API 默认可返回 200 条。
 6. 继续兼容现有 status activity 字段，避免破坏已有接口和测试。
@@ -65,7 +65,7 @@ Agent runtime / worker event / slei CLI
 
 | event_kind | 来源 | 含义 |
 | --- | --- | --- |
-| `status.updated` | `slei agent status` | Agent 主动上报状态 |
+| `status.updated` | `slei-cli agent status` | Agent 主动上报状态 |
 | `run.started` | channel / DM run 启动 | daemon 已创建 run 并准备唤醒 Agent |
 | `input.received` | run prompt 构建后 | Agent 本次收到的触发输入摘要 |
 | `output.delta` | worker `output_delta` | Agent 产生了回复片段 |
@@ -169,7 +169,7 @@ summarize_activity_event(kind, fields) -> summary
 
 ### ClaimService
 
-`slei agent status` 继续写活动日志，但事件升级为：
+`slei-cli agent status` 继续写活动日志，但事件升级为：
 
 - `event_kind = status.updated`
 - `summary` 基于 `state / phase / reason` 生成。
@@ -291,7 +291,7 @@ DM 日志填充 `run_id`，不强求 `channel_id/message_id`。如有 conversati
 更新点：
 
 - Agent 活动日志从最近 100 条调整为最近 200 条。
-- 活动日志不只来自 `slei agent status`，也包括 daemon 记录的 run/input/output/tool/completion/failure 事件。
+- 活动日志不只来自 `slei-cli agent status`，也包括 daemon 记录的 run/input/output/tool/completion/failure 事件。
 - 活动日志仍不参与路由、claim 或业务决策。
 
 ## 风险与缓解

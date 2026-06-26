@@ -11,7 +11,7 @@
 {{key_knowledge}}
 
 ## Active Context
-Active Context 只记录当前可恢复的处理上下文，最多 3 个频道/事项；有新的频道或事项进入时，淘汰最旧的一项。不要复制完整聊天历史，历史需要时用 `slei message read/search` 主动拉取。
+Active Context 只记录当前可恢复的处理上下文，最多 3 个频道/事项；有新的频道或事项进入时，淘汰最旧的一项。不要复制完整聊天历史，历史需要时用 `slei-cli message read/search` 主动拉取。
 
 | 频道 | 时间 | 当前处理事项 | 进展 |
 |------|------|--------------|------|

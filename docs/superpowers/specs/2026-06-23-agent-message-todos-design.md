@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前频道消息流转中，人类消息会广播给频道内所有 Agent，Agent 消息会按显式 mention 投递给目标 Agent。每个 Agent 被唤醒后根据自身角色、消息内容和 system prompt 自主判断是否通过 `slei message claim` 认领。由于 `message claim` 是按消息独占的原子锁，第一个成功认领的 Agent 会占有这条消息；其他同样判断自己应参与的 Agent 在 claim 失败后只能静默退出。
+当前频道消息流转中，人类消息会广播给频道内所有 Agent，Agent 消息会按显式 mention 投递给目标 Agent。每个 Agent 被唤醒后根据自身角色、消息内容和 system prompt 自主判断是否通过 `slei-cli message claim` 认领。由于 `message claim` 是按消息独占的原子锁，第一个成功认领的 Agent 会占有这条消息；其他同样判断自己应参与的 Agent 在 claim 失败后只能静默退出。
 
 这会让群体互动场景不完整。例如用户发送“大家好，报数”时，所有 Agent 都可能判断自己应该参与，但只有第一个成功 claim 的 Agent 会回复。后续 Agent 的参与意图没有持久化，且第一个 Agent 的普通回复通常没有显式 mention，daemon 不会继续唤醒其他 Agent。
 
@@ -15,13 +15,13 @@
 - 无显式 mention 时，如果当前频道存在 pending 待办，daemon 每次只串行唤醒一个 Agent 处理自己的待办。
 - 待办生命周期由 daemon 自动推进：`pending -> running -> done`，启动失败或 run failed 时恢复 `pending`。
 - CLI/API 提供人类和开发调试用的待办增删改查，但 Agent prompt 不暴露 todo update/delete/clear/reopen 权限。
-- `slei message read` 支持按两个 message id 查询包含端点的频道消息区间，供 Agent 需要时读取待办消息到当前触发消息之间的上下文。
+- `slei-cli message read` 支持按两个 message id 查询包含端点的频道消息区间，供 Agent 需要时读取待办消息到当前触发消息之间的上下文。
 
 ## 非目标
 
 - 不恢复 coordinator runtime、coordinator JSON 或隐藏中心化路由。
 - 不让 UI 决定哪个 Agent 应被唤醒或哪个待办应完成。
-- 不把 Agent stdout 自动转换成频道消息；可见回复仍必须通过 `slei message send`。
+- 不把 Agent stdout 自动转换成频道消息；可见回复仍必须通过 `slei-cli message send`。
 - 不要求 Agent 重新 claim 原始待办消息。原始消息的独占 claim 已经属于第一个成功 claim 的 Agent。
 - 不在 Agent prompt 中暴露待办管理命令；待办完成、恢复和删除由 daemon 自动路径或人工 CLI 管理。
 
@@ -57,7 +57,7 @@
 
 ## 待办创建规则
 
-待办只在 `slei message claim` 对应的 daemon claim API 中自动创建，且必须同时满足：
+待办只在 `slei-cli message claim` 对应的 daemon claim API 中自动创建，且必须同时满足：
 
 1. claim 失败，且失败原因是该消息已被其他 Agent 成功 claim。
 2. 失败的 Agent 对该 message 存在 delivery。
@@ -122,14 +122,14 @@ Agent prompt 中只加入以下规则：
 
 - 当 `Pending Message Todos` 存在时，即使当前触发消息按普通 claim 规则不可 claim 或应该静默，也要先处理这些待办。不要为了处理待办而 claim 当前触发消息。
 - 待办是补充参与上下文，不要重新 `claim` 原始消息。
-- 若待办信息足够，可以直接通过 `slei message send` 回复。
+- 若待办信息足够，可以直接通过 `slei-cli message send` 回复。
 - 若需要判断上下文，可斟酌读取从待办消息到当前触发消息之间的频道内容，例如：
 
 ```sh
-slei message read --channel "#all" --from-message msg_A --to-message msg_B
+slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B
 ```
 
-Agent prompt 不包含 `slei todo update/delete/clear/reopen` 等管理命令。待办是否完成由 daemon 按 run 生命周期自动更新。
+Agent prompt 不包含 `slei-cli todo update/delete/clear/reopen` 等管理命令。待办是否完成由 daemon 按 run 生命周期自动更新。
 
 ## 生命周期
 
@@ -149,12 +149,12 @@ daemon 不尝试解析自然语言判断 Agent 是否逐条处理了所有待办
 新增 CLI 命令组 `todo`，用于人类和开发调试：
 
 ```sh
-slei todo list --agent agent_coda --channel "#all" --status pending
-slei todo show todo_123
-slei todo create --agent agent_coda --channel "#all" --message msg_123 --note "manual recovery"
-slei todo update todo_123 --status done --note "manually resolved"
-slei todo delete todo_123
-slei todo clear --agent agent_coda --channel "#all" --status pending
+slei-cli todo list --agent agent_coda --channel "#all" --status pending
+slei-cli todo show todo_123
+slei-cli todo create --agent agent_coda --channel "#all" --message msg_123 --note "manual recovery"
+slei-cli todo update todo_123 --status done --note "manually resolved"
+slei-cli todo delete todo_123
+slei-cli todo clear --agent agent_coda --channel "#all" --status pending
 ```
 
 删除语义固定为软删：
@@ -189,10 +189,10 @@ CLI 写命令必须使用 idempotency key；CLI 未显式传入时沿用现有�
 
 ## 消息区间查询
 
-`slei message read` 新增按 message id 的包含端点区间查询：
+`slei-cli message read` 新增按 message id 的包含端点区间查询：
 
 ```sh
-slei message read --channel "#all" --from-message msg_A --to-message msg_B
+slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B
 ```
 
 API 增加 query 参数：

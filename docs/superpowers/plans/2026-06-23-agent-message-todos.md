@@ -607,8 +607,8 @@ Add/extend unit tests for `broadcast_message_prompt` or a new prompt builder:
   - process pending todos even if current trigger is not claimable.
   - do not claim current trigger solely for todo progression.
   - do not claim todo source message.
-  - use `slei message read --channel "#all" --from-message msg_A --to-message msg_B`.
-- prompt does not contain `slei todo update`, `slei todo delete`, `slei todo clear`, or `slei todo reopen`.
+  - use `slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B`.
+- prompt does not contain `slei-cli todo update`, `slei-cli todo delete`, `slei-cli todo clear`, or `slei-cli todo reopen`.
 
 - [ ] **Step 2: Run prompt tests and verify failure**
 
@@ -759,13 +759,13 @@ git commit -m "feat(daemon): inject and advance agent message todos"
 
 Add tests for:
 
-- `slei message read --channel "#all" --from-message msg_a --to-message msg_b` builds `/v1/messages/read?channel=all&fromMessage=msg_a&toMessage=msg_b`.
-- `slei todo list --agent agent_coda --channel "#all" --status pending` builds `GET /v1/agent-message-todos?agentId=agent_coda&channelId=all&status=pending`.
-- `slei todo show todo_123` builds `GET /v1/agent-message-todos/todo_123`.
-- `slei todo create --agent agent_coda --channel "#all" --message msg_1` builds `POST /v1/agent-message-todos`.
-- `slei todo update todo_123 --status done` builds `PATCH /v1/agent-message-todos/todo_123`.
-- `slei todo delete todo_123` builds `DELETE /v1/agent-message-todos/todo_123`.
-- `slei todo clear --agent agent_coda --channel "#all" --status pending` builds `POST /v1/agent-message-todos/clear`.
+- `slei-cli message read --channel "#all" --from-message msg_a --to-message msg_b` builds `/v1/messages/read?channel=all&fromMessage=msg_a&toMessage=msg_b`.
+- `slei-cli todo list --agent agent_coda --channel "#all" --status pending` builds `GET /v1/agent-message-todos?agentId=agent_coda&channelId=all&status=pending`.
+- `slei-cli todo show todo_123` builds `GET /v1/agent-message-todos/todo_123`.
+- `slei-cli todo create --agent agent_coda --channel "#all" --message msg_1` builds `POST /v1/agent-message-todos`.
+- `slei-cli todo update todo_123 --status done` builds `PATCH /v1/agent-message-todos/todo_123`.
+- `slei-cli todo delete todo_123` builds `DELETE /v1/agent-message-todos/todo_123`.
+- `slei-cli todo clear --agent agent_coda --channel "#all" --status pending` builds `POST /v1/agent-message-todos/clear`.
 
 - [ ] **Step 2: Run CLI tests and verify failure**
 
@@ -852,7 +852,7 @@ Add a section after claim / Channel Group Address explaining:
 - Agent no-mention messages may serially trigger one pending todo run.
 - Pending Message Todos override the normal current-trigger claim/silence path.
 - Agent must not claim todo source messages or current triggers solely for todo progression.
-- `slei message read --from-message --to-message` is available for inclusive context windows.
+- `slei-cli message read --from-message --to-message` is available for inclusive context windows.
 
 - [ ] **Step 2: Run architecture guardrails**
 

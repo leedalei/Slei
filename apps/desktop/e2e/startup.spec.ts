@@ -133,7 +133,11 @@ describe("desktop startup contract", () => {
     const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
 
     expect(packageJson.scripts?.desktop).toBe("scripts/desktop-dev.sh");
+    expect(desktopDevScript).toContain("cargo build -p slei-cli");
     expect(desktopDevScript).toContain("cargo run -p slei-daemon");
+    expect(desktopDevScript.indexOf("cargo build -p slei-cli")).toBeLessThan(
+      desktopDevScript.indexOf("cargo run -p slei-daemon"),
+    );
     expect(desktopDevScript).toContain("tauri dev");
   });
 

@@ -10,7 +10,7 @@
 - coordinator 角色从新流转中移除。
 - 频道消息广播给频道内所有普通 Agent。
 - Agent 根据 system prompt、消息 header、`@mention`、自身职责和按需读取的历史自主判断是否 claim。
-- 任何可见发言、任务创建、任务回复和状态更新都必须通过 `slei` CLI 触发 daemon API。
+- 任何可见发言、任务创建、任务回复和状态更新都必须通过 `slei-cli` CLI 触发 daemon API。
 - 旧 coordinator 数据不兼容；需要改 schema 时可以清空旧生产状态并重新建表。
 
 本文档记录目标设计。后续实现必须同步更新长期架构文档，尤其是：
@@ -26,7 +26,7 @@
 
 - `workers/claude-agent/src/worker.ts` 使用 `@anthropic-ai/claude-agent-sdk` 的 `query()` 启动 Claude Code；目标架构要求改为 spawn Claude CLI。
 - `crates/slei-daemon/src/services/channel_orchestrator_service.rs` 在无显式目标时创建 `coordinator_runtime_runs`，等待 coordinator JSON，再创建 inbox、task 或 Agent run；目标架构要求改为广播投递和 claim。
-- `workers/claude-agent/src/slei-tools.ts` 只有少量 MCP 产品工具；目标架构要求提供完整 `slei` CLI 能力。
+- `workers/claude-agent/src/slei-tools.ts` 只有少量 MCP 产品工具；目标架构要求提供完整 `slei-cli` CLI 能力。
 - `coordinator_decisions`、`coordinator_runtime_runs`、`routing_context_packages` 等表承载旧路由语义；目标架构不再依赖它们。
 
 ## 核心原则
@@ -70,7 +70,7 @@ flowchart LR
 - daemon API 负责鉴权、幂等、消息落库、广播投递、claim、任务、诊断、reset。
 - Broadcast Dispatcher 为每个频道普通成员创建可恢复投递记录，并决定是否唤醒 Agent。
 - Claude CLI Launcher 按需 spawn 短生命周期 Claude CLI 进程。
-- Agent 通过 system prompt 和 `slei` CLI 自主完成判断和后续动作。
+- Agent 通过 system prompt 和 `slei-cli` CLI 自主完成判断和后续动作。
 
 ## 消息格式
 
@@ -126,8 +126,8 @@ daemon 启动 Agent 时必须注入固定结构的 system prompt。内容可以�
 - 如果消息明确 `@别人` 且没有 `@我`，不得 claim。
 - 如果没有明确 mention，但内容是频道需要处理的开放请求，且我有职责或值守关系，可以尝试 claim。
 - 如果要让别的 Agent 接力，必须发出可见 `@agent`。
-- 任何可见发言、任务创建、任务回复、任务状态更新和 Agent 操作进展上报都必须通过 `slei` CLI 完成。
-- 需要历史、线程或任务上下文时，主动用 `slei message read/search` 和 `slei task thread/list` 拉取。
+- 任何可见发言、任务创建、任务回复、任务状态更新和 Agent 操作进展上报都必须通过 `slei-cli` CLI 完成。
+- 需要历史、线程或任务上下文时，主动用 `slei-cli message read/search` 和 `slei-cli task thread/list` 拉取。
 - 重要长期信息写入 `MEMORY.md` 或 notes；不要把长期记忆只留在进程上下文里。
 - 处理长任务、等待用户确认、交接给其他 Agent、遇到 blocker、完成阶段性工作或即将退出前，应判断是否需要更新 `MEMORY.md` 的 `Active Context`。
 - `Active Context` 只保存恢复当前任务所需的最小状态。由于同一个 Agent 可能同时被拉进多个频道处理事项，应按频道记录最近最多 3 个活动上下文；新频道或新事项超过上限时淘汰最旧项。
@@ -142,15 +142,15 @@ daemon 启动 Agent 时必须注入固定结构的 system prompt。内容可以�
 - Channel ID、channel name、workspace mounts
 - 可访问路径和权限模式
 
-## `slei` CLI 合同
+## `slei-cli` CLI 合同
 
 CLI 是 Agent 和 daemon 交互的主接口。第一版必须覆盖消息、历史、任务、Agent 操作进展和状态。
 
 ### 消息认领和发言
 
 ```bash
-slei message claim <msg-id> --agent <agent-id>
-slei message send --target "#channel" --agent <agent-id>
+slei-cli message claim <msg-id> --agent <agent-id>
+slei-cli message send --target "#channel" --agent <agent-id>
 ```
 
 `message claim` 必须是 SQLite 原子操作。同一消息同一 claim scope 只能有一个成功者。claim 失败时 CLI 返回明确失败状态，Agent 必须静默。
@@ -163,20 +163,20 @@ slei message send --target "#channel" --agent <agent-id>
 
 ```bash
 # 读取频道最近 N 条
-slei message read --channel "#channel-name" --limit 20
+slei-cli message read --channel "#channel-name" --limit 20
 
 # 读取特定线程
-slei message read --channel "#channel:msgId"
+slei-cli message read --channel "#channel:msgId"
 
 # 按时间或序号锚点
-slei message read --channel "#channel" --after <seqNo>
-slei message read --channel "#channel" --before <seqNo>
+slei-cli message read --channel "#channel" --after <seqNo>
+slei-cli message read --channel "#channel" --before <seqNo>
 
 # 以某条消息为中心读取上下文
-slei message read --channel "#channel" --around <msgId>
+slei-cli message read --channel "#channel" --around <msgId>
 
 # 搜索
-slei message search --query "关键词"
+slei-cli message search --query "关键词"
 ```
 
 返回结果也应使用统一 header，保证 Agent 可以直接复制 target/msg 引用继续操作。
@@ -184,14 +184,14 @@ slei message search --query "关键词"
 ### 任务操作
 
 ```bash
-slei task create --source-message <msg-id>
-slei task claim <task-id> --agent <agent-id>
-slei task reply <task-id> --agent <agent-id>
-slei task update <task-id> --status in_progress
-slei task update <task-id> --status in_review
-slei task update <task-id> --status done
-slei task list --channel "#channel"
-slei task thread <task-id>
+slei-cli task create --source-message <msg-id>
+slei-cli task claim <task-id> --agent <agent-id>
+slei-cli task reply <task-id> --agent <agent-id>
+slei-cli task update <task-id> --status in_progress
+slei-cli task update <task-id> --status in_review
+slei-cli task update <task-id> --status done
+slei-cli task list --channel "#channel"
+slei-cli task thread <task-id>
 ```
 
 任务 root 仍绑定 source message。任务卡片是源消息的展示状态，不新增 `task_card` 消息。
@@ -201,12 +201,12 @@ slei task thread <task-id>
 ### Agent 状态
 
 ```bash
-slei agent status --agent <agent-id> --state working --phase reading_history
-slei agent status --agent <agent-id> --state working --phase checking_tasks
-slei agent status --agent <agent-id> --state working --phase claiming_message
-slei agent status --agent <agent-id> --state working --phase updating_memory
-slei agent status --agent <agent-id> --state idle
-slei agent status --agent <agent-id> --state blocked --reason "等待用户确认"
+slei-cli agent status --agent <agent-id> --state working --phase reading_history
+slei-cli agent status --agent <agent-id> --state working --phase checking_tasks
+slei-cli agent status --agent <agent-id> --state working --phase claiming_message
+slei-cli agent status --agent <agent-id> --state working --phase updating_memory
+slei-cli agent status --agent <agent-id> --state idle
+slei-cli agent status --agent <agent-id> --state blocked --reason "等待用户确认"
 ```
 
 这是 Agent 主动上报操作进展的能力，用于 UI 和诊断展示，不参与路由决策。当前 UI 只有单一“正在思考”状态；新架构应允许 Agent 在关键步骤调用 CLI 展示更细粒度的状态。
@@ -226,7 +226,7 @@ slei agent status --agent <agent-id> --state blocked --reason "等待用户确�
 - `waiting_user`: 正在等待用户确认、输入或审批。
 - `blocked`: 被权限、缺失信息、运行失败或外部依赖阻塞。
 
-Agent prompt 应鼓励在耗时或用户可感知的阶段调用 `slei agent status`，但不要为极短步骤频繁刷屏。daemon 应持久化最新状态，并把每次状态/phase 上报追加到该 Agent 的操作日志；UI 只展示 daemon 返回的状态，不自行推断 Agent 在做什么。
+Agent prompt 应鼓励在耗时或用户可感知的阶段调用 `slei-cli agent status`，但不要为极短步骤频繁刷屏。daemon 应持久化最新状态，并把每次状态/phase 上报追加到该 Agent 的操作日志；UI 只展示 daemon 返回的状态，不自行推断 Agent 在做什么。
 
 操作日志要求：
 
@@ -253,13 +253,13 @@ sequenceDiagram
     Daemon->>Store: create broadcast deliveries
     Daemon->>A: spawn Claude CLI with message/header
     Daemon->>B: spawn Claude CLI with message/header
-    A->>CLI: slei message claim msg_1
+    A->>CLI: slei-cli message claim msg_1
     CLI->>Store: atomic insert claim
     Store-->>CLI: claimed
-    B->>CLI: slei message claim msg_1
+    B->>CLI: slei-cli message claim msg_1
     CLI->>Store: claim conflict
     CLI-->>B: failed
-    A->>CLI: slei message send --target #all
+    A->>CLI: slei-cli message send --target #all
     CLI->>Daemon: POST visible reply
     Daemon->>Store: insert agent message
     Daemon->>Store: create next broadcast deliveries
@@ -341,7 +341,7 @@ Agent 进程不保留产品状态。跨会话状态来自 SQLite、`MEMORY.md`�
 - 同一频道同一事项有新进展时，更新原条目并刷新 `Time`。
 - 新频道或新事项超过 3 个条目时，删除 `Time` 最旧的条目。
 - 如果没有活动工作，写 `- State: idle; waiting for the next user request.`。
-- 不记录聊天流水、完整历史或可通过 `slei message read/search` 便宜恢复的信息。
+- 不记录聊天流水、完整历史或可通过 `slei-cli message read/search` 便宜恢复的信息。
 
 何时应更新 `Active Context`：
 
@@ -398,10 +398,10 @@ memory skill 必须明确：更新 `Active Context` 是为了让下一次短生�
 变化点：
 
 - 任务不再由 coordinator 创建或指派。
-- Agent 通过 `slei task create --source-message <msg-id>` 把消息转为任务。
-- Agent 通过 `slei task claim` 认领任务。
-- Agent 通过 `slei task reply` 写任务线程。
-- Agent 通过 `slei task update` 更新状态。
+- Agent 通过 `slei-cli task create --source-message <msg-id>` 把消息转为任务。
+- Agent 通过 `slei-cli task claim` 认领任务。
+- Agent 通过 `slei-cli task reply` 写任务线程。
+- Agent 通过 `slei-cli task update` 更新状态。
 - 如果需要其他 Agent 接力，任务回复正文中必须可见 `@agent`，新回复会广播并触发下一轮 claim。
 
 ## 运行器替换
@@ -412,13 +412,13 @@ memory skill 必须明确：更新 `Active Context` 是为了让下一次短生�
 
 - 保留现有 cwd / workspace mount / overlay 逻辑。
 - System prompt 由 daemon 生成并注入。
-- Agent 通过本机 `slei` CLI 与 daemon 通信。
-- Claude CLI stdout 不再被当作可见回复的唯一来源；可见产品动作必须来自 `slei` CLI。
+- Agent 通过本机 `slei-cli` CLI 与 daemon 通信。
+- Claude CLI stdout 不再被当作可见回复的唯一来源；可见产品动作必须来自 `slei-cli` CLI。
 - CLI 退出非 0 或超时写入 `agent_runs.status=failed` 和诊断，不伪造频道回复。
 
 实施可以分阶段：
 
-1. 先建立 `slei` CLI 和 claim API。
+1. 先建立 `slei-cli` CLI 和 claim API。
 2. 再把频道流转从 coordinator 改为广播 claim。
 3. 最后把 worker 内部从 SDK 改成 spawn Claude CLI，或移除 worker 外壳。
 
@@ -445,7 +445,7 @@ memory skill 必须明确：更新 `Active Context` 是为了让下一次短生�
 - daemon 不做 AI 路由判断，只做广播、锁、持久化、reset 和诊断。
 - human 和 Agent 消息进入同一广播链。
 - 协作接力依赖可见 `@mention`。
-- Agent system prompt 和 `slei` CLI 是路由规则的表达位置。
+- Agent system prompt 和 `slei-cli` CLI 是路由规则的表达位置。
 - Drift guardrails 必须禁止重新引入 UI 路由、daemon 关键词兜底、coordinator JSON 路由。
 
 ### `0006-task-source-message-card.md`
@@ -453,7 +453,7 @@ memory skill 必须明确：更新 `Active Context` 是为了让下一次短生�
 保留源消息任务卡片原则，替换 coordinator 建任务语义：
 
 - `asTask` 或 Agent CLI 创建任务都绑定 source message。
-- 任务 claim 和状态更新来自 `slei task` 命令。
+- 任务 claim 和状态更新来自 `slei-cli task` 命令。
 - 任务线程中的可见 `@mention` 触发后续协作。
 
 ### 旧 coordinator specs
@@ -470,10 +470,10 @@ memory skill 必须明确：更新 `Active Context` 是为了让下一次短生�
 - 明确 `@别人` 且没有 `@我` 的 Agent 不应 claim。
 - 无 mention 开放请求允许一个合适或值守 Agent claim。
 - Agent A 发出 `@Coda` 后，新消息广播，Coda 可以 claim 并继续流转。
-- `slei message read/search` 能返回可用于判断的 header 和上下文。
-- `slei task create/claim/reply/update` 全部落 SQLite。
-- `slei agent status --phase ...` 能持久化并让 UI 展示阅读历史、查询任务、更新记忆等细粒度进展，而不是只有单一 thinking 状态。
-- `slei agent status --phase ...` 每次调用都会写入 Agent 操作日志，且每个 Agent 只保留最近 100 条，超过后删除最旧记录。
+- `slei-cli message read/search` 能返回可用于判断的 header 和上下文。
+- `slei-cli task create/claim/reply/update` 全部落 SQLite。
+- `slei-cli agent status --phase ...` 能持久化并让 UI 展示阅读历史、查询任务、更新记忆等细粒度进展，而不是只有单一 thinking 状态。
+- `slei-cli agent status --phase ...` 每次调用都会写入 Agent 操作日志，且每个 Agent 只保留最近 100 条，超过后删除最旧记录。
 - 任务 source message 原地升级为任务卡片，不新增 `task_card` 消息。
 - 每条新消息触发独立 Agent run，单次 run 内允许多轮工具调用。
 - `Active Context` 在长任务、等待用户和交接场景中可被更新，并能帮助下一次 spawn 恢复上下文。
@@ -494,5 +494,5 @@ pnpm --filter @slei/desktop lint
 - 不在 UI 中实现路由、claim、任务判断或本地 mock 回复。
 - 不兼容旧 coordinator 生产数据。
 - 不保留新路径里的 `task_card` control message。
-- 不让 Claude stdout 自动变成频道消息；可见动作必须走 `slei` CLI。
+- 不让 Claude stdout 自动变成频道消息；可见动作必须走 `slei-cli` CLI。
 - 不在 daemon 中用关键词规则替代 Agent 自主判断。

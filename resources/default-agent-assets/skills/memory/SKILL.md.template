@@ -37,7 +37,7 @@ Use this skill to maintain `MEMORY.md` as curated working memory, not as a chat 
 
 ## Active Context Format
 
-在 `## Active Context` 下使用紧凑表格。Active Context 最多 3 个频道/事项；如果新的频道或事项进入时表格已有 3 行，先淘汰最旧的一行。不要在这里保存完整历史；需要历史时使用 `slei message read/search` 和 `slei task thread/list` 主动拉取。
+在 `## Active Context` 下使用紧凑表格。Active Context 最多 3 个频道/事项；如果新的频道或事项进入时表格已有 3 行，先淘汰最旧的一行。不要在这里保存完整历史；需要历史时使用 `slei-cli message read/search` 和 `slei-cli task thread/list` 主动拉取。
 
 必需列：
 

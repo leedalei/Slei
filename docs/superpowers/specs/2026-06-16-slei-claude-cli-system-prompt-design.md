@@ -2,7 +2,7 @@
 
 ## 背景
 
-Slei 第一阶段已经落地 broadcast delivery、Agent claim、`slei` CLI、任务 CLI、Agent 状态日志和 `MEMORY.md` Active Context。剩余关键缺口在执行面和 prompt 合同：
+Slei 第一阶段已经落地 broadcast delivery、Agent claim、`slei-cli` CLI、任务 CLI、Agent 状态日志和 `MEMORY.md` Active Context。剩余关键缺口在执行面和 prompt 合同：
 
 - `workers/claude-agent` 仍通过 `@anthropic-ai/claude-agent-sdk query()` 启动 Claude Code。
 - Agent 的完整 system prompt 仍主要由 worker 侧拼装，daemon 没有把角色、CLI 合同、消息 header、行为约定和运行时上下文作为统一 prompt contract 传给 worker。
@@ -16,7 +16,7 @@ Slei 第一阶段已经落地 broadcast delivery、Agent claim、`slei` CLI、�
 3. daemon 在每次 `start_run` command 中传入完整 Slei system prompt。
 4. Agent system prompt 覆盖：
    - Agent 角色定义。
-   - 所有 `slei` CLI 命令说明。
+   - 所有 `slei-cli` CLI 命令说明。
    - 消息 header 字段说明。
    - claim、静默、任务、handoff、状态更新、MEMORY 使用规则。
    - 当前运行时上下文：Agent ID、channel/server/computer/cwd/session 等。
@@ -25,7 +25,7 @@ Slei 第一阶段已经落地 broadcast delivery、Agent claim、`slei` CLI、�
 
 ## 非目标
 
-- 不重新设计 `slei` CLI 命令语义。
+- 不重新设计 `slei-cli` CLI 命令语义。
 - 不改变 daemon 的 cwd 选择逻辑。
 - 不实现旧 JSON 数据兼容迁移；开发 reset 仍可清空旧运行数据。
 - 不引入第二套本地 mock 或 UI 路由。

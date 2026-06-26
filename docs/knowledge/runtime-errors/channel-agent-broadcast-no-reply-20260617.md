@@ -16,11 +16,11 @@ related_files:
 # 频道广播消息显示执行中但没有 Agent 回复
 
 ## 问题描述
-频道里发送消息后，UI 能看到投递/执行状态，但不管是 `@agent` 还是群发都没有可见 Agent 回复。根因不在前端渲染，而在 daemon spawn 出来的 worker 无法稳定执行 `slei message claim/send` 回写频道。
+频道里发送消息后，UI 能看到投递/执行状态，但不管是 `@agent` 还是群发都没有可见 Agent 回复。根因不在前端渲染，而在 daemon spawn 出来的 worker 无法稳定执行 `slei-cli message claim/send` 回写频道。
 
 ## 环境信息
 - **模块**: 频道消息与 multi-agent 路由
-- **受影响组件**: daemon channel orchestrator、Claude worker、本地 `slei` CLI 环境、桌面频道活动展示
+- **受影响组件**: daemon channel orchestrator、Claude worker、本地 `slei-cli` CLI 环境、桌面频道活动展示
 - **解决日期**: 2026-06-17
 
 ## 症状
@@ -35,7 +35,7 @@ channel_agent_runtime.completed run_id=run_... output_len=4445 visible_output_cr
 ```
 - 本机命令行没有全局 `slei`：
 ```text
-slei not found
+slei-cli not found
 ```
 
 ## 尝试过但无效的方案
@@ -44,13 +44,13 @@ slei not found
 - **无效原因**: 这只能说明 daemon 已投递/启动 worker，不代表 agent 已经 claim 或回复；状态容易被误认为“真的有人在处理”。
 
 **方案 2**: 只依赖 worker stdout 作为回复依据。
-- **无效原因**: 广播 run 使用 `suppress_visible_output=true`，普通 stdout 不会自动进入频道；可见回复必须由 agent 主动执行 `slei message claim` 和 `slei message send`。
+- **无效原因**: 广播 run 使用 `suppress_visible_output=true`，普通 stdout 不会自动进入频道；可见回复必须由 agent 主动执行 `slei-cli message claim` 和 `slei-cli message send`。
 
 ## 解决方案
 修复分三层：
 
-1. worker 允许 `Bash`，因为系统提示要求 agent 运行 `slei message claim/send`。
-2. daemon 启动时给子进程设置 `SLEI_DAEMON_URL`、`SLEI_DAEMON_TOKEN`，并把 repo 的 `target/debug` 加入 `PATH`，让 worker 能找到并正确连接本地 `slei` CLI。
+1. worker 允许 `Bash`，因为系统提示要求 agent 运行 `slei-cli message claim/send`。
+2. daemon 启动时给子进程设置 `SLEI_DAEMON_URL`、`SLEI_DAEMON_TOKEN`，并把 repo 的 `target/debug` 加入 `PATH`，让 worker 能找到并正确连接本地 `slei-cli` CLI。
 3. worker completed/failed 时，将对应 `message_deliveries` 从 `running` 收口到 `completed`/`failed`，并记录 diagnostics 事件。
 
 **代码变更**：

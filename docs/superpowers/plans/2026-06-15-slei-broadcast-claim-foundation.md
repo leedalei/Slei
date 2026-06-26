@@ -4,7 +4,7 @@
 
 **Goal:** 为 Slei 落地广播投递、原子 claim、Agent CLI、细粒度状态日志、MEMORY 活动上下文和架构文档更新的第一阶段基础能力。
 
-**Architecture:** daemon 继续作为产品状态、路由事实、持久化、幂等、reset 和诊断的唯一控制面；Agent 只通过 `slei` CLI 调用 daemon API 自主 claim、读历史、发言、处理任务和上报状态。本计划只实现可测试的基础协议和 daemon 流转，Claude SDK 改为 spawn Claude CLI 的 runtime 替换放到后续计划，避免同时改控制面和执行面。
+**Architecture:** daemon 继续作为产品状态、路由事实、持久化、幂等、reset 和诊断的唯一控制面；Agent 只通过 `slei-cli` CLI 调用 daemon API 自主 claim、读历史、发言、处理任务和上报状态。本计划只实现可测试的基础协议和 daemon 流转，Claude SDK 改为 spawn Claude CLI 的 runtime 替换放到后续计划，避免同时改控制面和执行面。
 
 **Tech Stack:** Rust 2021, Axum, Tokio, sqlx/SQLite, serde/serde_json, uuid, clap/reqwest, pnpm/Vitest/Playwright, Markdown ADR。
 
@@ -15,7 +15,7 @@
 本计划覆盖第一阶段可独立验证的基础能力：
 
 - 新增 SQLite 表：消息投递、消息 claim、任务 claim、Agent 最新状态、Agent 最近 100 条操作日志。
-- 新增仓储、daemon service、HTTP API 和 `slei` CLI。
+- 新增仓储、daemon service、HTTP API 和 `slei-cli` CLI。
 - 所有新增 daemon HTTP route 必须挂在现有 `/v1/...` API 前缀下，不引入平行的 `/api/...` 公共面。
 - 所有会产生副作用的 CLI 写命令必须发送 `idempotency-key` header，并复用现有 namespaced idempotency 机制。
 - 新频道消息不再启动 coordinator runtime，改为给频道内普通 Agent 创建投递记录并唤醒。
@@ -846,7 +846,7 @@ git add crates/slei-daemon/src/api/tasks.rs crates/slei-daemon/src/services/task
 git commit -m "feat: add task claim cli semantics"
 ```
 
-## Task 6: 新增 `slei` CLI Crate
+## Task 6: 新增 `slei-cli` CLI Crate
 
 **Files:**
 - Modify: `Cargo.toml`
@@ -860,20 +860,20 @@ git commit -m "feat: add task claim cli semantics"
 测试命令树包含：
 
 ```text
-slei message claim <msg-id> --agent <agent-id>
-slei message send --target "#all" --agent <agent-id>
-slei message read --channel "#all" --limit 20
-slei message read --channel "#all" --after 10
-slei message read --channel "#all" --before 10
-slei message read --channel "#all" --around msg_123
-slei message search --query "关键词"
-slei task create --source-message <msg-id> --agent <agent-id>
-slei task claim <task-id> --agent <agent-id>
-slei task reply <task-id> --agent <agent-id>
-slei task update <task-id> --status in_progress
-slei task list --channel "#all"
-slei task thread <task-id>
-slei agent status --agent <agent-id> --state working --phase reading_history
+slei-cli message claim <msg-id> --agent <agent-id>
+slei-cli message send --target "#all" --agent <agent-id>
+slei-cli message read --channel "#all" --limit 20
+slei-cli message read --channel "#all" --after 10
+slei-cli message read --channel "#all" --before 10
+slei-cli message read --channel "#all" --around msg_123
+slei-cli message search --query "关键词"
+slei-cli task create --source-message <msg-id> --agent <agent-id>
+slei-cli task claim <task-id> --agent <agent-id>
+slei-cli task reply <task-id> --agent <agent-id>
+slei-cli task update <task-id> --status in_progress
+slei-cli task list --channel "#all"
+slei-cli task thread <task-id>
+slei-cli agent status --agent <agent-id> --state working --phase reading_history
 ```
 
 - [ ] **Step 2: 运行测试确认失败**
@@ -963,7 +963,7 @@ Expected: PASS。
 
 ```bash
 git add Cargo.toml crates/slei-cli
-git commit -m "feat: add slei agent cli"
+git commit -m "feat: add slei-cli agent cli"
 ```
 
 ## Task 7: 将频道新消息流转改为广播投递
@@ -981,7 +981,7 @@ git commit -m "feat: add slei agent cli"
 - 无明确 mention 的消息不会启动 `coordinator_runtime_runs`。
 - 有 `@agent` 的消息也走同一广播投递，实际处理由 Agent prompt + claim 决定。
 - Agent 通过 `message send` 发出的消息也触发下一轮广播。
-- 旧 channel Agent worker 的普通 stdout/output delta 不会被 daemon 自动转成可见频道消息；可见发言只能来自 `slei message send` 或任务相关 CLI/API。
+- 旧 channel Agent worker 的普通 stdout/output delta 不会被 daemon 自动转成可见频道消息；可见发言只能来自 `slei-cli message send` 或任务相关 CLI/API。
 
 - [ ] **Step 2: 运行测试确认失败**
 
@@ -1000,7 +1000,7 @@ Expected: FAIL，当前实现仍会创建 coordinator runtime。
 3. 对每个 Agent 调用 `claims.create_delivery(message_id, channel_id, agent_id)`。
 4. 对每个投递启动单条消息处理 run，但本阶段必须关闭或忽略“worker stdout 自动生成可见消息”的旧桥接。
 5. runtime prompt 只注入本次触发消息和必要运行时元数据；历史由 Agent 用 CLI 自取。
-6. 可见频道发言、任务回复和任务状态更新只能由 Agent 在进程内调用 `slei` CLI 完成。
+6. 可见频道发言、任务回复和任务状态更新只能由 Agent 在进程内调用 `slei-cli` CLI 完成。
 
 如果 `ChannelOrchestratorService` 当前没有 `ClaimService`，调整 constructor，由 `AppState` 注入。不要在 UI 或 worker 里补路由逻辑。
 
@@ -1072,7 +1072,7 @@ Expected: FAIL，模板还没有多频道规则。
 - 开始长任务、等待用户确认、交接给其他 Agent、完成阶段性工作、遇到 blocker、即将退出前，判断是否更新。
 - 每项必须包含频道、时间、当前处理事项和进展。
 - 最多 3 项，超过时删除最旧项。
-- Active Context 只存恢复工作所需内容，不复制完整历史；历史用 `slei message read/search` 获取。
+- Active Context 只存恢复工作所需内容，不复制完整历史；历史用 `slei-cli message read/search` 获取。
 
 - [ ] **Step 5: 运行测试**
 
@@ -1104,18 +1104,18 @@ git commit -m "docs: define multi-channel active context"
 - Agent 判断规则来自 system prompt，不由 coordinator 输出 JSON。
 - human/Agent 发言都写入频道消息并触发同一广播机制。
 - 通过可见 `@mention` 接力，不依赖隐藏路由。
-- `slei message claim` 是唯一消息独占入口。
-- `slei agent status` 每次上报写最新状态并追加最近 100 条操作日志。
+- `slei-cli message claim` 是唯一消息独占入口。
+- `slei-cli agent status` 每次上报写最新状态并追加最近 100 条操作日志。
 
 - [ ] **Step 2: 更新 0006**
 
 内容必须覆盖：
 
 - 任务卡片仍是 source message 的展示状态，不新增 task-card 消息。
-- `slei task create --source-message` 创建或返回同一任务。
-- `slei task claim` 是 task 维度原子锁。
-- `slei task reply` 保留 `role` 和稳定 reply id。
-- `slei task update` 只通过 daemon API 改 SQLite。
+- `slei-cli task create --source-message` 创建或返回同一任务。
+- `slei-cli task claim` 是 task 维度原子锁。
+- `slei-cli task reply` 保留 `role` 和稳定 reply id。
+- `slei-cli task update` 只通过 daemon API 改 SQLite。
 
 - [ ] **Step 3: 搜索并修正旧命名**
 
@@ -1176,9 +1176,9 @@ Expected: PASS，或记录不适用原因。
 启动 daemon 后执行：
 
 ```bash
-slei agent status --agent agent_cindy --state working --phase reading_history
-slei message read --channel "#all" --limit 5
-printf "收到，我来处理。" | slei message send --target "#all" --agent agent_cindy
+slei-cli agent status --agent agent_cindy --state working --phase reading_history
+slei-cli message read --channel "#all" --limit 5
+printf "收到，我来处理。" | slei-cli message send --target "#all" --agent agent_cindy
 ```
 
 Expected:

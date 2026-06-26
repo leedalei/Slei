@@ -170,7 +170,7 @@ mod tests {
         assert!(memory.contains("进展"));
         assert!(memory.contains("淘汰最旧"));
         assert!(memory.contains("不要复制完整聊天历史"));
-        assert!(memory.contains("slei message read/search"));
+        assert!(memory.contains("slei-cli message read/search"));
         assert!(memory.contains("空闲"));
         assert!(!memory.contains("| #all | 首次启动 | 等待用户提出需要引导的任务 | idle |"));
     }
@@ -242,7 +242,7 @@ mod tests {
         assert!(body.contains("handoff"));
         assert!(body.contains("下一次 spawn"));
         assert!(body.contains("不要在这里保存完整历史"));
-        assert!(body.contains("slei message read/search"));
+        assert!(body.contains("slei-cli message read/search"));
         assert!(body.contains("#频道名"));
         assert!(body.contains("空闲"));
         assert!(!body.contains("#channel"));

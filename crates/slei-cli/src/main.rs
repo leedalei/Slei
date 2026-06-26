@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "slei",
+    name = "slei-cli",
     version,
     about = "Command line client for the Slei daemon"
 )]

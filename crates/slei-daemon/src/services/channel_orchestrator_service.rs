@@ -527,7 +527,7 @@ impl ChannelOrchestratorService {
     ) -> Result<(), ChannelOrchestratorError> {
         let agent = self.members.get_product_agent(agent_id).await?;
         let prompt = format!(
-            "你正在为自己刚加入的频道 #{channel_id} 生成一条简短入场消息。\n\n最终输出会被 daemon 直接发布为频道可见消息；不要调用 `slei message send`，不要输出 JSON，不要复述这些系统要求。\n\n只输出面向频道成员的问候正文：简单打招呼，说明你是谁、负责什么、用户或其他成员什么时候应该 mention 你。不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程；不要承诺开始无关工作。"
+            "你正在为自己刚加入的频道 #{channel_id} 生成一条简短入场消息。\n\n最终输出会被 daemon 直接发布为频道可见消息；不要调用 `slei-cli message send`，不要输出 JSON，不要复述这些系统要求。\n\n只输出面向频道成员的问候正文：简单打招呼，说明你是谁、负责什么、用户或其他成员什么时候应该 mention 你。不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程；不要承诺开始无关工作。"
         );
         self.start_channel_agent_run_once(
             agent_id,
@@ -1757,7 +1757,7 @@ fn channel_run_prompt(
             r##"Classify the message with the system Claim Intent Classes. If you should respond, first run:
 
 ```bash
-slei message claim {message_id} --agent {agent_id}
+slei-cli message claim {message_id} --agent {agent_id}
 ```
 
 If the claim fails, exit silently."##,
@@ -1770,7 +1770,7 @@ If the claim fails, exit silently."##,
 For the current trigger message itself, classify it with the system Claim Intent Classes. If you should respond to the trigger, first run:
 
 ```bash
-slei message claim {message_id} --agent {agent_id}
+slei-cli message claim {message_id} --agent {agent_id}
 ```
 
 If the trigger claim fails, continue processing Pending Message Todos. Do not claim the current trigger solely for todo progression."##,
@@ -1799,17 +1799,17 @@ If the trigger claim fails, continue processing Pending Message Todos. Do not cl
 Read nearby messages only when classification needs flow, order, prior participants, or topic continuity.
 
 ```bash
-slei message read --channel "#{channel_id}" --around {message_id}
+slei-cli message read --channel "#{channel_id}" --around {message_id}
 ```
 
 ## Visible Reply
 If the claim succeeds, use Slei CLI for visible work. Send channel replies through stdin:
 
 ```bash
-printf "..." | slei message send --target "#{channel_id}" --agent {agent_id}
+printf "..." | slei-cli message send --target "#{channel_id}" --agent {agent_id}
 ```
 
-Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful progress. Use `slei task` commands when the work belongs to a task."##,
+Use `slei-cli agent status --agent {agent_id} --state ... --phase ...` for truthful progress. Use `slei-cli task` commands when the work belongs to a task."##,
         channel_id = message.channel_id,
         message_id = message.id,
         author_id = message.author_id,
@@ -1825,7 +1825,7 @@ Use `slei agent status --agent {agent_id} --state ... --phase ...` for truthful 
 Process pending todos even if the current trigger is not claimable.
 Do not claim the current trigger solely for todo progression.
 Do not claim the todo source message.
-Use `slei message read --channel "#all" --from-message msg_A --to-message msg_B` for source-message ranges.
+Use `slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B` for source-message ranges.
 
 "##,
         );
@@ -1844,7 +1844,7 @@ Use `slei message read --channel "#all" --from-message msg_A --to-message msg_B`
 ```
 
 ```bash
-slei message read --channel "#{todo_channel_id}" --from-message {todo_message_id} --to-message {todo_message_id}
+slei-cli message read --channel "#{todo_channel_id}" --from-message {todo_message_id} --to-message {todo_message_id}
 ```
 
 "##,
@@ -2094,12 +2094,12 @@ mod tests {
         assert!(prompt.contains("## Triggering Message"));
         assert!(prompt.contains("```text\n[target=#all msg=msg_group_1 time=2026-06-17T06:28:04Z type=human] human_lei: @all 早上好\n```"));
         assert!(prompt.contains("## Required First Action"));
-        assert!(prompt.contains("```bash\nslei message claim msg_group_1 --agent agent_nova\n```"));
+        assert!(prompt.contains("```bash\nslei-cli message claim msg_group_1 --agent agent_nova\n```"));
         assert!(prompt.contains("## Optional Context Lookup"));
-        assert!(prompt.contains("slei message read --channel \"#all\" --around msg_group_1"));
+        assert!(prompt.contains("slei-cli message read --channel \"#all\" --around msg_group_1"));
         assert!(prompt.contains("## Visible Reply"));
         assert!(prompt
-            .contains("printf \"...\" | slei message send --target \"#all\" --agent agent_nova"));
+            .contains("printf \"...\" | slei-cli message send --target \"#all\" --agent agent_nova"));
     }
 
     #[test]
@@ -2147,11 +2147,11 @@ mod tests {
             .contains("If the trigger claim fails, continue processing Pending Message Todos."));
         assert!(!prompt.contains("If the claim fails, exit silently."));
         assert!(prompt.contains(
-            "slei message read --channel \"#all\" --from-message msg_A --to-message msg_A"
+            "slei-cli message read --channel \"#all\" --from-message msg_A --to-message msg_A"
         ));
-        assert!(!prompt.contains("slei todo update"));
-        assert!(!prompt.contains("slei todo delete"));
-        assert!(!prompt.contains("slei todo clear"));
-        assert!(!prompt.contains("slei todo reopen"));
+        assert!(!prompt.contains("slei-cli todo update"));
+        assert!(!prompt.contains("slei-cli todo delete"));
+        assert!(!prompt.contains("slei-cli todo clear"));
+        assert!(!prompt.contains("slei-cli todo reopen"));
     }
 }

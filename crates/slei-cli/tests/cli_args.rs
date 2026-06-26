@@ -253,7 +253,7 @@ fn cli_version_exits_zero() {
 
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stderr.is_empty());
-    assert!(String::from_utf8_lossy(&output.stdout).contains("slei"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("slei-cli"));
 }
 
 #[test]
@@ -264,7 +264,7 @@ fn claimed_false_remains_exit_two() {
 }
 
 fn run_slei(args: impl IntoIterator<Item = &'static str>) -> Output {
-    ProcessCommand::new(env!("CARGO_BIN_EXE_slei"))
+    ProcessCommand::new(env!("CARGO_BIN_EXE_slei-cli"))
         .args(args)
         .output()
         .unwrap()

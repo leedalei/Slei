@@ -166,14 +166,14 @@ adapter
         "run_1",
         &session,
         "hello",
-        "Slei system prompt: claim with slei message claim.",
+        "Slei system prompt: claim with slei-cli message claim.",
         Vec::new(),
     )
     .unwrap();
 
 assert_eq!(
     commands[0]["input"]["system_prompt"],
-    "Slei system prompt: claim with slei message claim."
+    "Slei system prompt: claim with slei-cli message claim."
 );
 ```
 
@@ -930,8 +930,8 @@ fn system_prompt_includes_identity_cli_header_rules_and_memory_contract() {
     assert!(prompt.contains("## Slei Agent Identity"));
     assert!(prompt.contains("Agent ID: agent_coda"));
     assert!(prompt.contains("Handle: @coda"));
-    assert!(prompt.contains("slei message claim <msg-id> --agent <agent-id>"));
-    assert!(prompt.contains("slei message read --channel \"#channel\" --around <msgId>"));
+    assert!(prompt.contains("slei-cli message claim <msg-id> --agent <agent-id>"));
+    assert!(prompt.contains("slei-cli message read --channel \"#channel\" --around <msgId>"));
     assert!(prompt.contains("[target=#channel msg=<msg-id> time=<iso8601> type=<human|agent|system>]"));
     assert!(prompt.contains("Active Context"));
     assert!(prompt.contains("最多 3 个频道/事项"));
@@ -1002,7 +1002,7 @@ Expected: PASS.
 
 ```bash
 git add crates/slei-daemon/src/services/agent_prompt_service.rs crates/slei-daemon/src/services/mod.rs crates/slei-daemon/src/state.rs
-git commit -m "feat: build slei agent system prompt"
+git commit -m "feat: build slei-cli agent system prompt"
 ```
 
 ## Task 7: Inject System Prompt Into DM, Broadcast, Task, Legacy Runs
@@ -1023,8 +1023,8 @@ In `crates/slei-daemon/tests/agent_workspace.rs`, add to an existing DM start te
 let command = start_run_command_with_prompt(&commands, "你好");
 let system_prompt = command["input"]["system_prompt"].as_str().unwrap();
 assert!(system_prompt.contains("Agent ID: agent_guide_local_node"));
-assert!(system_prompt.contains("slei message claim"));
-assert!(system_prompt.contains("slei task thread"));
+assert!(system_prompt.contains("slei-cli message claim"));
+assert!(system_prompt.contains("slei-cli task thread"));
 assert!(system_prompt.contains("Active Context"));
 assert_eq!(command["input"]["prompt"], "你好");
 ```
@@ -1041,7 +1041,7 @@ assert!(command["input"]["prompt"].as_str().unwrap().contains("本次触发消�
 assert!(!command["input"]["prompt"].as_str().unwrap().contains("旧历史不应进 broadcast prompt"));
 let system_prompt = command["input"]["system_prompt"].as_str().unwrap();
 assert!(system_prompt.contains("## Claim Rules"));
-assert!(system_prompt.contains("slei message read --channel \"#channel\" --around <msgId>"));
+assert!(system_prompt.contains("slei-cli message read --channel \"#channel\" --around <msgId>"));
 assert!(system_prompt.contains("Agent ID: agent_nova"));
 ```
 

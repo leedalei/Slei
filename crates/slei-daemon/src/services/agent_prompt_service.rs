@@ -91,7 +91,7 @@ Optional context lookup:
 
 - For a Channel Group Address, you may read nearby previous messages before claiming when needed.
 - Read history if you need to determine the original group prompt, current sequence/order, which agents have already participated, whether the latest message belongs to the same group flow, or whether the user has changed topic.
-- Prefer the smallest useful window, for example `slei message read --channel "#channel" --around <msgId>` or `slei message read --channel "#channel" --limit 20`.
+- Prefer the smallest useful window, for example `slei-cli message read --channel "#channel" --around <msgId>` or `slei-cli message read --channel "#channel" --limit 20`.
 - Do not read history just to answer a simple standalone greeting if the current message is sufficient.
 
 ### 3. Specialized Work Request
@@ -102,7 +102,7 @@ A message asks for concrete work but does not address the whole group.
 - For `type=agent` messages, this class still requires an explicit mention of {handle}.
 
 ### Required Claim Command
-- Before doing visible work for a channel message, run `slei message claim <msg-id> --agent <agent-id>`.
+- Before doing visible work for a channel message, run `slei-cli message claim <msg-id> --agent <agent-id>`.
 - If the claim fails, another agent already claimed it, or the message is no longer actionable, exit silently. Do not send a channel reply explaining the failed claim.
 
 ## Pending Message Todos
@@ -111,35 +111,35 @@ Some channel runs may include pending message todos in the run packet. These are
 - Process pending todos even if the current trigger is not claimable.
 - Do not claim the current trigger solely for todo progression.
 - Do not claim the todo source message.
-- Read the source message range when needed with `slei message read --channel "#all" --from-message msg_A --to-message msg_B`.
-- Visible replies and handoffs still use `slei message send`; the daemon advances todo status from the worker run lifecycle.
+- Read the source message range when needed with `slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B`.
+- Visible replies and handoffs still use `slei-cli message send`; the daemon advances todo status from the worker run lifecycle.
 
 ## Slei CLI Commands
-All visible product flow must go through `slei` CLI commands.
+All visible product flow must go through `slei-cli` CLI commands.
 
 Message intake and claims:
-- `slei message claim <msg-id> --agent <agent-id>`
+- `slei-cli message claim <msg-id> --agent <agent-id>`
 
 History reading:
-- `slei message read --channel "#channel" --limit 20`
-- `slei message read --channel "#channel:msgId"`
-- `slei message read --channel "#channel" --after <seqNo>`
-- `slei message read --channel "#channel" --before <seqNo>`
-- `slei message read --channel "#channel" --around <msgId>`
-- `slei message search --query "关键词"`
+- `slei-cli message read --channel "#channel" --limit 20`
+- `slei-cli message read --channel "#channel:msgId"`
+- `slei-cli message read --channel "#channel" --after <seqNo>`
+- `slei-cli message read --channel "#channel" --before <seqNo>`
+- `slei-cli message read --channel "#channel" --around <msgId>`
+- `slei-cli message search --query "关键词"`
 
 Visible replies and task operations:
-- Send channel replies with `slei message send --target "#channel" --agent <agent-id>` and pipe the body through stdin.
-- Create a task from a source message with `slei task create --source-message <msg-id> --agent <agent-id>`.
-- Claim a task with `slei task claim <task-id> --agent <agent-id>`.
-- Reply to a task with `slei task reply <task-id> --agent <agent-id>` and include concise progress or results.
-- Update task status with `slei task update <task-id> --status <status>`.
-- List tasks with `slei task list --channel "#channel"`.
-- Read a task thread with `slei task thread <task-id>`.
+- Send channel replies with `slei-cli message send --target "#channel" --agent <agent-id>` and pipe the body through stdin.
+- Create a task from a source message with `slei-cli task create --source-message <msg-id> --agent <agent-id>`.
+- Claim a task with `slei-cli task claim <task-id> --agent <agent-id>`.
+- Reply to a task with `slei-cli task reply <task-id> --agent <agent-id>` and include concise progress or results.
+- Update task status with `slei-cli task update <task-id> --status <status>`.
+- List tasks with `slei-cli task list --channel "#channel"`.
+- Read a task thread with `slei-cli task thread <task-id>`.
 - To hand work to another agent, send a visible `@mention` with the next owner and task/thread context, then update the task/status as needed.
-- Update status with `slei agent status --agent <agent-id> --state working --phase "正在阅读历史"` and keep phase text truthful.
+- Update status with `slei-cli agent status --agent <agent-id> --state working --phase "正在阅读历史"` and keep phase text truthful.
 - Read channel membership, rosters, associated projects, and handoff relationships from `notes/channels.md`; do not duplicate those channel facts in `MEMORY.md`.
-- Update `MEMORY.md` directly only when task Active Context should survive handoff, wait, or exit, then use `slei agent status` to record that you are updating memory.
+- Update `MEMORY.md` directly only when task Active Context should survive handoff, wait, or exit, then use `slei-cli agent status` to record that you are updating memory.
 
 ## Runtime Status Phases
 Use status phases such as:
@@ -162,7 +162,7 @@ Format each Active Context entry with:
 最多 3 个频道/事项. When a new channel/item must be added beyond the limit, replace the oldest item. Keep this short and actionable so the next run can resume without guessing.
 
 ## Output Rules
-- All visible channel/task flow must use the `slei` CLI.
+- All visible channel/task flow must use the `slei-cli` CLI.
 - Ordinary stdout is only local process output; it will not automatically become a channel message.
 - Do not depend on local mock state for production behavior. The daemon is the source of truth for messages, claims, tasks, memory, status, and persistence.
 "##,
@@ -226,23 +226,23 @@ mod tests {
         assert!(prompt.contains("Each agent may participate once"));
         assert!(prompt.contains("Agent-authored messages (`type=agent`) default to silence"));
         assert!(prompt.contains("Display names are not stable routing identifiers"));
-        assert!(prompt.contains("slei message claim <msg-id> --agent <agent-id>"));
-        assert!(prompt.contains("slei message read --channel \"#channel\" --around <msgId>"));
+        assert!(prompt.contains("slei-cli message claim <msg-id> --agent <agent-id>"));
+        assert!(prompt.contains("slei-cli message read --channel \"#channel\" --around <msgId>"));
         assert!(prompt
             .contains("[target=#channel msg=<msg-id> time=<iso8601> type=<human|agent|system>]"));
         assert!(prompt.contains("Active Context"));
         assert!(prompt.contains("最多 3 个频道/事项"));
         assert!(prompt.contains("正在阅读历史"));
         assert!(prompt.contains("最近 100 条"));
-        assert!(prompt.contains("slei task create --source-message <msg-id> --agent <agent-id>"));
-        assert!(prompt.contains("slei task claim <task-id> --agent <agent-id>"));
-        assert!(prompt.contains("slei task update <task-id> --status <status>"));
-        assert!(prompt.contains("slei task list --channel \"#channel\""));
-        assert!(prompt.contains("slei task thread <task-id>"));
+        assert!(prompt.contains("slei-cli task create --source-message <msg-id> --agent <agent-id>"));
+        assert!(prompt.contains("slei-cli task claim <task-id> --agent <agent-id>"));
+        assert!(prompt.contains("slei-cli task update <task-id> --status <status>"));
+        assert!(prompt.contains("slei-cli task list --channel \"#channel\""));
+        assert!(prompt.contains("slei-cli task thread <task-id>"));
         assert!(prompt.contains("If it mentions another agent and not you, do not claim"));
-        assert!(!prompt.contains("slei message check"));
-        assert!(!prompt.contains("slei task transfer"));
-        assert!(!prompt.contains("slei memory update"));
+        assert!(!prompt.contains("slei-cli message check"));
+        assert!(!prompt.contains("slei-cli task transfer"));
+        assert!(!prompt.contains("slei-cli memory update"));
         assert!(!prompt.contains("raft "));
     }
 
@@ -276,11 +276,11 @@ mod tests {
         assert!(prompt.contains("Do not claim the current trigger solely for todo progression."));
         assert!(prompt.contains("Do not claim the todo source message."));
         assert!(prompt.contains(
-            "slei message read --channel \"#all\" --from-message msg_A --to-message msg_B"
+            "slei-cli message read --channel \"#all\" --from-message msg_A --to-message msg_B"
         ));
-        assert!(!prompt.contains("slei todo update"));
-        assert!(!prompt.contains("slei todo delete"));
-        assert!(!prompt.contains("slei todo clear"));
-        assert!(!prompt.contains("slei todo reopen"));
+        assert!(!prompt.contains("slei-cli todo update"));
+        assert!(!prompt.contains("slei-cli todo delete"));
+        assert!(!prompt.contains("slei-cli todo clear"));
+        assert!(!prompt.contains("slei-cli todo reopen"));
     }
 }

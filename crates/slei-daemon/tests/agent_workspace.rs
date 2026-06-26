@@ -98,7 +98,7 @@ async fn creating_agent_generates_workspace_memory_and_docs() {
         "join prompt should explain stdout is the visible message: {join_prompt}"
     );
     assert!(
-        join_prompt.contains("不要调用 `slei message send`"),
+        join_prompt.contains("不要调用 `slei-cli message send`"),
         "join prompt should prevent duplicate/manual visible sends: {join_prompt}"
     );
     assert!(
@@ -808,7 +808,7 @@ async fn channel_create_setup_completes_join_memory_updates() {
                 && command["input"]["prompt"].as_str().is_some_and(|prompt| {
                     prompt.contains("入场消息")
                         && prompt.contains("最终输出会被 daemon 直接发布为频道可见消息")
-                        && prompt.contains("不要调用 `slei message send`")
+                        && prompt.contains("不要调用 `slei-cli message send`")
                         && prompt.contains(
                             "不要提到 MEMORY.md、notes、记忆初始化、文件读取、状态更新或发送过程",
                         )
@@ -1418,8 +1418,8 @@ async fn guide_dm_without_card_shortcut_starts_runtime() {
     assert_eq!(start_run["input"]["prompt"], "你好");
     let system_prompt = start_run["input"]["system_prompt"].as_str().unwrap();
     assert!(system_prompt.contains("Agent ID: agent_guide_local_node"));
-    assert!(system_prompt.contains("slei message claim"));
-    assert!(system_prompt.contains("slei task thread"));
+    assert!(system_prompt.contains("slei-cli message claim"));
+    assert!(system_prompt.contains("slei-cli task thread"));
     assert!(system_prompt.contains("Active Context"));
 }
 

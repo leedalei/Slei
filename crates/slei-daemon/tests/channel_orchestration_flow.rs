@@ -4096,16 +4096,16 @@ fn assert_broadcast_runs_started(
         );
         assert!(
             prompt.contains(&format!(
-                "slei message claim {message_id} --agent {agent_id}"
+                "slei-cli message claim {message_id} --agent {agent_id}"
             )),
             "prompt missing claim instruction: {prompt}"
         );
         assert!(
-            prompt.contains("slei message read") && prompt.contains("slei message send"),
+            prompt.contains("slei-cli message read") && prompt.contains("slei-cli message send"),
             "prompt should direct agent to use Slei CLI for history/reply operations: {prompt}"
         );
         assert!(
-            prompt.contains("printf \"...\" | slei message send"),
+            prompt.contains("printf \"...\" | slei-cli message send"),
             "prompt should show message send reading the body from stdin: {prompt}"
         );
         assert!(
@@ -4113,7 +4113,7 @@ fn assert_broadcast_runs_started(
             "prompt should not mention unsupported --body flag: {prompt}"
         );
         assert!(
-            prompt.contains(&format!("slei agent status --agent {agent_id} --state")),
+            prompt.contains(&format!("slei-cli agent status --agent {agent_id} --state")),
             "prompt should use the real agent status command shape: {prompt}"
         );
         assert!(
@@ -4141,7 +4141,7 @@ fn assert_broadcast_runs_started(
                 && prompt.contains("## Required First Action")
                 && prompt.contains("```bash")
                 && prompt.contains(&format!(
-                    "slei message claim {message_id} --agent {agent_id}"
+                    "slei-cli message claim {message_id} --agent {agent_id}"
                 ))
                 && prompt.contains("## Optional Context Lookup"),
             "prompt should be a Markdown run packet with fenced trigger and claim command: {prompt}"
@@ -4158,7 +4158,7 @@ fn assert_broadcast_runs_started(
             "system prompt missing markdown claim intent classes: {system_prompt}"
         );
         assert!(
-            system_prompt.contains("slei message read --channel \"#channel\" --around <msgId>"),
+            system_prompt.contains("slei-cli message read --channel \"#channel\" --around <msgId>"),
             "system prompt missing around-history command: {system_prompt}"
         );
         assert!(

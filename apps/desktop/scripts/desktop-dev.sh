@@ -17,6 +17,7 @@ trap cleanup EXIT INT TERM
 
 cd "$REPO_ROOT"
 pnpm --filter @slei/claude-agent build
+cargo build -p slei-cli
 
 if nc -z 127.0.0.1 4319 2>/dev/null; then
   echo "[slei-desktop] local daemon already listening on 127.0.0.1:4319"
