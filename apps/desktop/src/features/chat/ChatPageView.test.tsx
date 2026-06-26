@@ -2144,7 +2144,7 @@ describe("ChatPage mention panel", () => {
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
       messages: [
-        { id: "msg-deferred-thread", author: "Lei", role: "human", time: "10:00", body: "先看看，不要立刻创建子线程", channelId: "all" },
+        { id: "msg-deferred-thread", author: "Lei", role: "human", time: "10:00", body: "## 先看看\n\n- 不要立刻创建子线程\n- `inlineCode`", channelId: "all" },
       ],
     });
     const onMessageThreadOpen = vi.fn();
@@ -2168,7 +2168,14 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(onMessageThreadOpen).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("先看看，不要立刻创建子线程");
+    const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
+    const rootMarkdown = drawer?.querySelector<HTMLElement>('[data-slot="task-thread-root-body"] .slei-markdown-message');
+    expect(rootMarkdown).toBeTruthy();
+    expect(rootMarkdown?.classList.contains("text-sm")).toBe(true);
+    expect(rootMarkdown?.classList.contains("leading-relaxed")).toBe(true);
+    expect(rootMarkdown?.querySelector("h2")?.textContent).toBe("先看看");
+    expect(rootMarkdown?.querySelector("li")?.textContent).toContain("不要立刻创建子线程");
+    expect(rootMarkdown?.querySelector("code")?.textContent).toBe("inlineCode");
 
     const replyInput = document.body.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${messages.tasks.replyPlaceholder}"]`);
     expect(replyInput).toBeTruthy();
@@ -2186,7 +2193,7 @@ describe("ChatPage mention panel", () => {
     const sendButton = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${messages.tasks.sendReply}"]`);
     expect(sendButton).toBeTruthy();
     await act(async () => {
-      sendButton?.click();
+      replyInput?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
     });
 
     expect(onMessageThreadReplyFromSource).toHaveBeenCalledWith(data.messages[0], "现在发送回复");

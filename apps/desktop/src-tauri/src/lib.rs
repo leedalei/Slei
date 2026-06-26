@@ -96,8 +96,8 @@ mod tests {
         list_conversation_messages, list_conversation_sessions, list_conversations,
         list_diagnostics, list_nodes, list_preferences, list_profile, list_saved_messages,
         list_tasks, open_agent_path, read_agent_workspace_file, reconnect_events,
-        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_task,
-        request_artifact_open, reset_conversation_runtime_session, save_message,
+        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_message_thread,
+        reply_to_task, request_artifact_open, reset_conversation_runtime_session, save_message,
         send_channel_message, send_conversation_message, unsave_message, update_agent,
         update_preferences, update_profile, upload_conversation_attachment, FrontendCrashReport,
     };
@@ -105,8 +105,8 @@ mod tests {
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
         GlobalSearchQuery, NotificationPreferencesView, PreferencesUpdateRequest,
-        ProfileUpdateRequest, RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest,
-        TaskListQuery, TaskReplyRequest,
+        ProfileUpdateRequest, ReplyToMessageThreadRequest, RuntimeDescriptor, SaveMessageRequest,
+        SendChannelMessageRequest, TaskListQuery, TaskReplyRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -631,6 +631,59 @@ mod tests {
         assert!(request.contains("POST /v1/tasks/task_1/replies HTTP/1.1"));
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-task-reply-"));
+    }
+
+    #[test]
+    fn message_thread_reply_command_uses_daemon_route_with_idempotency_key() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = serde_json::json!({
+                "reply": {
+                    "id": "reply_1",
+                    "threadId": "thread_1",
+                    "senderId": "human:local",
+                    "role": "human",
+                    "body": "继续处理",
+                    "createdAt": "2"
+                }
+            })
+            .to_string();
+            write!(
+                stream,
+                "HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = reply_to_message_thread(
+            &broker,
+            "thread_1",
+            ReplyToMessageThreadRequest {
+                sender_id: "human:local".to_string(),
+                role: Some("human".to_string()),
+                body: "继续处理".to_string(),
+            },
+        )
+        .unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.reply.id, "reply_1");
+        assert!(request.contains("POST /v1/message-threads/thread_1/replies HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains("Idempotency-Key: desktop-message-thread-reply-"));
     }
 
     #[test]

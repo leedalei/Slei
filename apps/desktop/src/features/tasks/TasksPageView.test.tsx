@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
@@ -306,7 +306,8 @@ describe("TasksPage filters", () => {
   });
 
   it("opens the task thread as an unmasked right slide-over with a bottom reply composer", async () => {
-    await mountTasksPage("task_ai_coda", { onTaskReply: async () => undefined });
+    const onTaskReply = vi.fn().mockResolvedValue(undefined);
+    await mountTasksPage("task_ai_coda", { onTaskReply });
 
     const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
     const footer = drawer?.querySelector<HTMLElement>('[data-slot="sheet-footer"]');
@@ -353,6 +354,11 @@ describe("TasksPage filters", () => {
       textarea?.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(sendButton?.disabled).toBe(false);
+
+    await act(async () => {
+      textarea?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+    });
+    expect(onTaskReply).toHaveBeenCalledWith("task_ai_coda", "继续处理");
 
     expect(composer?.contains(textarea!)).toBe(true);
     expect(composer?.contains(sendButton!)).toBe(true);

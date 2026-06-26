@@ -3093,12 +3093,13 @@ impl DaemonBroker {
     ) -> Result<MessageThreadReplyReceipt, ChannelError> {
         let payload = serde_json::to_string(request)
             .map_err(|error| ChannelError::DaemonResponse(error.to_string()))?;
+        let idempotency_key = format!("desktop-message-thread-reply-{}", monotonic_id());
         let response = self
             .send_daemon_request_checked(
                 "POST",
                 &format!("/v1/message-threads/{thread_id}/replies"),
                 Some(&payload),
-                &[],
+                &[("Idempotency-Key", idempotency_key.as_str())],
             )
             .map_err(ChannelError::DaemonRequest)?;
         serde_json::from_str::<MessageThreadReplyReceipt>(&response)
@@ -5403,7 +5404,9 @@ fn local_card_from_product_tool_event(
         .ok_or_else(|| "slei_propose_interactive_card payload must be an object".to_string())?;
     let kind = required_payload_string(payload, "kind")?;
     if kind != "createAgent" && kind != "createChannel" {
-        return Err("local Slei interactive cards only support createAgent and createChannel".to_string());
+        return Err(
+            "local Slei interactive cards only support createAgent and createChannel".to_string(),
+        );
     }
     Ok(InteractiveCardView {
         id: format!(

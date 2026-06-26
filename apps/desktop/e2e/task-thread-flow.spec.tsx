@@ -210,11 +210,11 @@ describe("chat to task thread flow", () => {
     expect(html).not.toContain("标记待评审");
   });
 
-  it("renders the task drawer title one step larger than body text without bold weight", () => {
+  it("renders the task drawer root content as message-sized markdown", () => {
     const data = createSleiFixtures({
       tasks: [{
         id: "T-title",
-        title: "感谢欢迎，agent_guide",
+        title: "## 感谢欢迎\n\n- agent_guide\n- `inlineCode`",
         owner: "Theo",
         status: "in_progress",
         channelId: "all",
@@ -232,11 +232,34 @@ describe("chat to task thread flow", () => {
       />,
     );
 
-    const titleMatch = html.match(/<h2[^>]*data-slot="sheet-title"[^>]*class="([^"]*)"[^>]*>感谢欢迎，agent_guide<\/h2>/);
+    const titleMatch = html.match(/<h2[^>]*data-slot="sheet-title"[^>]*class="([^"]*)"[^>]*>/);
+    const rootMatch = html.match(/<div[^>]*(?:data-slot="task-thread-root-body"[^>]*class="([^"]*)"|class="([^"]*)"[^>]*data-slot="task-thread-root-body")[^>]*>/);
+    const rootClasses = rootMatch?.[1] ?? rootMatch?.[2] ?? "";
+    const scrollContentMatch = html.match(/<div[^>]*(?:data-slot="task-thread-scroll-content"[^>]*class="([^"]*)"|class="([^"]*)"[^>]*data-slot="task-thread-scroll-content")[^>]*>/);
+    const scrollContentClasses = scrollContentMatch?.[1] ?? scrollContentMatch?.[2];
+    const headerStart = html.indexOf('data-slot="sheet-header"');
+    const scrollStart = html.indexOf('data-slot="scroll-area"');
+    const rootStart = html.indexOf('data-slot="task-thread-root-body"');
+    const footerStart = html.indexOf('data-slot="sheet-footer"');
+    const rootEnd = html.indexOf('data-slot="card"', rootStart);
+    const rootHtml = html.slice(rootStart, rootEnd);
 
-    expect(titleMatch?.[1]).toContain("text-base");
-    expect(titleMatch?.[1]).toContain("font-normal");
-    expect(titleMatch?.[1]).not.toContain("font-bold");
+    expect(titleMatch?.[1]).toContain("sr-only");
+    expect(rootClasses).not.toContain("mb-32");
+    expect(scrollContentClasses).toContain("pb-36");
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(scrollStart).toBeGreaterThan(headerStart);
+    expect(rootStart).toBeGreaterThanOrEqual(0);
+    expect(rootStart).toBeGreaterThan(scrollStart);
+    expect(rootStart).toBeLessThan(footerStart);
+    expect(rootEnd).toBeGreaterThan(rootStart);
+    expect(rootHtml).toContain("slei-markdown-message");
+    expect(rootHtml).toContain("text-sm");
+    expect(rootHtml).toContain("leading-relaxed");
+    expect(rootHtml).toContain("<h2>感谢欢迎</h2>");
+    expect(rootHtml).toContain("<li>agent_guide</li>");
+    expect(rootHtml).toContain("<code");
+    expect(rootHtml).toContain("inlineCode");
   });
 
   it("keeps task drawer async errors and thread-open rejections handled in source", () => {

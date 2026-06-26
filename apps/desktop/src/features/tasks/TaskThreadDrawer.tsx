@@ -118,14 +118,17 @@ export function TaskThreadDrawer(input: {
       <>
         <SheetHeader className="relative border-b p-5 pr-14">
           <TaskStatusBadge messages={input.messages} status={task.status} />
-          <SheetTitle className="text-base font-normal">{task.title}</SheetTitle>
+          <SheetTitle className="sr-only">{task.title}</SheetTitle>
           <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(task.replyCount ?? task.replies?.length ?? 0)}</SheetDescription>
           <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3" onClick={input.onClose} size="icon-sm" type="button" variant="ghost">
             <SleiIcon className="size-4" name="x" />
           </Button>
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1">
-          <div className="grid gap-3 p-5">
+          <div className="grid gap-3 p-5 pb-36" data-slot="task-thread-scroll-content">
+            <div data-slot="task-thread-root-body">
+              <MarkdownMessage markdown={task.title} />
+            </div>
             {(task.replies ?? []).map((reply) => (
               <Card className={`${CARD_INSET_CLASS} grid gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
                 <strong className="text-sm">{reply.sender}</strong>
@@ -184,6 +187,10 @@ export function TaskThreadDrawer(input: {
                   if (action === "selectMention") {
                     event.preventDefault();
                     selectMention();
+                  }
+                  if (action === "submit") {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
                   }
                 }}
                 placeholder={input.messages.tasks.replyPlaceholder}
