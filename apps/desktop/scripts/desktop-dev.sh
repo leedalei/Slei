@@ -18,6 +18,7 @@ trap cleanup EXIT INT TERM
 cd "$REPO_ROOT"
 pnpm --filter @slei/claude-agent build
 cargo build -p slei-cli
+cargo build -p slei-daemon
 
 if nc -z 127.0.0.1 4319 2>/dev/null; then
   echo "[slei-desktop] local daemon already listening on 127.0.0.1:4319"
@@ -33,7 +34,7 @@ else
       exit 1
     fi
     attempts=$((attempts + 1))
-    if [ "$attempts" -ge 100 ]; then
+    if [ "$attempts" -ge 300 ]; then
       echo "[slei-desktop] timed out waiting for local daemon" >&2
       exit 1
     fi
