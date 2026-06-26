@@ -2094,12 +2094,15 @@ mod tests {
         assert!(prompt.contains("## Triggering Message"));
         assert!(prompt.contains("```text\n[target=#all msg=msg_group_1 time=2026-06-17T06:28:04Z type=human] human_lei: @all 早上好\n```"));
         assert!(prompt.contains("## Required First Action"));
-        assert!(prompt.contains("```bash\nslei-cli message claim msg_group_1 --agent agent_nova\n```"));
+        assert!(
+            prompt.contains("```bash\nslei-cli message claim msg_group_1 --agent agent_nova\n```")
+        );
         assert!(prompt.contains("## Optional Context Lookup"));
         assert!(prompt.contains("slei-cli message read --channel \"#all\" --around msg_group_1"));
         assert!(prompt.contains("## Visible Reply"));
-        assert!(prompt
-            .contains("printf \"...\" | slei-cli message send --target \"#all\" --agent agent_nova"));
+        assert!(prompt.contains(
+            "printf \"...\" | slei-cli message send --target \"#all\" --agent agent_nova"
+        ));
     }
 
     #[test]

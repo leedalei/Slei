@@ -234,7 +234,9 @@ mod tests {
         assert!(prompt.contains("最多 3 个频道/事项"));
         assert!(prompt.contains("正在阅读历史"));
         assert!(prompt.contains("最近 100 条"));
-        assert!(prompt.contains("slei-cli task create --source-message <msg-id> --agent <agent-id>"));
+        assert!(
+            prompt.contains("slei-cli task create --source-message <msg-id> --agent <agent-id>")
+        );
         assert!(prompt.contains("slei-cli task claim <task-id> --agent <agent-id>"));
         assert!(prompt.contains("slei-cli task update <task-id> --status <status>"));
         assert!(prompt.contains("slei-cli task list --channel \"#channel\""));
