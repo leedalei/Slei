@@ -94,6 +94,7 @@ sequenceDiagram
 - daemon 可根据可见 mention 创建任务 handoff inbox/runtime，但不得因为 task 存在兼容 assignee 字段就隐式转交。
 - 需要其他 Agent 接力时，当前 Agent 必须在任务回复正文中可见 `@agent`。
 - 任务线程历史需要时由 Agent 调用 `slei-cli task thread <task-id>` 主动读取。
+- 若任务源消息后续通过 Agent Message Todo 或频道唤醒继续处理，daemon prompt 必须携带 task id，并要求 Agent 使用 `slei-cli task reply <task-id> --agent <agent-id>` 继续写入任务线程；任务进展、结果和 handoff 不应作为顶层频道消息发送。
 - 普通消息子线程回复也保存在 daemon/SQLite，并聚合在子线程抽屉中；这些回复不进入主 timeline，且回复本身不能再嵌套创建子线程。
 
 ## UX 合同
@@ -123,6 +124,7 @@ sequenceDiagram
 - `slei-cli task create --source-message` 是否仍创建或返回同一源消息任务。
 - `slei-cli task claim` 是否仍是任务维度原子锁。
 - `slei-cli task reply` 是否仍保留 role、sender 和稳定 reply id。
+- 任务源消息的后续 Agent 待办、续写和 handoff 是否仍回到同一 task thread，没有退化成顶层频道 `message send`。
 - `slei-cli task update` 是否仍只通过 daemon API 改 SQLite。
 - 新增任务路径是否仍原地升级源消息，而不是写入新的 `task_card` 消息。
 - 历史 `task_card:` 是否仍被隐藏/清理，而不是恢复成 UI 兼容渲染路径。

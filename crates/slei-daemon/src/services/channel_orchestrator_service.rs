@@ -1826,10 +1826,51 @@ Process pending todos even if the current trigger is not claimable.
 Do not claim the current trigger solely for todo progression.
 Do not claim the todo source message.
 Use `slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B` for source-message ranges.
+If a todo includes a Task ID, the todo source is a task message: reply with `slei-cli task reply <task-id> --agent <agent-id>` so the response stays in the task thread. Use `slei-cli message send` only for non-task channel todos.
 
 "##,
         );
         for todo in pending_todos {
+            let task_context = match todo.task_id.as_deref() {
+                Some(task_id) => {
+                    let thread_line = todo
+                        .task_thread_id
+                        .as_deref()
+                        .map(|thread_id| format!("- Task Thread ID: `{thread_id}`\n"))
+                        .unwrap_or_default();
+                    let status_line = todo
+                        .task_status
+                        .as_deref()
+                        .map(|status| format!("- Task Status: `{status}`\n"))
+                        .unwrap_or_default();
+                    format!(
+                        r##"- Task ID: `{task_id}`
+{thread_line}{status_line}
+This todo source is a task message. Put visible progress, results, and handoffs in the task thread:
+
+```bash
+printf "..." | slei-cli task reply {task_id} --agent {agent_id}
+```
+
+"##,
+                        task_id = task_id,
+                        thread_line = thread_line,
+                        status_line = status_line,
+                        agent_id = agent_id,
+                    )
+                }
+                None => format!(
+                    r##"This todo source is a channel message. Put visible replies and handoffs in the channel:
+
+```bash
+printf "..." | slei-cli message send --target "#{channel_id}" --agent {agent_id}
+```
+
+"##,
+                    channel_id = todo.channel_id,
+                    agent_id = agent_id,
+                ),
+            };
             prompt.push_str(&format!(
                 r##"### Todo `{todo_id}`
 - Todo ID: `{todo_id}`
@@ -1838,6 +1879,7 @@ Use `slei-cli message read --channel "#all" --from-message msg_A --to-message ms
 - Author ID: `{todo_author_id}`
 - Claim Owner Agent ID: `{claim_owner_agent_id}`
 - Created At: `{todo_created_at}`
+{task_context}
 
 ```text
 {todo_body}
@@ -1854,6 +1896,7 @@ slei-cli message read --channel "#{todo_channel_id}" --from-message {todo_messag
                 todo_author_id = todo.author_id,
                 claim_owner_agent_id = todo.claim_owner_agent_id,
                 todo_created_at = todo.created_at,
+                task_context = task_context,
                 todo_body = todo.body,
             ));
         }
@@ -2129,6 +2172,9 @@ mod tests {
             created_at: "2026-06-18T06:00:00Z".to_string(),
             claim_owner_agent_id: "agent_coda".to_string(),
             body: "Continue processing this older message.".to_string(),
+            task_id: None,
+            task_thread_id: None,
+            task_status: None,
         }];
 
         let prompt = channel_run_prompt("agent_nova", &message, &pending_todos);
@@ -2140,6 +2186,11 @@ mod tests {
         assert!(prompt.contains("- Author ID: `human_lei`"));
         assert!(prompt.contains("- Claim Owner Agent ID: `agent_coda`"));
         assert!(prompt.contains("- Created At: `2026-06-18T06:00:00Z`"));
+        assert!(prompt.contains("This todo source is a channel message."));
+        assert!(prompt.contains(
+            "printf \"...\" | slei-cli message send --target \"#all\" --agent agent_nova"
+        ));
+        assert!(!prompt.contains("This todo source is a task message."));
         assert!(prompt.contains("Continue processing this older message."));
         assert!(
             prompt.contains("Process pending todos even if the current trigger is not claimable.")

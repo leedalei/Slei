@@ -1070,6 +1070,69 @@ async fn agent_message_todo_agent_no_mention_message_starts_one_todo_only_run_wi
 }
 
 #[tokio::test]
+async fn agent_message_todo_for_task_source_prompts_task_thread_reply() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+    let source = state
+        .messages()
+        .create_human_channel_message(
+            "dev",
+            "human_lei",
+            "整理 MySQL MCP 推荐并沉淀成任务",
+            "task-source-todo-message",
+            true,
+        )
+        .await
+        .unwrap();
+    let task = state
+        .tasks()
+        .create_from_source_message(&source.id, "human_lei", "task-source-todo-task")
+        .await
+        .unwrap();
+    state
+        .agent_message_todos()
+        .create_manual_idempotent(
+            CreateAgentMessageTodoInput {
+                agent_id: "agent_alice".to_string(),
+                channel_id: "dev".to_string(),
+                message_id: source.id.clone(),
+                note: None,
+            },
+            "task-source-todo",
+        )
+        .await
+        .unwrap();
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_coda",
+            "我这边先同步一个阶段结果",
+            "task-source-todo-trigger",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+
+    assert!(delivered.is_empty());
+    let prompt = prompt_for_agent(&state, "agent_alice");
+    assert!(prompt.contains(&format!("- Task ID: `{}`", task.id)));
+    assert!(prompt.contains(&format!(
+        "printf \"...\" | slei-cli task reply {} --agent agent_alice",
+        task.id
+    )));
+    assert!(prompt.contains("This todo source is a task message."));
+    assert!(!prompt.contains("Visible replies and handoffs still use `slei-cli message send`"));
+}
+
+#[tokio::test]
 async fn agent_message_todo_agent_unknown_mention_does_not_start_todo_only_run() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
@@ -1899,7 +1962,7 @@ async fn task_thread_visible_agent_mention_creates_task_scoped_inbox_event() {
         "system prompt should identify visible handoff: {system_prompt}"
     );
     assert!(
-        !system_prompt.contains("task assignment"),
+        !system_prompt.contains("- notes: task assignment;"),
         "handoff prompt should not be labeled as task assignment: {system_prompt}"
     );
     complete_channel_agent_run(&state, "agent_coda", "Coda 已在任务线程继续实现。").await;

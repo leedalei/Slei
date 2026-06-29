@@ -81,6 +81,9 @@ pub struct PendingMessageTodoPrompt {
     pub created_at: String,
     pub claim_owner_agent_id: String,
     pub body: String,
+    pub task_id: Option<String>,
+    pub task_thread_id: Option<String>,
+    pub task_status: Option<String>,
 }
 
 impl AgentMessageTodoService {
@@ -331,6 +334,11 @@ impl AgentMessageTodoService {
                     self.mark_invalid_source_deleted(&row.id).await?;
                     continue;
                 };
+                let task = self
+                    .repos
+                    .task_by_source_message(&row.message_id)
+                    .await
+                    .map_err(storage_error)?;
                 prompts.push(PendingMessageTodoPrompt {
                     id: row.id,
                     channel_id: row.channel_id,
@@ -339,6 +347,9 @@ impl AgentMessageTodoService {
                     created_at: message.created_at,
                     claim_owner_agent_id: row.claim_owner_agent_id,
                     body: body.to_string(),
+                    task_id: task.as_ref().map(|task| task.id.clone()),
+                    task_thread_id: task.as_ref().and_then(|task| task.thread_id.clone()),
+                    task_status: task.map(|task| task.status),
                 });
             }
         }

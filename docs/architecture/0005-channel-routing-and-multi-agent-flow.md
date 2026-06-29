@@ -219,6 +219,7 @@ Prompt 规则：
 - 出现 `## Pending Message Todos` 时，Agent 应优先处理这些待办；即使当前触发消息不可 claim 或普通规则要求静默，也不要因此忽略待办。
 - Agent 不要为了处理待办而 claim 当前触发消息，也不要重新 claim 待办源消息；源消息的独占 claim 已属于第一个成功 claim 的 Agent。
 - 若待办上下文不足，Agent 可以用 `slei-cli message read --channel "#channel" --from-message <todoMsg> --to-message <triggerMsg>` 读取包含端点的区间消息。
+- 若待办源消息已关联 task，prompt 必须注入 task id，并明确要求 Agent 使用 `slei-cli task reply <task-id> --agent <agent-id>` 把进展、结果和 handoff 写回任务线程；不得用顶层 `slei-cli message send` 代替任务线程回复。
 - Agent system prompt 只暴露待办处理规则，不暴露 `slei-cli todo update/delete/clear/reopen` 等管理命令；待办完成、恢复和删除由 daemon 生命周期或人工 CLI 管理。
 
 生命周期：
@@ -328,7 +329,7 @@ daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_ac
 - mention 唤醒是否仍优先，并且只给被唤醒 Agent 注入当前频道、属于该 Agent 的 pending todos。
 - Human 无 mention 消息是否仍只走 broadcast，不额外启动 todo-only run；Agent 无 mention 顶层频道消息是否每次最多串行推进一个 pending todo Agent。
 - 任务回复和普通消息子线程回复是否不会触发 pending todo-only 推进。
-- Pending Message Todos prompt 是否仍明确：可处理待办而不 claim 当前触发消息、不 claim 待办源消息，必要时用 `slei-cli message read --from-message --to-message` 查区间。
+- Pending Message Todos prompt 是否仍明确：可处理待办而不 claim 当前触发消息、不 claim 待办源消息，必要时用 `slei-cli message read --from-message --to-message` 查区间；若待办源消息有关联 task，是否明确要求用 `slei-cli task reply` 写回任务线程，而不是顶层频道 `message send`。
 - 生产代码、Tauri broker、React UI、mock 和 diagnostics 是否仍没有 `CoordinatorService`、`coordinator_runtime_runs`、`coordinator_decisions`、`channel_coordinators`、`agent_global_coordinator`、`agent_coordinator_*`、`request_agent_reply` 或 `coordinator_routing`。
 - `slei-cli message claim` 是否仍是唯一消息独占入口。
 - Agent stdout 是否仍不会自动生成可见频道消息；可见动作是否来自 `slei-cli` CLI/API。

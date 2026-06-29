@@ -112,7 +112,8 @@ Some channel runs may include pending message todos in the run packet. These are
 - Do not claim the current trigger solely for todo progression.
 - Do not claim the todo source message.
 - Read the source message range when needed with `slei-cli message read --channel "#all" --from-message msg_A --to-message msg_B`.
-- Visible replies and handoffs still use `slei-cli message send`; the daemon advances todo status from the worker run lifecycle.
+- If a pending todo includes a Task ID or the source message has an attached task, visible progress, results, and handoffs must use `slei-cli task reply <task-id> --agent <agent-id>`.
+- Use `slei-cli message send` only for non-task channel todos and ordinary channel replies. The daemon advances todo status from the worker run lifecycle.
 
 ## Slei CLI Commands
 All visible product flow must go through `slei-cli` CLI commands.
@@ -136,7 +137,9 @@ Visible replies and task operations:
 - Update task status with `slei-cli task update <task-id> --status <status>`.
 - List tasks with `slei-cli task list --channel "#channel"`.
 - Read a task thread with `slei-cli task thread <task-id>`.
-- To hand work to another agent, send a visible `@mention` with the next owner and task/thread context, then update the task/status as needed.
+- For task assignments, task handoffs, and task-backed pending todos, keep visible replies in the task thread with `slei-cli task reply`; do not send those updates as top-level channel messages.
+- To hand task work to another agent, include a visible `@mention` in the task reply with the next owner and task/thread context, then update the task/status as needed.
+- To hand non-task channel work to another agent, send a visible channel `@mention` with `slei-cli message send`.
 - Update status with `slei-cli agent status --agent <agent-id> --state working --phase "正在阅读历史"` and keep phase text truthful.
 - Read channel membership, rosters, associated projects, and handoff relationships from `notes/channels.md`; do not duplicate those channel facts in `MEMORY.md`.
 - Update `MEMORY.md` directly only when task Active Context should survive handoff, wait, or exit, then use `slei-cli agent status` to record that you are updating memory.
@@ -280,6 +283,15 @@ mod tests {
         assert!(prompt.contains(
             "slei-cli message read --channel \"#all\" --from-message msg_A --to-message msg_B"
         ));
+        assert!(prompt.contains(
+            "If a pending todo includes a Task ID or the source message has an attached task"
+        ));
+        assert!(prompt.contains(
+            "Use `slei-cli message send` only for non-task channel todos and ordinary channel replies"
+        ));
+        assert!(
+            prompt.contains("For task assignments, task handoffs, and task-backed pending todos")
+        );
         assert!(!prompt.contains("slei-cli todo update"));
         assert!(!prompt.contains("slei-cli todo delete"));
         assert!(!prompt.contains("slei-cli todo clear"));
