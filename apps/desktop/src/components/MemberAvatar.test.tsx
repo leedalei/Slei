@@ -182,6 +182,30 @@ describe("MemberAvatar", () => {
     }
   });
 
+  it("renders the small avatar size at 16 pixels for compact message rows", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "LW",
+      avatarSeed: "lin-wen-small",
+      handle: "lin",
+      id: "member-small",
+      name: "Lin Wen",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} size="small" />);
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+
+      expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
+      expect(avatar?.className.split(/\s+/)).toContain("size-4");
+      expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
+      expect(avatar?.className.split(/\s+/)).not.toContain("size-16");
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
   it("falls back to uppercased member name initials when no avatar text is provided", async () => {
     installImageMock("error");
     const identity: MemberAvatarIdentity = {

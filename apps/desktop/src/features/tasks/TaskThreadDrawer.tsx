@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiMember, SleiTask, SleiTaskStatus } from "../../app/types";
+import type { SleiMember, SleiTask, SleiTaskReply, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
-import { SleiIcon } from "../../components";
+import { MemberAvatar, SleiIcon, type MemberAvatarIdentity } from "../../components";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
@@ -36,9 +36,12 @@ export function TaskThreadDrawer(input: {
   const taskId = task?.id;
   const openRef = useRef(input.open);
   const activeTaskIdRef = useRef(taskId);
+  const threadScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mention = activeMentionQuery(replyDraft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, input.mentionMembers ?? []) : [];
+  const replyCount = task?.replies?.length ?? 0;
+  const latestReplyId = task?.replies?.at(-1)?.id ?? "";
   const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply || !replyDraft.trim();
   const statusActionDisabled = replySubmitting || statusSubmitting || !input.onStatusChange;
   openRef.current = input.open;
@@ -60,6 +63,25 @@ export function TaskThreadDrawer(input: {
     if (!mention || mentionTargets.length === 0) return;
     mentionOptionRefs.current[selectedMentionIndex]?.scrollIntoView({ block: "nearest" });
   }, [mention, mentionTargets.length, selectedMentionIndex]);
+
+  useEffect(() => {
+    if (!input.open || !taskId || typeof window === "undefined") return undefined;
+    const scrollToBottom = () => {
+      const viewport = threadScrollAreaRef.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+      if (!viewport) return;
+      if (typeof viewport.scrollTo === "function") {
+        viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+      } else {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    };
+    if (typeof window.requestAnimationFrame !== "function") {
+      scrollToBottom();
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(scrollToBottom);
+    return () => window.cancelAnimationFrame(frame);
+  }, [input.open, latestReplyId, replyCount, taskId]);
 
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,15 +146,18 @@ export function TaskThreadDrawer(input: {
             <SleiIcon className="size-4" name="x" />
           </Button>
         </SheetHeader>
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1" ref={threadScrollAreaRef}>
           <div className="grid gap-3 p-5 pb-36" data-slot="task-thread-scroll-content">
             <div data-slot="task-thread-root-body">
               <MarkdownMessage markdown={task.title} />
             </div>
             {(task.replies ?? []).map((reply) => (
-              <Card className={`${CARD_INSET_CLASS} grid gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
-                <strong className="text-sm">{reply.sender}</strong>
-                <MarkdownMessage markdown={reply.body} />
+              <Card className={`${CARD_INSET_CLASS} grid grid-cols-[1rem_minmax(0,1fr)] gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
+                <MemberAvatar identity={taskReplyAvatarIdentity(reply, input.mentionMembers ?? [])} size="small" />
+                <div className="grid min-w-0 gap-2">
+                  <strong className="text-sm">{reply.sender}</strong>
+                  <MarkdownMessage markdown={reply.body} />
+                </div>
               </Card>
             ))}
           </div>
@@ -231,4 +256,24 @@ function formatTaskActionError(prefix: string, error: unknown) {
       ? error
       : "";
   return detail.trim() ? `${prefix}：${detail}` : prefix;
+}
+
+function taskReplyAvatarIdentity(reply: SleiTaskReply, members: SleiMember[]): MemberAvatarIdentity {
+  const normalizedSender = normalizeTaskReplyAuthor(reply.sender);
+  const member = members.find((candidate) => {
+    const normalizedName = normalizeTaskReplyAuthor(candidate.name);
+    const normalizedHandle = normalizeTaskReplyAuthor(candidate.handle);
+    return normalizedName === normalizedSender || normalizedHandle === normalizedSender;
+  });
+  if (member) return member;
+  return {
+    id: `${reply.role ?? "reply"}-${reply.sender}`,
+    name: reply.sender,
+    handle: reply.sender.startsWith("@") ? reply.sender : `@${reply.sender}`,
+    avatar: reply.sender.slice(0, 2).toUpperCase(),
+  };
+}
+
+function normalizeTaskReplyAuthor(author: string) {
+  return author.trim().replace(/^@/, "").toLowerCase();
 }

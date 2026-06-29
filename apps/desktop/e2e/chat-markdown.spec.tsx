@@ -1,7 +1,24 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownMessage } from "../src/features/chat/MarkdownMessage";
+
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let mountedRoot: Root | null = null;
+
+afterEach(() => {
+  act(() => {
+    mountedRoot?.unmount();
+  });
+  mountedRoot = null;
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+});
 
 describe("chat Markdown rendering", () => {
   it("renders app-styled Markdown blocks and sanitizes unsafe links", () => {
@@ -45,6 +62,59 @@ describe("chat Markdown rendering", () => {
     expect(html).toContain('href="#blocked"');
     expect(html).toContain('href="https://example.com"');
     expect(html).not.toContain("<script>");
+  });
+
+  it("renders fenced code with a separate language and copy toolbar before code content", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage
+        markdown={[
+          "```sh",
+          "pnpm --filter @slei/desktop exec vitest run src/app/SleiApp.test.ts",
+          "```",
+        ].join("\n")}
+      />,
+    );
+
+    const headerIndex = html.indexOf('data-slot="markdown-code-header"');
+    const languageIndex = html.indexOf('data-slot="markdown-code-language"');
+    const copyButtonIndex = html.indexOf('aria-label="Copy code"');
+    const preIndex = html.indexOf("<pre");
+    const codeIndex = html.indexOf("pnpm --filter");
+
+    expect(html).toContain('data-slot="markdown-code-block"');
+    expect(headerIndex).toBeGreaterThan(-1);
+    expect(languageIndex).toBeGreaterThan(headerIndex);
+    expect(copyButtonIndex).toBeGreaterThan(languageIndex);
+    expect(preIndex).toBeGreaterThan(copyButtonIndex);
+    expect(codeIndex).toBeGreaterThan(preIndex);
+    expect(html).toContain(">sh</span>");
+  });
+
+  it("copies fenced code content from the code block toolbar", async () => {
+    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
+    vi.stubGlobal("navigator", { clipboard });
+    const host = document.createElement("div");
+    document.body.append(host);
+    mountedRoot = createRoot(host);
+
+    await act(async () => {
+      mountedRoot?.render(
+        <MarkdownMessage
+          markdown={[
+            "```ts",
+            "const answer = 42;",
+            "console.log(answer);",
+            "```",
+          ].join("\n")}
+        />,
+      );
+    });
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[aria-label="Copy code"]')?.click();
+    });
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("const answer = 42;\nconsole.log(answer);");
   });
 
   it("renders common inline and gfm Markdown syntax from chat replies", () => {

@@ -1,7 +1,8 @@
-import { Children, type CSSProperties, type ReactNode } from "react";
+import { Children, isValidElement, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { SleiIcon, TooltipButton } from "../../components";
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
 
@@ -36,6 +37,32 @@ function safeMarkdownUrl(url: string): string {
 }
 
 const markdownComponents: Components = {
+  pre({ children, node: _node, ...props }) {
+    const codeBlock = codeBlockFromChildren(children);
+    if (!codeBlock) return <pre {...props}>{children}</pre>;
+
+    return (
+      <div className="slei-code-block" data-slot="markdown-code-block">
+        <div className="slei-code-block__header" data-slot="markdown-code-header">
+          <span className="slei-code-block__language" data-slot="markdown-code-language">
+            {codeBlock.language}
+          </span>
+          <TooltipButton
+            aria-label="Copy code"
+            className="slei-code-block__copy"
+            onClick={() => void copyCodeBlock(codeBlock.code)}
+            size="icon-xs"
+            tooltip="Copy code"
+            type="button"
+            variant="ghost"
+          >
+            <SleiIcon name="copy" size={14} />
+          </TooltipButton>
+        </div>
+        <pre {...props}>{children}</pre>
+      </div>
+    );
+  },
   p({ children, node: _node, ...props }) {
     return <p {...props}>{renderMentions(children)}</p>;
   },
@@ -58,6 +85,33 @@ const markdownComponents: Components = {
     );
   },
 };
+
+type CodeElementProps = {
+  className?: string;
+  children?: ReactNode;
+};
+
+function codeBlockFromChildren(children: ReactNode): { code: string; language: string } | null {
+  const codeElement = Children.toArray(children).find(isValidElement) as ReactElement<CodeElementProps> | undefined;
+  if (!codeElement) return null;
+
+  const className = codeElement.props.className ?? "";
+  const language = className.match(/(?:^|\s)language-([^\s]+)/)?.[1] ?? "text";
+  const code = plainTextFromNode(codeElement.props.children).replace(/\n$/, "");
+  return { code, language };
+}
+
+function plainTextFromNode(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(plainTextFromNode).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return plainTextFromNode(node.props.children);
+  return "";
+}
+
+async function copyCodeBlock(code: string): Promise<void> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
+  await navigator.clipboard.writeText(code);
+}
 
 const mentionPattern = /(^|[^A-Za-z0-9_@.])(@[A-Za-z0-9][A-Za-z0-9_-]*)(?=$|[^A-Za-z0-9_-])/g;
 

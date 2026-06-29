@@ -78,23 +78,42 @@ function pageData() {
   });
 }
 
+function pageDataWithTasks(inputTasks: SleiTask[]) {
+  return createSleiFixtures({
+    channels: [
+      { id: "ai", name: "AI咨询", description: "AI research", unread: 0 },
+      { id: "design", name: "设计", description: "Design", unread: 0 },
+    ],
+    members: [coda, alice],
+    tasks: inputTasks,
+  });
+}
+
 let root: Root | undefined;
 let container: HTMLDivElement | undefined;
 
 async function mountTasksPage(
   activeTaskId?: string,
   handlers: Pick<ComponentProps<typeof TasksPage>, "onTaskReply"> = {},
+  data = pageData(),
 ) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
 
   await act(async () => {
-    root?.render(<TasksPage activeTaskId={activeTaskId} data={pageData()} messages={createDesktopMessages("zh-CN")} {...handlers} />);
+    root?.render(<TasksPage activeTaskId={activeTaskId} data={data} messages={createDesktopMessages("zh-CN")} {...handlers} />);
   });
   await act(async () => undefined);
 
   return container;
+}
+
+async function renderTasksPage(activeTaskId: string | undefined, data: ReturnType<typeof pageData>) {
+  await act(async () => {
+    root?.render(<TasksPage activeTaskId={activeTaskId} data={data} messages={createDesktopMessages("zh-CN")} />);
+  });
+  await act(async () => undefined);
 }
 
 async function changeSelect(label: string, value: string) {
@@ -363,4 +382,79 @@ describe("TasksPage filters", () => {
     expect(composer?.contains(textarea!)).toBe(true);
     expect(composer?.contains(sendButton!)).toBe(true);
   });
+
+  it("scrolls the task thread to the latest message after task data loads", async () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const scrollTo = vi.fn();
+    await mountTasksPage("task_ai_coda", {}, pageDataWithTasks([]));
+
+    expect(document.body.querySelector('[data-slot="sheet-content"][aria-label="任务讨论"]')).toBeNull();
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    await renderTasksPage("task_ai_coda", pageDataWithTasks([
+      {
+        ...tasks[0],
+        replies: [
+          { id: "reply-1", sender: "Coda", role: "agent", body: "先检查数据加载" },
+          { id: "reply-2", sender: "lei lee", role: "human", body: "继续往下看" },
+        ],
+      },
+    ]));
+
+    const viewport = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"] [data-slot="scroll-area-viewport"]');
+    setScrollMetrics(viewport, { clientHeight: 320, scrollHeight: 1280, scrollTop: 0 });
+    Object.defineProperty(viewport, "scrollTo", { configurable: true, value: scrollTo });
+
+    await renderTasksPage("task_ai_coda", pageDataWithTasks([
+      {
+        ...tasks[0],
+        replies: [
+          { id: "reply-1", sender: "Coda", role: "agent", body: "先检查数据加载" },
+          { id: "reply-2", sender: "lei lee", role: "human", body: "继续往下看" },
+          { id: "reply-3", sender: "Coda", role: "agent", body: "最新消息" },
+        ],
+      },
+    ]));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1280, behavior: "smooth" });
+
+    requestAnimationFrameSpy.mockRestore();
+    cancelAnimationFrameSpy.mockRestore();
+  });
+
+  it("renders 16px avatars for human and agent replies in the task thread", async () => {
+    await mountTasksPage("task_ai_coda", {}, pageDataWithTasks([
+      {
+        ...tasks[0],
+        replies: [
+          { id: "reply-human", sender: "Lei", role: "human", body: "人类回复" },
+          { id: "reply-agent", sender: "Coda", role: "agent", body: "Agent 回复" },
+        ],
+      },
+    ]));
+
+    const replies = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"] [data-reply-role]'));
+    const avatars = replies.map((reply) => reply.querySelector<HTMLElement>('[data-slot="avatar"]'));
+
+    expect(replies).toHaveLength(2);
+    expect(avatars.every(Boolean)).toBe(true);
+    expect(avatars.map((avatar) => avatar?.getAttribute("data-avatar-size"))).toEqual(["small", "small"]);
+    expect(avatars.every((avatar) => avatar?.className.split(/\s+/).includes("size-4"))).toBe(true);
+    expect(avatars.map((avatar) => avatar?.getAttribute("aria-label"))).toEqual(["Lei", "Coda"]);
+    expect(replies[0]?.textContent).toContain("人类回复");
+    expect(replies[1]?.textContent).toContain("Agent 回复");
+  });
 });
+
+function setScrollMetrics(element: HTMLElement | null, metrics: { clientHeight: number; scrollHeight: number; scrollTop: number }) {
+  if (!element) return;
+  Object.defineProperty(element, "clientHeight", { configurable: true, value: metrics.clientHeight });
+  Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight });
+  Object.defineProperty(element, "scrollTop", { configurable: true, value: metrics.scrollTop, writable: true });
+}
