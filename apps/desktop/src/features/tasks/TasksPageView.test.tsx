@@ -561,6 +561,13 @@ describe("TasksPage filters", () => {
 
   it("scrolls the task thread to the latest reply when replies change", async () => {
     const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     const scrollTo = vi.fn();
     HTMLElement.prototype.scrollTo = scrollTo;
     const data = pageData();
@@ -610,6 +617,8 @@ describe("TasksPage filters", () => {
       expect(scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: "smooth" });
     } finally {
       HTMLElement.prototype.scrollTo = originalScrollTo;
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
     }
   });
 });

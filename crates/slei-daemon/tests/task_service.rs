@@ -115,6 +115,10 @@ async fn task_service_blocks_root_delete_while_active_and_updates_status() {
     assert!(err.to_string().contains("active task"));
 
     service
+        .add_reply(&task.id, "agent_coda", "active task completed", "task-key-2-reply")
+        .await
+        .unwrap();
+    service
         .update_status(&task.id, TaskStatus::Done)
         .await
         .unwrap();
@@ -344,6 +348,16 @@ async fn task_status_idempotency_replays_original_response_after_service_reload(
         .create_task_root("all", "human_lei", "status task", "status-idem-create")
         .await
         .unwrap();
+    first
+        .tasks()
+        .add_reply(
+            &task.id,
+            "agent_coda",
+            "status task has started",
+            "status-idem-reply",
+        )
+        .await
+        .unwrap();
     let updated = first
         .tasks()
         .update_status_idempotent(&task.id, TaskStatus::InProgress, "status-idem-update")
@@ -426,6 +440,15 @@ async fn reassignment_preserves_review_and_done_statuses() {
         .await
         .unwrap();
     service
+        .add_reply(
+            &review_task.id,
+            "agent_alice",
+            "review task is ready",
+            "task-key-4-reply",
+        )
+        .await
+        .unwrap();
+    service
         .update_status(&review_task.id, TaskStatus::InReview)
         .await
         .unwrap();
@@ -446,6 +469,15 @@ async fn reassignment_preserves_review_and_done_statuses() {
 
     let done_task = service
         .create_task_root("channel_dev", "human_lei", "done task", "task-key-5")
+        .await
+        .unwrap();
+    service
+        .add_reply(
+            &done_task.id,
+            "agent_coda",
+            "done task completed",
+            "task-key-5-reply",
+        )
         .await
         .unwrap();
     service

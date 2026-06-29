@@ -219,17 +219,19 @@ describe("desktop startup contract", () => {
     expect(sourceIcon).toContain('fill-opacity="0.88"');
     expect(sourceIcon).not.toContain('r="3.05"');
     await expect(sha256(join(iconRoot, "slei-icon.svg"))).resolves.toBe("362ce08df11fe71bd6a1c69a64ccd53b0d231ad0359b2a528275914384310c3e");
-    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("4d186b83834748fd3305539e29480276471e3ce550f411cdbbfb0bc3416fbc7d");
-    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("e39158aa973ce8dd95dfa3ea6b2a7e3caaa8d82a47016d19271a13c42ff2f023");
-    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("1999254eced9f512326d46615f0afd46d95c1fe439f4cfeaac3a9394fff650ed");
-    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("e30988843d2253fab15c26e5b3fadc4a55a0778b2e85a551dbfd5dfff52a9700");
-    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("280bd0dcd391d3ef4eb048c171f1de1dd49402869c4d251deed85141304d2770");
+    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("a1c046ef5fe4637ce0e1c013d0bd0b455a71527d307e6bdf945808b8f1afb255");
+    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("aef0fbe8f94f0b3990d1a001cd7d12731b1cd678b4e4807a9ed727f8b9f597d0");
+    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("fc43016b0fc96906b56b28d4f2fdeadf2f67834cba34d3fa08ee5ebc9354468d");
+    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("39eb3e534556162eaf842367145fff46ba6810ef0d5c18371850770be30cd890");
+    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("8186d818fa96551b3923c0df2b2774c8ccfd78b23ef6e906266515f0608aab63");
     await expect(icnsPngHashes(join(iconRoot, "icon.icns"))).resolves.toEqual(
       expect.arrayContaining([
-        "1999254eced9f512326d46615f0afd46d95c1fe439f4cfeaac3a9394fff650ed",
-        "e30988843d2253fab15c26e5b3fadc4a55a0778b2e85a551dbfd5dfff52a9700",
-        "280bd0dcd391d3ef4eb048c171f1de1dd49402869c4d251deed85141304d2770",
-        "4d186b83834748fd3305539e29480276471e3ce550f411cdbbfb0bc3416fbc7d",
+        "a337720e8e7c81196a9d78420c51a50f361ba65c1a6e70106e805f391d1ec968",
+        "4e40025b8db4a30745ef222be57703ae278d75c58ce69a2ab3a978f6171d48d8",
+        "a88b5d871ed31f039ffb09cd9ffe8e4af1a422ea8aa343bcbe63c1eac53c9a0d",
+        "c0d98caec33b78739f66e6b8788a09fd5777edb06a62464cb0f7a8f364724ba5",
+        "109430bea765f82d4f015a417029579bc5864180ab6aefff39dce838b7f42e8f",
+        "7b95f2f6c6d38d1b038d08400b1b2705a59041a79b9b140feb7438f081a69d75",
       ]),
     );
   });

@@ -36,6 +36,15 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
         .await
         .unwrap();
     service
+        .add_reply(
+            &ai_task.id,
+            "agent_coda",
+            "已整理 AI 动态，提交评审",
+            "task-board-2-reply",
+        )
+        .await
+        .unwrap();
+    service
         .update_status(&ai_task.id, TaskStatus::InReview)
         .await
         .unwrap();
@@ -46,6 +55,15 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
             "human_may",
             "检查 release note",
             "task-board-3",
+        )
+        .await
+        .unwrap();
+    service
+        .add_reply(
+            &done_task.id,
+            "human_may",
+            "release note 已检查",
+            "task-board-3-reply",
         )
         .await
         .unwrap();
@@ -113,6 +131,15 @@ async fn task_board_queries_across_channels_and_preserves_attention_separately()
     assert_eq!(visible_dev_task.status, TaskStatus::InProgress);
     assert!(visible_dev_task.attention_required);
 
+    service
+        .add_reply(
+            &dev_task.id,
+            "agent_alice",
+            "调研方案已整理，等待评审",
+            "task-board-1-reply",
+        )
+        .await
+        .unwrap();
     service
         .update_status(&dev_task.id, TaskStatus::InReview)
         .await
