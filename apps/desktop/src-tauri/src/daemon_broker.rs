@@ -65,6 +65,23 @@ pub struct SanitizedDaemonStatus {
 #[derive(Clone, Debug, Serialize)]
 pub struct EventReconnectReceipt {
     pub after: u64,
+    pub events: Vec<DaemonEventView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaemonEventView {
+    pub sequence: u64,
+    #[serde(rename = "eventType", alias = "event_type")]
+    pub event_type: String,
+    #[serde(rename = "occurredAtUnixMs", alias = "occurred_at_unix_ms")]
+    pub occurred_at_unix_ms: u128,
+    pub payload: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct EventReplayResponse {
+    events: Vec<DaemonEventView>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -683,6 +700,7 @@ pub struct TaskReplyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct TaskReplyRoute {
     pub handoff_agent_ids: Vec<String>,
+    pub followup_agent_ids: Vec<String>,
     pub needs_assignment: bool,
 }
 
@@ -1124,11 +1142,13 @@ impl DaemonBroker {
 
     pub fn reconnect_events(&self, after: u64) -> EventReconnectReceipt {
         let _socket = &self.descriptor.event_socket;
-        self.last_authorization_header
-            .lock()
-            .expect("authorization mutex poisoned")
-            .replace(format!("Bearer {}", self.descriptor.token));
-        EventReconnectReceipt { after }
+        let path = format!("/v1/events/ws?after={after}");
+        let events = self
+            .send_daemon_request("GET", &path, None, &[])
+            .and_then(|response| serde_json::from_str::<EventReplayResponse>(&response).ok())
+            .map(|receipt| receipt.events)
+            .unwrap_or_default();
+        EventReconnectReceipt { after, events }
     }
 
     pub fn request_artifact_open(
@@ -3599,6 +3619,7 @@ impl DaemonBroker {
             reply,
             route: TaskReplyRoute {
                 handoff_agent_ids: Vec::new(),
+                followup_agent_ids: Vec::new(),
                 needs_assignment: false,
             },
         })

@@ -437,7 +437,7 @@ export function createDaemonBridgeMock(input: {
       thread.task.replyCount = thread.replies.length;
       thread.task.updatedAt = reply.createdAt;
       tasks = tasks.map((task) => (task.id === taskId ? thread.task : task));
-      return { reply, route: { handoffAgentIds: [], needsAssignment: false } };
+      return { reply, route: { handoffAgentIds: [], followupAgentIds: [], needsAssignment: false } };
     },
     async updateTaskStatus(taskId, request) {
       const thread = taskThreads.get(taskId);
@@ -787,6 +787,7 @@ export function createDaemonBridgeMock(input: {
     },
     async subscribeEvents(after) {
       eventSubscriptions.push({ after });
+      return { after, events: [] };
     },
   };
 }

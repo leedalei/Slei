@@ -123,6 +123,29 @@ impl AgentInboxService {
         .await
     }
 
+    pub async fn create_task_followup_with_details(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        reply_id: &str,
+        readiness: ChannelMemberReadiness,
+        sender_id: Option<&str>,
+        followup_text: Option<&str>,
+    ) -> AgentInboxEvent {
+        self.push_with_details(
+            agent_id,
+            channel_id,
+            Some(task_id),
+            reply_id,
+            "task_followup",
+            delivery_state_for_readiness(readiness),
+            sender_id,
+            followup_text,
+        )
+        .await
+    }
+
     pub async fn events_for_agent(&self, agent_id: &str) -> Vec<AgentInboxEvent> {
         match self.store.agent_inbox_events_for_agent(agent_id).await {
             Ok(records) => records

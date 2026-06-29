@@ -133,11 +133,12 @@ describe("Slei protocol contract fixtures", () => {
         body: "@coda 继续",
         createdAt: "2",
       },
-      route: { handoffAgentIds: ["agent_coda"], needsAssignment: false },
+      route: { handoffAgentIds: ["agent_coda"], followupAgentIds: ["agent_alice"], needsAssignment: false },
     } satisfies TaskReplyReceipt;
 
     expect(channelRequest.asTask).toBe(true);
     expect(thread.task.status).toBe("pending_assignment");
     expect(receipt.route.handoffAgentIds).toEqual(["agent_coda"]);
+    expect(receipt.route.followupAgentIds).toEqual(["agent_alice"]);
   });
 });

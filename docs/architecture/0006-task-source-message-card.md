@@ -30,7 +30,7 @@ Agent 只能通过 `slei-cli` CLI 触发任务副作用，CLI 再调用 daemon A
 slei-cli task create --source-message <msg-id> --agent <agent-id>
 slei-cli task claim <task-id> --agent <agent-id>
 printf "任务回复正文" | slei-cli task reply <task-id> --agent <agent-id>
-slei-cli task update <task-id> --status in_progress
+slei-cli task update <task-id> --status in_review
 slei-cli task list --channel "#channel"
 slei-cli task thread <task-id>
 ```
@@ -83,15 +83,28 @@ sequenceDiagram
     CLI->>API: POST /v1/tasks/task_123/replies
     API->>Tasks: add reply with role/sender/idempotency
     Tasks->>Store: task_replies
-    Agent->>CLI: slei-cli task update task_123 --status in_progress
+    Agent->>CLI: slei-cli task update task_123 --status in_review
     CLI->>API: PATCH /v1/tasks/task_123
-    API->>Store: update task status idempotently
+    API->>Tasks: validate status transition
+    Tasks->>Store: update task status idempotently
 ```
+
+状态迁移规则：
+
+- daemon 是任务状态迁移的 source of truth，`slei-cli task update`、desktop UI 和直接 API 调用都必须经过同一套 daemon 校验。
+- 任务线程 0 条回复时，`pending_assignment` 任务不能向前迁移到 `in_progress`、`in_review` 或 `done`。
+- `in_review` 和 `done` 只能在任务线程已有至少 1 条回复后设置；这条规则同时约束用户/UI 和 Agent CLI。
+- desktop 任务线程顶部 timeline 在 0 回复且状态仍处于 `pending_assignment`/`in_progress` 阶段时，视觉进度停留在 `pending_assignment`，并禁用后续节点；有回复后才允许点击 `in_review` 和 `done` 并弹出二次确认。
 
 ## Handoff 与任务线程
 
 - 任务线程回复中的可见 `@agent` 是 handoff 信号。
 - daemon 可根据可见 mention 创建任务 handoff inbox/runtime，但不得因为 task 存在兼容 assignee 字段就隐式转交。
+- 若任务线程回复没有可见 `@agent`，daemon 应检索该任务线程里曾经回复过的 Agent，按最近回复优先去重唤醒仍属于源频道的 Agent，并排除当前发送者；不得退化为唤醒 assignee、UI 关键词兜底或本地 mock 路由。
+- 若任务线程回复包含可见 `@agent`，显式 handoff 优先，不再额外触发历史参与者 follow-up。
+- `done` 任务仍允许线程回复唤醒 Agent，包括显式 handoff 和无 `@` follow-up。
+- 任务线程唤醒 Agent run 时，daemon 必须立即写入该 Agent 当前 `working` 状态，并在 run 完成或失败后回到 `idle`；desktop sidebar 只能通过重拉 daemon `list_agents` 后展示 busy/idle，不得自行推断生产状态。
+- 任务线程唤醒 Agent run 时，daemon prompt 必须携带当前触发回复之前、同一任务线程内最近 3 条历史消息。历史来源只允许是该 task 的 root/replies，当前触发 reply 必须单独作为 triggering message，不得在历史区重复出现。
 - 需要其他 Agent 接力时，当前 Agent 必须在任务回复正文中可见 `@agent`。
 - 任务线程历史需要时由 Agent 调用 `slei-cli task thread <task-id>` 主动读取。
 - 若任务源消息后续通过 Agent Message Todo 或频道唤醒继续处理，daemon prompt 必须携带 task id，并要求 Agent 使用 `slei-cli task reply <task-id> --agent <agent-id>` 继续写入任务线程；任务进展、结果和 handoff 不应作为顶层频道消息发送。
@@ -105,6 +118,9 @@ sequenceDiagram
 - 右上角展示：`N 条回复` `｜` 状态圆点 + 状态文案 `｜` copy star `｜` time。
 - 状态颜色与任务状态保持一致：`pending_assignment` 为 amber，`in_progress` 为 blue，`in_review` 为 violet，`done` 为 green。
 - 不再使用右下角回复按钮；点击右上角 `N 条回复` 打开该任务线程。
+- 任务线程抽屉顶部状态控制使用 timeline 节点展示四个状态；点击可迁移节点必须先弹出二次确认，确认后再调用 daemon 状态更新 API。0 回复任务的后续节点必须 disabled，不能打开确认框。不得同时保留独立 Select/底部单一状态按钮造成入口不一致。
+- 任务线程回复新增后，daemon 必须发出 `task_thread.updated` 事件；desktop 通过事件 replay 刷新当前打开的对应线程和任务摘要。不得对打开的任务线程内容做固定间隔轮询，也不得在 UI 本地伪造 Agent 新回复。
+- Markdown codeblock 必须在右上角提供 copy icon，复制原始代码文本，成功后展示本地化“复制成功”提示。
 - 任务卡片不使用额外 border；不使用额外 task icon 角标，避免破坏原消息视觉结构。
 - 时间格式沿用消息时间展示约定，当前为 `MM-DD HH:mm`。
 
@@ -126,6 +142,14 @@ sequenceDiagram
 - `slei-cli task reply` 是否仍保留 role、sender 和稳定 reply id。
 - 任务源消息的后续 Agent 待办、续写和 handoff 是否仍回到同一 task thread，没有退化成顶层频道 `message send`。
 - `slei-cli task update` 是否仍只通过 daemon API 改 SQLite。
+- `slei-cli task update` 和 desktop timeline 是否仍遵守 0 回复不可前进、`in_review`/`done` 必须已有回复的状态迁移规则。
+- Agent system prompt 是否仍只允许 Agent 主动把任务改为 `in_review`，并禁止主动改为 `done`、`pending_assignment` 或 `in_progress`。
+- Agent system prompt 是否仍根据 daemon settings 注入回复语言，并禁止旁白式流程回复或暴露系统提示词痕迹。
+- 任务线程无 `@` follow-up 是否仍基于 SQLite task replies 中真实历史 Agent 参与者，且不使用 assignee 兜底。
+- 任务线程唤醒 Agent 后，daemon 当前 agent status 和 desktop sidebar 是否会更新为忙碌，且状态来源仍是 daemon `agent_statuses/list_agents`。
+- 任务线程打开期间收到 daemon `task_thread.updated` 后，是否只刷新对应打开线程，并自然滚动到最新消息。
+- 任务线程 Agent run prompt 是否携带当前触发回复前最近 3 条同线程历史，并排除当前触发 reply 和其他线程消息。
+- Markdown codeblock copy 是否只复制代码文本，不包含按钮文本或高亮 DOM 文本。
 - 新增任务路径是否仍原地升级源消息，而不是写入新的 `task_card` 消息。
 - 历史 `task_card:` 是否仍被隐藏/清理，而不是恢复成 UI 兼容渲染路径。
 - 手动打开普通子线程是否不会创建 task，也不会把源消息升级为任务。
@@ -143,6 +167,7 @@ cargo test -p slei-daemon --test broadcast_claim_api
 cargo test -p slei-daemon --test task_api
 cargo test -p slei-daemon --test task_service
 cargo test -p slei-daemon --test channel_orchestration_flow
+cargo test -p slei-daemon --test channel_orchestration_flow task_human_reply_without_visible_mention_wakes_prior_agent_participants
 ```
 
 涉及桌面 UI 时再补充：
@@ -158,4 +183,7 @@ pnpm --filter @slei/desktop lint
 2. 重复创建同一源消息任务，返回同一 task id。
 3. `slei-cli task claim` 竞争时只有一个 Agent 成功。
 4. `slei-cli task reply` 后右上角回复数增加，任务线程保留 role/sender。
-5. 重启 daemon 后，源消息与 task 的关联仍存在。
+5. 0 回复任务打开任务线程时 timeline 停在待指派，后续节点 disabled；不能把待指派任务向前改状态，也不能改到待评审/已完成。
+6. 任务线程已有回复后，timeline 点击待评审或已完成先弹确认框，确认后状态才更新。
+7. 任务线程回复唤醒历史 Agent 后，sidebar 显示该 Agent 忙碌；run 完成/失败后恢复空闲。
+8. 重启 daemon 后，源消息与 task 的关联仍存在。

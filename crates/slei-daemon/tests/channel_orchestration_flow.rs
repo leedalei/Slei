@@ -2095,7 +2095,261 @@ async fn task_human_reply_without_visible_mention_does_not_handoff_to_assignee()
 }
 
 #[tokio::test]
-async fn done_task_reply_with_visible_mention_does_not_create_handoff_or_run() {
+async fn task_human_reply_without_visible_mention_wakes_prior_agent_participants() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_bob", "@bob-win"),
+        ("agent_outsider", "@outsider-win"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-implicit-followup",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda", "agent_bob"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let task = state
+        .tasks()
+        .create_from_source_with_assignment(
+            "dev",
+            "human_lei",
+            "msg_root_implicit_followup",
+            "实现任务线程 follow-up",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-implicit-followup-root",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_alice",
+            "Alice 先给出方案。",
+            "task-implicit-followup-alice",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_coda",
+            "Coda 补充实现细节。",
+            "task-implicit-followup-coda",
+        )
+        .await
+        .unwrap();
+    state
+        .tasks()
+        .add_reply_with_role(
+            &task.id,
+            "agent_outsider",
+            Some("agent"),
+            "不在频道内的历史回复者不应被唤醒。",
+            "task-implicit-followup-outsider",
+        )
+        .await
+        .unwrap();
+
+    let receipt = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "这个任务我补了一个新约束，请继续看一下。",
+            "task-implicit-followup-human",
+        )
+        .await
+        .unwrap();
+
+    assert!(receipt.route.handoff_agent_ids.is_empty());
+    assert_eq!(
+        receipt.route.followup_agent_ids,
+        vec!["agent_coda".to_string(), "agent_alice".to_string()]
+    );
+    let commands = state.worker_commands();
+    let followup_runs = commands
+        .iter()
+        .filter_map(|command| {
+            let prompt = command["input"]["prompt"].as_str()?;
+            if !prompt.contains("这个任务我补了一个新约束，请继续看一下。") {
+                return None;
+            }
+            Some(command["session"]["agent_id"].as_str().unwrap().to_string())
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        followup_runs,
+        vec!["agent_coda".to_string(), "agent_alice".to_string()]
+    );
+    let coda_followup_prompt = commands
+        .iter()
+        .find_map(|command| {
+            if command["session"]["agent_id"] != "agent_coda" {
+                return None;
+            }
+            let prompt = command["input"]["prompt"].as_str()?;
+            if prompt.contains("这个任务我补了一个新约束，请继续看一下。") {
+                Some(prompt)
+            } else {
+                None
+            }
+        })
+        .expect("coda follow-up prompt should include triggering reply");
+    assert!(coda_followup_prompt.contains("## Previous Task Thread Messages"));
+    assert!(coda_followup_prompt.contains("Alice 先给出方案。"));
+    assert!(coda_followup_prompt.contains("Coda 补充实现细节。"));
+    assert!(coda_followup_prompt.contains("不在频道内的历史回复者不应被唤醒。"));
+    assert!(!coda_followup_prompt.contains("实现任务线程 follow-up"));
+    assert_eq!(
+        coda_followup_prompt
+            .matches("这个任务我补了一个新约束，请继续看一下。")
+            .count(),
+        1
+    );
+    assert!(commands.iter().any(|command| {
+        command["session"]["agent_id"] == "agent_coda"
+            && command["input"]["system_prompt"]
+                .as_str()
+                .is_some_and(|prompt| prompt.contains("implicit task thread follow-up"))
+    }));
+    let coda_status = state
+        .orchestration()
+        .repos()
+        .agent_status("agent_coda")
+        .await
+        .unwrap()
+        .expect("coda status should be updated when follow-up run starts");
+    assert_eq!(coda_status.state, "working");
+    assert_eq!(coda_status.phase.as_deref(), Some("正在处理任务线程回复"));
+    assert_eq!(coda_status.task_id.as_deref(), Some(task.id.as_str()));
+    let coda_agent = state
+        .members()
+        .get_product_agent("agent_coda")
+        .await
+        .expect("coda agent should be listed");
+    assert_eq!(coda_agent.runtime_thread.status, "working");
+    let alice_status = state
+        .orchestration()
+        .repos()
+        .agent_status("agent_alice")
+        .await
+        .unwrap()
+        .expect("alice status should be updated when follow-up run starts");
+    assert_eq!(alice_status.state, "working");
+    assert_eq!(alice_status.phase.as_deref(), Some("正在处理任务线程回复"));
+    assert_eq!(alice_status.task_id.as_deref(), Some(task.id.as_str()));
+    assert!(!commands
+        .iter()
+        .any(|command| command["session"]["agent_id"] == "agent_outsider"));
+}
+
+#[tokio::test]
+async fn task_reply_with_visible_mention_does_not_create_implicit_followups() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-mentioned-no-followup",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+        state
+            .channels()
+            .set_member_readiness("dev", agent_id, ChannelMemberReadiness::Ready)
+            .await
+            .unwrap();
+    }
+
+    let task = state
+        .tasks()
+        .create_from_source_with_assignment(
+            "dev",
+            "human_lei",
+            "msg_root_mentioned_no_followup",
+            "实现任务线程显式交接",
+            Some("agent_alice".to_string()),
+            "initial assignment",
+            "task-mentioned-no-followup-root",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "agent_coda",
+            "Coda 之前参与过。",
+            "task-mentioned-no-followup-coda-history",
+        )
+        .await
+        .unwrap();
+
+    let receipt = state
+        .channel_orchestrator()
+        .add_task_reply(
+            &task.id,
+            "human_lei",
+            "@alice-win 请你接手，其他人先不用动。",
+            "task-mentioned-no-followup-human",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(receipt.route.handoff_agent_ids, vec!["agent_alice"]);
+    assert!(receipt.route.followup_agent_ids.is_empty());
+    let commands = state.worker_commands();
+    assert!(commands.iter().any(|command| {
+        command["session"]["agent_id"] == "agent_alice"
+            && command["input"]["prompt"]
+                .as_str()
+                .is_some_and(|prompt| prompt.contains("@alice-win 请你接手"))
+    }));
+    assert!(!commands.iter().any(|command| {
+        command["session"]["agent_id"] == "agent_coda"
+            && command["input"]["prompt"]
+                .as_str()
+                .is_some_and(|prompt| prompt.contains("@alice-win 请你接手"))
+    }));
+}
+
+#[tokio::test]
+async fn done_task_reply_with_visible_mention_creates_handoff_and_run() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -2139,6 +2393,17 @@ async fn done_task_reply_with_visible_mention_does_not_create_handoff_or_run() {
         .unwrap();
     state
         .tasks()
+        .add_reply_with_role(
+            &task.id,
+            "agent_alice",
+            Some("agent"),
+            "完成前已有任务线程回复。",
+            "task-done-no-handoff-history",
+        )
+        .await
+        .unwrap();
+    state
+        .tasks()
         .update_status(&task.id, TaskStatus::Done)
         .await
         .unwrap();
@@ -2149,15 +2414,16 @@ async fn done_task_reply_with_visible_mention_does_not_create_handoff_or_run() {
         .add_task_reply(
             &task.id,
             "agent_alice",
-            "@coda-win 这条 done 任务里的 mention 不应该再启动交接。",
+            "@coda-win 这条 done 任务里的 mention 也应该启动交接。",
             "task-done-no-handoff-reply",
         )
         .await
         .unwrap();
 
-    assert!(receipt.route.handoff_agent_ids.is_empty());
+    assert_eq!(receipt.route.handoff_agent_ids, vec!["agent_coda"]);
+    assert!(receipt.route.followup_agent_ids.is_empty());
     assert!(!receipt.route.needs_assignment);
-    assert_eq!(state.worker_commands().len(), command_count_before);
+    assert_eq!(state.worker_commands().len(), command_count_before + 1);
     let coda_handoffs = state
         .agent_inbox()
         .events_for_agent("agent_coda")
@@ -2165,7 +2431,7 @@ async fn done_task_reply_with_visible_mention_does_not_create_handoff_or_run() {
         .into_iter()
         .filter(|event| event.event_type == "task_handoff")
         .collect::<Vec<_>>();
-    assert!(coda_handoffs.is_empty());
+    assert_eq!(coda_handoffs.len(), 1);
 }
 
 #[tokio::test]

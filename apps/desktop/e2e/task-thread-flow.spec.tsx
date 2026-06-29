@@ -128,9 +128,9 @@ describe("chat to task thread flow", () => {
     });
     const html = renderToStaticMarkup(<SleiAppFrame activeTaskId="T-900" activeView="tasks" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />);
     expect(html).toContain("待评审");
-    expect(html).toContain("标记已完成");
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?标记已完成[\s\S]*?<\/button>/);
-    expect(html).not.toContain("标记待评审");
+    expect(html).toContain('aria-label="变更任务状态"');
+    expect(html).toContain("已完成");
+    expect(html).not.toContain("标记已完成");
     expect(html).toContain("2 条回复");
   });
 

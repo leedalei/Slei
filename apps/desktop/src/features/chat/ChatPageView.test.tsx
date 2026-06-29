@@ -177,7 +177,7 @@ describe("ChatPage DM skill message highlight", () => {
 
     expect(html).toContain("slei-message-skill");
     expect(html).toContain("/memory");
-    expect(html).toContain("<pre>");
+    expect(html).toContain("<pre");
     expect(html).toContain("<code>code");
   });
 
@@ -785,6 +785,48 @@ describe("ChatPage mention panel", () => {
       });
 
       expect(host.querySelector('[data-slot="notification"]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("copies markdown code block text from the code copy icon", async () => {
+    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
+    vi.stubGlobal("navigator", { clipboard });
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_code_copy",
+          author: "Lei",
+          handle: "@lei",
+          role: "human",
+          time: "09:08",
+          body: "代码：\n\n```ts\nconst answer = 42;\nconsole.log(answer);\n```",
+          channelId: "all",
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const message = host.querySelector<HTMLElement>('[data-message-id="msg_code_copy"]');
+
+      await act(async () => {
+        message?.querySelector<HTMLButtonElement>('button[data-slot="markdown-code-copy"]')?.click();
+      });
+      await act(async () => undefined);
+
+      expect(clipboard.writeText).toHaveBeenCalledWith("const answer = 42;\nconsole.log(answer);");
+      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain(messages.chat.copySuccess);
     } finally {
       vi.unstubAllGlobals();
     }

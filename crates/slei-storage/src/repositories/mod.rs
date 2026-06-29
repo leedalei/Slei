@@ -2490,6 +2490,34 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn agent_status(
+        &self,
+        agent_id: &str,
+    ) -> Result<Option<AgentStatusRow>, sqlx::Error> {
+        sqlx::query(
+            "SELECT agent_id, state, phase, reason, run_id, channel_id, message_id, task_id, updated_at
+             FROM agent_statuses
+             WHERE agent_id = ?",
+        )
+        .bind(agent_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|row| {
+            Ok(AgentStatusRow {
+                agent_id: row.try_get("agent_id")?,
+                state: row.try_get("state")?,
+                phase: row.try_get("phase")?,
+                reason: row.try_get("reason")?,
+                run_id: row.try_get("run_id")?,
+                channel_id: row.try_get("channel_id")?,
+                message_id: row.try_get("message_id")?,
+                task_id: row.try_get("task_id")?,
+                updated_at: row.try_get("updated_at")?,
+            })
+        })
+        .transpose()
+    }
+
     pub async fn record_agent_activity(
         &self,
         agent_id: &str,

@@ -190,10 +190,30 @@ mod tests {
     }
 
     #[test]
-    fn broker_reconnect_uses_token_internally_and_returns_only_sequence() {
+    fn broker_reconnect_fetches_daemon_events_with_token() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        drop(listener);
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{
+              "events":[{
+                "sequence":43,
+                "type":"task_thread.updated",
+                "event_type":"task_thread.updated",
+                "occurred_at_unix_ms":1790000000000,
+                "payload":{"taskId":"task_1","replyId":"reply_1","channelId":"all"}
+              }]
+            }"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
         let broker = DaemonBroker::for_tests(RuntimeDescriptor {
             endpoint: format!("http://127.0.0.1:{port}"),
             event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
@@ -204,12 +224,19 @@ mod tests {
 
         let receipt = reconnect_events(&broker, 42);
         let serialized = serde_json::to_string(&receipt).unwrap();
+        let request = handle.join().unwrap();
 
         assert_eq!(receipt.after, 42);
+        assert_eq!(receipt.events.len(), 1);
+        assert_eq!(receipt.events[0].sequence, 43);
+        assert_eq!(receipt.events[0].event_type, "task_thread.updated");
+        assert_eq!(receipt.events[0].payload["taskId"], "task_1");
         assert_eq!(
             broker.last_authorization_header().as_deref(),
             Some("Bearer secret-token")
         );
+        assert!(request.contains("GET /v1/events/ws?after=42 HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("ws://"));
     }
@@ -594,6 +621,7 @@ mod tests {
                 },
                 "route": {
                     "handoffAgentIds": ["agent_coda"],
+                    "followupAgentIds": [],
                     "needsAssignment": false
                 }
             })

@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiTask, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
-import { SleiIcon } from "../../components";
+import { SleiIcon, Toast, TOAST_VISIBLE_MS, type SleiIconName, type ToastType } from "../../components";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,16 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { TaskStatusBadge } from "./TaskStatusBadge";
+import { cn } from "@/lib/utils";
 
 const CARD_INSET_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const TASK_STATUSES: SleiTaskStatus[] = ["pending_assignment", "in_progress", "in_review", "done"];
+const TASK_STATUS_ICONS: Record<SleiTaskStatus, SleiIconName> = {
+  pending_assignment: "user",
+  in_progress: "loader",
+  in_review: "approval",
+  done: "check",
+};
 
 export function TaskThreadDrawer(input: {
   initialReplyDraft?: string;
@@ -30,17 +37,21 @@ export function TaskThreadDrawer(input: {
   const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [pendingStatus, setPendingStatus] = useState<SleiTaskStatus | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [isComposing, setIsComposing] = useState(false);
   const task = input.task;
   const taskId = task?.id;
   const openRef = useRef(input.open);
   const activeTaskIdRef = useRef(taskId);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const mention = activeMentionQuery(replyDraft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, input.mentionMembers ?? []) : [];
   const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply || !replyDraft.trim();
-  const statusActionDisabled = replySubmitting || statusSubmitting || !input.onStatusChange;
+  const statusActionDisabled = replySubmitting || statusSubmitting;
   openRef.current = input.open;
   activeTaskIdRef.current = taskId;
 
@@ -52,14 +63,27 @@ export function TaskThreadDrawer(input: {
     setStatusSubmitting(false);
     setReplyError("");
     setStatusError("");
+    setPendingStatus(null);
+    dismissToast();
     setSelectedMentionIndex(0);
     setIsComposing(false);
   }, [input.open, input.initialReplyDraft, task?.id]);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!mention || mentionTargets.length === 0) return;
     mentionOptionRefs.current[selectedMentionIndex]?.scrollIntoView({ block: "nearest" });
   }, [mention, mentionTargets.length, selectedMentionIndex]);
+
+  useEffect(() => {
+    if (!input.open || !task) return;
+    const viewport = scrollAreaRef.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!viewport || typeof viewport.scrollTo !== "function") return;
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+  }, [input.open, task?.id, task?.replies?.length]);
 
   async function submitReply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,11 +110,14 @@ export function TaskThreadDrawer(input: {
 
   async function handleStatusChange(status: SleiTaskStatus) {
     const onStatusChange = input.onStatusChange;
-    if (!task || !onStatusChange || replySubmitting || statusSubmitting) return;
+    if (!task || !onStatusChange || replySubmitting || statusSubmitting || status === task.status) return;
     setStatusError("");
     setStatusSubmitting(true);
     try {
       await onStatusChange(task.id, status);
+      if (isDrawerOperationCurrent(task.id)) {
+        setPendingStatus(null);
+      }
     } catch (error) {
       if (isDrawerOperationCurrent(task.id)) {
         setStatusError(formatTaskActionError("状态更新失败", error));
@@ -106,6 +133,18 @@ export function TaskThreadDrawer(input: {
     return openRef.current && activeTaskIdRef.current === operationTaskId;
   }
 
+  function showToast(message: string, type: ToastType = "info") {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast((current) => ({ ...current, message: "" })), TOAST_VISIBLE_MS);
+  }
+
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = undefined;
+    setToast((current) => ({ ...current, message: "" }));
+  }
+
   function selectMention(index = selectedMentionIndex) {
     if (!mention || !mentionTargets[index]) return;
     setReplyDraft(insertMention(replyDraft, mention, mentionTargets[index].handle));
@@ -114,25 +153,62 @@ export function TaskThreadDrawer(input: {
 
   function renderContent() {
     if (!task) return null;
+    const pendingStatusLabel = pendingStatus ? input.messages.tasks.status[pendingStatus] : "";
+    const replyCount = task.replyCount ?? task.replies?.length ?? 0;
+    const timelineStatus = replyCount === 0 && (task.status === "pending_assignment" || task.status === "in_progress")
+      ? "pending_assignment"
+      : task.status;
+    const blockedStatusTargets = replyCount === 0
+      ? (["in_progress", "in_review", "done"] satisfies SleiTaskStatus[])
+      : [];
     return (
       <>
+        <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
         <SheetHeader className="relative border-b p-5 pr-14">
-          <TaskStatusBadge messages={input.messages} status={task.status} />
+          <TaskStatusTimeline
+            blockedStatuses={blockedStatusTargets}
+            disabled={statusActionDisabled}
+            messages={input.messages}
+            onStatusRequest={setPendingStatus}
+            status={timelineStatus}
+          />
+          {pendingStatus ? (
+            <div
+              className="absolute left-5 top-[4.65rem] z-30 grid w-[min(24rem,calc(100%-6rem))] gap-3 rounded-lg border border-border/70 bg-popover/95 p-3 text-popover-foreground shadow-lg backdrop-blur-xl"
+              data-slot="task-status-confirm"
+              role="alertdialog"
+            >
+              <div className="grid gap-1">
+                <strong className="text-sm">{input.messages.tasks.confirmStatusChange}</strong>
+                <p className="text-xs text-muted-foreground">
+                  {input.messages.tasks.confirmStatusChangeDescription(input.messages.tasks.status[task.status], pendingStatusLabel)}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button disabled={statusSubmitting} onClick={() => setPendingStatus(null)} size="sm" type="button" variant="outline">
+                  {input.messages.common.cancel}
+                </Button>
+                <Button data-slot="task-status-confirm-action" disabled={statusSubmitting || !input.onStatusChange} onClick={() => void handleStatusChange(pendingStatus)} size="sm" type="button" variant="primary">
+                  {input.messages.tasks.confirmStatusChangeAction}
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <SheetTitle className="sr-only">{task.title}</SheetTitle>
-          <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(task.replyCount ?? task.replies?.length ?? 0)}</SheetDescription>
+          <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(replyCount)}</SheetDescription>
           <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3" onClick={input.onClose} size="icon-sm" type="button" variant="ghost">
             <SleiIcon className="size-4" name="x" />
           </Button>
         </SheetHeader>
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1" ref={scrollAreaRef}>
           <div className="grid gap-3 p-5 pb-36" data-slot="task-thread-scroll-content">
             <div data-slot="task-thread-root-body">
-              <MarkdownMessage markdown={task.title} />
+              <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={task.title} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
             </div>
             {(task.replies ?? []).map((reply) => (
               <Card className={`${CARD_INSET_CLASS} grid gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
                 <strong className="text-sm">{reply.sender}</strong>
-                <MarkdownMessage markdown={reply.body} />
+                <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={reply.body} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
               </Card>
             ))}
           </div>
@@ -149,11 +225,6 @@ export function TaskThreadDrawer(input: {
                 }}
                 selectedIndex={selectedMentionIndex}
               />
-            ) : null}
-            {task.status === "in_review" ? (
-              <div className="flex justify-end">
-                <Button disabled={statusActionDisabled} onClick={() => void handleStatusChange("done")} type="button" variant="outline">{input.messages.tasks.markDone}</Button>
-              </div>
             ) : null}
             <div className="relative rounded-xl shadow-[0_12px_28px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
               <Textarea
@@ -221,6 +292,73 @@ export function TaskThreadDrawer(input: {
         {renderContent()}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function TaskStatusTimeline(input: {
+  blockedStatuses?: SleiTaskStatus[];
+  disabled: boolean;
+  messages: DesktopMessages;
+  onStatusRequest: (status: SleiTaskStatus) => void;
+  status: SleiTaskStatus;
+}) {
+  const currentIndex = TASK_STATUSES.indexOf(input.status);
+  const blockedStatuses = new Set(input.blockedStatuses ?? []);
+  return (
+    <div
+      aria-label={input.messages.tasks.changeStatus}
+      className="inline-grid w-auto grid-cols-[repeat(4,4.75rem)] justify-start gap-0 py-0.5"
+      data-slot="task-status-timeline"
+      role="list"
+    >
+      {TASK_STATUSES.map((status, index) => {
+        const isCurrent = status === input.status;
+        const isComplete = index < currentIndex;
+        const isReached = isCurrent || isComplete;
+        const isBlocked = blockedStatuses.has(status);
+        return (
+          <button
+            aria-current={isCurrent ? "step" : undefined}
+            aria-label={`${input.messages.tasks.changeStatus}: ${input.messages.tasks.status[status]}`}
+            className={cn(
+              "group relative grid min-w-0 rounded-md py-1 text-xs transition",
+              "focus-visible:outline-none focus-visible:[&_[data-task-status-icon]]:ring-cyan-200/80",
+              isCurrent ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+              input.disabled || isBlocked ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+              index === 0 ? "justify-items-start" : index === TASK_STATUSES.length - 1 ? "justify-items-end" : "justify-items-center",
+            )}
+            data-current={isCurrent ? "true" : undefined}
+            data-task-status-node={status}
+            disabled={input.disabled || isBlocked}
+            key={status}
+            onClick={() => {
+              if (isCurrent || isBlocked) return;
+              input.onStatusRequest(status);
+            }}
+            role="listitem"
+            type="button"
+          >
+            {index > 0 ? <span className="absolute left-0 top-3.5 h-px w-1/2 bg-border/70" aria-hidden="true" /> : null}
+            {index < TASK_STATUSES.length - 1 ? <span className="absolute right-0 top-3.5 h-px w-1/2 bg-border/70" aria-hidden="true" /> : null}
+            <span className="relative z-10 grid justify-items-center gap-2" data-task-status-node-content={status}>
+              <span
+                className={cn(
+                  "grid size-6 place-items-center rounded-full border ring-4 ring-white/75",
+                  isReached
+                    ? "border-cyan-400/40 bg-linear-to-r from-cyan-500 to-blue-500 text-primary-foreground shadow-[0_0_10px_rgba(6,182,212,0.32)]"
+                    : "border-slate-300/80 bg-slate-100 text-slate-500 shadow-none",
+                )}
+                data-reached={isReached ? "true" : "false"}
+                data-task-status-icon={status}
+              >
+                <SleiIcon className={cn("size-3.5", status === "in_progress" && isCurrent ? "animate-spin" : "")} name={TASK_STATUS_ICONS[status]} />
+              </span>
+              <span className="max-w-full truncate text-center text-[10px] leading-4" data-task-status-label={status}>{input.messages.tasks.status[status]}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

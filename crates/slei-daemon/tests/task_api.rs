@@ -14,7 +14,9 @@ use uuid::Uuid;
 #[tokio::test]
 async fn task_api_lists_tasks_and_updates_status() {
     let token = AuthToken::from_static("test-token");
-    let app = build_router(AppState::for_tests(token.clone()));
+    let state = AppState::for_tests(token.clone());
+    state.channels().list_channels().await;
+    let app = build_router(state);
 
     let created = app
         .clone()
@@ -59,6 +61,43 @@ async fn task_api_lists_tasks_and_updates_status() {
     assert_eq!(json["tasks"][0]["id"], task_id);
     assert_eq!(json["tasks"][0]["status"], "pending_assignment");
 
+    let blocked = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/v1/tasks/{task_id}/status"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "status": "done" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(blocked.status(), StatusCode::BAD_REQUEST);
+
+    let reply = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/tasks/{task_id}/replies"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "task-list-reply-before-done")
+                .body(Body::from(
+                    json!({
+                        "senderId": "agent:coda",
+                        "body": "已处理完成，提交验收"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), StatusCode::CREATED);
+
     let updated = app
         .oneshot(
             Request::builder()
@@ -72,6 +111,109 @@ async fn task_api_lists_tasks_and_updates_status() {
         .await
         .unwrap();
     assert_eq!(updated.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn task_api_blocks_review_statuses_until_thread_has_replies() {
+    let token = AuthToken::from_static("test-token");
+    let state = AppState::for_tests(token.clone());
+    state.channels().list_channels().await;
+    let app = build_router(state);
+
+    let created = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/tasks")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "task-review-status-create")
+                .body(Body::from(
+                    json!({
+                        "channelId": "all",
+                        "creatorId": "human:local",
+                        "title": "验证状态迁移"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = to_bytes(created.into_body(), usize::MAX).await.unwrap();
+    let task_id = serde_json::from_slice::<Value>(&body).unwrap()["task"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    for status in ["in_review", "done"] {
+        let blocked = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri(format!("/v1/tasks/{task_id}/status"))
+                    .header("authorization", token.authorization_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "status": status }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(blocked.status(), StatusCode::BAD_REQUEST);
+    }
+
+    let reply = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/v1/tasks/{task_id}/replies"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .header("idempotency-key", "task-review-status-reply")
+                .body(Body::from(
+                    json!({
+                        "senderId": "agent:coda",
+                        "body": "任务线程已有处理结果"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), StatusCode::CREATED);
+
+    let in_review = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/v1/tasks/{task_id}/status"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "status": "in_review" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(in_review.status(), StatusCode::OK);
+
+    let done = app
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/v1/tasks/{task_id}/status"))
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(json!({ "status": "done" }).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(done.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -138,6 +280,7 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
     assert!(json["reply"]["createdAt"].as_str().is_some());
 
     let thread = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri(format!("/v1/tasks/{task_id}/thread"))
@@ -159,6 +302,33 @@ async fn task_api_creates_roots_and_appends_thread_replies() {
         json["thread"]["replies"][0]["body"],
         "我会继续在这个任务 session 里处理"
     );
+    let reply_id = json["thread"]["replies"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let events = app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/events/ws?after=0")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(events.status(), StatusCode::OK);
+    let body = to_bytes(events.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    let event = json["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["type"] == "task_thread.updated")
+        .expect("task reply should emit a task thread update event");
+    assert_eq!(event["payload"]["taskId"], task_id);
+    assert_eq!(event["payload"]["replyId"], reply_id);
+    assert_eq!(event["payload"]["channelId"], "all");
 }
 
 #[tokio::test]
@@ -317,6 +487,10 @@ async fn task_reply_api_routes_mentions_through_orchestrator_once_per_idempotenc
         let body = to_bytes(reply.into_body(), usize::MAX).await.unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json["route"]["handoffAgentIds"][0], "agent_coda");
+        assert_eq!(
+            json["route"]["followupAgentIds"].as_array().unwrap().len(),
+            0
+        );
     }
 
     let handoffs = state

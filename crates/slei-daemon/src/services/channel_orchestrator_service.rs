@@ -23,13 +23,15 @@ use crate::services::card_service::{CardError, CardService};
 use crate::services::channel_service::{
     ChannelError, ChannelMemberReadiness, ChannelMemberRecord, ChannelService,
 };
-use crate::services::claim_service::{ClaimError, ClaimService};
+use crate::services::claim_service::{AgentStatusUpdate, ClaimError, ClaimService};
+use crate::services::event_service::EventService;
 use crate::services::member_service::{MemberError, MemberService, ProductAgentRecord};
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord, MessageService};
 use crate::services::message_thread_service::MessageThreadReplyView;
 use crate::services::message_thread_service::{MessageThreadError, MessageThreadService};
 use crate::services::orchestration_store::OrchestrationStore;
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
+use crate::services::settings_service::{LocalePreference, SettingsService};
 use crate::services::task_service::{
     thread_message_for_reply, TaskError, TaskRecord, TaskService, TaskStatus, TaskThreadMessage,
 };
@@ -60,6 +62,7 @@ pub struct SendChannelMessageOutcome {
 #[serde(rename_all = "camelCase")]
 pub struct TaskReplyRoute {
     pub handoff_agent_ids: Vec<String>,
+    pub followup_agent_ids: Vec<String>,
     pub needs_assignment: bool,
 }
 
@@ -80,8 +83,10 @@ pub struct ChannelOrchestratorService {
     claims: ClaimService,
     agent_message_todos: AgentMessageTodoService,
     agent_inbox: AgentInboxService,
+    events: EventService,
     orchestration: OrchestrationStore,
     members: MemberService,
+    settings: SettingsService,
     worker: ClaudeWorkerAdapter,
     reset_runtime: ResetRuntimeState,
     outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
@@ -112,8 +117,10 @@ impl ChannelOrchestratorService {
         claims: ClaimService,
         agent_message_todos: AgentMessageTodoService,
         agent_inbox: AgentInboxService,
+        events: EventService,
         orchestration: OrchestrationStore,
         members: MemberService,
+        settings: SettingsService,
         worker: ClaudeWorkerAdapter,
         reset_runtime: ResetRuntimeState,
     ) -> Self {
@@ -126,8 +133,10 @@ impl ChannelOrchestratorService {
             claims,
             agent_message_todos,
             agent_inbox,
+            events,
             orchestration,
             members,
+            settings,
             worker,
             reset_runtime,
             outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
@@ -375,17 +384,22 @@ impl ChannelOrchestratorService {
             .tasks
             .add_reply_with_role(task_id, sender_id, role, body, idempotency_key)
             .await?;
+        let reply_created = reply_outcome.created;
         let reply = reply_outcome.reply;
         let task = self.tasks.task(&reply_outcome.task_id).await?;
         let public_reply = thread_message_for_reply(&reply_outcome.task_id, reply.clone());
-        if task.status == TaskStatus::Done {
-            return Ok(TaskReplyReceipt {
-                reply: public_reply,
-                route: TaskReplyRoute {
-                    handoff_agent_ids: Vec::new(),
-                    needs_assignment: false,
-                },
-            });
+        if reply_created {
+            self.events
+                .append(
+                    "task_thread.updated",
+                    json!({
+                        "taskId": &task.id,
+                        "replyId": &reply.id,
+                        "channelId": &task.channel_id,
+                        "senderId": &reply.sender_id,
+                    }),
+                )
+                .await;
         }
         let channel_members = self.channels.channel_members(&task.channel_id).await?;
         let readiness_by_agent = channel_members
@@ -430,14 +444,58 @@ impl ChannelOrchestratorService {
                 }
             }
         }
+        let followup_agent_ids = if handoff_agent_ids.is_empty() {
+            let followup_agent_ids = self
+                .implicit_task_followup_agent_ids(
+                    &task.id,
+                    &reply.id,
+                    &reply.sender_id,
+                    &member_ids,
+                )
+                .await?;
+            let mut started = Vec::new();
+            for agent_id in followup_agent_ids {
+                if let Some(readiness) = readiness_by_agent.get(&agent_id) {
+                    let created = self
+                        .create_task_followup_once(
+                            &agent_id,
+                            &task.channel_id,
+                            &task.id,
+                            &reply.id,
+                            &reply.sender_id,
+                            &reply.body,
+                            readiness.clone(),
+                        )
+                        .await;
+                    if created {
+                        self.start_channel_agent_task_reply_once(
+                            &agent_id,
+                            &task.channel_id,
+                            &reply.id,
+                            &task.id,
+                            &reply.body,
+                            Some("implicit task thread follow-up"),
+                        )
+                        .await?;
+                    }
+                    started.push(agent_id);
+                }
+            }
+            started
+        } else {
+            Vec::new()
+        };
 
         let needs_assignment = handoff_agent_ids.is_empty()
+            && followup_agent_ids.is_empty()
+            && task.status != TaskStatus::Done
             && task.assignee_id.is_none()
             && reply_requires_work(&public_reply.body);
         Ok(TaskReplyReceipt {
             reply: public_reply,
             route: TaskReplyRoute {
                 handoff_agent_ids,
+                followup_agent_ids,
                 needs_assignment,
             },
         })
@@ -692,6 +750,14 @@ impl ChannelOrchestratorService {
                         ),
                     )
                     .await;
+                self.update_channel_agent_status(
+                    &record,
+                    run_id,
+                    "idle",
+                    Some("空闲"),
+                    Some("run completed"),
+                )
+                .await?;
                 Ok(true)
             }
             Some("failed") => {
@@ -795,6 +861,14 @@ impl ChannelOrchestratorService {
                         ),
                     )
                     .await;
+                self.update_channel_agent_status(
+                    &record,
+                    run_id,
+                    "idle",
+                    Some("空闲"),
+                    Some("run failed"),
+                )
+                .await?;
                 Ok(true)
             }
             Some("tool_started") => {
@@ -1039,19 +1113,129 @@ impl ChannelOrchestratorService {
         channel_id: &str,
         source_message_id: &str,
         task_id: &str,
-        prompt: &str,
+        trigger_body: &str,
         note_kind: Option<&str>,
     ) -> Result<(), ChannelOrchestratorError> {
+        let prompt = self
+            .task_thread_run_prompt(
+                agent_id,
+                channel_id,
+                source_message_id,
+                task_id,
+                trigger_body,
+                note_kind,
+            )
+            .await?;
         self.start_channel_agent_run_once(
             agent_id,
             channel_id,
             source_message_id,
-            prompt,
+            &prompt,
             None,
             Some(task_id.to_string()),
             note_kind.map(str::to_string),
         )
         .await
+    }
+
+    async fn task_thread_run_prompt(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        source_message_id: &str,
+        task_id: &str,
+        trigger_body: &str,
+        note_kind: Option<&str>,
+    ) -> Result<String, ChannelOrchestratorError> {
+        let thread = self.tasks.thread_view(task_id).await?;
+        let mut messages = Vec::with_capacity(thread.replies.len() + 1);
+        messages.push(thread.root.clone());
+        messages.extend(thread.replies.clone());
+        let trigger = messages
+            .iter()
+            .find(|message| message.id == source_message_id);
+        let previous_messages = messages
+            .iter()
+            .filter(|message| message.id != source_message_id)
+            .rev()
+            .take(3)
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>();
+        let trigger_id = trigger
+            .map(|message| message.id.as_str())
+            .unwrap_or(source_message_id);
+        let trigger_sender_id = trigger
+            .map(|message| message.sender_id.as_str())
+            .unwrap_or("unknown");
+        let trigger_role = trigger
+            .map(|message| message.role.as_str())
+            .unwrap_or("unknown");
+        let trigger_status = trigger
+            .and_then(|message| message.status.as_deref())
+            .unwrap_or("unknown");
+        let trigger_body = trigger
+            .map(|message| message.body.as_str())
+            .unwrap_or(trigger_body);
+        let previous = if previous_messages.is_empty() {
+            "No previous task-thread messages.".to_string()
+        } else {
+            previous_messages
+                .iter()
+                .map(format_task_thread_prompt_message)
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        };
+        Ok(format!(
+            r#"# Slei Task Thread Run Packet
+
+## Runtime Context
+- Agent ID: `{agent_id}`
+- Channel ID: `{channel_id}`
+- Task ID: `{task_id}`
+- Task Status: `{task_status}`
+- Source Message ID: `{source_message_id}`
+- Note: `{note}`
+
+## Triggering Task Thread Message
+```text
+[id={trigger_id} sender_id={trigger_sender_id} role={trigger_role} status={trigger_status}]
+{trigger_body}
+```
+
+## Previous Task Thread Messages
+```text
+{previous}
+```
+
+## Required Visible Reply
+Reply in this task thread when you have user-visible progress, a result, or a handoff:
+
+```bash
+printf "..." | slei-cli task reply {task_id} --agent {agent_id}
+```
+
+Use `slei-cli agent status --agent {agent_id} --state ... --phase ...` for truthful progress. If the work is ready for user review, first reply with the result, then you may set the task to review:
+
+```bash
+slei-cli task update {task_id} --status in_review
+```
+"#,
+            agent_id = agent_id,
+            channel_id = channel_id,
+            task_id = task_id,
+            task_status = task_status_label(thread.task.status),
+            source_message_id = source_message_id,
+            note = note_kind.unwrap_or("task thread reply"),
+            trigger_id = trigger_id,
+            trigger_sender_id = trigger_sender_id,
+            trigger_role = trigger_role,
+            trigger_status = trigger_status,
+            trigger_body = safe_task_prompt_text(trigger_body),
+            previous = previous,
+        ))
     }
 
     async fn start_channel_agent_run_once(
@@ -1182,6 +1366,8 @@ impl ChannelOrchestratorService {
                 note_kind.as_deref().unwrap_or("task assignment")
             )
         });
+        let preferences = self.settings.preferences().await;
+        let locale = locale_prompt_value(preferences.locale);
         let system_prompt = build_agent_system_prompt(AgentSystemPromptInput {
             agent_id: &agent.id,
             handle: &agent.handle,
@@ -1199,6 +1385,7 @@ impl ChannelOrchestratorService {
             legacy_mode: false,
             source_message_id: Some(source_message_id),
             notes: task_notes.as_deref(),
+            locale: Some(locale),
         });
         if let Err(error) =
             self.worker
@@ -1257,6 +1444,39 @@ impl ChannelOrchestratorService {
             None,
         )
         .await;
+        self.update_channel_agent_status(
+            &record,
+            run_id,
+            "working",
+            Some("正在处理任务线程回复"),
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn update_channel_agent_status(
+        &self,
+        record: &ChannelAgentRunRecord,
+        run_id: &str,
+        state: &str,
+        phase: Option<&str>,
+        reason: Option<&str>,
+    ) -> Result<(), ChannelOrchestratorError> {
+        self.claims
+            .update_agent_status(
+                &record.agent_id,
+                AgentStatusUpdate {
+                    state: state.to_string(),
+                    phase: phase.map(str::to_string),
+                    reason: reason.map(str::to_string),
+                    run_id: Some(run_id.to_string()),
+                    channel_id: Some(record.channel_id.clone()),
+                    message_id: Some(record.source_message_id.clone()),
+                    task_id: record.task_id.clone(),
+                },
+            )
+            .await?;
         Ok(())
     }
 
@@ -1643,6 +1863,73 @@ impl ChannelOrchestratorService {
             )
             .await;
         true
+    }
+
+    async fn create_task_followup_once(
+        &self,
+        agent_id: &str,
+        channel_id: &str,
+        task_id: &str,
+        reply_id: &str,
+        sender_id: &str,
+        followup_text: &str,
+        readiness: ChannelMemberReadiness,
+    ) -> bool {
+        let already_created = self
+            .agent_inbox
+            .events_for_agent(agent_id)
+            .await
+            .into_iter()
+            .any(|event| {
+                event.event_type == "task_followup"
+                    && event.channel_id == channel_id
+                    && event.task_id.as_deref() == Some(task_id)
+                    && event.message_id == reply_id
+            });
+        if already_created {
+            return false;
+        }
+
+        self.agent_inbox
+            .create_task_followup_with_details(
+                agent_id,
+                channel_id,
+                task_id,
+                reply_id,
+                readiness,
+                Some(sender_id),
+                Some(followup_text),
+            )
+            .await;
+        true
+    }
+
+    async fn implicit_task_followup_agent_ids(
+        &self,
+        task_id: &str,
+        current_reply_id: &str,
+        sender_id: &str,
+        member_ids: &HashSet<String>,
+    ) -> Result<Vec<String>, ChannelOrchestratorError> {
+        let thread = self.tasks.thread_view(task_id).await?;
+        let mut seen = HashSet::new();
+        let mut agent_ids = Vec::new();
+        for reply in thread.replies.iter().rev() {
+            if reply.id == current_reply_id {
+                continue;
+            }
+            let sender_is_agent = reply.role == "agent" || reply.sender_id.starts_with("agent_");
+            if !sender_is_agent {
+                continue;
+            }
+            if reply.sender_id == sender_id || !member_ids.contains(&reply.sender_id) {
+                continue;
+            }
+            if seen.insert(reply.sender_id.clone()) {
+                agent_ids.push(reply.sender_id.clone());
+            }
+        }
+        Ok(agent_ids)
     }
 
     async fn update_status_for_created_handoff(
@@ -2057,6 +2344,37 @@ fn is_agent_memory_relative_path(relative_target: &Path) -> bool {
 
 fn diagnostic_token(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join("_")
+}
+
+fn task_status_label(status: TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::PendingAssignment => "pending_assignment",
+        TaskStatus::InProgress => "in_progress",
+        TaskStatus::InReview => "in_review",
+        TaskStatus::Done => "done",
+    }
+}
+
+fn format_task_thread_prompt_message(message: &TaskThreadMessage) -> String {
+    format!(
+        "[id={id} sender_id={sender_id} role={role} status={status}]\n{body}",
+        id = message.id,
+        sender_id = message.sender_id,
+        role = message.role,
+        status = message.status.as_deref().unwrap_or("unknown"),
+        body = safe_task_prompt_text(&message.body),
+    )
+}
+
+fn safe_task_prompt_text(value: &str) -> String {
+    value.replace("```", "`` `")
+}
+
+fn locale_prompt_value(locale: LocalePreference) -> &'static str {
+    match locale {
+        LocalePreference::EnUs => "en-US",
+        LocalePreference::ZhCn => "zh-CN",
+    }
 }
 
 fn activity_summary_message(value: &str) -> String {

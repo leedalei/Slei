@@ -48,6 +48,8 @@ const tasks: SleiTask[] = [
     status: "in_review",
     channelId: "ai",
     assigneeId: "agent_coda",
+    replies: [{ id: "reply_ai_coda", sender: "Coda", role: "agent", body: "已完成初步处理" }],
+    replyCount: 1,
   },
   {
     id: "task_ai_alice",
@@ -83,14 +85,15 @@ let container: HTMLDivElement | undefined;
 
 async function mountTasksPage(
   activeTaskId?: string,
-  handlers: Pick<ComponentProps<typeof TasksPage>, "onTaskReply"> = {},
+  handlers: Pick<ComponentProps<typeof TasksPage>, "onTaskReply" | "onTaskStatusChange"> = {},
+  data = pageData(),
 ) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
 
   await act(async () => {
-    root?.render(<TasksPage activeTaskId={activeTaskId} data={pageData()} messages={createDesktopMessages("zh-CN")} {...handlers} />);
+    root?.render(<TasksPage activeTaskId={activeTaskId} data={data} messages={createDesktopMessages("zh-CN")} {...handlers} />);
   });
   await act(async () => undefined);
 
@@ -362,5 +365,155 @@ describe("TasksPage filters", () => {
 
     expect(composer?.contains(textarea!)).toBe(true);
     expect(composer?.contains(sendButton!)).toBe(true);
+  });
+
+  it("changes task status from the drawer timeline after confirmation", async () => {
+    const onTaskStatusChange = vi.fn().mockResolvedValue(undefined);
+    await mountTasksPage("task_ai_coda", { onTaskStatusChange });
+
+    const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
+    const timeline = drawer?.querySelector<HTMLElement>('[data-slot="task-status-timeline"]');
+    const doneNode = drawer?.querySelector<HTMLButtonElement>('[data-task-status-node="done"]');
+    expect(timeline).not.toBeNull();
+    expect(timeline?.className).not.toContain("bg-white");
+    expect(timeline?.className).not.toContain("shadow");
+    expect(timeline?.className).not.toContain("border");
+    expect(timeline?.className).not.toContain("mx-auto");
+    expect(timeline?.className).toContain("inline-grid");
+    expect(timeline?.className).toContain("justify-start");
+    expect(drawer?.querySelectorAll('[data-task-status-node]')).toHaveLength(4);
+    expect(drawer?.querySelectorAll('[data-task-status-icon]')).toHaveLength(4);
+    expect(drawer?.querySelector('[data-task-status-node="pending_assignment"]')?.className).toContain("justify-items-start");
+    expect(drawer?.querySelector('[data-task-status-node="pending_assignment"]')?.className).not.toContain("focus-visible:ring-2");
+    expect(drawer?.querySelector('[data-task-status-node-content="pending_assignment"]')?.className).toContain("justify-items-center");
+    expect(drawer?.querySelector('[data-task-status-node-content="pending_assignment"]')?.className).toContain("gap-2");
+    expect(drawer?.querySelector('[data-task-status-icon="in_review"]')?.className).toContain("ring-white/75");
+    expect(drawer?.querySelector('[data-task-status-icon="in_review"]')?.className).toContain("bg-linear-to-r");
+    expect(drawer?.querySelector('[data-task-status-icon="in_review"]')?.className).toContain("from-cyan-500");
+    expect(drawer?.querySelector('[data-task-status-icon="in_review"]')?.className).toContain("to-blue-500");
+    expect(drawer?.querySelector('[data-task-status-icon="in_review"]')?.getAttribute("data-reached")).toBe("true");
+    expect(drawer?.querySelector('[data-task-status-icon="done"]')?.className).toContain("bg-slate-100");
+    expect(drawer?.querySelector('[data-task-status-icon="done"]')?.className).not.toContain("bg-linear-to-r");
+    expect(drawer?.querySelector('[data-task-status-icon="done"]')?.getAttribute("data-reached")).toBe("false");
+    expect(drawer?.querySelector('[data-task-status-label="done"]')?.className).toContain("text-center");
+    expect(drawer?.querySelector('[data-task-status-label="done"]')?.className).toContain("text-[10px]");
+    expect(drawer?.querySelector('[data-task-status-node="pending_assignment"] [data-slei-icon="user"]')).not.toBeNull();
+    expect(drawer?.querySelector('[data-task-status-node="in_progress"] [data-slei-icon="loader"]')).not.toBeNull();
+    expect(drawer?.querySelector('[data-task-status-node="in_review"] [data-slei-icon="approval"]')).not.toBeNull();
+    expect(drawer?.querySelector('[data-task-status-node="done"] [data-slei-icon="check"]')).not.toBeNull();
+    expect(drawer?.querySelector('[data-task-status-node="in_review"]')?.getAttribute("data-current")).toBe("true");
+    expect(doneNode).not.toBeNull();
+    expect(doneNode?.disabled).toBe(false);
+    expect(drawer?.querySelector('[data-slot="select-trigger"][aria-label="变更任务状态"]')).toBeNull();
+
+    await act(async () => {
+      doneNode!.click();
+    });
+    await act(async () => undefined);
+
+    expect(onTaskStatusChange).not.toHaveBeenCalled();
+    const confirm = drawer?.querySelector<HTMLButtonElement>('[data-slot="task-status-confirm-action"]');
+    expect(drawer?.querySelector('[data-slot="task-status-confirm"]')).not.toBeNull();
+    expect(drawer?.textContent).toContain("确认变更任务状态");
+    expect(drawer?.textContent).toContain("待评审 -> 已完成");
+    expect(confirm).not.toBeNull();
+
+    await act(async () => {
+      confirm!.click();
+    });
+
+    expect(onTaskStatusChange).toHaveBeenCalledWith("task_ai_coda", "done");
+  });
+
+  it("keeps zero-reply task timeline at pending and disables forward status nodes", async () => {
+    const onTaskStatusChange = vi.fn().mockResolvedValue(undefined);
+    const data = pageData();
+    data.tasks = [
+      {
+        id: "task_empty",
+        title: "刚创建的任务",
+        owner: "Lei",
+        status: "in_progress",
+        channelId: "ai",
+        replies: [],
+        replyCount: 0,
+      },
+    ];
+    await mountTasksPage("task_empty", { onTaskStatusChange }, data);
+
+    const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
+    const pendingIcon = drawer?.querySelector('[data-task-status-icon="pending_assignment"]');
+    const inProgressIcon = drawer?.querySelector('[data-task-status-icon="in_progress"]');
+    const inProgressNode = drawer?.querySelector<HTMLButtonElement>('[data-task-status-node="in_progress"]');
+    const inReviewNode = drawer?.querySelector<HTMLButtonElement>('[data-task-status-node="in_review"]');
+    const doneNode = drawer?.querySelector<HTMLButtonElement>('[data-task-status-node="done"]');
+
+    expect(pendingIcon?.getAttribute("data-reached")).toBe("true");
+    expect(inProgressIcon?.getAttribute("data-reached")).toBe("false");
+    expect(drawer?.querySelector('[data-task-status-node="pending_assignment"]')?.getAttribute("data-current")).toBe("true");
+    expect(inProgressNode?.disabled).toBe(true);
+    expect(inReviewNode?.disabled).toBe(true);
+    expect(doneNode?.disabled).toBe(true);
+
+    await act(async () => {
+      doneNode?.click();
+    });
+
+    expect(drawer?.querySelector('[data-slot="task-status-confirm"]')).toBeNull();
+    expect(onTaskStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("scrolls the task thread to the latest reply when replies change", async () => {
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollTo = vi.fn();
+    HTMLElement.prototype.scrollTo = scrollTo;
+    const data = pageData();
+    data.tasks = data.tasks.map((task) =>
+      task.id === "task_ai_coda"
+        ? {
+            ...task,
+            replies: [
+              { id: "r1", sender: "Coda", role: "agent", body: "第一条" },
+            ],
+            replyCount: 1,
+          }
+        : task,
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root?.render(<TasksPage activeTaskId="task_ai_coda" data={data} messages={createDesktopMessages("zh-CN")} />);
+      });
+      await act(async () => undefined);
+      scrollTo.mockClear();
+
+      const nextData = {
+        ...data,
+        tasks: data.tasks.map((task) =>
+          task.id === "task_ai_coda"
+            ? {
+                ...task,
+                replies: [
+                  ...(task.replies ?? []),
+                  { id: "r2", sender: "Lei", role: "human" as const, body: "新增回复" },
+                ],
+                replyCount: 2,
+              }
+            : task,
+        ),
+      };
+
+      await act(async () => {
+        root?.render(<TasksPage activeTaskId="task_ai_coda" data={nextData} messages={createDesktopMessages("zh-CN")} />);
+      });
+      await act(async () => undefined);
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: "smooth" });
+    } finally {
+      HTMLElement.prototype.scrollTo = originalScrollTo;
+    }
   });
 });

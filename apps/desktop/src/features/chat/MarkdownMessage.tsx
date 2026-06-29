@@ -1,7 +1,9 @@
-import { Children, type CSSProperties, type ReactNode } from "react";
+import { Children, isValidElement, type CSSProperties, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { SleiIcon, TooltipButton } from "../../components";
+import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
 
@@ -10,7 +12,20 @@ type MarkdownForegroundStyle = CSSProperties & {
   "--markdown-foreground"?: string;
 };
 
-export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: string; tone?: MarkdownTone }) {
+export function MarkdownMessage({
+  copyCodeLabel,
+  markdown,
+  onCodeCopied,
+  onCodeCopyFailed,
+  tone = "foreground",
+}: {
+  copyCodeLabel?: string;
+  markdown: string;
+  onCodeCopied?: () => void;
+  onCodeCopyFailed?: (error: unknown) => void;
+  tone?: MarkdownTone;
+}) {
+  const components = markdownComponents({ copyCodeLabel, onCodeCopied, onCodeCopyFailed });
   return (
     <div
       className={cn(
@@ -19,7 +34,7 @@ export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: s
       )}
       style={markdownForegroundStyle(tone)}
     >
-      <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeMarkdownUrl}>
+      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeMarkdownUrl}>
         {sanitizeMarkdown(markdown)}
       </ReactMarkdown>
     </div>
@@ -35,29 +50,64 @@ function safeMarkdownUrl(url: string): string {
   return /^(https?:|mailto:|#blocked$)/i.test(url) ? url : "#blocked";
 }
 
-const markdownComponents: Components = {
-  p({ children, node: _node, ...props }) {
-    return <p {...props}>{renderMentions(children)}</p>;
-  },
-  li({ children, node: _node, ...props }) {
-    return <li {...props}>{renderMentions(children)}</li>;
-  },
-  a({ children, href, node: _node, ...props }) {
-    return (
-      <a href={href} rel="noreferrer" target="_blank" {...props}>
-        {children}
-      </a>
-    );
-  },
-  code({ children, className, node: _node, ...props }) {
-    const code = String(children).replace(/\n$/, "");
-    return (
-      <code className={className} {...props}>
-        {className ? highlightCode(code) : children}
-      </code>
-    );
-  },
-};
+function markdownComponents(input: {
+  copyCodeLabel?: string;
+  onCodeCopied?: () => void;
+  onCodeCopyFailed?: (error: unknown) => void;
+}): Components {
+  return {
+    p({ children, node: _node, ...props }) {
+      return <p {...props}>{renderMentions(children)}</p>;
+    },
+    li({ children, node: _node, ...props }) {
+      return <li {...props}>{renderMentions(children)}</li>;
+    },
+    a({ children, href, node: _node, ...props }) {
+      return (
+        <a href={href} rel="noreferrer" target="_blank" {...props}>
+          {children}
+        </a>
+      );
+    },
+    pre({ children, node: _node, ...props }) {
+      const code = textFromReactNode(children).replace(/\n$/, "");
+      return (
+        <pre className="group relative" {...props}>
+          {input.copyCodeLabel ? (
+            <TooltipButton
+              aria-label={input.copyCodeLabel}
+              className="absolute right-2 top-2 z-10 opacity-80 transition-opacity hover:opacity-100"
+              data-slot="markdown-code-copy"
+              onClick={async () => {
+                try {
+                  const copied = await copyPlainText(code);
+                  if (copied) input.onCodeCopied?.();
+                } catch (error) {
+                  input.onCodeCopyFailed?.(error);
+                }
+              }}
+              size="icon-xs"
+              tooltip={input.copyCodeLabel}
+              type="button"
+              variant="ghost"
+            >
+              <SleiIcon name="copy" size={13} />
+            </TooltipButton>
+          ) : null}
+          {children}
+        </pre>
+      );
+    },
+    code({ children, className, node: _node, ...props }) {
+      const code = String(children).replace(/\n$/, "");
+      return (
+        <code className={className} {...props}>
+          {className ? highlightCode(code) : children}
+        </code>
+      );
+    },
+  };
+}
 
 const mentionPattern = /(^|[^A-Za-z0-9_@.])(@[A-Za-z0-9][A-Za-z0-9_-]*)(?=$|[^A-Za-z0-9_-])/g;
 
@@ -89,6 +139,14 @@ function renderMentionText(text: string, childIndex: number): ReactNode[] {
 
   if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
   return nodes.length > 0 ? nodes : [text];
+}
+
+function textFromReactNode(node: ReactNode): string {
+  return Children.toArray(node).map((child) => {
+    if (typeof child === "string" || typeof child === "number") return String(child);
+    if (isValidElement<{ children?: ReactNode }>(child)) return textFromReactNode(child.props.children);
+    return "";
+  }).join("");
 }
 
 function highlightCode(code: string): ReactNode[] {

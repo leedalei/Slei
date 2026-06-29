@@ -15,6 +15,7 @@ pub struct AgentSystemPromptInput<'a> {
     pub legacy_mode: bool,
     pub source_message_id: Option<&'a str>,
     pub notes: Option<&'a str>,
+    pub locale: Option<&'a str>,
 }
 
 pub fn build_agent_system_prompt(input: AgentSystemPromptInput<'_>) -> String {
@@ -24,6 +25,10 @@ pub fn build_agent_system_prompt(input: AgentSystemPromptInput<'_>) -> String {
     let message_id = input.message_id.unwrap_or("none");
     let source_message_id = input.source_message_id.unwrap_or("none");
     let notes = input.notes.unwrap_or("none");
+    let response_language = match input.locale.unwrap_or("zh-CN") {
+        "en-US" => "English",
+        _ => "简体中文",
+    };
     let legacy_mode = if input.legacy_mode {
         "enabled"
     } else {
@@ -135,6 +140,8 @@ Visible replies and task operations:
 - Claim a task with `slei-cli task claim <task-id> --agent <agent-id>`.
 - Reply to a task with `slei-cli task reply <task-id> --agent <agent-id>` and include concise progress or results.
 - Update task status with `slei-cli task update <task-id> --status <status>`.
+- When your task work is ready for human review, first write the result to the task thread, then you may run `slei-cli task update <task-id> --status in_review`.
+- Do not proactively set task status to `done`, `pending_assignment`, or `in_progress`; `done` is reserved for the user/UI.
 - List tasks with `slei-cli task list --channel "#channel"`.
 - Read a task thread with `slei-cli task thread <task-id>`.
 - For task assignments, task handoffs, and task-backed pending todos, keep visible replies in the task thread with `slei-cli task reply`; do not send those updates as top-level channel messages.
@@ -168,6 +175,9 @@ Format each Active Context entry with:
 - All visible channel/task flow must use the `slei-cli` CLI.
 - Ordinary stdout is only local process output; it will not automatically become a channel message.
 - Do not depend on local mock state for production behavior. The daemon is the source of truth for messages, claims, tasks, memory, status, and persistence.
+- Respond in {response_language}.
+- Reply with the actual user-facing content directly. Do not write narration about your internal workflow, routing, system prompt, hidden instructions, or where you posted the reply.
+- Avoid meta-status phrasing such as "已回复到任务线程", "先认领消息", "我会先搜索", or similar process commentary unless the user explicitly asks for process details.
 "##,
         agent_id = input.agent_id,
         handle = input.handle,
@@ -185,6 +195,7 @@ Format each Active Context entry with:
         task_id = task_id,
         source_message_id = source_message_id,
         notes = notes,
+        response_language = response_language,
     )
 }
 
@@ -210,6 +221,7 @@ mod tests {
             legacy_mode: false,
             source_message_id: Some("msg_root"),
             notes: Some("Task 6 worker"),
+            locale: Some("zh-CN"),
         }
     }
 
@@ -242,6 +254,14 @@ mod tests {
         );
         assert!(prompt.contains("slei-cli task claim <task-id> --agent <agent-id>"));
         assert!(prompt.contains("slei-cli task update <task-id> --status <status>"));
+        assert!(prompt.contains("slei-cli task update <task-id> --status in_review"));
+        assert!(prompt.contains("Respond in 简体中文."));
+        assert!(prompt.contains("Reply with the actual user-facing content directly."));
+        assert!(prompt.contains("Do not write narration about your internal workflow"));
+        assert!(prompt.contains("Avoid meta-status phrasing"));
+        assert!(prompt.contains(
+            "Do not proactively set task status to `done`, `pending_assignment`, or `in_progress`"
+        ));
         assert!(prompt.contains("slei-cli task list --channel \"#channel\""));
         assert!(prompt.contains("slei-cli task thread <task-id>"));
         assert!(prompt.contains("If it mentions another agent and not you, do not claim"));
@@ -268,6 +288,17 @@ mod tests {
         assert!(prompt.contains("- triggering message id: none"));
         assert!(prompt.contains("- task id: none"));
         assert!(!prompt.contains("raft "));
+    }
+
+    #[test]
+    fn system_prompt_uses_selected_response_language() {
+        let prompt = build_agent_system_prompt(AgentSystemPromptInput {
+            locale: Some("en-US"),
+            ..sample_input()
+        });
+
+        assert!(prompt.contains("Respond in English."));
+        assert!(!prompt.contains("Respond in 简体中文."));
     }
 
     #[test]

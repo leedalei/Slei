@@ -197,6 +197,10 @@ export type DesktopMessages = {
     board: string;
     channelFilter: string;
     channelTasksCount: (count: number) => string;
+    changeStatus: string;
+    confirmStatusChange: string;
+    confirmStatusChangeAction: string;
+    confirmStatusChangeDescription: (from: string, to: string) => string;
     closeThread: string;
     commentThread: string;
     description: string;
