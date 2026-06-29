@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiFixtures, SleiTask } from "../../app/types";
-import { Empty, SelectableCard, SleiIcon, StatusBadge } from "../../components";
+import type { SleiFixtures, SleiMember, SleiTask } from "../../app/types";
+import { Empty, MemberAvatar, SelectableCard, SleiIcon, StatusBadge, type MemberAvatarIdentity } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -117,7 +117,7 @@ export function TasksPage({
                     </div>
                     {columnTasks.length ? columnTasks.map((task) => (
                       <TaskCard
-                        assigneeName={taskAssigneeName(task, membersById)}
+                        assigneeIdentity={taskAssigneeIdentity(task, membersById)}
                         channelName={taskChannelName(task, channelsById, messages)}
                         key={task.id}
                         messages={messages}
@@ -143,7 +143,7 @@ export function TasksPage({
             <div className="grid gap-3 p-6">
               {filteredTasks.map((task) => (
                 <TaskCard
-                  assigneeName={taskAssigneeName(task, membersById)}
+                  assigneeIdentity={taskAssigneeIdentity(task, membersById)}
                   channelName={taskChannelName(task, channelsById, messages)}
                   layout="row"
                   key={task.id}
@@ -210,12 +210,20 @@ function taskChannelName(task: SleiTask, channelsById: Map<string, { name: strin
   return channelsById.get(task.channelId)?.name ?? task.channelId;
 }
 
-function taskAssigneeName(task: SleiTask, membersById: Map<string, { name: string }>) {
-  return (task.assigneeId ? membersById.get(task.assigneeId)?.name : undefined) ?? task.owner;
+function taskAssigneeIdentity(task: SleiTask, membersById: Map<string, SleiMember>): MemberAvatarIdentity {
+  const member = task.assigneeId ? membersById.get(task.assigneeId) : undefined;
+  if (member) return member;
+  const name = task.owner || task.assigneeId || "Agent";
+  return {
+    id: task.assigneeId ?? `task-owner-${name}`,
+    name,
+    handle: name.startsWith("@") ? name : `@${name.toLowerCase().replace(/\s+/g, "-")}`,
+    avatar: name.slice(0, 2).toUpperCase(),
+  };
 }
 
 function TaskCard(input: {
-  assigneeName: string;
+  assigneeIdentity: MemberAvatarIdentity;
   channelName: string;
   layout?: "card" | "row";
   messages: DesktopMessages;
@@ -234,20 +242,20 @@ function TaskCard(input: {
     >
       <div className={row ? "min-w-0" : ""}>
         <h3 className="break-words text-sm font-semibold">{input.task.title}</h3>
-        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <SleiIcon className="size-3" name="hash" />
-            {input.messages.tasks.taskChannelLabel(input.channelName)}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <SleiIcon className="size-3" name="user" />
-            {input.messages.tasks.taskAssigneeLabel(input.assigneeName)}
-          </span>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-task-card-metadata>
+          <span className="inline-flex items-center">{input.messages.tasks.taskChannelLabel(input.channelName)}</span>
         </p>
       </div>
+      <Badge className="w-fit max-w-full truncate" variant="outline">{input.task.id}</Badge>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline">{input.task.id}</Badge>
         <TaskStatusBadge messages={input.messages} status={input.task.status} />
+        <span
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-0.5 pl-0.5 pr-2 text-xs font-medium text-muted-foreground [&_[data-slot=avatar]]:size-4"
+          data-task-card-assignee
+        >
+          <MemberAvatar identity={input.assigneeIdentity} />
+          <span className="min-w-0 truncate">{input.assigneeIdentity.name}</span>
+        </span>
         {input.task.attention ? <StatusBadge label={input.task.attention} status="warn" /> : null}
         <div className={row ? "sm:ml-auto" : "ml-auto"}>
           <Button aria-label={input.messages.tasks.commentThread} onClick={input.onSelect} size="sm" type="button" variant="outline">

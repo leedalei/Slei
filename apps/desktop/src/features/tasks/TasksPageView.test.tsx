@@ -208,13 +208,23 @@ describe("TasksPage filters", () => {
     expect(listTab?.querySelector('[data-slei-icon="file"]')).toBeNull();
   });
 
-  it("shows task source channel and assignee metadata on cards", async () => {
+  it("shows the source channel above the task id and the assignee next to the status", async () => {
     await mountTasksPage();
 
     const text = container?.textContent ?? "";
+    const codaTask = container?.querySelector<HTMLElement>('[data-task-id="task_ai_coda"]');
+    const metadata = codaTask?.querySelector<HTMLElement>('[data-task-card-metadata]');
+    const assignee = codaTask?.querySelector<HTMLElement>('[data-task-card-assignee]');
 
-    expect(text).toContain("来自 #AI咨询");
-    expect(text).toContain("交给 Coda");
+    expect(metadata).not.toBeNull();
+    expect(metadata!.textContent).toContain("来自#AI咨询");
+    expect(metadata?.querySelector('[data-slei-icon="hash"]')).toBeNull();
+    expect(text).not.toContain("交给 Coda");
+    expect(assignee).not.toBeNull();
+    expect(assignee!.textContent).toContain("Coda");
+    expect(assignee?.querySelector('[data-slot="avatar"]')).not.toBeNull();
+    expect(assignee?.className).toContain("[&_[data-slot=avatar]]:size-4");
+    expect(codaTask?.querySelector('[data-slei-status="in_review"]')?.parentElement).toBe(assignee?.parentElement);
     expect(text).toContain("3 个频道任务");
     expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
     expect(container?.querySelector('[data-slei-status="in_progress"]')).not.toBeNull();
