@@ -28,7 +28,7 @@ export const tasks = {
     done: "已完成",
   },
   taskAssigneeLabel: (name: string) => `交给 ${name}`,
-  taskChannelLabel: (name: string) => `来自 #${name}`,
+  taskChannelLabel: (name: string) => `来自#${name}`,
   thread: "任务讨论",
   title: "任务",
   unknownChannel: "未知频道",
