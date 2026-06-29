@@ -457,6 +457,7 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
+        | ChannelOrchestratorError::Task(TaskError::InvalidTaskStatusTransition)
         | ChannelOrchestratorError::MessageThread(MessageThreadError::InvalidThreadInput)
         | ChannelOrchestratorError::MessageThread(MessageThreadError::MissingIdempotencyKey)
         | ChannelOrchestratorError::MessageThread(MessageThreadError::NestedThreadNotAllowed)

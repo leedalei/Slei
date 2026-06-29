@@ -16,6 +16,7 @@ use crate::services::conversation_service::{
 };
 use crate::services::member_service::{MemberError, MemberService};
 use crate::services::reset_service::{ResetLaunchGuard, ResetRuntimeError, ResetRuntimeState};
+use crate::services::settings_service::{LocalePreference, SettingsService};
 use slei_storage::repositories::{
     sanitize_activity_payload_preview, NewAgentActivityEventRow, Repositories,
 };
@@ -25,6 +26,7 @@ pub struct AgentDmService {
     conversations: ConversationService,
     cards: CardService,
     members: MemberService,
+    settings: SettingsService,
     worker: ClaudeWorkerAdapter,
     runs: AgentDmRunStore,
     reset_runtime: ResetRuntimeState,
@@ -70,6 +72,7 @@ impl AgentDmService {
         conversations: ConversationService,
         cards: CardService,
         members: MemberService,
+        settings: SettingsService,
         worker: ClaudeWorkerAdapter,
         runs: AgentDmRunStore,
         reset_runtime: ResetRuntimeState,
@@ -79,6 +82,7 @@ impl AgentDmService {
             conversations,
             cards,
             members,
+            settings,
             worker,
             runs,
             reset_runtime,
@@ -135,6 +139,8 @@ impl AgentDmService {
                 .await?
         };
         let prompt = ConversationService::prompt_with_attachments(message);
+        let preferences = self.settings.preferences().await;
+        let locale = locale_prompt_value(preferences.locale);
         let system_prompt = build_agent_system_prompt(AgentSystemPromptInput {
             agent_id: &agent.id,
             handle: &agent.handle,
@@ -152,6 +158,7 @@ impl AgentDmService {
             legacy_mode: false,
             source_message_id: None,
             notes: None,
+            locale: Some(locale),
         });
         self.worker
             .start_run(&run_id, &session, &prompt, &system_prompt, context)?;
@@ -669,6 +676,13 @@ fn activity_summary_message(value: &str) -> String {
     const MAX_CHARS: usize = 120;
     let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
     sanitize_activity_payload_preview(&normalized, MAX_CHARS)
+}
+
+fn locale_prompt_value(locale: LocalePreference) -> &'static str {
+    match locale {
+        LocalePreference::EnUs => "en-US",
+        LocalePreference::ZhCn => "zh-CN",
+    }
 }
 
 fn worker_tool_name(event: &Value) -> &str {

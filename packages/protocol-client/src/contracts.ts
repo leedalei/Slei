@@ -107,6 +107,7 @@ export interface TaskReplyRequest {
 
 export interface TaskReplyRoute {
   handoffAgentIds: string[];
+  followupAgentIds: string[];
   needsAssignment: boolean;
 }
 

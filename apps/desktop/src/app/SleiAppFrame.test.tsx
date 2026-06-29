@@ -6,7 +6,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createDesktopMessages } from "../i18n";
 import { createDemoMembers, createSleiFixtures } from "../test/fixtures";
+import type { DesktopAgentView } from "../lib/daemon-bridge";
+import { memberFromAgentView } from "./SleiApp";
 import { SleiAppFrame } from "./SleiAppFrame";
 import type { SleiMessage } from "./types";
 
@@ -52,6 +55,41 @@ afterEach(async () => {
 });
 
 describe("SleiAppFrame appearance preferences", () => {
+  it("maps daemon working agent status to a busy sidebar member", () => {
+    const agent: DesktopAgentView = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "实现工程师。",
+      workspacePath: "/tmp/coda",
+      memoryPath: "/tmp/coda/MEMORY.md",
+      docsPath: "/tmp/coda/docs",
+      avatarSeed: "Coda",
+      runtimeThread: {
+        runtimeKind: "ClaudeCode",
+        status: "working",
+        createdAt: "2026-06-29T00:00:00Z",
+      },
+      createdAt: "2026-06-29T00:00:00Z",
+      updatedAt: "2026-06-29T00:00:00Z",
+    };
+
+    const member = memberFromAgentView(agent, [{
+      id: "local-node",
+      name: "本机",
+      status: "connected",
+      daemonVersion: "dev",
+      device: { hostname: "local", platform: "macos", arch: "arm64" },
+      runtimes: [],
+    }], createDesktopMessages("zh-CN"));
+
+    expect(member.runtimeStatus).toBe("busy");
+    expect(member.activity).toBe("正在处理任务线程回复");
+  });
+
   it("wires the runtime toast close control to the prop-owned dismiss callback", async () => {
     const onRuntimeToastDismiss = vi.fn();
     const container = await mount(

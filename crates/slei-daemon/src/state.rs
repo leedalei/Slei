@@ -191,8 +191,10 @@ impl AppState {
             claims.clone(),
             agent_message_todos.clone(),
             agent_inbox_service.clone(),
+            event_service.clone(),
             orchestration_store.clone(),
             member_service.clone(),
+            settings_service.clone(),
             worker.clone(),
             reset_runtime.clone(),
         );
@@ -397,6 +399,7 @@ impl AppState {
             self.conversation_service.clone(),
             self.card_service.clone(),
             self.member_service.clone(),
+            self.settings_service.clone(),
             self.worker.clone(),
             self.agent_dm_runs.clone(),
             self.reset_runtime.clone(),

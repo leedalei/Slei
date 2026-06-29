@@ -45,35 +45,11 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { copyPlainText } from "../../lib/clipboard";
 
 type MemberTab = "profile" | "workspace" | "capabilities" | "permissions" | "activity";
 type MemberEditableField = "description" | "model" | "name" | "runtime";
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card/30 text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-
-type ClipboardWriter = {
-  writeText?: (text: string) => Promise<void>;
-};
-
-async function copyPlainText(text: string) {
-  const content = text.trim();
-  if (!content) return false;
-  const clipboard: ClipboardWriter | undefined = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
-  if (clipboard?.writeText) {
-    await clipboard.writeText(content);
-    return true;
-  }
-  if (typeof document === "undefined") return false;
-  const textarea = document.createElement("textarea");
-  textarea.value = content;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  return copied;
-}
 
 export function MembersPage(input: {
   activeMemberId?: string;
@@ -216,7 +192,7 @@ export function MembersPage(input: {
   }
 
   async function copyDescription() {
-    const copied = await copyPlainText(memberDetails.description);
+    const copied = await copyPlainText(memberDetails.description.trim());
     if (!copied) return;
     showToast(input.messages.chat.copySuccess, "success");
   }

@@ -13,6 +13,7 @@ import {
   type ConversationMessageView,
   type ConversationSessionView,
   type DaemonBridge,
+  type DaemonEventView,
   type DiagnosticEventView,
   type DesktopAgentView,
   type DesktopNodeView,
@@ -240,8 +241,10 @@ export function replaceChannelMessages(current: SleiMessage[], channelMessages: 
   ];
 }
 
-function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")): SleiMember {
+export function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")): SleiMember {
   const node = nodes.find((candidate) => candidate.id === agent.nodeId);
+  const runtimeStatus = agent.runtimeThread?.status;
+  const isBusy = runtimeStatus === "working" || runtimeStatus === "running" || runtimeStatus === "busy";
   return {
     id: agent.id,
     name: agent.name,
@@ -250,7 +253,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     avatarSeed: agent.avatarSeed,
     agentKind: agent.agentKind,
     type: "agent",
-    runtimeStatus: node?.status === "offline" ? "offline" : "idle",
+    runtimeStatus: node?.status === "offline" ? "offline" : isBusy ? "busy" : "idle",
     role: agent.agentKind === "guide"
         ? messages.chat.guide
         : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent,
@@ -265,7 +268,7 @@ function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], 
     permissions: [],
     environmentVariables: [],
     createdAgents: [],
-    activity: messages.members.noActivity,
+    activity: isBusy ? "正在处理任务线程回复" : messages.members.noActivity,
     capabilities: [agent.runtimeKind],
     workspacePath: agent.workspacePath,
     memoryPath: agent.memoryPath,
@@ -651,6 +654,25 @@ function diagnosticPayloadValue(event: DiagnosticEventView, key: string): string
   return match?.[1];
 }
 
+function daemonEventPayloadString(event: DaemonEventView, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = event.payload[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+export function taskThreadIdFromDaemonEvent(event: DaemonEventView): string | undefined {
+  if (event.eventType !== "task_thread.updated") return undefined;
+  return daemonEventPayloadString(event, "taskId", "task_id");
+}
+
+export function daemonEventNeedsAgentRefresh(event: DaemonEventView): boolean {
+  if (!daemonEventPayloadString(event, "agentId", "agent_id")) return false;
+  return event.eventType === "agent_activity.updated"
+    || event.eventType.startsWith("channel_agent_runtime.");
+}
+
 export function markAgentActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
   if (!diagnosticEventNeedsToast(event)) return messages;
   const messageId = diagnosticPayloadValue(event, "message_id") ?? diagnosticPayloadValue(event, "source_message_id");
@@ -889,6 +911,8 @@ export function SleiApp() {
   const pendingProfileFieldRef = useRef<typeof pendingProfileField>(undefined);
   const appToastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastDiagnosticToastSequenceRef = useRef(0);
+  const lastDaemonEventSequenceRef = useRef(0);
+  const activeTaskThreadIdsRef = useRef(new Set<string>());
   const olderMessagesLoadingRef = useRef(false);
   const exhaustedOlderMessageTargetsRef = useRef(new Set<string>());
   const messageNavigationSequenceRef = useRef(0);
@@ -1053,6 +1077,15 @@ export function SleiApp() {
     applyTaskThreadReceiptToState(receipt);
   }
 
+  async function handleTaskThreadOpen(taskId: string) {
+    activeTaskThreadIdsRef.current.add(taskId);
+    await refreshTaskThreadIntoState(taskId);
+  }
+
+  function handleTaskThreadClose(taskId: string) {
+    activeTaskThreadIdsRef.current.delete(taskId);
+  }
+
   function showAppToast(message: string, type: ToastType = "info") {
     if (appToastTimerRef.current) clearTimeout(appToastTimerRef.current);
     setAppToast({ message, type });
@@ -1140,6 +1173,52 @@ export function SleiApp() {
       window.removeEventListener("unhandledrejection", handleUnhandledRejection);
     };
   }, [bridge, messages.common.operationFailed]);
+
+  useEffect(() => {
+    let mounted = true;
+    const replayDaemonEvents = async () => {
+      const receipt = await bridge.subscribeEvents(lastDaemonEventSequenceRef.current);
+      if (!mounted) return;
+      const events = [...receipt.events].sort((left, right) => left.sequence - right.sequence);
+      let shouldRefreshAgents = false;
+      for (const event of events) {
+        lastDaemonEventSequenceRef.current = Math.max(lastDaemonEventSequenceRef.current, event.sequence);
+        const taskId = taskThreadIdFromDaemonEvent(event);
+        if (taskId) {
+          const channelId = daemonEventPayloadString(event, "channelId", "channel_id");
+          if (activeTaskThreadIdsRef.current.has(taskId)) {
+            void refreshTaskThreadIntoState(taskId).catch((error: unknown) => {
+              logAppEvent(bridge, "task-refresh", "thread-refresh-failed-after-event", { taskId, error: formatLogError(error) });
+              showBackendServiceErrorToast(error);
+            });
+          }
+          void refreshTasks(channelId).catch((error: unknown) => {
+            logAppEvent(bridge, "task-refresh", "summary-refresh-failed-after-event", { channelId, taskId, error: formatLogError(error) });
+            showBackendServiceErrorToast(error);
+          });
+        }
+        shouldRefreshAgents = shouldRefreshAgents || daemonEventNeedsAgentRefresh(event);
+      }
+      if (shouldRefreshAgents) {
+        void refreshAgentMembersIntoState().catch((error: unknown) => {
+          logAppEvent(bridge, "agent-status", "refresh-failed-after-event", { error: formatLogError(error) });
+          showBackendServiceErrorToast(error);
+        });
+      }
+    };
+    void replayDaemonEvents().catch((error: unknown) => {
+      logAppEvent(bridge, "events", "replay-failed", { error: formatLogError(error) });
+    });
+    const interval = window.setInterval(() => {
+      void replayDaemonEvents().catch((error: unknown) => {
+        logAppEvent(bridge, "events", "replay-failed", { error: formatLogError(error) });
+      });
+    }, 1000);
+    return () => {
+      mounted = false;
+      window.clearInterval(interval);
+    };
+  }, [bridge, backendErrorToastsEnabled]);
 
   useEffect(() => {
     let mounted = true;
@@ -1502,6 +1581,16 @@ export function SleiApp() {
     showAppToast(messages.agentCreate.createdSuccess, "success");
   }
 
+  async function refreshAgentMembersIntoState() {
+    const agentReceipt = await bridge.listAgents();
+    let members = await loadGuideSkillsForMembers(
+      bridge,
+      mergeAgentViewsIntoMembers(data.members, agentReceipt.agents, runtimeSetup.nodes, messages),
+    );
+    members = await loadSleiChannelMemberReadiness(bridge, data.channels, members);
+    setData((current) => createEmptySleiData({ ...current, members }));
+  }
+
   async function refreshChannelsAfterCreate(channelId: string) {
     const receipt = await bridge.listChannels();
     const channels = receipt.channels.map((channel) => channelFromView(channel, messages));
@@ -1847,6 +1936,13 @@ export function SleiApp() {
         channelId,
         taskId,
         handoffAgentIds: receipt.route.handoffAgentIds,
+      });
+    }
+    const routedAgentIds = [...receipt.route.handoffAgentIds, ...receipt.route.followupAgentIds];
+    if (routedAgentIds.length > 0) {
+      void refreshAgentMembersIntoState().catch((error: unknown) => {
+        logAppEvent(bridge, "task-agent-reply", "agent-status-refresh-failed", { channelId, taskId, error: formatLogError(error) });
+        showBackendServiceErrorToast(error);
       });
     }
   }
@@ -2417,7 +2513,8 @@ export function SleiApp() {
       onAttachmentUpload={handleUploadConversationAttachment}
       onTaskReply={handleTaskReply}
       onTaskStatusChange={handleTaskStatusChange}
-      onTaskThreadOpen={refreshTaskThreadIntoState}
+      onTaskThreadClose={handleTaskThreadClose}
+      onTaskThreadOpen={handleTaskThreadOpen}
       onViewChange={navigateToView}
       onMemberSelect={setActiveMemberId}
       onMemberMessage={handleMessageMember}

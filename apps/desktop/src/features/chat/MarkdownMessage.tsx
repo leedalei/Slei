@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { SleiIcon, TooltipButton } from "../../components";
+import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
 
@@ -11,7 +12,20 @@ type MarkdownForegroundStyle = CSSProperties & {
   "--markdown-foreground"?: string;
 };
 
-export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: string; tone?: MarkdownTone }) {
+export function MarkdownMessage({
+  copyCodeLabel,
+  markdown,
+  onCodeCopied,
+  onCodeCopyFailed,
+  tone = "foreground",
+}: {
+  copyCodeLabel?: string;
+  markdown: string;
+  onCodeCopied?: () => void;
+  onCodeCopyFailed?: (error: unknown) => void;
+  tone?: MarkdownTone;
+}) {
+  const components = markdownComponents({ copyCodeLabel, onCodeCopied, onCodeCopyFailed });
   return (
     <div
       className={cn(
@@ -20,7 +34,7 @@ export function MarkdownMessage({ markdown, tone = "foreground" }: { markdown: s
       )}
       style={markdownForegroundStyle(tone)}
     >
-      <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeMarkdownUrl}>
+      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} skipHtml urlTransform={safeMarkdownUrl}>
         {sanitizeMarkdown(markdown)}
       </ReactMarkdown>
     </div>
@@ -36,55 +50,69 @@ function safeMarkdownUrl(url: string): string {
   return /^(https?:|mailto:|#blocked$)/i.test(url) ? url : "#blocked";
 }
 
-const markdownComponents: Components = {
-  pre({ children, node: _node, ...props }) {
-    const codeBlock = codeBlockFromChildren(children);
-    if (!codeBlock) return <pre {...props}>{children}</pre>;
-
-    return (
-      <div className="slei-code-block" data-slot="markdown-code-block">
-        <div className="slei-code-block__header" data-slot="markdown-code-header">
-          <span className="slei-code-block__language" data-slot="markdown-code-language">
-            {codeBlock.language}
-          </span>
-          <TooltipButton
-            aria-label="Copy code"
-            className="slei-code-block__copy"
-            onClick={() => void copyCodeBlock(codeBlock.code)}
-            size="icon-xs"
-            tooltip="Copy code"
-            type="button"
-            variant="ghost"
-          >
-            <SleiIcon name="copy" size={14} />
-          </TooltipButton>
+function markdownComponents(input: {
+  copyCodeLabel?: string;
+  onCodeCopied?: () => void;
+  onCodeCopyFailed?: (error: unknown) => void;
+}): Components {
+  return {
+    pre({ children, node: _node, ...props }) {
+      const codeBlock = codeBlockFromChildren(children);
+      if (!codeBlock) return <pre {...props}>{children}</pre>;
+      const copyLabel = input.copyCodeLabel ?? "Copy code";
+      return (
+        <div className="slei-code-block" data-slot="markdown-code-block">
+          <div className="slei-code-block__header" data-slot="markdown-code-header">
+            <span className="slei-code-block__language" data-slot="markdown-code-language">
+              {codeBlock.language}
+            </span>
+            <TooltipButton
+              aria-label={copyLabel}
+              className="slei-code-block__copy"
+              data-slot="markdown-code-copy"
+              onClick={async () => {
+                try {
+                  const copied = await copyPlainText(codeBlock.code);
+                  if (copied) input.onCodeCopied?.();
+                } catch (error) {
+                  input.onCodeCopyFailed?.(error);
+                }
+              }}
+              size="icon-xs"
+              tooltip={copyLabel}
+              type="button"
+              variant="ghost"
+            >
+              <SleiIcon name="copy" size={14} />
+            </TooltipButton>
+          </div>
+          <pre {...props}>{children}</pre>
         </div>
-        <pre {...props}>{children}</pre>
-      </div>
-    );
-  },
-  p({ children, node: _node, ...props }) {
-    return <p {...props}>{renderMentions(children)}</p>;
-  },
-  li({ children, node: _node, ...props }) {
-    return <li {...props}>{renderMentions(children)}</li>;
-  },
-  a({ children, href, node: _node, ...props }) {
-    return (
-      <a href={href} rel="noreferrer" target="_blank" {...props}>
-        {children}
-      </a>
-    );
-  },
-  code({ children, className, node: _node, ...props }) {
-    const code = String(children).replace(/\n$/, "");
-    return (
-      <code className={className} {...props}>
-        {className ? highlightCode(code) : children}
-      </code>
-    );
-  },
-};
+      );
+    },
+    p({ children, node: _node, ...props }) {
+      return <p {...props}>{renderMentions(children)}</p>;
+    },
+    li({ children, node: _node, ...props }) {
+      return <li {...props}>{renderMentions(children)}</li>;
+    },
+    a({ children, href, node: _node, ...props }) {
+      return (
+        <a href={href} rel="noreferrer" target="_blank" {...props}>
+          {children}
+        </a>
+      );
+    },
+    code({ children, className, node: _node, ...props }) {
+      const code = String(children).replace(/\n$/, "");
+      return (
+        <code className={className} {...props}>
+          {className ? highlightCode(code) : children}
+        </code>
+      );
+    },
+  };
+}
 
 type CodeElementProps = {
   className?: string;
@@ -106,11 +134,6 @@ function plainTextFromNode(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(plainTextFromNode).join("");
   if (isValidElement<{ children?: ReactNode }>(node)) return plainTextFromNode(node.props.children);
   return "";
-}
-
-async function copyCodeBlock(code: string): Promise<void> {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return;
-  await navigator.clipboard.writeText(code);
 }
 
 const mentionPattern = /(^|[^A-Za-z0-9_@.])(@[A-Za-z0-9][A-Za-z0-9_-]*)(?=$|[^A-Za-z0-9_-])/g;

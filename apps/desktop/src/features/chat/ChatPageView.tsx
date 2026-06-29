@@ -19,6 +19,7 @@ import { Separator } from "../../components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
+import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
@@ -347,25 +348,6 @@ function messageTimestampLabel(message: SleiMessage): string {
   return raw;
 }
 
-async function copyMessageBody(body: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(body);
-    return true;
-  }
-  if (typeof document === "undefined") return false;
-
-  const textarea = document.createElement("textarea");
-  textarea.value = body;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  return copied;
-}
-
 function formatConversationDateTime(value: string): string {
   return formatLocalRecordDateTime(value);
 }
@@ -399,9 +381,19 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnType<typeof leadingSkillSlashToken> }) {
+function MessageBody({
+  body,
+  copyCodeLabel,
+  onCodeCopied,
+  skillToken,
+}: {
+  body: string;
+  copyCodeLabel: string;
+  onCodeCopied: () => void;
+  skillToken?: ReturnType<typeof leadingSkillSlashToken>;
+}) {
   if (!skillToken) {
-    return <MarkdownMessage markdown={body} tone="card" />;
+    return <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={body} onCodeCopied={onCodeCopied} tone="card" />;
   }
   const rest = skillToken.rest;
   const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
@@ -413,7 +405,7 @@ function MessageBody({ body, skillToken }: { body: string; skillToken?: ReturnTy
       <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
         {skillToken.token}
       </span>
-      {rest ? <MarkdownMessage markdown={rest} tone="card" /> : null}
+      {rest ? <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={rest} onCodeCopied={onCodeCopied} tone="card" /> : null}
     </div>
   );
 }
@@ -663,7 +655,7 @@ function ChannelMemberPanel(input: {
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadClose, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadClose?: (taskId: string) => void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -920,13 +912,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }
 
   async function copyMessage(message: SleiMessage) {
-    const copied = await copyMessageBody(message.body);
+    const copied = await copyPlainText(message.body);
     if (!copied) return;
     showToast(messages.chat.copySuccess, "success");
   }
 
   async function copyChannelTitle() {
-    const copied = await copyMessageBody(detailTitle);
+    const copied = await copyPlainText(detailTitle);
     if (!copied) return;
     showToast(messages.chat.copySuccess, "success");
   }
@@ -1326,6 +1318,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               </div>
                               <MessageBody
                                 body={message.body}
+                                copyCodeLabel={messages.chat.copyMessage}
+                                onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
                                 skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
                               />
                               <AttachmentList attachments={message.attachments ?? []} messageAttachments />
@@ -1519,7 +1513,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       </section>
       <TaskThreadDrawer
         messages={messages}
-        onClose={() => setSelectedThreadMessageId(undefined)}
+        onClose={() => {
+          if (selectedMessageThreadTask?.id) onTaskThreadClose?.(selectedMessageThreadTask.id);
+          setSelectedThreadMessageId(undefined);
+        }}
         onReply={selectedThreadMessage && (selectedThreadMessage.thread?.id ? onMessageThreadReply : onMessageThreadReplyFromSource) ? replyToSelectedMessageThread : undefined}
         mentionMembers={data.members}
         open={Boolean(selectedMessageThreadTask)}
@@ -1527,7 +1524,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       />
       <TaskThreadDrawer
         messages={messages}
-        onClose={() => setSelectedTaskId(undefined)}
+        onClose={() => {
+          if (selectedTaskId) onTaskThreadClose?.(selectedTaskId);
+          setSelectedTaskId(undefined);
+        }}
         onReply={onTaskReply}
         onStatusChange={onTaskStatusChange}
         mentionMembers={data.members}

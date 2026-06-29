@@ -21,6 +21,7 @@ export function TasksPage({
   messages,
   onTaskReply,
   onTaskStatusChange,
+  onTaskThreadClose,
   onTaskThreadOpen,
 }: {
   activeTaskId?: string;
@@ -28,6 +29,7 @@ export function TasksPage({
   messages: DesktopMessages;
   onTaskReply?: (taskId: string, body: string) => Promise<void> | void;
   onTaskStatusChange?: (taskId: string, status: SleiTask["status"]) => Promise<void> | void;
+  onTaskThreadClose?: (taskId: string) => void;
   onTaskThreadOpen?: (taskId: string) => Promise<void> | void;
 }) {
   const columns: SleiTask["status"][] = ["pending_assignment", "in_progress", "in_review", "done"];
@@ -168,7 +170,10 @@ export function TasksPage({
       <TaskThreadDrawer
         mentionMembers={data.members}
         messages={messages}
-        onClose={() => setSelectedTaskId(undefined)}
+        onClose={() => {
+          if (selectedTaskId) onTaskThreadClose?.(selectedTaskId);
+          setSelectedTaskId(undefined);
+        }}
         onReply={onTaskReply}
         onStatusChange={onTaskStatusChange}
         open={Boolean(selectedTask)}

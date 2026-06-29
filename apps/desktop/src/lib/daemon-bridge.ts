@@ -380,7 +380,7 @@ export type TaskThreadReceipt = { thread: TaskThreadView };
 
 export type TaskReplyRequest = { senderId: string; body: string };
 
-export type TaskReplyRoute = { handoffAgentIds: string[]; needsAssignment: boolean };
+export type TaskReplyRoute = { handoffAgentIds: string[]; followupAgentIds: string[]; needsAssignment: boolean };
 
 export type TaskReplyReceipt = { reply: TaskThreadMessageView; route: TaskReplyRoute };
 
@@ -629,6 +629,18 @@ export type DiagnosticEventView = {
   createdAt: string;
 };
 
+export type DaemonEventView = {
+  sequence: number;
+  eventType: string;
+  occurredAtUnixMs: number;
+  payload: Record<string, unknown>;
+};
+
+export type EventReconnectReceipt = {
+  after: number;
+  events: DaemonEventView[];
+};
+
 export type DiagnosticsSnapshotView = {
   node: string;
   runtime: string;
@@ -695,7 +707,7 @@ export type DaemonBridge = {
   updateProfile(request: ProfileUpdateRequest): Promise<ProfileReceipt>;
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
   refreshRuntimeStatus(): Promise<NodeListReceipt>;
-  subscribeEvents(after: number): Promise<void>;
+  subscribeEvents(after: number): Promise<EventReconnectReceipt>;
 };
 
 function defaultAppLocale(): AppLocale {
@@ -859,8 +871,8 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async refreshRuntimeStatus() {
       return { nodes: [] };
     },
-    async subscribeEvents() {
-      return undefined;
+    async subscribeEvents(after) {
+      return { after, events: [] };
     },
   };
 }
@@ -921,7 +933,7 @@ export function createDaemonBridge(): DaemonBridge {
       updateProfile: (request: ProfileUpdateRequest) => invoke<ProfileReceipt>("update_profile_command", { request }),
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),
       refreshRuntimeStatus: () => invoke<NodeListReceipt>("refresh_runtime_status_command"),
-      subscribeEvents: (after: number) => invoke<void>("reconnect_events_command", { after }),
+      subscribeEvents: (after: number) => invoke<EventReconnectReceipt>("reconnect_events_command", { after }),
     };
   }
 

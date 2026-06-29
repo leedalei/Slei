@@ -18,6 +18,8 @@ import {
   markAgentActivityFailedByDiagnostic,
   applyPreferenceMutation,
   removeCompletedAgentActivityByDiagnostic,
+  daemonEventNeedsAgentRefresh,
+  taskThreadIdFromDaemonEvent,
   shouldToastBackendServiceError,
   updateAgentActivityByDiagnostic,
   replaceChannelMessages,
@@ -191,6 +193,44 @@ describe("ensureActiveDmAgentSkills", () => {
     expect(source).toContain("activeDmSkillLoadsRef.current.delete(activeDmAgentId)");
     expect(source).not.toContain("if (nextData !== data) setData(nextData)");
     expect(source).not.toContain("}, [activeConversationId, bridge.listAgentSkills, data]);");
+  });
+});
+
+describe("daemon event routing", () => {
+  it("extracts task thread ids from task thread update events", () => {
+    expect(taskThreadIdFromDaemonEvent({
+      sequence: 7,
+      eventType: "task_thread.updated",
+      occurredAtUnixMs: 1790000000000,
+      payload: { taskId: "task_123", replyId: "reply_1", channelId: "all" },
+    })).toBe("task_123");
+    expect(taskThreadIdFromDaemonEvent({
+      sequence: 8,
+      eventType: "channel_agent_runtime.started",
+      occurredAtUnixMs: 1790000000001,
+      payload: { agentId: "agent_coda" },
+    })).toBeUndefined();
+  });
+
+  it("detects daemon events that require sidebar agent status refresh", () => {
+    expect(daemonEventNeedsAgentRefresh({
+      sequence: 9,
+      eventType: "agent_activity.updated",
+      occurredAtUnixMs: 1790000000002,
+      payload: { agentId: "agent_coda" },
+    })).toBe(true);
+    expect(daemonEventNeedsAgentRefresh({
+      sequence: 10,
+      eventType: "channel_agent_runtime.completed",
+      occurredAtUnixMs: 1790000000003,
+      payload: { agent_id: "agent_coda" },
+    })).toBe(true);
+    expect(daemonEventNeedsAgentRefresh({
+      sequence: 11,
+      eventType: "task_thread.updated",
+      occurredAtUnixMs: 1790000000004,
+      payload: { taskId: "task_123" },
+    })).toBe(false);
   });
 });
 

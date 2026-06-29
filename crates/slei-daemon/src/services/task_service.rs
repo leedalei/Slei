@@ -635,7 +635,7 @@ impl TaskService {
     }
 
     pub async fn update_status(&self, task_id: &str, status: TaskStatus) -> Result<(), TaskError> {
-        self.task(task_id).await?;
+        self.validate_status_transition(task_id, status).await?;
         self.repos
             .update_task_status(task_id, status_to_storage(status))
             .await
@@ -668,6 +668,7 @@ impl TaskService {
             return Ok(task);
         }
 
+        self.validate_status_transition(task_id, status).await?;
         let payload = self
             .repos
             .update_task_status_idempotent(task_id, status_to_storage(status), &idempotency_key)
@@ -681,6 +682,31 @@ impl TaskService {
             .status_idempotency
             .insert(idempotency_key, task.clone());
         Ok(task)
+    }
+
+    async fn validate_status_transition(
+        &self,
+        task_id: &str,
+        target_status: TaskStatus,
+    ) -> Result<(), TaskError> {
+        let task = self.task(task_id).await?;
+        if target_status == task.status {
+            return Ok(());
+        }
+        let reply_count = self
+            .repos
+            .task_replies(task_id)
+            .await
+            .map_err(storage_error)?
+            .len();
+        if reply_count == 0
+            && (matches!(target_status, TaskStatus::InReview | TaskStatus::Done)
+                || (task.status == TaskStatus::PendingAssignment
+                    && target_status != TaskStatus::PendingAssignment))
+        {
+            return Err(TaskError::InvalidTaskStatusTransition);
+        }
+        Ok(())
     }
 
     pub async fn assign(
@@ -1090,6 +1116,8 @@ pub enum TaskError {
     MissingIdempotencyKey,
     #[error("task input is invalid")]
     InvalidTaskInput,
+    #[error("task status cannot move forward before the task thread has replies")]
+    InvalidTaskStatusTransition,
     #[error("active task root cannot be deleted")]
     ActiveTaskRootDeletionBlocked,
     #[error("task storage error: {0}")]

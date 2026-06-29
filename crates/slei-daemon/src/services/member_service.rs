@@ -685,7 +685,13 @@ impl MemberService {
         row: AgentRow,
     ) -> Result<ProductAgentRecord, MemberError> {
         let channel_ids = channel_ids_for_agent(&self.repos, &row.id, false).await?;
-        let record = product_agent_from_row(row, channel_ids);
+        let current_status = self
+            .repos
+            .agent_status(&row.id)
+            .await
+            .map_err(member_storage_error)?
+            .map(|status| status.state);
+        let record = product_agent_from_row(row, channel_ids, current_status);
         write_default_skills(&record)?;
         migrate_channel_memory_guidance(&record)?;
         self.write_agent_channel_notes(&record).await?;
@@ -792,7 +798,11 @@ async fn channel_ids_for_agent(
     Ok(channel_ids)
 }
 
-fn product_agent_from_row(row: AgentRow, channel_ids: Vec<String>) -> ProductAgentRecord {
+fn product_agent_from_row(
+    row: AgentRow,
+    channel_ids: Vec<String>,
+    current_status: Option<String>,
+) -> ProductAgentRecord {
     ProductAgentRecord {
         id: row.id,
         name: row.name,
@@ -809,7 +819,7 @@ fn product_agent_from_row(row: AgentRow, channel_ids: Vec<String>) -> ProductAge
         avatar_seed: row.avatar_seed,
         runtime_thread: RuntimeThreadRecord {
             runtime_kind: row.runtime_kind,
-            status: row.runtime_status,
+            status: current_status.unwrap_or(row.runtime_status),
             created_at: row.created_at.clone(),
         },
         channel_ids,

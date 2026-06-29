@@ -329,7 +329,8 @@ fn task_error_response(error: TaskError) -> Response {
             .into_response(),
         TaskError::ActiveTaskRootDeletionBlocked
         | TaskError::MissingIdempotencyKey
-        | TaskError::InvalidTaskInput => (
+        | TaskError::InvalidTaskInput
+        | TaskError::InvalidTaskStatusTransition => (
             StatusCode::BAD_REQUEST,
             Json(json!({ "error": error.to_string() })),
         )
@@ -394,6 +395,7 @@ fn task_reply_error_response(error: ChannelOrchestratorError) -> Response {
         ChannelOrchestratorError::Task(TaskError::ActiveTaskRootDeletionBlocked)
         | ChannelOrchestratorError::Task(TaskError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Task(TaskError::InvalidTaskInput)
+        | ChannelOrchestratorError::Task(TaskError::InvalidTaskStatusTransition)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidChannel)
         | ChannelOrchestratorError::Channel(ChannelError::InvalidWorkspacePath)
         | ChannelOrchestratorError::Channel(ChannelError::MissingIdempotencyKey)
