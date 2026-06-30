@@ -9,6 +9,8 @@ export const settings = {
   avatar: "头像",
   avatarHint: "从几个预设像素画里选择你的头像。",
   avatarPresets: "像素头像选项",
+  avatarUpload: "上传头像图片",
+  avatarUploadInvalid: "请选择非空的 PNG、JPG 或 WebP 图片",
   connectedComputers: "已连接设备",
   daemonVersion: "Daemon 版本",
   desktopVersion: "桌面端版本",

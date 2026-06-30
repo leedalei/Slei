@@ -320,6 +320,8 @@ export type DesktopMessages = {
     avatar: string;
     avatarHint: string;
     avatarPresets: string;
+    avatarUpload: string;
+    avatarUploadInvalid: string;
     connectedComputers: string;
     daemonVersion: string;
     desktopVersion: string;

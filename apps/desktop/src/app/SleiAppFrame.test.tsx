@@ -51,6 +51,23 @@ async function changeField(field: HTMLInputElement | HTMLTextAreaElement | null,
   await act(async () => undefined);
 }
 
+function inputByLabel(root: ParentNode, label: string) {
+  const input = root.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+  if (!input) throw new Error(`Missing input labeled ${label}`);
+  return input;
+}
+
+async function uploadFile(input: HTMLInputElement, file: File) {
+  await act(async () => {
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => undefined);
+}
+
 const readyNodes = [{
   id: "local-node",
   name: "本机设备",
@@ -62,13 +79,13 @@ const readyNodes = [{
 
 function currentDialog() {
   const dialog = document.body.querySelector<HTMLElement>('[data-slot="dialog-content"]');
-  expect(dialog).toBeTruthy();
+  if (!dialog) throw new Error("Missing dialog content");
   return dialog;
 }
 
 function currentDialogSubmit() {
   const submit = currentDialog().querySelector<HTMLButtonElement>('form button[type="submit"]');
-  expect(submit).toBeTruthy();
+  if (!submit) throw new Error("Missing dialog submit");
   return submit;
 }
 
@@ -213,6 +230,26 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(description).not.toBeNull();
     expect(description?.className).toContain("text-sm");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
+  });
+
+  it("wires settings account avatar upload to the provided callback", async () => {
+    const onProfileAvatarUpload = vi.fn().mockResolvedValue(undefined);
+    const container = await mount(
+      <SleiAppFrame
+        activeView="settings"
+        data={createSleiFixtures()}
+        initialSettingsPanel="account"
+        locale="zh-CN"
+        onProfileAvatarUpload={onProfileAvatarUpload}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const file = new File([Uint8Array.from([137, 80, 78, 71])], "avatar.png", { type: "image/png" });
+
+    await uploadFile(inputByLabel(container, "上传头像图片"), file);
+
+    expect(onProfileAvatarUpload).toHaveBeenCalledWith(file);
   });
 
   it("defaults to dark theme when appearance is omitted", async () => {

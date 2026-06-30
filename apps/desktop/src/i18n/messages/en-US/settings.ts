@@ -9,6 +9,8 @@ export const settings = {
   avatar: "Avatar",
   avatarHint: "Choose from a few preset pixel portraits.",
   avatarPresets: "Pixel avatar options",
+  avatarUpload: "Upload avatar image",
+  avatarUploadInvalid: "Choose a non-empty PNG, JPG, or WebP image",
   connectedComputers: "Connected computers",
   daemonVersion: "Daemon version",
   desktopVersion: "Desktop version",

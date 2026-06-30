@@ -807,6 +807,18 @@ function formatAppErrorToast(prefix: string, error: unknown) {
   return detail ? `${prefix}：${detail}` : prefix;
 }
 
+const supportedProfileAvatarMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
 function formatDiagnosticEventToast(prefix: string, event: DiagnosticEventView) {
   const detail = [event.eventType, event.payload].filter(Boolean).join(" ");
   return formatAppErrorToast(prefix, detail);
@@ -2425,6 +2437,41 @@ export function SleiApp() {
     }
   }
 
+  async function handleProfileAvatarUpload(file: File) {
+    const field = "avatar";
+    if (pendingProfileFieldRef.current) return;
+
+    pendingProfileFieldRef.current = field;
+    setPendingProfileField(field);
+    setProfileErrors((current) => {
+      const next = { ...current };
+      delete next.avatar;
+      return next;
+    });
+
+    try {
+      if (!profile) {
+        throw new Error(messages.settings.profileUnavailable);
+      }
+      if (file.size <= 0 || !supportedProfileAvatarMimeTypes.has(file.type)) {
+        throw new Error(messages.settings.avatarUploadInvalid);
+      }
+
+      const bytesBase64 = arrayBufferToBase64(await file.arrayBuffer());
+      const receipt = await bridge.uploadProfileAvatar({ fileName: file.name, mimeType: file.type, bytesBase64 });
+      setProfile(receipt.profile);
+      showAppToast(messages.settings.updateSuccess, "success");
+    } catch (error) {
+      const message = formatAppErrorToast(messages.settings.updateFailed, error);
+      setProfileErrors((current) => ({ ...current, avatar: message }));
+      showAppToast(message, "error");
+      throw error;
+    } finally {
+      pendingProfileFieldRef.current = undefined;
+      setPendingProfileField(undefined);
+    }
+  }
+
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     const startX = event.clientX;
@@ -2494,6 +2541,7 @@ export function SleiApp() {
       onComputerDelete={handleDeleteComputer}
       onComputerRename={handleRenameComputer}
       onGlobalSearch={(query) => bridge.globalSearch(query)}
+      onProfileAvatarUpload={handleProfileAvatarUpload}
       onProfileChange={handleProfileChange}
       onLocaleChange={handleLocaleChange}
       onTimeZoneChange={handleTimeZoneChange}

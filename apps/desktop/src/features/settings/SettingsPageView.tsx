@@ -3,7 +3,7 @@ import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +23,7 @@ type SettingsPageInput = {
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void;
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void;
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void;
+  onProfileAvatarUpload?: (file: File) => Promise<void> | void;
   onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void;
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
   pendingPreference?: "locale" | "timeZone" | "appearance" | "notifications";
@@ -46,6 +47,8 @@ export function SettingsPage(input: SettingsPageInput) {
   const profile = input.profile;
   const preferencePending = Boolean(input.pendingPreference);
   const profilePending = Boolean(input.pendingProfileField);
+  const avatarUploadId = "settings-profile-avatar-upload";
+  const avatarUploadDisabled = input.pendingProfileField === "avatar" || !input.onProfileAvatarUpload;
 
   function updateNotification(field: keyof NotificationPreferences, value: boolean) {
     runSettingsFireAndForgetAction(() => input.onNotificationsChange?.({
@@ -111,6 +114,33 @@ export function SettingsPage(input: SettingsPageInput) {
                 <div className="grid gap-1">
                   <h2 className="text-sm font-medium">{labels.avatar}</h2>
                   <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    aria-label={labels.avatarUpload}
+                    className="sr-only"
+                    data-settings-avatar-upload="true"
+                    disabled={avatarUploadDisabled}
+                    id={avatarUploadId}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = "";
+                      if (!file || avatarUploadDisabled) return;
+                      runSettingsFireAndForgetAction(() => input.onProfileAvatarUpload?.(file));
+                    }}
+                    type="file"
+                  />
+                  <Label
+                    aria-disabled={avatarUploadDisabled ? "true" : undefined}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      avatarUploadDisabled && "pointer-events-none opacity-50",
+                    )}
+                    htmlFor={avatarUploadId}
+                  >
+                    {labels.avatarUpload}
+                  </Label>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {profileAvatarPresets.map((preset) => (

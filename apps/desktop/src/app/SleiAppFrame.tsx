@@ -257,6 +257,7 @@ export type SleiAppFrameProps = {
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void;
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void;
   onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void;
+  onProfileAvatarUpload?: (file: File) => Promise<void> | void;
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
   onAgentResultSelect?: (agentId: string) => void;
   onChannelResultSelect?: (channelId: string) => void;
@@ -467,7 +468,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         </>
       ) : null}
 
-      <main className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-visible bg-transparent">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
+      <main className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-visible bg-transparent">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
         setAgentDraft(draft);
         setActiveCardId(cardId);
         setAgentCreateOpen(true);
@@ -1451,6 +1452,7 @@ function renderWorkspace(
   notifications: NotificationPreferences,
   activeSettingsPanel: SettingsPanel,
   onProfileChange?: (patch: Partial<Pick<UserProfile, "displayName" | "avatar">>) => Promise<void> | void,
+  onProfileAvatarUpload?: (file: File) => Promise<void> | void,
   onLocaleChange?: (locale: AppLocale) => Promise<void> | void,
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void,
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void,
@@ -1554,6 +1556,7 @@ function renderWorkspace(
         onAppearanceChange={onAppearanceChange}
         onLocaleChange={onLocaleChange}
         onNotificationsChange={onNotificationsChange}
+        onProfileAvatarUpload={onProfileAvatarUpload}
         onProfileChange={onProfileChange}
         onTimeZoneChange={onTimeZoneChange}
         pendingPreference={pendingPreference}

@@ -39,6 +39,23 @@ async function mountSettingsPage(element: React.ReactElement) {
   return mountedContainer;
 }
 
+function inputByLabel(root: HTMLElement, label: string) {
+  const input = root.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+  if (!input) throw new Error(`Missing input labeled ${label}`);
+  return input;
+}
+
+async function uploadFile(input: HTMLInputElement, file: File) {
+  await act(async () => {
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [file],
+    });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => undefined);
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -268,5 +285,88 @@ describe("SettingsPage header", () => {
     await act(async () => undefined);
 
     expect(onProfileChange).toHaveBeenCalledWith({ avatar: "pixel-moon" });
+  });
+
+  it("renders a localized avatar upload control in the account panel", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(inputByLabel(root, "上传头像图片")).toBeTruthy();
+    expect(root.textContent).toContain("上传头像图片");
+  });
+
+  it("calls onProfileAvatarUpload when a valid image is selected", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onProfileAvatarUpload = vi.fn().mockResolvedValue(undefined);
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={onProfileAvatarUpload}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+    const validPngBytes = Uint8Array.from([137, 80, 78, 71]);
+    const file = new File([validPngBytes], "avatar.png", { type: "image/png" });
+
+    await uploadFile(inputByLabel(root, "上传头像图片"), file);
+
+    expect(onProfileAvatarUpload).toHaveBeenCalledWith(file);
+  });
+
+  it("disables avatar upload while the avatar profile field is pending", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        pendingProfileField="avatar"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(inputByLabel(root, "上传头像图片").disabled).toBe(true);
+  });
+
+  it("does not render an active avatar upload control when profile is unavailable", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        profile={null}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(root.querySelector('input[aria-label="上传头像图片"]:not(:disabled)')).toBeNull();
   });
 });
