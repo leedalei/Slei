@@ -178,6 +178,7 @@ async fn dev_reset_clears_live_in_memory_product_state() {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "dev agent".to_string(),
+                avatar_seed: None,
             },
             "create-agent-before-memory-reset",
         )
@@ -554,6 +555,7 @@ async fn dev_reset_in_progress_makes_dm_message_api_conflict_before_append() {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "dev agent".to_string(),
+                avatar_seed: None,
             },
             "create-agent-coda-dm-api-conflict",
         )

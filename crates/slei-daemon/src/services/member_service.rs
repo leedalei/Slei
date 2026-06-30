@@ -45,6 +45,7 @@ pub struct ProductAgentDraft {
     pub model: String,
     pub node_id: String,
     pub description: String,
+    pub avatar_seed: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -292,11 +293,9 @@ impl MemberService {
             return Err(MemberError::MissingIdempotencyKey);
         }
 
+        let normalized_name = validate_agent_name(&draft.name)?;
         let normalized_handle = normalize_handle(&draft.handle)?;
-        if draft.name.trim().is_empty()
-            || draft.runtime_kind.trim().is_empty()
-            || draft.node_id.trim().is_empty()
-        {
+        if draft.runtime_kind.trim().is_empty() || draft.node_id.trim().is_empty() {
             return Err(MemberError::InvalidAgent);
         }
 
@@ -317,6 +316,16 @@ impl MemberService {
                 .await
                 .map_err(member_storage_error)?
                 .is_some()
+            {
+                return Err(MemberError::DuplicateHandle);
+            }
+            if self
+                .repos
+                .agents()
+                .await
+                .map_err(member_storage_error)?
+                .iter()
+                .any(|agent| agent.name == normalized_name)
             {
                 return Err(MemberError::DuplicateHandle);
             }
@@ -364,6 +373,7 @@ impl MemberService {
             node_id: node_id.to_string(),
             description: "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。"
                 .to_string(),
+            avatar_seed: None,
         };
         let agent = self
             .create_product_agent_record(
@@ -447,6 +457,19 @@ impl MemberService {
         channel_ids: Vec<String>,
     ) -> Result<ProductAgentRecord, MemberError> {
         let normalized_handle = normalize_handle(&draft.handle)?;
+        let avatar_seed = draft
+            .avatar_seed
+            .as_deref()
+            .map(str::trim)
+            .filter(|seed| !seed.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if agent_kind == "guide" {
+                    "yeal".to_string()
+                } else {
+                    id.clone()
+                }
+            });
         let workspace_path = self.agent_data_root.join("agents").join(&id);
         let docs_path = workspace_path.join("docs");
         let memory_path = workspace_path.join("MEMORY.md");
@@ -466,11 +489,7 @@ impl MemberService {
             workspace_path: workspace_path.to_string_lossy().to_string(),
             memory_path: memory_path.to_string_lossy().to_string(),
             docs_path: docs_path.to_string_lossy().to_string(),
-            avatar_seed: if agent_kind == "guide" {
-                "yeal".to_string()
-            } else {
-                id.clone()
-            },
+            avatar_seed,
             runtime_thread: RuntimeThreadRecord {
                 runtime_kind: draft.runtime_kind.trim().to_string(),
                 status: "ready".to_string(),
@@ -882,16 +901,26 @@ fn member_storage_error(error: sqlx::Error) -> MemberError {
 }
 
 fn normalize_handle(handle: &str) -> Result<String, MemberError> {
-    let trimmed = handle.trim().trim_start_matches('@').to_lowercase();
+    let trimmed = handle.trim().trim_start_matches('@');
     let valid = !trimmed.is_empty()
-        && trimmed.len() <= 32
-        && trimmed.chars().all(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        });
+        && trimmed.chars().count() <= 32
+        && !trimmed.chars().any(char::is_whitespace)
+        && !trimmed.contains('-');
     if valid {
         Ok(format!("@{trimmed}"))
     } else {
         Err(MemberError::InvalidHandle)
+    }
+}
+
+fn validate_agent_name(name: &str) -> Result<String, MemberError> {
+    let trimmed = name.trim();
+    let valid =
+        !trimmed.is_empty() && !trimmed.chars().any(char::is_whitespace) && !trimmed.contains('-');
+    if valid {
+        Ok(trimmed.to_string())
+    } else {
+        Err(MemberError::InvalidAgent)
     }
 }
 

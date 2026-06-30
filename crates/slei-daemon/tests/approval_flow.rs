@@ -152,6 +152,7 @@ async fn approval_flow_worker_permission_request_creates_session_card_and_resolv
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "研发工程师".to_string(),
+                avatar_seed: None,
             },
             "create-coda",
         )

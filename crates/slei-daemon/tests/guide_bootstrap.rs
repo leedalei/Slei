@@ -58,6 +58,7 @@ async fn product_agents_survive_app_state_reload_without_legacy_json_index() {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "负责实现任务".to_string(),
+                avatar_seed: None,
             },
             "create-coda",
         )

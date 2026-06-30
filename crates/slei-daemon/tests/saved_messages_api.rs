@@ -23,6 +23,7 @@ async fn saved_message_api_persists_and_enriches_channel_and_dm_messages() {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "研发工程师".to_string(),
+                avatar_seed: None,
             },
             "create-coda",
         )

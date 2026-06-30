@@ -655,6 +655,7 @@ async fn thread_reply_with_visible_mention_launches_agent_without_main_timeline_
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "coding agent".to_string(),
+                avatar_seed: None,
             },
             "thread-reply-agent",
         )

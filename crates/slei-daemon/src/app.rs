@@ -68,6 +68,7 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(api::agent_message_todos::delete),
         )
         .route("/v1/search/global", get(api::search::global))
+        .route("/v1/agent-role-presets", get(api::agent_role_presets::list))
         .route(
             "/v1/saved-messages",
             get(api::saved_messages::list).post(api::saved_messages::save),

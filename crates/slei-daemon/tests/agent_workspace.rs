@@ -191,7 +191,7 @@ async fn deleting_agent_removes_registry_membership_and_workspace() {
         Some("delete-coda-create"),
         json!({
             "name": "Coda",
-            "handle": "@coda-delete",
+            "handle": "@codadelete",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
@@ -1469,7 +1469,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
         "/v1/agents",
         Some("create-two-case"),
         json!({
-            "name": "Case Other",
+            "name": "CaseOther",
             "handle": "@Coda",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
@@ -1496,7 +1496,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
         "/v1/agents",
         Some("create-guide-handle"),
         json!({
-            "name": "User Yeal",
+            "name": "UserYeal",
             "handle": "@yeal",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
@@ -1531,7 +1531,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
         Some("create-bad-runtime"),
         json!({
             "name": "NoRuntime",
-            "handle": "@no-runtime",
+            "handle": "@noruntime",
             "runtimeKind": "ImaginaryRuntime",
             "model": "Sonnet",
             "nodeId": "local-node",
@@ -2628,7 +2628,7 @@ async fn uploaded_attachment_can_be_sent_after_daemon_reload() {
         Some("create-unsent-attachment-agent"),
         json!({
             "name": "Coda",
-            "handle": "@coda-unsent",
+            "handle": "@codaunsent",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
@@ -2714,7 +2714,7 @@ async fn dm_send_rejects_session_from_another_conversation() {
         Some("create-cross-session-first"),
         json!({
             "name": "Coda",
-            "handle": "@cross-session-first",
+            "handle": "@crosssessionfirst",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
@@ -2734,7 +2734,7 @@ async fn dm_send_rejects_session_from_another_conversation() {
         Some("create-cross-session-second"),
         json!({
             "name": "Nova",
-            "handle": "@cross-session-second",
+            "handle": "@crosssessionsecond",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",

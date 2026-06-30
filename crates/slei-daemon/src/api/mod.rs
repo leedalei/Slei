@@ -1,4 +1,5 @@
 pub mod agent_message_todos;
+pub mod agent_role_presets;
 pub mod approvals;
 pub mod artifacts;
 pub mod capabilities;
