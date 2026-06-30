@@ -3,6 +3,16 @@ import { type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, us
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -27,7 +37,7 @@ import type { ChatWorkspaceMode } from "./SleiAppFrame";
 
 type SortDirection = "default" | "asc" | "desc";
 
-type ChannelCardDraftRequest = {
+export type ChannelCardDraftRequest = {
   id: number;
   draft: Record<string, unknown>;
   cardId?: string;
@@ -163,11 +173,11 @@ export type ChannelDraftState = {
   selectedAgentIds: string[];
 };
 
-function resetSidebarChannelDraft(): ChannelDraftState {
+export function resetChannelDraft(): ChannelDraftState {
   return { name: "", projectName: "", projectPaths: [], selectedAgentIds: [] };
 }
 
-function toggleSidebarChannelDraftAgent(draft: ChannelDraftState, agentId: string): ChannelDraftState {
+export function toggleChannelDraftAgent(draft: ChannelDraftState, agentId: string): ChannelDraftState {
   return {
     ...draft,
     selectedAgentIds: draft.selectedAgentIds.includes(agentId)
@@ -176,7 +186,7 @@ function toggleSidebarChannelDraftAgent(draft: ChannelDraftState, agentId: strin
   };
 }
 
-function channelDraftCreateInput(draft: ChannelDraftState): { name: string; projectName?: string; projectPaths?: string[]; agentIds: string[] } {
+export function channelDraftCreateInput(draft: ChannelDraftState): { name: string; projectName?: string; projectPaths?: string[]; agentIds: string[] } {
   const projectPaths = uniqueProjectPaths(draft.projectPaths);
   const projectName = projectPaths.length > 0 ? projectPaths.join(", ") : draft.projectName;
   return {
@@ -187,7 +197,7 @@ function channelDraftCreateInput(draft: ChannelDraftState): { name: string; proj
   };
 }
 
-function channelDraftFromCardDraft(draft: Record<string, unknown>, members: SleiMember[]): ChannelDraftState {
+export function channelDraftFromCardDraft(draft: Record<string, unknown>, members: SleiMember[]): ChannelDraftState {
   const agentMemberIds = new Set(
     members
       .filter((member) => member.type === "agent" && member.directMessageEnabled !== false)
@@ -208,7 +218,7 @@ function channelDraftFromCardDraft(draft: Record<string, unknown>, members: Slei
   };
 }
 
-async function submitChannelDraftWithFeedback(input: {
+export async function submitChannelDraftWithFeedback(input: {
   draft: ChannelDraftState;
   createFailedMessage: string;
   createPartialFailureMessage: string;
@@ -238,7 +248,7 @@ async function submitChannelDraftWithFeedback(input: {
     input.onLog?.("request-success", { channelId });
     const channels = await refreshCreatedChannels(input, channelId);
     input.onCreateSuccess?.(input.createdMessage ?? "", "success");
-    return { created: true, draft: resetSidebarChannelDraft(), channelId, channels };
+    return { created: true, draft: resetChannelDraft(), channelId, channels };
   } catch (error) {
     const detail = channelCreateErrorDetail(error);
     input.onLog?.("request-failed", { name: channelName, error: detail });
@@ -278,7 +288,7 @@ async function tryRefreshCreatedChannel(input: {
   input.onCreateFailure?.(formatChannelCreateFailure(input.createPartialFailureMessage, detail), "warn");
   return {
     created: true,
-    draft: resetSidebarChannelDraft(),
+    draft: resetChannelDraft(),
     channelId: createdChannel.id,
     channels,
     partialFailure: detail,
@@ -366,7 +376,7 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
 }
 
 export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
-  const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetSidebarChannelDraft());
+  const [channelDraft, setChannelDraft] = useState<ChannelDraftState>(() => resetChannelDraft());
   const [createOpen, setCreateOpen] = useState(input.initialCreateChannelModalOpen ?? false);
   const [creatingChannel, setCreatingChannel] = useState(false);
   const [activeChannelCardId, setActiveChannelCardId] = useState<string | undefined>(undefined);
@@ -374,7 +384,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   const [directMessageSortDirection, setDirectMessageSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.directMessages));
   const [openChannelMenuId, setOpenChannelMenuId] = useState<string | undefined>();
   const [openDmMenuId, setOpenDmMenuId] = useState<string | undefined>();
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [pendingDeleteChannel, setPendingDeleteChannel] = useState<SleiFixtures["channels"][number] | undefined>();
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const profile = localHumanPresentation(input.profile, input.messages);
   const directMessageConversations = input.conversations.filter((conversation) => {
@@ -443,14 +453,14 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   }
 
   function closeCreateChannelModal() {
-    setChannelDraft(resetSidebarChannelDraft());
+    setChannelDraft(resetChannelDraft());
     setActiveChannelCardId(undefined);
     setCreateOpen(false);
     setCreatingChannel(false);
   }
 
   function toggleSelectedAgent(agentId: string) {
-    setChannelDraft((current) => toggleSidebarChannelDraftAgent(current, agentId));
+    setChannelDraft((current) => toggleChannelDraftAgent(current, agentId));
   }
 
   function addProjectFolders(files: FileList | null) {
@@ -589,7 +599,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                       {channel.id !== "all" ? (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={() => input.onChannelDelete?.(channel.id)} variant="destructive">
+                          <DropdownMenuItem onSelect={() => setPendingDeleteChannel(channel)} variant="destructive">
                             <SleiIcon name="delete" size={14} />
                             {input.messages.shell.workspaceSidebar.deleteChannel}
                           </DropdownMenuItem>
@@ -698,11 +708,10 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               <strong className="block truncate text-sm">{profile.displayName}</strong>
               <small className="block truncate text-xs text-muted-foreground">{profile.handle}</small>
             </div>
-            <DropdownMenu open={settingsMenuOpen} onOpenChange={setSettingsMenuOpen}>
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}
-                  onClick={() => setSettingsMenuOpen((open) => !open)}
                   size="icon-sm"
                   type="button"
                   variant="ghost"
@@ -838,6 +847,33 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             </DialogFooter>
           </form>
       </ShellDialog>
+
+      <AlertDialog open={Boolean(pendingDeleteChannel)} onOpenChange={(open) => {
+        if (!open) setPendingDeleteChannel(undefined);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {input.messages.chat.deleteChannel(stripChannelHash(pendingDeleteChannel?.name ?? ""))}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {input.messages.chat.deleteChannelConfirm(stripChannelHash(pendingDeleteChannel?.name ?? ""))}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingDeleteChannel) input.onChannelDelete?.(pendingDeleteChannel.id);
+                setPendingDeleteChannel(undefined);
+              }}
+            >
+              {input.messages.common.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

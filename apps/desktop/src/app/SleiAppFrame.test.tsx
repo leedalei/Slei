@@ -68,6 +68,19 @@ async function uploadFile(input: HTMLInputElement, file: File) {
   await act(async () => undefined);
 }
 
+async function clickElement(element: Element | null | undefined) {
+  expect(element).toBeInstanceOf(HTMLElement);
+  const target = element as HTMLElement;
+  await act(async () => {
+    target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, ctrlKey: false, pointerType: "mouse" }));
+    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, ctrlKey: false }));
+    target.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, ctrlKey: false, pointerType: "mouse" }));
+    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0, ctrlKey: false }));
+    target.click();
+  });
+  await act(async () => undefined);
+}
+
 const readyNodes = [{
   id: "local-node",
   name: "本机设备",
@@ -556,15 +569,9 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]')?.click();
-    });
-    await act(async () => undefined);
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("运行设备"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]'));
+    await clickElement(Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+      .find((item) => item.textContent?.includes("运行设备")));
 
     expect(onViewChange).toHaveBeenCalledWith("computers");
   });
@@ -681,8 +688,98 @@ describe("SleiAppFrame global search navigation", () => {
     });
 
     expect(onChannelEdit).toHaveBeenCalledWith("dev");
+    expect(onChannelSelect).not.toHaveBeenCalled();
+    expect(onViewChange).not.toHaveBeenCalled();
+  });
+
+  it("falls back to selecting the channel and chat view when no edit callback is provided", async () => {
+    const onChannelSelect = vi.fn();
+    const onViewChange = vi.fn();
+    const data = createSleiFixtures({
+      channels: [
+        { id: "ops", name: "ops", description: "运维频道描述", unread: 0, activeSessionId: "session:ops" },
+        { id: "dev", name: "dev", description: "研发频道描述", projectPaths: ["/workspace/dev"], unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeChannelId="ops"
+        activeView="tasks"
+        data={data}
+        locale="zh-CN"
+        onChannelSelect={onChannelSelect}
+        onViewChange={onViewChange}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]')
+        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("编辑频道"))
+        ?.click();
+    });
+
     expect(onChannelSelect).toHaveBeenCalledWith("dev");
     expect(onViewChange).toHaveBeenCalledWith("chat");
+  });
+
+  it("confirms channel deletion from the workspace sidebar context menu", async () => {
+    const onChannelDelete = vi.fn();
+    const data = createSleiFixtures({
+      channels: [
+        { id: "all", name: "all", description: "所有成员的默认频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev", name: "dev", description: "研发频道描述", unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onChannelDelete={onChannelDelete}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const devRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]');
+    const allRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-all"]');
+
+    await act(async () => {
+      allRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).not.toContain("删除频道");
+
+    await act(async () => {
+      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("删除频道"))
+        ?.click();
+    });
+    expect(onChannelDelete).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("确定删除 #dev？");
+
+    await act(async () => {
+      document.body.querySelector<HTMLElement>('[data-slot="alert-dialog-cancel"]')?.click();
+    });
+    expect(onChannelDelete).not.toHaveBeenCalled();
+
+    await act(async () => {
+      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("删除频道"))
+        ?.click();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLElement>('[data-slot="alert-dialog-action"]')?.click();
+    });
+    expect(onChannelDelete).toHaveBeenCalledWith("dev");
   });
 
   it("does not keep old primary navigation tooltip wiring in the app frame", () => {
@@ -896,13 +993,23 @@ describe("SleiAppFrame global search navigation", () => {
     expect(tauriConfig.app.windows[0]?.trafficLightPosition).toEqual({ x: 8, y: 18 });
   });
 
-  it("removes the old search button from the channel list sidebar", () => {
-    const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-    const channelListSource = source.slice(source.indexOf("function ChannelList"), source.indexOf("function SavedMessagesWorkspace"));
+  it("renders search only as the top workspace sidebar primary action", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const sidebar = host.querySelector(".slei-workspace-sidebar");
+    const searchActions = Array.from(sidebar?.querySelectorAll("button") ?? [])
+      .filter((button) => button.textContent?.trim() === "搜索");
 
-    expect(channelListSource).not.toContain("onSearchToggle");
-    expect(channelListSource).not.toContain("searchOpen");
-    expect(channelListSource).not.toContain("Command K");
+    expect(searchActions).toHaveLength(1);
+    expect(sidebar?.textContent).not.toContain("Command K");
   });
 
   it("renders saved messages in the right workspace while keeping channels and DMs in the sidebar", () => {

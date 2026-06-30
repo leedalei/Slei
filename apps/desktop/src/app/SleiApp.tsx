@@ -2657,12 +2657,14 @@ function hasReadyClaudeRuntime(nodes: DesktopNodeView[]) {
 }
 
 export {
-  channelDraftFromCardDraft,
-  channelDraftCreateInput,
   findActiveAgentActivities,
-  resetChannelDraft,
   selectAgentActivityForTick,
   SleiAppFrame,
+} from "./SleiAppFrame";
+export {
+  channelDraftFromCardDraft,
+  channelDraftCreateInput,
+  resetChannelDraft,
   submitChannelDraftWithFeedback,
   toggleChannelDraftAgent,
-} from "./SleiAppFrame";
+} from "./WorkspaceSidebar";
