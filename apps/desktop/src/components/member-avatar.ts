@@ -15,8 +15,10 @@ export type MemberAvatarImage = {
   src: string;
 };
 
-export function createMemberAvatar(identity: MemberAvatarIdentity): string | undefined {
-  return createMemberAvatarImage(identity)?.src;
+export function createMemberAvatar(identity: MemberAvatarIdentity): string {
+  const profileImageUrl = profileAvatarImageUrl(identity.avatar ?? "");
+  if (profileImageUrl) return profileImageUrl;
+  return createDiceBearAvatar(identity);
 }
 
 export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberAvatarImage | undefined {
@@ -31,19 +33,22 @@ export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberA
 
   return {
     imageRendering: "pixelated",
-    src: createAvatar(pixelArt, {
-      seed: diceBearAvatarSeed(identity),
-      size: 64,
-      radius: 0,
-    }).toDataUri(),
+    src: createDiceBearAvatar(identity),
   };
 }
 
 function diceBearAvatarSeed(identity: MemberAvatarIdentity): string {
   const avatarSeed = identity.avatarSeed?.trim();
   if (avatarSeed) return avatarSeed;
-  if (isPixelAvatar(identity.avatar)) return identity.avatar;
   return identity.id || identity.handle || identity.name || regularAvatarText(identity.avatar) || "slei-member";
+}
+
+function createDiceBearAvatar(identity: MemberAvatarIdentity): string {
+  return createAvatar(pixelArt, {
+    seed: diceBearAvatarSeed(identity),
+    size: 64,
+    radius: 0,
+  }).toDataUri();
 }
 
 function isPixelAvatar(avatar: string | undefined): avatar is string {

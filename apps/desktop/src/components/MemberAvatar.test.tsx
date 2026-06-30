@@ -85,6 +85,31 @@ afterEach(() => {
 });
 
 describe("MemberAvatar", () => {
+  it("keeps createMemberAvatar returning a safe image string for invalid profile image refs", () => {
+    const identity: MemberAvatarIdentity = {
+      avatar: "profile-image:nothex.png",
+      handle: "@lei",
+      id: "human-invalid-profile-image",
+      name: "Lei Zhang",
+    };
+
+    const src = createMemberAvatar(identity);
+
+    expect(src).toMatch(/^data:image\/svg\+xml/);
+    expect(src).not.toContain("profile-image:");
+  });
+
+  it("preserves legacy DiceBear seed priority for pixel avatar values", () => {
+    const identity: MemberAvatarIdentity = {
+      avatar: "pixel-sun",
+      handle: "@pixel",
+      id: "member-pixel",
+      name: "Pixel Sun",
+    };
+
+    expect(createMemberAvatar(identity)).toBe(createMemberAvatar({ ...identity, avatar: "" }));
+  });
+
   it("renders the EinUI avatar and image slots with the generated member avatar source", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
@@ -156,10 +181,16 @@ describe("MemberAvatar", () => {
 
       try {
         const fallback = host.querySelector<HTMLElement>('[data-slot="avatar-fallback"]');
+        const avatarRoot = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+        const image = host.querySelector<HTMLImageElement>('[data-slot="avatar-image"]');
 
+        expect(avatarRoot?.getAttribute("data-avatar-image-rendering")).toBe("fallback");
+        expect(image).toBeNull();
         expect(fallback).not.toBeNull();
         expect(fallback?.textContent).toBe("LE");
+        expect(host.innerHTML).not.toContain("profile-image:");
         expect(host.textContent).not.toContain("profile-image:");
+        expect(host.querySelector<HTMLImageElement>('img[src*="profile-image:"]')).toBeNull();
       } finally {
         cleanupMemberAvatar(root, host);
       }
