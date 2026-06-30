@@ -78,7 +78,11 @@ export type SleiTask = {
 export type SleiTaskReply = {
   id: string;
   sender: string;
+  handle?: string;
+  avatar?: string;
   role?: SleiMessage["role"];
+  time?: string;
+  sentAt?: string;
   body: string;
 };
 

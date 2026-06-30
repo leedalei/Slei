@@ -3,7 +3,8 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiTask, SleiTaskReply, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
-import { MemberAvatar, SleiIcon, Toast, TOAST_VISIBLE_MS, type MemberAvatarIdentity, type SleiIconName, type ToastType } from "../../components";
+import { MemberAvatar, SleiIcon, Toast, TOAST_VISIBLE_MS, TooltipButton, type MemberAvatarIdentity, type SleiIconName, type ToastType } from "../../components";
+import { copyPlainText } from "../../lib/clipboard";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,11 @@ export function TaskThreadDrawer(input: {
     }
   }
 
+  async function copyTaskReply(reply: SleiTaskReply) {
+    const copied = await copyPlainText(reply.body);
+    if (copied) showToast(input.messages.chat.copySuccess, "success");
+  }
+
   function isDrawerOperationCurrent(operationTaskId: string) {
     return openRef.current && activeTaskIdRef.current === operationTaskId;
   }
@@ -219,15 +225,39 @@ export function TaskThreadDrawer(input: {
             <div data-slot="task-thread-root-body">
               <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={task.title} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
             </div>
-            {(task.replies ?? []).map((reply) => (
-              <Card className={`${CARD_INSET_CLASS} grid grid-cols-[1rem_minmax(0,1fr)] gap-2 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
-                <MemberAvatar identity={taskReplyAvatarIdentity(reply, input.mentionMembers ?? [])} size="small" />
-                <div className="grid min-w-0 gap-2">
-                  <strong className="text-sm">{reply.sender}</strong>
-                  <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={reply.body} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
-                </div>
-              </Card>
-            ))}
+            {(task.replies ?? []).map((reply) => {
+              const identity = taskReplyAvatarIdentity(reply, input.mentionMembers ?? []);
+              const timestamp = taskReplyTimestampLabel(reply);
+              return (
+                <Card className={`${CARD_INSET_CLASS} grid grid-cols-[2rem_minmax(0,1fr)] gap-3 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
+                  <MemberAvatar identity={identity} />
+                  <div className="grid min-w-0 gap-2">
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
+                        <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
+                        {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
+                        <span aria-hidden="true">｜</span>
+                        <span className="min-w-0 flex-1 truncate">{taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages)}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
+                        <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyTaskReply(reply)} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                          <SleiIcon name="copy" size={14} />
+                        </TooltipButton>
+                        {timestamp ? (
+                          <>
+                            <span aria-hidden="true">｜</span>
+                            <time className="whitespace-nowrap tabular-nums" dateTime={reply.sentAt ?? timestamp}>
+                              {timestamp}
+                            </time>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={reply.body} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </ScrollArea>
         <SheetFooter className="sticky bottom-0 z-20 block shrink-0 bg-transparent px-5 pb-5 pt-3">
@@ -389,19 +419,36 @@ function formatTaskActionError(prefix: string, error: unknown) {
 }
 
 function taskReplyAvatarIdentity(reply: SleiTaskReply, members: SleiMember[]): MemberAvatarIdentity {
-  const normalizedSender = normalizeTaskReplyAuthor(reply.sender);
-  const member = members.find((candidate) => {
-    const normalizedName = normalizeTaskReplyAuthor(candidate.name);
-    const normalizedHandle = normalizeTaskReplyAuthor(candidate.handle);
-    return normalizedName === normalizedSender || normalizedHandle === normalizedSender;
-  });
+  const member = taskReplyMember(reply, members);
   if (member) return member;
+  const handle = reply.handle ?? (reply.sender.startsWith("@") ? reply.sender : `@${reply.sender}`);
   return {
     id: `${reply.role ?? "reply"}-${reply.sender}`,
     name: reply.sender,
-    handle: reply.sender.startsWith("@") ? reply.sender : `@${reply.sender}`,
-    avatar: reply.sender.slice(0, 2).toUpperCase(),
+    handle,
+    avatar: reply.avatar ?? reply.sender.slice(0, 2).toUpperCase(),
   };
+}
+
+function taskReplyMember(reply: SleiTaskReply, members: SleiMember[]): SleiMember | undefined {
+  const normalizedSender = normalizeTaskReplyAuthor(reply.sender);
+  const normalizedHandle = reply.handle ? normalizeTaskReplyAuthor(reply.handle) : "";
+  return members.find((candidate) => {
+    const normalizedName = normalizeTaskReplyAuthor(candidate.name);
+    const candidateHandle = normalizeTaskReplyAuthor(candidate.handle);
+    return normalizedName === normalizedSender || candidateHandle === normalizedSender || (normalizedHandle && candidateHandle === normalizedHandle);
+  });
+}
+
+function taskReplyRoleDescription(reply: SleiTaskReply, members: SleiMember[], messages: DesktopMessages): string {
+  return taskReplyMember(reply, members)?.role ?? messages.chat.roleLabels[reply.role ?? "human"];
+}
+
+function taskReplyTimestampLabel(reply: SleiTaskReply): string {
+  const raw = (reply.sentAt ?? reply.time ?? "").trim();
+  const match = raw.match(/^(?:(\d{4})-)?(\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2})?/);
+  if (match) return `${match[2]} ${match[3]}`;
+  return raw;
 }
 
 function normalizeTaskReplyAuthor(author: string) {

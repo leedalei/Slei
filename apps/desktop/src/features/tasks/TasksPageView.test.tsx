@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
 import { createSleiFixtures, type SleiMember } from "../../test/fixtures";
-import type { SleiTask } from "../../app/types";
+import type { SleiTask, SleiTaskReply } from "../../app/types";
 import { TasksPage } from "./TasksPageView";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -168,6 +168,7 @@ afterEach(async () => {
   container?.remove();
   root = undefined;
   container = undefined;
+  vi.unstubAllGlobals();
 });
 
 describe("TasksPage filters", () => {
@@ -244,7 +245,7 @@ describe("TasksPage filters", () => {
     expect(assignee).not.toBeNull();
     expect(assignee!.textContent).toContain("Coda");
     expect(assignee?.querySelector('[data-slot="avatar"]')).not.toBeNull();
-    expect(assignee?.className).toContain("[&_[data-slot=avatar]]:size-4");
+    expect(assignee?.className).toContain("[&_[data-slot=avatar]]:size-[18px]");
     expect(codaTask?.querySelector('[data-slei-status="in_review"]')?.parentElement).toBe(assignee?.parentElement);
     expect(text).toContain("3 个频道任务");
     expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
@@ -440,27 +441,45 @@ describe("TasksPage filters", () => {
     cancelAnimationFrameSpy.mockRestore();
   });
 
-  it("renders 16px avatars for human and agent replies in the task thread", async () => {
+  it("renders task replies with the same header metadata and actions as chat messages", async () => {
+    const clipboard = { writeText: vi.fn<() => Promise<void>>(() => Promise.resolve()) };
+    vi.stubGlobal("navigator", { clipboard });
     await mountTasksPage("task_ai_coda", {}, pageDataWithTasks([
       {
         ...tasks[0],
         replies: [
-          { id: "reply-human", sender: "Lei", role: "human", body: "人类回复" },
-          { id: "reply-agent", sender: "Coda", role: "agent", body: "Agent 回复" },
+          { id: "reply-agent", sender: "Coda", role: "agent", body: "Agent 回复", time: "06-17 10:30", sentAt: "2026-06-17 10:30:00" } satisfies SleiTaskReply,
         ],
       },
     ]));
 
     const replies = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"] [data-reply-role]'));
-    const avatars = replies.map((reply) => reply.querySelector<HTMLElement>('[data-slot="avatar"]'));
+    const reply = replies[0];
+    const avatar = reply?.querySelector<HTMLElement>('[data-slot="avatar"]');
+    const metadata = reply?.querySelector<HTMLElement>('[data-slot="task-reply-metadata"]');
+    const actions = reply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
+    const copyButton = actions?.querySelector<HTMLButtonElement>('button[aria-label="复制"]');
+    const time = actions?.querySelector<HTMLTimeElement>("time");
 
-    expect(replies).toHaveLength(2);
-    expect(avatars.every(Boolean)).toBe(true);
-    expect(avatars.map((avatar) => avatar?.getAttribute("data-avatar-size"))).toEqual(["small", "small"]);
-    expect(avatars.every((avatar) => avatar?.className.split(/\s+/).includes("size-4"))).toBe(true);
-    expect(avatars.map((avatar) => avatar?.getAttribute("aria-label"))).toEqual(["Lei", "Coda"]);
-    expect(replies[0]?.textContent).toContain("人类回复");
-    expect(replies[1]?.textContent).toContain("Agent 回复");
+    expect(replies).toHaveLength(1);
+    expect(avatar).not.toBeNull();
+    expect(avatar?.getAttribute("data-avatar-size")).toBe("default");
+    expect(avatar?.className.split(/\s+/)).toContain("size-8");
+    expect(avatar?.getAttribute("aria-label")).toBe("Coda");
+    expect(metadata?.textContent).toContain("Coda");
+    expect(metadata?.textContent).toContain("@coda");
+    expect(metadata?.textContent).toContain("Developer");
+    expect(actions).not.toBeNull();
+    expect(copyButton).not.toBeNull();
+    expect(time?.textContent).toBe("06-17 10:30");
+    expect(time?.getAttribute("dateTime")).toBe("2026-06-17 10:30:00");
+    expect(reply?.textContent).toContain("Agent 回复");
+
+    await act(async () => {
+      copyButton!.click();
+    });
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("Agent 回复");
   });
 
   it("changes task status from the drawer timeline after confirmation", async () => {

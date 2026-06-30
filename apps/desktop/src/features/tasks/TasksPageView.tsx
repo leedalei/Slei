@@ -255,7 +255,7 @@ function TaskCard(input: {
       <div className="flex flex-wrap items-center gap-2">
         <TaskStatusBadge messages={input.messages} status={input.task.status} />
         <span
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-0.5 pl-0.5 pr-2 text-xs font-medium text-muted-foreground [&_[data-slot=avatar]]:size-4"
+          className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-0.5 pl-0.5 pr-2 text-xs font-medium text-muted-foreground [&_[data-slot=avatar]]:size-[18px]"
           data-task-card-assignee
         >
           <MemberAvatar identity={input.assigneeIdentity} />

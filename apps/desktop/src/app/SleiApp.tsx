@@ -480,7 +480,11 @@ function taskThreadMessageToReply(message: TaskThreadMessageView, members: SleiM
   return {
     id: message.id,
     sender,
+    handle: member?.handle ?? (isLocalHuman ? displayUserHandle(humanProfile.handle) : undefined),
+    avatar: member?.avatar ?? (isLocalHuman ? humanProfile.avatar : undefined),
     role,
+    time: formatMessageTime(message.createdAt),
+    sentAt: formatMessageDateTime(message.createdAt),
     body: message.body,
   };
 }
@@ -493,7 +497,11 @@ function messageThreadReplyToReply(message: MessageThreadReplyView, members: Sle
   return {
     id: message.id,
     sender: member?.name ?? (role === "system" ? messages.common.system : isLocalHuman ? humanProfile.displayName : message.senderId),
+    handle: member?.handle ?? (isLocalHuman ? displayUserHandle(humanProfile.handle) : undefined),
+    avatar: member?.avatar ?? (isLocalHuman ? humanProfile.avatar : undefined),
     role,
+    time: formatMessageTime(message.createdAt),
+    sentAt: formatMessageDateTime(message.createdAt),
     body: message.body,
   };
 }
