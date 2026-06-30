@@ -130,7 +130,13 @@ fn profile_avatar_file_from_uri(data_root: &Path, uri: &str) -> Option<PathBuf> 
         return None;
     }
 
-    Some(data_root.join("profile").join("avatars").join(file_name))
+    let avatar_dir = data_root
+        .join("profile")
+        .join("avatars")
+        .canonicalize()
+        .ok()?;
+    let candidate = avatar_dir.join(file_name).canonicalize().ok()?;
+    candidate.starts_with(&avatar_dir).then_some(candidate)
 }
 
 fn profile_avatar_mime(file_name: &str) -> Option<&'static str> {
@@ -3267,7 +3273,10 @@ mod tests {
 
         let uri = format!("slei-avatar:///{file_name}");
         let resolved = super::profile_avatar_file_from_uri(&root, &uri).unwrap();
-        assert_eq!(resolved, avatar_dir.join(&file_name));
+        assert_eq!(
+            resolved,
+            avatar_dir.join(&file_name).canonicalize().unwrap()
+        );
 
         let response = super::profile_avatar_protocol_response(&root, &uri);
         assert_eq!(response.status(), tauri::http::StatusCode::OK);
@@ -3299,6 +3308,33 @@ mod tests {
             super::profile_avatar_protocol_response(&root, &missing_uri).status(),
             tauri::http::StatusCode::NOT_FOUND
         );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn profile_avatar_protocol_rejects_valid_hash_symlink_outside_avatar_dir() {
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-avatar-symlink-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let avatar_dir = root.join("profile").join("avatars");
+        fs::create_dir_all(&avatar_dir).unwrap();
+        let outside_dir = root.join("outside");
+        fs::create_dir_all(&outside_dir).unwrap();
+        let outside_file = outside_dir.join("secret.png");
+        fs::write(&outside_file, b"outside-avatar-bytes").unwrap();
+
+        let file_name = format!("{}.png", "c".repeat(64));
+        let avatar_link = avatar_dir.join(&file_name);
+        std::os::unix::fs::symlink(&outside_file, &avatar_link).unwrap();
+
+        let uri = format!("slei-avatar:///{file_name}");
+        assert!(super::profile_avatar_file_from_uri(&root, &uri).is_none());
+        let response = super::profile_avatar_protocol_response(&root, &uri);
+        assert_eq!(response.status(), tauri::http::StatusCode::NOT_FOUND);
+        assert_ne!(response.body(), b"outside-avatar-bytes");
 
         fs::remove_dir_all(root).unwrap();
     }
