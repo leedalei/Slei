@@ -3572,6 +3572,69 @@ async fn agent_send_api_mention_can_match_handle_containing_at_sign() {
 }
 
 #[tokio::test]
+async fn agent_send_api_does_not_match_handle_prefix_without_boundary() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_foo", "@foo"),
+        ("agent_sender", "@sender"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-prefix-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_foo", "agent_sender"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/messages/send",
+        Some("agent-send-prefix-mention-no-delivery"),
+        json!({
+            "target": "#api-core",
+            "agentId": "agent_sender",
+            "body": "@foobar 请处理。"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent = response_json(sent).await;
+    let message_id = sent["messageId"].as_str().unwrap();
+
+    let deliveries = state
+        .claims()
+        .message_deliveries_for_message(message_id)
+        .await
+        .unwrap();
+    assert!(
+        deliveries.is_empty(),
+        "unexpected deliveries for prefix-only mention: {deliveries:?}"
+    );
+    let commands = state.worker_commands();
+    assert!(
+        commands.iter().all(|command| {
+            command["type"] != "start_run" || command["session"]["agent_id"] != "agent_foo"
+        }),
+        "unexpected run for prefix-only mention: {commands:?}"
+    );
+}
+
+#[tokio::test]
 async fn broadcast_channel_agent_worker_completed_or_failed_output_is_suppressed() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state

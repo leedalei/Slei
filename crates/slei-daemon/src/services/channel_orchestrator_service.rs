@@ -2269,7 +2269,7 @@ fn explicit_handles_from_persisted_handles(
         let mention_text = &lower_body[mention_start..];
         if let Some(handle) = persisted_handles
             .iter()
-            .find(|handle| mention_text.starts_with(handle.as_str()))
+            .find(|handle| mention_text_starts_with_handle_at_boundary(mention_text, handle))
         {
             handles.push(handle.clone());
             index = mention_start + handle.len();
@@ -2278,6 +2278,16 @@ fn explicit_handles_from_persisted_handles(
         }
     }
     handles
+}
+
+fn mention_text_starts_with_handle_at_boundary(mention_text: &str, handle: &str) -> bool {
+    if !mention_text.starts_with(handle) {
+        return false;
+    }
+    mention_text[handle.len()..]
+        .chars()
+        .next()
+        .is_none_or(is_mention_handle_terminator)
 }
 
 fn is_mention_handle_terminator(character: char) -> bool {
