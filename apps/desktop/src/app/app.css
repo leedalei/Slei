@@ -389,6 +389,45 @@
       0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
   }
 
+  .slei-channel-member-group {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+  }
+
+  .slei-channel-member-avatar-button {
+    position: relative;
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    outline: none;
+    transition:
+      transform var(--duration-interaction) var(--ease-ui),
+      filter var(--duration-interaction) var(--ease-ui);
+  }
+
+  .slei-channel-member-avatar-button:hover,
+  .slei-channel-member-avatar-button:focus-visible {
+    z-index: 1;
+    transform: translateY(-1px);
+  }
+
+  .slei-channel-member-avatar-button:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 68%, transparent);
+  }
+
+  .slei-channel-member-add-button {
+    position: relative;
+    z-index: 2;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+  }
+
 }
 
 @layer base {

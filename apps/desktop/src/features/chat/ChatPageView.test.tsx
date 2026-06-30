@@ -421,7 +421,7 @@ describe("ChatPage mention panel", () => {
     expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
   });
 
-  it("renders channel titles at a size close to the hash icon", () => {
+  it("renders channel titles with the literal hash prefix", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -436,8 +436,10 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(html).toContain("text-xl font-semibold");
+    expect(html).toContain('data-testid="slei-channel-title"');
+    expect(html).toContain("text-lg font-semibold");
     expect(html).toContain('aria-label="# all"');
+    expect(html).toContain(">#all</span>");
   });
 
   it("places the channel title copy button on the title row", () => {
@@ -456,14 +458,13 @@ describe("ChatPage mention panel", () => {
     );
 
     const titleStart = html.indexOf('aria-label="# all"');
-    const titleEnd = html.indexOf("</h1>", titleStart);
-    const titleTextIndex = html.indexOf(">all</span>", titleStart);
+    const titleTextIndex = html.indexOf(">#all</span>", titleStart);
     const copyButtonIndex = html.indexOf(`aria-label="${messages.chat.copyMessage}"`, titleStart);
 
     expect(titleStart).toBeGreaterThanOrEqual(0);
     expect(titleTextIndex).toBeGreaterThan(titleStart);
     expect(copyButtonIndex).toBeGreaterThan(titleTextIndex);
-    expect(copyButtonIndex).toBeLessThan(titleEnd);
+    expect(copyButtonIndex).toBeLessThan(html.indexOf('data-testid="slei-channel-header-actions"'));
   });
 
   it("renders linked project text and edit button in non-default channel headers", () => {
@@ -544,7 +545,7 @@ describe("ChatPage mention panel", () => {
     const headerEnd = html.indexOf("</header>", headerMarker);
     const headerHtml = html.slice(headerStart, headerEnd);
     const copyButtonStart = headerHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
-    const membersButtonStart = headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"');
+    const membersButtonStart = headerHtml.indexOf('data-testid="slei-channel-member-add-trigger"');
 
     expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
@@ -1358,25 +1359,38 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("max-w-[35%] truncate");
   });
 
-  it("renders channel members and addable agents in the member panel", () => {
+  it("renders the channel header title, member count, and header member group without the old panel", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
-      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      channels: [{ id: "dev", name: "#dev", description: "测试频道", unread: 0 }],
       members: [
-        memberWithLongMentionText(),
         {
           ...memberWithLongMentionText(),
           id: "agent_coda",
           name: "Coda",
           handle: "@coda",
-          channelReadiness: { all: "ready" },
+          channelReadiness: { dev: "ready" },
         },
         {
           ...memberWithLongMentionText(),
           id: "agent_nova",
           name: "Nova",
           handle: "@nova",
-          channelReadiness: { all: "memory_syncing" },
+          channelReadiness: { dev: "memory_syncing" },
+        },
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { dev: "ready" },
+        },
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_orion",
+          name: "Orion",
+          handle: "@orion",
+          channelReadiness: { dev: "ready" },
         },
       ],
     });
@@ -1385,53 +1399,25 @@ describe("ChatPage mention panel", () => {
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialChannelMembersOpen
         messages={messages}
         profile={defaultProfile}
       />,
     );
+    const host = staticMarkupHost(html);
+    const header = host.querySelector('[data-testid="slei-channel-header"]');
 
-    expect(html).toContain('data-testid="slei-channel-member-panel"');
-    const panelStart = html.lastIndexOf("<aside", html.indexOf('data-testid="slei-channel-member-panel"'));
-    const panelHtml = html.slice(panelStart, html.indexOf("</aside>", panelStart));
-    const panelOpenTag = panelHtml.slice(0, panelHtml.indexOf(">"));
-    expect(panelOpenTag).not.toContain("absolute");
-    expect(panelOpenTag).not.toContain("translate-x");
-    expect(panelOpenTag).not.toContain("shadow-lg");
-    expect(panelOpenTag).not.toContain("top-16");
-    expect(html).not.toContain("top-[calc(4rem+1px)]");
-    expect(panelHtml).toContain("w-80");
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-dialog"');
-    expect(readChatPageSource()).toContain("DialogContent");
-    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('width="18"');
-    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain('height="18"');
-    expect(readChatPageSource()).not.toContain("absolute right-2 top-8");
-    expect(html).toContain('data-slei-icon="plus"');
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate"');
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate-checkbox"');
-    expect(readChatPageSource()).toContain('data-testid="slei-channel-member-add-candidate-description"');
-    expect(readChatPageSource()).toContain("block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap");
-    expect(readChatPageSource()).toContain("{member.name}</strong>");
-    expect(readChatPageSource()).toContain("{member.handle}</small>");
-    expect(readChatPageSource()).toContain("{member.description}");
-    expect(html).toContain("Coda");
-    expect(html).toContain("Nova");
-    expect(panelHtml).not.toContain("已就位");
-    expect(panelHtml).not.toContain("搜索群成员");
-    expect(html).toContain("添加成员");
-    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).toContain("频道成员(2)");
-    expect(panelHtml.slice(0, panelHtml.indexOf('data-radix-scroll-area-viewport'))).not.toContain('data-slot="badge"');
-    expect(panelHtml).toContain('data-testid="slei-channel-member-header-separator"');
-    expect(panelHtml).toContain('aria-hidden="true"');
-    expect(panelHtml).toContain("border-border/60");
-    expect(panelHtml).toContain('data-testid="slei-channel-member-status-dot"');
-    expect(panelHtml).toContain("bg-emerald-500");
-    expect(panelHtml).toContain("bg-muted-foreground/40");
-    expect(panelHtml).toContain('data-slei-icon="delete"');
-    expect(panelHtml).toContain("text-destructive");
+    expect(header?.querySelector('[data-testid="slei-channel-title"]')?.textContent).toBe("#dev");
+    expect(header?.querySelector('[data-testid="slei-channel-member-count"]')?.textContent).toBe("4 Agent");
+    expect(header?.textContent).toContain(messages.chat.projectPrefix(messages.chat.noLinkedProjects));
+    expect(header?.querySelector('[data-testid="slei-channel-member-group"]')).not.toBeNull();
+    expect(header?.querySelectorAll('[data-testid="slei-channel-member-avatar-trigger"]')).toHaveLength(4);
+    expect(header?.querySelector('[data-testid="slei-channel-member-add-trigger"]')).not.toBeNull();
+    expect(html).not.toContain('data-testid="slei-channel-member-panel"');
+    expect(html).not.toContain('data-testid="slei-channel-member-panel-shell"');
+    expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
   });
 
-  it("renders channel view tabs below the header and member toggle in the header actions", () => {
+  it("renders channel view tabs below the header and member group in the header actions", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1451,16 +1437,14 @@ describe("ChatPage mention panel", () => {
     const headerEndIndex = html.indexOf("</header>");
 
     expect(html).not.toContain('data-testid="slei-channel-members-edge-toggle"');
-    expect(html).toContain('data-testid="slei-channel-members-header-toggle"');
+    expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
     expect(html).toContain('data-testid="slei-channel-view-tabs"');
     expect(tabsIndex).toBeGreaterThan(headerEndIndex);
     expect(headerHtml).not.toContain(messages.chat.newSession);
     expect(headerHtml).not.toContain(messages.chat.history);
     expect(headerHtml).not.toContain('data-testid="slei-channel-header-action-separator"');
-    expect(headerHtml).toContain('data-testid="slei-channel-members-header-toggle"');
-    const closedToggleHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", headerHtml.indexOf('data-testid="slei-channel-members-header-toggle"')));
-    expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).toContain('data-slei-icon="panelOpen"');
-    expect(closedToggleHtml.slice(0, closedToggleHtml.indexOf("</button>"))).not.toContain('data-slei-icon="members"');
+    expect(headerHtml).toContain('data-testid="slei-channel-member-group"');
+    expect(headerHtml).toContain('data-testid="slei-channel-member-add-trigger"');
     expect(headerHtml).not.toContain('role="tablist"');
     expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
@@ -1491,31 +1475,31 @@ describe("ChatPage mention panel", () => {
     expect(tabsHtml).toContain(messages.chat.files);
   });
 
-  it("uses active color on the header member toggle while the member panel is expanded", () => {
+  it("does not render the channel member group in DM headers", () => {
     const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
     const data = createSleiFixtures({
-      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
+      members: [member],
     });
 
     const html = renderToStaticMarkup(
       <ChatPage
         activeChannel={data.channels[0]}
+        activeConversation={data.conversations[0]}
         data={data}
-        initialChannelMembersOpen
         messages={messages}
         profile={defaultProfile}
       />,
     );
+    const headerHtml = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
 
-    expect(html).toContain('aria-expanded="true"');
-    const toggleTestIdIndex = html.indexOf('data-testid="slei-channel-members-header-toggle"');
-    const toggleHtml = html.slice(html.lastIndexOf("<button", toggleTestIdIndex));
-    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).toContain("bg-primary/10 text-primary");
-    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).toContain('data-slei-icon="panelClose"');
-    expect(toggleHtml.slice(0, toggleHtml.indexOf("</button>"))).not.toContain('data-slei-icon="members"');
+    expect(headerHtml).not.toContain('data-testid="slei-channel-member-group"');
+    expect(headerHtml).not.toContain('data-testid="slei-channel-member-count"');
+    expect(headerHtml).not.toContain('data-testid="slei-channel-member-add-trigger"');
   });
 
-  it("embeds the channel member panel beside a shrinkable channel workspace", () => {
+  it("keeps the main chat layout one column without an offscreen member panel", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1534,21 +1518,22 @@ describe("ChatPage mention panel", () => {
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialChannelMembersOpen
         messages={messages}
         profile={defaultProfile}
       />,
     );
 
-    expect(html).toContain('data-testid="slei-channel-member-panel"');
-    expect(html).toContain('data-testid="slei-channel-member-panel-shell"');
+    expect(html).not.toContain('data-testid="slei-channel-member-panel"');
+    expect(html).not.toContain('data-testid="slei-channel-member-panel-shell"');
     expect(html).toContain('data-testid="slei-channel-main-region"');
     expect(html).toContain('data-testid="slei-channel-workspace"');
     expect(html).toContain('data-testid="slei-channel-chat-column"');
-    expect(html).toContain("grid-cols-[minmax(0,1fr)_20rem]");
-    expect(html).toContain("transition-[grid-template-columns]");
-    expect(html).toContain("transition-[opacity,transform]");
-    expect(html).toContain("translate-x-0 opacity-100");
+    expect(html).toContain("grid-cols-1");
+    expect(html).not.toContain("grid-cols-[minmax(0,1fr)_20rem]");
+    expect(html).not.toContain("grid-cols-[minmax(0,1fr)_0rem]");
+    expect(html).not.toContain("transition-[grid-template-columns]");
+    expect(html).not.toContain("transition-[opacity,transform]");
+    expect(html).not.toContain("translate-x-0 opacity-100");
     expect(html).toContain("relative h-full min-h-0 overflow-visible");
     expect(html).toContain('data-testid="slei-chat-timeline"');
     expect(html).toContain("h-full min-h-0 overflow-y-auto");
@@ -1556,37 +1541,7 @@ describe("ChatPage mention panel", () => {
     expect(html).not.toContain("pointer-events-none translate-x-full");
   });
 
-  it("keeps the channel member panel mounted offscreen while collapsed for slide animation", () => {
-    const messages = createDesktopMessages("zh-CN");
-    const data = createSleiFixtures({
-      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
-      members: [
-        {
-          ...memberWithLongMentionText(),
-          id: "agent_coda",
-          name: "Coda",
-          handle: "@coda",
-          channelReadiness: { all: "ready" },
-        },
-      ],
-    });
-
-    const html = renderToStaticMarkup(
-      <ChatPage
-        activeChannel={data.channels[0]}
-        data={data}
-        messages={messages}
-        profile={defaultProfile}
-      />,
-    );
-
-    expect(html).toContain('data-testid="slei-channel-member-panel-shell"');
-    expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain("grid-cols-[minmax(0,1fr)_0rem]");
-    expect(html).toContain("pointer-events-none translate-x-full opacity-0");
-  });
-
-  it("hides the channel member panel while task or file tabs are active", () => {
+  it("keeps the header member group while task or file tabs are active without mounting the old panel", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1606,25 +1561,23 @@ describe("ChatPage mention panel", () => {
         <ChatPage
           activeChannel={data.channels[0]}
           data={data}
-          initialChannelMembersOpen
           initialChannelView={initialChannelView}
           messages={messages}
           profile={defaultProfile}
         />,
       );
-      const toggleTestIdIndex = html.indexOf('data-testid="slei-channel-members-header-toggle"');
-      const toggleHtml = html.slice(html.lastIndexOf("<button", toggleTestIdIndex), html.indexOf("</button>", toggleTestIdIndex));
 
       expect(html).not.toContain('data-testid="slei-channel-member-panel"');
+      expect(html).not.toContain('data-testid="slei-channel-member-panel-shell"');
+      expect(html).toContain('data-testid="slei-channel-member-group"');
       expect(html).toContain("grid-cols-1");
       expect(html).not.toContain("grid-cols-[minmax(0,1fr)_20rem]");
-      expect(toggleHtml).toContain('aria-expanded="false"');
-      expect(toggleHtml).not.toContain("bg-primary/10 text-primary");
+      expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
     }
   });
 
   it("keeps channel member add and remove mutations behind confirmation UI", () => {
-    const source = readChatPageSource();
+    const source = readFileSync(join(process.cwd(), "src/features/chat/ChannelMemberGroup.tsx"), "utf8");
 
     expect(source).toContain("selectedAddIds");
     expect(source).toContain("data-testid=\"slei-channel-member-add-confirm\"");
@@ -1636,54 +1589,6 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("mutate(member.id, \"remove\")");
     expect(source).toContain("text-destructive");
     expect(source).not.toContain("<Button onClick={() => setConfirmingRemoveId(undefined)}");
-  });
-
-  it("automatically collapses the inline member panel below the compact breakpoint", async () => {
-    const originalMatchMedia = window.matchMedia;
-    window.matchMedia = (() => ({
-      matches: true,
-      media: "(max-width: 899px)",
-      onchange: null,
-      addEventListener() {},
-      removeEventListener() {},
-      addListener() {},
-      removeListener() {},
-      dispatchEvent: () => false,
-    })) as typeof window.matchMedia;
-    const messages = createDesktopMessages("zh-CN");
-    const data = createSleiFixtures({
-      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
-      members: [
-        {
-          ...memberWithLongMentionText(),
-          id: "agent_coda",
-          name: "Coda",
-          handle: "@coda",
-          channelReadiness: { all: "ready" },
-        },
-      ],
-    });
-
-    try {
-      const host = await mountChatPage(
-        <ChatPage
-          activeChannel={data.channels[0]}
-          data={data}
-          initialChannelMembersOpen
-          messages={messages}
-          profile={defaultProfile}
-        />,
-      );
-
-      const panelShell = host.querySelector('[data-testid="slei-channel-member-panel-shell"]');
-      expect(panelShell).not.toBeNull();
-      expect(panelShell?.getAttribute("aria-hidden")).toBe("true");
-      expect(host.innerHTML).toContain("grid-cols-[minmax(0,1fr)_0rem]");
-      expect(host.innerHTML).toContain("pointer-events-none translate-x-full opacity-0");
-      expect(host.querySelector('[data-testid="slei-channel-members-header-toggle"]')?.getAttribute("aria-expanded")).toBe("false");
-    } finally {
-      window.matchMedia = originalMatchMedia;
-    }
   });
 
   it("adds multiple selected channel members from a modal", async () => {
@@ -1713,14 +1618,13 @@ describe("ChatPage mention panel", () => {
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialChannelMembersOpen
         messages={messages}
         onChannelMemberAdd={onChannelMemberAdd}
         profile={defaultProfile}
       />,
     );
 
-    const addButton = host.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.addChannelMember}"]`);
+    const addButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-trigger"]');
     await act(async () => {
       addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -1750,6 +1654,45 @@ describe("ChatPage mention panel", () => {
     expect(document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]')).toBeNull();
   });
 
+  it("opens a channel member info card from the header member avatar", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          role: "产品研究 Agent",
+          description: "负责产品研究。",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    });
+
+    const card = document.body.querySelector('[data-testid="slei-channel-member-info-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain("Luna");
+    expect(card?.textContent).toContain("@luna");
+    expect(card?.textContent).toContain("产品研究 Agent");
+    expect(card?.textContent).toContain("ready");
+    expect(card?.textContent).toContain(messages.chat.removeChannelMember("Luna"));
+  });
+
   it("removes a channel member only after confirming in a dialog", async () => {
     const messages = createDesktopMessages("zh-CN");
     const onChannelMemberRemove = vi.fn().mockResolvedValue(undefined);
@@ -1770,7 +1713,6 @@ describe("ChatPage mention panel", () => {
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialChannelMembersOpen
         messages={messages}
         onChannelMemberRemove={onChannelMemberRemove}
         profile={defaultProfile}
@@ -1778,7 +1720,13 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    });
+
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const dialog = document.body.querySelector('[data-testid="slei-channel-member-remove-dialog"]');

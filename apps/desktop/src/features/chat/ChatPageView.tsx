@@ -11,11 +11,8 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
 import { Checkbox } from "../../components/ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
-import { Separator } from "../../components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
@@ -25,6 +22,7 @@ import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
 import { SkillSlashPicker } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
+import { ChannelMemberGroup } from "./ChannelMemberGroup";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
@@ -410,257 +408,11 @@ function MessageBody({
   );
 }
 
-function ChannelMemberPanel(input: {
-  availableMembers: SleiMember[];
-  channelId: string;
-  members: SleiMember[];
-  messages: DesktopMessages;
-  onAdd?: (agentId: string) => Promise<void> | void;
-  onRemove?: (agentId: string) => Promise<void> | void;
-}) {
-  const [mutatingMemberId, setMutatingMemberId] = useState<string | undefined>(undefined);
-  const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
-  const [addingSelected, setAddingSelected] = useState(false);
-  const availableAddMemberIds = input.availableMembers.map((member) => member.id).join("|");
-
-  useEffect(() => {
-    const availableIds = new Set(input.availableMembers.map((member) => member.id));
-    setSelectedAddIds((current) => {
-      const next = current.filter((memberId) => availableIds.has(memberId));
-      return next.length === current.length ? current : next;
-    });
-  }, [availableAddMemberIds]);
-
-  function closeAddDialog() {
-    setAddDialogOpen(false);
-    setSelectedAddIds([]);
-  }
-
-  function toggleSelectedAddMember(memberId: string) {
-    if (addingSelected) return;
-    setSelectedAddIds((current) =>
-      current.includes(memberId)
-        ? current.filter((selectedId) => selectedId !== memberId)
-        : [...current, memberId],
-    );
-  }
-
-  async function addSelectedMembers() {
-    if (selectedAddIds.length === 0) return;
-    const selectedIds = input.availableMembers
-      .map((member) => member.id)
-      .filter((memberId) => selectedAddIds.includes(memberId));
-    setAddingSelected(true);
-    try {
-      for (const memberId of selectedIds) {
-        await input.onAdd?.(memberId);
-      }
-      closeAddDialog();
-    } finally {
-      setAddingSelected(false);
-    }
-  }
-
-  async function mutate(memberId: string, action: "add" | "remove") {
-    setMutatingMemberId(memberId);
-    try {
-      if (action === "add") {
-        await input.onAdd?.(memberId);
-      } else {
-        await input.onRemove?.(memberId);
-        setConfirmingRemoveId(undefined);
-      }
-    } finally {
-      setMutatingMemberId(undefined);
-    }
-  }
-
-  return (
-    <aside
-      aria-label={input.messages.chat.channelMembers}
-      className="grid h-full min-h-0 w-80 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 border-l bg-background/55 p-4 backdrop-blur-xl"
-      data-testid="slei-channel-member-panel"
-    >
-      <div className="flex items-center justify-between gap-2 pr-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
-            <SleiIcon name="members" size={16} />
-            <span className="truncate">{input.messages.chat.channelMembers}({input.members.length})</span>
-          </h2>
-        </div>
-        <Dialog open={addDialogOpen} onOpenChange={(open) => {
-          setAddDialogOpen(open);
-          if (!open) setSelectedAddIds([]);
-        }}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DialogTrigger asChild>
-                <Button aria-label={input.messages.chat.addChannelMember} size="icon-xs" type="button" variant="ghost">
-                  <SleiIcon name="plus" size={18} />
-                </Button>
-              </DialogTrigger>
-            </TooltipTrigger>
-            <TooltipContent>{input.messages.chat.addChannelMember}</TooltipContent>
-          </Tooltip>
-          <DialogContent className="w-[min(42rem,calc(100vw-2rem))] sm:max-w-2xl" closeLabel={input.messages.common.cancel} data-testid="slei-channel-member-add-dialog">
-            <DialogHeader>
-              <DialogTitle>{input.messages.chat.addChannelMember}</DialogTitle>
-              <DialogDescription>{input.messages.chat.addChannelMemberDescription}</DialogDescription>
-            </DialogHeader>
-            <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
-              <ScrollArea className="max-h-[22rem] min-h-0 rounded-lg border bg-background">
-                <div aria-multiselectable="true" className="grid gap-1 p-2" role="listbox">
-                  {input.availableMembers.length > 0 ? (
-                    input.availableMembers.map((member) => {
-                      const selected = selectedAddIds.includes(member.id);
-                      return (
-                        <SelectableCard
-                          aria-selected={selected ? "true" : "false"}
-                          className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          data-testid="slei-channel-member-add-candidate"
-                          key={member.id}
-                          onClick={() => toggleSelectedAddMember(member.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              toggleSelectedAddMember(member.id);
-                            }
-                          }}
-                          role="option"
-                          selected={selected}
-                          tabIndex={0}
-                        >
-                          <Checkbox
-                            aria-label={member.name}
-                            checked={selected}
-                            data-testid="slei-channel-member-add-candidate-checkbox"
-                            disabled={addingSelected}
-                            onCheckedChange={() => toggleSelectedAddMember(member.id)}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                          <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden text-left">
-                            <MemberAvatar identity={member} />
-                            <span className="grid min-w-0 gap-0.5 overflow-hidden">
-                              <span className="flex min-w-0 items-baseline gap-1.5">
-                                <strong className="truncate text-sm text-foreground">{member.name}</strong>
-                                <small className="shrink-0 text-xs font-normal text-muted-foreground">{member.handle}</small>
-                              </span>
-                              <small className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs font-normal text-muted-foreground" data-testid="slei-channel-member-add-candidate-description">
-                                {member.description}
-                              </small>
-                            </span>
-                          </span>
-                        </SelectableCard>
-                      );
-                    })
-                  ) : (
-                    <Empty
-                      framed={false}
-                      size="sm"
-                      title={input.messages.chat.noAvailableChannelMembers}
-                      variant="nodata"
-                    />
-                  )}
-                </div>
-              </ScrollArea>
-              <div className="grid min-h-40 content-start gap-2 rounded-lg border bg-muted/30 p-3">
-                <strong className="text-sm">{input.messages.chat.selectedChannelMembers(selectedAddIds.length)}</strong>
-                {selectedAddIds.length > 0 ? (
-                  <div className="grid gap-1">
-                    {input.availableMembers.filter((member) => selectedAddIds.includes(member.id)).map((member) => (
-                      <span className="truncate text-sm text-muted-foreground" key={member.id}>{member.name} {member.handle}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{input.messages.chat.noSelectedChannelMembers}</p>
-                )}
-              </div>
-            </div>
-            <DialogFooter>
-              <Button disabled={addingSelected} onClick={closeAddDialog} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button" variant="primary">
-                {input.messages.chat.confirmAddChannelMembers(selectedAddIds.length)}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-      <Separator className="border-border/60" data-testid="slei-channel-member-header-separator" />
-      <ScrollArea className="min-h-0 pr-2">
-        <div className="grid gap-1">
-          {input.members.length > 0 ? input.members.map((member) => {
-            const readiness = member.channelReadiness?.[input.channelId];
-            const confirming = confirmingRemoveId === member.id;
-            return (
-              <div className="group/member grid gap-1 rounded-md px-1.5 py-2 hover:bg-muted/50" key={member.id}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className={cn("size-2 shrink-0 rounded-full", readiness === "ready" ? "bg-emerald-500" : "bg-muted-foreground/40")}
-                    data-testid="slei-channel-member-status-dot"
-                  />
-                  <MemberAvatar identity={member} />
-                  <span className="grid min-w-0 flex-1">
-                    <strong className="truncate text-sm">{member.name}</strong>
-                    <small className="truncate text-xs text-muted-foreground">{member.handle}</small>
-                  </span>
-                  <AlertDialog
-                    open={confirming}
-                    onOpenChange={(open) => {
-                      setConfirmingRemoveId(open ? member.id : undefined);
-                    }}
-                  >
-                    <AlertDialogTrigger asChild>
-                      <Button aria-label={input.messages.chat.removeChannelMember(member.name)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={mutatingMemberId === member.id} size="icon-xs" type="button" variant="ghost">
-                        <SleiIcon name="delete" size={14} />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent data-testid="slei-channel-member-remove-dialog">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{input.messages.chat.removeChannelMember(member.name)}</AlertDialogTitle>
-                        <AlertDialogDescription>{input.messages.chat.removeChannelMemberConfirm(member.name)}</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={mutatingMemberId === member.id}>{input.messages.common.cancel}</AlertDialogCancel>
-                        <AlertDialogAction
-                          data-testid="slei-channel-member-remove-confirm"
-                          disabled={mutatingMemberId === member.id}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            void mutate(member.id, "remove");
-                          }}
-                          variant="destructive"
-                        >
-                          {input.messages.common.delete}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            );
-          }) : (
-            <Empty
-              framed={false}
-              size="sm"
-              title={input.messages.chat.noChannelMembers}
-              variant="nodata"
-            />
-          )}
-        </div>
-      </ScrollArea>
-    </aside>
-  );
-}
-
-export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelMembersOpen, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadClose, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelMembersOpen?: boolean; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadClose?: (taskId: string) => void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadClose, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadClose?: (taskId: string) => void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
   const [channelView, setChannelView] = useState<ChannelEmbeddedView>(initialChannelView ?? "chat");
-  const [channelMembersOpen, setChannelMembersOpen] = useState(initialChannelMembersOpen ?? false);
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
@@ -781,8 +533,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const showProjectEditor = !dmMember && activeChannel.id !== "all";
   const sessionBusy = Boolean(activeConversation && visibleMessages.some((message) => message.status === "running" || message.status === "pending"));
   const sendDisabled = Boolean((!draft.trim() && attachments.length === 0) || sessionBusy || sending || submitting);
-  const showChannelMembersPanel = !dmMember && channelMembersOpen && effectiveChannelView === "chat";
-  const renderChannelMemberPanelRegion = !dmMember && effectiveChannelView === "chat";
 
   useEffect(() => {
     setChannelView(initialChannelView ?? "chat");
@@ -793,17 +543,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     setProjectEditorOpen(false);
     setProjectSaving(false);
   }, [activeChannel.id, activeChannel.projectPaths]);
-
-  useEffect(() => {
-    if (dmMember || typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const media = window.matchMedia("(max-width: 899px)");
-    const collapseIfCompact = () => {
-      if (media.matches) setChannelMembersOpen(false);
-    };
-    collapseIfCompact();
-    media.addEventListener?.("change", collapseIfCompact);
-    return () => media.removeEventListener?.("change", collapseIfCompact);
-  }, [activeChannel.id, dmMember]);
 
   useEffect(() => {
     if (!focusedMessageId || typeof document === "undefined") return;
@@ -1083,21 +822,33 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     <section className={cn("relative grid h-full min-h-0 bg-transparent", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
-        <div className="min-w-0" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
+        <div className="min-w-0 flex-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
           <div className="min-w-0" data-tauri-drag-region="deep">
-            <h1 aria-label={detailAriaLabel} className="inline-flex max-w-full min-w-0 items-center gap-2 text-xl font-semibold" data-tauri-drag-region="deep">
-              <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
-                {dmMember ? <SleiIcon name="chat" size={20} /> : <SleiIcon name="hash" size={20} />}
-              </span>
-              <span className="min-w-0" data-tauri-drag-region="deep">
-                <span className="truncate" data-tauri-drag-region="deep">{detailTitle}</span>
-              </span>
+            <div className="flex min-w-0 items-center gap-2" data-tauri-drag-region="deep">
+              <h1
+                aria-label={detailAriaLabel}
+                className="inline-flex max-w-full min-w-0 items-center gap-2 text-lg font-semibold"
+                data-testid={dmMember ? undefined : "slei-channel-title"}
+                data-tauri-drag-region="deep"
+              >
+                {dmMember ? (
+                  <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
+                    <SleiIcon name="chat" size={18} />
+                  </span>
+                ) : null}
+                <span className="truncate" data-tauri-drag-region="deep">{dmMember ? detailTitle : `#${detailTitle}`}</span>
+              </h1>
               {!dmMember ? (
-                <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
-                  <SleiIcon name="copy" size={14} />
-                </TooltipButton>
+                <>
+                  <Badge className="h-6 shrink-0 rounded-md px-2 text-xs font-medium" data-testid="slei-channel-member-count" variant="secondary">
+                    {channelMembers.length} Agent
+                  </Badge>
+                  <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                    <SleiIcon name="copy" size={14} />
+                  </TooltipButton>
+                </>
               ) : null}
-            </h1>
+            </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-tauri-drag-region="deep">
               <p className="truncate" data-tauri-drag-region="deep">{detailSubtitle}</p>
               {showProjectEditor ? (
@@ -1167,26 +918,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         </div>
         {dmMember ? null : (
           <div className="flex shrink-0 items-center gap-2" data-testid="slei-channel-header-actions">
-            <TooltipButton
-              aria-expanded={showChannelMembersPanel ? "true" : "false"}
-              aria-label={messages.chat.channelMembers}
-              className={cn(showChannelMembersPanel && "border-primary/20 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
-              data-testid="slei-channel-members-header-toggle"
-              onClick={() => {
-                if (effectiveChannelView !== "chat") {
-                  setChannelView("chat");
-                  setChannelMembersOpen(true);
-                  return;
-                }
-                setChannelMembersOpen((current) => !current);
-              }}
-              tooltip={messages.chat.channelMembers}
-              type="button"
-              variant="outline"
-              size="icon-sm"
-            >
-              <SleiIconSwap active={showChannelMembersPanel} activeName="panelClose" inactiveName="panelOpen" size={15} />
-            </TooltipButton>
+            <ChannelMemberGroup
+              availableMembers={availableChannelMembers}
+              channelId={activeChannel.id}
+              members={channelMembers}
+              messages={messages}
+              onAdd={onChannelMemberAdd}
+              onRemove={onChannelMemberRemove}
+            />
           </div>
         )}
       </header>
@@ -1202,14 +941,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         </Tabs>
       ) : null}
       <section
-        className={cn(
-          "grid min-h-0 transition-[grid-template-columns] duration-200 ease-out",
-          renderChannelMemberPanelRegion
-            ? showChannelMembersPanel
-              ? "grid-cols-[minmax(0,1fr)_20rem]"
-              : "grid-cols-[minmax(0,1fr)_0rem]"
-            : "grid-cols-1",
-        )}
+        className="grid min-h-0 grid-cols-1"
         data-testid="slei-channel-main-region"
       >
         <div className="grid min-h-0 overflow-visible" data-testid="slei-channel-workspace">
@@ -1487,29 +1219,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
             <ChannelFileList files={channelFiles} messages={messages} />
           )}
         </div>
-        {renderChannelMemberPanelRegion ? (
-          <div
-            aria-hidden={showChannelMembersPanel ? "false" : "true"}
-            className="min-h-0 overflow-hidden"
-            data-testid="slei-channel-member-panel-shell"
-          >
-            <div
-              className={cn(
-                "h-full w-80 transform-gpu transition-[opacity,transform] duration-200 ease-out",
-                showChannelMembersPanel ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0",
-              )}
-            >
-              <ChannelMemberPanel
-                availableMembers={availableChannelMembers}
-                channelId={activeChannel.id}
-                members={channelMembers}
-                messages={messages}
-                onAdd={onChannelMemberAdd}
-                onRemove={onChannelMemberRemove}
-              />
-            </div>
-          </div>
-        ) : null}
       </section>
       <TaskThreadDrawer
         messages={messages}

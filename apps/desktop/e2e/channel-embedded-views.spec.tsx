@@ -64,6 +64,9 @@ describe("channel embedded views", () => {
     expect(html).toContain(">聊天</button>");
     expect(html).toContain(">任务</button>");
     expect(html).toContain(">附件</button>");
+    expect(html).toContain('data-testid="slei-channel-member-group"');
+    expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
+    expect(html).not.toContain('data-testid="slei-channel-member-panel"');
     expect(html).not.toContain("Runtime 已检测");
     expect(html).not.toContain("Runtime detected");
   });

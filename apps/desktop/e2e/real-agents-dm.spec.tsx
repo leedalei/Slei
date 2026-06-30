@@ -383,9 +383,13 @@ describe("real agent members and direct messages", () => {
     expect(dmHtml).not.toContain("历史对话");
     expect(dmHtml).not.toContain("Runtime 已检测");
     expect(dmHtml).not.toContain('aria-label="频道视图"');
+    expect(dmHtml).not.toContain('data-testid="slei-channel-member-group"');
     expect(channelHtml).not.toContain("重置会话");
     expect(channelHtml).not.toContain("新会话");
     expect(channelHtml).not.toContain("历史对话");
+    expect(channelHtml).toContain('data-testid="slei-channel-member-group"');
+    expect(channelHtml).not.toContain('data-testid="slei-channel-members-header-toggle"');
+    expect(channelHtml).not.toContain('data-testid="slei-channel-member-panel"');
   });
 
   it("shows the as-task composer toggle in direct messages and channels", () => {
