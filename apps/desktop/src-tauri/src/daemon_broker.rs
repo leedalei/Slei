@@ -351,6 +351,8 @@ pub struct AgentCreateRequest {
     #[serde(alias = "nodeId")]
     pub node_id: String,
     pub description: String,
+    #[serde(alias = "avatarSeed", default)]
+    pub avatar_seed: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -363,6 +365,21 @@ pub struct AgentUpdateRequest {
     pub model: Option<String>,
     #[serde(alias = "nodeId")]
     pub node_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRolePresetView {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub sort_order: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRolePresetReceipt {
+    pub presets: Vec<AgentRolePresetView>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -1822,6 +1839,20 @@ impl DaemonBroker {
         }
     }
 
+    pub fn list_agent_role_presets(&self) -> Result<AgentRolePresetReceipt, AgentError> {
+        let response = self
+            .send_daemon_request_checked("GET", "/v1/agent-role-presets", None, &[])
+            .map_err(|error| {
+                if is_daemon_unavailable_error(&error) {
+                    AgentError::DaemonUnavailable
+                } else {
+                    AgentError::DaemonRequest(error)
+                }
+            })?;
+        serde_json::from_str::<AgentRolePresetReceipt>(&response)
+            .map_err(|error| AgentError::DaemonResponse(error.to_string()))
+    }
+
     pub fn list_agent_activity(
         &self,
         agent_id: &str,
@@ -1856,15 +1887,23 @@ impl DaemonBroker {
 
         let handle = normalize_handle(&request.handle)?;
         let mut agents = self.agents.lock().expect("agents mutex poisoned");
+        let handle_key = handle.to_lowercase();
         if agents
             .iter()
-            .any(|agent| agent.handle.eq_ignore_ascii_case(&handle))
+            .any(|agent| agent.handle.to_lowercase() == handle_key)
         {
             return Err(AgentError::DuplicateHandle);
         }
 
         let id = format!("agent_{}", monotonic_id());
         let workspace_path = self.local_agent_workspace(&id);
+        let avatar_seed = request
+            .avatar_seed
+            .as_deref()
+            .map(str::trim)
+            .filter(|seed| !seed.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| id.clone());
         let now = monotonic_id();
         let mut agent = DesktopAgentView {
             id: id.clone(),
@@ -1879,7 +1918,7 @@ impl DaemonBroker {
             workspace_path: workspace_path.clone(),
             memory_path: format!("{workspace_path}/MEMORY.md"),
             docs_path: format!("{workspace_path}/docs"),
-            avatar_seed: id,
+            avatar_seed,
             runtime_thread: Some(RuntimeThreadView {
                 runtime_kind: request.runtime_kind.trim().to_string(),
                 status: "ready".to_string(),
@@ -4091,12 +4130,11 @@ fn validate_agent_create(request: &AgentCreateRequest) -> Result<(), AgentError>
 }
 
 fn normalize_handle(handle: &str) -> Result<String, AgentError> {
-    let trimmed = handle.trim().trim_start_matches('@').to_lowercase();
+    let trimmed = handle.trim().trim_start_matches('@');
     let valid = !trimmed.is_empty()
-        && trimmed.len() <= 32
-        && trimmed.chars().all(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        });
+        && trimmed.chars().count() <= 32
+        && !trimmed.chars().any(char::is_whitespace)
+        && !trimmed.contains('-');
     if valid {
         Ok(format!("@{trimmed}"))
     } else {

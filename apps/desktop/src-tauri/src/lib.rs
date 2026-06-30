@@ -40,6 +40,7 @@ pub fn run() {
             commands::list_preferences_command,
             commands::list_profile_command,
             commands::list_agents_command,
+            commands::list_agent_role_presets_command,
             commands::list_agent_activity_command,
             commands::list_agent_skills_command,
             commands::list_conversations_command,
@@ -91,15 +92,16 @@ mod tests {
         activate_conversation_session, add_channel_member, app_runtime_flags,
         bootstrap_guide_agent, complete_interactive_card, create_agent, create_channel,
         create_conversation_session, create_dm_conversation, daemon_status, delete_agent,
-        format_frontend_crash_log, global_search, list_agent_activity, list_agent_skills,
-        list_agent_workspace, list_agents, list_channel_members, list_channel_messages,
-        list_conversation_messages, list_conversation_sessions, list_conversations,
-        list_diagnostics, list_nodes, list_preferences, list_profile, list_saved_messages,
-        list_tasks, open_agent_path, read_agent_workspace_file, reconnect_events,
-        remember_agent_fact, remove_channel_member, rename_local_node, reply_to_message_thread,
-        reply_to_task, request_artifact_open, reset_conversation_runtime_session, save_message,
-        send_channel_message, send_conversation_message, unsave_message, update_agent,
-        update_preferences, update_profile, upload_conversation_attachment, FrontendCrashReport,
+        format_frontend_crash_log, global_search, list_agent_activity, list_agent_role_presets,
+        list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
+        list_channel_messages, list_conversation_messages, list_conversation_sessions,
+        list_conversations, list_diagnostics, list_nodes, list_preferences, list_profile,
+        list_saved_messages, list_tasks, open_agent_path, read_agent_workspace_file,
+        reconnect_events, remember_agent_fact, remove_channel_member, rename_local_node,
+        reply_to_message_thread, reply_to_task, request_artifact_open,
+        reset_conversation_runtime_session, save_message, send_channel_message,
+        send_conversation_message, unsave_message, update_agent, update_preferences,
+        update_profile, upload_conversation_attachment, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
@@ -1069,6 +1071,7 @@ mod tests {
                 model: "Opus".to_string(),
                 node_id: "local-node".to_string(),
                 description: "Architect".to_string(),
+                avatar_seed: Some("preset-engineer".to_string()),
             },
         )
         .unwrap();
@@ -1079,6 +1082,137 @@ mod tests {
         assert!(request.contains("Authorization: Bearer secret-token"));
         assert!(request.contains("Idempotency-Key: desktop-agent-create-"));
         assert!(request.contains(r#""handle":"@nova""#));
+        assert!(request.contains(r#""avatarSeed":"preset-engineer""#));
+    }
+
+    #[test]
+    fn broker_fetches_agent_role_presets_from_daemon() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"presets":[{"id":"engineer","title":"工程师","description":"实现功能","sortOrder":10}]}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let receipt = list_agent_role_presets(&broker).unwrap();
+        let request = handle.join().unwrap();
+
+        assert_eq!(receipt.presets.len(), 1);
+        assert_eq!(receipt.presets[0].id, "engineer");
+        assert_eq!(receipt.presets[0].sort_order, 10);
+        assert!(request.contains("GET /v1/agent-role-presets HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+    }
+
+    #[test]
+    fn broker_agent_role_presets_return_error_when_daemon_unavailable_or_invalid() {
+        let unavailable = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: "http://127.0.0.1:1".to_string(),
+            event_socket: "ws://127.0.0.1:1/v1/events/ws".to_string(),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+        assert_eq!(
+            list_agent_role_presets(&unavailable)
+                .unwrap_err()
+                .to_string(),
+            "daemon unavailable"
+        );
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"presets":[{"id":"engineer"}]}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let invalid = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = list_agent_role_presets(&invalid).unwrap_err();
+        let request = handle.join().unwrap();
+
+        assert!(error.to_string().contains("daemon response error"));
+        assert!(request.contains("GET /v1/agent-role-presets HTTP/1.1"));
+    }
+
+    #[test]
+    fn local_create_agent_preserves_avatar_seed_and_daemon_aligned_handle() {
+        let _env_guard = test_env_lock();
+        let agent_root =
+            std::env::temp_dir().join(format!("slei-desktop-agent-test-{}", uuid::Uuid::new_v4()));
+        std::env::set_var("SLEI_DATA_ROOT", &agent_root);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let created = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Nova".to_string(),
+                handle: "  @Nova_42  ".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "Architect".to_string(),
+                avatar_seed: Some("  preset-engineer  ".to_string()),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(created.agent.handle, "@Nova_42");
+        assert_eq!(created.agent.avatar_seed, "preset-engineer");
+        assert!(create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Bad".to_string(),
+                handle: "@bad-handle".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "Bad".to_string(),
+                avatar_seed: None,
+            },
+        )
+        .is_err());
+        std::env::remove_var("SLEI_DATA_ROOT");
     }
 
     #[test]
@@ -1568,6 +1702,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "QA 质保员".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap();
@@ -1683,11 +1818,12 @@ mod tests {
             &broker,
             AgentCreateRequest {
                 name: "Delete Me".to_string(),
-                handle: "@delete-me".to_string(),
+                handle: "@delete_me".to_string(),
                 runtime_kind: "ClaudeCode".to_string(),
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "temporary agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -1728,11 +1864,12 @@ mod tests {
             &broker,
             AgentCreateRequest {
                 name: "Ready Member".to_string(),
-                handle: "@ready-member".to_string(),
+                handle: "@ready_member".to_string(),
                 runtime_kind: "ClaudeCode".to_string(),
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "频道成员状态测试".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -1778,6 +1915,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "架构工程师".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -1907,6 +2045,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -1991,6 +2130,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2189,6 +2329,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2257,6 +2398,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2356,6 +2498,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2428,6 +2571,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2517,6 +2661,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "开发 Agent".to_string(),
+                avatar_seed: None,
             },
         )
         .unwrap()
@@ -2946,6 +3091,7 @@ mod tests {
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
                 description: "should not be created locally".to_string(),
+                avatar_seed: None,
             },
         )
         .is_err());

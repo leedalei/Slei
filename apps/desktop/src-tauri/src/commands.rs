@@ -1,9 +1,9 @@
 use crate::daemon_broker::{
     AgentActivityListReceipt, AgentCreateRequest, AgentError, AgentListReceipt, AgentPathError,
-    AgentPathOpenReceipt, AgentReceipt, AgentUpdateRequest, AgentWorkspaceFileReceipt,
-    AgentWorkspaceListReceipt, AppRuntimeFlagsView, ArtifactOpenError, ArtifactOpenReceipt,
-    CardError, ChannelCreateRequest, ChannelDeleteReceipt, ChannelError, ChannelListReceipt,
-    ChannelMemberAddRequest, ChannelMemberListReceipt, ChannelMemberReceipt,
+    AgentPathOpenReceipt, AgentReceipt, AgentRolePresetReceipt, AgentUpdateRequest,
+    AgentWorkspaceFileReceipt, AgentWorkspaceListReceipt, AppRuntimeFlagsView, ArtifactOpenError,
+    ArtifactOpenReceipt, CardError, ChannelCreateRequest, ChannelDeleteReceipt, ChannelError,
+    ChannelListReceipt, ChannelMemberAddRequest, ChannelMemberListReceipt, ChannelMemberReceipt,
     ChannelMemberRemoveReceipt, ChannelMessageListReceipt, ChannelProjectPathsRequest,
     ChannelReceipt, ConversationAttachmentReceipt, ConversationAttachmentUploadRequest,
     ConversationError, ConversationListReceipt, ConversationMessageListReceipt,
@@ -240,6 +240,12 @@ pub fn update_profile(
 
 pub fn list_agents(broker: &DaemonBroker) -> AgentListReceipt {
     broker.list_agents()
+}
+
+pub fn list_agent_role_presets(
+    broker: &DaemonBroker,
+) -> Result<AgentRolePresetReceipt, AgentError> {
+    broker.list_agent_role_presets()
 }
 
 pub fn list_agent_activity(
@@ -627,6 +633,13 @@ pub fn complete_interactive_card_command(
 #[tauri::command]
 pub fn list_agents_command(state: tauri::State<'_, DaemonBroker>) -> AgentListReceipt {
     list_agents(state.inner())
+}
+
+#[tauri::command]
+pub fn list_agent_role_presets_command(
+    state: tauri::State<'_, DaemonBroker>,
+) -> Result<AgentRolePresetReceipt, String> {
+    list_agent_role_presets(state.inner()).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

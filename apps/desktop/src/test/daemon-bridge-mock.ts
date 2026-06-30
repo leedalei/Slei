@@ -5,6 +5,7 @@ import {
 } from "../lib/default-agent-assets";
 import type {
   AgentActivityLogView,
+  AgentRolePresetView,
   AgentWorkspaceEntry,
   ChannelMemberView,
   ChannelMessageView,
@@ -83,6 +84,7 @@ export function createDaemonBridgeMock(input: {
   channelMembers?: ChannelMemberView[];
   channelMessages?: ChannelMessageView[];
   activityLogs?: AgentActivityLogView[];
+  rolePresets?: AgentRolePresetView[];
   profile?: UserProfileView | null;
 }): DaemonBridgeMock {
   let connected = input.connected;
@@ -106,6 +108,7 @@ export function createDaemonBridgeMock(input: {
   let channelMembers: ChannelMemberView[] = input.channelMembers ?? [];
   let channelMessages: ChannelMessageView[] = input.channelMessages ?? [];
   let activityLogs: AgentActivityLogView[] = input.activityLogs ?? [];
+  let rolePresets: AgentRolePresetView[] = input.rolePresets ?? [];
   let tasks: TaskSummaryView[] = [];
   const taskThreads = new Map<string, TaskThreadView>();
   let channelMessageCounter = 0;
@@ -483,6 +486,9 @@ export function createDaemonBridgeMock(input: {
     async listAgents() {
       return { agents };
     },
+    async listAgentRolePresets() {
+      return { presets: rolePresets };
+    },
     async createAgent(request) {
       const id = `agent_${Date.now()}`;
       const handle = request.handle.startsWith("@") ? request.handle : `@${request.handle}`;
@@ -490,7 +496,7 @@ export function createDaemonBridgeMock(input: {
       const agent: DesktopAgentView = {
         id,
         name: request.name,
-        handle: handle.toLowerCase(),
+        handle,
         agentKind: "agent",
         systemOwned: false,
         runtimeKind: request.runtimeKind,
@@ -500,7 +506,7 @@ export function createDaemonBridgeMock(input: {
         workspacePath,
         memoryPath: `${workspacePath}/MEMORY.md`,
         docsPath: `${workspacePath}/docs`,
-        avatarSeed: id,
+        avatarSeed: request.avatarSeed ?? id,
         runtimeThread: { runtimeKind: request.runtimeKind, status: "ready", createdAt: new Date().toISOString() },
         channelIds: ["all"],
         createdAt: new Date().toISOString(),

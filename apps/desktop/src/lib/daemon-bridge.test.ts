@@ -28,6 +28,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     await expect(bridge.listAgents()).resolves.toEqual({ agents: [] });
     await expect(bridge.listTasks()).resolves.toEqual({ tasks: [] });
     await expect(bridge.listNodes()).resolves.toEqual({ nodes: [] });
+    await expect(bridge.listAgentRolePresets()).resolves.toEqual({ presets: [] });
     await expect(bridge.listChannels()).resolves.toEqual({ channels: [] });
     await expect(bridge.listAgentActivity("agent_alice")).resolves.toEqual({ logs: [] });
     await expect(bridge.globalSearch({ q: "needle" })).resolves.toEqual({
@@ -156,6 +157,58 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       },
     });
   });
+
+  it("invokes role preset listing and surfaces command failures", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { __TAURI_INTERNALS__: {} },
+    });
+    invokeMock
+      .mockResolvedValueOnce({
+        presets: [{ id: "engineer", title: "工程师", description: "实现功能", sortOrder: 10 }],
+      })
+      .mockRejectedValueOnce(new Error("daemon unavailable"));
+
+    const bridge = createDaemonBridge();
+    await expect(bridge.listAgentRolePresets()).resolves.toEqual({
+      presets: [{ id: "engineer", title: "工程师", description: "实现功能", sortOrder: 10 }],
+    });
+    await expect(bridge.listAgentRolePresets()).rejects.toThrow("daemon unavailable");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "list_agent_role_presets_command");
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "list_agent_role_presets_command");
+  });
+
+  it("passes avatarSeed through createAgent", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { __TAURI_INTERNALS__: {} },
+    });
+    invokeMock.mockResolvedValueOnce({ agent: testAgent("agent_nova", "Nova", "@Nova") });
+
+    const bridge = createDaemonBridge();
+    await bridge.createAgent({
+      name: "Nova",
+      handle: "@Nova",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "Architect",
+      avatarSeed: "preset-engineer",
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("create_agent_command", {
+      request: {
+        name: "Nova",
+        handle: "@Nova",
+        runtimeKind: "ClaudeCode",
+        model: "Sonnet",
+        nodeId: "local-node",
+        description: "Architect",
+        avatarSeed: "preset-engineer",
+      },
+    });
+  });
 });
 
 describe("createDaemonBridgeMock global search", () => {
@@ -182,6 +235,29 @@ describe("createDaemonBridgeMock global search", () => {
 
     expect(receipt.messages.map((message) => message.messageId)).toEqual(["msg_001"]);
     expect(receipt.messages[0].authorId).toBe("agent_coda");
+  });
+
+  it("returns role preset fixtures and preserves avatarSeed on created agents", async () => {
+    const bridge = createDaemonBridgeMock({
+      connected: true,
+      rolePresets: [{ id: "engineer", title: "工程师", description: "实现功能", sortOrder: 10 }],
+    });
+
+    await expect(bridge.listAgentRolePresets()).resolves.toEqual({
+      presets: [{ id: "engineer", title: "工程师", description: "实现功能", sortOrder: 10 }],
+    });
+
+    const created = await bridge.createAgent({
+      name: "Nova",
+      handle: "@Nova",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "Architect",
+      avatarSeed: "preset-engineer",
+    });
+
+    expect(created.agent.avatarSeed).toBe("preset-engineer");
   });
 });
 

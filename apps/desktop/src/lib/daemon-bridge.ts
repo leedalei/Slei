@@ -136,9 +136,21 @@ export type AgentCreateRequest = {
   model: string;
   nodeId: string;
   description: string;
+  avatarSeed?: string;
 };
 
 export type AgentUpdateRequest = Partial<Pick<AgentCreateRequest, "name" | "runtimeKind" | "model" | "nodeId" | "description">>;
+
+export type AgentRolePresetView = {
+  id: string;
+  title: string;
+  description: string;
+  sortOrder: number;
+};
+
+export type AgentRolePresetReceipt = {
+  presets: AgentRolePresetView[];
+};
 
 export type AgentListReceipt = {
   agents: DesktopAgentView[];
@@ -675,6 +687,7 @@ export type DaemonBridge = {
   updateTaskStatus(taskId: string, request: TaskStatusUpdateRequest): Promise<TaskReceipt>;
   completeInteractiveCard(cardId: string): Promise<InteractiveCardReceipt>;
   listAgents(): Promise<AgentListReceipt>;
+  listAgentRolePresets(): Promise<AgentRolePresetReceipt>;
   createAgent(request: AgentCreateRequest): Promise<AgentReceipt>;
   updateAgent(agentId: string, request: AgentUpdateRequest): Promise<AgentReceipt>;
   deleteAgent(agentId: string): Promise<AgentReceipt>;
@@ -813,6 +826,9 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async listAgents() {
       return { agents: [] };
     },
+    async listAgentRolePresets() {
+      return { presets: [] };
+    },
     createAgent: rejectDaemonOffline,
     updateAgent: rejectDaemonOffline,
     deleteAgent: rejectDaemonOffline,
@@ -901,6 +917,7 @@ export function createDaemonBridge(): DaemonBridge {
       updateTaskStatus: (taskId: string, request: TaskStatusUpdateRequest) => invoke<TaskReceipt>("update_task_status_command", { taskId, request }),
       completeInteractiveCard: (cardId: string) => invoke<InteractiveCardReceipt>("complete_interactive_card_command", { cardId }),
       listAgents: () => invoke<AgentListReceipt>("list_agents_command"),
+      listAgentRolePresets: () => invoke<AgentRolePresetReceipt>("list_agent_role_presets_command"),
       createAgent: (request: AgentCreateRequest) => invoke<AgentReceipt>("create_agent_command", { request }),
       updateAgent: (agentId: string, request: AgentUpdateRequest) => invoke<AgentReceipt>("update_agent_command", { agentId, request }),
       deleteAgent: (agentId: string) => invoke<AgentReceipt>("delete_agent_command", { agentId }),
