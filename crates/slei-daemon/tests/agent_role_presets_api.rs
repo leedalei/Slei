@@ -199,6 +199,49 @@ async fn agent_create_rejects_invalid_handles_and_preserves_case() {
 }
 
 #[tokio::test]
+async fn agent_create_rejects_unicode_case_duplicate_handle() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-role-presets-api-unicode-handle-duplicate");
+    let app = build_router(AppState::for_tests_with_agent_root_async(token.clone(), root).await);
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-uppercase-umlaut-handle"),
+        json!({
+            "name": "UmlautUpper",
+            "handle": "@Ä",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Uses uppercase non-ASCII handle."
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+
+    let duplicate = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-lowercase-umlaut-handle"),
+        json!({
+            "name": "UmlautLower",
+            "handle": "@ä",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Should conflict after Rust Unicode lowercase folding."
+        }),
+    )
+    .await;
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let body = response_json(duplicate).await;
+    assert_eq!(body["error"], "duplicate handle");
+}
+
+#[tokio::test]
 async fn agent_update_rejects_invalid_or_duplicate_display_name() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("agent-role-presets-api-update-name-validation");

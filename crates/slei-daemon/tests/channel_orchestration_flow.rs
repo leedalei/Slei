@@ -3440,7 +3440,7 @@ async fn agent_send_api_unicode_handle_mention_creates_delivery_and_run() {
         json!({
             "target": "#api-core",
             "agentId": "agent_alice",
-            "body": "@小红书调研员 请继续调研这个话题。"
+            "body": "@小红书调研员（继续） 请继续调研这个话题。"
         }),
     )
     .await;
@@ -3453,8 +3453,121 @@ async fn agent_send_api_unicode_handle_mention_creates_delivery_and_run() {
         &state,
         &["agent_xiaohongshu"],
         message_id,
-        &["@小红书调研员 请继续调研"],
+        &["@小红书调研员（继续） 请继续调研"],
         &["@alice"],
+    );
+}
+
+#[tokio::test]
+async fn agent_send_api_mention_uses_longest_persisted_handle_match() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_foo", "@foo"),
+        ("agent_foo_bar", "@foo.bar"),
+        ("agent_sender", "@sender"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-longest-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_foo", "agent_foo_bar", "agent_sender"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/messages/send",
+        Some("agent-send-longest-mention-delivery"),
+        json!({
+            "target": "#api-core",
+            "agentId": "agent_sender",
+            "body": "@foo.bar 请处理。"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent = response_json(sent).await;
+    let message_id = sent["messageId"].as_str().unwrap();
+
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_foo_bar"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_foo_bar"],
+        message_id,
+        &["@foo.bar 请处理"],
+        &["@foo 请处理"],
+    );
+}
+
+#[tokio::test]
+async fn agent_send_api_mention_can_match_handle_containing_at_sign() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_foo", "@foo"),
+        ("agent_bar", "@bar"),
+        ("agent_foo_at_bar", "@foo@bar"),
+        ("agent_sender", "@sender"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-at-sign-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_foo", "agent_bar", "agent_foo_at_bar", "agent_sender"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/messages/send",
+        Some("agent-send-at-sign-mention-delivery"),
+        json!({
+            "target": "#api-core",
+            "agentId": "agent_sender",
+            "body": "@foo@bar 请处理。"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent = response_json(sent).await;
+    let message_id = sent["messageId"].as_str().unwrap();
+
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_foo_at_bar"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_foo_at_bar"],
+        message_id,
+        &["@foo@bar 请处理"],
+        &[],
     );
 }
 

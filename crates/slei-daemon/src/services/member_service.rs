@@ -307,20 +307,15 @@ impl MemberService {
         {
             return self.get_product_agent(&id).await;
         }
-        if self
-            .repos
-            .agent_by_handle(&normalized_handle)
-            .await
-            .map_err(member_storage_error)?
-            .is_some()
+        let existing_agents = self.repos.agents().await.map_err(member_storage_error)?;
+        let normalized_handle_key = normalized_handle.to_lowercase();
+        if existing_agents
+            .iter()
+            .any(|agent| agent.handle.to_lowercase() == normalized_handle_key)
         {
             return Err(MemberError::DuplicateHandle);
         }
-        if self
-            .repos
-            .agents()
-            .await
-            .map_err(member_storage_error)?
+        if existing_agents
             .iter()
             .any(|agent| agent.name == normalized_name)
         {

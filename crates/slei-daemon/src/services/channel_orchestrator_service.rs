@@ -324,7 +324,7 @@ impl ChannelOrchestratorService {
             .await?;
         if delivered_agent_ids.is_empty()
             && message.kind == MessageKind::Agent
-            && explicit_handles(message.body.as_deref().unwrap_or_default()).is_empty()
+            && !has_explicit_mention_marker(message.body.as_deref().unwrap_or_default())
         {
             let _ = self
                 .start_next_pending_todo_for_channel(&message.channel_id, message)
@@ -519,7 +519,7 @@ impl ChannelOrchestratorService {
         if thread.source_kind != "channel" {
             return Ok(reply);
         }
-        if explicit_handles(&reply.body).is_empty() {
+        if !has_explicit_mention_marker(&reply.body) {
             return Ok(reply);
         }
 
@@ -1035,8 +1035,7 @@ impl ChannelOrchestratorService {
         body: &str,
         member_ids: &HashSet<String>,
     ) -> Vec<String> {
-        let mentioned_handles = explicit_handles(body);
-        if mentioned_handles.is_empty() {
+        if !has_explicit_mention_marker(body) {
             return Vec::new();
         }
 
@@ -1050,6 +1049,20 @@ impl ChannelOrchestratorService {
                 handles
             },
         );
+        let mut persisted_handles = handle_to_agent.keys().cloned().collect::<Vec<_>>();
+        persisted_handles.sort_by(|left, right| {
+            right
+                .chars()
+                .count()
+                .cmp(&left.chars().count())
+                .then_with(|| right.len().cmp(&left.len()))
+        });
+
+        let mentioned_handles = explicit_handles_from_persisted_handles(body, &persisted_handles);
+        if mentioned_handles.is_empty() {
+            return Vec::new();
+        }
+
         let mut resolved = Vec::new();
         for handle in mentioned_handles {
             if let Some(agent_ids) = handle_to_agent.get(&handle) {
@@ -2221,29 +2234,47 @@ fn is_channel_join_run(source_message_id: &str) -> bool {
     source_message_id.starts_with("channel_join:")
 }
 
-fn explicit_handles(body: &str) -> Vec<String> {
-    let mut handles = Vec::new();
-    let mut characters = body.char_indices().peekable();
-    while let Some((_, character)) = characters.next() {
+fn has_explicit_mention_marker(body: &str) -> bool {
+    let mut characters = body.chars().peekable();
+    while let Some(character) = characters.next() {
         if character != '@' {
             continue;
         }
-
-        let mut handle = String::from("@");
-        while let Some((_, next)) = characters.peek() {
-            if is_mention_handle_terminator(*next) {
-                break;
-            }
-            if *next == '@' {
-                break;
-            }
-            for lowered in next.to_lowercase() {
-                handle.push(lowered);
-            }
-            characters.next();
+        if characters
+            .peek()
+            .is_some_and(|next| !is_mention_handle_terminator(*next))
+        {
+            return true;
         }
-        if handle.chars().count() > 1 {
-            handles.push(handle);
+    }
+    false
+}
+
+fn explicit_handles_from_persisted_handles(
+    body: &str,
+    persisted_handles: &[String],
+) -> Vec<String> {
+    if persisted_handles.is_empty() {
+        return Vec::new();
+    }
+
+    let lower_body = body.to_lowercase();
+    let mut handles = Vec::new();
+    let mut index = 0;
+    while index < lower_body.len() {
+        let Some(offset) = lower_body[index..].find('@') else {
+            break;
+        };
+        let mention_start = index + offset;
+        let mention_text = &lower_body[mention_start..];
+        if let Some(handle) = persisted_handles
+            .iter()
+            .find(|handle| mention_text.starts_with(handle.as_str()))
+        {
+            handles.push(handle.clone());
+            index = mention_start + handle.len();
+        } else {
+            index = mention_start + '@'.len_utf8();
         }
     }
     handles
@@ -2269,12 +2300,20 @@ fn is_mention_handle_terminator(character: char) -> bool {
                 | ')'
                 | '['
                 | ']'
+                | '【'
+                | '】'
                 | '{'
                 | '}'
                 | '<'
                 | '>'
                 | '《'
                 | '》'
+                | '（'
+                | '）'
+                | '「'
+                | '」'
+                | '“'
+                | '”'
                 | '"'
                 | '\''
                 | '`'
