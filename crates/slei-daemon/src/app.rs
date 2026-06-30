@@ -1,4 +1,4 @@
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use serde_json::json;
@@ -157,6 +157,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/v1/settings/profile",
             get(api::settings::get_profile).patch(api::settings::update_profile),
+        )
+        .route(
+            "/v1/settings/profile/avatar-image",
+            post(api::settings::upload_profile_avatar_image)
+                .layer(DefaultBodyLimit::max(4 * 1024 * 1024)),
         )
         .route("/v1/diagnostics", get(api::diagnostics::get))
         .route("/v1/dev/reset", post(api::dev::reset))

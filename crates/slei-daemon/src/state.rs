@@ -34,6 +34,7 @@ pub struct AppState {
     pub auth_token: AuthToken,
     pub daemon_version: &'static str,
     pub protocol_version: &'static str,
+    data_root: PathBuf,
     node_service: NodeService,
     member_service: MemberService,
     channel_service: ChannelService,
@@ -224,6 +225,7 @@ impl AppState {
             auth_token,
             daemon_version: env!("CARGO_PKG_VERSION"),
             protocol_version: slei_protocol::PROTOCOL_VERSION,
+            data_root,
             node_service,
             member_service,
             channel_service,
@@ -283,6 +285,10 @@ impl AppState {
 
     pub fn settings(&self) -> &SettingsService {
         &self.settings_service
+    }
+
+    pub fn data_root(&self) -> &PathBuf {
+        &self.data_root
     }
 
     pub fn tasks(&self) -> &TaskService {

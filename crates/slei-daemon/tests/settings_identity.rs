@@ -1,6 +1,6 @@
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use serde_json::Value;
+use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::notification_service::NotificationService;
@@ -381,6 +381,188 @@ async fn settings_profile_api_returns_null_and_rejects_patch_when_profile_missin
         .unwrap();
     let json: Value = serde_json::from_slice(&body).unwrap();
     assert!(json["profile"].is_null());
+}
+
+#[tokio::test]
+async fn settings_profile_avatar_image_upload_persists_reference_and_file() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("avatar-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let uploaded = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/settings/profile/avatar-image")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "fileName": "avatar.png",
+                        "mimeType": "image/png",
+                        "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = uploaded.status();
+    let body = to_bytes(uploaded.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    let avatar = json["profile"]["avatar"].as_str().unwrap();
+    assert!(avatar.starts_with("profile-image:"));
+    assert!(avatar.ends_with(".png"));
+    let file_name = avatar.strip_prefix("profile-image:").unwrap();
+    assert!(root
+        .join("profile")
+        .join("avatars")
+        .join(file_name)
+        .exists());
+
+    let reloaded = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    let reloaded_app = build_router(reloaded);
+    let fetched = reloaded_app
+        .oneshot(
+            Request::builder()
+                .uri("/v1/settings/profile")
+                .header("authorization", token.authorization_header())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(fetched.status(), StatusCode::OK);
+    let body = to_bytes(fetched.into_body(), usize::MAX).await.unwrap();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["profile"]["avatar"], avatar);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_avatar_image_upload_rejects_invalid_inputs() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("avatar-invalid-token");
+    let state = AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await;
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    let oversized_decoded_bytes = "A".repeat((2 * 1024 * 1024 + 1) * 4 / 3 + 4);
+    let cases = [
+        (
+            "mime extension mismatch",
+            "avatar.jpg",
+            "image/png",
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=".to_string(),
+        ),
+        (
+            "text plain",
+            "avatar.txt",
+            "text/plain",
+            "aGVsbG8=".to_string(),
+        ),
+        ("empty bytes", "avatar.png", "image/png", String::new()),
+        (
+            "decoded bytes over limit",
+            "avatar.png",
+            "image/png",
+            oversized_decoded_bytes,
+        ),
+        (
+            "image dimensions over limit",
+            "avatar.png",
+            "image/png",
+            "iVBORw0KGgoAAAANSUhEUgAACAEAAAABCAYAAACl1iXMAAAAIUlEQVR42u3DAQkAAAwEoetfesvxoGDVqaqqqqqqqqr7H4NV+WnuBjSPAAAAAElFTkSuQmCC".to_string(),
+        ),
+    ];
+
+    for (name, file_name, mime_type, bytes_base64) in cases {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/settings/profile/avatar-image")
+                    .header("authorization", token.authorization_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({
+                            "fileName": file_name,
+                            "mimeType": mime_type,
+                            "bytesBase64": bytes_base64
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{name}");
+    }
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_patch_rejects_malformed_profile_image_refs() {
+    let token = AuthToken::from_static("settings-profile-image-ref-token");
+    let state = AppState::for_tests(token.clone());
+    state
+        .settings()
+        .create_profile(ProfileDraft {
+            nickname: "Lei".to_string(),
+            handle: "lei".to_string(),
+            bio: None,
+            avatar_url: Some("pixel-sun".to_string()),
+        })
+        .await
+        .unwrap();
+    let app = build_router(state);
+
+    for avatar in [
+        "profile-image:../x.png",
+        "profile-image:nothex.png",
+        "profile-image:/tmp/x.png",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/v1/settings/profile")
+                    .header("authorization", token.authorization_header())
+                    .header("content-type", "application/json")
+                    .body(Body::from(json!({ "avatar": avatar }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{avatar}");
+    }
 }
 
 #[tokio::test]

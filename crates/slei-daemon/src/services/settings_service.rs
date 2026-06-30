@@ -1,5 +1,8 @@
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use sha2::{Digest, Sha256};
 use slei_storage::repositories::{Repositories, UserPreferencesRow, UserProfileRow};
 use tokio::sync::Mutex;
 
@@ -17,6 +20,14 @@ pub struct ProfileDraft {
     pub handle: String,
     pub bio: Option<String>,
     pub avatar_url: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AvatarImageUpload {
+    pub file_name: String,
+    pub mime_type: String,
+    pub bytes: Vec<u8>,
+    pub data_root: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -142,6 +153,19 @@ impl SettingsService {
         if let Some(avatar) = avatar {
             profile.avatar_url = validate_avatar(Some(avatar))?;
         }
+        self.persist_profile(&profile).await?;
+        self.inner.lock().await.profile = Some(profile.clone());
+        Ok(profile)
+    }
+
+    pub async fn upload_avatar_image(
+        &self,
+        upload: AvatarImageUpload,
+    ) -> Result<UserProfile, SettingsError> {
+        let _gate = self.mutation_gate.lock().await;
+        let mut profile = self.profile_for_update().await?;
+        let avatar = store_avatar_image(upload)?;
+        profile.avatar_url = Some(avatar);
         self.persist_profile(&profile).await?;
         self.inner.lock().await.profile = Some(profile.clone());
         Ok(profile)
@@ -320,6 +344,68 @@ fn validate_avatar(avatar: Option<String>) -> Result<Option<String>, SettingsErr
     Ok(Some(trimmed.to_string()))
 }
 
+fn store_avatar_image(upload: AvatarImageUpload) -> Result<String, SettingsError> {
+    if upload.bytes.is_empty() || upload.bytes.len() > 2 * 1024 * 1024 {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    }
+    let ext = avatar_extension(&upload.file_name, &upload.mime_type)?;
+    let (width, height) = image_dimensions(&upload.bytes, ext)?;
+    if width == 0 || height == 0 || width > 2048 || height > 2048 {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    }
+
+    let hash = Sha256::digest(&upload.bytes);
+    let file_name = format!("{hash:x}.{ext}");
+    let avatar_dir = upload.data_root.join("profile").join("avatars");
+    std::fs::create_dir_all(&avatar_dir)
+        .map_err(|error| SettingsError::Storage(error.to_string()))?;
+    std::fs::write(avatar_dir.join(&file_name), &upload.bytes)
+        .map_err(|error| SettingsError::Storage(error.to_string()))?;
+    Ok(format!("profile-image:{file_name}"))
+}
+
+fn image_dimensions(bytes: &[u8], ext: &str) -> Result<(u32, u32), SettingsError> {
+    match image::load_from_memory(bytes) {
+        Ok(image) => return Ok((image.width(), image.height())),
+        Err(_) if ext == "png" => {}
+        Err(_) => return Err(SettingsError::InvalidProfileField("avatar")),
+    }
+    image::ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|_| SettingsError::InvalidProfileField("avatar"))?
+        .into_dimensions()
+        .map_err(|_| SettingsError::InvalidProfileField("avatar"))
+}
+
+fn avatar_extension(file_name: &str, mime_type: &str) -> Result<&'static str, SettingsError> {
+    let file_name = file_name.trim();
+    if file_name.is_empty() || file_name.contains('/') || file_name.contains('\\') {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    }
+    let Some(name) = Path::new(file_name)
+        .file_name()
+        .and_then(|value| value.to_str())
+    else {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    };
+    if name != file_name {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    }
+    let Some(ext) = Path::new(file_name)
+        .extension()
+        .and_then(|value| value.to_str())
+    else {
+        return Err(SettingsError::InvalidProfileField("avatar"));
+    };
+    match (mime_type.trim(), ext) {
+        ("image/png", "png") => Ok("png"),
+        ("image/jpeg", "jpg") => Ok("jpg"),
+        ("image/jpeg", "jpeg") => Ok("jpeg"),
+        ("image/webp", "webp") => Ok("webp"),
+        _ => Err(SettingsError::InvalidProfileField("avatar")),
+    }
+}
+
 impl Default for UserPreferences {
     fn default() -> Self {
         system_default_preferences()
@@ -402,7 +488,19 @@ fn is_supported_avatar(avatar: &str) -> bool {
     matches!(
         avatar,
         "pixel-sun" | "pixel-moon" | "pixel-cube" | "pixel-spark"
-    )
+    ) || is_supported_profile_image_ref(avatar)
+}
+
+fn is_supported_profile_image_ref(avatar: &str) -> bool {
+    let Some(file_name) = avatar.strip_prefix("profile-image:") else {
+        return false;
+    };
+    let Some((hash, ext)) = file_name.rsplit_once('.') else {
+        return false;
+    };
+    hash.len() == 64
+        && hash.chars().all(|character| character.is_ascii_hexdigit())
+        && matches!(ext, "png" | "jpg" | "jpeg" | "webp")
 }
 
 fn profile_to_row(profile: &UserProfile) -> UserProfileRow {

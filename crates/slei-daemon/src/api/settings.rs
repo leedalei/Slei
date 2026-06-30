@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::services::settings_service::{
-    AppearancePreferences, LocalePreference, NotificationPreferences, SettingsError,
-    UserPreferences, UserProfile,
+    AppearancePreferences, AvatarImageUpload, LocalePreference, NotificationPreferences,
+    SettingsError, UserPreferences, UserProfile,
 };
 use crate::state::AppState;
 
@@ -60,6 +60,14 @@ pub struct ProfileUpdateRequest {
     handle: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileAvatarImageUploadRequest {
+    file_name: String,
+    mime_type: String,
+    bytes_base64: String,
+}
+
 pub async fn get_profile(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if !state.auth_token.is_authorized(&headers) {
         return StatusCode::UNAUTHORIZED.into_response();
@@ -72,6 +80,44 @@ pub async fn get_profile(State(state): State<AppState>, headers: HeaderMap) -> R
         return Json(json!({ "profile": null })).into_response();
     };
     Json(json!({ "profile": UserProfileView::from(profile) })).into_response()
+}
+
+pub async fn upload_profile_avatar_image(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<ProfileAvatarImageUploadRequest>,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+    let bytes = match decode_base64(&payload.bytes_base64) {
+        Ok(bytes) => bytes,
+        Err(()) => return error_response(StatusCode::BAD_REQUEST, "invalid avatar image"),
+    };
+
+    match state
+        .settings()
+        .upload_avatar_image(AvatarImageUpload {
+            file_name: payload.file_name,
+            mime_type: payload.mime_type,
+            bytes,
+            data_root: state.data_root().clone(),
+        })
+        .await
+    {
+        Ok(profile) => Json(json!({ "profile": UserProfileView::from(profile) })).into_response(),
+        Err(SettingsError::ProfileUnavailable) => {
+            error_response(StatusCode::NOT_FOUND, "profile unavailable")
+        }
+        Err(error @ SettingsError::Storage(_)) => {
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+        }
+        Err(error) => error_response(StatusCode::BAD_REQUEST, &error.to_string()),
+    }
 }
 
 pub async fn update_profile(
@@ -179,6 +225,32 @@ fn locale_string(locale: LocalePreference) -> String {
         LocalePreference::ZhCn => "zh-CN".to_string(),
         LocalePreference::EnUs => "en-US".to_string(),
     }
+}
+
+fn decode_base64(input: &str) -> Result<Vec<u8>, ()> {
+    let mut output = Vec::new();
+    let mut buffer = 0u32;
+    let mut bits = 0u8;
+    for byte in input.bytes().filter(|byte| !byte.is_ascii_whitespace()) {
+        if byte == b'=' {
+            break;
+        }
+        let value = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return Err(()),
+        } as u32;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            output.push(((buffer >> bits) & 0xff) as u8);
+        }
+    }
+    Ok(output)
 }
 
 impl From<UserProfile> for UserProfileView {

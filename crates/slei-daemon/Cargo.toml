@@ -8,8 +8,10 @@ license.workspace = true
 axum.workspace = true
 chrono = "0.4"
 chrono-tz = "0.10"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 slei-default-agent-assets = { path = "../slei-default-agent-assets" }
 slei-protocol = { path = "../slei-protocol" }
 slei-storage = { path = "../slei-storage" }
