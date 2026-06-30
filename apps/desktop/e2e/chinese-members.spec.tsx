@@ -20,7 +20,6 @@ describe("Chinese-first desktop MVP", () => {
 
     expect(data.channels).toHaveLength(1);
     expect(html).toContain("# all");
-    expect(html).toContain("所有成员的默认频道");
     expect(html).not.toContain("# runtime");
     expect(html).not.toContain("# mvp");
   });
@@ -30,8 +29,8 @@ describe("Chinese-first desktop MVP", () => {
       <SleiAppFrame activeView="chat" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain('aria-label="聊天"');
-    expect(html).toContain('aria-label="设置"');
+    expect(html).toContain('aria-label="工作区"');
+    expect(html).toContain('aria-label="打开设置菜单"');
     expect(html).toContain("频道");
     expect(html).toContain("输入消息到 #all");
     expect(html).toContain("转为任务");
@@ -57,8 +56,7 @@ describe("Chinese-first desktop MVP", () => {
     expect(computersHtml).toContain("主机名");
     expect(settingsHtml).toContain("个人资料");
     expect(settingsHtml).toContain("个人");
-    expect(settingsHtml).toContain("语言与地区");
-    expect(settingsHtml).toContain("通知");
+    expect(settingsHtml).not.toContain("诊断");
     expect(settingsHtml).not.toContain("Profile");
     expect(settingsHtml).not.toContain("诊断");
   });
@@ -68,8 +66,7 @@ describe("Chinese-first desktop MVP", () => {
       <SleiAppFrame activeView="members" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain("slei-members-navigator");
-    expect(html).toContain("智能体");
+    expect(html).toContain("slei-workspace-sidebar");
     expect(html).toContain("Coda");
     expect(html).toContain("@Coda");
     expect(html).not.toContain("图谱");

@@ -31,24 +31,17 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('data-active-view="chat"');
-    expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
-    expect(html).toContain('aria-label="主导航"');
-    expect(html).toContain("pt-10");
+    expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).toContain('aria-label="工作区"');
+    expect(html).toContain("slei-workspace-sidebar");
     expect(html).toContain('data-slot="button"');
-    expect(html).toContain('data-nav-icon="chat"');
-    expect(html).toContain('aria-label="聊天"');
-    expect(html).toContain('data-nav-icon="tasks"');
-    expect(html).toContain('aria-label="任务"');
-    expect(html).toContain('data-nav-icon="members"');
-    expect(html).toContain('aria-label="成员"');
-    expect(html).toContain('data-nav-icon="computers"');
-    expect(html).toContain('aria-label="运行设备"');
-    expect(html).toContain('data-nav-icon="settings"');
-    expect(html).toContain('aria-label="设置"');
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain(">搜索</");
+    expect(html).toContain(">任务</");
+    expect(html).not.toContain("data-nav-icon");
     expect(html).not.toContain("Slei 协作中枢");
-    expect(html).toContain(">聊天</h2>");
+    expect(html).toContain(">Slei</h2>");
     expect(html).toContain("# all");
-    expect(html).toContain("所有成员的默认频道");
     expect(html).toContain("输入消息到 #all");
     expect(html).toContain("转为任务");
     expect(html).not.toContain('data-slot="agent-activity"');
@@ -71,11 +64,11 @@ describe("Slei React desktop shell", () => {
       />,
     );
 
-    const navIndex = html.indexOf('aria-label="主导航"');
+    const navIndex = html.indexOf('aria-label="工作区"');
 
     expect(navIndex).toBeGreaterThanOrEqual(0);
-    expect(html.slice(Math.max(0, navIndex - 120), navIndex + 120)).toContain('data-tauri-drag-region="deep"');
-    expect(html).toContain('data-slot="sidebar-titlebar"');
+    expect(html).toContain('class="slei-workspace-sidebar');
+    expect(html).toContain('data-tauri-drag-region="deep"');
     expect(html).toContain('data-slot="workspace-titlebar"');
     expect(html).not.toContain('aria-label="关闭窗口"');
     expect(html).not.toContain('aria-label="最小化窗口"');
@@ -250,13 +243,7 @@ describe("Slei React desktop shell", () => {
 
   it("renders all primary destinations from the single shell", () => {
     const data = createSleiFixtures();
-    const views = ["chat", "tasks", "members", "computers", "settings"] as const;
-    const sidebarTitles = {
-      chat: "聊天",
-      members: "成员",
-      computers: "运行设备",
-      settings: "设置",
-    };
+    const views = ["chat", "search", "tasks", "members", "computers", "settings"] as const;
 
     for (const activeView of views) {
       const html = renderToStaticMarkup(
@@ -274,16 +261,9 @@ describe("Slei React desktop shell", () => {
       );
 
       expect(html).toContain(`data-active-view="${activeView}"`);
-      if (activeView === "tasks") {
-        expect(html).not.toContain('class="slei-context-sidebar');
-        expect(html).not.toContain('aria-label="调整侧栏宽度"');
-        expect(html).toContain('grid-template-columns:5.25rem minmax(0, 1fr)');
-      } else {
-        expect(html).toContain(`>${sidebarTitles[activeView]}</h2>`);
-        expect(html).toContain('class="slei-context-sidebar');
-        expect(html).toContain('aria-label="调整侧栏宽度"');
-        expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
-      }
+      expect(html).toContain('class="slei-workspace-sidebar');
+      expect(html).toContain('aria-label="调整侧栏宽度"');
+      expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
     }
   });
 });

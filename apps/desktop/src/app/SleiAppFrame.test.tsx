@@ -432,20 +432,37 @@ describe("SleiAppFrame agent creation modal", () => {
 });
 
 describe("SleiAppFrame global search navigation", () => {
-  it("renders the primary navigation with soft icon buttons", async () => {
-    const container = await mount(
+  it("renders the single workspace sidebar without the old primary rail", () => {
+    const data = createSleiFixtures({
+      members: createDemoMembers(),
+      channels: [
+        { id: "all", name: "all", description: "所有成员的默认频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev", name: "dev", description: "研发频道描述", projectPaths: ["/workspace/dev"], unread: 2, activeSessionId: "session:dev" },
+      ],
+      conversations: [{ id: "dm:agent_coda", agentId: "a1", kind: "dm", activeSessionId: "session-dm-coda", createdAt: "0", updatedAt: "0" }],
+    });
+    const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
-        data={createSleiFixtures()}
+        data={data}
         locale="zh-CN"
         runtimeSetup={runtimeSetup}
       />,
     );
-    const navButtons = container.querySelectorAll("[data-nav-icon]");
 
-    expect(navButtons.length).toBeGreaterThan(0);
-    expect(container.querySelector("[data-slei-icon]")).not.toBeNull();
-    expect(container.querySelector('[data-nav-icon="chat"]')?.getAttribute("aria-current")).toBe("page");
+    expect(html).not.toContain("slei-shell-nav");
+    expect(html).not.toContain("data-nav-icon");
+    expect(html).toContain("slei-workspace-sidebar");
+    expect(html).toContain("搜索");
+    expect(html).toContain("任务");
+    expect(html).toContain(">dev</");
+    expect(html).toContain(">Coda</");
+    expect(html).not.toContain("data-nav-icon=\"members\"");
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const sidebarText = host.querySelector(".slei-workspace-sidebar")?.textContent ?? "";
+    expect(sidebarText).not.toContain("关联项目：");
+    expect(sidebarText).not.toContain("研发频道描述");
   });
 
   it("renders the top-left brand with the transparent bubble icon asset", async () => {
@@ -459,13 +476,13 @@ describe("SleiAppFrame global search navigation", () => {
     );
     const brandIcon = container.querySelector<HTMLImageElement>(".slei-brand__icon");
     const asset = readFileSync(join(process.cwd(), "src/assets/brand/slei-bubble.svg"), "utf8");
-    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
 
     expect(brandIcon).not.toBeNull();
     expect(brandIcon?.getAttribute("alt")).toBe("");
     expect(brandIcon?.getAttribute("src")).toMatch(/^(data:image\/svg\+xml|.*slei-bubble\.svg)/);
     expect(container.querySelector(".slei-brand__mark")).toBeNull();
-    expect(frameSource).toContain("../assets/brand/slei-bubble.svg");
+    expect(sidebarSource).toContain("../assets/brand/slei-bubble.svg");
     expect(asset).toContain("<path");
     expect(asset).not.toContain("<rect");
     expect(asset).toContain('stop-color="#0B9C67"');
@@ -480,43 +497,39 @@ describe("SleiAppFrame global search navigation", () => {
     expect(asset).not.toContain('r="3.05"');
   });
 
-  it("renders search as an active far-left rail item", () => {
+  it("keeps the workspace sidebar visible for search", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="search"
         data={createSleiFixtures()}
-        locale="en-US"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
-
-    const navStart = html.indexOf('aria-label="Main navigation"');
-    const searchIndex = html.indexOf('data-nav-icon="search"', navStart);
-    const chatIndex = html.indexOf('data-nav-icon="chat"', navStart);
-
-    expect(searchIndex).toBeGreaterThan(navStart);
-    expect(chatIndex).toBeGreaterThan(searchIndex);
-    expect(html.slice(Math.max(navStart, searchIndex - 500), searchIndex + 220)).toContain('aria-current="page"');
-  });
-
-  it("renders global search without the conversation sidebar", () => {
-    const html = renderToStaticMarkup(
-      <SleiAppFrame
-        activeView="search"
-        data={createSleiFixtures()}
-        locale="en-US"
+        locale="zh-CN"
         runtimeSetup={runtimeSetup}
       />,
     );
 
     expect(html).toContain('data-active-view="search"');
-    expect(html).not.toContain('class="slei-context-sidebar');
-    expect(html).not.toContain('aria-label="Resize sidebar"');
-    expect(html).not.toContain('data-slot="sidebar-titlebar"');
-    expect(html).toContain('grid-template-columns:5.25rem minmax(0, 1fr)');
+    expect(html).toContain("slei-workspace-sidebar");
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain("搜索");
   });
 
-  it("uses a wider left rail with the existing navigation button footprint", () => {
+  it("keeps the workspace sidebar visible for tasks", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="tasks"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('data-active-view="tasks"');
+    expect(html).toContain("slei-workspace-sidebar");
+    expect(html).toContain('aria-current="page"');
+    expect(html).toContain("任务");
+  });
+
+  it("uses the workspace sidebar grid without the old rail column", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -526,35 +539,136 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain('grid-template-columns:5.25rem var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
-    expect(html).toContain("grid h-14 w-14 place-items-center");
+    expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).not.toContain("5.25rem");
+    expect(html).not.toContain("grid h-14 w-14 place-items-center");
   });
 
-  it("opens primary navigation icon tooltips on the right side of the menubar", () => {
+  it("routes bottom settings menu entries to existing views", async () => {
+    const onViewChange = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onViewChange={onViewChange}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]')?.click();
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("运行设备"))
+        ?.click();
+    });
+
+    expect(onViewChange).toHaveBeenCalledWith("computers");
+  });
+
+  it("opens channel and DM context menus from pointer, keyboard, and row more buttons", async () => {
+    const onMemberSelect = vi.fn();
+    const onViewChange = vi.fn();
+    const onConversationSelect = vi.fn();
+    const data = createSleiFixtures({
+      members: createDemoMembers(),
+      channels: [
+        { id: "all", name: "all", description: "所有成员的默认频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev", name: "dev", description: "研发频道描述", unread: 0, activeSessionId: "session:dev" },
+      ],
+      conversations: [{ id: "dm:agent_coda", agentId: "a1", kind: "dm", activeSessionId: "session-dm-coda", createdAt: "0", updatedAt: "0" }],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onConversationSelect={onConversationSelect}
+        onMemberSelect={onMemberSelect}
+        onViewChange={onViewChange}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const devRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]');
+    const allRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-all"]');
+    const dmRow = container.querySelector<HTMLElement>('[data-testid="workspace-dm-row-agent_coda"]');
+
+    expect(devRow).toBeTruthy();
+    expect(allRow).toBeTruthy();
+    expect(dmRow).toBeTruthy();
+
+    await act(async () => {
+      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).toContain("编辑频道");
+    expect(document.body.textContent).toContain("删除频道");
+
+    await act(async () => {
+      allRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).toContain("编辑频道");
+    expect(document.body.textContent).not.toContain("删除频道");
+
+    await act(async () => {
+      devRow?.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).toContain("编辑频道");
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]')?.click();
+    });
+    expect(document.body.textContent).toContain("编辑频道");
+
+    await act(async () => {
+      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).toContain("打开成员资料");
+    expect(document.body.textContent).toContain("打开私聊");
+
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("打开成员资料"))
+        ?.click();
+    });
+    expect(onMemberSelect).toHaveBeenCalledWith("a1");
+    expect(onViewChange).toHaveBeenCalledWith("members");
+
+    await act(async () => {
+      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("打开私聊"))
+        ?.click();
+    });
+    expect(onConversationSelect).toHaveBeenCalledWith("dm:agent_coda");
+  });
+
+  it("does not keep old primary navigation tooltip wiring in the app frame", () => {
     const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-    const navSource = source.slice(source.indexOf("<nav "), source.indexOf("</nav>"));
 
-    expect(navSource).toContain('tooltipSide="right"');
+    expect(source).not.toContain("<nav ");
+    expect(source).not.toContain('tooltipSide="right"');
   });
 
-  it("keeps the menubar right divider as a single thin line", () => {
-    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+  it("keeps the workspace sidebar right divider as a single thin line", () => {
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-context-sidebar {"));
+    const sidebarCss = appCss.slice(appCss.indexOf(".slei-workspace-sidebar {"), appCss.indexOf(".slei-workspace-sidebar__header {"));
 
-    expect(navSource).not.toContain("border-r border-sidebar-border/70");
-    expect(navCss).toContain("inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent)");
-    expect(navCss).not.toContain("inset -8px 0 18px");
+    expect(sidebarSource).toContain("border-r border-sidebar-border/65");
+    expect(sidebarCss).toContain("inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent)");
+    expect(sidebarCss).not.toContain("inset -8px 0 18px");
   });
 
-  it("keeps menu and context sidebar transparent while giving workspace a light glass fill", () => {
+  it("keeps the workspace sidebar transparent while giving workspace a light glass fill", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
-    const asideSource = frameSource.slice(frameSource.indexOf("<aside "), frameSource.indexOf("<SidebarFrame"));
-    const navCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-shell-nav__button {"));
-    const sidebarCss = appCss.slice(appCss.indexOf(".slei-context-sidebar {"), appCss.indexOf(".slei-resize-handle {"));
+    const sidebarCss = appCss.slice(appCss.indexOf(".slei-workspace-sidebar {"), appCss.indexOf(".slei-glass-workspace {"));
 
     expect(appCss).toContain("--glass-bg:");
     expect(appCss).toContain("--glass-border:");
@@ -563,12 +677,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--workspace-glass-bg: oklch(0.955 0.003 220 / 1)");
     expect(appCss).toContain("--glass-surface-filter: blur(var(--glass-blur)) saturate(145%)");
     expect(appCss).toContain("--chrome-surface-filter: blur(6px) saturate(112%)");
-    expect(navSource).not.toContain("bg-sidebar/");
-    expect(asideSource).not.toContain("bg-sidebar/");
-    expect(navCss).toContain("background: transparent");
-    expect(navCss).not.toContain("background: var(--glass-nav-bg)");
-    expect(navCss).toContain("-webkit-backdrop-filter: var(--chrome-surface-filter)");
-    expect(navCss).toContain("backdrop-filter: var(--chrome-surface-filter)");
+    expect(sidebarSource).not.toContain("bg-sidebar/");
+    expect(frameSource).not.toContain("bg-sidebar/");
     expect(sidebarCss).toContain("background: transparent");
     expect(sidebarCss).not.toContain("background: var(--glass-sidebar-bg)");
     expect(sidebarCss).toContain("-webkit-backdrop-filter: var(--chrome-surface-filter)");
@@ -644,49 +754,40 @@ describe("SleiAppFrame global search navigation", () => {
     }
   });
 
-  it("renders menubar navigation items as stable einui icon buttons without click ripple", () => {
-    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
-    const navSource = frameSource.slice(frameSource.indexOf("<nav "), frameSource.indexOf("</nav>"));
+  it("renders search and task actions as stable sidebar buttons without click ripple", () => {
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
 
-    expect(navSource).toContain("slei-shell-nav flex min-h-0 flex-col items-center gap-4");
-    expect(navSource).toContain("slei-shell-nav__button grid h-14 w-14 place-items-center rounded-[10px] p-0");
-    expect(navSource).not.toContain("ripple");
-    expect(navSource).not.toContain("rippleColor");
-    expect(navSource).toContain('size="icon"');
-    expect(navSource).not.toContain('size="lg"');
-    expect(navSource).toContain('variant={input.activeView === item.id ? "primary" : "outline"}');
-    expect(navSource).not.toContain('variant={input.activeView === item.id ? "default" : "outline"}');
+    expect(sidebarSource).toContain('onClick={() => input.onViewChange?.("search")}');
+    expect(sidebarSource).toContain('onClick={() => input.onViewChange?.("tasks")}');
+    expect(sidebarSource).not.toContain("ripple");
+    expect(sidebarSource).not.toContain("rippleColor");
+    expect(sidebarSource).toContain('variant={input.activeView === "search" ? "primary" : "outline"}');
+    expect(sidebarSource).toContain('variant={input.activeView === "tasks" ? "primary" : "outline"}');
   });
 
-  it("renders the active menubar icon as the einui primary button variant", () => {
+  it("renders the active sidebar action as the einui primary button variant", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
-        activeView="chat"
+        activeView="search"
         data={createSleiFixtures()}
         locale="zh-CN"
         runtimeSetup={runtimeSetup}
       />,
     );
 
-    const chatButtonIndex = html.indexOf('data-nav-icon="chat"');
-    const chatButtonOpenTag = html.slice(html.lastIndexOf("<button", chatButtonIndex), html.indexOf(">", chatButtonIndex));
-    const searchButtonIndex = html.indexOf('data-nav-icon="search"');
+    const searchButtonIndex = html.indexOf('aria-current="page"');
     const searchButtonOpenTag = html.slice(html.lastIndexOf("<button", searchButtonIndex), html.indexOf(">", searchButtonIndex));
 
-    expect(chatButtonOpenTag).toContain('data-variant="primary"');
-    expect(chatButtonOpenTag).toContain("slei-shell-nav__button--flow");
+    expect(searchButtonOpenTag).toContain('data-variant="primary"');
     expect(searchButtonOpenTag).not.toContain("slei-shell-nav__button--flow");
   });
 
-  it("keeps search outline while using filled icons for the other menubar items", () => {
-    const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+  it("keeps search and member icons available for sidebar and menu actions", () => {
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
-    const navSource = frameSource.slice(frameSource.indexOf("const navItems"), frameSource.indexOf("function isSortDirection"));
 
-    expect(navSource).toContain('{ id: "search", icon: "search" }');
-    expect(navSource).toContain('{ id: "members", icon: "membersFilled" }');
-    expect(navSource).not.toContain('{ id: "search", icon: "searchFilled" }');
-    expect(navSource).not.toContain('{ id: "members", icon: "members" }');
+    expect(sidebarSource).toContain('name="search"');
+    expect(sidebarSource).toContain('name="members"');
     expect(iconsSource).toContain("SearchCheck");
     expect(iconsSource).toContain("UsersRound");
     expect(iconsSource).toContain("searchFilled: SearchCheck");
@@ -695,27 +796,16 @@ describe("SleiAppFrame global search navigation", () => {
     expect(iconsSource).toContain("members: Users");
   });
 
-  it("adds the flowing gradient only to active menubar items", () => {
+  it("removes the old flowing gradient rail styling", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const buttonSource = readFileSync(join(process.cwd(), "src/components/ui/button.tsx"), "utf8");
-    const flowCss = appCss.slice(
-      appCss.indexOf('.slei-shell-nav__button--flow[data-variant="primary"]'),
-      appCss.indexOf("@media (prefers-reduced-motion: reduce)", appCss.indexOf("@keyframes slei-shell-nav-gradient-flow")),
-    );
 
     expect(appCss).toContain("--glass-button-primary-bg: var(--primary)");
     expect(appCss).not.toContain("--glass-button-primary-gradient-bg");
-    expect(appCss).toContain('.slei-shell-nav__button--flow[data-variant="primary"]');
-    expect(appCss).toContain("@keyframes slei-shell-nav-gradient-flow");
-    expect(flowCss).toContain("background-size: 260% 260%, 260% 260%");
-    expect(flowCss).toContain("0%, 100%");
-    expect(flowCss).toContain("24%");
-    expect(flowCss).toContain("52%");
-    expect(flowCss).toContain("76%");
-    expect(flowCss).not.toContain("220% 50%");
-    expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(frameSource).toContain("slei-shell-nav__button--flow");
+    expect(appCss).not.toContain('.slei-shell-nav__button--flow[data-variant="primary"]');
+    expect(appCss).not.toContain("@keyframes slei-shell-nav-gradient-flow");
+    expect(frameSource).not.toContain("slei-shell-nav__button--flow");
     expect(buttonSource).not.toContain("slei-shell-nav__button--flow");
   });
 
@@ -728,23 +818,24 @@ describe("SleiAppFrame global search navigation", () => {
     expect(accentDeclarations.some((value) => value.endsWith("285"))).toBe(false);
   });
 
-  it("keeps menubar button chrome on einui button variants", () => {
+  it("keeps workspace sidebar button chrome on einui button variants", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const navChromeCss = appCss.slice(appCss.indexOf(".slei-shell-nav {"), appCss.indexOf(".slei-context-sidebar {"));
+    const sidebarChromeCss = appCss.slice(appCss.indexOf(".slei-workspace-sidebar {"), appCss.indexOf(".slei-workspace-sidebar__header {"));
 
-    expect(navChromeCss).not.toContain(".slei-shell-nav__button {");
-    expect(navChromeCss).not.toContain("border-color: var(--glass-button-border)");
-    expect(navChromeCss).not.toContain("box-shadow: var(--glass-button-shadow)");
-    expect(navChromeCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
-    expect(navChromeCss).not.toContain("var(--raised-border)");
+    expect(sidebarChromeCss).not.toContain("__button");
+    expect(sidebarChromeCss).not.toContain("border-color: var(--glass-button-border)");
+    expect(sidebarChromeCss).not.toContain("box-shadow: var(--glass-button-shadow)");
+    expect(sidebarChromeCss).not.toContain("color-mix(in srgb, var(--primary) 28%, var(--menu-border))");
+    expect(sidebarChromeCss).not.toContain("var(--raised-border)");
   });
 
   it("uses primary buttons for modal confirmation actions", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
 
-    expect(frameSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
-    expect(frameSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
-    expect(frameSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary"');
+    expect(sidebarSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
+    expect(sidebarSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
+    expect(sidebarSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary"');
     expect(frameSource).toContain('<Button type="submit" variant="primary"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>');
     expect(frameSource).toContain('<Button disabled={createDisabled} type="submit" variant="primary">{input.messages.common.create}</Button>');
     expect(frameSource).toContain('disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button" variant="primary"');
@@ -838,19 +929,11 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    const sidebar = container.querySelector(".slei-context-sidebar");
+    const sidebar = container.querySelector(".slei-workspace-sidebar");
     const currentItems = Array.from(sidebar?.querySelectorAll<HTMLElement>('[aria-current="true"]') ?? []);
-    const savedTrigger = Array.from(sidebar?.querySelectorAll<HTMLButtonElement>("button") ?? [])
-      .find((button) => button.textContent?.includes("已保存"));
 
-    expect(currentItems).toHaveLength(1);
-    expect(currentItems[0]?.textContent).toContain("已保存");
-    expect(currentItems[0]?.parentElement?.className).toContain("bg-white/20");
-    expect(currentItems[0]?.parentElement?.className).toContain("backdrop-blur-xl");
-    expect(currentItems[0]?.parentElement?.className).not.toContain("bg-accent");
-    expect(currentItems[0]?.parentElement?.className).not.toContain("text-accent-foreground");
+    expect(currentItems).toHaveLength(0);
     expect(sidebar?.querySelector('[data-channel-id="all"] [aria-current="true"]')).toBeNull();
-    expect(savedTrigger?.getAttribute("data-variant")).not.toBe("secondary");
   });
 
   it("renders saved message rows as cards while preserving unavailable and click behavior", async () => {
@@ -911,7 +994,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onSavedMessageSelect).toHaveBeenCalledWith(availableMessage);
   });
 
-  it("shows linked project labels for non-default channels while preserving the all channel description", () => {
+  it("renders channel names only in the workspace sidebar", () => {
     const data = createSleiFixtures({
       channels: [
         { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
@@ -929,10 +1012,16 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    expect(html).toContain("默认团队频道");
-    expect(html).toContain("关联项目：暂无");
-    expect(html).toContain("关联项目：/workspace/kol");
-    expect(html).not.toContain(">频道</small>");
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const sidebarText = host.querySelector(".slei-workspace-sidebar")?.textContent ?? "";
+
+    expect(sidebarText).toContain("all");
+    expect(sidebarText).toContain("dev-content");
+    expect(sidebarText).toContain("kol");
+    expect(sidebarText).not.toContain("默认团队频道");
+    expect(sidebarText).not.toContain("关联项目：暂无");
+    expect(sidebarText).not.toContain("关联项目：/workspace/kol");
   });
 
   it("uses liquid glass selected states for sidebar channels and direct messages", () => {
@@ -990,7 +1079,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(selectedDm?.className).not.toContain("text-accent-foreground");
   });
 
-  it("uses the shared selectable card selected state for secondary sidebars", () => {
+  it("keeps the workspace sidebar visible while secondary destinations render in the workspace", () => {
     const data = createSleiFixtures({ members: createDemoMembers() });
     const nodes = [
       {
@@ -1013,13 +1102,9 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={{ ...runtimeSetup, nodes }}
       />,
     );
-    const membersHost = document.createElement("div");
-    membersHost.innerHTML = membersHtml;
-    const selectedMember = membersHost.querySelector<HTMLElement>('[aria-current="true"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
-
-    expect(selectedMember?.getAttribute("data-selected")).toBe("true");
-    expect(selectedMember?.className).toContain("bg-white/20");
-    expect(selectedMember?.className).not.toContain("bg-accent");
+    expect(membersHtml).toContain("slei-workspace-sidebar");
+    expect(membersHtml).toContain("成员");
+    expect(membersHtml).toContain(">频道 ");
 
     const computersHtml = renderToStaticMarkup(
       <SleiAppFrame
@@ -1029,13 +1114,9 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={{ ...runtimeSetup, nodes }}
       />,
     );
-    const computersHost = document.createElement("div");
-    computersHost.innerHTML = computersHtml;
-    const selectedComputer = computersHost.querySelector<HTMLElement>('[aria-current="true"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
-
-    expect(selectedComputer?.getAttribute("data-selected")).toBe("true");
-    expect(selectedComputer?.className).toContain("bg-white/20");
-    expect(selectedComputer?.className).not.toContain("bg-accent");
+    expect(computersHtml).toContain("slei-workspace-sidebar");
+    expect(computersHtml).toContain("Mac Studio");
+    expect(computersHtml).toContain(">频道 ");
 
     const settingsHtml = renderToStaticMarkup(
       <SleiAppFrame
@@ -1046,13 +1127,9 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={{ ...runtimeSetup, nodes }}
       />,
     );
-    const settingsHost = document.createElement("div");
-    settingsHost.innerHTML = settingsHtml;
-    const selectedSettingsPanel = settingsHost.querySelector<HTMLElement>('[data-settings-icon="appearance"]')?.closest<HTMLElement>('[data-slot="selectable-card"]');
-
-    expect(selectedSettingsPanel?.getAttribute("data-selected")).toBe("true");
-    expect(selectedSettingsPanel?.className).toContain("bg-white/20");
-    expect(selectedSettingsPanel?.className).not.toContain("bg-accent");
+    expect(settingsHtml).toContain("slei-workspace-sidebar");
+    expect(settingsHtml).toContain("外观");
+    expect(settingsHtml).toContain(">频道 ");
   });
 
   it("cycles channel and direct message sorting independently by name", async () => {
@@ -1304,26 +1381,13 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
       />,
     );
-    const computersHtml = renderToStaticMarkup(
-      <SleiAppFrame
-        activeView="computers"
-        data={data}
-        locale="zh-CN"
-        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
-      />,
-    );
-
     expect(chatHtml).toContain('data-slot="sidebar-section-title"');
     expect(chatHtml).toContain('class="select-none');
     expect(chatHtml).toContain(">频道 1</");
     expect(chatHtml).toContain(">私聊 1</");
-    expect(computersHtml).toContain('data-slot="sidebar-section-title"');
-    expect(computersHtml).toContain(">设备 1</");
-    for (const html of [chatHtml, computersHtml]) {
-      const titleMatches = html.match(/data-slot="sidebar-section-title"[^>]*class="([^"]*)"/g) ?? [];
-      expect(titleMatches.length).toBeGreaterThan(0);
-      expect(titleMatches.every((match) => match.includes("select-none"))).toBe(true);
-    }
+    const titleMatches = chatHtml.match(/data-slot="sidebar-section-title"[^>]*class="([^"]*)"/g) ?? [];
+    expect(titleMatches.length).toBeGreaterThan(0);
+    expect(titleMatches.every((match) => match.includes("select-none"))).toBe(true);
   });
 });
 

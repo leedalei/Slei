@@ -12,15 +12,16 @@ const readyRuntime = {
 };
 
 describe("desktop interaction fixes", () => {
-  it("renders the primary menu as accessible icon controls", () => {
+  it("renders the workspace sidebar primary actions as accessible controls", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame activeView="chat" data={createSleiFixtures()} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain('aria-label="聊天"');
-    expect(html).toContain('data-nav-icon="chat"');
-    expect(html).toContain('aria-label="设置"');
-    expect(html).toContain('data-nav-icon="settings"');
+    expect(html).toContain('aria-label="工作区"');
+    expect(html).toContain(">搜索</");
+    expect(html).toContain(">任务</");
+    expect(html).toContain('aria-label="打开设置菜单"');
+    expect(html).not.toContain("data-nav-icon");
     expect(html).not.toContain("<small>Chat</small>");
   });
 
@@ -87,8 +88,13 @@ describe("desktop interaction fixes", () => {
     const members = createDemoMembers()
       .filter((member) => member.type === "agent")
       .map((member) => (member.name === "Alice" ? { ...member, runtimeStatus: "offline" as const } : member));
+    const conversations = [
+      { id: "dm:a1", agentId: "a1", kind: "dm" as const, activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" },
+      { id: "dm:a3", agentId: "a3", kind: "dm" as const, activeSessionId: "session-dm-a3", createdAt: "0", updatedAt: "0" },
+      { id: "dm:a4", agentId: "a4", kind: "dm" as const, activeSessionId: "session-dm-a4", createdAt: "0", updatedAt: "0" },
+    ];
     const html = renderToStaticMarkup(
-      <SleiAppFrame activeView="members" data={createSleiFixtures({ members })} locale="zh-CN" runtimeSetup={readyRuntime} />,
+      <SleiAppFrame activeView="chat" data={createSleiFixtures({ conversations, members })} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
     expect(html).toContain('aria-label="idle"');

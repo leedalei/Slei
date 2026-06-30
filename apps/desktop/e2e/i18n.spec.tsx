@@ -55,7 +55,7 @@ describe("desktop i18n", () => {
       />,
     );
     expect(activeLocale).toBe("zh-CN");
-    expect(html).toContain('aria-label="主导航"');
+    expect(html).toContain('aria-label="工作区"');
     expect(html).toContain("保存失败：daemon offline");
     expect(html).not.toContain("Save failed");
   });
@@ -68,17 +68,17 @@ describe("desktop i18n", () => {
       <SleiAppFrame activeView="chat" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(english).toContain('aria-label="Main navigation"');
+    expect(english).toContain('aria-label="Workspace"');
     expect(english).toContain("CHANNELS");
     expect(english).toContain("DIRECT MESSAGES");
     expect(english).toContain("Files");
     expect(english).toContain("As Task");
     expect(english).toContain("Send");
-    expect(english).not.toContain("主导航");
+    expect(english).not.toContain("工作区");
     expect(english).not.toContain("转为任务");
     expect(english).not.toContain("发送");
 
-    expect(chinese).toContain('aria-label="主导航"');
+    expect(chinese).toContain('aria-label="工作区"');
     expect(chinese).not.toContain("Slei</strong><span>工作区</span>");
     expect(chinese).toContain("转为任务");
     expect(chinese).toContain("发送");
@@ -108,14 +108,10 @@ describe("desktop i18n", () => {
     expect(html).toContain("设备");
     expect(html).toContain("设置");
     expect(html).toContain("个人");
-    expect(html).toContain("服务端");
-    expect(html).toContain("关于");
     expect(html).not.toContain("CHANNELS");
     expect(html).not.toContain("DIRECT MESSAGES");
     expect(html).not.toContain("AGENTS");
     expect(html).not.toContain("COMPUTERS");
     expect(html).not.toContain("PERSON");
-    expect(html).not.toContain("SERVER");
-    expect(html).not.toContain("ABOUT");
   });
 });

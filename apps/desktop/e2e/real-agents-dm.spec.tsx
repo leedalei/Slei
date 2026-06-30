@@ -126,7 +126,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain("私聊 1");
     expect(html).toContain("Coda");
     expect(html).toContain("<strong>Coda</strong>");
-    expect(html).toContain("真实创建的开发 Agent。");
+    expect(html).not.toContain("真实创建的开发 Agent。");
     expect(html).not.toContain("<small>@coda</small>");
   });
 

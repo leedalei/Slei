@@ -16,7 +16,7 @@ const readyRuntime = {
 };
 
 describe("settings preferences", () => {
-  it("renders the settings category sidebar with icon submenu items", () => {
+  it("renders the settings page while the workspace sidebar stays present", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="settings"
@@ -28,20 +28,10 @@ describe("settings preferences", () => {
     );
 
     expect(html).toContain("个人");
-    expect(html).toContain("服务端");
-    expect(html).toContain("关于");
-    expect(html).toContain("账户");
-    expect(html).toContain("语言与地区");
-    expect(html).toContain("外观");
-    expect(html).toContain("通知");
-    expect(html).toContain("关于");
-    expect(html).toContain('data-settings-icon="account"');
+    expect(html).toContain("个人资料");
+    expect(html).toContain("slei-workspace-sidebar");
     expect(html).toContain('data-font-size="md"');
     expect(html).toContain("--app-font-size:15px");
-    expect(html).toContain('data-settings-icon="language-region"');
-    expect(html).toContain('data-settings-icon="appearance"');
-    expect(html).toContain('data-settings-icon="notifications"');
-    expect(html).toContain('data-settings-icon="about"');
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });
@@ -110,7 +100,6 @@ describe("settings preferences", () => {
       />,
     );
 
-    expect(html).toContain("Settings");
     expect(html).toContain("Notifications");
     expect(html).toContain("Mention notifications");
     expect(html).not.toContain("个人资料");

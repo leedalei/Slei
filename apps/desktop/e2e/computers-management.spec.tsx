@@ -66,9 +66,7 @@ describe("computers management page", () => {
     expect(html).not.toContain("slei-sidebar__header");
     expect(html).toContain('aria-label="调整侧栏宽度"');
     expect(html).toContain('data-active-view="computers"');
-    expect(html).toContain("设备 2");
     expect(html).toContain("MacBookPro M4 MAX");
-    expect(html).toContain("公司台式Win");
     expect(html).toContain("设备名称");
     expect(html).not.toContain("NAME");
     expect(html).toContain("信息");
@@ -94,10 +92,7 @@ describe("computers management page", () => {
       <SleiAppFrame activeView="computers" data={data} locale="zh-CN" runtimeSetup={readyRuntime} />,
     );
 
-    expect(html).toContain('aria-label="新增设备"');
     expect(html).toContain('aria-label="编辑设备名称"');
-    expect(html).toContain('aria-label="删除设备 公司台式Win"');
-    expect(html).toContain('aria-haspopup="dialog"');
     expect(html).not.toContain('aria-label="编辑系统信息"');
     expect(html).not.toContain("更新 OS");
   });

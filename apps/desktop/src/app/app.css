@@ -761,63 +761,7 @@ select:focus-visible {
   width: 42px;
 }
 
-.slei-shell-nav {
-  -webkit-backdrop-filter: var(--chrome-surface-filter);
-  backdrop-filter: var(--chrome-surface-filter);
-  background: transparent;
-  box-shadow:
-    inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 34%, transparent),
-    inset 1px 0 0 var(--glass-highlight);
-}
-
-.slei-shell-nav__button--flow[data-variant="primary"] {
-  background:
-    linear-gradient(
-      135deg,
-      rgba(6, 182, 212, 0.58) 0%,
-      rgba(59, 130, 246, 0.64) 24%,
-      rgba(168, 85, 247, 0.62) 48%,
-      rgba(59, 130, 246, 0.64) 72%,
-      rgba(6, 182, 212, 0.58) 100%
-    ) padding-box,
-    linear-gradient(
-      45deg,
-      rgba(34, 211, 238, 0.62) 0%,
-      rgba(96, 165, 250, 0.52) 34%,
-      rgba(192, 132, 252, 0.62) 68%,
-      rgba(34, 211, 238, 0.62) 100%
-    ) border-box;
-  background-position: 0% 50%, 100% 50%;
-  background-size: 260% 260%, 260% 260%;
-  animation: slei-shell-nav-gradient-flow 7.2s ease-in-out infinite;
-}
-
-@keyframes slei-shell-nav-gradient-flow {
-  0%, 100% {
-    background-position: 0% 50%, 100% 50%;
-  }
-
-  24% {
-    background-position: 76% 18%, 16% 82%;
-  }
-
-  52% {
-    background-position: 100% 72%, 42% 12%;
-  }
-
-  76% {
-    background-position: 28% 88%, 86% 64%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .slei-shell-nav__button--flow[data-variant="primary"] {
-    animation: none;
-    background-position: 50% 50%, 50% 50%;
-  }
-}
-
-.slei-context-sidebar {
+.slei-workspace-sidebar {
   -webkit-backdrop-filter: var(--chrome-surface-filter);
   backdrop-filter: var(--chrome-surface-filter);
   background: transparent;
@@ -826,6 +770,15 @@ select:focus-visible {
     inset 10px 0 24px color-mix(in srgb, var(--glass-highlight) 24%, transparent);
 }
 
+.slei-workspace-sidebar__header {
+  border-bottom: 1px solid color-mix(in srgb, var(--sidebar-border) 44%, transparent);
+}
+
+.slei-workspace-sidebar__footer {
+  background: transparent;
+}
+
+.slei-workspace-sidebar [data-slot="agent-activity"],
 .slei-context-sidebar [data-slot="agent-activity"] {
   background: transparent;
 }

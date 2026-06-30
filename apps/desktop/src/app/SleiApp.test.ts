@@ -888,13 +888,14 @@ describe("createChannelAgentReplyMessage", () => {
     expect(source).toContain("input.onChannelCreateFailure?.");
   });
 
-  it("keeps the primary navigation icon-only with accessible labels", () => {
-    const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
+  it("keeps the workspace sidebar primary actions accessible", () => {
+    const source = readFileSync(new URL("./WorkspaceSidebar.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain("aria-label={messages.shell.nav[item.id]}");
-    expect(source).toContain("tooltip={messages.shell.nav[item.id]}");
-    expect(source).toContain("className=\"size-5\"");
-    expect(source).not.toContain("<span className=\"text-[11px] leading-none\">{messages.shell.nav[item.id]}</span>");
+    expect(source).toContain('onClick={() => input.onViewChange?.("search")}');
+    expect(source).toContain('onClick={() => input.onViewChange?.("tasks")}');
+    expect(source).toContain("aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}");
+    expect(source).toContain("aria-label={input.messages.shell.workspaceSidebar.channelMore(channelName)}");
+    expect(source).not.toContain("data-nav-icon");
   });
 
   it("renders a thin sidebar resize handle with resize cursor", () => {

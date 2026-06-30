@@ -33,6 +33,21 @@ export type DesktopMessages = {
   shell: {
     mainNavigation: string;
     nav: Record<AppView, string>;
+    workspaceSidebar: {
+      workspace: string;
+      openSettingsMenu: string;
+      channelMore: (name: string) => string;
+      dmMore: (name: string) => string;
+      editChannel: string;
+      deleteChannel: string;
+      openMemberProfile: string;
+      openDirectMessage: string;
+      memberManagement: string;
+      runtimeDevices: string;
+      accountProfile: string;
+      preferences: string;
+      savedMessages: string;
+    };
     sidebarTitle: Record<AppView, string>;
     sidebarSubtitle: Record<AppView, string>;
     sectionLabel: Record<AppView, string>;
