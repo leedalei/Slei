@@ -594,12 +594,21 @@ impl MemberService {
         update: ProductAgentUpdate,
     ) -> Result<ProductAgentRecord, MemberError> {
         let mut agent = self.get_product_agent(agent_id).await?;
+        let mut state = self.inner.lock().await;
 
         if let Some(name) = update.name {
-            if name.trim().is_empty() {
-                return Err(MemberError::InvalidAgent);
+            let normalized_name = validate_agent_name(&name)?;
+            if self
+                .repos
+                .agents()
+                .await
+                .map_err(member_storage_error)?
+                .iter()
+                .any(|existing| existing.id != agent.id && existing.name == normalized_name)
+            {
+                return Err(MemberError::DuplicateName);
             }
-            agent.name = name.trim().to_string();
+            agent.name = normalized_name;
         }
         if let Some(description) = update.description {
             agent.description = description.trim().to_string();
@@ -626,11 +635,7 @@ impl MemberService {
             .update_agent(product_agent_to_update_row(&agent))
             .await
             .map_err(member_storage_error)?;
-        self.inner
-            .lock()
-            .await
-            .product_agents
-            .insert(agent.id.clone(), agent.clone());
+        state.product_agents.insert(agent.id.clone(), agent.clone());
         Ok(agent)
     }
 

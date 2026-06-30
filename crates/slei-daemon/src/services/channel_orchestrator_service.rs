@@ -2231,18 +2231,54 @@ fn explicit_handles(body: &str) -> Vec<String> {
 
         let mut handle = String::from("@");
         while let Some((_, next)) = characters.peek() {
-            if next.is_ascii_alphanumeric() || *next == '-' || *next == '_' {
-                handle.push(next.to_ascii_lowercase());
-                characters.next();
-            } else {
+            if is_mention_handle_terminator(*next) {
                 break;
             }
+            if *next == '@' {
+                break;
+            }
+            for lowered in next.to_lowercase() {
+                handle.push(lowered);
+            }
+            characters.next();
         }
-        if handle.len() > 1 {
+        if handle.chars().count() > 1 {
             handles.push(handle);
         }
     }
     handles
+}
+
+fn is_mention_handle_terminator(character: char) -> bool {
+    character.is_whitespace()
+        || matches!(
+            character,
+            ',' | '.'
+                | ';'
+                | ':'
+                | '!'
+                | '?'
+                | '，'
+                | '。'
+                | '；'
+                | '：'
+                | '！'
+                | '？'
+                | '、'
+                | '('
+                | ')'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '<'
+                | '>'
+                | '《'
+                | '》'
+                | '"'
+                | '\''
+                | '`'
+        )
 }
 
 fn reply_requires_work(body: &str) -> bool {

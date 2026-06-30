@@ -3404,6 +3404,61 @@ async fn agent_send_api_mentions_only_target_channel_members_and_excludes_author
 }
 
 #[tokio::test]
+async fn agent_send_api_unicode_handle_mention_creates_delivery_and_run() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice"),
+        ("agent_xiaohongshu", "@小红书调研员"),
+    ])
+    .await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "api-core".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-api-core-unicode-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_alice", "agent_xiaohongshu"] {
+        state
+            .channels()
+            .add_agent_to_channel("api-core", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let token = AuthToken::from_static("test-token");
+    let app = build_router(state.clone());
+    let sent = post_json(
+        &app,
+        &token,
+        "/v1/messages/send",
+        Some("agent-send-unicode-mention-delivery"),
+        json!({
+            "target": "#api-core",
+            "agentId": "agent_alice",
+            "body": "@小红书调研员 请继续调研这个话题。"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::OK);
+    let sent = response_json(sent).await;
+    let message_id = sent["messageId"].as_str().unwrap();
+
+    assert_broadcast_deliveries_running(&state, message_id, &["agent_xiaohongshu"]).await;
+    assert_broadcast_runs_started(
+        &state,
+        &["agent_xiaohongshu"],
+        message_id,
+        &["@小红书调研员 请继续调研"],
+        &["@alice"],
+    );
+}
+
+#[tokio::test]
 async fn broadcast_channel_agent_worker_completed_or_failed_output_is_suppressed() {
     let state = app_state_with_agent_handle("agent_alice", "@alice-win").await;
     state

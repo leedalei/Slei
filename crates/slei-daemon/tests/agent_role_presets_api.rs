@@ -198,6 +198,80 @@ async fn agent_create_rejects_invalid_handles_and_preserves_case() {
     assert_eq!(mixed_case_body["agent"]["handle"], "@CasePreserved");
 }
 
+#[tokio::test]
+async fn agent_update_rejects_invalid_or_duplicate_display_name() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-role-presets-api-update-name-validation");
+    let app = build_router(AppState::for_tests_with_agent_root_async(token.clone(), root).await);
+
+    let first = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-update-name-first"),
+        json!({
+            "name": "架构师",
+            "handle": "@架构师",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "负责系统设计。"
+        }),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::CREATED);
+    let first_body = response_json(first).await;
+    let first_id = first_body["agent"]["id"].as_str().unwrap();
+
+    let second = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-update-name-second"),
+        json!({
+            "name": "调研员",
+            "handle": "@调研员",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "负责资料调研。"
+        }),
+    )
+    .await;
+    assert_eq!(second.status(), StatusCode::CREATED);
+    let second_body = response_json(second).await;
+    let second_id = second_body["agent"]["id"].as_str().unwrap();
+
+    let spaced = patch_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{first_id}"),
+        json!({ "name": "Foo Bar" }),
+    )
+    .await;
+    assert_eq!(spaced.status(), StatusCode::BAD_REQUEST);
+
+    let hyphenated = patch_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{first_id}"),
+        json!({ "name": "Foo-Bar" }),
+    )
+    .await;
+    assert_eq!(hyphenated.status(), StatusCode::BAD_REQUEST);
+
+    let duplicate = patch_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{second_id}"),
+        json!({ "name": "  架构师  " }),
+    )
+    .await;
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let duplicate_body = response_json(duplicate).await;
+    assert_eq!(duplicate_body["error"], "duplicate name");
+}
+
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> Response<Body> {
     app.clone()
         .oneshot(
@@ -229,6 +303,26 @@ async fn post_json(
     }
     app.clone()
         .oneshot(builder.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn patch_json(
+    app: &axum::Router,
+    token: &AuthToken,
+    uri: &str,
+    body: Value,
+) -> Response<Body> {
+    app.clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(uri)
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
         .await
         .unwrap()
 }
