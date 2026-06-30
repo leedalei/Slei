@@ -80,6 +80,7 @@ pub async fn create_agent(
         Err(MemberError::DuplicateHandle) => {
             error_response(StatusCode::CONFLICT, "duplicate handle")
         }
+        Err(MemberError::DuplicateName) => error_response(StatusCode::CONFLICT, "duplicate name"),
         Err(error) => member_error_response(error),
     }
 }
@@ -275,6 +276,7 @@ fn member_error_response(error: MemberError) -> Response {
     match error {
         MemberError::AgentNotFound => error_response(StatusCode::NOT_FOUND, &error.to_string()),
         MemberError::DuplicateHandle => error_response(StatusCode::CONFLICT, &error.to_string()),
+        MemberError::DuplicateName => error_response(StatusCode::CONFLICT, &error.to_string()),
         MemberError::MissingIdempotencyKey
         | MemberError::InvalidAgent
         | MemberError::InvalidHandle

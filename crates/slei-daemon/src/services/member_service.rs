@@ -299,41 +299,44 @@ impl MemberService {
             return Err(MemberError::InvalidAgent);
         }
 
+        let mut state = self.inner.lock().await;
+        if let Some(id) = state
+            .product_agent_idempotency
+            .get(idempotency_key)
+            .cloned()
         {
-            let idempotent_id = {
-                let state = self.inner.lock().await;
-                state
-                    .product_agent_idempotency
-                    .get(idempotency_key)
-                    .cloned()
-            };
-            if let Some(id) = idempotent_id {
-                return self.get_product_agent(&id).await;
-            }
-            if self
-                .repos
-                .agent_by_handle(&normalized_handle)
-                .await
-                .map_err(member_storage_error)?
-                .is_some()
-            {
-                return Err(MemberError::DuplicateHandle);
-            }
-            if self
-                .repos
-                .agents()
-                .await
-                .map_err(member_storage_error)?
-                .iter()
-                .any(|agent| agent.name == normalized_name)
-            {
-                return Err(MemberError::DuplicateHandle);
-            }
+            return self.get_product_agent(&id).await;
+        }
+        if self
+            .repos
+            .agent_by_handle(&normalized_handle)
+            .await
+            .map_err(member_storage_error)?
+            .is_some()
+        {
+            return Err(MemberError::DuplicateHandle);
+        }
+        if self
+            .repos
+            .agents()
+            .await
+            .map_err(member_storage_error)?
+            .iter()
+            .any(|agent| agent.name == normalized_name)
+        {
+            return Err(MemberError::DuplicateName);
         }
 
         let id = format!("agent_{}", Uuid::new_v4().simple());
-        self.create_product_agent_record(draft, id, "agent", false, idempotency_key)
-            .await
+        self.create_product_agent_record_locked(
+            draft,
+            id,
+            "agent",
+            false,
+            idempotency_key,
+            &mut state,
+        )
+        .await
     }
 
     pub async fn create_guide_agent(
@@ -436,18 +439,41 @@ impl MemberService {
         system_owned: bool,
         idempotency_key: &str,
     ) -> Result<ProductAgentRecord, MemberError> {
-        self.create_product_agent_record_with_channels(
+        let mut state = self.inner.lock().await;
+        self.create_product_agent_record_with_channels_locked(
             draft,
             id,
             agent_kind,
             system_owned,
             idempotency_key,
             vec!["all".to_string()],
+            &mut state,
         )
         .await
     }
 
-    async fn create_product_agent_record_with_channels(
+    async fn create_product_agent_record_locked(
+        &self,
+        draft: ProductAgentDraft,
+        id: String,
+        agent_kind: &str,
+        system_owned: bool,
+        idempotency_key: &str,
+        state: &mut MemberState,
+    ) -> Result<ProductAgentRecord, MemberError> {
+        self.create_product_agent_record_with_channels_locked(
+            draft,
+            id,
+            agent_kind,
+            system_owned,
+            idempotency_key,
+            vec!["all".to_string()],
+            state,
+        )
+        .await
+    }
+
+    async fn create_product_agent_record_with_channels_locked(
         &self,
         draft: ProductAgentDraft,
         id: String,
@@ -455,6 +481,7 @@ impl MemberService {
         system_owned: bool,
         idempotency_key: &str,
         channel_ids: Vec<String>,
+        state: &mut MemberState,
     ) -> Result<ProductAgentRecord, MemberError> {
         let normalized_handle = normalize_handle(&draft.handle)?;
         let avatar_seed = draft
@@ -524,7 +551,6 @@ impl MemberService {
             .map_err(member_storage_error)?;
         self.persist_agent_channel_memberships(&record).await?;
 
-        let mut state = self.inner.lock().await;
         state
             .product_agent_idempotency
             .insert(idempotency_key.to_string(), record.id.clone());
@@ -1314,6 +1340,8 @@ pub enum MemberError {
     MissingIdempotencyKey,
     #[error("duplicate handle")]
     DuplicateHandle,
+    #[error("duplicate name")]
+    DuplicateName,
     #[error("invalid handle")]
     InvalidHandle,
     #[error("invalid agent")]

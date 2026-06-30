@@ -134,6 +134,68 @@ async fn agent_create_rejects_name_with_space_or_hyphen_and_duplicate_name() {
     )
     .await;
     assert_eq!(duplicate_name.status(), StatusCode::CONFLICT);
+    let duplicate_name_body = response_json(duplicate_name).await;
+    assert_eq!(duplicate_name_body["error"], "duplicate name");
+}
+
+#[tokio::test]
+async fn agent_create_rejects_invalid_handles_and_preserves_case() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-role-presets-api-handle-validation");
+    let app = build_router(AppState::for_tests_with_agent_root_async(token.clone(), root).await);
+
+    let whitespace_handle = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-whitespace-handle"),
+        json!({
+            "name": "WhitespaceHandle",
+            "handle": "@white space",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Handle contains whitespace."
+        }),
+    )
+    .await;
+    assert_eq!(whitespace_handle.status(), StatusCode::BAD_REQUEST);
+
+    let hyphen_handle = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-hyphen-handle"),
+        json!({
+            "name": "HyphenHandle",
+            "handle": "@hyphen-handle",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Handle contains hyphen."
+        }),
+    )
+    .await;
+    assert_eq!(hyphen_handle.status(), StatusCode::BAD_REQUEST);
+
+    let mixed_case = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-mixed-case-handle"),
+        json!({
+            "name": "MixedCase",
+            "handle": "@CasePreserved",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "Handle case should be preserved."
+        }),
+    )
+    .await;
+    assert_eq!(mixed_case.status(), StatusCode::CREATED);
+    let mixed_case_body = response_json(mixed_case).await;
+    assert_eq!(mixed_case_body["agent"]["handle"], "@CasePreserved");
 }
 
 async fn get_json(app: &axum::Router, token: &AuthToken, uri: &str) -> Response<Body> {

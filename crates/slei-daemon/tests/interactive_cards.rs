@@ -192,6 +192,30 @@ async fn interactive_cards_reject_freeform_workspace_mount_and_privilege_escalat
 }
 
 #[tokio::test]
+async fn create_agent_card_draft_normalizes_hyphenated_name_for_agent_create_api() {
+    let service = CardService::for_tests();
+
+    let card = service
+        .propose_card(
+            CardProposal {
+                run_id: "run_hyphen_agent".to_string(),
+                agent_id: "agent_guide".to_string(),
+                action: CardAction::CreateAgent {
+                    name: "Foo-Bar".to_string(),
+                    permission: "Controlled".to_string(),
+                },
+            },
+            "card-hyphen-agent",
+        )
+        .await
+        .expect("card is proposed");
+
+    let view = card.to_view();
+    assert_eq!(view.draft["name"], "FooBar");
+    assert_eq!(view.draft["handle"], "@FooBar");
+}
+
+#[tokio::test]
 async fn interactive_cards_survive_app_state_reload_without_legacy_json_index() {
     let root = temp_data_root();
     let token = AuthToken::from_static("interactive-card-token");
@@ -351,6 +375,71 @@ async fn product_tool_card_reload_restores_full_payload_and_message_id() {
     );
     assert_eq!(restored.state, CardState::Done);
     assert!(!root.join("cards/index.json").exists());
+}
+
+#[tokio::test]
+async fn product_tool_create_agent_card_rejects_name_or_handle_that_create_agent_rejects() {
+    let state = AppState::for_tests_with_agent_root_async(
+        AuthToken::from_static("product-agent-card-validation-token"),
+        temp_data_root(),
+    )
+    .await;
+
+    let hyphen_name = json!({
+        "kind": "createAgent",
+        "title": "创建智能体",
+        "summary": "Foo-Bar · ClaudeCode / Sonnet",
+        "draft": {
+            "name": "Foo-Bar",
+            "handle": "@FooBar",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "负责实现任务"
+        },
+        "actionLabel": "创建",
+        "doneLabel": "DONE"
+    });
+    let name_error = state
+        .cards()
+        .propose_product_tool_card(
+            "run_product_tool_invalid_name",
+            "agent_guide_local_node",
+            "conv_guide",
+            &hyphen_name,
+            "product-card-invalid-name",
+        )
+        .await
+        .expect_err("hyphenated agent name should be rejected");
+    assert!(name_error.to_string().contains("name"));
+
+    let hyphen_handle = json!({
+        "kind": "createAgent",
+        "title": "创建智能体",
+        "summary": "FooBar · ClaudeCode / Sonnet",
+        "draft": {
+            "name": "FooBar",
+            "handle": "@Foo-Bar",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "负责实现任务"
+        },
+        "actionLabel": "创建",
+        "doneLabel": "DONE"
+    });
+    let handle_error = state
+        .cards()
+        .propose_product_tool_card(
+            "run_product_tool_invalid_handle",
+            "agent_guide_local_node",
+            "conv_guide",
+            &hyphen_handle,
+            "product-card-invalid-handle",
+        )
+        .await
+        .expect_err("hyphenated agent handle should be rejected");
+    assert!(handle_error.to_string().contains("handle"));
 }
 
 #[tokio::test]

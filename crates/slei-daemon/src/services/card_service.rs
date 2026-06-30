@@ -513,23 +513,26 @@ impl InteractiveCard {
         }
 
         match &self.action {
-            CardAction::CreateAgent { name, .. } => InteractiveCardView {
-                id: self.id.clone(),
-                kind: "createAgent".to_string(),
-                state: card_state_label(self.state.clone()),
-                title: "创建智能体草案".to_string(),
-                summary: format!("{name} · ClaudeCode / Sonnet"),
-                draft: json!({
-                    "name": name,
-                    "handle": format!("@{}", normalize_handle_seed(name)),
-                    "runtimeKind": "ClaudeCode",
-                    "model": "Sonnet",
-                    "nodeId": "local-node",
-                    "description": agent_description(name),
-                }),
-                action_label: "创建".to_string(),
-                done_label: "DONE".to_string(),
-            },
+            CardAction::CreateAgent { name, .. } => {
+                let draft_name = normalize_agent_name_seed(name);
+                InteractiveCardView {
+                    id: self.id.clone(),
+                    kind: "createAgent".to_string(),
+                    state: card_state_label(self.state.clone()),
+                    title: "创建智能体草案".to_string(),
+                    summary: format!("{draft_name} · ClaudeCode / Sonnet"),
+                    draft: json!({
+                        "name": draft_name,
+                        "handle": format!("@{}", normalize_handle_seed(name)),
+                        "runtimeKind": "ClaudeCode",
+                        "model": "Sonnet",
+                        "nodeId": "local-node",
+                        "description": agent_description(name),
+                    }),
+                    action_label: "创建".to_string(),
+                    done_label: "DONE".to_string(),
+                }
+            }
             CardAction::CreateChannel { name } => InteractiveCardView {
                 id: self.id.clone(),
                 kind: "createChannel".to_string(),
@@ -594,16 +597,18 @@ fn product_tool_template(payload: &Value) -> Result<InteractiveCardTemplate, Car
 fn validate_product_tool_draft(kind: &str, draft: &Value) -> Result<(), CardError> {
     match kind {
         "createAgent" => {
-            for key in [
-                "name",
-                "handle",
-                "runtimeKind",
-                "model",
-                "nodeId",
-                "description",
-            ] {
-                required_string(draft, key)?;
+            let name = required_string(draft, "name")?;
+            if !is_valid_agent_name(name) {
+                return Err(CardError::InvalidProductToolPayload("name"));
             }
+            let handle = required_string(draft, "handle")?;
+            if !is_valid_agent_handle(handle) {
+                return Err(CardError::InvalidProductToolPayload("handle"));
+            }
+            required_string(draft, "runtimeKind")?;
+            required_string(draft, "model")?;
+            required_string(draft, "nodeId")?;
+            required_string(draft, "description")?;
         }
         "createChannel" => {
             required_string(draft, "name")?;
@@ -669,19 +674,43 @@ fn optional_string_array(value: &Value, key: &'static str) -> Result<(), CardErr
 }
 
 fn normalize_handle_seed(name: &str) -> String {
-    let seed = name
+    let seed = normalize_agent_name_seed(name)
         .trim()
-        .to_lowercase()
         .chars()
-        .filter(|character| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || *character == '-'
-        })
+        .filter(|character| !character.is_whitespace() && *character != '-')
+        .take(32)
         .collect::<String>();
     if seed.is_empty() {
-        "agent".to_string()
+        "Agent".to_string()
     } else {
         seed
     }
+}
+
+fn normalize_agent_name_seed(name: &str) -> String {
+    let seed = name
+        .trim()
+        .chars()
+        .filter(|character| !character.is_whitespace() && *character != '-')
+        .collect::<String>();
+    if seed.is_empty() {
+        "Agent".to_string()
+    } else {
+        seed
+    }
+}
+
+fn is_valid_agent_name(name: &str) -> bool {
+    let trimmed = name.trim();
+    !trimmed.is_empty() && !trimmed.chars().any(char::is_whitespace) && !trimmed.contains('-')
+}
+
+fn is_valid_agent_handle(handle: &str) -> bool {
+    let trimmed = handle.trim().trim_start_matches('@');
+    !trimmed.is_empty()
+        && trimmed.chars().count() <= 32
+        && !trimmed.chars().any(char::is_whitespace)
+        && !trimmed.contains('-')
 }
 
 fn agent_description(name: &str) -> String {

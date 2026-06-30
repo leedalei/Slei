@@ -450,7 +450,6 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::Member(MemberError::MissingIdempotencyKey)
         | ChannelOrchestratorError::Member(MemberError::InvalidAgent)
         | ChannelOrchestratorError::Member(MemberError::InvalidHandle)
-        | ChannelOrchestratorError::Member(MemberError::DuplicateHandle)
         | ChannelOrchestratorError::Member(MemberError::InvalidMemory)
         | ChannelOrchestratorError::Member(MemberError::WorkspaceBoundary)
         | ChannelOrchestratorError::Member(MemberError::SystemAgentImmutable)
@@ -467,9 +466,9 @@ fn channel_message_error_response(error: ChannelOrchestratorError) -> Response {
         | ChannelOrchestratorError::InactiveIdempotentMessage { .. } => StatusCode::BAD_REQUEST,
         ChannelOrchestratorError::Channel(ChannelError::DuplicateChannelName)
         | ChannelOrchestratorError::Channel(ChannelError::DuplicateWorkspacePath)
-        | ChannelOrchestratorError::Channel(ChannelError::IdempotencyConflict) => {
-            StatusCode::CONFLICT
-        }
+        | ChannelOrchestratorError::Channel(ChannelError::IdempotencyConflict)
+        | ChannelOrchestratorError::Member(MemberError::DuplicateHandle)
+        | ChannelOrchestratorError::Member(MemberError::DuplicateName) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Reset(_) => StatusCode::CONFLICT,
         ChannelOrchestratorError::Message(MessageError::Storage(_))
         | ChannelOrchestratorError::Task(TaskError::Storage(_))
