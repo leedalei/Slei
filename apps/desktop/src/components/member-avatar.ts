@@ -1,6 +1,7 @@
 import { createAvatar } from "@dicebear/core";
 import { pixelArt } from "@dicebear/collection";
 
+import { profileAvatarImageUrl } from "../app/model";
 import type { SleiMember, SleiMessage } from "../app/types";
 
 export type MemberAvatarIdentity = Pick<SleiMember, "id" | "name" | "handle" | "avatar"> & {
@@ -9,13 +10,51 @@ export type MemberAvatarIdentity = Pick<SleiMember, "id" | "name" | "handle" | "
 
 export type AvatarIdentity = MemberAvatarIdentity;
 
+export type MemberAvatarImage = {
+  imageRendering: "auto" | "pixelated";
+  src: string;
+};
+
 export function createMemberAvatar(identity: MemberAvatarIdentity): string {
-  const seed = identity.avatarSeed?.trim() || identity.id || identity.handle || identity.name || identity.avatar || "slei-member";
-  return createAvatar(pixelArt, {
-    seed,
-    size: 64,
-    radius: 0,
-  }).toDataUri();
+  return createMemberAvatarImage(identity).src;
+}
+
+export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberAvatarImage {
+  const profileImageUrl = profileAvatarImageUrl(identity.avatar ?? "");
+  if (profileImageUrl) {
+    return {
+      imageRendering: "auto",
+      src: profileImageUrl,
+    };
+  }
+
+  return {
+    imageRendering: "pixelated",
+    src: createAvatar(pixelArt, {
+      seed: diceBearAvatarSeed(identity),
+      size: 64,
+      radius: 0,
+    }).toDataUri(),
+  };
+}
+
+function diceBearAvatarSeed(identity: MemberAvatarIdentity): string {
+  const avatarSeed = identity.avatarSeed?.trim();
+  if (avatarSeed) return avatarSeed;
+  if (isPixelAvatar(identity.avatar)) return identity.avatar;
+  return identity.id || identity.handle || identity.name || identity.avatar || "slei-member";
+}
+
+function isPixelAvatar(avatar: string | undefined): avatar is string {
+  return avatar?.startsWith("pixel-") ?? false;
+}
+
+export function memberAvatarFallback(identity: MemberAvatarIdentity): string {
+  if (identity.avatar && !profileAvatarImageUrl(identity.avatar) && !isPixelAvatar(identity.avatar)) {
+    return identity.avatar;
+  }
+
+  return identity.name.slice(0, 2).toUpperCase();
 }
 
 export function memberFromMessage(message: SleiMessage, members: SleiMember[]): MemberAvatarIdentity {

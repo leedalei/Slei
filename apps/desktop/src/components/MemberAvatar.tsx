@@ -1,22 +1,29 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import { createMemberAvatar, type MemberAvatarIdentity } from "./member-avatar";
+import { createMemberAvatarImage, memberAvatarFallback, type MemberAvatarIdentity } from "./member-avatar";
 
 type MemberAvatarSize = "small" | "default" | "large";
 
 export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: boolean; size?: MemberAvatarSize }) {
   const { identity, large = false } = input;
   const size = large ? "large" : input.size ?? "default";
-  const fallback = identity.avatar ?? identity.name.slice(0, 2).toUpperCase();
+  const avatarImage = createMemberAvatarImage(identity);
+  const fallback = memberAvatarFallback(identity);
   return (
     <Avatar
       aria-label={identity.name}
       className={avatarSizeClassName(size)}
-      data-avatar-image-rendering="pixelated"
+      data-avatar-image-rendering={avatarImage?.imageRendering ?? "fallback"}
       data-avatar-size={size}
       glowEffect={false}
     >
-      <AvatarImage alt="" className="[image-rendering:pixelated]" src={createMemberAvatar(identity)} />
+      {avatarImage ? (
+        <AvatarImage
+          alt=""
+          className={avatarImage.imageRendering === "pixelated" ? "[image-rendering:pixelated]" : undefined}
+          src={avatarImage.src}
+        />
+      ) : null}
       <AvatarFallback className={size === "small" ? "text-[8px] leading-none" : undefined}>{fallback}</AvatarFallback>
     </Avatar>
   );

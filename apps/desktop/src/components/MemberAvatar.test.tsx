@@ -114,6 +114,33 @@ describe("MemberAvatar", () => {
     }
   });
 
+  it("renders profile image avatar refs through the slei-avatar protocol without pixelated rendering", async () => {
+    installImageMock("loaded");
+    const ref = `profile-image:${"a".repeat(64)}.png`;
+    const identity: MemberAvatarIdentity = {
+      avatar: ref,
+      handle: "@lei",
+      id: "human",
+      name: "Lei",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} />);
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+      const image = host.querySelector<HTMLImageElement>('[data-slot="avatar-image"]');
+
+      expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("auto");
+      expect(image).not.toBeNull();
+      expect(image?.getAttribute("src")).toBe(
+        "slei-avatar:///aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png",
+      );
+      expect(image?.className).not.toContain("[image-rendering:pixelated]");
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
   it("uses a tight global avatar shadow no larger than 3px blur", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
