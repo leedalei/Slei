@@ -2110,6 +2110,7 @@ export function SleiApp() {
       showAppToast(messages.chat.addChannelMemberSuccess, "success");
     } catch (error) {
       showAppToast(formatAppErrorToast(messages.chat.addChannelMemberFailed, error), "error");
+      throw error;
     }
   }
 
@@ -2121,6 +2122,7 @@ export function SleiApp() {
       showAppToast(messages.chat.removeChannelMemberSuccess, "success");
     } catch (error) {
       showAppToast(formatAppErrorToast(messages.chat.removeChannelMemberFailed, error), "error");
+      throw error;
     }
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
@@ -22,6 +22,8 @@ type ChannelMemberGroupProps = {
   onRemove?: (agentId: string) => Promise<void> | void;
 };
 
+const MAX_VISIBLE_CHANNEL_MEMBER_AVATARS = 5;
+
 export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
   const [mutatingMemberId, setMutatingMemberId] = useState<string | undefined>(undefined);
   const [confirmingRemoveId, setConfirmingRemoveId] = useState<string | undefined>(undefined);
@@ -30,6 +32,8 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
   const [selectedAddIds, setSelectedAddIds] = useState<string[]>([]);
   const [addingSelected, setAddingSelected] = useState(false);
   const availableAddMemberIds = input.availableMembers.map((member) => member.id).join("|");
+  const visibleMembers = input.members.slice(0, MAX_VISIBLE_CHANNEL_MEMBER_AVATARS);
+  const overflowMemberCount = input.members.length - visibleMembers.length;
 
   useEffect(() => {
     const availableIds = new Set(input.availableMembers.map((member) => member.id));
@@ -64,6 +68,8 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
         await input.onAdd?.(memberId);
       }
       closeAddDialog();
+    } catch {
+      // Keep the dialog and selections intact so callers can surface the failure.
     } finally {
       setAddingSelected(false);
     }
@@ -77,6 +83,8 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
         setConfirmingRemoveId(undefined);
         setActiveMemberId(undefined);
       }
+    } catch {
+      // Keep the popover and confirmation open when the daemon rejects the mutation.
     } finally {
       setMutatingMemberId(undefined);
     }
@@ -85,7 +93,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
   return (
     <div aria-label={input.messages.chat.channelMembers} className="slei-channel-member-group" data-testid="slei-channel-member-group">
       <div className="flex items-center">
-        {input.members.map((member, index) => (
+        {visibleMembers.map((member, index) => (
           <ChannelMemberAvatar
             channelId={input.channelId}
             key={member.id}
@@ -100,6 +108,15 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
             setConfirmingRemoveId={setConfirmingRemoveId}
           />
         ))}
+        {overflowMemberCount > 0 ? (
+          <span
+            aria-label={`${overflowMemberCount} ${input.messages.chat.channelMembers}`}
+            className={cn("slei-channel-member-overflow", visibleMembers.length > 0 && "-ml-2")}
+            data-testid="slei-channel-member-overflow-count"
+          >
+            +{overflowMemberCount}
+          </span>
+        ) : null}
         <Dialog open={addDialogOpen} onOpenChange={(open) => {
           setAddDialogOpen(open);
           if (!open) setSelectedAddIds([]);
@@ -156,6 +173,13 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
                             disabled={addingSelected}
                             onCheckedChange={() => toggleSelectedAddMember(member.id)}
                             onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                toggleSelectedAddMember(member.id);
+                              }
+                            }}
                           />
                           <span className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 overflow-hidden text-left">
                             <MemberAvatar identity={member} />
@@ -215,19 +239,10 @@ function ChannelMemberAvatar(input: {
   open: boolean;
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const readiness = input.member.channelReadiness?.[input.channelId];
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
-
-  useEffect(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const open = () => input.onOpenChange(true);
-    trigger.addEventListener("focus", open);
-    return () => trigger.removeEventListener("focus", open);
-  }, [input]);
 
   return (
     <Popover open={input.open} onOpenChange={input.onOpenChange}>
@@ -236,16 +251,8 @@ function ChannelMemberAvatar(input: {
           aria-label={`${input.member.name} ${input.member.handle}`}
           className={cn("slei-channel-member-avatar-button", input.offset && "-ml-2")}
           data-testid="slei-channel-member-avatar-trigger"
-          onBlur={() => {
-            if (!confirming) input.onOpenChange(false);
-          }}
-          onBlurCapture={() => {
-            if (!confirming) input.onOpenChange(false);
-          }}
           onFocus={() => input.onOpenChange(true)}
-          onFocusCapture={() => input.onOpenChange(true)}
           onMouseEnter={() => input.onOpenChange(true)}
-          ref={triggerRef}
           type="button"
         >
           <MemberAvatar identity={input.member} />
@@ -256,9 +263,6 @@ function ChannelMemberAvatar(input: {
         className="w-72 p-3"
         data-testid="slei-channel-member-info-card"
         onMouseEnter={() => input.onOpenChange(true)}
-        onMouseLeave={() => {
-          if (!confirming) input.onOpenChange(false);
-        }}
       >
         <div className="grid gap-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">

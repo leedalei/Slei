@@ -1576,21 +1576,6 @@ describe("ChatPage mention panel", () => {
     }
   });
 
-  it("keeps channel member add and remove mutations behind confirmation UI", () => {
-    const source = readFileSync(join(process.cwd(), "src/features/chat/ChannelMemberGroup.tsx"), "utf8");
-
-    expect(source).toContain("selectedAddIds");
-    expect(source).toContain("data-testid=\"slei-channel-member-add-confirm\"");
-    expect(source).toContain("addSelectedMembers");
-    expect(source).toContain("confirmingRemoveId");
-    expect(source).toContain("AlertDialogContent");
-    expect(source).toContain("data-testid=\"slei-channel-member-remove-dialog\"");
-    expect(source).toContain("removeChannelMemberConfirm");
-    expect(source).toContain("mutate(member.id, \"remove\")");
-    expect(source).toContain("text-destructive");
-    expect(source).not.toContain("<Button onClick={() => setConfirmingRemoveId(undefined)}");
-  });
-
   it("adds multiple selected channel members from a modal", async () => {
     const messages = createDesktopMessages("zh-CN");
     const onChannelMemberAdd = vi.fn().mockResolvedValue(undefined);
@@ -1654,6 +1639,125 @@ describe("ChatPage mention panel", () => {
     expect(document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]')).toBeNull();
   });
 
+  it("toggles an add-member checkbox only once from keyboard activation", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        memberWithLongMentionText(),
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-trigger"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const checkbox = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-add-candidate-checkbox"]');
+    expect(checkbox?.getAttribute("data-state")).toBe("unchecked");
+
+    await act(async () => {
+      checkbox?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: " " }));
+    });
+
+    expect(checkbox?.getAttribute("data-state")).toBe("checked");
+
+    await act(async () => {
+      checkbox?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+    });
+
+    expect(checkbox?.getAttribute("data-state")).toBe("unchecked");
+  });
+
+  it("keeps selected add-member candidates and the dialog open when add fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onChannelMemberAdd = vi.fn().mockRejectedValue(new Error("daemon add failed"));
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        memberWithLongMentionText(),
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_coda",
+          name: "Coda",
+          handle: "@coda",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onChannelMemberAdd={onChannelMemberAdd}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-trigger"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const candidate = document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-candidate"]');
+    await act(async () => {
+      candidate?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-add-confirm"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChannelMemberAdd).toHaveBeenCalledTimes(1);
+    expect(document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="slei-channel-member-add-candidate-checkbox"]')?.getAttribute("data-state")).toBe("checked");
+  });
+
+  it("caps visible header member avatars and renders an overflow count", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const members: SleiMember[] = Array.from({ length: 8 }, (_, index) => ({
+      ...memberWithLongMentionText(),
+      id: `agent_${index}`,
+      name: `Agent ${index}`,
+      handle: `@agent-${index}`,
+      channelReadiness: { all: "ready" as const },
+    }));
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members,
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const host = staticMarkupHost(html);
+
+    expect(host.querySelectorAll('[data-testid="slei-channel-member-avatar-trigger"]')).toHaveLength(5);
+    expect(host.querySelector('[data-testid="slei-channel-member-overflow-count"]')?.textContent).toBe("+3");
+    expect(host.querySelector('[data-testid="slei-channel-member-add-trigger"]')).not.toBeNull();
+  });
+
   it("opens a channel member info card from the header member avatar", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
@@ -1681,7 +1785,7 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
     });
 
     const card = document.body.querySelector('[data-testid="slei-channel-member-info-card"]');
@@ -1692,6 +1796,51 @@ describe("ChatPage mention panel", () => {
     expect(card?.textContent).toContain(messages.chat.memberReady);
     expect(card?.textContent).not.toContain("ready");
     expect(card?.textContent).toContain(messages.chat.removeChannelMember("Luna"));
+  });
+
+  it("keeps the member popover open while focus moves from avatar to remove button", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+    await act(async () => {
+      avatar?.focus();
+    });
+
+    const removeButton = document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`);
+    expect(removeButton).not.toBeNull();
+
+    await act(async () => {
+      removeButton?.focus();
+    });
+
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
+
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.querySelector('[data-testid="slei-channel-member-remove-dialog"]')).not.toBeNull();
   });
 
   it("removes a channel member only after confirming in a dialog", async () => {
@@ -1721,7 +1870,7 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
     });
 
     expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
@@ -1743,6 +1892,47 @@ describe("ChatPage mention panel", () => {
 
     expect(onChannelMemberRemove).toHaveBeenCalledTimes(1);
     expect(onChannelMemberRemove).toHaveBeenCalledWith("agent_luna");
+  });
+
+  it("keeps the remove confirmation open when remove fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onChannelMemberRemove = vi.fn().mockRejectedValue(new Error("daemon remove failed"));
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onChannelMemberRemove={onChannelMemberRemove}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-remove-confirm"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onChannelMemberRemove).toHaveBeenCalledTimes(1);
+    expect(document.body.querySelector('[data-testid="slei-channel-member-remove-dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
   });
 
   it("renders channel tabs without new-session or history controls", () => {
