@@ -15,11 +15,11 @@ export type MemberAvatarImage = {
   src: string;
 };
 
-export function createMemberAvatar(identity: MemberAvatarIdentity): string {
-  return createMemberAvatarImage(identity).src;
+export function createMemberAvatar(identity: MemberAvatarIdentity): string | undefined {
+  return createMemberAvatarImage(identity)?.src;
 }
 
-export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberAvatarImage {
+export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberAvatarImage | undefined {
   const profileImageUrl = profileAvatarImageUrl(identity.avatar ?? "");
   if (profileImageUrl) {
     return {
@@ -27,6 +27,7 @@ export function createMemberAvatarImage(identity: MemberAvatarIdentity): MemberA
       src: profileImageUrl,
     };
   }
+  if (isProfileImageLike(identity.avatar)) return undefined;
 
   return {
     imageRendering: "pixelated",
@@ -42,19 +43,31 @@ function diceBearAvatarSeed(identity: MemberAvatarIdentity): string {
   const avatarSeed = identity.avatarSeed?.trim();
   if (avatarSeed) return avatarSeed;
   if (isPixelAvatar(identity.avatar)) return identity.avatar;
-  return identity.id || identity.handle || identity.name || identity.avatar || "slei-member";
+  return identity.id || identity.handle || identity.name || regularAvatarText(identity.avatar) || "slei-member";
 }
 
 function isPixelAvatar(avatar: string | undefined): avatar is string {
   return avatar?.startsWith("pixel-") ?? false;
 }
 
+function isProfileImageLike(avatar: string | undefined): avatar is string {
+  return avatar?.startsWith("profile-image:") ?? false;
+}
+
 export function memberAvatarFallback(identity: MemberAvatarIdentity): string {
-  if (identity.avatar && !profileAvatarImageUrl(identity.avatar) && !isPixelAvatar(identity.avatar)) {
-    return identity.avatar;
+  const avatarText = regularAvatarText(identity.avatar);
+  if (avatarText) {
+    return avatarText;
   }
 
   return identity.name.slice(0, 2).toUpperCase();
+}
+
+function regularAvatarText(avatar: string | undefined): string | undefined {
+  if (!avatar) return undefined;
+  if (isProfileImageLike(avatar)) return undefined;
+  if (isPixelAvatar(avatar)) return undefined;
+  return avatar;
 }
 
 export function memberFromMessage(message: SleiMessage, members: SleiMember[]): MemberAvatarIdentity {

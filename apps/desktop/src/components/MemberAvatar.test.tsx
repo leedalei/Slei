@@ -141,6 +141,31 @@ describe("MemberAvatar", () => {
     }
   });
 
+  it.each(["profile-image:nothex.png", "profile-image:../x.png"])(
+    "uses initials fallback for invalid profile image avatar ref %s",
+    async (avatar) => {
+      installImageMock("loaded");
+      const identity: MemberAvatarIdentity = {
+        avatar,
+        handle: "@lei",
+        id: "human-invalid-profile-image",
+        name: "Lei Zhang",
+      };
+
+      const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} />);
+
+      try {
+        const fallback = host.querySelector<HTMLElement>('[data-slot="avatar-fallback"]');
+
+        expect(fallback).not.toBeNull();
+        expect(fallback?.textContent).toBe("LE");
+        expect(host.textContent).not.toContain("profile-image:");
+      } finally {
+        cleanupMemberAvatar(root, host);
+      }
+    },
+  );
+
   it("uses a tight global avatar shadow no larger than 3px blur", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
