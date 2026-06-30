@@ -5,6 +5,7 @@ import {
   activeSkillSlashQuery,
   agentAvatarSeedFromName,
   agentHandleFromName,
+  isProfileImageAvatar,
   formatMemberCreatedDate,
   formatLocalRecordDateTime,
   formatMessageDateTime,
@@ -14,6 +15,7 @@ import {
   localeFromSystemLanguages,
   mentionSuggestions,
   mergeMessagePage,
+  profileAvatarImageUrl,
   sendChatComposerMessage,
   shouldRefreshChannelMessages,
   skillSlashSuggestions,
@@ -75,6 +77,19 @@ describe("agent creation helpers", () => {
   it("derives stable avatar seeds from names", () => {
     expect(agentAvatarSeedFromName(" 小红书调研员 ")).toBe("agent-avatar-小红书调研员");
     expect(agentAvatarSeedFromName("")).toBe("agent-avatar-new");
+  });
+});
+
+describe("profile avatar image helpers", () => {
+  it("recognizes only daemon profile image avatar values", () => {
+    expect(isProfileImageAvatar("profile-image:" + "a".repeat(64) + ".png")).toBe(true);
+    expect(isProfileImageAvatar("profile-image:abc.png")).toBe(false);
+    expect(isProfileImageAvatar("pixel-sun")).toBe(false);
+  });
+
+  it("builds slei-avatar URLs for profile image avatars", () => {
+    expect(profileAvatarImageUrl("profile-image:" + "b".repeat(64) + ".webp"))
+      .toBe("slei-avatar:///bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.webp");
   });
 });
 

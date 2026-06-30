@@ -778,6 +778,24 @@ export function createDaemonBridgeMock(input: {
       };
       return { profile };
     },
+    async uploadProfileAvatar(request) {
+      if (!connected) {
+        throw new Error("daemon offline");
+      }
+      if (!profile) {
+        throw new Error("profile unavailable");
+      }
+      const extension = request.mimeType === "image/jpeg"
+        ? "jpg"
+        : request.mimeType === "image/webp"
+          ? "webp"
+          : "png";
+      profile = {
+        ...profile,
+        avatar: `profile-image:${"a".repeat(64)}.${extension}`,
+      };
+      return { profile };
+    },
     async renameLocalNode(name) {
       const trimmed = name.trim();
       if (!trimmed) {

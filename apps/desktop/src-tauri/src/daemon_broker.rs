@@ -223,6 +223,14 @@ pub struct ProfileUpdateRequest {
     pub handle: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileAvatarUploadRequest {
+    pub file_name: String,
+    pub mime_type: String,
+    pub bytes_base64: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopAgentView {
@@ -1276,6 +1284,19 @@ impl DaemonBroker {
         let receipt = self.update_profile_in_daemon(&request)?;
         self.replace_local_profile(receipt.profile.clone());
         Ok(receipt)
+    }
+
+    pub fn upload_profile_avatar(
+        &self,
+        request: ProfileAvatarUploadRequest,
+    ) -> Result<ProfileReceipt, ProfileError> {
+        let receipt = self.upload_profile_avatar_in_daemon(&request)?;
+        self.replace_local_profile(receipt.profile.clone());
+        Ok(receipt)
+    }
+
+    pub fn data_root_path(&self) -> PathBuf {
+        PathBuf::from(&self.data_root)
     }
 
     pub fn rename_local_node(&self, name: &str) -> Result<NodeRenameReceipt, NodeNameError> {
@@ -3214,6 +3235,24 @@ impl DaemonBroker {
             .map_err(|error| ProfileError::DaemonResponse(error.to_string()))?;
         let response = self
             .send_daemon_request_checked("PATCH", "/v1/settings/profile", Some(&payload), &[])
+            .map_err(profile_daemon_request_error)?;
+        serde_json::from_str::<ProfileReceipt>(&response)
+            .map_err(|error| ProfileError::DaemonResponse(error.to_string()))
+    }
+
+    fn upload_profile_avatar_in_daemon(
+        &self,
+        request: &ProfileAvatarUploadRequest,
+    ) -> Result<ProfileReceipt, ProfileError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| ProfileError::DaemonResponse(error.to_string()))?;
+        let response = self
+            .send_daemon_request_checked(
+                "POST",
+                "/v1/settings/profile/avatar-image",
+                Some(&payload),
+                &[],
+            )
             .map_err(profile_daemon_request_error)?;
         serde_json::from_str::<ProfileReceipt>(&response)
             .map_err(|error| ProfileError::DaemonResponse(error.to_string()))

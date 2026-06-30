@@ -13,9 +13,9 @@ use crate::daemon_broker::{
     GlobalSearchQuery, GlobalSearchReceipt, GuideBootstrapReceipt, InteractiveCardReceipt,
     MessagePageQuery, MessageThreadReceipt, MessageThreadReplyReceipt, NodeListReceipt,
     NodeNameError, NodeRenameReceipt, PermissionResolveRequest, PreferencesError,
-    PreferencesReceipt, PreferencesUpdateRequest, ProfileError, ProfileReceipt,
-    ProfileUpdateRequest, ReplyToMessageThreadRequest, SanitizedDaemonStatus, SaveMessageRequest,
-    SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
+    PreferencesReceipt, PreferencesUpdateRequest, ProfileAvatarUploadRequest, ProfileError,
+    ProfileReceipt, ProfileUpdateRequest, ReplyToMessageThreadRequest, SanitizedDaemonStatus,
+    SaveMessageRequest, SavedMessageListReceipt, SavedMessageReceipt, SendChannelMessageReceipt,
     SendChannelMessageRequest, SkillListReceipt, TaskError, TaskListQuery, TaskListReceipt,
     TaskReceipt, TaskReplyReceipt, TaskReplyRequest, TaskStatusUpdateRequest, TaskThreadReceipt,
 };
@@ -236,6 +236,13 @@ pub fn update_profile(
     request: ProfileUpdateRequest,
 ) -> Result<ProfileReceipt, ProfileError> {
     broker.update_profile(request)
+}
+
+pub fn upload_profile_avatar(
+    broker: &DaemonBroker,
+    request: ProfileAvatarUploadRequest,
+) -> Result<ProfileReceipt, ProfileError> {
+    broker.upload_profile_avatar(request)
 }
 
 pub fn list_agents(broker: &DaemonBroker) -> AgentListReceipt {
@@ -496,6 +503,14 @@ pub fn update_profile_command(
     request: ProfileUpdateRequest,
 ) -> Result<ProfileReceipt, String> {
     update_profile(state.inner(), request).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn upload_profile_avatar_command(
+    state: tauri::State<'_, DaemonBroker>,
+    request: ProfileAvatarUploadRequest,
+) -> Result<ProfileReceipt, String> {
+    upload_profile_avatar(state.inner(), request).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

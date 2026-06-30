@@ -1,11 +1,19 @@
 pub mod commands;
 pub mod daemon_broker;
 
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
         .manage(daemon_broker::DaemonBroker::default_local())
+        .register_uri_scheme_protocol("slei-avatar", |ctx, request| {
+            let broker = ctx.app_handle().state::<daemon_broker::DaemonBroker>();
+            profile_avatar_protocol_response(&broker.data_root_path(), &request.uri().to_string())
+        })
         .setup(|app| {
             configure_transparent_window(app)?;
             Ok(())
@@ -54,6 +62,7 @@ pub fn run() {
             commands::delete_agent_command,
             commands::update_preferences_command,
             commands::update_profile_command,
+            commands::upload_profile_avatar_command,
             commands::remember_agent_fact_command,
             commands::open_agent_path_command,
             commands::list_agent_workspace_command,
@@ -86,6 +95,65 @@ fn configure_transparent_window(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+fn profile_avatar_protocol_response(data_root: &Path, uri: &str) -> tauri::http::Response<Vec<u8>> {
+    let Some(file_path) = profile_avatar_file_from_uri(data_root, uri) else {
+        return profile_avatar_not_found_response();
+    };
+    let Some(file_name) = file_path.file_name().and_then(|name| name.to_str()) else {
+        return profile_avatar_not_found_response();
+    };
+    let Some(mime) = profile_avatar_mime(file_name) else {
+        return profile_avatar_not_found_response();
+    };
+
+    match fs::read(file_path) {
+        Ok(bytes) => tauri::http::Response::builder()
+            .status(tauri::http::StatusCode::OK)
+            .header(tauri::http::header::CONTENT_TYPE, mime)
+            .body(bytes)
+            .unwrap(),
+        Err(_) => profile_avatar_not_found_response(),
+    }
+}
+
+fn profile_avatar_file_from_uri(data_root: &Path, uri: &str) -> Option<PathBuf> {
+    if uri.contains('?') || uri.contains('#') {
+        return None;
+    }
+    let file_name = uri.strip_prefix("slei-avatar:///")?;
+    if file_name.is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains("..")
+        || profile_avatar_mime(file_name).is_none()
+    {
+        return None;
+    }
+
+    Some(data_root.join("profile").join("avatars").join(file_name))
+}
+
+fn profile_avatar_mime(file_name: &str) -> Option<&'static str> {
+    let (hash, extension) = file_name.rsplit_once('.')?;
+    if hash.len() != 64 || !hash.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    match extension {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+fn profile_avatar_not_found_response() -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(tauri::http::StatusCode::NOT_FOUND)
+        .body(Vec::new())
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::commands::{
@@ -101,14 +169,15 @@ mod tests {
         reply_to_message_thread, reply_to_task, request_artifact_open,
         reset_conversation_runtime_session, save_message, send_channel_message,
         send_conversation_message, unsave_message, update_agent, update_preferences,
-        update_profile, upload_conversation_attachment, FrontendCrashReport,
+        update_profile, upload_conversation_attachment, upload_profile_avatar, FrontendCrashReport,
     };
     use super::daemon_broker::{
         AgentCreateRequest, AgentUpdateRequest, ChannelCreateRequest, ChannelMemberAddRequest,
         ConversationAttachmentUploadRequest, ConversationMessageRequest, DaemonBroker,
         GlobalSearchQuery, NotificationPreferencesView, PreferencesUpdateRequest,
-        ProfileUpdateRequest, ReplyToMessageThreadRequest, RuntimeDescriptor, SaveMessageRequest,
-        SendChannelMessageRequest, TaskListQuery, TaskReplyRequest,
+        ProfileAvatarUploadRequest, ProfileUpdateRequest, ReplyToMessageThreadRequest,
+        RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest, TaskListQuery,
+        TaskReplyRequest,
     };
     use std::fs;
     use std::io::{Read, Write};
@@ -3131,6 +3200,107 @@ mod tests {
         assert!(requests[2].contains("PATCH /v1/settings/profile HTTP/1.1"));
         assert!(requests[2].contains("Authorization: Bearer secret-token"));
         assert!(requests[2].contains(r#""handle":"other""#));
+    }
+
+    #[test]
+    fn profile_avatar_upload_posts_payload_to_daemon() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let body = r#"{"profile":{"displayName":"Lei","handle":"lei","avatar":"profile-image:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"}}"#;
+            std::io::Write::write_all(
+                &mut stream,
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let updated = upload_profile_avatar(
+            &broker,
+            ProfileAvatarUploadRequest {
+                file_name: "avatar.png".to_string(),
+                mime_type: "image/png".to_string(),
+                bytes_base64: "aGVsbG8=".to_string(),
+            },
+        )
+        .unwrap();
+
+        let profile = updated.profile.unwrap();
+        assert_eq!(
+            profile.avatar,
+            "profile-image:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png"
+        );
+        let request = handle.join().unwrap();
+        assert!(request.contains("POST /v1/settings/profile/avatar-image HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer secret-token"));
+        assert!(request.contains(r#""fileName":"avatar.png""#));
+        assert!(request.contains(r#""mimeType":"image/png""#));
+        assert!(request.contains(r#""bytesBase64":"aGVsbG8=""#));
+    }
+
+    #[test]
+    fn profile_avatar_protocol_serves_only_valid_hash_images_from_data_root() {
+        let root = std::env::temp_dir().join(format!(
+            "slei-desktop-avatar-protocol-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let avatar_dir = root.join("profile").join("avatars");
+        fs::create_dir_all(&avatar_dir).unwrap();
+        let file_name = format!("{}.png", "a".repeat(64));
+        let bytes = b"\x89PNG\r\n\x1a\navatar-bytes".to_vec();
+        fs::write(avatar_dir.join(&file_name), &bytes).unwrap();
+
+        let uri = format!("slei-avatar:///{file_name}");
+        let resolved = super::profile_avatar_file_from_uri(&root, &uri).unwrap();
+        assert_eq!(resolved, avatar_dir.join(&file_name));
+
+        let response = super::profile_avatar_protocol_response(&root, &uri);
+        assert_eq!(response.status(), tauri::http::StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(tauri::http::header::CONTENT_TYPE)
+                .unwrap(),
+            "image/png"
+        );
+        assert_eq!(response.body(), &bytes);
+
+        for invalid_uri in [
+            format!("slei-avatar:///{file_name}?v=1"),
+            format!("slei-avatar:///../{file_name}"),
+            format!("slei-avatar:///{}/nested.png", "a".repeat(64)),
+            format!("slei-avatar:///{}.gif", "a".repeat(64)),
+            "slei-avatar:///abc.png".to_string(),
+        ] {
+            assert!(super::profile_avatar_file_from_uri(&root, &invalid_uri).is_none());
+            assert_eq!(
+                super::profile_avatar_protocol_response(&root, &invalid_uri).status(),
+                tauri::http::StatusCode::NOT_FOUND
+            );
+        }
+
+        let missing_uri = format!("slei-avatar:///{}.webp", "b".repeat(64));
+        assert_eq!(
+            super::profile_avatar_protocol_response(&root, &missing_uri).status(),
+            tauri::http::StatusCode::NOT_FOUND
+        );
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

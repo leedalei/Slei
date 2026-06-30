@@ -55,6 +55,13 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     ).rejects.toThrow("daemon offline");
     await expect(bridge.sendChannelMessage("all", { authorId: "human:local", body: "hello", asTask: false })).rejects.toThrow("daemon offline");
     await expect(bridge.listAgentWorkspace("agent_alice")).rejects.toThrow("daemon offline");
+    await expect(
+      bridge.uploadProfileAvatar({
+        fileName: "avatar.png",
+        mimeType: "image/png",
+        bytesBase64: "aGVsbG8=",
+      }),
+    ).rejects.toThrow("daemon offline");
   });
 
   it("invokes list agent activity with the expected command shape", async () => {
@@ -208,6 +215,36 @@ describe("createDaemonBridge non-Tauri fallback", () => {
         avatarSeed: "preset-engineer",
       },
     });
+  });
+
+  it("invokes profile avatar upload with the expected command shape", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { __TAURI_INTERNALS__: {} },
+    });
+    invokeMock.mockResolvedValueOnce({
+      profile: {
+        displayName: "Lei",
+        handle: "lei",
+        avatar: `profile-image:${"a".repeat(64)}.png`,
+      },
+    });
+
+    const request = {
+      fileName: "avatar.png",
+      mimeType: "image/png",
+      bytesBase64: "aGVsbG8=",
+    };
+    const bridge = createDaemonBridge();
+    await expect(bridge.uploadProfileAvatar(request)).resolves.toEqual({
+      profile: {
+        displayName: "Lei",
+        handle: "lei",
+        avatar: `profile-image:${"a".repeat(64)}.png`,
+      },
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith("upload_profile_avatar_command", { request });
   });
 });
 

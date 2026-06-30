@@ -154,6 +154,15 @@ export const profileAvatarPresets = [
   { id: "pixel-spark", labelKey: "pixelSpark", name: "Pixel Spark" },
 ];
 
+export function isProfileImageAvatar(avatar: string | undefined): boolean {
+  return /^profile-image:[a-fA-F0-9]{64}\.(png|jpg|jpeg|webp)$/.test(avatar ?? "");
+}
+
+export function profileAvatarImageUrl(avatar: string): string | undefined {
+  if (!isProfileImageAvatar(avatar)) return undefined;
+  return `slei-avatar:///${encodeURIComponent(avatar.slice("profile-image:".length))}`;
+}
+
 export async function submitComposerDraft(input: {
   draft: string;
   asTask: boolean;

@@ -95,6 +95,12 @@ export type ProfileUpdateRequest = {
   handle?: string;
 };
 
+export type ProfileAvatarUploadRequest = {
+  fileName: string;
+  mimeType: string;
+  bytesBase64: string;
+};
+
 export type DesktopAgentView = {
   id: string;
   name: string;
@@ -718,6 +724,7 @@ export type DaemonBridge = {
   updatePreferences(request: PreferencesUpdateRequest): Promise<PreferencesReceipt>;
   listProfile(): Promise<ProfileReceipt>;
   updateProfile(request: ProfileUpdateRequest): Promise<ProfileReceipt>;
+  uploadProfileAvatar(request: ProfileAvatarUploadRequest): Promise<ProfileReceipt>;
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
   refreshRuntimeStatus(): Promise<NodeListReceipt>;
   subscribeEvents(after: number): Promise<EventReconnectReceipt>;
@@ -883,6 +890,7 @@ export function createOfflineDaemonBridge(): DaemonBridge {
       return { profile: null };
     },
     updateProfile: rejectDaemonOffline,
+    uploadProfileAvatar: rejectDaemonOffline,
     renameLocalNode: rejectDaemonOffline,
     async refreshRuntimeStatus() {
       return { nodes: [] };
@@ -948,6 +956,7 @@ export function createDaemonBridge(): DaemonBridge {
       updatePreferences: (request: PreferencesUpdateRequest) => invoke<PreferencesReceipt>("update_preferences_command", { request }),
       listProfile: () => invoke<ProfileReceipt>("list_profile_command"),
       updateProfile: (request: ProfileUpdateRequest) => invoke<ProfileReceipt>("update_profile_command", { request }),
+      uploadProfileAvatar: (request: ProfileAvatarUploadRequest) => invoke<ProfileReceipt>("upload_profile_avatar_command", { request }),
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),
       refreshRuntimeStatus: () => invoke<NodeListReceipt>("refresh_runtime_status_command"),
       subscribeEvents: (after: number) => invoke<EventReconnectReceipt>("reconnect_events_command", { after }),
