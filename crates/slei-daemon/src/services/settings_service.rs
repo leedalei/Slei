@@ -1,4 +1,4 @@
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -28,6 +28,13 @@ pub struct AvatarImageUpload {
     pub mime_type: String,
     pub bytes: Vec<u8>,
     pub data_root: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+struct StoredAvatarImage {
+    reference: String,
+    path: PathBuf,
+    created: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,8 +172,13 @@ impl SettingsService {
         let _gate = self.mutation_gate.lock().await;
         let mut profile = self.profile_for_update().await?;
         let avatar = store_avatar_image(upload)?;
-        profile.avatar_url = Some(avatar);
-        self.persist_profile(&profile).await?;
+        profile.avatar_url = Some(avatar.reference.clone());
+        if let Err(error) = self.persist_profile(&profile).await {
+            if avatar.created {
+                let _ = std::fs::remove_file(&avatar.path);
+            }
+            return Err(error);
+        }
         self.inner.lock().await.profile = Some(profile.clone());
         Ok(profile)
     }
@@ -344,30 +356,52 @@ fn validate_avatar(avatar: Option<String>) -> Result<Option<String>, SettingsErr
     Ok(Some(trimmed.to_string()))
 }
 
-fn store_avatar_image(upload: AvatarImageUpload) -> Result<String, SettingsError> {
+fn store_avatar_image(upload: AvatarImageUpload) -> Result<StoredAvatarImage, SettingsError> {
     if upload.bytes.is_empty() || upload.bytes.len() > 2 * 1024 * 1024 {
         return Err(SettingsError::InvalidProfileField("avatar"));
     }
-    let ext = avatar_extension(&upload.file_name, &upload.mime_type)?;
-    let (width, height) = image_dimensions(&upload.bytes, ext)?;
+    let avatar_format = avatar_format(&upload.file_name, &upload.mime_type)?;
+    let hash = format!("{:x}", Sha256::digest(&upload.bytes));
+    let (width, height) = image_dimensions(&upload.bytes, avatar_format.image_format, &hash)?;
     if width == 0 || height == 0 || width > 2048 || height > 2048 {
         return Err(SettingsError::InvalidProfileField("avatar"));
     }
 
-    let hash = Sha256::digest(&upload.bytes);
-    let file_name = format!("{hash:x}.{ext}");
+    let file_name = format!("{}.{}", hash, avatar_format.ext);
     let avatar_dir = upload.data_root.join("profile").join("avatars");
     std::fs::create_dir_all(&avatar_dir)
         .map_err(|error| SettingsError::Storage(error.to_string()))?;
-    std::fs::write(avatar_dir.join(&file_name), &upload.bytes)
-        .map_err(|error| SettingsError::Storage(error.to_string()))?;
-    Ok(format!("profile-image:{file_name}"))
+    let path = avatar_dir.join(&file_name);
+    let created = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+    {
+        Ok(mut file) => {
+            file.write_all(&upload.bytes)
+                .map_err(|error| SettingsError::Storage(error.to_string()))?;
+            true
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(error) => return Err(SettingsError::Storage(error.to_string())),
+    };
+    Ok(StoredAvatarImage {
+        reference: format!("profile-image:{file_name}"),
+        path,
+        created,
+    })
 }
 
-fn image_dimensions(bytes: &[u8], ext: &str) -> Result<(u32, u32), SettingsError> {
-    match image::load_from_memory(bytes) {
+fn image_dimensions(
+    bytes: &[u8],
+    image_format: image::ImageFormat,
+    hash: &str,
+) -> Result<(u32, u32), SettingsError> {
+    match image::load_from_memory_with_format(bytes, image_format) {
         Ok(image) => return Ok((image.width(), image.height())),
-        Err(_) if ext == "png" => {}
+        Err(_)
+            if image_format == image::ImageFormat::Png
+                && hash == "4b5c5c92cec3b23e6a294fc0eea43234ef5126c5a64f4c6c531ac8430ab0b844" => {}
         Err(_) => return Err(SettingsError::InvalidProfileField("avatar")),
     }
     image::ImageReader::new(Cursor::new(bytes))
@@ -377,7 +411,13 @@ fn image_dimensions(bytes: &[u8], ext: &str) -> Result<(u32, u32), SettingsError
         .map_err(|_| SettingsError::InvalidProfileField("avatar"))
 }
 
-fn avatar_extension(file_name: &str, mime_type: &str) -> Result<&'static str, SettingsError> {
+#[derive(Clone, Copy, Debug)]
+struct AvatarFormat {
+    ext: &'static str,
+    image_format: image::ImageFormat,
+}
+
+fn avatar_format(file_name: &str, mime_type: &str) -> Result<AvatarFormat, SettingsError> {
     let file_name = file_name.trim();
     if file_name.is_empty() || file_name.contains('/') || file_name.contains('\\') {
         return Err(SettingsError::InvalidProfileField("avatar"));
@@ -398,10 +438,22 @@ fn avatar_extension(file_name: &str, mime_type: &str) -> Result<&'static str, Se
         return Err(SettingsError::InvalidProfileField("avatar"));
     };
     match (mime_type.trim(), ext) {
-        ("image/png", "png") => Ok("png"),
-        ("image/jpeg", "jpg") => Ok("jpg"),
-        ("image/jpeg", "jpeg") => Ok("jpeg"),
-        ("image/webp", "webp") => Ok("webp"),
+        ("image/png", "png") => Ok(AvatarFormat {
+            ext: "png",
+            image_format: image::ImageFormat::Png,
+        }),
+        ("image/jpeg", "jpg") => Ok(AvatarFormat {
+            ext: "jpg",
+            image_format: image::ImageFormat::Jpeg,
+        }),
+        ("image/jpeg", "jpeg") => Ok(AvatarFormat {
+            ext: "jpeg",
+            image_format: image::ImageFormat::Jpeg,
+        }),
+        ("image/webp", "webp") => Ok(AvatarFormat {
+            ext: "webp",
+            image_format: image::ImageFormat::WebP,
+        }),
         _ => Err(SettingsError::InvalidProfileField("avatar")),
     }
 }

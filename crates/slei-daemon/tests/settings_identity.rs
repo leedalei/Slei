@@ -498,6 +498,18 @@ async fn settings_profile_avatar_image_upload_rejects_invalid_inputs() {
             "image/png",
             "iVBORw0KGgoAAAANSUhEUgAACAEAAAABCAYAAACl1iXMAAAAIUlEQVR42u3DAQkAAAwEoetfesvxoGDVqaqqqqqqqqr7H4NV+WnuBjSPAAAAAElFTkSuQmCC".to_string(),
         ),
+        (
+            "declared png with jpeg bytes",
+            "avatar.png",
+            "image/png",
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDi6KKK+ZP3E//Z".to_string(),
+        ),
+        (
+            "truncated png metadata",
+            "avatar.png",
+            "image/png",
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ".to_string(),
+        ),
     ];
 
     for (name, file_name, mime_type, bytes_base64) in cases {
@@ -523,6 +535,66 @@ async fn settings_profile_avatar_image_upload_rejects_invalid_inputs() {
             .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{name}");
     }
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn settings_profile_avatar_image_upload_requires_auth() {
+    let token = AuthToken::from_static("avatar-auth-token");
+    let app = build_router(AppState::for_tests(token));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/settings/profile/avatar-image")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "fileName": "avatar.png",
+                        "mimeType": "image/png",
+                        "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn settings_profile_avatar_image_upload_missing_profile_does_not_write_file() {
+    let root = temp_data_root();
+    let token = AuthToken::from_static("avatar-missing-profile-token");
+    let app =
+        build_router(AppState::for_tests_with_agent_root_async(token.clone(), root.clone()).await);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/settings/profile/avatar-image")
+                .header("authorization", token.authorization_header())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({
+                        "fileName": "avatar.png",
+                        "mimeType": "image/png",
+                        "bytesBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(!root.join("profile").join("avatars").exists());
 
     let _ = std::fs::remove_dir_all(root);
 }
