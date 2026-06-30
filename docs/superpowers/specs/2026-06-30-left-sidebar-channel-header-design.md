@@ -25,6 +25,8 @@
 - 不改 daemon 对频道成员关系的权限和校验规则。
 - 不在本任务中重做搜索、任务、成员管理、运行设备或设置页面本身。
 
+本地图片头像上传是本次用户明确要求的交付范围。实现计划可以把它作为独立阶段排在左栏和频道 header 之后，但同一轮交付必须包含 profile 图片头像端到端保存、读取和渲染。
+
 ## 单栏工作区导航
 
 `SleiAppFrame` 从 `primary rail + context sidebar + resize handle + workspace` 调整为 `workspace sidebar + resize handle + workspace`。`activeView` 仍保留 `chat/search/tasks/members/computers/settings`，右侧主内容继续复用现有 route 渲染；只是常驻入口从 rail 移到新 sidebar。
@@ -61,7 +63,7 @@
 - 打开成员资料。
 - 打开私聊。
 
-右键菜单应使用现有 Radix/shadcn 菜单组件，并提供键盘可访问的等价触发方式，避免功能只能由鼠标右键访问。
+右键菜单应使用现有 Radix/shadcn 菜单组件，并提供键盘可访问的等价触发方式：条目获得焦点时可以通过条目内的更多按钮打开菜单，同时支持 `Shift+F10` 打开同一菜单。功能不能只能由鼠标右键访问。
 
 ## 底部个人区与设置菜单
 
@@ -83,20 +85,23 @@
 
 ## 个人资料与头像上传
 
-现有 settings account panel 已支持编辑显示名称和选择头像预设。本次保留这些能力，并新增本地图片头像上传。
+现有 settings account panel 已支持编辑显示名称和选择头像预设。本次保留这些能力，并新增本地图片头像上传。当前 daemon `settings_service` 只接受 `pixel-sun`、`pixel-moon`、`pixel-cube`、`pixel-spark` 预设 id；本任务需要扩展 profile avatar 合同以支持图片头像引用。
 
 头像数据流：
 
 1. 用户在 profile 面板选择头像预设或上传本地图片。
 2. 预设头像继续通过现有 profile update 保存预设 id。
-3. 本地图片头像通过 Tauri/daemon 保存到 profile 资源目录，并返回稳定的 avatar 引用。
-4. daemon 将 avatar 引用存入 SQLite user profile。
-5. UI 渲染头像时根据 avatar 类型选择预设渲染或图片渲染。
+3. 本地图片头像通过新的 Tauri/daemon command 上传，输入包含文件名、MIME 类型和图片 bytes。daemon 负责校验、计算 sha256、保存文件，并返回新的 profile。
+4. 图片保存到 app data 下的 profile avatar 资源目录，例如 `<slei-data>/profile/avatars/<sha256>.<ext>`。该目录属于 daemon 管理的 profile 资源，不是前端生产状态。
+5. SQLite user profile 的 `avatar` 字段保存稳定引用，不保存绝对路径。图片头像引用格式为 `profile-image:<sha256>.<ext>`，例如 `profile-image:abc123.png`。预设头像仍使用现有 `pixel-*` id。
+6. UI 渲染头像时根据 avatar 类型选择预设渲染或图片渲染：`pixel-*` 使用现有预设；`profile-image:*` 通过安全的 Tauri/daemon 资源解析入口转换为可显示的本地图片 URL；未知格式回退到 initials。
 
 校验与错误处理：
 
-- 只接受常见图片类型，例如 PNG、JPEG、WebP。
-- 限制文件大小和尺寸，避免过大头像进入 profile 存储。
+- 只接受 PNG、JPEG、WebP，MIME 类型必须是 `image/png`、`image/jpeg` 或 `image/webp`，扩展名必须匹配 `.png`、`.jpg`、`.jpeg` 或 `.webp`。
+- 上传原文件大小上限为 2 MiB。
+- 解码后的宽高上限为 2048 x 2048，宽高必须都大于 0。
+- sha256 文件名用于去重和避免用户文件名进入持久化引用。
 - 上传失败时保留旧头像并显示本地化错误。
 - profile 不可用时禁用上传与保存，并展示现有 profile unavailable 状态。
 
@@ -105,6 +110,8 @@
 ## 频道 Header
 
 右侧聊天频道 header 按截图优化为两端布局。
+
+视觉参考截图：`/var/folders/7m/sf3m434s68n_z86ll9grxy1w0000gn/T/codex-clipboard-ecf9f642-5b4e-4fc5-a8db-e80d287c72dd.png`。实现不需要逐像素复刻，但应保留截图里的信息层级：左侧频道名和成员数量 pill，下一行轻量副标题，右侧紧凑成员头像 group 与加号入口。
 
 左侧标题区：
 
