@@ -31,7 +31,7 @@ describe("Slei React desktop shell", () => {
     );
 
     expect(html).toContain('data-active-view="chat"');
-    expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).toContain("slei-app-shell");
     expect(html).toContain('aria-label="工作区"');
     expect(html).toContain("slei-workspace-sidebar");
     expect(html).toContain('data-slot="button"');
@@ -263,7 +263,7 @@ describe("Slei React desktop shell", () => {
       expect(html).toContain(`data-active-view="${activeView}"`);
       expect(html).toContain('class="slei-workspace-sidebar');
       expect(html).toContain('aria-label="调整侧栏宽度"');
-      expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+      expect(html).toContain("slei-app-shell");
     }
   });
 });

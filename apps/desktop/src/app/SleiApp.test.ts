@@ -904,7 +904,8 @@ describe("createChannelAgentReplyMessage", () => {
 
     expect(source).toContain("aria-label={messages.common.resizeSidebar}");
     expect(source).toContain("role=\"separator\"");
-    expect(source).toContain("3px minmax(0, 1fr)");
+    expect(styles).toContain("3px minmax(0, 1fr)");
+    expect(styles).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(source).toContain("w-[3px]");
     expect(styles).toContain("width: 3px;");
     expect(source).toContain("!cursor-col-resize");

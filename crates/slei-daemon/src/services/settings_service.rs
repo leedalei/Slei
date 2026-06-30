@@ -362,7 +362,7 @@ fn store_avatar_image(upload: AvatarImageUpload) -> Result<StoredAvatarImage, Se
     }
     let avatar_format = avatar_format(&upload.file_name, &upload.mime_type)?;
     let hash = format!("{:x}", Sha256::digest(&upload.bytes));
-    let (width, height) = image_dimensions(&upload.bytes, avatar_format.image_format, &hash)?;
+    let (width, height) = image_dimensions(&upload.bytes, avatar_format.image_format)?;
     if width == 0 || height == 0 || width > 2048 || height > 2048 {
         return Err(SettingsError::InvalidProfileField("avatar"));
     }
@@ -395,18 +395,10 @@ fn store_avatar_image(upload: AvatarImageUpload) -> Result<StoredAvatarImage, Se
 fn image_dimensions(
     bytes: &[u8],
     image_format: image::ImageFormat,
-    hash: &str,
 ) -> Result<(u32, u32), SettingsError> {
-    match image::load_from_memory_with_format(bytes, image_format) {
-        Ok(image) => return Ok((image.width(), image.height())),
-        Err(_)
-            if image_format == image::ImageFormat::Png
-                && hash == "4b5c5c92cec3b23e6a294fc0eea43234ef5126c5a64f4c6c531ac8430ab0b844" => {}
-        Err(_) => return Err(SettingsError::InvalidProfileField("avatar")),
-    }
-    image::ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(|_| SettingsError::InvalidProfileField("avatar"))?
+    let mut reader = image::ImageReader::new(Cursor::new(bytes));
+    reader.set_format(image_format);
+    reader
         .into_dimensions()
         .map_err(|_| SettingsError::InvalidProfileField("avatar"))
 }
@@ -609,7 +601,9 @@ fn preferences_from_row(row: UserPreferencesRow) -> UserPreferences {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_supported_time_zone, locale_preference_from_env, LocalePreference};
+    use super::{
+        image_dimensions, is_supported_time_zone, locale_preference_from_env, LocalePreference,
+    };
 
     #[test]
     fn locale_preference_uses_system_locale_environment_order() {
@@ -638,6 +632,21 @@ mod tests {
         assert!(!is_supported_time_zone(""));
         assert!(!is_supported_time_zone("UTC"));
         assert!(!is_supported_time_zone("../Asia/Shanghai"));
+    }
+
+    #[test]
+    fn avatar_image_dimensions_read_png_metadata_without_decoding_pixels() {
+        let oversized_png = [
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 8, 1, 0, 0, 0, 1,
+            8, 6, 0, 0, 0, 165, 214, 37, 204, 0, 0, 0, 33, 73, 68, 65, 84, 120, 218, 237, 195, 1,
+            9, 0, 0, 12, 4, 161, 235, 95, 122, 203, 241, 160, 96, 213, 169, 170, 170, 170, 170,
+            170, 170, 170, 251, 31, 131, 85, 249, 105, 238, 6, 52, 143, 0, 0, 0, 0, 73, 69, 78, 68,
+            174, 66, 96, 130,
+        ];
+
+        let dimensions = image_dimensions(&oversized_png, image::ImageFormat::Png).unwrap();
+
+        assert_eq!(dimensions, (2049, 1));
     }
 }
 

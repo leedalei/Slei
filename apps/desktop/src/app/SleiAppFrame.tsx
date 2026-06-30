@@ -195,7 +195,6 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const shellStyle = {
     "--app-sidebar-width": `${input.sidebarWidth ?? 240}px`,
     "--app-font-size": fontSize,
-    gridTemplateColumns: "var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)",
   } as CSSProperties;
 
   useEffect(() => {
@@ -264,7 +263,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   return (
     <TooltipProvider>
     <div
-      className={cn("grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme)}
+      className={cn("slei-app-shell grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme)}
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}

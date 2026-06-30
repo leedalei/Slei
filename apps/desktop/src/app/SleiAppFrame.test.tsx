@@ -478,6 +478,28 @@ describe("SleiAppFrame global search navigation", () => {
     expect(sidebarText).not.toContain("研发频道描述");
   });
 
+  it("keeps the app shell grid responsive instead of fixing columns inline", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+        sidebarWidth={280}
+      />,
+    );
+    const shell = container.querySelector<HTMLElement>("[data-active-view='chat']");
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+
+    expect(shell).not.toBeNull();
+    expect(shell?.classList.contains("slei-app-shell")).toBe(true);
+    expect(shell?.style.gridTemplateColumns).toBe("");
+    expect(shell?.style.getPropertyValue("--app-sidebar-width")).toBe("280px");
+    expect(appCss).toContain(".slei-app-shell");
+    expect(appCss).toContain("@media (max-width: 760px)");
+    expect(appCss).toContain("grid-template-columns: minmax(0, 1fr)");
+  });
+
   it("renders the top-left brand with the transparent bubble icon asset", async () => {
     const container = await mount(
       <SleiAppFrame
@@ -551,8 +573,10 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={runtimeSetup}
       />,
     );
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(html).toContain('grid-template-columns:var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)');
+    expect(html).toContain("slei-app-shell");
+    expect(appCss).toContain("grid-template-columns: var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr)");
     expect(html).not.toContain("5.25rem");
     expect(html).not.toContain("grid h-14 w-14 place-items-center");
   });

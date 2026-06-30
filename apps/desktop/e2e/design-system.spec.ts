@@ -65,7 +65,7 @@ describe("shadcn design system wiring", () => {
     expect(appCss).toContain("@layer base");
     expect(appCss).not.toContain("Temporary legacy app compatibility styles");
     expect(appCss).not.toMatch(legacyThemeLeakagePattern);
-    expect(appCss).toContain(".slei-shell");
+    expect(appCss).toContain(".slei-app-shell");
     expect(appCss).not.toContain([".slei", "button"].join("-"));
     expect(webEntry).toContain('import "./app/app.css";');
     expect(webEntry).not.toContain(["animal", "island-ui/style"].join("-"));

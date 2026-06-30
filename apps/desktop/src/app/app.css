@@ -759,14 +759,6 @@ select:focus-visible {
   .t-tabs .t-tab { transition: none !important; }
 }
 
-.slei-shell {
-  display: grid;
-  grid-template-columns: var(--rail-width) var(--app-sidebar-width, var(--sidebar-width)) 8px minmax(0, 1fr);
-  height: 100vh;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .slei-crash-screen {
   background: color-mix(in srgb, var(--background) 86%, color-mix(in srgb, var(--destructive) 14%, var(--background)) 14%);
   color: var(--text-primary);
@@ -825,6 +817,10 @@ select:focus-visible {
   box-shadow:
     inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
     inset 10px 0 24px color-mix(in srgb, var(--glass-highlight) 24%, transparent);
+}
+
+.slei-app-shell {
+  grid-template-columns: var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr);
 }
 
 .slei-workspace-sidebar__header {
@@ -1129,6 +1125,10 @@ select:focus-visible {
 }
 
 @media (max-width: 760px) {
+  .slei-app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .slei-resize-handle {
     display: none;
   }
