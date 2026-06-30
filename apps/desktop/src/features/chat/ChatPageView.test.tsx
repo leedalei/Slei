@@ -1689,7 +1689,8 @@ describe("ChatPage mention panel", () => {
     expect(card?.textContent).toContain("Luna");
     expect(card?.textContent).toContain("@luna");
     expect(card?.textContent).toContain("产品研究 Agent");
-    expect(card?.textContent).toContain("ready");
+    expect(card?.textContent).toContain(messages.chat.memberReady);
+    expect(card?.textContent).not.toContain("ready");
     expect(card?.textContent).toContain(messages.chat.removeChannelMember("Luna"));
   });
 

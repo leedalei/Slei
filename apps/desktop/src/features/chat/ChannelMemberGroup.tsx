@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
+import { channelReadinessLabel } from "../../app/model";
 import { Empty, MemberAvatar, SelectableCard, SleiIcon } from "../../components";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
 import { Button } from "../../components/ui/button";
@@ -215,7 +216,8 @@ function ChannelMemberAvatar(input: {
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const readiness = input.member.channelReadiness?.[input.channelId] ?? "unknown";
+  const readiness = input.member.channelReadiness?.[input.channelId];
+  const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
 
@@ -270,7 +272,7 @@ function ChannelMemberAvatar(input: {
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
               <span aria-hidden="true" className={cn("size-1.5 rounded-full", readiness === "ready" ? "bg-emerald-500" : "bg-muted-foreground/50")} />
-              {readiness}
+              {readinessLabel}
             </span>
             <AlertDialog
               open={confirming}
