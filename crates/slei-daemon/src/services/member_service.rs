@@ -866,7 +866,12 @@ async fn repositories_for_data_root(data_root: PathBuf) -> Repositories {
         .await
         .expect("connect member db");
     db.migrate().await.expect("migrate member db");
-    Repositories::new(db.pool().clone())
+    let repos = Repositories::new(db.pool().clone());
+    repos
+        .seed_default_agent_role_presets()
+        .await
+        .expect("seed agent role presets");
+    repos
 }
 
 fn member_storage_error(error: sqlx::Error) -> MemberError {

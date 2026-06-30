@@ -94,6 +94,97 @@ pub struct AgentSearchRow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentRolePresetRow {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub sort_order: i64,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgentRolePresetSeed {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub description: &'static str,
+    pub sort_order: i64,
+    pub enabled: bool,
+}
+
+pub const DEFAULT_AGENT_ROLE_PRESETS: &[AgentRolePresetSeed] = &[
+    AgentRolePresetSeed {
+        id: "xiaohongshu-researcher",
+        title: "小红书调研员",
+        description: "负责从小红书调研检索信息，整理笔记、提炼趋势、对比竞品，并输出可执行的分析结论。",
+        sort_order: 10,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "research-analyst",
+        title: "资料调研员",
+        description: "负责围绕指定主题收集资料、核对来源、归纳关键事实，并形成结构化调研摘要。",
+        sort_order: 20,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "product-planner",
+        title: "产品策划员",
+        description: "负责拆解用户需求、梳理使用场景、设计功能边界，并输出清晰的产品方案。",
+        sort_order: 30,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "engineering-implementer",
+        title: "研发执行员",
+        description: "负责根据明确需求实现代码、修复缺陷、运行验证，并及时反馈风险和阻塞。",
+        sort_order: 40,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "system-architect",
+        title: "系统架构师",
+        description: "负责设计系统架构、拆分模块边界、识别技术风险，并给出可落地的演进方案。",
+        sort_order: 50,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "qa-reviewer",
+        title: "质量审查员",
+        description: "负责检查交付物的正确性、边界条件、回归风险和体验问题，并给出可复现的改进建议。",
+        sort_order: 60,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "teaching-assistant",
+        title: "教学助理",
+        description: "负责把复杂知识拆成循序渐进的讲解、练习和反馈，帮助学习者理解概念并完成训练。",
+        sort_order: 70,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "legal-researcher",
+        title: "法律研究员",
+        description: "负责整理法律、合同和合规相关资料，提炼风险点与待确认问题，并提醒用户寻求专业律师确认。",
+        sort_order: 80,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "finance-analyst",
+        title: "财务分析员",
+        description: "负责整理预算、成本、收入和指标数据，做基础测算、趋势分析和风险提示。",
+        sort_order: 90,
+        enabled: true,
+    },
+    AgentRolePresetSeed {
+        id: "operations-planner",
+        title: "运营策划员",
+        description: "负责设计活动方案、用户触达节奏、内容排期和效果指标，并持续复盘优化。",
+        sort_order: 100,
+        enabled: true,
+    },
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentUpdateRow {
     pub id: String,
     pub name: String,
@@ -764,6 +855,59 @@ impl Repositories {
         }
 
         tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn seed_default_agent_role_presets(&self) -> Result<(), sqlx::Error> {
+        for preset in DEFAULT_AGENT_ROLE_PRESETS {
+            sqlx::query(
+                "INSERT OR IGNORE INTO agent_role_presets(
+                    id, title, description, sort_order, enabled
+                 )
+                 VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(preset.id)
+            .bind(preset.title)
+            .bind(preset.description)
+            .bind(preset.sort_order)
+            .bind(if preset.enabled { 1 } else { 0 })
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn agent_role_presets(&self) -> Result<Vec<AgentRolePresetRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, title, description, sort_order, enabled
+             FROM agent_role_presets
+             WHERE enabled = 1
+             ORDER BY sort_order ASC, title ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(agent_role_preset_row_from_sql)
+            .collect()
+    }
+
+    /// Exists only for repository tests that need to exercise disabled preset filtering.
+    pub async fn set_agent_role_preset_enabled_for_test(
+        &self,
+        id: &str,
+        enabled: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE agent_role_presets
+             SET enabled = ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?",
+        )
+        .bind(if enabled { 1 } else { 0 })
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
@@ -4643,6 +4787,19 @@ fn agent_search_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentSearch
         avatar_seed: row.try_get("avatar_seed")?,
         system_owned: system_owned != 0,
         updated_at: row.try_get("updated_at")?,
+    })
+}
+
+fn agent_role_preset_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<AgentRolePresetRow, sqlx::Error> {
+    let enabled: i64 = row.try_get("enabled")?;
+    Ok(AgentRolePresetRow {
+        id: row.try_get("id")?,
+        title: row.try_get("title")?,
+        description: row.try_get("description")?,
+        sort_order: row.try_get("sort_order")?,
+        enabled: enabled != 0,
     })
 }
 

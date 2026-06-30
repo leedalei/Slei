@@ -467,6 +467,10 @@ async fn repositories_for_data_root(data_root: PathBuf) -> (Repositories, Option
         .expect("connect application db");
     db.migrate().await.expect("migrate application db");
     let repos = Repositories::new(db.pool().clone());
+    repos
+        .seed_default_agent_role_presets()
+        .await
+        .expect("seed agent role presets");
     let local_node = repos.node("local-node").await.expect("load local node");
     (repos, local_node)
 }
