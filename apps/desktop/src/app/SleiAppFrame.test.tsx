@@ -647,6 +647,44 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onConversationSelect).toHaveBeenCalledWith("dm:agent_coda");
   });
 
+  it("routes channel edit menu actions through the frame edit path", async () => {
+    const onChannelEdit = vi.fn();
+    const onChannelSelect = vi.fn();
+    const onViewChange = vi.fn();
+    const data = createSleiFixtures({
+      channels: [
+        { id: "ops", name: "ops", description: "运维频道描述", unread: 0, activeSessionId: "session:ops" },
+        { id: "dev", name: "dev", description: "研发频道描述", projectPaths: ["/workspace/dev"], unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeChannelId="ops"
+        activeView="tasks"
+        data={data}
+        locale="zh-CN"
+        onChannelEdit={onChannelEdit}
+        onChannelSelect={onChannelSelect}
+        onViewChange={onViewChange}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+    const devRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]');
+
+    await act(async () => {
+      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("编辑频道"))
+        ?.click();
+    });
+
+    expect(onChannelEdit).toHaveBeenCalledWith("dev");
+    expect(onChannelSelect).toHaveBeenCalledWith("dev");
+    expect(onViewChange).toHaveBeenCalledWith("chat");
+  });
+
   it("does not keep old primary navigation tooltip wiring in the app frame", () => {
     const source = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
 

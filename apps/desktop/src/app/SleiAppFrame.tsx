@@ -227,6 +227,7 @@ export type SleiAppFrameProps = {
   onChannelCreateLog?: (message: string, context?: Record<string, unknown>) => void;
   onChannelCreateRefresh?: (channelId: string) => Promise<SleiFixtures["channels"]> | SleiFixtures["channels"];
   onChannelDelete?: (channelId: string) => void;
+  onChannelEdit?: (channelId: string) => void;
   onChannelMemberAdd?: (agentId: string) => Promise<void> | void;
   onChannelMemberRemove?: (agentId: string) => Promise<void> | void;
   onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void;
@@ -361,6 +362,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
 
+  function handleChannelEdit(channelId: string) {
+    input.onChannelEdit?.(channelId);
+    input.onChannelSelect?.(channelId);
+    input.onViewChange?.("chat");
+  }
+
   return (
     <TooltipProvider>
     <div
@@ -389,6 +396,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         onChannelCreateLog={input.onChannelCreateLog}
         onChannelCreateRefresh={input.onChannelCreateRefresh}
         onChannelDelete={input.onChannelDelete}
+        onChannelEdit={handleChannelEdit}
         onChannelSelect={input.onChannelSelect}
         onConversationSelect={input.onConversationSelect}
         onInteractiveCardComplete={input.onInteractiveCardComplete}

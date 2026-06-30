@@ -2508,6 +2508,18 @@ export function SleiApp() {
     navigateToView("chat");
   }
 
+  function selectChannelForChat(channelId: string) {
+    setChatWorkspaceMode("chat");
+    setActiveChannelId(channelId);
+    setActiveConversationId(undefined);
+    setActiveSessionId(undefined);
+  }
+
+  function handleEditChannel(channelId: string) {
+    selectChannelForChat(channelId);
+    navigateToView("chat");
+  }
+
   return (
     <SleiAppFrame
       activeChatWorkspace={chatWorkspaceMode}
@@ -2537,12 +2549,8 @@ export function SleiApp() {
       onChannelProjectPathsChange={handleReplaceChannelProjectPaths}
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
-      onChannelSelect={(channelId) => {
-        setChatWorkspaceMode("chat");
-        setActiveChannelId(channelId);
-        setActiveConversationId(undefined);
-        setActiveSessionId(undefined);
-      }}
+      onChannelEdit={handleEditChannel}
+      onChannelSelect={selectChannelForChat}
       onComputerCreate={handleCreateComputer}
       onComputerDelete={handleDeleteComputer}
       onComputerRename={handleRenameComputer}
