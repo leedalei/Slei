@@ -115,7 +115,12 @@ async fn task_service_blocks_root_delete_while_active_and_updates_status() {
     assert!(err.to_string().contains("active task"));
 
     service
-        .add_reply(&task.id, "agent_coda", "active task completed", "task-key-2-reply")
+        .add_reply(
+            &task.id,
+            "agent_coda",
+            "active task completed",
+            "task-key-2-reply",
+        )
         .await
         .unwrap();
     service

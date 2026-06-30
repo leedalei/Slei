@@ -316,11 +316,12 @@ describe("SleiAppFrame agent creation modal", () => {
     expect(presetList?.className).toContain("overflow-y-auto");
     expect(document.body.textContent).toContain("教师");
 
+    const presetCard = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("教师") && button.textContent?.includes("课程讲解"));
     await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
-        .find((button) => button.textContent?.includes("教师") && button.textContent?.includes("课程讲解"))
-        ?.click();
+      presetCard?.click();
     });
+    expect(presetCard?.getAttribute("aria-pressed")).toBe("true");
     await act(async () => {
       currentDialogSubmit()?.click();
     });
@@ -354,6 +355,10 @@ describe("SleiAppFrame agent creation modal", () => {
 
     await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "Coda");
     expect(document.body.textContent).toContain("已有同名成员");
+    expect(currentDialogSubmit()?.disabled).toBe(true);
+
+    await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "一".repeat(33));
+    expect(document.body.textContent).toContain("名称不能超过 32 个字符");
     expect(currentDialogSubmit()?.disabled).toBe(true);
 
     await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "系统架构师");

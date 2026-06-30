@@ -2098,6 +2098,95 @@ mod tests {
     }
 
     #[test]
+    fn agent_create_command_does_not_fallback_when_daemon_rejects_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"error":"duplicate name"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = create_agent(
+            &broker,
+            AgentCreateRequest {
+                name: "Nova".to_string(),
+                handle: "@Nova".to_string(),
+                runtime_kind: "ClaudeCode".to_string(),
+                model: "Sonnet".to_string(),
+                node_id: "local-node".to_string(),
+                description: "Architect".to_string(),
+                avatar_seed: None,
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("POST /v1/agents HTTP/1.1"));
+        assert!(error.contains("duplicate name"));
+        assert!(!error.contains("daemon unavailable"));
+        assert!(list_agents(&broker).agents.is_empty());
+    }
+
+    #[test]
+    fn agent_update_command_does_not_fallback_when_daemon_rejects_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_http_request(&mut stream);
+            let response = r#"{"error":"duplicate name"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+            request
+        });
+        let broker = DaemonBroker::for_tests(RuntimeDescriptor {
+            endpoint: format!("http://127.0.0.1:{port}"),
+            event_socket: format!("ws://127.0.0.1:{port}/v1/events/ws"),
+            token: "secret-token".to_string(),
+            daemon_version: "0.1.0".to_string(),
+            protocol_version: "v1".to_string(),
+        });
+
+        let error = update_agent(
+            &broker,
+            "agent_nova",
+            AgentUpdateRequest {
+                name: Some("Nova".to_string()),
+                ..AgentUpdateRequest::default()
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        let request = handle.join().unwrap();
+
+        assert!(request.contains("PATCH /v1/agents/agent_nova HTTP/1.1"));
+        assert!(error.contains("duplicate name"));
+        assert!(!error.contains("daemon unavailable"));
+    }
+
+    #[test]
     fn broker_agent_workspaces_keep_broker_data_root_when_env_changes() {
         let _env_guard = test_env_lock();
         let first_root = std::env::temp_dir().join(format!(

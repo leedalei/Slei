@@ -68,6 +68,7 @@ describe("agent creation helpers", () => {
     expect(validateAgentDisplayName("小红书调研员", [])).toBeNull();
     expect(validateAgentDisplayName("系统 架构师", [])).toBe("format");
     expect(validateAgentDisplayName("legal-researcher", [])).toBe("format");
+    expect(validateAgentDisplayName("一".repeat(33), [])).toBe("length");
     expect(validateAgentDisplayName("架构师", [agent({ id: "agent_1", name: "架构师" })])).toBe("duplicate");
   });
 

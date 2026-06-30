@@ -1877,9 +1877,12 @@ impl DaemonBroker {
     pub fn create_agent(&self, request: AgentCreateRequest) -> Result<AgentReceipt, AgentError> {
         validate_agent_create(&request)?;
 
-        if let Some(receipt) = self.create_agent_in_daemon(&request) {
-            self.upsert_local_agent(receipt.agent.clone());
-            return Ok(receipt);
+        match self.create_agent_in_daemon(&request)? {
+            Some(receipt) => {
+                self.upsert_local_agent(receipt.agent.clone());
+                return Ok(receipt);
+            }
+            None => {}
         }
         if self.offline_fallback == OfflineFallback::Empty {
             return Err(AgentError::DaemonUnavailable);
@@ -1943,9 +1946,12 @@ impl DaemonBroker {
         agent_id: &str,
         request: AgentUpdateRequest,
     ) -> Result<AgentReceipt, AgentError> {
-        if let Some(receipt) = self.update_agent_in_daemon(agent_id, &request) {
-            self.upsert_local_agent(receipt.agent.clone());
-            return Ok(receipt);
+        match self.update_agent_in_daemon(agent_id, &request)? {
+            Some(receipt) => {
+                self.upsert_local_agent(receipt.agent.clone());
+                return Ok(receipt);
+            }
+            None => {}
         }
         if self.offline_fallback == OfflineFallback::Empty {
             return Err(AgentError::DaemonUnavailable);
@@ -3232,37 +3238,54 @@ impl DaemonBroker {
         serde_json::from_str::<SkillListReceipt>(&response).ok()
     }
 
-    fn create_agent_in_daemon(&self, request: &AgentCreateRequest) -> Option<AgentReceipt> {
-        let payload = serde_json::to_string(request).ok()?;
+    fn create_agent_in_daemon(
+        &self,
+        request: &AgentCreateRequest,
+    ) -> Result<Option<AgentReceipt>, AgentError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| AgentError::DaemonResponse(error.to_string()))?;
         let idempotency_key = format!(
             "desktop-agent-create-{}-{}",
             normalize_handle(&request.handle)
-                .ok()?
+                .map_err(|_| AgentError::InvalidHandle)?
                 .trim_start_matches('@'),
             monotonic_id()
         );
-        let response = self.send_daemon_request(
+        let response = match self.send_daemon_request_checked(
             "POST",
             "/v1/agents",
             Some(&payload),
             &[("Idempotency-Key", idempotency_key.as_str())],
-        )?;
-        serde_json::from_str::<AgentReceipt>(&response).ok()
+        ) {
+            Ok(response) => response,
+            Err(error) if is_daemon_unavailable_error(&error) => return Ok(None),
+            Err(error) => return Err(AgentError::DaemonRequest(error)),
+        };
+        serde_json::from_str::<AgentReceipt>(&response)
+            .map(Some)
+            .map_err(|error| AgentError::DaemonResponse(error.to_string()))
     }
 
     fn update_agent_in_daemon(
         &self,
         agent_id: &str,
         request: &AgentUpdateRequest,
-    ) -> Option<AgentReceipt> {
-        let payload = serde_json::to_string(request).ok()?;
-        let response = self.send_daemon_request(
+    ) -> Result<Option<AgentReceipt>, AgentError> {
+        let payload = serde_json::to_string(request)
+            .map_err(|error| AgentError::DaemonResponse(error.to_string()))?;
+        let response = match self.send_daemon_request_checked(
             "PATCH",
             &format!("/v1/agents/{agent_id}"),
             Some(&payload),
             &[],
-        )?;
-        serde_json::from_str::<AgentReceipt>(&response).ok()
+        ) {
+            Ok(response) => response,
+            Err(error) if is_daemon_unavailable_error(&error) => return Ok(None),
+            Err(error) => return Err(AgentError::DaemonRequest(error)),
+        };
+        serde_json::from_str::<AgentReceipt>(&response)
+            .map(Some)
+            .map_err(|error| AgentError::DaemonResponse(error.to_string()))
     }
 
     fn delete_agent_in_daemon(&self, agent_id: &str) -> Option<AgentReceipt> {

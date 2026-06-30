@@ -714,6 +714,7 @@ impl MemberService {
 
     async fn load_product_agents_from_repo(&self) -> Vec<ProductAgentRecord> {
         let rows = self.repos.agents().await.expect("load product agents");
+        assert_unique_product_agent_handles(&rows);
         let mut agents = Vec::new();
         for row in rows {
             agents.push(
@@ -870,6 +871,19 @@ fn product_agent_from_row(
         channel_ids,
         created_at: row.created_at,
         updated_at: row.updated_at,
+    }
+}
+
+fn assert_unique_product_agent_handles(rows: &[AgentRow]) {
+    let mut seen = HashMap::<String, String>::new();
+    for row in rows {
+        let key = row.handle.to_lowercase();
+        if let Some(existing_id) = seen.insert(key.clone(), row.id.clone()) {
+            panic!(
+                "duplicate product agent handle after Unicode case folding: handle={key} agent_ids={existing_id},{}",
+                row.id
+            );
+        }
     }
 }
 

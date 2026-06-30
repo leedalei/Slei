@@ -412,6 +412,7 @@ export type DesktopMessages = {
     refreshAvatar: string;
     nameRequired: string;
     nameInvalid: string;
+    nameTooLong: string;
     nameDuplicate: string;
     title: string;
   };

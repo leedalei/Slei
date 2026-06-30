@@ -3573,11 +3573,8 @@ async fn agent_send_api_mention_can_match_handle_containing_at_sign() {
 
 #[tokio::test]
 async fn agent_send_api_does_not_match_handle_prefix_without_boundary() {
-    let state = app_state_with_agent_handles(&[
-        ("agent_foo", "@foo"),
-        ("agent_sender", "@sender"),
-    ])
-    .await;
+    let state =
+        app_state_with_agent_handles(&[("agent_foo", "@foo"), ("agent_sender", "@sender")]).await;
     state
         .channels()
         .create_channel(

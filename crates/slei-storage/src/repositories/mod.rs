@@ -115,7 +115,8 @@ pub const DEFAULT_AGENT_ROLE_PRESETS: &[AgentRolePresetSeed] = &[
     AgentRolePresetSeed {
         id: "xiaohongshu-researcher",
         title: "小红书调研员",
-        description: "负责从小红书调研检索信息，整理笔记、提炼趋势、对比竞品，并输出可执行的分析结论。",
+        description:
+            "负责从小红书调研检索信息，整理笔记、提炼趋势、对比竞品，并输出可执行的分析结论。",
         sort_order: 10,
         enabled: true,
     },
@@ -150,7 +151,8 @@ pub const DEFAULT_AGENT_ROLE_PRESETS: &[AgentRolePresetSeed] = &[
     AgentRolePresetSeed {
         id: "qa-reviewer",
         title: "质量审查员",
-        description: "负责检查交付物的正确性、边界条件、回归风险和体验问题，并给出可复现的改进建议。",
+        description:
+            "负责检查交付物的正确性、边界条件、回归风险和体验问题，并给出可复现的改进建议。",
         sort_order: 60,
         enabled: true,
     },
@@ -164,7 +166,8 @@ pub const DEFAULT_AGENT_ROLE_PRESETS: &[AgentRolePresetSeed] = &[
     AgentRolePresetSeed {
         id: "legal-researcher",
         title: "法律研究员",
-        description: "负责整理法律、合同和合规相关资料，提炼风险点与待确认问题，并提醒用户寻求专业律师确认。",
+        description:
+            "负责整理法律、合同和合规相关资料，提炼风险点与待确认问题，并提醒用户寻求专业律师确认。",
         sort_order: 80,
         enabled: true,
     },

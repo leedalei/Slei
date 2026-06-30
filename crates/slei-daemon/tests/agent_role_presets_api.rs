@@ -6,7 +6,10 @@ use axum::http::{Request, Response, StatusCode};
 use serde_json::{json, Value};
 use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
+use slei_daemon::services::member_service::MemberService;
 use slei_daemon::state::AppState;
+use slei_storage::db::SleiDb;
+use slei_storage::repositories::Repositories;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -239,6 +242,50 @@ async fn agent_create_rejects_unicode_case_duplicate_handle() {
     assert_eq!(duplicate.status(), StatusCode::CONFLICT);
     let body = response_json(duplicate).await;
     assert_eq!(body["error"], "duplicate handle");
+}
+
+#[tokio::test]
+#[should_panic(expected = "duplicate product agent handle after Unicode case folding")]
+async fn member_service_rejects_persisted_unicode_case_duplicate_handles() {
+    let root = make_temp_dir("agent-role-presets-api-persisted-unicode-duplicate");
+    let database_url = format!("sqlite://{}", root.join("slei.sqlite").display());
+    let db = SleiDb::connect(&database_url).await.unwrap();
+    db.migrate().await.unwrap();
+    let repos = Repositories::new(db.pool().clone());
+
+    repos
+        .upsert_agent(
+            "agent_upper",
+            "UmlautUpper",
+            "@Ä",
+            "agent",
+            false,
+            "ClaudeCode",
+            "Sonnet",
+            "local-node",
+            "Uppercase non-ASCII handle.",
+            "avatar-upper",
+        )
+        .await
+        .unwrap();
+    repos
+        .upsert_agent(
+            "agent_lower",
+            "UmlautLower",
+            "@ä",
+            "agent",
+            false,
+            "ClaudeCode",
+            "Sonnet",
+            "local-node",
+            "Lowercase non-ASCII handle.",
+            "avatar-lower",
+        )
+        .await
+        .unwrap();
+
+    let service = MemberService::new(root, repos);
+    let _ = service.list_product_agents().await;
 }
 
 #[tokio::test]

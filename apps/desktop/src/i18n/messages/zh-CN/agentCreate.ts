@@ -31,6 +31,7 @@ export const agentCreate = {
   refreshAvatar: "重新生成头像",
   nameRequired: "请输入名称",
   nameInvalid: "名称不能包含空格或 -",
+  nameTooLong: "名称不能超过 32 个字符",
   nameDuplicate: "已有同名成员",
   title: "创建智能体",
 };

@@ -1840,6 +1840,8 @@ function AgentCreateModal(input: {
                         ? input.messages.agentCreate.nameRequired
                         : nameError === "duplicate"
                           ? input.messages.agentCreate.nameDuplicate
+                          : nameError === "length"
+                            ? input.messages.agentCreate.nameTooLong
                           : input.messages.agentCreate.nameInvalid}
                     </p>
                   ) : null}
@@ -1876,6 +1878,7 @@ function AgentCreateModal(input: {
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {rolePresets.map((preset) => (
                           <button
+                            aria-pressed={selectedPresetId === preset.id}
                             className={cn(
                               "grid gap-1 rounded-md border p-3 text-left text-sm transition-colors",
                               selectedPresetId === preset.id

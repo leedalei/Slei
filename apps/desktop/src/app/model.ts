@@ -39,7 +39,7 @@ export type AgentDraftInput = {
   avatarSeed?: string;
 };
 
-export type AgentDisplayNameValidation = "required" | "format" | "duplicate";
+export type AgentDisplayNameValidation = "required" | "format" | "length" | "duplicate";
 
 export function agentHandleFromName(name: string): string {
   return `@${name.trim()}`;
@@ -52,6 +52,7 @@ export function validateAgentDisplayName(
   const trimmed = name.trim();
   if (!trimmed) return "required";
   if (/\s/.test(trimmed) || trimmed.includes("-")) return "format";
+  if (Array.from(trimmed).length > 32) return "length";
   if (members.some((member) => member.name.trim() === trimmed)) return "duplicate";
   return null;
 }

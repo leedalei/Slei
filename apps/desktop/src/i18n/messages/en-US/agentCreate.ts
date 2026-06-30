@@ -31,6 +31,7 @@ export const agentCreate = {
   refreshAvatar: "Refresh avatar",
   nameRequired: "Enter a name",
   nameInvalid: "Name cannot contain spaces or -",
+  nameTooLong: "Name cannot exceed 32 characters",
   nameDuplicate: "A member already has this name",
   title: "Create Agent",
 };
