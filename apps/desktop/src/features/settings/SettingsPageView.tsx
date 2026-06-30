@@ -1,9 +1,10 @@
+import { useRef } from "react";
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,7 +49,8 @@ export function SettingsPage(input: SettingsPageInput) {
   const preferencePending = Boolean(input.pendingPreference);
   const profilePending = Boolean(input.pendingProfileField);
   const avatarUploadId = "settings-profile-avatar-upload";
-  const avatarUploadDisabled = input.pendingProfileField === "avatar" || !input.onProfileAvatarUpload;
+  const avatarUploadDisabled = profilePending || !input.onProfileAvatarUpload;
+  const avatarUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   function updateNotification(field: keyof NotificationPreferences, value: boolean) {
     runSettingsFireAndForgetAction(() => input.onNotificationsChange?.({
@@ -119,10 +121,11 @@ export function SettingsPage(input: SettingsPageInput) {
                   <input
                     accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                     aria-label={labels.avatarUpload}
-                    className="sr-only"
+                    className="hidden"
                     data-settings-avatar-upload="true"
                     disabled={avatarUploadDisabled}
                     id={avatarUploadId}
+                    ref={avatarUploadInputRef}
                     onChange={(event) => {
                       const file = event.currentTarget.files?.[0];
                       event.currentTarget.value = "";
@@ -131,16 +134,16 @@ export function SettingsPage(input: SettingsPageInput) {
                     }}
                     type="file"
                   />
-                  <Label
-                    aria-disabled={avatarUploadDisabled ? "true" : undefined}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" }),
-                      avatarUploadDisabled && "pointer-events-none opacity-50",
-                    )}
-                    htmlFor={avatarUploadId}
+                  <Button
+                    data-settings-avatar-upload-trigger="true"
+                    disabled={avatarUploadDisabled}
+                    onClick={() => avatarUploadInputRef.current?.click()}
+                    size="sm"
+                    type="button"
+                    variant="outline"
                   >
                     {labels.avatarUpload}
-                  </Label>
+                  </Button>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {profileAvatarPresets.map((preset) => (

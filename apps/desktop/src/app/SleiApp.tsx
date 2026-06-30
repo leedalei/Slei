@@ -24,6 +24,7 @@ import {
   type PermissionDecision,
   type GlobalMessageSearchResult,
   type MessagePageQuery,
+  type ProfileAvatarUploadRequest,
   type SaveMessageRequest,
   type SavedMessageView,
   type AgentActivityListReceipt,
@@ -817,6 +818,15 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
   }
   return btoa(binary);
+}
+
+export async function createProfileAvatarUploadRequest(file: File, labels: DesktopMessages["settings"]): Promise<ProfileAvatarUploadRequest> {
+  if (file.size <= 0 || !supportedProfileAvatarMimeTypes.has(file.type)) {
+    throw new Error(labels.avatarUploadInvalid);
+  }
+
+  const bytesBase64 = arrayBufferToBase64(await file.arrayBuffer());
+  return { fileName: file.name, mimeType: file.type, bytesBase64 };
 }
 
 function formatDiagnosticEventToast(prefix: string, event: DiagnosticEventView) {
@@ -2453,12 +2463,8 @@ export function SleiApp() {
       if (!profile) {
         throw new Error(messages.settings.profileUnavailable);
       }
-      if (file.size <= 0 || !supportedProfileAvatarMimeTypes.has(file.type)) {
-        throw new Error(messages.settings.avatarUploadInvalid);
-      }
-
-      const bytesBase64 = arrayBufferToBase64(await file.arrayBuffer());
-      const receipt = await bridge.uploadProfileAvatar({ fileName: file.name, mimeType: file.type, bytesBase64 });
+      const request = await createProfileAvatarUploadRequest(file, messages.settings);
+      const receipt = await bridge.uploadProfileAvatar(request);
       setProfile(receipt.profile);
       showAppToast(messages.settings.updateSuccess, "success");
     } catch (error) {

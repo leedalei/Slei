@@ -17,6 +17,7 @@ import {
   keepOnlyClaimedAgentActivityByDiagnostic,
   markAgentActivityFailedByDiagnostic,
   applyPreferenceMutation,
+  createProfileAvatarUploadRequest,
   removeCompletedAgentActivityByDiagnostic,
   daemonEventNeedsAgentRefresh,
   taskThreadIdFromDaemonEvent,
@@ -307,6 +308,23 @@ describe("createChannelAgentReplyMessage", () => {
     expect(source).toContain("showAppToast(messages.settings.updateSuccess, \"success\")");
     expect(source).toContain("formatAppErrorToast(messages.settings.updateFailed, error)");
     expect(source).toContain("if (field === \"avatar\") showAppToast(messages.settings.updateSuccess, \"success\")");
+  });
+
+  it("builds profile avatar upload bridge requests from supported image files", async () => {
+    const file = new File([Uint8Array.from([137, 80, 78, 71])], "avatar.png", { type: "image/png" });
+
+    await expect(createProfileAvatarUploadRequest(file, createDesktopMessages("zh-CN").settings)).resolves.toEqual({
+      fileName: "avatar.png",
+      mimeType: "image/png",
+      bytesBase64: "iVBORw==",
+    });
+  });
+
+  it("rejects unsupported profile avatar upload MIME types before bridge calls", async () => {
+    const file = new File([Uint8Array.from([1, 2, 3])], "avatar.gif", { type: "image/gif" });
+
+    await expect(createProfileAvatarUploadRequest(file, createDesktopMessages("zh-CN").settings))
+      .rejects.toThrow("请选择非空的 PNG、JPG 或 WebP 图片");
   });
 
   it("keeps direct agent activity during pending refresh and removes it after the agent reply appears", () => {

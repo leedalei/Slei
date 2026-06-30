@@ -351,6 +351,49 @@ describe("SettingsPage header", () => {
     expect(inputByLabel(root, "上传头像图片").disabled).toBe(true);
   });
 
+  it("disables avatar upload while the display name profile field is pending", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        pendingProfileField="displayName"
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    expect(inputByLabel(root, "上传头像图片").disabled).toBe(true);
+  });
+
+  it("renders the avatar upload trigger as a focusable button", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+    const button = root.querySelector<HTMLButtonElement>('button[data-settings-avatar-upload-trigger="true"]');
+
+    expect(button?.textContent).toContain("上传头像图片");
+    expect(button?.disabled).toBe(false);
+    button?.focus();
+    expect(document.activeElement).toBe(button);
+  });
+
   it("does not render an active avatar upload control when profile is unavailable", async () => {
     const messages = createDesktopMessages("zh-CN");
     const root = await mountSettingsPage(
