@@ -2459,6 +2459,7 @@ export function SleiApp() {
       data={data}
       guideBootstrapping={guideBootstrapping}
       onAgentCreate={handleCreateAgent}
+      onAgentRolePresetsLoad={() => bridge.listAgentRolePresets()}
       onAgentDelete={handleDeleteAgent}
       onAgentUpdate={handleUpdateAgent}
       locale={locale}

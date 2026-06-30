@@ -18,6 +18,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -42,6 +43,8 @@ import {
   type AgentActivityListReceipt,
   type AgentWorkspaceFileReceipt,
   type AgentWorkspaceListReceipt,
+  type AgentRolePresetReceipt,
+  type AgentRolePresetView,
   type GlobalMessageSearchResult,
   type GlobalSearchQuery,
   type GlobalSearchReceipt,
@@ -59,18 +62,22 @@ import { TasksRoute } from "./routes/TasksRoute";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import {
   channelReadinessLabel,
+  agentAvatarSeedFromName,
+  agentHandleFromName,
   defaultAppearance,
   defaultNotifications,
   defaultTimeZone,
   deviceOsLabel,
   localHumanPresentation,
   normalizeAppearanceTheme,
+  refreshedAgentAvatarSeed,
   stripChannelHash,
   type AgentDraftInput,
   type AppView,
   type ChatSearchFilters,
   type SettingsPanel,
   type UserProfile,
+  validateAgentDisplayName,
 } from "./model";
 
 const primaryRailWidth = "5.25rem";
@@ -222,6 +229,7 @@ export type SleiAppFrameProps = {
   sidebarWidth?: number;
   savedMessages?: SavedMessageView[];
   onAgentCreate?: (request: AgentDraftInput) => Promise<void> | void;
+  onAgentRolePresetsLoad?: () => Promise<AgentRolePresetReceipt> | AgentRolePresetReceipt;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
   onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
@@ -485,8 +493,10 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       {agentCreateOpen ? (
         <AgentCreateModal
           draft={agentDraft}
+          members={input.data.members}
           messages={messages}
           nodes={input.runtimeSetup.nodes}
+          onRolePresetsLoad={input.onAgentRolePresetsLoad}
           onClose={() => {
             setAgentCreateOpen(false);
             setAgentDraft(undefined);
@@ -1674,107 +1684,227 @@ function ShellDialog(input: {
 
 function AgentCreateModal(input: {
   draft?: Partial<AgentDraftInput>;
+  members: SleiMember[];
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
+  onRolePresetsLoad?: () => Promise<AgentRolePresetReceipt> | AgentRolePresetReceipt;
   onClose: () => void;
   onCreate?: (request: AgentDraftInput) => void;
 }) {
   const firstNode = input.nodes[0];
   const firstRuntime = firstNode?.runtimes.find((runtime) => runtime.readiness === "ready") ?? firstNode?.runtimes[0];
   const [name, setName] = useState(input.draft?.name ?? "");
-  const [handle, setHandle] = useState(input.draft?.handle ?? "");
   const [runtimeKind, setRuntimeKind] = useState(input.draft?.runtimeKind ?? firstRuntime?.kind ?? "ClaudeCode");
   const [model, setModel] = useState(input.draft?.model ?? "Sonnet");
   const [nodeId, setNodeId] = useState(input.draft?.nodeId ?? firstNode?.id ?? "local-node");
   const [description, setDescription] = useState(input.draft?.description ?? "");
+  const [descriptionMode, setDescriptionMode] = useState<"custom" | "preset">("custom");
+  const [rolePresets, setRolePresets] = useState<AgentRolePresetView[]>([]);
+  const [rolePresetsLoading, setRolePresetsLoading] = useState(false);
+  const [rolePresetsError, setRolePresetsError] = useState<string | undefined>();
+  const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>();
+  const [avatarRefreshIndex, setAvatarRefreshIndex] = useState(0);
+  const [avatarManuallyRefreshed, setAvatarManuallyRefreshed] = useState(false);
+  const trimmedName = name.trim();
+  const nameError = validateAgentDisplayName(trimmedName, input.members);
+  const selectedPreset = rolePresets.find((preset) => preset.id === selectedPresetId);
+  const avatarSeed = avatarManuallyRefreshed
+    ? refreshedAgentAvatarSeed(trimmedName, avatarRefreshIndex)
+    : agentAvatarSeedFromName(trimmedName);
+  const createDisabled = Boolean(nameError) || (descriptionMode === "preset" && !selectedPreset);
+
+  async function loadRolePresets() {
+    if (!input.onRolePresetsLoad) {
+      setRolePresets([]);
+      return;
+    }
+    setRolePresetsLoading(true);
+    setRolePresetsError(undefined);
+    try {
+      const receipt = await input.onRolePresetsLoad();
+      setRolePresets(receipt.presets);
+      setSelectedPresetId((current) => current && receipt.presets.some((preset) => preset.id === current) ? current : undefined);
+    } catch (error) {
+      setRolePresets([]);
+      setRolePresetsError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRolePresetsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadRolePresets();
+  }, []);
 
   function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const trimmedName = name.trim();
-    const trimmedHandle = handle.trim();
-    if (!trimmedName || !trimmedHandle) return;
+    if (createDisabled) return;
     input.onCreate?.({
       name: trimmedName,
-      handle: normalizeHandleInput(trimmedHandle),
+      handle: agentHandleFromName(trimmedName),
       runtimeKind,
       model,
       nodeId,
-      description: description.trim() || input.messages.agentCreate.defaultDescription(trimmedName),
+      description: descriptionMode === "preset"
+        ? selectedPreset?.description ?? input.messages.agentCreate.defaultDescription(trimmedName)
+        : description.trim() || input.messages.agentCreate.defaultDescription(trimmedName),
+      avatarSeed,
     });
   }
 
   return (
     <ShellDialog closeLabel={input.messages.common.cancel} open onOpenChange={(open) => {
       if (!open) input.onClose();
-    }} className="slei-agent-modal max-h-[min(90vh,44rem)] overflow-hidden sm:max-w-lg">
+    }} className="slei-agent-modal max-h-[min(90vh,46rem)] overflow-hidden sm:max-w-4xl">
         <DialogHeader>
           <Badge className="w-fit" variant="secondary">{input.messages.agentCreate.fallbackAgent}</Badge>
           <DialogTitle>{input.messages.agentCreate.title}</DialogTitle>
           <DialogDescription>{input.messages.agentCreate.associatedDevice} / {input.messages.agentCreate.model} / {input.messages.agentCreate.description}</DialogDescription>
         </DialogHeader>
         <form className="grid min-h-0 gap-4" onSubmit={submitCreate}>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-agent-runtime">Runtime</Label>
-            <Select value={runtimeKind} onValueChange={setRuntimeKind}>
-              <SelectTrigger aria-label="Runtime" className="w-full" id="slei-agent-runtime">
-                <SelectValue placeholder="Runtime" />
-              </SelectTrigger>
-              <SelectContent>
-                {input.nodes
-                  .flatMap((node) => node.runtimes.map((runtime) => runtime.kind))
-                  .filter((kind, index, all) => all.indexOf(kind) === index)
-                  .map((kind) => <SelectItem key={kind} value={kind}>{kind}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label className="gap-1" htmlFor="slei-agent-name">
-              {input.messages.agentCreate.name}
-              <span aria-hidden="true" className="text-destructive">*</span>
-            </Label>
-            <Input id="slei-agent-name" onChange={(event) => {
-              setName(event.currentTarget.value);
-              if (!handle.trim()) setHandle(normalizeHandleInput(event.currentTarget.value));
-            }} required value={name} />
-          </div>
-          <div className="grid gap-2">
-            <Label className="gap-1" htmlFor="slei-agent-handle">
-              {input.messages.agentCreate.handle}
-              <span aria-hidden="true" className="text-destructive">*</span>
-            </Label>
-            <Input id="slei-agent-handle" onChange={(event) => setHandle(event.currentTarget.value)} required value={handle} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-agent-node">{input.messages.agentCreate.associatedDevice}</Label>
-            <Select value={nodeId} onValueChange={setNodeId}>
-              <SelectTrigger aria-label={input.messages.agentCreate.associatedDevice} className="w-full" id="slei-agent-node">
-                <SelectValue placeholder={input.messages.agentCreate.associatedDevice} />
-              </SelectTrigger>
-              <SelectContent>
-                {input.nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-agent-model">{input.messages.agentCreate.model}</Label>
-            <Input id="slei-agent-model" onChange={(event) => setModel(event.currentTarget.value)} value={model} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-agent-description">{input.messages.agentCreate.description}</Label>
-            <Textarea id="slei-agent-description" onChange={(event) => setDescription(event.currentTarget.value)} value={description} />
+          <div className="grid min-h-0 gap-5 md:grid-cols-[minmax(14rem,0.78fr)_minmax(0,1.22fr)]">
+            <section className="grid content-start gap-4">
+              <h3 className="text-sm font-semibold text-foreground">{input.messages.agentCreate.runtimeSection}</h3>
+              <div className="grid gap-2">
+                <Label htmlFor="slei-agent-node">{input.messages.agentCreate.associatedDevice}</Label>
+                <Select value={nodeId} onValueChange={setNodeId}>
+                  <SelectTrigger aria-label={input.messages.agentCreate.associatedDevice} className="w-full" id="slei-agent-node">
+                    <SelectValue placeholder={input.messages.agentCreate.associatedDevice} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {input.nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="slei-agent-runtime">Runtime</Label>
+                <Select value={runtimeKind} onValueChange={setRuntimeKind}>
+                  <SelectTrigger aria-label="Runtime" className="w-full" id="slei-agent-runtime">
+                    <SelectValue placeholder="Runtime" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {input.nodes
+                      .flatMap((node) => node.runtimes.map((runtime) => runtime.kind))
+                      .filter((kind, index, all) => all.indexOf(kind) === index)
+                      .map((kind) => <SelectItem key={kind} value={kind}>{kind}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="slei-agent-model">{input.messages.agentCreate.model}</Label>
+                <Input id="slei-agent-model" onChange={(event) => setModel(event.currentTarget.value)} value={model} />
+              </div>
+            </section>
+            <section className="grid min-h-0 content-start gap-4">
+              <h3 className="text-sm font-semibold text-foreground">{input.messages.agentCreate.memberSection}</h3>
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+                <button
+                  aria-label={input.messages.agentCreate.refreshAvatar}
+                  className="group relative size-14 shrink-0 rounded-full"
+                  data-agent-create-avatar
+                  onClick={() => {
+                    setAvatarRefreshIndex((current) => current + 1);
+                    setAvatarManuallyRefreshed(true);
+                  }}
+                  type="button"
+                >
+                  <MemberAvatar
+                    identity={{
+                      id: "agent-create-preview",
+                      name: trimmedName || input.messages.agentCreate.fallbackAgent,
+                      handle: agentHandleFromName(trimmedName || "agent"),
+                      avatar: (trimmedName || input.messages.agentCreate.fallbackAgent).slice(0, 2).toUpperCase(),
+                      avatarSeed,
+                    }}
+                    large
+                  />
+                  <span className="absolute inset-0 hidden place-items-center rounded-full bg-background/75 text-foreground group-hover:grid">
+                    <SleiIcon name="refreshCw" size={16} />
+                  </span>
+                </button>
+                <div className="grid min-w-0 gap-2">
+                  <Label className="gap-1" htmlFor="slei-agent-name">
+                    {input.messages.agentCreate.name}
+                    <span aria-hidden="true" className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    aria-invalid={Boolean(nameError)}
+                    id="slei-agent-name"
+                    onChange={(event) => setName(event.currentTarget.value)}
+                    required
+                    value={name}
+                  />
+                  {nameError ? (
+                    <p className="text-xs text-destructive">
+                      {nameError === "required"
+                        ? input.messages.agentCreate.nameRequired
+                        : nameError === "duplicate"
+                          ? input.messages.agentCreate.nameDuplicate
+                          : input.messages.agentCreate.nameInvalid}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="grid gap-3">
+                <Label>{input.messages.agentCreate.descriptionMode}</Label>
+                <RadioGroup className="flex flex-wrap gap-4" onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")} value={descriptionMode}>
+                  <RadioGroupItem label={input.messages.agentCreate.customDescription} value="custom" />
+                  <RadioGroupItem label={input.messages.agentCreate.presetDescription} value="preset" />
+                </RadioGroup>
+              </div>
+              {descriptionMode === "custom" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="slei-agent-description">{input.messages.agentCreate.description}</Label>
+                  <Textarea id="slei-agent-description" onChange={(event) => setDescription(event.currentTarget.value)} value={description} />
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <div className="max-h-72 overflow-y-auto pr-1" data-agent-preset-list>
+                    {rolePresetsLoading ? (
+                      <p className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                        <SleiIcon className="animate-spin" name="loader" size={14} />
+                        {input.messages.agentCreate.rolePresetsLoading}
+                      </p>
+                    ) : rolePresetsError ? (
+                      <div className="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                        <p>{input.messages.agentCreate.rolePresetsFailed}</p>
+                        <Button onClick={() => void loadRolePresets()} size="sm" type="button" variant="outline">{input.messages.agentCreate.retryRolePresets}</Button>
+                      </div>
+                    ) : rolePresets.length === 0 ? (
+                      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">{input.messages.agentCreate.rolePresetsEmpty}</p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {rolePresets.map((preset) => (
+                          <button
+                            className={cn(
+                              "grid gap-1 rounded-md border p-3 text-left text-sm transition-colors",
+                              selectedPresetId === preset.id
+                                ? "border-primary bg-primary/10 text-foreground"
+                                : "border-border bg-card/70 text-muted-foreground hover:border-primary/60 hover:text-foreground",
+                            )}
+                            data-selected={selectedPresetId === preset.id ? "true" : "false"}
+                            key={preset.id}
+                            onClick={() => setSelectedPresetId(preset.id)}
+                            type="button"
+                          >
+                            <span className="font-medium text-foreground">{preset.title}</span>
+                            <span className="line-clamp-3">{preset.description}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit" variant="primary">{input.messages.common.create}</Button>
+            <Button disabled={createDisabled} type="submit" variant="primary">{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
   );
-}
-
-function normalizeHandleInput(value: string) {
-  const handle = value.trim().replace(/^@/, "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-  return `@${handle || "agent"}`;
 }
 
 function RuntimeOnboardingModal(input: {

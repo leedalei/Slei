@@ -36,7 +36,34 @@ export type AgentDraftInput = {
   model: string;
   nodeId: string;
   description: string;
+  avatarSeed?: string;
 };
+
+export type AgentDisplayNameValidation = "required" | "format" | "duplicate";
+
+export function agentHandleFromName(name: string): string {
+  return `@${name.trim()}`;
+}
+
+export function validateAgentDisplayName(
+  name: string,
+  members: Array<{ name: string }>,
+): AgentDisplayNameValidation | null {
+  const trimmed = name.trim();
+  if (!trimmed) return "required";
+  if (/\s/.test(trimmed) || trimmed.includes("-")) return "format";
+  if (members.some((member) => member.name.trim() === trimmed)) return "duplicate";
+  return null;
+}
+
+export function agentAvatarSeedFromName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed ? `agent-avatar-${trimmed}` : "agent-avatar-new";
+}
+
+export function refreshedAgentAvatarSeed(name: string, refreshIndex: number): string {
+  return `${agentAvatarSeedFromName(name)}-${refreshIndex}`;
+}
 
 export type AgentMemoryRequest = {
   agentId: string;

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { SleiMember } from "./types";
 import {
   activeSkillSlashQuery,
+  agentAvatarSeedFromName,
+  agentHandleFromName,
   formatMemberCreatedDate,
   formatLocalRecordDateTime,
   formatMessageDateTime,
@@ -16,6 +18,7 @@ import {
   shouldRefreshChannelMessages,
   skillSlashSuggestions,
   timeZoneFromSystemValue,
+  validateAgentDisplayName,
 } from "./model";
 import type { SleiMessage } from "./types";
 
@@ -52,6 +55,25 @@ describe("mention suggestions", () => {
     ];
 
     expect(mentionSuggestions("co", members).map((member) => member.id)).toEqual(["agent_coda"]);
+  });
+});
+
+describe("agent creation helpers", () => {
+  it("generates handle directly from trimmed non-English names", () => {
+    expect(agentHandleFromName(" 小红书调研员 ")).toBe("@小红书调研员");
+    expect(agentHandleFromName("Architect")).toBe("@Architect");
+  });
+
+  it("validates agent display names without requiring pure English", () => {
+    expect(validateAgentDisplayName("小红书调研员", [])).toBeNull();
+    expect(validateAgentDisplayName("系统 架构师", [])).toBe("format");
+    expect(validateAgentDisplayName("legal-researcher", [])).toBe("format");
+    expect(validateAgentDisplayName("架构师", [agent({ id: "agent_1", name: "架构师" })])).toBe("duplicate");
+  });
+
+  it("derives stable avatar seeds from names", () => {
+    expect(agentAvatarSeedFromName(" 小红书调研员 ")).toBe("agent-avatar-小红书调研员");
+    expect(agentAvatarSeedFromName("")).toBe("agent-avatar-new");
   });
 });
 

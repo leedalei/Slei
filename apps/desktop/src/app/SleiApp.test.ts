@@ -856,6 +856,12 @@ describe("createChannelAgentReplyMessage", () => {
     expect(handlerSource).not.toContain('navigateToView("members");');
   });
 
+  it("wires agent role presets through the desktop bridge", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("onAgentRolePresetsLoad={() => bridge.listAgentRolePresets()}");
+  });
+
   it("surfaces agent creation failures from the modal", () => {
     const source = readFileSync(new URL("./SleiAppFrame.tsx", import.meta.url), "utf8");
 

@@ -182,7 +182,10 @@ describe("real agent members and direct messages", () => {
     expect(title).toContain("font-semibold");
     expect(title).not.toContain("<svg");
     expect(html).toContain(">名字<");
-    expect(html).toContain(">@handle<");
+    expect(html).not.toContain(">@handle<");
+    expect(html).toContain(">运行环境<");
+    expect(html).toContain(">成员信息<");
+    expect(html).toContain(">描述来源<");
     expect(html).toContain(">关联设备<");
     expect(html).toContain(">描述<");
     expect(html).toMatch(/<button\b[^>]*type="submit"[\s\S]*?>创建<\/span><\/button>/);

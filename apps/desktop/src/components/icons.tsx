@@ -38,6 +38,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   SearchCheck,
   Send,
@@ -90,6 +91,7 @@ export type SleiIconName =
   | "pencil"
   | "palette"
   | "plus"
+  | "refreshCw"
   | "search"
   | "searchFilled"
   | "send"
@@ -150,6 +152,7 @@ export const sleiIcons: Record<SleiIconName, SleiLucideIcon> = {
   pencil: Pencil,
   palette: Palette,
   plus: Plus,
+  refreshCw: RefreshCw,
   search: Search,
   searchFilled: SearchCheck,
   send: Send,
