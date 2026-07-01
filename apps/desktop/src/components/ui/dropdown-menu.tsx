@@ -14,8 +14,8 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
 const menuContentClassName = cn(
-  "t-dropdown z-50 min-w-36 overflow-hidden rounded-xl border border-white/20 bg-white/10 p-1 text-popover-foreground backdrop-blur-2xl",
-  "shadow-[0_4px_4px_rgba(0,0,0,0.14)] outline-none",
+  "t-dropdown z-50 min-w-32 overflow-hidden rounded-lg border border-border/70 bg-popover p-1 text-popover-foreground",
+  "shadow-[0_0_4px_rgba(0,0,0,0.12)] outline-none",
 )
 
 function DropdownMenuContent({
@@ -51,11 +51,11 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-popover-foreground outline-none",
-        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
+        "relative flex cursor-default select-none items-center gap-1.5 rounded-md px-2 py-1 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-muted/70 focus:text-popover-foreground data-[highlighted]:bg-muted/70 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset=true]:pl-8",
         "data-[variant=destructive]:text-red-200 data-[variant=destructive]:focus:bg-red-500/20",
-        "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+        "[&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
         className,
       )}
       {...props}
@@ -73,8 +73,8 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-popover-foreground outline-none",
-        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
+        "relative flex cursor-default select-none items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-muted/70 focus:text-popover-foreground data-[highlighted]:bg-muted/70 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -100,8 +100,8 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-lg py-1.5 pl-8 pr-2 text-sm text-popover-foreground outline-none",
-        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground",
+        "relative flex cursor-default select-none items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-muted/70 focus:text-popover-foreground data-[highlighted]:bg-muted/70 data-[highlighted]:text-popover-foreground",
         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
@@ -128,7 +128,7 @@ function DropdownMenuLabel({
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground data-[inset=true]:pl-8", className)}
+      className={cn("px-2 py-1 text-xs font-medium text-muted-foreground data-[inset=true]:pl-7", className)}
       {...props}
     />
   )
@@ -139,7 +139,7 @@ function DropdownMenuSeparator({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
-    <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn("-mx-1 my-1 h-px bg-white/10", className)} {...props} />
+    <DropdownMenuPrimitive.Separator data-slot="dropdown-menu-separator" className={cn("-mx-1 my-1 h-px bg-border/70", className)} {...props} />
   )
 }
 
@@ -160,8 +160,8 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-popover-foreground outline-none",
-        "transition-colors focus:bg-white/10 focus:text-popover-foreground data-[highlighted]:bg-white/10 data-[highlighted]:text-popover-foreground data-[inset=true]:pl-8",
+        "flex cursor-default select-none items-center gap-1.5 rounded-md px-2 py-1 text-sm text-popover-foreground outline-none",
+        "transition-colors focus:bg-muted/70 focus:text-popover-foreground data-[highlighted]:bg-muted/70 data-[highlighted]:text-popover-foreground data-[inset=true]:pl-7",
         className,
       )}
       {...props}

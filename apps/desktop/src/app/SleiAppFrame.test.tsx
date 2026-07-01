@@ -612,6 +612,41 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("任务");
   });
 
+  it("returns to the chat workspace when selecting a sidebar channel from search or tasks", async () => {
+    for (const activeView of ["search", "tasks"] as const) {
+      const onChannelSelect = vi.fn();
+      const onViewChange = vi.fn();
+      const data = createSleiFixtures({
+        channels: [
+          { id: "ops", name: "ops", description: "运维频道描述", unread: 0, activeSessionId: "session:ops" },
+          { id: "dev", name: "dev", description: "研发频道描述", unread: 0, activeSessionId: "session:dev" },
+        ],
+      });
+      const container = await mount(
+        <SleiAppFrame
+          activeChannelId="ops"
+          activeView={activeView}
+          data={data}
+          locale="zh-CN"
+          onChannelSelect={onChannelSelect}
+          onViewChange={onViewChange}
+          runtimeSetup={runtimeSetup}
+        />,
+      );
+
+      await clickElement(container.querySelector<HTMLButtonElement>('[data-testid="workspace-channel-row-dev"] [data-slot="channel-select-trigger"]'));
+
+      expect(onChannelSelect).toHaveBeenCalledWith("dev");
+      expect(onViewChange).toHaveBeenCalledWith("chat");
+      await act(async () => {
+        mountedRoot?.unmount();
+      });
+      mountedRoot = undefined;
+      mountedContainer?.remove();
+      mountedContainer = undefined;
+    }
+  });
+
   it("uses a chrome shell with sidebar and workspace cards instead of the old flush grid", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
@@ -733,6 +768,33 @@ describe("SleiAppFrame global search navigation", () => {
         ?.click();
     });
     expect(onConversationSelect).toHaveBeenCalledWith("dm:agent_coda");
+  });
+
+  it("keeps the sidebar channel delete menu item visually neutral before confirmation", async () => {
+    const data = createSleiFixtures({
+      channels: [
+        { id: "ops", name: "ops", description: "运维频道描述", unread: 0, activeSessionId: "session:ops" },
+        { id: "dev", name: "dev", description: "研发频道描述", unread: 0, activeSessionId: "session:dev" },
+      ],
+    });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await act(async () => {
+      container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]')
+        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+
+    const deleteItem = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+      .find((item) => item.textContent?.includes("删除频道"));
+    expect(deleteItem).toBeTruthy();
+    expect(deleteItem?.getAttribute("data-variant")).not.toBe("destructive");
   });
 
   it("routes channel edit menu actions through the frame edit path", async () => {
@@ -1305,6 +1367,33 @@ describe("SleiAppFrame global search navigation", () => {
     expect(sidebarText).not.toContain("默认团队频道");
     expect(sidebarText).not.toContain("关联项目：暂无");
     expect(sidebarText).not.toContain("关联项目：/workspace/kol");
+  });
+
+  it("renders sidebar channel hash marks as bold italic text-color-3 text", () => {
+    const data = createSleiFixtures({
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const hashMark = host.querySelector<HTMLElement>('[data-channel-id="all"] [data-slot="channel-hash-mark"]');
+
+    expect(hashMark?.tagName).toBe("SPAN");
+    expect(hashMark?.textContent).toBe("#");
+    expect(hashMark?.className).toContain("font-bold");
+    expect(hashMark?.className).toContain("italic");
+    expect(hashMark?.className).toContain("text-[var(--text-color-3)]");
+    expect(hashMark?.querySelector('[data-slei-icon="hash"]')).toBeNull();
   });
 
   it("uses flat selected states for sidebar channels and direct messages", () => {

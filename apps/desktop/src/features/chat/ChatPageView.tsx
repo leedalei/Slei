@@ -836,7 +836,21 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     <SleiIcon name="chat" size={18} />
                   </span>
                 ) : null}
-                <span className="truncate" data-tauri-drag-region="deep">{dmMember ? detailTitle : `#${detailTitle}`}</span>
+                {dmMember ? (
+                  <span className="truncate" data-tauri-drag-region="deep">{detailTitle}</span>
+                ) : (
+                  <span className="inline-flex min-w-0 items-baseline truncate" data-tauri-drag-region="deep">
+                    <span
+                      aria-hidden="true"
+                      className="mr-1 shrink-0 select-none text-[var(--text-color-3)] font-bold italic"
+                      data-slot="channel-title-hash-mark"
+                      data-tauri-drag-region="deep"
+                    >
+                      #
+                    </span>
+                    <span className="truncate" data-tauri-drag-region="deep">{detailTitle}</span>
+                  </span>
+                )}
               </h1>
               {!dmMember ? (
                 <>

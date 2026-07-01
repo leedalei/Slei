@@ -63,8 +63,8 @@ const SelectContent = React.forwardRef<
       ref={ref}
       data-slot="select-content"
       className={cn(
-        "t-dropdown relative z-50 max-h-96 min-w-32 overflow-hidden rounded-xl border border-white/20 bg-white/10 text-popover-foreground backdrop-blur-2xl",
-        "shadow-[0_2px_4px_rgba(0,0,0,0.10)]",
+        "t-dropdown relative z-50 max-h-96 min-w-32 overflow-hidden rounded-lg border border-border/70 bg-popover text-popover-foreground",
+        "shadow-[0_0_4px_rgba(0,0,0,0.12)]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,
@@ -103,8 +103,8 @@ const SelectItem = React.forwardRef<
     ref={ref}
     data-slot="select-item"
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-2 text-sm text-popover-foreground outline-none",
-      "transition-colors duration-150 focus:bg-white/10 focus:text-popover-foreground",
+      "relative flex w-full cursor-pointer select-none items-center rounded-md py-1.5 pl-7 pr-2 text-sm text-popover-foreground outline-none",
+      "transition-colors duration-150 focus:bg-muted/70 focus:text-popover-foreground",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className,
     )}
@@ -124,7 +124,7 @@ const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <SelectPrimitive.Separator ref={ref} data-slot="select-separator" className={cn("-mx-1 my-1 h-px bg-white/10", className)} {...props} />
+  <SelectPrimitive.Separator ref={ref} data-slot="select-separator" className={cn("-mx-1 my-1 h-px bg-border/70", className)} {...props} />
 ))
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName
 

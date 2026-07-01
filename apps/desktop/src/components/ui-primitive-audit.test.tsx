@@ -1087,7 +1087,7 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).toContain('data-slot="select-item"');
     expect(selectSource).toContain("t-dropdown");
     expect(selectSource).toContain("focus:bg-white/15");
-    expect(selectSource).toContain("focus:bg-white/10");
+    expect(selectSource).toContain("focus:bg-muted/70");
     expect(selectSource).toContain("data-[disabled]:pointer-events-none");
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
@@ -1097,13 +1097,13 @@ describe("desktop UI primitive usage", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
     expect(selectSource).toContain("rounded-xl border border-[var(--tabs-glass-border)] bg-white/10");
-    expect(selectSource).toContain("rounded-xl border border-white/20 bg-white/10 text-popover-foreground");
+    expect(selectSource).toContain("rounded-lg border border-border/70 bg-popover text-popover-foreground");
     expect(selectSource).toContain("focus:bg-white/15");
     expect(selectSource).not.toContain("focus:border-white/40");
     expect(selectSource).not.toContain("focus:ring-2");
     expect(selectSource).not.toContain("focus:ring-cyan-400/30");
     expect(selectSource).toContain("shadow-[var(--tabs-pill-shadow)]");
-    expect(selectSource).toContain("shadow-[0_2px_4px_rgba(0,0,0,0.10)]");
+    expect(selectSource).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
