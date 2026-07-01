@@ -969,7 +969,7 @@ describe("ChatPage mention panel", () => {
     }
   });
 
-  it("renders the composer send action as the primary button", () => {
+  it("renders the composer send action as the default shadcn button", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -984,7 +984,9 @@ describe("ChatPage mention panel", () => {
       />,
     ));
 
-    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.dataset.variant).toBe("primary");
+    const sendButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]');
+    expect(sendButton?.className).toContain("bg-primary");
+    expect(sendButton?.className).toContain("text-primary-foreground");
   });
 
   it("uses the virtualizer last item when scrolling to the latest message", () => {
@@ -1233,7 +1235,6 @@ describe("ChatPage mention panel", () => {
     const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
     expect(button?.textContent).toContain("滚动到底部");
     expect(button?.querySelector('[data-slei-icon="arrowDown"]')).not.toBeNull();
-    expect(button?.getAttribute("data-variant")).toBe("ghost");
     expect(button?.className).toContain("h-8");
     expect(button?.className).toContain("px-3.5");
     expect(button?.className).toContain("border-white/25");
@@ -2269,7 +2270,7 @@ describe("ChatPage mention panel", () => {
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
       expect(cardHtml).toContain('data-slot="card"');
-      expect(cardHtml).toContain('data-size="xs"');
+      expect(cardHtml).not.toContain('data-size="xs"');
       expect(cardOpenTag).not.toContain("shadow-[");
       expect(cardOpenTag).not.toContain("hover:shadow");
     }

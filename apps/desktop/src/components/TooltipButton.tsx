@@ -71,7 +71,7 @@ export function TooltipButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button {...buttonProps} className={cn(ripple && "overflow-hidden", className)} disabled={disabled} onPointerDown={handlePointerDown} wrapContent={!ripple}>
+        <Button {...buttonProps} className={cn(ripple && "relative overflow-hidden", className)} disabled={disabled} onPointerDown={handlePointerDown}>
           {ripple ? (
             <>
               {ripples.map((item) => (

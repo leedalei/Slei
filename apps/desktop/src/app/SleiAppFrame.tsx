@@ -699,7 +699,7 @@ function ComputerCreateModal(input: {
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit" variant="primary"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
+            <Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -773,7 +773,7 @@ function ShellDialog(input: {
           >
             {input.children}
             {input.showCloseButton !== false ? (
-              <Button className="absolute top-2 right-2" data-slot="dialog-close" size="icon-sm" type="button" variant="ghost">
+            <Button className="absolute top-2 right-2 size-8 [&_svg]:size-3.5" data-slot="dialog-close" size="icon" type="button" variant="ghost">
                 <span className="sr-only">{input.closeLabel ?? "Close"}</span>
               </Button>
             ) : null}
@@ -1023,7 +1023,7 @@ function AgentCreateModal(input: {
           </div>
           <DialogFooter>
             <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button disabled={createDisabled} type="submit" variant="primary">{input.messages.common.create}</Button>
+            <Button disabled={createDisabled} type="submit">{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -1068,7 +1068,7 @@ function RuntimeOnboardingModal(input: {
         </div>
         <DialogFooter>
           <Button onClick={() => input.onRenameLocalNode?.(name)} type="button" variant="outline">{input.messages.onboarding.saveDeviceName}</Button>
-          <Button disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button" variant="primary">{input.messages.onboarding.refreshRuntime}</Button>
+          <Button disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button">{input.messages.onboarding.refreshRuntime}</Button>
         </DialogFooter>
     </ShellDialog>
   );

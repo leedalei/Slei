@@ -1118,7 +1118,6 @@ describe("SleiAppFrame global search navigation", () => {
     const searchButtonIndex = html.indexOf('aria-current="page"');
     const searchButtonOpenTag = html.slice(html.lastIndexOf("<button", searchButtonIndex), html.indexOf(">", searchButtonIndex));
 
-    expect(searchButtonOpenTag).toContain('data-variant="ghost"');
     expect(searchButtonOpenTag).toContain("bg-[var(--workspace-sidebar-active-bg)]");
     expect(searchButtonOpenTag).toContain("h-[32px]");
     expect(searchButtonOpenTag).toContain("min-h-[32px]");
@@ -1162,7 +1161,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(accentDeclarations.some((value) => value.endsWith("285"))).toBe(false);
   });
 
-  it("keeps workspace sidebar button chrome on einui button variants", () => {
+  it("keeps workspace sidebar button chrome off shared shadcn button variants", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const sidebarChromeCss = appCss.slice(appCss.indexOf(".slei-workspace-sidebar {"), appCss.indexOf(".slei-workspace-sidebar__header {"));
 
@@ -1173,16 +1172,16 @@ describe("SleiAppFrame global search navigation", () => {
     expect(sidebarChromeCss).not.toContain("var(--raised-border)");
   });
 
-  it("uses primary buttons for modal confirmation actions", () => {
+  it("uses default shadcn buttons for modal confirmation actions", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
 
     expect(sidebarSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
     expect(sidebarSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
-    expect(sidebarSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary"');
-    expect(frameSource).toContain('<Button type="submit" variant="primary"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>');
-    expect(frameSource).toContain('<Button disabled={createDisabled} type="submit" variant="primary">{input.messages.common.create}</Button>');
-    expect(frameSource).toContain('disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button" variant="primary"');
+    expect(sidebarSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit"');
+    expect(frameSource).toContain('<Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>');
+    expect(frameSource).toContain('<Button disabled={createDisabled} type="submit">{input.messages.common.create}</Button>');
+    expect(frameSource).toContain('disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button"');
   });
 
   it("keeps TooltipProvider at the app frame instead of nesting it in each Tooltip", () => {
@@ -1620,7 +1619,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
     expect(channelSortButton()?.dataset.sortState).toBe("default");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
-    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(false);
     expect(channelSortButton()?.querySelector("[data-sort-direction]")?.getAttribute("data-sort-direction")).toBe("default");
     expect(sortIconState(channelSortButton())).toBe("a");
@@ -1631,7 +1629,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
     expect(channelSortButton()?.dataset.sortState).toBe("asc");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("降序");
-    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(true);
     expect(channelSortButton()?.classList.contains("text-foreground")).toBe(true);
     expect(channelSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);
@@ -1645,7 +1642,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(channelOrder()).toEqual(["zeta", "beta", "alpha"]);
     expect(channelSortButton()?.dataset.sortState).toBe("desc");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("取消排序");
-    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(true);
     expect(channelSortButton()?.classList.contains("text-foreground")).toBe(true);
     expect(channelSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);
@@ -1659,7 +1655,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
     expect(channelSortButton()?.dataset.sortState).toBe("default");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
-    expect(channelSortButton()?.getAttribute("data-variant")).toBe("ghost");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(false);
     expect(sortIconState(channelSortButton())).toBe("a");
     expect(activeSortIcon(channelSortButton())).toBe("sort");
@@ -1670,7 +1665,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(directMessageOrder()).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
     expect(directMessageSortButton()?.dataset.sortState).toBe("asc");
     expect(directMessageSortButton()?.getAttribute("aria-label")).toBe("降序");
-    expect(directMessageSortButton()?.getAttribute("data-variant")).toBe("ghost");
     expect(directMessageSortButton()?.classList.contains("bg-muted/70")).toBe(true);
     expect(directMessageSortButton()?.classList.contains("text-foreground")).toBe(true);
     expect(directMessageSortButton()?.classList.contains("dark:bg-muted/50")).toBe(true);

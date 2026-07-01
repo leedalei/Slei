@@ -126,9 +126,9 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
               <DialogTrigger asChild>
                 <Button
                   aria-label={input.messages.chat.addChannelMember}
-                  className={cn("slei-channel-member-add-button", input.members.length > 0 && "-ml-2")}
+                  className={cn("slei-channel-member-add-button size-8 [&_svg]:size-3.5", input.members.length > 0 && "-ml-2")}
                   data-testid="slei-channel-member-add-trigger"
-                  size="icon-sm"
+                  size="icon"
                   type="button"
                   variant="outline"
                 >
@@ -216,7 +216,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
             </div>
             <DialogFooter>
               <Button disabled={addingSelected} onClick={closeAddDialog} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button" variant="primary">
+              <Button data-testid="slei-channel-member-add-confirm" disabled={selectedAddIds.length === 0 || addingSelected} onClick={() => void addSelectedMembers()} type="button">
                 {input.messages.chat.confirmAddChannelMembers(selectedAddIds.length)}
               </Button>
             </DialogFooter>

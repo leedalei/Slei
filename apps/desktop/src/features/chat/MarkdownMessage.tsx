@@ -68,7 +68,7 @@ function markdownComponents(input: {
             </span>
             <TooltipButton
               aria-label={copyLabel}
-              className="slei-code-block__copy"
+              className="slei-code-block__copy size-6 [&_svg]:size-3"
               data-slot="markdown-code-copy"
               onClick={async () => {
                 try {
@@ -78,7 +78,7 @@ function markdownComponents(input: {
                   input.onCodeCopyFailed?.(error);
                 }
               }}
-              size="icon-xs"
+              size="icon"
               tooltip={copyLabel}
               type="button"
               variant="ghost"

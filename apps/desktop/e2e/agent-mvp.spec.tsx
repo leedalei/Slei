@@ -306,7 +306,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).not.toContain('data-variant="destructive"');
     expect(html).toContain('data-slot="button"');
     expect(html).toContain("grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).toContain('data-size="xs"');
+    expect(html).not.toContain('data-size="xs"');
     expect(html).toContain("disabled=\"\"");
     expect(html).toContain("已完成");
   });
@@ -352,7 +352,7 @@ describe("agent creation, device association, and memory MVP", () => {
     expect(html).toContain("#qa");
     expect(html).toContain('data-slot="card"');
     expect(html).toContain("grid-cols-[minmax(0,1fr)_auto]");
-    expect(html).toContain('data-size="xs"');
+    expect(html).not.toContain('data-size="xs"');
   });
 
   it("renders multiple persisted guide card messages separately", () => {

@@ -341,7 +341,7 @@ export function MembersPage(input: {
                 </span>
                 <span className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
                   <span className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</span>
-                  <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyDescription()} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                  <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyDescription()} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                     <SleiIcon className="size-3.5" name="copy" />
                   </TooltipButton>
                 </span>
