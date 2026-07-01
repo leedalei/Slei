@@ -5,6 +5,7 @@ import type { SleiMember } from "../../app/types";
 import { channelReadinessLabel } from "../../app/model";
 import { Empty, MemberAvatar, SelectableCard, SleiIcon } from "../../components";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
+import { AvatarGroup, AvatarGroupCount } from "../../components/ui/avatar";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
@@ -92,15 +93,14 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
 
   return (
     <div aria-label={input.messages.chat.channelMembers} className="slei-channel-member-group" data-testid="slei-channel-member-group">
-      <div className="flex items-center">
-        {visibleMembers.map((member, index) => (
+      <AvatarGroup className="items-center">
+        {visibleMembers.map((member) => (
           <ChannelMemberAvatar
             channelId={input.channelId}
             key={member.id}
             member={member}
             messages={input.messages}
             mutating={mutatingMemberId === member.id}
-            offset={index > 0}
             onOpenChange={(open) => setActiveMemberId(open ? member.id : undefined)}
             open={activeMemberId === member.id || confirmingRemoveId === member.id}
             onRemove={() => void mutate(member.id, "remove")}
@@ -109,13 +109,13 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
           />
         ))}
         {overflowMemberCount > 0 ? (
-          <span
+          <AvatarGroupCount
             aria-label={`${overflowMemberCount} ${input.messages.chat.channelMembers}`}
-            className={cn("slei-channel-member-overflow", visibleMembers.length > 0 && "-ml-2")}
+            className="slei-channel-member-overflow size-8 text-xs font-semibold"
             data-testid="slei-channel-member-overflow-count"
           >
             +{overflowMemberCount}
-          </span>
+          </AvatarGroupCount>
         ) : null}
         <Dialog open={addDialogOpen} onOpenChange={(open) => {
           setAddDialogOpen(open);
@@ -126,7 +126,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
               <DialogTrigger asChild>
                 <Button
                   aria-label={input.messages.chat.addChannelMember}
-                  className={cn("slei-channel-member-add-button size-8 [&_svg]:size-3.5", input.members.length > 0 && "-ml-2")}
+                  className="slei-channel-member-add-button size-8 [&_svg]:size-3.5"
                   data-testid="slei-channel-member-add-trigger"
                   size="icon"
                   type="button"
@@ -222,7 +222,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </AvatarGroup>
     </div>
   );
 }
@@ -233,7 +233,6 @@ function ChannelMemberAvatar(input: {
   member: SleiMember;
   messages: DesktopMessages;
   mutating: boolean;
-  offset: boolean;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   open: boolean;
@@ -295,7 +294,7 @@ function ChannelMemberAvatar(input: {
         <button
           ref={triggerRef}
           aria-label={`${input.member.name} ${input.member.handle}`}
-          className={cn("slei-channel-member-avatar-button", input.offset && "-ml-2")}
+          className="slei-channel-member-avatar-button"
           data-testid="slei-channel-member-avatar-trigger"
           onFocus={() => input.onOpenChange(true)}
           onMouseEnter={openFromPointer}

@@ -570,11 +570,11 @@ describe("ChatPage mention panel", () => {
   it("keeps the chat workspace transparent while the composer floats in a frosted shell", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/ChatPageView.tsx"), "utf8");
 
-    expect(source).toContain('"relative grid h-full min-h-0 bg-transparent"');
+    expect(source).toContain('"relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-transparent"');
     expect(source).not.toContain('"relative grid h-full min-h-0 bg-background"');
     expect(source).toContain('border-b bg-transparent px-4 py-3');
     expect(source).not.toContain('border-b bg-background/95 px-4 py-3');
-    expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
+    expect(source).not.toContain('className="border-b bg-transparent px-4 py-2"');
     expect(source).not.toContain('<footer className="border-t bg-transparent">');
     expect(source).not.toContain('<footer className="border-t bg-background/95">');
     expect(source).toContain('data-testid="slei-composer-shell"');
@@ -1427,7 +1427,7 @@ describe("ChatPage mention panel", () => {
     expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
   });
 
-  it("renders channel view tabs below the header and member group in the header actions", () => {
+  it("renders channel view tabs inside header actions to the right of the member group", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1442,21 +1442,32 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const source = readChatPageSource();
+    const host = staticMarkupHost(html);
     const headerHtml = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
     const tabsIndex = html.indexOf('data-testid="slei-channel-view-tabs"');
-    const headerEndIndex = html.indexOf("</header>");
+    const headerActions = host.querySelector('[data-testid="slei-channel-header-actions"]');
+    const headerActionsHtml = headerActions?.outerHTML ?? "";
+    const memberGroupIndex = headerActionsHtml.indexOf('data-testid="slei-channel-member-group"');
+    const headerActionTabsIndex = headerActionsHtml.indexOf('data-testid="slei-channel-view-tabs"');
 
     expect(html).not.toContain('data-testid="slei-channel-members-edge-toggle"');
     expect(html).not.toContain('data-testid="slei-channel-members-header-toggle"');
     expect(html).toContain('data-testid="slei-channel-view-tabs"');
-    expect(tabsIndex).toBeGreaterThan(headerEndIndex);
+    expect(tabsIndex).toBeGreaterThanOrEqual(0);
+    expect(headerHtml).toContain('data-testid="slei-channel-view-tabs"');
+    expect(headerActions?.className).toContain("items-center");
+    expect(headerActions?.className).toContain("gap-3");
     expect(headerHtml).not.toContain(messages.chat.newSession);
     expect(headerHtml).not.toContain(messages.chat.history);
     expect(headerHtml).not.toContain('data-testid="slei-channel-header-action-separator"');
     expect(headerHtml).toContain('data-testid="slei-channel-member-group"');
     expect(headerHtml).toContain('data-testid="slei-channel-member-add-trigger"');
-    expect(headerHtml).not.toContain('role="tablist"');
-    expect(source).toContain('className="border-b bg-transparent px-4 py-2"');
+    expect(headerHtml).toContain('role="tablist"');
+    expect(headerHtml).toContain('data-slot="tabs-list"');
+    expect(headerHtml).toContain('data-variant="soft"');
+    expect(memberGroupIndex).toBeGreaterThanOrEqual(0);
+    expect(headerActionTabsIndex).toBeGreaterThan(memberGroupIndex);
+    expect(source).not.toContain('className="border-b bg-transparent px-4 py-2"');
     expect(source).not.toContain('aria-pressed={channelMembersOpen ? "true" : "false"}');
   });
 
@@ -1507,6 +1518,7 @@ describe("ChatPage mention panel", () => {
     expect(headerHtml).not.toContain('data-testid="slei-channel-member-group"');
     expect(headerHtml).not.toContain('data-testid="slei-channel-member-count"');
     expect(headerHtml).not.toContain('data-testid="slei-channel-member-add-trigger"');
+    expect(headerHtml).not.toContain('data-testid="slei-channel-view-tabs"');
   });
 
   it("keeps the main chat layout one column without an offscreen member panel", () => {

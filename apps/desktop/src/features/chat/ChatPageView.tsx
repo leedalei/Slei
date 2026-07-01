@@ -819,7 +819,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }
 
   return (
-    <section className={cn("relative grid h-full min-h-0 bg-transparent", dmMember ? "grid-rows-[auto_minmax(0,1fr)]" : "grid-rows-[auto_auto_minmax(0,1fr)]")} data-slot="chat-page">
+    <section className="relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-transparent" data-slot="chat-page">
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-tauri-drag-region="deep">
         <div className="min-w-0 flex-1" data-slot="workspace-titlebar" data-tauri-drag-region="deep">
@@ -931,7 +931,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
           </div>
         </div>
         {dmMember ? null : (
-          <div className="flex shrink-0 items-center gap-2" data-testid="slei-channel-header-actions">
+          <div className="flex shrink-0 items-center gap-3" data-testid="slei-channel-header-actions">
             <ChannelMemberGroup
               availableMembers={availableChannelMembers}
               channelId={activeChannel.id}
@@ -940,20 +940,18 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
               onAdd={onChannelMemberAdd}
               onRemove={onChannelMemberRemove}
             />
+            <Tabs className="gap-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
+              <div className="flex items-center" data-testid="slei-channel-view-tabs">
+                <TabsList aria-label={messages.chat.channelView} variant="soft">
+                  <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><SleiIcon name="chat" size={14} />{messages.shell.nav.chat}</TabsTrigger>
+                  <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><SleiIcon name="tasks" size={14} />{messages.chat.tasks}</TabsTrigger>
+                  <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><SleiIcon name="fileText" size={14} />{messages.chat.files}</TabsTrigger>
+                </TabsList>
+              </div>
+            </Tabs>
           </div>
         )}
       </header>
-      {!dmMember ? (
-        <Tabs className="gap-0" onValueChange={(value) => setChannelView(value as ChannelEmbeddedView)} value={effectiveChannelView}>
-          <div className="border-b bg-transparent px-4 py-2" data-testid="slei-channel-view-tabs">
-            <TabsList aria-label={messages.chat.channelView} variant="soft">
-              <TabsTrigger aria-current={effectiveChannelView === "chat" ? "page" : undefined} value="chat"><SleiIcon name="chat" size={14} />{messages.shell.nav.chat}</TabsTrigger>
-              <TabsTrigger aria-current={effectiveChannelView === "tasks" ? "page" : undefined} value="tasks"><SleiIcon name="tasks" size={14} />{messages.chat.tasks}</TabsTrigger>
-              <TabsTrigger aria-current={effectiveChannelView === "files" ? "page" : undefined} value="files"><SleiIcon name="fileText" size={14} />{messages.chat.files}</TabsTrigger>
-            </TabsList>
-          </div>
-        </Tabs>
-      ) : null}
       <section
         className="grid min-h-0 grid-cols-1"
         data-testid="slei-channel-main-region"
