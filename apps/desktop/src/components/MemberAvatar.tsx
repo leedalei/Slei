@@ -15,7 +15,6 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
       className={avatarSizeClassName(size)}
       data-avatar-image-rendering={avatarImage?.imageRendering ?? "fallback"}
       data-avatar-size={size}
-      glowEffect={false}
     >
       {avatarImage ? (
         <AvatarImage

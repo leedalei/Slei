@@ -30,16 +30,7 @@ const PopoverContent = React.forwardRef<
 ))
 PopoverContent.displayName = PopoverPrimitive.Content.displayName
 
-const GlassPopover = Popover
-const GlassPopoverTrigger = PopoverTrigger
-const GlassPopoverContent = PopoverContent
-const GlassPopoverAnchor = PopoverAnchor
-
 export {
-  GlassPopover,
-  GlassPopoverAnchor,
-  GlassPopoverContent,
-  GlassPopoverTrigger,
   Popover,
   PopoverAnchor,
   PopoverContent,

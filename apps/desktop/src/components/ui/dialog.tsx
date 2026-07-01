@@ -20,7 +20,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     data-slot="dialog-overlay"
     className={cn(
-      "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm",
+      "fixed inset-0 z-50 bg-black/60",
       "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
@@ -41,17 +41,16 @@ const DialogContent = React.forwardRef<
       ref={ref}
       data-slot="dialog-content"
       className={cn(
-        "t-modal fixed left-1/2 top-1/2 z-50 grid w-full max-w-sm -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl border border-white/25 bg-white/30 p-6 text-popover-foreground backdrop-blur-2xl supports-[backdrop-filter]:bg-white/35 [.light_&]:bg-white/70 supports-[backdrop-filter]:[.light_&]:bg-white/80",
-        "shadow-[0_4px_4px_rgba(0,0,0,0.14)] outline-none",
-        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-gradient-to-b before:from-white/45 before:to-transparent",
+        "bg-background fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
         className,
       )}
       {...props}
     >
-      <div className="relative z-10 contents">{children}</div>
+      {children}
       {showCloseButton ? (
         <DialogPrimitive.Close asChild>
-          <Button className="absolute right-4 top-4 z-20 size-8 [&_svg]:size-3.5" size="icon" type="button" variant="ghost">
+          <Button className="absolute top-4 right-4 size-8 rounded-xs opacity-70 transition-opacity hover:opacity-100 [&_svg]:size-4" size="icon" type="button" variant="ghost">
             <X className="h-4 w-4" />
             <span className="sr-only">{closeLabel}</span>
           </Button>
@@ -79,7 +78,7 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div data-slot="dialog-header" className={cn("relative z-10 flex flex-col gap-2", className)} {...props} />
+  return <div data-slot="dialog-header" className={cn("flex flex-col gap-2 text-center sm:text-left", className)} {...props} />
 }
 
 function DialogFooter({
@@ -93,7 +92,7 @@ function DialogFooter({
   showCloseButton?: boolean
 }) {
   return (
-    <div data-slot="dialog-footer" className={cn("relative z-10 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props}>
+    <div data-slot="dialog-footer" className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props}>
       {children}
       {showCloseButton ? (
         <DialogPrimitive.Close asChild>
@@ -108,7 +107,7 @@ const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Title ref={ref} data-slot="dialog-title" className={cn("relative z-10 text-lg font-semibold text-popover-foreground", className)} {...props} />
+  <DialogPrimitive.Title ref={ref} data-slot="dialog-title" className={cn("text-lg leading-none font-semibold", className)} {...props} />
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
@@ -116,20 +115,9 @@ const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <DialogPrimitive.Description ref={ref} data-slot="dialog-description" className={cn("relative z-10 text-sm text-muted-foreground", className)} {...props} />
+  <DialogPrimitive.Description ref={ref} data-slot="dialog-description" className={cn("text-muted-foreground text-sm", className)} {...props} />
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName
-
-const GlassDialog = Dialog
-const GlassDialogTrigger = DialogTrigger
-const GlassDialogPortal = DialogPortal
-const GlassDialogClose = DialogClose
-const GlassDialogOverlay = DialogOverlay
-const GlassDialogContent = DialogContent
-const GlassDialogHeader = DialogHeader
-const GlassDialogFooter = DialogFooter
-const GlassDialogTitle = DialogTitle
-const GlassDialogDescription = DialogDescription
 
 export {
   Dialog,
@@ -142,14 +130,4 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-  GlassDialog,
-  GlassDialogClose,
-  GlassDialogContent,
-  GlassDialogDescription,
-  GlassDialogFooter,
-  GlassDialogHeader,
-  GlassDialogOverlay,
-  GlassDialogPortal,
-  GlassDialogTitle,
-  GlassDialogTrigger,
 }

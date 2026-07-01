@@ -66,7 +66,7 @@ export function StatusBadge({
       {...props}
       className={cn(getSleiStatusBadgeClassName(status), className)}
       data-slei-status={status}
-      variant="filled"
+      variant="outline"
     >
       <span
         aria-hidden="true"

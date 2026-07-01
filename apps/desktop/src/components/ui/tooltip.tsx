@@ -46,9 +46,7 @@ const TooltipContent = React.forwardRef<
       role="tooltip"
       sideOffset={sideOffset}
       className={cn(
-        "z-50 max-w-xs rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-popover-foreground backdrop-blur-xl",
-        "shadow-[0_2px_4px_rgba(0,0,0,0.12)]",
-        "data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95",
+        "bg-primary text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit max-w-xs origin-(--radix-tooltip-content-transform-origin) rounded-md px-3 py-1.5 text-xs text-balance",
         className,
       )}
       {...props}
@@ -57,16 +55,7 @@ const TooltipContent = React.forwardRef<
 ))
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
-const GlassTooltip = Tooltip
-const GlassTooltipTrigger = TooltipTrigger
-const GlassTooltipContent = TooltipContent
-const GlassTooltipProvider = TooltipProvider
-
 export {
-  GlassTooltip,
-  GlassTooltipContent,
-  GlassTooltipProvider,
-  GlassTooltipTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,

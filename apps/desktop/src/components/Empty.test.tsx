@@ -12,7 +12,7 @@ describe("Empty", () => {
     expect(html).not.toContain("data-slei-panel");
   });
 
-  it("uses an EinUI card when the framed shell is requested", () => {
+  it("uses a shadcn card when the framed shell is requested", () => {
     const html = renderToStaticMarkup(<Empty framed title="暂无数据" />);
 
     expect(html).toContain('data-slot="card"');

@@ -149,13 +149,11 @@ describe("overlay UI primitives", () => {
       expect(content?.getAttribute("role")).toBe("dialog");
       expect(content?.textContent).toContain("Channel details");
       expect(content?.textContent).toContain("Review channel metadata.");
-      expect(content?.className.split(/\s+/)).toContain("bg-white/30");
-      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:bg-white/35");
-      expect(content?.className.split(/\s+/)).toContain("[.light_&]:bg-white/70");
-      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:[.light_&]:bg-white/80");
-      expect(content?.className.split(/\s+/)).not.toContain("bg-white/20");
-      expect(content?.className.split(/\s+/)).toContain("backdrop-blur-2xl");
-      expect(content?.className).toContain("before:from-white/45");
+      expect(content?.className).toContain("bg-background");
+      expect(content?.className).toContain("shadow-lg");
+      expect(content?.className).not.toContain("bg-white/30");
+      expect(content?.className).not.toContain("backdrop-blur-2xl");
+      expect(content?.className).not.toContain("before:from-white/45");
       expect(content?.querySelector('[data-slot="dialog-title"]')?.id).toBeTruthy();
       expect(content?.querySelector('[data-slot="dialog-description"]')?.id).toBeTruthy();
 
@@ -192,13 +190,11 @@ describe("overlay UI primitives", () => {
       expect(content?.getAttribute("role")).toBe("alertdialog");
       expect(content?.textContent).toContain("Remove member?");
       expect(content?.textContent).toContain("This action removes the member from the channel.");
-      expect(content?.className.split(/\s+/)).toContain("bg-white/30");
-      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:bg-white/35");
-      expect(content?.className.split(/\s+/)).toContain("[.light_&]:bg-white/70");
-      expect(content?.className.split(/\s+/)).toContain("supports-[backdrop-filter]:[.light_&]:bg-white/80");
-      expect(content?.className.split(/\s+/)).not.toContain("bg-white/20");
-      expect(content?.className.split(/\s+/)).toContain("backdrop-blur-2xl");
-      expect(content?.className).toContain("before:from-white/45");
+      expect(content?.className).toContain("bg-background");
+      expect(content?.className).toContain("shadow-lg");
+      expect(content?.className).not.toContain("bg-white/30");
+      expect(content?.className).not.toContain("backdrop-blur-2xl");
+      expect(content?.className).not.toContain("before:from-white/45");
       expect(disabledAction?.disabled).toBe(true);
       expect(document.activeElement?.closest('[data-slot="alert-dialog-content"]')).toBe(content);
 
@@ -393,10 +389,11 @@ describe("overlay UI primitives", () => {
       expect(content).not.toBeNull();
       expect(content?.getAttribute("role")).toBe("dialog");
       expect(content?.getAttribute("data-side")).toBe("left");
-      expect(content?.className.split(/\s+/)).toContain("bg-white/30");
+      expect(content?.className.split(/\s+/)).toContain("bg-background");
       expect(content?.className).toContain("data-[state=open]:animate-in");
       expect(content?.className).toContain("data-[state=closed]:animate-out");
-      expect(content?.className).toContain("before:from-white/35");
+      expect(content?.className).not.toContain("bg-white/30");
+      expect(content?.className).not.toContain("before:from-white/35");
       expect(content?.textContent).toContain("Task thread");
       expect(content?.textContent).toContain("Continue the task conversation.");
 

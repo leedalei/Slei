@@ -8,48 +8,21 @@ import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
   cn(
-    "inline-flex w-fit shrink-0 items-center justify-center gap-1 rounded-full px-3 py-1 text-xs font-medium",
-    "border backdrop-blur-xl transition-all duration-300",
-    "[&>svg]:pointer-events-none [&>svg]:size-3",
+    "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0",
+    "[&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+    "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
   ),
   {
     variants: {
       variant: {
-        default: "border-white/25 bg-white/15 text-foreground",
-        primary: "border-cyan-400/30 bg-linear-to-r from-cyan-500/30 to-blue-500/30 text-cyan-100",
-        filled: "border-cyan-400/30 bg-linear-to-r from-cyan-500/30 to-blue-500/30 text-cyan-100",
-        secondary: "border-white/20 bg-white/10 text-muted-foreground",
-        soft: "border-white/20 bg-white/10 text-muted-foreground",
-        success: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
-        warning: "border-amber-400/30 bg-amber-500/20 text-amber-100",
-        destructive: "border-red-400/30 bg-red-500/20 text-red-100",
-        outline: "border-white/30 bg-transparent text-foreground",
-        ghost: "border-transparent bg-transparent text-muted-foreground hover:bg-white/10 hover:text-foreground",
-        link: "border-transparent bg-transparent text-cyan-200 underline-offset-4 hover:underline",
-      },
-      status: {
-        approval: "border-amber-400/30 bg-amber-500/20 text-amber-100",
-        busy: "border-amber-400/30 bg-amber-500/20 text-amber-100",
-        connected: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
-        failed: "border-red-400/30 bg-red-500/20 text-red-100",
-        idle: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
-        info: "border-sky-400/30 bg-sky-500/20 text-sky-100",
-        offline: "border-white/20 bg-white/10 text-muted-foreground",
-        pending: "border-white/20 bg-white/10 text-muted-foreground",
-        running: "border-sky-400/30 bg-sky-500/20 text-sky-100",
-        success: "border-emerald-400/30 bg-emerald-500/20 text-emerald-100",
-        warn: "border-amber-400/30 bg-amber-500/20 text-amber-100",
-        warning: "border-amber-400/30 bg-amber-500/20 text-amber-100",
-      },
-      size: {
-        sm: "px-2 py-0.5 text-xs",
-        md: "px-3 py-1 text-sm",
-        lg: "px-4 py-2 text-base",
+        default: "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+        secondary: "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+        destructive: "border-transparent bg-destructive text-destructive-foreground [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline: "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
       },
     },
     defaultVariants: {
       variant: "default",
-      size: "sm",
     },
   },
 )
@@ -59,21 +32,17 @@ type BadgeProps = React.ComponentProps<"span"> &
     asChild?: boolean
   }
 
-function Badge({ className, status, variant, size, asChild = false, ...props }: BadgeProps) {
+function Badge({ className, variant, asChild = false, ...props }: BadgeProps) {
   const Comp = asChild ? Slot : "span"
   return (
     <Comp
       data-slot="badge"
-      data-status={status ?? undefined}
       data-variant={variant ?? "default"}
-      className={cn(badgeVariants({ status, variant, size }), className)}
+      className={cn(badgeVariants({ variant }), className)}
       {...props}
     />
   )
 }
 
-const GlassBadge = Badge
-const glassBadgeVariants = badgeVariants
-
-export { Badge, GlassBadge, badgeVariants, glassBadgeVariants }
+export { Badge, badgeVariants }
 export type { BadgeProps }

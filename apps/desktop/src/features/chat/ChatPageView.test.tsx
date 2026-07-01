@@ -787,14 +787,14 @@ describe("ChatPage mention panel", () => {
       });
       await act(async () => undefined);
 
-      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain(messages.chat.copySuccess);
-      expect(host.querySelector('[data-slot="notification-close"]')).not.toBeNull();
+      expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain(messages.chat.copySuccess);
+      expect(host.querySelector('[data-slot="toast-close"]')).not.toBeNull();
 
       await act(async () => {
-        host.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+        host.querySelector<HTMLButtonElement>('[data-slot="toast-close"]')?.click();
       });
 
-      expect(host.querySelector('[data-slot="notification"]')).toBeNull();
+      expect(host.querySelector('[data-slot="toast"]')).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }
@@ -836,7 +836,7 @@ describe("ChatPage mention panel", () => {
       await act(async () => undefined);
 
       expect(clipboard.writeText).toHaveBeenCalledWith("const answer = 42;\nconsole.log(answer);");
-      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain(messages.chat.copySuccess);
+      expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain(messages.chat.copySuccess);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -877,7 +877,7 @@ describe("ChatPage mention panel", () => {
     await act(async () => undefined);
 
     expect(onMessageSaveToggle).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("收藏成功");
+    expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain("收藏成功");
   });
 
   it("shows an error toast when saving a message fails", async () => {
@@ -915,7 +915,7 @@ describe("ChatPage mention panel", () => {
     await act(async () => undefined);
 
     expect(onMessageSaveToggle).toHaveBeenCalledTimes(1);
-    expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("收藏失败：daemon offline");
+    expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain("收藏失败：daemon offline");
   });
 
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {

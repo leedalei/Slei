@@ -29,20 +29,22 @@ function cleanupToast(root: Root, host: HTMLElement) {
 }
 
 describe("Toast", () => {
-  it("renders the toast message on a glass notification surface", () => {
+  it("renders the toast message on a shadcn toast surface", () => {
     const { host, root } = renderToast({ message: "保存成功", type: "success" });
 
     try {
-      const notification = host.querySelector<HTMLElement>('[data-slot="notification"]');
-      const title = host.querySelector<HTMLElement>('[data-slot="notification-title"]');
+      const toast = host.querySelector<HTMLElement>('[data-slot="toast"]');
+      const title = host.querySelector<HTMLElement>('[data-slot="toast-title"]');
 
-      expect(notification).not.toBeNull();
-      expect(notification?.getAttribute("data-toast-notification")).toBe("true");
+      expect(toast).not.toBeNull();
       expect(title?.textContent).toBe("保存成功");
       expect(title?.querySelector("button")).toBeNull();
-      expect(host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')).toBeNull();
+      expect(host.querySelector<HTMLButtonElement>('[data-slot="toast-action"]')).toBeNull();
       expect(host.querySelector<HTMLButtonElement>('[aria-label="复制通知内容"]')).toBeNull();
       expect(host.querySelector("[data-slei-panel]")).toBeNull();
+      expect(host.innerHTML).not.toContain("notification-surface");
+      expect(host.innerHTML).not.toContain("backdrop-blur");
+      expect(host.innerHTML).not.toContain("bg-linear");
     } finally {
       cleanupToast(root, host);
     }
@@ -55,10 +57,10 @@ describe("Toast", () => {
     });
 
     try {
-      const notification = host.querySelector('[data-slot="notification"]');
-      const title = host.querySelector<HTMLElement>('[data-slot="notification-title"]');
+      const toast = host.querySelector('[data-slot="toast"]');
+      const title = host.querySelector<HTMLElement>('[data-slot="toast-title"]');
 
-      expect(notification?.className).toContain("max-w-[70vw]");
+      expect(toast?.className).toContain("max-w-[70vw]");
       expect(title?.className).toContain("whitespace-normal");
       expect(title?.className).toContain("break-words");
     } finally {
@@ -66,29 +68,25 @@ describe("Toast", () => {
     }
   });
 
-  it("centers compact toast content vertically on a 70 percent frosted surface", () => {
+  it("centers compact toast content vertically on a token-based surface", () => {
     const { host, root } = renderToast({ message: "复制成功", type: "success" });
 
     try {
-      const content = host.querySelector<HTMLElement>('[data-slot="notification-content"]');
-      const iconContainer = host.querySelector<HTMLElement>('[data-slot="notification-icon-container"]');
-      const icon = host.querySelector<SVGElement>('[data-slot="notification-icon"]');
-      const surface = host.querySelector<HTMLElement>('[data-slot="notification-surface"]');
+      const content = host.querySelector<HTMLElement>('[data-slot="toast-content"]');
+      const icon = host.querySelector<SVGElement>('[data-slot="toast-icon"]');
+      const toast = host.querySelector<HTMLElement>('[data-slot="toast"]');
 
       expect(content).not.toBeNull();
-      expect(iconContainer).not.toBeNull();
       expect(icon).not.toBeNull();
-      expect(surface).not.toBeNull();
+      expect(toast).not.toBeNull();
       expect(content?.className).toContain("items-center");
-      expect(content?.className).toContain("px-3.5");
-      expect(content?.className).toContain("py-2.5");
-      expect(iconContainer?.className).toContain("h-7");
-      expect(iconContainer?.className).toContain("w-7");
+      expect(toast?.className).toContain("bg-popover");
+      expect(toast?.className).toContain("text-popover-foreground");
       expect(icon?.className.baseVal).toContain("h-4");
       expect(icon?.className.baseVal).toContain("w-4");
-      expect(surface?.className).toContain("bg-white/70");
-      expect(surface?.className).toContain("backdrop-blur-2xl");
-      expect(surface?.className).toContain("backdrop-saturate-150");
+      expect(toast?.className).not.toContain("bg-white/70");
+      expect(toast?.className).not.toContain("backdrop-blur-2xl");
+      expect(toast?.className).not.toContain("backdrop-saturate-150");
     } finally {
       cleanupToast(root, host);
     }
@@ -103,10 +101,10 @@ describe("Toast", () => {
     const { host, root } = renderToast({ type: toastType });
 
     try {
-      const notification = host.querySelector<HTMLElement>('[data-slot="notification"]');
+      const toast = host.querySelector<HTMLElement>('[data-slot="toast"]');
 
-      expect(notification?.getAttribute("data-type")).toBe(notificationType);
-      expect(notification?.getAttribute("role")).toBe(toastType === "error" ? "alert" : "status");
+      expect(toast?.getAttribute("data-type")).toBe(notificationType);
+      expect(toast?.getAttribute("role")).toBe(toastType === "error" ? "alert" : "status");
     } finally {
       cleanupToast(root, host);
     }
@@ -116,8 +114,8 @@ describe("Toast", () => {
     const { host, root } = renderToast({ message: "  copied text  ", type: "info" });
 
     try {
-      expect(host.querySelector('[data-slot="notification"]')?.textContent).toContain("copied text");
-      expect(host.querySelector<HTMLButtonElement>('[data-slot="notification-action"]')).toBeNull();
+      expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain("copied text");
+      expect(host.querySelector<HTMLButtonElement>('[data-slot="toast-action"]')).toBeNull();
       expect(host.querySelector<HTMLButtonElement>('[aria-label="复制通知内容"]')).toBeNull();
     } finally {
       cleanupToast(root, host);
@@ -136,7 +134,7 @@ describe("Toast", () => {
 
     try {
       act(() => {
-        host.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+        host.querySelector<HTMLButtonElement>('[data-slot="toast-close"]')?.click();
       });
 
       expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -160,13 +158,13 @@ describe("Toast", () => {
     });
 
     try {
-      expect(host.querySelector('[data-slot="notification"]')).not.toBeNull();
+      expect(host.querySelector('[data-slot="toast"]')).not.toBeNull();
 
       act(() => {
-        host.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+        host.querySelector<HTMLButtonElement>('[data-slot="toast-close"]')?.click();
       });
 
-      expect(host.querySelector('[data-slot="notification"]')).toBeNull();
+      expect(host.querySelector('[data-slot="toast"]')).toBeNull();
     } finally {
       cleanupToast(root, host);
     }
@@ -194,17 +192,17 @@ describe("Toast", () => {
     });
 
     try {
-      expect(host.querySelectorAll('[data-slot="notification"]')).toHaveLength(1);
+      expect(host.querySelectorAll('[data-slot="toast"]')).toHaveLength(1);
 
       act(() => {
         vi.advanceTimersByTime(TOAST_VISIBLE_MS - 1);
       });
-      expect(host.querySelectorAll('[data-slot="notification"]')).toHaveLength(1);
+      expect(host.querySelectorAll('[data-slot="toast"]')).toHaveLength(1);
 
       act(() => {
         vi.advanceTimersByTime(1);
       });
-      expect(host.querySelectorAll('[data-slot="notification"]')).toHaveLength(0);
+      expect(host.querySelectorAll('[data-slot="toast"]')).toHaveLength(0);
     } finally {
       vi.useRealTimers();
       cleanupToast(root, host);

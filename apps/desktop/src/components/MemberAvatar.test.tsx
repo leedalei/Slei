@@ -110,7 +110,7 @@ describe("MemberAvatar", () => {
     expect(createMemberAvatar(identity)).toBe(createMemberAvatar({ ...identity, avatar: "" }));
   });
 
-  it("renders the EinUI avatar and image slots with the generated member avatar source", async () => {
+  it("renders the shadcn avatar and image slots with the generated member avatar source", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
       avatar: "LW",
@@ -197,7 +197,7 @@ describe("MemberAvatar", () => {
     },
   );
 
-  it("uses a tight global avatar shadow no larger than 3px blur", async () => {
+  it("uses default shadcn avatar styling without glass borders or custom shadows", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
       avatar: "LW",
@@ -212,9 +212,11 @@ describe("MemberAvatar", () => {
     try {
       const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
 
-      expect(avatar?.className).toContain("shadow-[0_1px_3px_rgba(0,0,0,0.14)]");
-      expect(avatar?.className).not.toContain("shadow-[0_2px_6px");
-      expect(avatar?.className).not.toContain("shadow-[0_4px_16px");
+      expect(avatar?.className).toContain("rounded-full");
+      expect(avatar?.className).toContain("size-8");
+      expect(avatar?.className).not.toContain("border-white");
+      expect(avatar?.className).not.toContain("shadow-[");
+      expect(avatar?.className).not.toContain("backdrop-blur");
     } finally {
       cleanupMemberAvatar(root, host);
     }

@@ -2,22 +2,9 @@
 
 import * as React from "react"
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group"
-import { motion, type Variants } from "framer-motion"
+import { CircleIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-
-const indicatorVariants: Variants = {
-  initial: { scale: 0, opacity: 0 },
-  checked: {
-    scale: 1,
-    opacity: 1,
-    transition: {
-      type: "spring",
-      visualDuration: 0.2,
-      bounce: 0.5,
-    },
-  },
-}
 
 const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
@@ -41,7 +28,7 @@ const RadioGroupItem = React.forwardRef<
   RadioGroupItemProps
 >(({ className, label, id, ...props }, ref) => {
   const fallbackId = React.useId()
-  const radioId = id ?? `glass-radio-${props.value}-${fallbackId}`
+  const radioId = id ?? `radio-${props.value}-${fallbackId}`
 
   return (
     <div className="flex items-center gap-3">
@@ -50,24 +37,13 @@ const RadioGroupItem = React.forwardRef<
         id={radioId}
         data-slot="radio-group-item"
         className={cn(
-          "aspect-square h-5 w-5 rounded-full",
-          "border border-white/35 bg-transparent backdrop-blur-xl",
-          "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
-          "transition-all duration-200",
-          "focus:outline-none",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-          "data-[state=checked]:border-cyan-400/60",
+          "border-input text-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive aspect-square size-4 shrink-0 rounded-full border shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}
       >
-        <RadioGroupPrimitive.Indicator className="flex h-full w-full items-center justify-center">
-          <motion.div
-            className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-cyan-400 to-blue-400"
-            initial="initial"
-            animate="checked"
-            variants={indicatorVariants}
-          />
+        <RadioGroupPrimitive.Indicator data-slot="radio-group-indicator" className="relative flex items-center justify-center">
+          <CircleIcon className="fill-primary absolute top-1/2 left-1/2 size-2 -translate-x-1/2 -translate-y-1/2" />
         </RadioGroupPrimitive.Indicator>
       </RadioGroupPrimitive.Item>
       {label ? (
@@ -80,7 +56,4 @@ const RadioGroupItem = React.forwardRef<
 })
 RadioGroupItem.displayName = RadioGroupPrimitive.Item.displayName
 
-const GlassRadioGroup = RadioGroup
-const GlassRadioGroupItem = RadioGroupItem
-
-export { GlassRadioGroup, GlassRadioGroupItem, RadioGroup, RadioGroupItem }
+export { RadioGroup, RadioGroupItem }

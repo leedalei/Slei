@@ -84,13 +84,14 @@ const allowedTailwindV4ThemeMappings = new Set([
   "--shadow-xs",
 ]);
 
-const allowedRadiusThemeVariables = new Set([
-  "--radius-xs",
-  "--radius-sm",
-  "--radius-base",
-  "--radius-md",
-  "--radius-lg",
-  "--radius-xl",
+const allowedRadiusThemeMappings = new Map([
+  ["--radius-sm", "calc(var(--radius) - 4px)"],
+  ["--radius-md", "calc(var(--radius) - 2px)"],
+  ["--radius-lg", "var(--radius)"],
+  ["--radius-xl", "calc(var(--radius) + 4px)"],
+  ["--radius-2xl", "calc(var(--radius) + 8px)"],
+  ["--radius-3xl", "calc(var(--radius) + 12px)"],
+  ["--radius-4xl", "calc(var(--radius) + 16px)"],
 ]);
 
 const legacyRootThemeTokens = new Set([
@@ -261,8 +262,7 @@ function isAllowedThemeInlineMapping(token: string, value: string) {
   }
 
   if (token.startsWith("--radius")) {
-    const referencedToken = value.trim().match(/^var\((--[\w-]+)\)$/)?.[1];
-    return referencedToken ? allowedRadiusThemeVariables.has(referencedToken) && referencedToken !== token : false;
+    return allowedRadiusThemeMappings.get(token) === value.trim();
   }
 
   if (token.startsWith("--shadow")) {
@@ -582,10 +582,8 @@ const shadcnRegistryPrimitiveFiles = [
   "components/ui/checkbox.tsx",
   "components/ui/dialog.tsx",
   "components/ui/dropdown-menu.tsx",
-  "components/ui/glass-avatar.tsx",
   "components/ui/input.tsx",
   "components/ui/label.tsx",
-  "components/ui/notification.tsx",
   "components/ui/popover.tsx",
   "components/ui/radio.tsx",
   "components/ui/scroll-area.tsx",
@@ -593,6 +591,7 @@ const shadcnRegistryPrimitiveFiles = [
   "components/ui/separator.tsx",
   "components/ui/sheet.tsx",
   "components/ui/skeleton.tsx",
+  "components/ui/sonner.tsx",
   "components/ui/switch.tsx",
   "components/ui/tabs.tsx",
   "components/ui/textarea.tsx",
@@ -748,13 +747,14 @@ describe("desktop UI primitive usage", () => {
   --color-background: var(--background);
   --color-card: var(--card);
   --color-foreground: var(--foreground);
-  --radius-lg: var(--radius-base);
+  --radius-lg: var(--radius);
+  --radius-sm: calc(var(--radius) - 4px);
   --shadow-lg: var(--shadow-lg);
 }
 
 :root {
   --background: oklch(0.15 0.03 250);
-  --radius-base: 8px;
+  --radius: 0.625rem;
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 16px;
@@ -890,8 +890,11 @@ describe("desktop UI primitive usage", () => {
     expect(cardSource).toContain("data-slot=\"card-description\"");
     expect(cardSource).toContain("data-slot=\"card-content\"");
     expect(cardSource).toContain("data-slot=\"card-footer\"");
-    expect(cardSource).toContain("border border-white/20 bg-white/10");
-    expect(cardSource).toContain("backdrop-blur-xl");
+    expect(cardSource).toContain("bg-card text-card-foreground");
+    expect(cardSource).toContain("rounded-xl border py-6 shadow-sm");
+    expect(cardSource).not.toContain("glowEffect");
+    expect(cardSource).not.toContain("backdrop-blur");
+    expect(cardSource).not.toContain("border-white/");
   });
 
   it("uses the default shadcn button API across production source", () => {
@@ -974,6 +977,9 @@ describe("desktop UI primitive usage", () => {
     expect(switchSource).toContain("h-5 w-5");
     expect(switchSource).toContain("data-[state=checked]:");
     expect(switchSource).toContain("data-[state=checked]:translate-x-5");
+    expect(switchSource).not.toContain("bg-linear");
+    expect(switchSource).not.toContain("backdrop-blur");
+    expect(switchSource).not.toContain("border-white/");
     expect(separatorSource).toContain('data-slot="separator"');
     expect(separatorSource).toContain('orientation = "horizontal"');
     expect(separatorSource).toContain('"shrink-0 border-border bg-transparent"');
@@ -1078,6 +1084,43 @@ describe("desktop UI primitive usage", () => {
     expect(appFrameSource).not.toContain('"t-modal rounded');
   });
 
+  it("does not keep glass compatibility exports in shadcn primitives", () => {
+    const uiFiles = collectRelativeFiles(resolve(SRC_ROOT, "components/ui"), (file) => file.endsWith(".tsx"));
+    const violations: string[] = [];
+
+    for (const file of uiFiles) {
+      const source = readFileSync(resolve(SRC_ROOT, "components/ui", file), "utf8");
+      if (/\bGlass[A-Z]/.test(source)) violations.push(`components/ui/${file}: Glass export`);
+      if (/\bglass[A-Z]/.test(source)) violations.push(`components/ui/${file}: glass alias`);
+      if (file.startsWith("glass-")) violations.push(`components/ui/${file}: glass file`);
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps badge and avatar primitives on default shadcn styling instead of glass variants", () => {
+    const avatarSource = readSource("components/ui/avatar.tsx");
+    const badgeSource = readSource("components/ui/badge.tsx");
+
+    expect(badgeSource).toContain('variant: {');
+    expect(badgeSource).toContain('default: "border-transparent bg-primary text-primary-foreground');
+    expect(badgeSource).toContain('secondary: "border-transparent bg-secondary text-secondary-foreground');
+    expect(badgeSource).toContain('outline: "text-foreground');
+    expect(badgeSource).not.toContain("status:");
+    expect(badgeSource).not.toContain("filled:");
+    expect(badgeSource).not.toContain("primary:");
+    expect(badgeSource).not.toContain("bg-linear");
+    expect(badgeSource).not.toContain("backdrop-blur");
+    expect(badgeSource).not.toContain("border-white/");
+
+    expect(avatarSource).toContain('data-slot="avatar"');
+    expect(avatarSource).toContain("h-8 w-8");
+    expect(avatarSource).not.toContain("glowEffect");
+    expect(avatarSource).not.toContain("bg-linear");
+    expect(avatarSource).not.toContain("backdrop-blur");
+    expect(avatarSource).not.toContain("border-white/");
+  });
+
   it("keeps tooltip free of legacy overlay shadow tokens", () => {
     const source = readSource("components/ui/tooltip.tsx");
 
@@ -1108,6 +1151,9 @@ describe("desktop UI primitive usage", () => {
       expect(source).not.toContain("--slei-");
       expect(source).not.toContain("slei-raised");
       expect(source).not.toContain("slei-inset");
+      expect(source).not.toContain("backdrop-blur-2xl");
+      expect(source).not.toContain("bg-white/30");
+      expect(source).not.toContain("border-white/25");
     }
   });
 
@@ -1158,15 +1204,11 @@ describe("desktop UI primitive usage", () => {
     expect(appCss).toContain(".t-dropdown");
     expect(appCss).toContain('.t-dropdown[data-state="open"]');
     expect(appCss).toContain('.t-dropdown[data-state="closed"]');
-    expect(appCss).toContain(".t-modal");
-    expect(appCss).toContain('.t-modal[data-state="open"]');
-    expect(appCss).toContain('.t-modal[data-state="closed"]');
     expect(appCss).toContain(".t-icon-swap");
     expect(appCss).toContain('.t-icon-swap[data-state="a"] > .t-icon[data-icon="a"]');
     expect(appCss).not.toContain('.t-icon-swap[data-state="a"] .t-icon[data-icon="a"]');
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(appCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.t-dropdown\s*\{[\s\S]*animation: none !important;/);
-    expect(appCss).toContain(".t-modal { transition: none !important; }");
     expect(appCss).toContain(".t-icon-swap .t-icon { transition: none !important; }");
   });
 
@@ -1202,9 +1244,11 @@ describe("desktop UI primitive usage", () => {
       "components/ui/alert-dialog.tsx",
     ]) {
       const source = readSource(file);
-      expect(source).toContain("t-modal");
+      expect(source).toContain("data-[state=open]:animate-in");
+      expect(source).toContain("data-[state=closed]:animate-out");
       expect(source).not.toContain("data-open:zoom-in-95");
       expect(source).not.toContain("data-closed:zoom-out-95");
+      expect(source).not.toContain("t-modal");
     }
   });
 

@@ -166,10 +166,10 @@ describe("SleiAppFrame appearance preferences", () => {
       />,
     );
 
-    expect(container.querySelector('[data-slot="notification"]')?.textContent).toContain("运行时错误");
+    expect(container.querySelector('[data-slot="toast"]')?.textContent).toContain("运行时错误");
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-slot="notification-close"]')?.click();
+      container.querySelector<HTMLButtonElement>('[data-slot="toast-close"]')?.click();
     });
 
     expect(onRuntimeToastDismiss).toHaveBeenCalledTimes(1);
@@ -1061,8 +1061,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).toContain('className="slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
     expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
-    expect(appCss).toContain("--background: oklch(0.18 0.045 255 / 0.5)");
-    expect(appCss).toContain("--background: oklch(0.94 0.006 220 / 0.5)");
+    expect(appCss).toContain("--background: oklch(1 0 0)");
+    expect(appCss).toContain("--background: oklch(0.145 0 0)");
     expect(appCss).toContain("body {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;");
     expect(appCss).toContain("html,\n#app {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n  background: transparent;");
@@ -1152,13 +1152,13 @@ describe("SleiAppFrame global search navigation", () => {
     expect(buttonSource).not.toContain("slei-shell-nav__button--flow");
   });
 
-  it("keeps the accent token in the teal family instead of purple", () => {
+  it("uses Vega neutral accent tokens instead of the old chroma palette", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const accentDeclarations = Array.from(appCss.matchAll(/--accent:\s*oklch\(([^;]+)\);/g), (match) => match[1]);
 
     expect(accentDeclarations).toHaveLength(3);
-    expect(accentDeclarations.every((value) => value.endsWith("185") || value.endsWith("190"))).toBe(true);
-    expect(accentDeclarations.some((value) => value.endsWith("285"))).toBe(false);
+    expect(accentDeclarations).toEqual(["0.97 0 0", "0.269 0 0", "0.97 0 0"]);
+    expect(accentDeclarations.some((value) => value.endsWith("185") || value.endsWith("190") || value.endsWith("285"))).toBe(false);
   });
 
   it("keeps workspace sidebar button chrome off shared shadcn button variants", () => {
@@ -1500,7 +1500,9 @@ describe("SleiAppFrame global search navigation", () => {
     const trigger = host.querySelector<HTMLElement>('[data-slot="direct-message-select-trigger"]');
     const directChildren = Array.from(trigger?.children ?? []);
     const statusDot = directChildren[0] as HTMLElement | undefined;
-    const avatar = directChildren[1]?.querySelector<HTMLElement>('[data-slot="avatar"]');
+    const avatar = directChildren[1]?.matches('[data-slot="avatar"]')
+      ? directChildren[1] as HTMLElement
+      : directChildren[1]?.querySelector<HTMLElement>('[data-slot="avatar"]');
     const name = directChildren[2] as HTMLElement | undefined;
 
     expect(statusDot?.getAttribute("role")).toBe("img");

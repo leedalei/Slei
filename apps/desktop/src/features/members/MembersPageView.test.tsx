@@ -263,7 +263,7 @@ describe("MembersPage agent details", () => {
     expect(html).toContain(`>${messages.members.message}<`);
   });
 
-  it("uses EinUI card slots and secondary detail blocks in member profile details", () => {
+  it("uses shadcn card slots and secondary detail blocks in member profile details", () => {
     const html = renderToStaticMarkup(renderMembersPage());
 
     expect(html).toContain('data-slot="card"');

@@ -4,41 +4,28 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-type CardProps = React.HTMLAttributes<HTMLDivElement> & {
-  glowEffect?: boolean
-}
-
-const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, glowEffect = true, children, ...props }, ref) => (
+const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
     <div
       ref={ref}
       data-slot="card"
-      className={cn(
-        "relative overflow-visible rounded-2xl border border-white/20 bg-white/10 text-card-foreground backdrop-blur-xl",
-        "shadow-[0_4px_4px_rgba(0,0,0,0.12)]",
-        glowEffect && "shadow-[0_4px_4px_rgba(0,0,0,0.12),0_0_4px_rgba(59,130,246,0.10)]",
-        "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-linear-to-b before:from-white/20 before:to-transparent",
-        "after:pointer-events-none after:absolute after:inset-px after:rounded-[calc(1rem-1px)] after:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]",
-        className,
-      )}
+      className={cn("bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm", className)}
       {...props}
-    >
-      {children}
-    </div>
+    />
   ),
 )
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} data-slot="card-header" className={cn("flex flex-col gap-1.5 p-6", className)} {...props} />
+    <div ref={ref} data-slot="card-header" className={cn("@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6", className)} {...props} />
   ),
 )
 CardHeader.displayName = "CardHeader"
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} data-slot="card-title" className={cn("text-xl font-semibold leading-none text-card-foreground", className)} {...props} />
+    <h3 ref={ref} data-slot="card-title" className={cn("leading-none font-semibold", className)} {...props} />
   ),
 )
 CardTitle.displayName = "CardTitle"
@@ -59,24 +46,17 @@ CardAction.displayName = "CardAction"
 
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} data-slot="card-content" className={cn("p-6 pt-0", className)} {...props} />
+    <div ref={ref} data-slot="card-content" className={cn("px-6", className)} {...props} />
   ),
 )
 CardContent.displayName = "CardContent"
 
 const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} data-slot="card-footer" className={cn("flex items-center p-6 pt-0", className)} {...props} />
+    <div ref={ref} data-slot="card-footer" className={cn("flex items-center px-6 [.border-t]:pt-6", className)} {...props} />
   ),
 )
 CardFooter.displayName = "CardFooter"
-
-const GlassCard = Card
-const GlassCardHeader = CardHeader
-const GlassCardTitle = CardTitle
-const GlassCardDescription = CardDescription
-const GlassCardContent = CardContent
-const GlassCardFooter = CardFooter
 
 export {
   Card,
@@ -86,10 +66,4 @@ export {
   CardFooter,
   CardHeader,
   CardTitle,
-  GlassCard,
-  GlassCardContent,
-  GlassCardDescription,
-  GlassCardFooter,
-  GlassCardHeader,
-  GlassCardTitle,
 }

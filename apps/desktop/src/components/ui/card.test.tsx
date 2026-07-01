@@ -10,7 +10,7 @@ describe("Card", () => {
   it("keeps layout classes and card sections on the card root", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(
-      <Card className="custom-card-root" glowEffect={false}>
+      <Card className="custom-card-root">
         <CardHeader>Header</CardHeader>
         <CardContent>Content</CardContent>
       </Card>,

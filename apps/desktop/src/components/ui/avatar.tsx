@@ -5,29 +5,17 @@ import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
 import { cn } from "@/lib/utils"
 
-type AvatarProps = React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> & {
-  glowEffect?: boolean
-}
-
-const Avatar = React.forwardRef<React.ElementRef<typeof AvatarPrimitive.Root>, AvatarProps>(
-  ({ className, glowEffect = true, ...props }, ref) => (
-    <div className="relative inline-flex">
-      {glowEffect ? (
-        <div className="absolute -inset-px rounded-full bg-linear-to-r from-cyan-500/30 via-blue-500/30 to-purple-500/30 opacity-45 blur-[3px]" />
-      ) : null}
-      <AvatarPrimitive.Root
-        ref={ref}
-        data-slot="avatar"
-        className={cn(
-          "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border-2 border-white/30",
-          "shadow-[0_1px_3px_rgba(0,0,0,0.14)]",
-          className,
-        )}
-        {...props}
-      />
-    </div>
-  ),
-)
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    data-slot="avatar"
+    className={cn("relative flex h-8 w-8 shrink-0 overflow-hidden rounded-full", className)}
+    {...props}
+  />
+))
 Avatar.displayName = AvatarPrimitive.Root.displayName
 
 const AvatarImage = React.forwardRef<
@@ -50,10 +38,7 @@ const AvatarFallback = React.forwardRef<
   <AvatarPrimitive.Fallback
     ref={ref}
     data-slot="avatar-fallback"
-    className={cn(
-      "flex h-full w-full items-center justify-center rounded-full bg-white/10 text-sm font-medium text-foreground backdrop-blur-xl",
-      className,
-    )}
+    className={cn("bg-muted flex h-full w-full items-center justify-center rounded-full", className)}
     {...props}
   />
 ))
@@ -63,10 +48,7 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="avatar-badge"
-      className={cn(
-        "absolute bottom-0 right-0 z-10 inline-flex h-3 w-3 items-center justify-center rounded-full border border-white/30 bg-cyan-400 text-primary-foreground ring-2 ring-black/20",
-        className,
-      )}
+      className={cn("absolute bottom-0 right-0 z-10 inline-flex h-3 w-3 items-center justify-center rounded-full border border-background bg-primary text-primary-foreground ring-2 ring-background", className)}
       {...props}
     />
   )
@@ -74,7 +56,7 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
 
 function AvatarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div data-slot="avatar-group" className={cn("flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-black/20", className)} {...props} />
+    <div data-slot="avatar-group" className={cn("flex -space-x-2 *:data-[slot=avatar]:ring-2 *:data-[slot=avatar]:ring-background", className)} {...props} />
   )
 }
 
@@ -82,15 +64,11 @@ function AvatarGroupCount({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="avatar-group-count"
-      className={cn("relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-sm text-muted-foreground backdrop-blur-xl", className)}
+      className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-medium text-muted-foreground ring-2 ring-background", className)}
       {...props}
     />
   )
 }
-
-const GlassAvatar = Avatar
-const GlassAvatarImage = AvatarImage
-const GlassAvatarFallback = AvatarFallback
 
 export {
   Avatar,
@@ -99,7 +77,4 @@ export {
   AvatarGroup,
   AvatarGroupCount,
   AvatarImage,
-  GlassAvatar,
-  GlassAvatarFallback,
-  GlassAvatarImage,
 }
