@@ -190,7 +190,7 @@ describe("TasksPage filters", () => {
     expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
   });
 
-  it("keeps task toolbar filters compact and lets view tabs use the default translucent surface", async () => {
+  it("keeps task toolbar filters compact and lets view tabs use the shared segmented surface", async () => {
     await mountTasksPage();
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
@@ -205,8 +205,11 @@ describe("TasksPage filters", () => {
       expect(classes).toContain("w-56");
       expect(classes).not.toContain("w-full");
     }
-    expect(tabsList?.className).toContain("bg-white/10");
-    expect(tabsList?.className).toContain("backdrop-blur-xl");
+    expect(tabsList?.className).toContain("h-8");
+    expect(tabsList?.className).toContain("rounded-[10px]");
+    expect(tabsList?.className).toContain("p-0.5");
+    expect(tabsList?.className).not.toContain("bg-white/10");
+    expect(tabsList?.className).not.toContain("backdrop-blur-xl");
     expect(tabsList?.className).not.toContain("bg-card/70");
     expect(tabsList?.className).not.toContain("backdrop-blur-none");
     expect(tabsList?.className).not.toContain("shadow-none");

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import * as TabsModule from "./tabs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,13 +89,30 @@ describe("Tabs", () => {
         </TabsList>
       </Tabs>,
     );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const list = host.querySelector<HTMLElement>('[data-slot="tabs-list"]');
+    const trigger = host.querySelector<HTMLElement>('[data-slot="tabs-trigger"]');
 
     expect(html).toContain('data-variant="soft"');
     expect(html).toContain('data-slot="tabs-list"');
     expect(html).toContain('data-slot="tabs-pill"');
     expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain("Chat");
+    expect(list?.className.split(/\s+/)).toEqual(expect.arrayContaining(["h-8", "gap-0.5", "rounded-[10px]", "p-0.5"]));
+    expect(trigger?.className.split(/\s+/)).toEqual(expect.arrayContaining(["rounded-lg", "px-3", "py-1.5", "text-[12.5px]"]));
+    expect(list?.className).not.toContain("backdrop-blur");
+    expect(list?.className).not.toContain("bg-white/10");
     expect(html).not.toContain("data-slei-tabs-pill");
+  });
+
+  it("exports only the standard shadcn tabs API", () => {
+    expect(Object.keys(TabsModule).sort()).toEqual([
+      "Tabs",
+      "TabsContent",
+      "TabsList",
+      "TabsTrigger",
+    ]);
   });
 
   it("renders the sliding pill before tab triggers", () => {

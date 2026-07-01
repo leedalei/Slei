@@ -973,6 +973,9 @@ describe("desktop UI primitive usage", () => {
     expect(tabsSource).toContain("variant?: \"line\" | \"soft\"");
     expect(tabsSource).toContain("t-tabs-pill");
     expect(tabsSource).toContain("data-[state=active]:text-foreground");
+    expect(tabsSource).not.toContain("GlassTabs");
+    expect(tabsSource).not.toContain("backdrop-blur");
+    expect(tabsSource).not.toContain("bg-white/10");
     expect(tabsSource).not.toContain("before:bg-linear-to-r");
     expect(tabsSource).not.toContain("before:blur-lg");
     expect(tabsSource).not.toContain("before:bg-gradient-to-b");
@@ -984,8 +987,12 @@ describe("desktop UI primitive usage", () => {
 
     expect(tabsSource).not.toContain("data-slei-");
     expect(tabsSource).not.toContain("data-slei-tabs-pill");
+    expect(tabsSource).not.toContain("GlassTabs");
     expect(tabsSource).toContain("requestAnimationFrame(() => moveToActiveTab(false))");
     expect(appCss).toContain(".t-tabs-pill");
+    expect(appCss).not.toContain("--tabs-glass");
+    expect(appCss).not.toContain(".t-tabs-glow");
+    expect(appCss).not.toContain("@keyframes t-tabs-glow-pulse");
   });
 
   it("keeps tab list shadowless while sizing the inner pill shadow token", () => {
@@ -993,7 +1000,7 @@ describe("desktop UI primitive usage", () => {
     const tabsSource = readSource("components/ui/tabs.tsx");
 
     expect(tabsSource).not.toContain("shadow-[");
-    expect(appCss).toContain("--tabs-pill-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent)");
+    expect(appCss).toContain("--tabs-pill-shadow: 0 1px 3px color-mix(in srgb, var(--overlay-shadow-color) 13%, transparent)");
     expect(appCss).toContain("box-shadow: var(--tabs-pill-shadow)");
   });
 
@@ -1096,7 +1103,7 @@ describe("desktop UI primitive usage", () => {
   it("keeps select trigger and menu shadows compact", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
-    expect(selectSource).toContain("rounded-xl border border-[var(--tabs-glass-border)] bg-white/10");
+    expect(selectSource).toContain("rounded-lg border border-[var(--tabs-control-border)] bg-[var(--tabs-control-bg)]");
     expect(selectSource).toContain("rounded-lg border border-border/70 bg-popover text-popover-foreground");
     expect(selectSource).toContain("focus:bg-white/15");
     expect(selectSource).not.toContain("focus:border-white/40");

@@ -84,7 +84,7 @@ const TabsList = React.forwardRef<
       data-slot="tabs-list"
       data-variant={variant}
       className={cn(
-        "t-tabs relative inline-flex h-12 items-center justify-center gap-1 rounded-xl border border-white/20 bg-white/10 p-1 backdrop-blur-xl",
+        "t-tabs relative inline-flex h-8 items-center justify-center gap-0.5 rounded-[10px] border border-[var(--tabs-control-border)] bg-[var(--tabs-control-bg)] p-0.5",
         className,
       )}
       {...props}
@@ -104,8 +104,8 @@ const TabsTrigger = React.forwardRef<
     ref={ref}
     data-slot="tabs-trigger"
     className={cn(
-      "t-tab relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground",
-      "transition-colors duration-200 hover:bg-white/5 hover:text-foreground",
+      "t-tab relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground",
+      "transition-colors duration-200 hover:text-foreground",
       "focus-visible:outline-none",
       "disabled:pointer-events-none disabled:opacity-50",
       "data-[state=active]:text-foreground",
@@ -131,9 +131,4 @@ const TabsContent = React.forwardRef<
 ))
 TabsContent.displayName = TabsPrimitive.Content.displayName
 
-const GlassTabs = Tabs
-const GlassTabsList = TabsList
-const GlassTabsTrigger = TabsTrigger
-const GlassTabsContent = TabsContent
-
-export { GlassTabs, GlassTabsContent, GlassTabsList, GlassTabsTrigger, Tabs, TabsContent, TabsList, TabsTrigger }
+export { Tabs, TabsContent, TabsList, TabsTrigger }
