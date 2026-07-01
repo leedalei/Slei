@@ -692,6 +692,33 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onViewChange).toHaveBeenCalledWith("computers");
   });
 
+  it("uses shadcn primitives for the sidebar create overlay and settings menu", async () => {
+    const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]'));
+
+    expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')?.getAttribute("role")).toBe("menu");
+    expect(document.body.querySelectorAll('[data-slot="dropdown-menu-item"]').length).toBeGreaterThan(0);
+    expect(sidebarSource).toContain("DropdownMenuContent");
+    expect(sidebarSource).not.toContain('data-slot="dialog-portal"');
+    expect(sidebarSource).not.toContain('role="dialog"');
+    expect(sidebarSource).not.toContain("typeof document");
+
+    await clickElement(container.querySelector<HTMLButtonElement>('button[aria-label="创建频道"]'));
+
+    expect(document.body.querySelector('[data-slot="dialog-overlay"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-slot="dialog-content"]')?.getAttribute("role")).toBe("dialog");
+    expect(document.body.querySelector('[data-slot="dialog-title"]')?.textContent).toContain("创建频道");
+  });
+
   it("opens channel and DM context menus from pointer, keyboard, and row more buttons", async () => {
     const onMemberSelect = vi.fn();
     const onViewChange = vi.fn();

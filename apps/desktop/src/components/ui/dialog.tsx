@@ -35,9 +35,8 @@ const DialogContent = React.forwardRef<
     closeLabel?: string
     showCloseButton?: boolean
   }
->(({ className, children, closeLabel = "Close", showCloseButton = true, ...props }, ref) => (
-  <DialogPortal>
-    <DialogOverlay />
+>(({ className, children, closeLabel = "Close", showCloseButton = true, ...props }, ref) => {
+  const content = (
     <DialogPrimitive.Content
       ref={ref}
       data-slot="dialog-content"
@@ -59,8 +58,24 @@ const DialogContent = React.forwardRef<
         </DialogPrimitive.Close>
       ) : null}
     </DialogPrimitive.Content>
-  </DialogPortal>
-))
+  )
+
+  if (typeof document === "undefined") {
+    return (
+      <>
+        <DialogOverlay />
+        {content}
+      </>
+    )
+  }
+
+  return (
+    <DialogPortal>
+      <DialogOverlay />
+      {content}
+    </DialogPortal>
+  )
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
