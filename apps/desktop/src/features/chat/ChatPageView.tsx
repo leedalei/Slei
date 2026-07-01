@@ -842,7 +842,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   <span className="inline-flex min-w-0 items-baseline truncate" data-tauri-drag-region="deep">
                     <span
                       aria-hidden="true"
-                      className="mr-1 shrink-0 select-none text-[var(--text-color-3)] font-bold italic"
+                      className="mr-2 shrink-0 select-none text-[var(--text-color-3)] font-bold"
                       data-slot="channel-title-hash-mark"
                       data-tauri-drag-region="deep"
                     >

@@ -445,9 +445,9 @@ describe("ChatPage mention panel", () => {
     expect(title?.getAttribute("aria-label")).toBe("# all");
     expect(hashMark?.tagName).toBe("SPAN");
     expect(hashMark?.textContent).toBe("#");
-    expect(hashMark?.className).toContain("mr-1");
+    expect(hashMark?.className).toContain("mr-2");
     expect(hashMark?.className).toContain("font-bold");
-    expect(hashMark?.className).toContain("italic");
+    expect(hashMark?.className).not.toContain("italic");
     expect(hashMark?.className).toContain("text-[var(--text-color-3)]");
     expect(hashMark?.querySelector('[data-slei-icon="hash"]')).toBeNull();
   });
