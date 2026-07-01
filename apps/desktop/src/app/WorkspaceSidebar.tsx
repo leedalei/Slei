@@ -582,7 +582,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         <span className="flex min-w-0 flex-1 items-center gap-2">
                           <span
                             aria-hidden="true"
-                            className="shrink-0 select-none text-[var(--text-color-3)] font-bold italic"
+                            className="shrink-0 select-none text-[var(--text-color-3)] font-bold"
                             data-slot="channel-hash-mark"
                           >
                             #

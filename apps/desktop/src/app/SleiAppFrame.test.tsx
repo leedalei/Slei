@@ -1369,7 +1369,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(sidebarText).not.toContain("关联项目：/workspace/kol");
   });
 
-  it("renders sidebar channel hash marks as bold italic text-color-3 text", () => {
+  it("renders sidebar channel hash marks as bold text-color-3 text without italics", () => {
     const data = createSleiFixtures({
       channels: [
         { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
@@ -1391,7 +1391,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(hashMark?.tagName).toBe("SPAN");
     expect(hashMark?.textContent).toBe("#");
     expect(hashMark?.className).toContain("font-bold");
-    expect(hashMark?.className).toContain("italic");
+    expect(hashMark?.className).not.toContain("italic");
     expect(hashMark?.className).toContain("text-[var(--text-color-3)]");
     expect(hashMark?.querySelector('[data-slei-icon="hash"]')).toBeNull();
   });
