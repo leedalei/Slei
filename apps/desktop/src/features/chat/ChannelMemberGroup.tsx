@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
@@ -240,6 +240,8 @@ function ChannelMemberAvatar(input: {
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const readiness = input.member.channelReadiness?.[input.channelId];
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
@@ -263,36 +265,53 @@ function ChannelMemberAvatar(input: {
     input.onOpenChange(true);
   }
 
-  function closeAfterPointerLeave() {
+  function isInsideHoverSurface(target: EventTarget | null) {
+    return target instanceof Node && (
+      triggerRef.current?.contains(target) ||
+      contentRef.current?.contains(target)
+    );
+  }
+
+  function closeAfterTriggerPointerLeave(event: MouseEvent<HTMLElement>) {
     if (confirming) return;
     clearScheduledClose();
+    if (isInsideHoverSurface(event.relatedTarget)) return;
     closeTimerRef.current = setTimeout(() => {
       input.onOpenChange(false);
       closeTimerRef.current = undefined;
     }, 120);
   }
 
+  function closeAfterContentPointerLeave(event: MouseEvent<HTMLElement>) {
+    if (confirming) return;
+    clearScheduledClose();
+    if (isInsideHoverSurface(event.relatedTarget)) return;
+    input.onOpenChange(false);
+  }
+
   return (
     <Popover open={input.open} onOpenChange={input.onOpenChange}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           aria-label={`${input.member.name} ${input.member.handle}`}
           className={cn("slei-channel-member-avatar-button", input.offset && "-ml-2")}
           data-testid="slei-channel-member-avatar-trigger"
           onFocus={() => input.onOpenChange(true)}
           onMouseEnter={openFromPointer}
-          onMouseLeave={closeAfterPointerLeave}
+          onMouseLeave={closeAfterTriggerPointerLeave}
           type="button"
         >
           <MemberAvatar identity={input.member} />
         </button>
       </PopoverTrigger>
       <PopoverContent
+        ref={contentRef}
         align="end"
-        className="w-72 p-3"
+        className="w-72 border-border/60 p-3 shadow-[0_0_4px_rgba(0,0,0,0.14)]"
         data-testid="slei-channel-member-info-card"
         onMouseEnter={openFromPointer}
-        onMouseLeave={closeAfterPointerLeave}
+        onMouseLeave={closeAfterContentPointerLeave}
       >
         <div className="grid gap-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">

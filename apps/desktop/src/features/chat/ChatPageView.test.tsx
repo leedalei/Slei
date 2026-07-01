@@ -1795,6 +1795,9 @@ describe("ChatPage mention panel", () => {
     expect(card?.textContent).toContain("产品研究 Agent");
     expect(card?.textContent).toContain(messages.chat.memberReady);
     expect(card?.textContent).not.toContain("ready");
+    expect(card?.className).toContain("border-border/60");
+    expect(card?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.14)]");
+    expect(card?.className).not.toContain("shadow-[0_4px_4px");
     expect(removeButton?.textContent?.trim()).toBe("移除");
     expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
     expect(removeButton?.className).toContain("text-[14px]");
@@ -1845,6 +1848,57 @@ describe("ChatPage mention panel", () => {
       await act(async () => {
         card?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
         vi.advanceTimersByTime(200);
+      });
+
+      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("closes the member popover immediately after pointer leaves the info card", async () => {
+    vi.useFakeTimers();
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+      await act(async () => {
+        avatar?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
+      });
+
+      const card = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-info-card"]');
+      expect(card).not.toBeNull();
+
+      await act(async () => {
+        avatar?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: card }));
+        card?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: avatar }));
+      });
+
+      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
+
+      await act(async () => {
+        card?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
       });
 
       expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
