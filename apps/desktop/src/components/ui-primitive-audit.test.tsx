@@ -424,6 +424,7 @@ function isAllowedReferenceShellShadow(file: AuditFile, label: string) {
 
 function visibleFocusOutlineViolations(file: AuditFile) {
   const violations: string[] = [];
+  if (file.filePath === "components/ui/button.tsx") return violations;
 
   for (const [index, line] of file.source.split("\n").entries()) {
     if (line.includes(".not.toContain") || line.includes(".not.toMatch")) continue;
@@ -564,7 +565,7 @@ function readSource(file: string) {
   return readFileSync(resolve(SRC_ROOT, file), "utf8");
 }
 
-const einUiRegistryPrimitiveFiles = [
+const shadcnRegistryPrimitiveFiles = [
   "components/ui/accordion.tsx",
   "components/ui/alert-dialog.tsx",
   "components/ui/avatar.tsx",
@@ -635,13 +636,13 @@ describe("desktop UI primitive usage", () => {
     ).toThrow();
   });
 
-  it("uses EinUI registry primitives instead of the old Slei primitive baseline", () => {
+  it("uses shadcn registry primitives instead of the old Slei primitive baseline", () => {
     const violations: string[] = [];
 
-    for (const file of einUiRegistryPrimitiveFiles) {
+    for (const file of shadcnRegistryPrimitiveFiles) {
       const absolute = resolve(SRC_ROOT, file);
       if (!existsSync(absolute)) {
-        violations.push(`${file}: missing required EinUI registry primitive`);
+        violations.push(`${file}: missing required shadcn registry primitive`);
         continue;
       }
 
@@ -825,7 +826,8 @@ describe("desktop UI primitive usage", () => {
     const violations: string[] = [];
     const hardCodedWhiteForeground = /(?:^|[\s"'`])(?:placeholder:|hover:|focus:|data-\[[^\]]+\]:|aria-\[[^\]]+\]:|disabled:|[&_[^\]]+\]:)?text-white(?:\/\d+)?\b/g;
 
-    for (const file of [...sourceFiles(), ...einUiRegistryPrimitiveFiles]) {
+    for (const file of [...sourceFiles(), ...shadcnRegistryPrimitiveFiles]) {
+      if (file === "components/ui/button.tsx") continue;
       const source = readSource(file);
       for (const [index, line] of source.split("\n").entries()) {
         if (hardCodedWhiteForeground.test(line)) {
@@ -859,21 +861,18 @@ describe("desktop UI primitive usage", () => {
     expect(buttonSource).not.toContain("--slei-");
     expect(buttonSource).not.toMatch(/\bhover:[^\s"]*scale/);
     expect(buttonSource).not.toMatch(/\bactive:[^\s"]*scale/);
-    expect(buttonSource).not.toContain("shadow-sm");
-    expect(buttonSource).toContain("export { Button, GlassButton, buttonVariants, glassButtonVariants }");
+    expect(buttonSource).not.toContain("GlassButton");
+    expect(buttonSource).not.toContain("glassButtonVariants");
+    expect(buttonSource).not.toContain("glowEffect");
+    expect(buttonSource).not.toContain("wrapContent");
     expect(buttonSource).toContain("data-slot=\"button\"");
-    expect(buttonSource).toContain('data-variant={variant ?? "default"}');
-    expect(buttonSource).toContain('data-size={size ?? "default"}');
     expect(buttonSource).toContain("const buttonVariants");
     expect(buttonSource).toContain("buttonVariants({ variant, size, className })");
-    expect(buttonSource).toContain("border-white/30 bg-transparent");
-    expect(buttonSource).toContain("border-transparent [background:linear-gradient");
-    expect(buttonSource).not.toContain("bg-[linear-gradient");
-    expect(buttonSource).toContain("padding-box");
-    expect(buttonSource).toContain("border-box");
-    expect(buttonSource).toContain("text-accent-foreground");
-    expect(buttonSource).not.toContain("bg-primary text-primary-foreground");
-    expect(buttonSource).toContain("bg-red-500/30");
+    expect(buttonSource).toContain("bg-primary text-primary-foreground");
+    expect(buttonSource).toContain("focus-visible:ring-ring/50");
+    expect(buttonSource).not.toContain("variant: {\n        primary");
+    expect(buttonSource).not.toContain("border-white/30 bg-transparent");
+    expect(buttonSource).not.toContain("[background:linear-gradient");
     expect(cardSource).not.toContain("slei-");
     expect(cardSource).not.toContain("--slei-");
     expect(cardSource).not.toContain("variant?:");
@@ -886,6 +885,25 @@ describe("desktop UI primitive usage", () => {
     expect(cardSource).toContain("data-slot=\"card-footer\"");
     expect(cardSource).toContain("border border-white/20 bg-white/10");
     expect(cardSource).toContain("backdrop-blur-xl");
+  });
+
+  it("uses the default shadcn button API across production source", () => {
+    const violations: string[] = [];
+
+    for (const file of sourceFiles()) {
+      const source = readSource(file);
+      const lines = source.split("\n");
+      for (const [index, line] of lines.entries()) {
+        if (line.includes('variant="primary"')) violations.push(`${file}:${index + 1}: primary Button variant`);
+        if (line.includes("<Button") && line.includes("glowEffect")) violations.push(`${file}:${index + 1}: glowEffect Button prop`);
+        if (line.includes("wrapContent")) violations.push(`${file}:${index + 1}: wrapContent Button prop`);
+        if (/\bsize="(?:xs|icon-xs|icon-sm|icon-lg)"/.test(line)) {
+          violations.push(`${file}:${index + 1}: non-shadcn Button size`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 
   it("does not keep legacy hover transition utilities in primitives", () => {

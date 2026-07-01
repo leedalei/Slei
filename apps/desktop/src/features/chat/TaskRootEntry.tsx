@@ -88,10 +88,10 @@ export function TaskRootEntry(input: {
               {input.messages.tasks.status[input.task.status]}
             </span>
             <span aria-hidden="true">｜</span>
-            <TooltipButton aria-label={copyLabel} onClick={() => void input.onCopy?.()} size="icon-xs" tooltip={copyLabel} type="button" variant="ghost">
+            <TooltipButton aria-label={copyLabel} className="size-6 [&_svg]:size-3" onClick={() => void input.onCopy?.()} size="icon" tooltip={copyLabel} type="button" variant="ghost">
               <SleiIcon name="copy" size={14} />
             </TooltipButton>
-            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} onClick={() => void input.onSaveToggle?.()} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
+            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} className="size-6 [&_svg]:size-3" onClick={() => void input.onSaveToggle?.()} size="icon" tooltip={saveLabel} type="button" variant="ghost">
               <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
             </TooltipButton>
             {timestamp ? (

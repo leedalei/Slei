@@ -208,7 +208,7 @@ export function SearchPage({
                 value={query}
               />
               {query ? (
-                <Button aria-label={messages.search.navigation.clearQuery} onClick={clearQuery} size="icon-sm" type="button" variant="ghost">
+                <Button aria-label={messages.search.navigation.clearQuery} className="size-8 [&_svg]:size-3.5" onClick={clearQuery} size="icon" type="button" variant="ghost">
                   <SleiIcon className="size-4" name="x" />
                 </Button>
               ) : null}

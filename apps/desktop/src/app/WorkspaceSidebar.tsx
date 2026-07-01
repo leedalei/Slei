@@ -529,18 +529,18 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               <div className="flex items-center gap-1">
                 <Button
                   aria-label={sortActionLabel(input.messages, channelSortDirection)}
-                  className={cn(channelSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
+                  className={cn("size-6 [&_svg]:size-3", channelSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
                   data-sort-state={channelSortDirection}
                   data-sort-target="channels"
                   onClick={cycleChannelSort}
-                  size="icon-xs"
+                  size="icon"
                   title={sortActionLabel(input.messages, channelSortDirection)}
                   type="button"
                   variant="ghost"
                 >
                   <SortDirectionIcon direction={channelSortDirection} />
                 </Button>
-                <Button aria-label={input.messages.chat.createChannel} onClick={openChannelCreate} size="icon-xs" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
+                <Button aria-label={input.messages.chat.createChannel} className="size-6 [&_svg]:size-3" onClick={openChannelCreate} size="icon" type="button" variant="ghost"><SleiIcon name="plus" size={14} /></Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -594,8 +594,8 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                       <DropdownMenuTrigger asChild>
                         <Button
                           aria-label={input.messages.shell.workspaceSidebar.channelMore(channelName)}
-                          className="mr-1 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100"
-                          size="icon-xs"
+                          className="mr-1 size-6 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100 [&_svg]:size-3"
+                          size="icon"
                           type="button"
                           variant="ghost"
                         >
@@ -627,11 +627,11 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
               <Button
                 aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
-                className={cn(directMessageSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
+                className={cn("size-6 [&_svg]:size-3", directMessageSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
                 data-sort-state={directMessageSortDirection}
                 data-sort-target="direct-messages"
                 onClick={cycleDirectMessageSort}
-                size="icon-xs"
+                size="icon"
                 title={sortActionLabel(input.messages, directMessageSortDirection)}
                 type="button"
                 variant="ghost"
@@ -684,8 +684,8 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                       <DropdownMenuTrigger asChild>
                         <Button
                           aria-label={input.messages.shell.workspaceSidebar.dmMore(member.name)}
-                          className="mr-1 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100"
-                          size="icon-xs"
+                          className="mr-1 size-6 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100 [&_svg]:size-3"
+                          size="icon"
                           type="button"
                           variant="ghost"
                         >
@@ -726,7 +726,8 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}
-                  size="icon-sm"
+                  className="size-8 [&_svg]:size-3.5"
+                  size="icon"
                   type="button"
                   variant="ghost"
                 >
@@ -811,7 +812,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                     {channelDraft.projectPaths.map((path) => (
                       <Badge className="max-w-full gap-1" key={path} variant="secondary">
                         <span className="truncate">{path}</span>
-                        <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 hover:bg-background/70" onClick={() => removeProjectFolder(path)} size="icon-xs" type="button" variant="ghost">
+                        <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 size-6 hover:bg-background/70 [&_svg]:size-3" onClick={() => removeProjectFolder(path)} size="icon" type="button" variant="ghost">
                           <SleiIcon className="size-3" name="x" />
                         </Button>
                       </Badge>
@@ -855,7 +856,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             ) : null}
             <DialogFooter>
               <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit" variant="primary">
+              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
                 {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
               </Button>
             </DialogFooter>
@@ -912,7 +913,7 @@ function ShellDialog(input: {
             role="dialog"
           >
             {input.children}
-            <Button className="absolute top-2 right-2" data-slot="dialog-close" size="icon-sm" type="button" variant="ghost">
+            <Button className="absolute top-2 right-2 size-8 [&_svg]:size-3.5" data-slot="dialog-close" size="icon" type="button" variant="ghost">
               <span className="sr-only">{input.closeLabel ?? "Close"}</span>
             </Button>
           </div>

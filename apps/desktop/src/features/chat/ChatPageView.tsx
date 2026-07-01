@@ -86,7 +86,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
           <p className="text-xs">仅影响当前会话；新会话会重新申请。</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_once")} size="sm" type="button" variant="primary">
+          <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_once")} size="sm" type="button">
             允许一次
           </Button>
           <Button disabled={done || !requestId} onClick={() => onPermissionResolve?.(requestId, "approve_session")} size="sm" type="button" variant="outline">
@@ -107,7 +107,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
       </div>
-      <Button disabled={done} onClick={onCreate} size="xs" type="button" variant="primary">
+      <Button disabled={done} onClick={onCreate} size="sm" type="button">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
     </Card>
@@ -152,7 +152,7 @@ function AttachmentList({ attachments, messageAttachments = false, onRemove }: {
             <span className="max-w-48 truncate">{attachment.name}</span>
             <small className="text-muted-foreground">{formatAttachmentSize(attachment.size)}</small>
             {onRemove ? (
-              <Button aria-label={`Remove ${attachment.name}`} className="-mr-1" onClick={() => onRemove(attachment.id)} size="icon-xs" type="button" variant="ghost">
+              <Button aria-label={`Remove ${attachment.name}`} className="-mr-1 size-6 [&_svg]:size-3" onClick={() => onRemove(attachment.id)} size="icon" type="button" variant="ghost">
                 <SleiIcon name="x" size={12} />
               </Button>
             ) : null}
@@ -857,7 +857,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   <Badge className="h-6 shrink-0 rounded-md px-2 text-xs font-medium" data-testid="slei-channel-member-count" variant="secondary">
                     {channelMembers.length} Agent
                   </Badge>
-                  <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyChannelTitle()} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyChannelTitle()} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                     <SleiIcon name="copy" size={14} />
                   </TooltipButton>
                 </>
@@ -874,7 +874,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           aria-label={messages.chat.editProjects}
                           className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
                           data-testid="slei-channel-project-edit"
-                          size="icon-xs"
+                          size="icon"
                           type="button"
                           variant="ghost"
                         >
@@ -910,7 +910,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           {projectDraftPaths.map((path) => (
                             <Badge className="max-w-full gap-1" key={path} variant="secondary">
                               <span className="truncate">{path}</span>
-                              <Button aria-label={messages.chat.removeProject(path)} className="-mr-1 ml-0.5 hover:bg-background/70" onClick={() => removeProjectFolder(path)} size="icon-xs" type="button" variant="ghost">
+                              <Button aria-label={messages.chat.removeProject(path)} className="-mr-1 ml-0.5 size-6 hover:bg-background/70 [&_svg]:size-3" onClick={() => removeProjectFolder(path)} size="icon" type="button" variant="ghost">
                                 <SleiIcon className="size-3" name="x" />
                               </Button>
                             </Badge>
@@ -921,7 +921,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       )}
                       <div className="flex justify-end gap-2">
                         <Button disabled={projectSaving} onClick={() => setProjectEditorOpen(false)} size="sm" type="button" variant="ghost">{messages.common.cancel}</Button>
-                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button" variant="primary">{messages.common.save}</Button>
+                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button">{messages.common.save}</Button>
                       </div>
                     </div>
                   </PopoverContent>
@@ -1044,13 +1044,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon-xs" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
+                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6 [&_svg]:size-3" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
                                     <SleiIcon name="messageSquare" size={14} />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={messages.chat.copyMessage} onClick={() => void copyMessage(message)} size="icon-xs" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                                     <SleiIcon name="copy" size={14} />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} onClick={() => void toggleMessageSave(message, saved)} size="icon-xs" tooltip={saveLabel} type="button" variant="ghost">
+                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6 [&_svg]:size-3" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
                                     <SleiIconSwap active={saved} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
                                   </TooltipButton>
                                   <span aria-hidden="true">｜</span>
@@ -1217,9 +1217,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       <div className="flex items-center gap-2 overflow-visible">
                         <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
                         <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                        <Button aria-label={messages.common.addImage} onClick={() => imageInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>
-                        <Button aria-label={messages.common.addAttachment} onClick={() => fileInputRef.current?.click()} size="icon-sm" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
-                        <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit" variant="primary"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
+                        <Button aria-label={messages.common.addImage} className="size-8 [&_svg]:size-3.5" onClick={() => imageInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>
+                        <Button aria-label={messages.common.addAttachment} className="size-8 [&_svg]:size-3.5" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
+                        <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>
                   </Card>

@@ -384,7 +384,7 @@ describe("TasksPage filters", () => {
     expect(sendButton?.className).toContain("absolute");
     expect(sendButton?.className).toContain("rounded-full");
     expect(sendButton?.className).toContain("right-3");
-    expect(sendButton?.getAttribute("data-size")).toBe("icon");
+    expect(sendButton?.className).toContain("size-9");
     expect(sendButton?.querySelector('[data-slei-icon="send"]')).not.toBeNull();
     expect(sendButton?.disabled).toBe(true);
 

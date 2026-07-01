@@ -208,7 +208,7 @@ export function TaskThreadDrawer(input: {
                 <Button disabled={statusSubmitting} onClick={() => setPendingStatus(null)} size="sm" type="button" variant="outline">
                   {input.messages.common.cancel}
                 </Button>
-                <Button data-slot="task-status-confirm-action" disabled={statusSubmitting || !input.onStatusChange} onClick={() => void handleStatusChange(pendingStatus)} size="sm" type="button" variant="primary">
+                <Button data-slot="task-status-confirm-action" disabled={statusSubmitting || !input.onStatusChange} onClick={() => void handleStatusChange(pendingStatus)} size="sm" type="button">
                   {input.messages.tasks.confirmStatusChangeAction}
                 </Button>
               </div>
@@ -216,7 +216,7 @@ export function TaskThreadDrawer(input: {
           ) : null}
           <SheetTitle className="sr-only">{task.title}</SheetTitle>
           <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(replyCount)}</SheetDescription>
-          <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3" onClick={input.onClose} size="icon-sm" type="button" variant="ghost">
+          <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3 size-8 [&_svg]:size-3.5" onClick={input.onClose} size="icon" type="button" variant="ghost">
             <SleiIcon className="size-4" name="x" />
           </Button>
         </SheetHeader>
@@ -240,7 +240,7 @@ export function TaskThreadDrawer(input: {
                         <span className="min-w-0 flex-1 truncate">{taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages)}</span>
                       </div>
                       <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
-                        <TooltipButton aria-label={input.messages.chat.copyMessage} onClick={() => void copyTaskReply(reply)} size="icon-xs" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                        <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                           <SleiIcon name="copy" size={14} />
                         </TooltipButton>
                         {timestamp ? (
@@ -314,7 +314,7 @@ export function TaskThreadDrawer(input: {
                 placeholder={input.messages.tasks.replyPlaceholder}
                 value={replyDraft}
               />
-              <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit" variant="primary">
+              <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit">
                 <SleiIcon className="size-4" name="send" />
               </Button>
             </div>

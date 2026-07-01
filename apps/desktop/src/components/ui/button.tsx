@@ -1,59 +1,30 @@
 "use client"
 
 import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  cn(
-    "relative inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden whitespace-nowrap rounded-xl",
-    "border text-sm font-medium text-foreground transition-all duration-300 ease-out",
-    "focus-visible:outline-none",
-    "disabled:pointer-events-none disabled:opacity-50",
-    "hover:border-white/40 hover:bg-white/10",
-    "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-  ),
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
   {
     variants: {
       variant: {
-        default: cn(
-          "border-white/30 bg-transparent backdrop-blur-xl",
-          "shadow-[0_2px_4px_rgba(0,0,0,0.12)]",
-          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
-          "before:bg-linear-to-b before:from-white/10 before:to-transparent",
-        ),
-        primary: cn(
-          "border-transparent [background:linear-gradient(90deg,rgba(6,182,212,0.60),rgba(59,130,246,0.60),rgba(168,85,247,0.60))_padding-box,linear-gradient(90deg,rgba(34,211,238,0.56),rgba(96,165,250,0.48),rgba(192,132,252,0.56))_border-box] text-accent-foreground backdrop-blur-xl",
-          "shadow-[0_4px_4px_rgba(59,130,246,0.12)] hover:shadow-[0_4px_4px_rgba(59,130,246,0.16)]",
-          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
-          "before:bg-linear-to-b before:from-white/30 before:to-transparent",
-        ),
-        secondary: "border-white/25 bg-transparent backdrop-blur-xl shadow-[0_2px_4px_rgba(0,0,0,0.1)] hover:bg-white/10",
-        outline: cn(
-          "border-2 border-white/35 bg-white/[0.08] backdrop-blur-sm",
-          "shadow-[0_1px_4px_rgba(15,23,42,0.1)]",
-          "hover:border-white/55 hover:bg-white/[0.14]",
-        ),
-        ghost: "border-transparent bg-transparent hover:bg-white/10",
-        destructive: cn(
-          "border-red-400/40 bg-red-500/30 backdrop-blur-xl",
-          "shadow-[0_4px_4px_rgba(239,68,68,0.12)] hover:border-red-400/60 hover:bg-red-500/40",
-          "before:pointer-events-none before:absolute before:inset-0 before:rounded-xl",
-          "before:bg-linear-to-b before:from-white/10 before:to-transparent",
-        ),
-        link: "border-transparent bg-transparent underline-offset-4 hover:bg-white/10 hover:underline",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+        outline:
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+        secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        xs: "h-6 rounded-lg px-2 text-xs [&_svg]:size-3",
-        sm: "h-8 rounded-lg px-3 text-xs [&_svg]:size-3.5",
-        lg: "h-12 px-6 text-base",
-        icon: "h-10 w-10",
-        "icon-xs": "h-6 w-6 rounded-lg [&_svg]:size-3",
-        "icon-sm": "h-8 w-8 rounded-lg [&_svg]:size-3.5",
-        "icon-lg": "h-12 w-12 [&_svg]:size-5",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
       },
     },
     defaultVariants: {
@@ -63,38 +34,25 @@ const buttonVariants = cva(
   },
 )
 
-type ButtonProps = React.ComponentProps<"button"> &
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
-    glowEffect?: boolean
-    wrapContent?: boolean
-  }
+  }) {
+  const Comp = asChild ? Slot : "button"
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, glowEffect = false, wrapContent = true, children, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button"
-    const content = asChild || !wrapContent ? children : <span className="relative z-10 flex min-w-0 items-center gap-2">{children}</span>
+  return (
+    <Comp
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
+}
 
-    return (
-      <Comp
-        ref={ref}
-        data-slot="button"
-        data-variant={variant ?? "default"}
-        data-size={size ?? "default"}
-        className={cn(
-          glowEffect && "shadow-[0_0_4px_rgba(34,211,238,0.12)]",
-          buttonVariants({ variant, size, className }),
-        )}
-        {...props}
-      >
-        {content}
-      </Comp>
-    )
-  },
-)
-Button.displayName = "Button"
-
-const GlassButton = Button
-const glassButtonVariants = buttonVariants
-
-export { Button, GlassButton, buttonVariants, glassButtonVariants }
+export { Button, buttonVariants }

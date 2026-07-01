@@ -52,7 +52,7 @@ const DialogContent = React.forwardRef<
       <div className="relative z-10 contents">{children}</div>
       {showCloseButton ? (
         <DialogPrimitive.Close asChild>
-          <Button className="absolute right-4 top-4 z-20" size="icon-sm" type="button" variant="ghost">
+          <Button className="absolute right-4 top-4 z-20 size-8 [&_svg]:size-3.5" size="icon" type="button" variant="ghost">
             <X className="h-4 w-4" />
             <span className="sr-only">{closeLabel}</span>
           </Button>

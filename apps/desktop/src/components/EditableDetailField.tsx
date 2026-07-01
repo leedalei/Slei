@@ -96,9 +96,9 @@ export function EditableDetailField(input: {
         {!editing ? (
           <Button
             aria-label={input.ariaLabel}
-            className="slei-editable-field__edit"
+            className="slei-editable-field__edit size-8 [&_svg]:size-3.5"
             onClick={() => setEditing(true)}
-            size="icon-sm"
+            size="icon"
             type="button"
             variant="ghost"
           >
@@ -142,7 +142,7 @@ export function EditableDetailField(input: {
             </p>
           ) : null}
           <div className="slei-editable-field__actions flex flex-wrap gap-2">
-            <Button aria-disabled={isSaving ? true : undefined} disabled={isSaving} size="sm" type="submit" variant="primary">
+            <Button aria-disabled={isSaving ? true : undefined} disabled={isSaving} size="sm" type="submit">
               {messages.common.save}
             </Button>
             <Button

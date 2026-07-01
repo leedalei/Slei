@@ -190,7 +190,7 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain(">描述来源<");
     expect(html).toContain(">关联设备<");
     expect(html).toContain(">描述<");
-    expect(html).toMatch(/<button\b[^>]*type="submit"[\s\S]*?>创建<\/span><\/button>/);
+    expect(html).toMatch(/<button\b[^>]*type="submit"[\s\S]*?>创建<\/button>/);
   });
 
   it("moves running and pending agent activity to the sidebar while keeping terminal replies in chat", () => {
