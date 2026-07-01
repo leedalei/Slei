@@ -1744,8 +1744,11 @@ describe("SleiAppFrame global search navigation", () => {
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
     expect(agentList?.className).toContain("bg-transparent");
     expect(agentList?.className).toContain("border-white/20");
-    expect(agentCheckbox?.className).toContain("bg-white/10");
-    expect(agentCheckbox?.className).toContain("border-white/20");
+    expect(agentCheckbox?.className).toContain("border-input");
+    expect(agentCheckbox?.className).toContain("dark:bg-input/30");
+    expect(agentCheckbox?.className).toContain("data-[state=checked]:bg-primary");
+    expect(agentCheckbox?.className).not.toContain("bg-white/10");
+    expect(agentCheckbox?.className).not.toContain("border-white/20");
     expect(agentCheckbox?.className).not.toContain("bg-transparent");
 
     await act(async () => {

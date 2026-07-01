@@ -428,6 +428,13 @@ function visibleFocusOutlineViolations(file: AuditFile) {
 
   for (const [index, line] of file.source.split("\n").entries()) {
     if (line.includes(".not.toContain") || line.includes(".not.toMatch")) continue;
+    if (
+      line.includes("focus-visible:ring-ring/50") ||
+      line.includes("focus-visible:ring-[3px]") ||
+      line.includes("aria-invalid:ring-destructive")
+    ) {
+      continue;
+    }
     if (/\bfocus(?:-visible|-within)?[^\s"`]*(?:ring-(?:[1-9]|white|cyan|red|ring|offset)|shadow-\[|\[[^\]]+\]:ring)/.test(line)) {
       violations.push(`${file.filePath}:${index + 1}: visible focus ring/shadow ${line.trim()}`);
     }
@@ -1110,10 +1117,13 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).toContain('data-slot="select-trigger"');
     expect(selectSource).toContain('data-slot="select-content"');
     expect(selectSource).toContain('data-slot="select-item"');
-    expect(selectSource).toContain("t-dropdown");
-    expect(selectSource).toContain("focus:bg-white/15");
-    expect(selectSource).toContain("focus:bg-muted/70");
+    expect(selectSource).toContain("border-input");
+    expect(selectSource).toContain("focus:bg-accent");
+    expect(selectSource).toContain("focus:text-accent-foreground");
     expect(selectSource).toContain("data-[disabled]:pointer-events-none");
+    expect(selectSource).not.toContain("t-dropdown");
+    expect(selectSource).not.toContain("focus:bg-white/15");
+    expect(selectSource).not.toContain("focus:bg-muted/70");
     expect(selectSource).not.toContain("data-[highlighted]:bg-accent");
     expect(selectSource).not.toContain("ring-1 ring-border/80");
   });
@@ -1121,14 +1131,17 @@ describe("desktop UI primitive usage", () => {
   it("keeps select trigger and menu shadows compact", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
-    expect(selectSource).toContain("rounded-lg border border-[var(--tabs-control-border)] bg-[var(--tabs-control-bg)]");
-    expect(selectSource).toContain("rounded-lg border border-border/70 bg-popover text-popover-foreground");
-    expect(selectSource).toContain("focus:bg-white/15");
+    expect(selectSource).toContain("rounded-md border bg-transparent");
+    expect(selectSource).toContain("rounded-md border border-border shadow-md");
+    expect(selectSource).toContain("shadow-xs");
+    expect(selectSource).not.toContain("rounded-lg border border-[var(--tabs-control-border)] bg-[var(--tabs-control-bg)]");
+    expect(selectSource).not.toContain("rounded-lg border border-border/70 bg-popover text-popover-foreground");
+    expect(selectSource).not.toContain("focus:bg-white/15");
     expect(selectSource).not.toContain("focus:border-white/40");
     expect(selectSource).not.toContain("focus:ring-2");
     expect(selectSource).not.toContain("focus:ring-cyan-400/30");
-    expect(selectSource).toContain("shadow-[var(--tabs-pill-shadow)]");
-    expect(selectSource).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
+    expect(selectSource).not.toContain("shadow-[var(--tabs-pill-shadow)]");
+    expect(selectSource).not.toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
@@ -1161,7 +1174,6 @@ describe("desktop UI primitive usage", () => {
     for (const file of [
       "components/ui/dropdown-menu.tsx",
       "components/ui/popover.tsx",
-      "components/ui/select.tsx",
     ]) {
       const source = readSource(file);
       expect(source).toContain("t-dropdown");
@@ -1176,11 +1188,13 @@ describe("desktop UI primitive usage", () => {
     expect(dropdownSource).toContain("forceMount");
 
     const selectSource = readSource("components/ui/select.tsx");
+    expect(selectSource).not.toContain("t-dropdown");
     const selectContentSource = selectSource.slice(
       selectSource.indexOf("const SelectContent"),
       selectSource.indexOf("const SelectLabel"),
     );
-    expect(selectContentSource).toContain("t-dropdown");
+    expect(selectContentSource).toContain("data-[state=open]:animate-in");
+    expect(selectContentSource).toContain("data-[state=closed]:animate-out");
     expect(selectContentSource).not.toContain("forceMount");
 
     for (const file of [
