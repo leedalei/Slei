@@ -631,7 +631,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("grid-template-rows: var(--app-chrome-height) minmax(0, 1fr)");
     expect(appCss).toContain(".slei-app-content {");
     expect(appCss).toContain("grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr)");
-    expect(appCss).toContain("padding: var(--app-card-gap)");
+    expect(appCss).toContain("padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset)");
     expect(appCss).toContain(".slei-workspace-sidebar-card {");
     expect(appCss).toContain(".slei-workspace-card {");
     expect(html).not.toContain("5.25rem");
@@ -896,6 +896,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--app-chrome-height: 36px");
     expect(appCss).toContain("--app-native-controls-width: 52px");
     expect(appCss).toContain("--app-card-gap: 8px");
+    expect(appCss).toContain("--app-shell-inline-inset: 12px");
+    expect(appCss).toContain("--app-shell-bottom-inset: 12px");
     expect(appCss).toContain("--app-card-radius: 16px");
     expect(appCss).toContain("--app-shell-radius: 0px");
     expect(appCss).toContain("--app-shell-bg: rgba(237, 239, 243, 0.72)");
@@ -1108,21 +1110,25 @@ describe("SleiAppFrame global search navigation", () => {
       app: { windows: Array<{ trafficLightPosition?: { x: number; y: number } }> };
     };
 
-    expect(tauriConfig.app.windows[0]?.trafficLightPosition).toEqual({ x: 8, y: 24 });
+    expect(tauriConfig.app.windows[0]?.trafficLightPosition).toEqual({ x: 8, y: 20 });
   });
 
   it("keeps app chrome branding visually quiet", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
+    const asset = readFileSync(join(process.cwd(), "src/assets/brand/slei-bubble.svg"), "utf8");
 
     expect(frameSource).toContain('className="slei-brand__name"');
     expect(frameSource).not.toContain("messages.shell.appChrome.collaborationFlow");
     expect(frameSource).not.toContain("slei-brand__slash");
     expect(frameSource).not.toContain("slei-brand__flow");
+    expect(asset).not.toContain("<filter");
+    expect(asset).not.toContain("feDropShadow");
+    expect(asset).not.toContain("filter=\"url(");
     expect(appCss).toContain(".slei-brand__icon");
     expect(appCss).toContain("box-shadow: none;");
     expect(appCss).toContain(".slei-brand__name");
-    expect(appCss).toContain("font-weight: 400;");
+    expect(appCss).toContain("font-weight: 500;");
   });
 
   it("renders search only as the top workspace sidebar primary action", () => {

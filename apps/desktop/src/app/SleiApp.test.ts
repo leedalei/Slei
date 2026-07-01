@@ -910,7 +910,8 @@ describe("createChannelAgentReplyMessage", () => {
     expect(styles).toContain("--app-resize-width: 8px;");
     expect(styles).toContain("--app-resize-handle-active-bg:");
     expect(styles).toContain("position: absolute;");
-    expect(styles).toContain("left: calc(var(--app-card-gap) + max(var(--app-sidebar-width, 260px), 260px));");
+    expect(styles).toContain("left: calc(var(--app-shell-inline-inset) + max(var(--app-sidebar-width, 260px), 260px));");
+    expect(styles).toContain("bottom: var(--app-shell-bottom-inset);");
     expect(styles).toContain("width: var(--app-card-gap);");
     expect(styles).toContain("gap: var(--app-card-gap)");
     expect(styles).toContain(".slei-resize-handle:hover,\n.slei-resize-handle:focus-visible,\n.slei-resize-handle:active");

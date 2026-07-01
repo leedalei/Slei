@@ -4,13 +4,9 @@
       <stop stop-color="#0B9C67"/>
       <stop offset="1" stop-color="#16C78A"/>
     </linearGradient>
-    <filter id="softShadow" x="4" y="5" width="40" height="39" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="1" stdDeviation="0.65" flood-color="#0EA88D" flood-opacity="0.16"/>
-    </filter>
   </defs>
 
   <path
-    filter="url(#softShadow)"
     d="M24.2 7.4C14.4 7.4 6.6 13.8 6.6 22.1C6.6 25.9 8.3 29.3 11.2 31.9C10.8 34.5 9.5 37.1 7.5 39.2C6.8 39.9 7.4 41.1 8.4 40.9C12.3 40.3 15.6 38.7 17.8 37.0C19.8 37.7 21.9 38.0 24.2 38.0C34.0 38.0 41.4 31.5 41.4 23.0C41.4 14.4 34.0 7.4 24.2 7.4Z"
     fill="url(#bubble)"
     stroke="#FFFFFF"

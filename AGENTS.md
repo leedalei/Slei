@@ -5,6 +5,7 @@
 - Slei 的每个任务完成之后，都要主动咨询是否合并到 `master` 或者其他分支。
 - Slei 的项目文档默认使用中文书写；除非用户明确要求英文，新增或更新文档时都应使用中文。
 - 所有任务都必须配套严格的单元测试，确保功能完整且行为正常；涉及 UI 的任务还必须验证对应 DOM 节点的渲染与关键交互。
+- 当用户说「启动APP」或「启动 App」时，默认启动 Slei 桌面 App（`pnpm --filter @slei/desktop desktop`），不要启动网页/Vite dev server；若之前启动了网页 dev server，应先关闭它。
 
 ## Core Architecture
 

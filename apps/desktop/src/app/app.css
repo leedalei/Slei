@@ -123,9 +123,11 @@
   --overlay-shadow-md: 0 4px 4px color-mix(in srgb, var(--overlay-shadow-color) 24%, transparent);
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
-  --app-chrome-height: 44px;
+  --app-chrome-height: 36px;
   --app-native-controls-width: 52px;
   --app-card-gap: 8px;
+  --app-shell-inline-inset: 12px;
+  --app-shell-bottom-inset: 12px;
   --app-card-radius: 16px;
   --app-shell-radius: 0px;
   --app-resize-width: 8px;
@@ -883,7 +885,7 @@ select:focus-visible {
 
 .slei-brand__name {
   font-size: 13.5px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -892,7 +894,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr);
   gap: var(--app-card-gap);
-  padding: var(--app-card-gap);
+  padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
   overflow: hidden;
 }
 
@@ -941,8 +943,8 @@ select:focus-visible {
 .slei-resize-handle {
   position: absolute;
   top: var(--app-card-gap);
-  bottom: var(--app-card-gap);
-  left: calc(var(--app-card-gap) + max(var(--app-sidebar-width, 260px), 260px));
+  bottom: var(--app-shell-bottom-inset);
+  left: calc(var(--app-shell-inline-inset) + max(var(--app-sidebar-width, 260px), 260px));
   z-index: 3;
   align-self: auto;
   background: transparent;
@@ -1230,7 +1232,7 @@ select:focus-visible {
   .slei-app-content {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    padding: var(--app-card-gap);
+    padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
   }
 
   .slei-native-window-controls-space {
