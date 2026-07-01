@@ -64,7 +64,7 @@ const SelectContent = React.forwardRef<
       data-slot="select-content"
       className={cn(
         "t-dropdown relative z-50 max-h-96 min-w-32 overflow-hidden rounded-xl border border-white/20 bg-white/10 text-popover-foreground backdrop-blur-2xl",
-        "shadow-[0_4px_16px_rgba(0,0,0,0.18)]",
+        "shadow-[0_2px_4px_rgba(0,0,0,0.10)]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className,

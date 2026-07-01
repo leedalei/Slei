@@ -54,7 +54,7 @@ const RadioGroupItem = React.forwardRef<
           "border border-white/35 bg-transparent backdrop-blur-xl",
           "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
           "transition-all duration-200",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+          "focus:outline-none",
           "disabled:cursor-not-allowed disabled:opacity-50",
           "data-[state=checked]:border-cyan-400/60",
           className,

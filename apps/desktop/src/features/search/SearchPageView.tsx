@@ -193,14 +193,14 @@ export function SearchPage({
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
         <div className="mx-auto grid w-full max-w-5xl gap-3">
           <Card
-            className="rounded-full border border-border/55 text-card-foreground shadow-none transition-[border-color,box-shadow] focus-within:border-primary focus-within:shadow-[0_0_0_1px_color-mix(in_srgb,var(--primary)_32%,transparent)]"
+            className="rounded-full border border-border/55 text-card-foreground shadow-none transition-[border-color] focus-within:border-primary"
             data-search-input-surface="true"
           >
             <CardContent className="flex min-h-12 items-center gap-3 px-3 py-0">
               <SleiIcon className="size-5 text-muted-foreground" name="search" />
               <Input
                 aria-label={messages.search.navigation.searchInput}
-                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none backdrop-blur-none focus:bg-transparent focus-visible:ring-0 dark:bg-transparent"
+                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none backdrop-blur-none focus:bg-transparent dark:bg-transparent"
                 glowEffect={false}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 onKeyDown={handleSearchKeyDown}

@@ -203,7 +203,7 @@ function GlassNotificationItem({
           className={cn(
             "relative overflow-hidden rounded-xl border backdrop-blur-2xl",
             toast ? "bg-white/70 backdrop-saturate-150" : "bg-white/10",
-            "shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.15)]",
+            "shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.15)]",
             config.border,
           )}
         >
@@ -282,7 +282,7 @@ function GlassNotification({
       <div
         className={cn(
           "relative rounded-xl border bg-white/10 backdrop-blur-2xl",
-          "shadow-[0_8px_32px_rgba(0,0,0,0.3),inset_0_1px_1px_rgba(255,255,255,0.15)]",
+          "shadow-[0_4px_4px_rgba(0,0,0,0.12),inset_0_1px_1px_rgba(255,255,255,0.15)]",
           config.border,
         )}
       >

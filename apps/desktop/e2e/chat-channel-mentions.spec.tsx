@@ -117,16 +117,21 @@ describe("chat search, channel management, and mentions", () => {
     expect(moreButtonMarkup).toContain("self-center");
     expect(moreButtonMarkup).toContain("group-hover/channel:opacity-100");
     expect(moreButtonMarkup).not.toContain("text-destructive");
-    expect(workspaceSidebarSource()).toContain("group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto]");
+    expect(workspaceSidebarSource()).toContain("group/channel grid h-[32px] min-h-[32px] grid-cols-[minmax(0,1fr)_auto]");
     expect(workspaceSidebarSource()).toContain("data-slot=\"channel-select-trigger\"");
+    expect(workspaceSidebarSource()).toContain('data-slot="workspace-sidebar-primary-nav"');
+    expect(workspaceSidebarSource()).toContain('name="ellipsis"');
+    expect(workspaceSidebarSource()).not.toContain('name="listDetails"');
+    expect(workspaceSidebarSource()).toContain("hover:bg-[var(--workspace-sidebar-hover-bg)]");
     expect(workspaceSidebarSource()).toContain('channel.id !== "all"');
     const channelSelectSource = workspaceSidebarSource().slice(
       workspaceSidebarSource().indexOf('data-slot="channel-select-trigger"') - 500,
       workspaceSidebarSource().indexOf('data-slot="channel-select-trigger"') + 500,
     );
     expect(channelSelectSource).not.toContain("hover:bg-");
-    expect(workspaceSidebarSource()).toContain('className="space-y-4 px-2 py-2"');
-    expect(workspaceSidebarSource()).toContain('className="-mx-2 -my-2 min-h-0 flex-1"');
+    expect(workspaceSidebarSource()).toContain('className="space-y-3 px-3 py-2"');
+    expect(workspaceSidebarSource()).toContain('className="min-h-0 flex-1"');
+    expect(workspaceSidebarSource()).not.toContain('className="-mx-2 -my-2 min-h-0 flex-1"');
     expect(workspaceSidebarSource()).toContain("data-channel-scroll-content");
     expect(appFrameSource()).not.toContain('className="space-y-4 pr-2"');
   });
@@ -465,7 +470,8 @@ describe("chat search, channel management, and mentions", () => {
 
     expect(html).toContain('data-slei-icon="search"');
     expect(html).toContain('data-slei-icon="settings"');
-    expect(html).toContain('data-slei-icon="listDetails"');
+    expect(html).toContain('data-slei-icon="ellipsis"');
+    expect(html).not.toContain('data-slei-icon="listDetails"');
     expect(html).toContain('data-slei-icon="send"');
     expect(workspaceSidebarSource()).toContain('name="delete"');
     expect(html).not.toContain("⌕");

@@ -904,14 +904,24 @@ describe("createChannelAgentReplyMessage", () => {
 
     expect(source).toContain("aria-label={messages.common.resizeSidebar}");
     expect(source).toContain("role=\"separator\"");
-    expect(styles).toContain("3px minmax(0, 1fr)");
+    expect(styles).toContain("grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr)");
     expect(styles).toContain("grid-template-columns: minmax(0, 1fr)");
-    expect(source).toContain("w-[3px]");
-    expect(styles).toContain("width: 3px;");
+    expect(source).toContain("w-[var(--app-resize-width)]");
+    expect(styles).toContain("--app-resize-width: 8px;");
+    expect(styles).toContain("--app-resize-handle-active-bg:");
+    expect(styles).toContain("position: absolute;");
+    expect(styles).toContain("left: calc(var(--app-card-gap) + max(var(--app-sidebar-width, 260px), 260px));");
+    expect(styles).toContain("width: var(--app-card-gap);");
+    expect(styles).toContain("gap: var(--app-card-gap)");
+    expect(styles).toContain(".slei-resize-handle:hover,\n.slei-resize-handle:focus-visible,\n.slei-resize-handle:active");
+    expect(styles).toContain("linear-gradient(to bottom, transparent 0%, var(--app-resize-handle-active-bg) 50%, transparent 100%)");
+    expect(styles).not.toContain("--app-resize-handle-active-border");
+    expect(styles).not.toContain("box-shadow: inset 0 0 0 1px var(--app-resize-handle-active-border);");
     expect(source).toContain("!cursor-col-resize");
+    expect(styles).not.toContain("var(--app-resize-width) minmax(0, 1fr)");
     expect(source).not.toContain("0.5rem minmax(0, 1fr)");
     expect(source).not.toContain("slei-resize-handle h-full w-2");
-    expect(styles).not.toContain("width: 8px;");
+    expect(styles).not.toContain("width: 3px;");
   });
 
   it("surfaces global and daemon diagnostic failures through the app toast", () => {

@@ -31,7 +31,7 @@ describe("settings preferences", () => {
     expect(html).toContain("个人资料");
     expect(html).toContain("slei-workspace-sidebar");
     expect(html).toContain('data-font-size="md"');
-    expect(html).toContain("--app-font-size:15px");
+    expect(html).toContain("--app-font-size:14px");
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });

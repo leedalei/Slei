@@ -28,7 +28,7 @@ SheetOverlay.displayName = SheetPrimitive.Overlay.displayName
 const sheetVariants = cva(
   cn(
     "fixed z-50 gap-4 border border-white/25 bg-white/30 p-6 text-popover-foreground backdrop-blur-2xl",
-    "shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition duration-300 ease-in-out",
+    "shadow-[0_4px_4px_rgba(0,0,0,0.14)] transition duration-300 ease-in-out",
     "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:duration-300 data-[state=closed]:duration-200",
     "before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-b before:from-white/35 before:to-transparent",
   ),
@@ -60,7 +60,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
       <SheetPrimitive.Content ref={ref} data-slot="sheet-content" data-side={side} className={cn(sheetVariants({ side }), className)} {...props}>
         <div className="relative z-10 flex h-full min-h-0 flex-col">{children}</div>
         {showCloseButton ? (
-          <SheetPrimitive.Close className="absolute right-4 top-4 z-20 rounded-lg p-1 text-muted-foreground transition-all hover:bg-white/10 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-white/50">
+          <SheetPrimitive.Close className="absolute right-4 top-4 z-20 rounded-lg p-1 text-muted-foreground transition-all hover:bg-white/10 hover:text-foreground focus:outline-none">
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

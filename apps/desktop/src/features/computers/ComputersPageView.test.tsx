@@ -178,7 +178,7 @@ describe("ComputersPage header", () => {
     expect(html).toContain('data-slei-icon="bot"');
   });
 
-  it("keeps the device-name editor glow visible inside the glass card", () => {
+  it("keeps the device-name editor inside the glass card without a focus glow", () => {
     const { host, root } = renderComputersPage();
 
     try {
@@ -195,8 +195,7 @@ describe("ComputersPage header", () => {
       expect(input?.value).toBe(localNode.name);
       expect(deviceCard?.className).toContain("overflow-visible");
       expect(cardContent?.className).toContain("p-5");
-      expect(glow?.className).toContain("-inset-0.5");
-      expect(glow?.className).toContain("group-focus-within:opacity-70");
+      expect(glow).toBeNull();
     } finally {
       cleanupComputersPage(root, host);
     }

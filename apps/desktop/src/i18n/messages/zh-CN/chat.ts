@@ -100,6 +100,7 @@ export const chat = {
   projectUpdateSuccess: "关联项目已更新",
   projectUpdateFailed: "更新关联项目失败",
   removeProject: (projectName: string) => `移除项目 ${projectName}`,
+  removeChannelMemberAction: "移除",
   removeChannelMember: (name: string) => `移除成员 ${name}`,
   selectAgents: "选择 Agent",
   clearSort: "取消排序",

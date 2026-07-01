@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
@@ -152,7 +152,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
                       return (
                         <SelectableCard
                           aria-selected={selected ? "true" : "false"}
-                          className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md px-2 py-2 focus-visible:outline-none"
                           data-testid="slei-channel-member-add-candidate"
                           key={member.id}
                           onClick={() => toggleSelectedAddMember(member.id)}
@@ -239,10 +239,38 @@ function ChannelMemberAvatar(input: {
   open: boolean;
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const readiness = input.member.channelReadiness?.[input.channelId];
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
+
+  useEffect(() => () => {
+    if (closeTimerRef.current !== undefined) {
+      clearTimeout(closeTimerRef.current);
+    }
+  }, []);
+
+  function clearScheduledClose() {
+    if (closeTimerRef.current !== undefined) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = undefined;
+    }
+  }
+
+  function openFromPointer() {
+    clearScheduledClose();
+    input.onOpenChange(true);
+  }
+
+  function closeAfterPointerLeave() {
+    if (confirming) return;
+    clearScheduledClose();
+    closeTimerRef.current = setTimeout(() => {
+      input.onOpenChange(false);
+      closeTimerRef.current = undefined;
+    }, 120);
+  }
 
   return (
     <Popover open={input.open} onOpenChange={input.onOpenChange}>
@@ -252,7 +280,8 @@ function ChannelMemberAvatar(input: {
           className={cn("slei-channel-member-avatar-button", input.offset && "-ml-2")}
           data-testid="slei-channel-member-avatar-trigger"
           onFocus={() => input.onOpenChange(true)}
-          onMouseEnter={() => input.onOpenChange(true)}
+          onMouseEnter={openFromPointer}
+          onMouseLeave={closeAfterPointerLeave}
           type="button"
         >
           <MemberAvatar identity={input.member} />
@@ -262,7 +291,8 @@ function ChannelMemberAvatar(input: {
         align="end"
         className="w-72 p-3"
         data-testid="slei-channel-member-info-card"
-        onMouseEnter={() => input.onOpenChange(true)}
+        onMouseEnter={openFromPointer}
+        onMouseLeave={closeAfterPointerLeave}
       >
         <div className="grid gap-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
@@ -286,9 +316,9 @@ function ChannelMemberAvatar(input: {
               }}
             >
               <AlertDialogTrigger asChild>
-                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={input.mutating} size="sm" type="button" variant="ghost">
+                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} className="text-[14px] leading-5 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={input.mutating} size="sm" type="button" variant="ghost">
                   <SleiIcon name="delete" size={14} />
-                  {input.messages.chat.removeChannelMember(input.member.name)}
+                  {input.messages.chat.removeChannelMemberAction}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent data-testid="slei-channel-member-remove-dialog">

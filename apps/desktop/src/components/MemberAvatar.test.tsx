@@ -281,7 +281,7 @@ describe("MemberAvatar", () => {
       const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
-      expect(avatar?.className.split(/\s+/)).toContain("size-4");
+      expect(avatar?.className.split(/\s+/)).toContain("size-[16px]");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-16");
     } finally {

@@ -11,7 +11,7 @@ type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, glowEffect, glowOnFocus, ...props }, ref) => {
-    const shouldGlow = glowOnFocus ?? glowEffect ?? true
+    const shouldGlow = glowOnFocus ?? glowEffect ?? false
 
     return (
       <div className="group relative w-full">
@@ -26,11 +26,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           data-slot="input"
           className={cn(
             "relative flex h-10 w-full rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm text-foreground backdrop-blur-xl",
-            "placeholder:text-muted-foreground/70 shadow-[0_4px_16px_rgba(0,0,0,0.2)] transition-all duration-300",
+            "placeholder:text-muted-foreground/70 shadow-[0_2px_4px_rgba(0,0,0,0.10)] transition-all duration-300",
             "focus:border-white/40 focus:bg-white/15 focus:outline-none",
             "disabled:cursor-not-allowed disabled:opacity-50",
             "file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground",
-            "aria-invalid:border-red-400/50 aria-invalid:ring-2 aria-invalid:ring-red-400/30",
+            "aria-invalid:border-red-400/50",
             className,
           )}
           {...props}

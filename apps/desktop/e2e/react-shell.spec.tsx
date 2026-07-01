@@ -40,7 +40,9 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain(">任务</");
     expect(html).not.toContain("data-nav-icon");
     expect(html).not.toContain("Slei 协作中枢");
-    expect(html).toContain(">Slei</h2>");
+    expect(html).toContain('data-slot="workspace-sidebar-header"');
+    expect(html).toContain('data-slot="workspace-sidebar-primary-nav"');
+    expect(html).not.toContain(">Slei</h2>");
     expect(html).toContain("# all");
     expect(html).toContain("输入消息到 #all");
     expect(html).toContain("转为任务");

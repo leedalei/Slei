@@ -346,6 +346,101 @@ function legacyThemeTokenViolations(file: AuditFile) {
   return violations;
 }
 
+function compactShadowViolations(file: AuditFile) {
+  const violations: string[] = [];
+  const lines = file.source.split("\n");
+
+  function checkShadowValue(lineNumber: number, label: string, value: string) {
+    if (isAllowedReferenceShellShadow(file, label)) return;
+
+    const normalizedValue = value.replace(/_/g, " ");
+    for (const match of normalizedValue.matchAll(/(-?\d+(?:\.\d+)?)px/g)) {
+      const pixelValue = Number(match[1]);
+      if (Math.abs(pixelValue) > 4) {
+        violations.push(`${file.filePath}:${lineNumber}: ${label} uses ${match[0]} in ${normalizedValue.trim()}`);
+      }
+    }
+  }
+
+  for (const [index, line] of lines.entries()) {
+    for (const shadowClass of line.matchAll(/\b(?:[a-z-]+:)*shadow-\[([^\]\n]+)\]/g)) {
+      checkShadowValue(index + 1, shadowClass[0], shadowClass[1]);
+    }
+
+    for (const declaration of line.matchAll(/(?:^|\s)((?:--[\w-]*shadow[\w-]*|box-shadow))\s*:\s*([^;]+);/g)) {
+      checkShadowValue(index + 1, declaration[1], declaration[2]);
+    }
+  }
+
+  return violations;
+}
+
+function shadowColorIntensityViolations(file: AuditFile) {
+  const violations: string[] = [];
+  const lines = file.source.split("\n");
+
+  function checkShadowValue(lineNumber: number, label: string, value: string) {
+    if (isAllowedReferenceShellShadow(file, label)) return;
+
+    const normalizedValue = value.replace(/_/g, " ");
+    for (const alphaMatch of normalizedValue.matchAll(/rgba\([^)]*,\s*(0?\.\d+)\)/g)) {
+      const alpha = Number(alphaMatch[1]);
+      if (alpha > 0.16) {
+        violations.push(`${file.filePath}:${lineNumber}: ${label} uses shadow alpha ${alphaMatch[1]} in ${normalizedValue.trim()}`);
+      }
+    }
+
+    for (const alphaMatch of normalizedValue.matchAll(/rgb\([^)]*\/\s*(0?\.\d+)\)/g)) {
+      const alpha = Number(alphaMatch[1]);
+      if (alpha > 0.16) {
+        violations.push(`${file.filePath}:${lineNumber}: ${label} uses shadow alpha ${alphaMatch[1]} in ${normalizedValue.trim()}`);
+      }
+    }
+
+    for (const mixMatch of normalizedValue.matchAll(/var\(--overlay-shadow-color\)\s+(\d+(?:\.\d+)?)%/g)) {
+      const mix = Number(mixMatch[1]);
+      if (mix > 24) {
+        violations.push(`${file.filePath}:${lineNumber}: ${label} mixes overlay shadow at ${mixMatch[1]}% in ${normalizedValue.trim()}`);
+      }
+    }
+  }
+
+  for (const [index, line] of lines.entries()) {
+    for (const shadowClass of line.matchAll(/\b(?:[a-z-]+:)*shadow-\[([^\]\n]+)\]/g)) {
+      checkShadowValue(index + 1, shadowClass[0], shadowClass[1]);
+    }
+
+    for (const declaration of line.matchAll(/(?:^|\s)((?:--[\w-]*shadow[\w-]*|box-shadow))\s*:\s*([^;]+);/g)) {
+      checkShadowValue(index + 1, declaration[1], declaration[2]);
+    }
+  }
+
+  return violations;
+}
+
+function isAllowedReferenceShellShadow(file: AuditFile, label: string) {
+  return file.filePath === "app/app.css" && (label === "--app-shell-shadow" || label === "--app-card-shadow");
+}
+
+function visibleFocusOutlineViolations(file: AuditFile) {
+  const violations: string[] = [];
+
+  for (const [index, line] of file.source.split("\n").entries()) {
+    if (line.includes(".not.toContain") || line.includes(".not.toMatch")) continue;
+    if (/\bfocus(?:-visible|-within)?[^\s"`]*(?:ring-(?:[1-9]|white|cyan|red|ring|offset)|shadow-\[|\[[^\]]+\]:ring)/.test(line)) {
+      violations.push(`${file.filePath}:${index + 1}: visible focus ring/shadow ${line.trim()}`);
+    }
+    if (/\baria-invalid:ring-(?:[1-9]|destructive)/.test(line)) {
+      violations.push(`${file.filePath}:${index + 1}: visible invalid ring ${line.trim()}`);
+    }
+    if (line.includes("box-shadow: 0 0 0")) {
+      violations.push(`${file.filePath}:${index + 1}: outline-like box shadow ${line.trim()}`);
+    }
+  }
+
+  return violations;
+}
+
 function themeInlineMappingViolations(file: AuditFile) {
   if (!file.filePath.endsWith(".css")) return [];
 
@@ -898,8 +993,26 @@ describe("desktop UI primitive usage", () => {
     const tabsSource = readSource("components/ui/tabs.tsx");
 
     expect(tabsSource).not.toContain("shadow-[");
-    expect(appCss).toContain("--tabs-pill-shadow: 0 4px 10px color-mix(in srgb, var(--overlay-shadow-color) 32%, transparent)");
+    expect(appCss).toContain("--tabs-pill-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent)");
     expect(appCss).toContain("box-shadow: var(--tabs-pill-shadow)");
+  });
+
+  it("keeps all component shadows no larger than 4px", () => {
+    const violations = legacySourceAuditFiles().flatMap(compactShadowViolations);
+
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps component shadow colors light", () => {
+    const violations = legacySourceAuditFiles().flatMap(shadowColorIntensityViolations);
+
+    expect(violations).toEqual([]);
+  });
+
+  it("does not render visible focus outline rings on controls", () => {
+    const violations = legacySourceAuditFiles().flatMap(visibleFocusOutlineViolations);
+
+    expect(violations).toEqual([]);
   });
 
   it("keeps static surfaces and badges free of old elevated variants", () => {
@@ -990,7 +1103,7 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).not.toContain("focus:ring-2");
     expect(selectSource).not.toContain("focus:ring-cyan-400/30");
     expect(selectSource).toContain("shadow-[var(--tabs-pill-shadow)]");
-    expect(selectSource).toContain("shadow-[0_4px_16px_rgba(0,0,0,0.18)]");
+    expect(selectSource).toContain("shadow-[0_2px_4px_rgba(0,0,0,0.10)]");
     expect(selectSource).not.toContain("shadow-[0_2px_8px_rgba(0,0,0,0.12)]");
     expect(selectSource).not.toContain("shadow-[0_4px_16px_rgba(0,0,0,0.2)]");
     expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");

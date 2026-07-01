@@ -187,7 +187,8 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(rootTokens, "--glow-cyan")).toBe("rgba(6, 182, 212, 0.3)");
     expect(tokenValue(rootTokens, "--glass-nav-bg")).toContain("var(--glass-bg)");
     expect(tokenValue(rootTokens, "--glass-sidebar-bg")).toContain("var(--glass-bg)");
-    expect(tokenValue(rootTokens, "--glass-surface-filter")).toBe("blur(var(--glass-blur)) saturate(145%)");
+    expect(tokenValue(rootTokens, "--glass-blur")).toBe("20px");
+    expect(tokenValue(rootTokens, "--glass-surface-filter")).toBe("blur(20px) saturate(150%)");
     expect(tokenValue(rootTokens, "--glass-button-border")).toBe("var(--glass-border)");
     expect(tokenValue(rootTokens, "--glass-button-hover-border")).toContain("var(--glow-cyan)");
     expect(tokenValue(rootTokens, "--glass-button-shadow")).toContain("var(--overlay-shadow-color)");
@@ -231,11 +232,11 @@ describe("shadcn design system wiring", () => {
     expect(tokenValue(darkTokens, "--foreground")).toBe(tokenValue(rootTokens, "--foreground"));
     expect(tokenValue(lightTokens, "--background")).toBe("oklch(0.94 0.006 220 / 0.5)");
 
-    expect(tokenValue(rootTokens, "--overlay-shadow-color")).toBe("rgb(0 0 0 / 0.54)");
+    expect(tokenValue(rootTokens, "--overlay-shadow-color")).toBe("rgb(0 0 0 / 0.14)");
     expect(tokenValue(rootTokens, "--overlay-shadow-xs")).toContain("var(--overlay-shadow-color)");
     expect(tokenValue(rootTokens, "--overlay-shadow-sm")).toContain("var(--overlay-shadow-color)");
     expect(tokenValue(rootTokens, "--overlay-shadow-md")).toContain("var(--overlay-shadow-color)");
-    expect(tokenValue(lightTokens, "--overlay-shadow-color")).toBe("rgb(15 23 42 / 0.20)");
+    expect(tokenValue(lightTokens, "--overlay-shadow-color")).toBe("rgb(15 23 42 / 0.10)");
     expect(appCss).toContain(`body {
   margin: 0;
   min-width: 320px;

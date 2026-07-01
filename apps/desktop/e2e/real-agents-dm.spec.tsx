@@ -125,7 +125,7 @@ describe("real agent members and direct messages", () => {
 
     expect(html).toContain("私聊 1");
     expect(html).toContain("Coda");
-    expect(html).toContain("<strong>Coda</strong>");
+    expect(html).toContain('<span class="min-w-0 truncate text-[14px] font-normal leading-5">Coda</span>');
     expect(html).not.toContain("真实创建的开发 Agent。");
     expect(html).not.toContain("<small>@coda</small>");
   });
@@ -142,7 +142,9 @@ describe("real agent members and direct messages", () => {
     );
 
     expect(html.match(/aria-current="true"/g)).toHaveLength(1);
-    expect(html).toMatch(/aria-current="true"[\s\S]*?<strong>Coda<\/strong>/);
+    expect(html).toMatch(
+      /aria-current="true"[\s\S]*?<span class="min-w-0 truncate text-\[14px\] font-normal leading-5">Coda<\/span>/,
+    );
     expect(html).not.toMatch(/aria-current="true"[\s\S]{0,240}# all/);
   });
 

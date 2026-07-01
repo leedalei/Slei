@@ -601,12 +601,11 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).toContain("bg-white/10");
     expect(composerInput?.className).toContain("backdrop-blur-xl");
     expect(composerInput?.className).toContain("focus:bg-white/15");
-    expect(composerInput?.className).toContain("focus:ring-cyan-400/30");
+    expect(composerInput?.className).not.toContain("focus:ring-cyan-400/30");
     expect(composerInput?.className).not.toContain("bg-transparent");
     expect(composerInput?.parentElement?.className).toContain("group");
     expect(composerInput?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')?.className).toContain("bg-linear-to-r");
-    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')?.className).toContain("overflow-visible");
+    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')).toBeNull();
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
@@ -1789,13 +1788,69 @@ describe("ChatPage mention panel", () => {
     });
 
     const card = document.body.querySelector('[data-testid="slei-channel-member-info-card"]');
+    const removeButton = document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`);
     expect(card).not.toBeNull();
     expect(card?.textContent).toContain("Luna");
     expect(card?.textContent).toContain("@luna");
     expect(card?.textContent).toContain("产品研究 Agent");
     expect(card?.textContent).toContain(messages.chat.memberReady);
     expect(card?.textContent).not.toContain("ready");
-    expect(card?.textContent).toContain(messages.chat.removeChannelMember("Luna"));
+    expect(removeButton?.textContent?.trim()).toBe("移除");
+    expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
+    expect(removeButton?.className).toContain("text-[14px]");
+  });
+
+  it("closes the member popover after pointer leaves the avatar and info card", async () => {
+    vi.useFakeTimers();
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+      await act(async () => {
+        avatar?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
+      });
+
+      const card = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-info-card"]');
+      expect(card).not.toBeNull();
+
+      await act(async () => {
+        avatar?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: card }));
+        card?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: avatar }));
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
+
+      await act(async () => {
+        card?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+        vi.advanceTimersByTime(200);
+      });
+
+      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the member popover open while focus moves from avatar to remove button", async () => {
@@ -2282,7 +2337,7 @@ describe("ChatPage mention panel", () => {
     expect(composerGlassCss).not.toContain("isolation");
     expect(composerGlassCss).not.toContain("overflow: hidden;");
     expect(appCss).toContain(".slei-composer-input:focus-visible {");
-    expect(appCss).toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
+    expect(appCss).not.toContain("0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent)");
 
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();

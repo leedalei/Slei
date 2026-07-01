@@ -31,6 +31,6 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
 
 function avatarSizeClassName(size: MemberAvatarSize) {
   if (size === "large") return "size-16";
-  if (size === "small") return "size-4";
+  if (size === "small") return "size-[16px]";
   return "size-8";
 }

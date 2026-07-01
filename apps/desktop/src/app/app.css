@@ -54,18 +54,18 @@
   --sidebar-ring: var(--ring);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-blur: 16px;
+  --glass-blur: 20px;
   --glow-cyan: rgba(6, 182, 212, 0.3);
   --glow-purple: rgba(147, 51, 234, 0.3);
   --glow-pink: rgba(236, 72, 153, 0.24);
-  --input-focus-glow-from: rgb(6 182 212 / 0.3);
-  --input-focus-glow-via: rgb(59 130 246 / 0.3);
-  --input-focus-glow-to: rgb(168 85 247 / 0.3);
+  --input-focus-glow-from: rgb(6 182 212 / 0.12);
+  --input-focus-glow-via: rgb(59 130 246 / 0.12);
+  --input-focus-glow-to: rgb(168 85 247 / 0.12);
   --text-primary: var(--text-color-1);
   --text-secondary: var(--text-color-2);
   --text-muted: var(--text-color-3);
   --composer-glass-bg: rgba(28, 35, 50, 0.7);
-  --composer-glass-shadow: rgb(0 0 0 / 0.18);
+  --composer-glass-shadow: rgb(0 0 0 / 0.10);
   --composer-glass-highlight: rgb(255 255 255 / 0.18);
   --radius-xs: 6px;
   --radius-sm: 6px;
@@ -82,17 +82,17 @@
   --spacing: 0.25rem;
   --shadow-color: oklch(0 0 0);
   --shadow-opacity: 0.16;
-  --shadow-blur: 18px;
+  --shadow-blur: 4px;
   --shadow-spread: 0px;
   --shadow-offset-x: 0;
-  --shadow-offset-y: 10px;
+  --shadow-offset-y: 2px;
   --shadow-2xs: none;
   --shadow-xs: none;
   --shadow-sm: none;
   --shadow: none;
-  --shadow-md: 0 8px 24px color-mix(in srgb, rgb(0 0 0 / 0.55) 38%, transparent);
-  --shadow-lg: 0 14px 36px color-mix(in srgb, rgb(0 0 0 / 0.55) 44%, transparent);
-  --shadow-xl: 0 24px 64px color-mix(in srgb, rgb(0 0 0 / 0.58) 50%, transparent);
+  --shadow-md: 0 2px 4px color-mix(in srgb, rgb(0 0 0 / 0.16) 18%, transparent);
+  --shadow-lg: 0 3px 4px color-mix(in srgb, rgb(0 0 0 / 0.16) 20%, transparent);
+  --shadow-xl: 0 4px 4px color-mix(in srgb, rgb(0 0 0 / 0.16) 22%, transparent);
   --shadow-2xl: var(--shadow-xl);
   --app-warning: oklch(0.82 0.16 83);
   --text-xs: 11px;
@@ -117,19 +117,35 @@
   --sidebar-width: 240px;
   --duration-interaction: 100ms;
   --ease-ui: cubic-bezier(0.4, 0, 0.2, 1);
-  --overlay-shadow-color: rgb(0 0 0 / 0.54);
-  --overlay-shadow-xs: 0 4px 10px color-mix(in srgb, var(--overlay-shadow-color) 52%, transparent);
-  --overlay-shadow-sm: 0 12px 30px color-mix(in srgb, var(--overlay-shadow-color) 58%, transparent);
-  --overlay-shadow-md: 0 24px 60px color-mix(in srgb, var(--overlay-shadow-color) 64%, transparent);
+  --overlay-shadow-color: rgb(0 0 0 / 0.14);
+  --overlay-shadow-xs: 0 1px 3px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent);
+  --overlay-shadow-sm: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent);
+  --overlay-shadow-md: 0 4px 4px color-mix(in srgb, var(--overlay-shadow-color) 24%, transparent);
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
-  --workspace-glass-bg: oklch(0.18 0.045 255 / 1);
+  --app-chrome-height: 44px;
+  --app-native-controls-width: 52px;
+  --app-card-gap: 8px;
+  --app-card-radius: 16px;
+  --app-shell-radius: 0px;
+  --app-resize-width: 8px;
+  --app-shell-bg: rgba(237, 239, 243, 0.72);
+  --app-shell-border: transparent;
+  --app-shell-shadow: none;
+  --app-card-bg: rgba(255, 255, 255, 0.86);
+  --app-card-border: rgba(255, 255, 255, 0.8);
+  --app-card-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --app-resize-handle-active-bg: color-mix(in srgb, var(--primary) 20%, transparent);
+  --workspace-sidebar-bg: rgba(255, 255, 255, 0.62);
+  --workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04);
+  --workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08);
+  --workspace-glass-bg: rgba(255, 255, 255, 0.86);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
-  --glass-surface-filter: blur(var(--glass-blur)) saturate(145%);
-  --chrome-surface-filter: blur(6px) saturate(112%);
+  --glass-surface-filter: blur(20px) saturate(150%);
+  --chrome-surface-filter: blur(40px) saturate(150%);
   --glass-button-border: var(--glass-border);
   --glass-button-hover-border: color-mix(in srgb, var(--glass-border) 52%, var(--glow-cyan));
-  --glass-button-shadow: 0 10px 26px color-mix(in srgb, var(--overlay-shadow-color) 36%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+  --glass-button-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
   --glass-button-primary-bg: var(--primary);
   --dropdown-open-dur: 250ms;
   --dropdown-close-dur: 150ms;
@@ -160,10 +176,10 @@
   --tabs-glass-active-bg: color-mix(in srgb, white 28%, var(--card) 18%);
   --tabs-glass-border: color-mix(in srgb, white 28%, var(--border));
   --tabs-glass-glow: color-mix(in srgb, var(--primary) 24%, transparent);
-  --tabs-glass-shadow: 0 4px 16px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
+  --tabs-glass-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent), inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
   --tabs-pill-bg: var(--tabs-glass-active-bg);
   --tabs-pill-border: color-mix(in srgb, white 36%, var(--tabs-glass-border));
-  --tabs-pill-shadow: 0 4px 10px color-mix(in srgb, var(--overlay-shadow-color) 32%, transparent);
+  --tabs-pill-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent);
 }
 
 @theme inline {
@@ -270,21 +286,28 @@
   --ring: oklch(0.75 0.13 205);
   --sidebar: oklch(0.16 0.04 255 / 0.62);
   --sidebar-foreground: var(--text-color-1);
-  --workspace-glass-bg: oklch(0.18 0.045 255 / 1);
+  --app-shell-bg: color-mix(in srgb, #1d2736 82%, transparent);
+  --app-card-bg: color-mix(in srgb, #1f2a3a 78%, transparent);
+  --app-card-border: color-mix(in srgb, white 14%, #1f2a3a 86%);
+  --app-card-shadow: 0 3px 4px color-mix(in srgb, rgb(0 0 0 / 0.14) 78%, transparent), inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+  --workspace-sidebar-bg: var(--app-card-bg);
+  --workspace-sidebar-hover-bg: color-mix(in srgb, white 8%, transparent);
+  --workspace-sidebar-active-bg: color-mix(in srgb, white 14%, transparent);
+  --workspace-glass-bg: var(--app-card-bg);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-blur: 16px;
+  --glass-blur: 20px;
   --glow-cyan: rgba(6, 182, 212, 0.3);
   --glow-purple: rgba(147, 51, 234, 0.3);
   --glow-pink: rgba(236, 72, 153, 0.3);
-  --input-focus-glow-from: rgb(6 182 212 / 0.3);
-  --input-focus-glow-via: rgb(59 130 246 / 0.3);
-  --input-focus-glow-to: rgb(168 85 247 / 0.3);
+  --input-focus-glow-from: rgb(6 182 212 / 0.12);
+  --input-focus-glow-via: rgb(59 130 246 / 0.12);
+  --input-focus-glow-to: rgb(168 85 247 / 0.12);
   --text-primary: var(--text-color-1);
   --text-secondary: var(--text-color-2);
   --text-muted: var(--text-color-3);
   --composer-glass-bg: rgba(28, 35, 50, 0.7);
-  --composer-glass-shadow: rgb(0 0 0 / 0.18);
+  --composer-glass-shadow: rgb(0 0 0 / 0.10);
   --composer-glass-highlight: rgb(255 255 255 / 0.18);
 }
 
@@ -329,20 +352,29 @@
   --sidebar-accent-foreground: var(--accent-foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
-  --workspace-glass-bg: oklch(0.955 0.003 220 / 1);
+  --app-shell-bg: rgba(237, 239, 243, 0.72);
+  --app-shell-border: transparent;
+  --app-shell-shadow: none;
+  --app-card-bg: rgba(255, 255, 255, 0.86);
+  --app-card-border: rgba(255, 255, 255, 0.8);
+  --app-card-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --workspace-sidebar-bg: rgba(255, 255, 255, 0.62);
+  --workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04);
+  --workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08);
+  --workspace-glass-bg: rgba(255, 255, 255, 0.86);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-blur: 16px;
   --glow-cyan: rgba(6, 182, 212, 0.15);
   --glow-purple: rgba(147, 51, 234, 0.15);
   --glow-pink: rgba(236, 72, 153, 0.12);
-  --input-focus-glow-from: rgb(6 182 212 / 0.16);
-  --input-focus-glow-via: rgb(59 130 246 / 0.16);
-  --input-focus-glow-to: rgb(168 85 247 / 0.16);
+  --input-focus-glow-from: rgb(6 182 212 / 0.08);
+  --input-focus-glow-via: rgb(59 130 246 / 0.08);
+  --input-focus-glow-to: rgb(168 85 247 / 0.08);
   --text-primary: var(--text-color-1);
   --text-secondary: var(--text-color-2);
   --text-muted: var(--text-color-3);
-  --overlay-shadow-color: rgb(15 23 42 / 0.20);
+  --overlay-shadow-color: rgb(15 23 42 / 0.10);
   --glass-highlight: color-mix(in srgb, white 72%, transparent);
   --composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);
   --composer-glass-shadow: rgb(15 23 42 / 0.14);
@@ -357,7 +389,7 @@
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
     box-shadow:
-      0 18px 48px var(--composer-glass-shadow),
+      0 2px 4px var(--composer-glass-shadow),
       inset 0 1px 0 var(--composer-glass-highlight);
   }
 
@@ -384,9 +416,7 @@
   }
 
   .slei-composer-input:focus-visible {
-    box-shadow:
-      inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent),
-      0 0 0 1px color-mix(in srgb, var(--ring) 72%, transparent);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);
   }
 
   .slei-channel-member-group {
@@ -414,10 +444,6 @@
   .slei-channel-member-avatar-button:focus-visible {
     z-index: 1;
     transform: translateY(-1px);
-  }
-
-  .slei-channel-member-avatar-button:focus-visible {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 68%, transparent);
   }
 
   .slei-channel-member-add-button {
@@ -792,35 +818,105 @@ select:focus-visible {
   margin: 0;
 }
 
-.slei-brand {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  display: flex;
-  height: 44px;
-  justify-content: center;
-  overflow: hidden;
-  width: 56px;
-}
-
-.slei-brand__icon {
-  display: block;
-  height: 42px;
-  width: 42px;
-}
-
 .slei-workspace-sidebar {
-  -webkit-backdrop-filter: var(--chrome-surface-filter);
-  backdrop-filter: var(--chrome-surface-filter);
   background: transparent;
-  box-shadow:
-    inset -1px 0 0 color-mix(in srgb, var(--sidebar-border) 56%, transparent),
-    inset 10px 0 24px color-mix(in srgb, var(--glass-highlight) 24%, transparent);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .slei-app-shell {
-  grid-template-columns: var(--app-sidebar-width, 15rem) 3px minmax(0, 1fr);
+  position: relative;
+  isolation: isolate;
+  grid-template-rows: var(--app-chrome-height) minmax(0, 1fr);
+  padding: 0;
+  background: var(--app-shell-bg);
+  border: 0 solid var(--app-shell-border);
+  border-radius: var(--app-shell-radius);
+  box-shadow: var(--app-shell-shadow);
+  overflow: hidden;
+  -webkit-backdrop-filter: var(--chrome-surface-filter);
+  backdrop-filter: var(--chrome-surface-filter);
+}
+
+.slei-app-chrome {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  height: var(--app-chrome-height);
+  padding: 0 16px;
+  color: var(--foreground);
+}
+
+.slei-native-window-controls-space {
+  display: block;
+  width: var(--app-native-controls-width);
+  height: 1px;
+  flex: 0 0 var(--app-native-controls-width);
+}
+
+.slei-app-chrome__divider {
+  width: 1px;
+  height: 20px;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.slei-brand {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  line-height: 1;
+}
+
+.slei-brand__icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.slei-brand__name {
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.slei-app-content {
+  position: relative;
+  display: grid;
+  grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr);
+  gap: var(--app-card-gap);
+  padding: var(--app-card-gap);
+  overflow: hidden;
+}
+
+.slei-workspace-sidebar-card {
+  min-width: 260px;
+}
+
+.slei-workspace-sidebar-card,
+.slei-workspace-card {
+  min-height: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--app-card-border);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  -webkit-backdrop-filter: var(--glass-surface-filter);
+  backdrop-filter: var(--glass-surface-filter);
+}
+
+.slei-workspace-sidebar-card {
+  background: var(--workspace-sidebar-bg);
+}
+
+.slei-workspace-card {
+  background: var(--workspace-glass-bg);
 }
 
 .slei-workspace-sidebar__header {
@@ -843,24 +939,27 @@ select:focus-visible {
 }
 
 .slei-resize-handle {
-  background: color-mix(in srgb, var(--sidebar-border) 36%, transparent);
+  position: absolute;
+  top: var(--app-card-gap);
+  bottom: var(--app-card-gap);
+  left: calc(var(--app-card-gap) + max(var(--app-sidebar-width, 260px), 260px));
+  z-index: 3;
+  align-self: auto;
+  background: transparent;
   border: 0;
-  border-right: 1px solid color-mix(in srgb, var(--sidebar-border) 52%, transparent);
   cursor: col-resize;
   padding: 0;
-  width: 3px;
-  transition:
-    background var(--duration-interaction) var(--ease-ui),
-    box-shadow var(--duration-interaction) var(--ease-ui);
+  width: var(--app-card-gap);
+  transition: background var(--duration-interaction) var(--ease-ui);
 }
 
 .slei-resize-handle:hover,
-.slei-resize-handle:focus-visible {
-  background: color-mix(in srgb, var(--sidebar-accent) 46%, transparent);
+.slei-resize-handle:focus-visible,
+.slei-resize-handle:active {
+  background: linear-gradient(to bottom, transparent 0%, var(--app-resize-handle-active-bg) 50%, transparent 100%);
 }
 
 .slei-resize-handle:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--ring);
   outline: 0;
 }
 
@@ -872,12 +971,10 @@ select:focus-visible {
   0%,
   100% {
     border-color: color-mix(in srgb, var(--primary) 25%, transparent);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
   }
 
   50% {
     border-color: color-mix(in srgb, var(--primary) 85%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
   }
 }
 
@@ -1126,7 +1223,27 @@ select:focus-visible {
 
 @media (max-width: 760px) {
   .slei-app-shell {
+    grid-template-rows: var(--app-chrome-height) minmax(0, 1fr);
+    padding: 0;
+  }
+
+  .slei-app-content {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: var(--app-card-gap);
+  }
+
+  .slei-native-window-controls-space {
+    width: var(--app-native-controls-width);
+    flex-basis: var(--app-native-controls-width);
+  }
+
+  .slei-app-chrome {
+    gap: 12px;
+  }
+
+  .slei-app-chrome__divider {
+    height: 24px;
   }
 
   .slei-resize-handle {

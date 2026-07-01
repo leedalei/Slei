@@ -17,6 +17,7 @@ import {
   CircleUserRound,
   Copy,
   Cpu,
+  Ellipsis,
   ExternalLink,
   File,
   FileText,
@@ -71,6 +72,7 @@ export type SleiIconName =
   | "copy"
   | "cpu"
   | "delete"
+  | "ellipsis"
   | "externalLink"
   | "file"
   | "fileText"
@@ -132,6 +134,7 @@ export const sleiIcons: Record<SleiIconName, SleiLucideIcon> = {
   copy: Copy,
   cpu: Cpu,
   delete: Trash,
+  ellipsis: Ellipsis,
   externalLink: ExternalLink,
   file: File,
   fileText: FileText,

@@ -23,6 +23,9 @@ export const shell = {
     preferences: "Preferences",
     savedMessages: "Saved",
   },
+  appChrome: {
+    collaborationFlow: "Collaboration flow",
+  },
   sidebarTitle: {
     chat: "Slei",
     search: "Slei",

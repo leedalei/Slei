@@ -273,7 +273,7 @@ export function TaskThreadDrawer(input: {
                 selectedIndex={selectedMentionIndex}
               />
             ) : null}
-            <div className="relative rounded-xl shadow-[0_12px_28px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
+            <div className="relative rounded-xl shadow-[0_2px_4px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
               <Textarea
                 aria-label={input.messages.tasks.replyPlaceholder}
                 className="min-h-20 border border-slate-300/90 bg-white/55 pr-16 shadow-none"
@@ -332,7 +332,7 @@ export function TaskThreadDrawer(input: {
       {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
       <SheetContent
         aria-label={input.messages.tasks.thread}
-        className="w-[min(100vw,680px)] gap-0 border-white/35 bg-white/70 p-0 text-foreground shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur-xl before:hidden sm:max-w-[680px]"
+        className="w-[min(100vw,680px)] gap-0 border-white/35 bg-white/70 p-0 text-foreground shadow-[0_4px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl before:hidden sm:max-w-[680px]"
         showCloseButton={false}
         showOverlay={false}
       >
@@ -369,7 +369,7 @@ function TaskStatusTimeline(input: {
             aria-label={`${input.messages.tasks.changeStatus}: ${input.messages.tasks.status[status]}`}
             className={cn(
               "group relative grid min-w-0 rounded-md py-1 text-xs transition",
-              "focus-visible:outline-none focus-visible:[&_[data-task-status-icon]]:ring-cyan-200/80",
+              "focus-visible:outline-none",
               isCurrent ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               input.disabled || isBlocked ? "cursor-not-allowed opacity-60" : "cursor-pointer",
               index === 0 ? "justify-items-start" : index === TASK_STATUSES.length - 1 ? "justify-items-end" : "justify-items-center",
@@ -392,7 +392,7 @@ function TaskStatusTimeline(input: {
                 className={cn(
                   "grid size-6 place-items-center rounded-full border ring-4 ring-white/75",
                   isReached
-                    ? "border-cyan-400/40 bg-linear-to-r from-cyan-500 to-blue-500 text-primary-foreground shadow-[0_0_10px_rgba(6,182,212,0.32)]"
+                    ? "border-cyan-400/40 bg-linear-to-r from-cyan-500 to-blue-500 text-primary-foreground shadow-[0_0_4px_rgba(6,182,212,0.12)]"
                     : "border-slate-300/80 bg-slate-100 text-slate-500 shadow-none",
                 )}
                 data-reached={isReached ? "true" : "false"}

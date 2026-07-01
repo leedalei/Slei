@@ -237,6 +237,7 @@ describe("TasksPage filters", () => {
     const codaTask = container?.querySelector<HTMLElement>('[data-task-id="task_ai_coda"]');
     const metadata = codaTask?.querySelector<HTMLElement>('[data-task-card-metadata]');
     const assignee = codaTask?.querySelector<HTMLElement>('[data-task-card-assignee]');
+    const idBadge = codaTask?.querySelector<HTMLElement>('[data-task-card-id]');
 
     expect(metadata).not.toBeNull();
     expect(metadata!.textContent).toContain("来自#AI咨询");
@@ -246,6 +247,14 @@ describe("TasksPage filters", () => {
     expect(assignee!.textContent).toContain("Coda");
     expect(assignee?.querySelector('[data-slot="avatar"]')).not.toBeNull();
     expect(assignee?.className).toContain("[&_[data-slot=avatar]]:size-[18px]");
+    expect(codaTask?.className).toContain("w-full");
+    expect(codaTask?.className).toContain("min-w-0");
+    expect(codaTask?.className).toContain("max-w-full");
+    expect(codaTask?.className).toContain("overflow-hidden");
+    expect(idBadge?.className).toContain("min-w-0");
+    expect(idBadge?.className).toContain("max-w-full");
+    expect(idBadge?.className).toContain("shrink");
+    expect(idBadge?.className).toContain("truncate");
     expect(codaTask?.querySelector('[data-slei-status="in_review"]')?.parentElement).toBe(assignee?.parentElement);
     expect(text).toContain("3 个频道任务");
     expect(container?.querySelector('[data-slei-status="in_review"]')).not.toBeNull();
@@ -330,9 +339,10 @@ describe("TasksPage filters", () => {
 
     expect(statusColumns.every(Boolean)).toBe(true);
     expect(new Set(statusColumns.map((column) => column?.parentElement)).size).toBe(1);
-    expect(boardClasses).toContain("grid-flow-col");
-    expect(boardClasses).toContain("auto-cols-[minmax(17rem,1fr)]");
+    expect(boardClasses).toContain("grid-cols-[repeat(4,minmax(17rem,1fr))]");
     expect(boardClasses).toContain("overflow-x-auto");
+    expect(boardClasses).not.toContain("grid-flow-col");
+    expect(boardClasses).not.toContain("auto-cols-[minmax(17rem,1fr)]");
     expect(boardClasses).not.toContain("xl:grid-cols-4");
     expect(columnClasses).toContain("min-w-0");
   });

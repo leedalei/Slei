@@ -13,7 +13,7 @@ import { TaskStatusBadge } from "./TaskStatusBadge";
 import { TaskThreadDrawer } from "./TaskThreadDrawer";
 
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card/45 text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const CARD_LIST_ITEM_CLASS = "rounded-lg border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden transition-colors hover:bg-card";
+const CARD_LIST_ITEM_CLASS = "min-w-0 max-w-full overflow-hidden rounded-lg border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden transition-colors hover:bg-card";
 
 export function TasksPage({
   activeTaskId,
@@ -108,7 +108,7 @@ export function TasksPage({
 
         <ScrollArea className="min-h-0">
           <TabsContent className="m-0 data-[state=inactive]:hidden" value="board">
-            <div className="grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-4 overflow-x-auto p-6">
+            <div className="grid min-w-0 grid-cols-[repeat(4,minmax(17rem,1fr))] gap-4 overflow-x-auto p-6">
               {columns.map((column) => {
                 const columnTasks = filteredTasks.filter((task) => task.status === column);
                 return (
@@ -243,26 +243,26 @@ function TaskCard(input: {
     <SelectableCard
       selected={input.selected}
       data-task-id={input.task.id}
-      className={row ? `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start` : `${CARD_LIST_ITEM_CLASS} grid gap-3 p-3`}
+      className={row ? `${CARD_LIST_ITEM_CLASS} grid w-full gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start` : `${CARD_LIST_ITEM_CLASS} grid w-full gap-3 p-3`}
     >
-      <div className={row ? "min-w-0" : ""}>
+      <div className="min-w-0">
         <h3 className="break-words text-sm font-semibold">{input.task.title}</h3>
         <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-task-card-metadata>
-          <span className="inline-flex items-center">{input.messages.tasks.taskChannelLabel(input.channelName)}</span>
+          <span className="inline-flex min-w-0 max-w-full items-center truncate">{input.messages.tasks.taskChannelLabel(input.channelName)}</span>
         </p>
       </div>
-      <Badge className="w-fit max-w-full truncate" variant="outline">{input.task.id}</Badge>
-      <div className="flex flex-wrap items-center gap-2">
-        <TaskStatusBadge messages={input.messages} status={input.task.status} />
+      <Badge className="min-w-0 max-w-full shrink justify-self-start truncate" data-task-card-id variant="outline">{input.task.id}</Badge>
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+        <TaskStatusBadge className="shrink-0" messages={input.messages} status={input.task.status} />
         <span
-          className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-0.5 pl-0.5 pr-2 text-xs font-medium text-muted-foreground [&_[data-slot=avatar]]:size-[18px]"
+          className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-background/70 py-0.5 pl-0.5 pr-2 text-xs font-medium text-muted-foreground [&_[data-slot=avatar]]:size-[18px]"
           data-task-card-assignee
         >
           <MemberAvatar identity={input.assigneeIdentity} />
           <span className="min-w-0 truncate">{input.assigneeIdentity.name}</span>
         </span>
         {input.task.attention ? <StatusBadge label={input.task.attention} status="warn" /> : null}
-        <div className={row ? "sm:ml-auto" : "ml-auto"}>
+        <div className={row ? "shrink-0 sm:ml-auto" : "ml-auto shrink-0"}>
           <Button aria-label={input.messages.tasks.commentThread} onClick={input.onSelect} size="sm" type="button" variant="outline">
             <SleiIcon className="size-3.5" name="chat" />
             {replyCount}

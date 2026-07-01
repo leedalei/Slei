@@ -33,7 +33,7 @@ const COMPOSER_RESERVE_PX = 184;
 const COMPOSER_EXPANDED_RESERVE_PX = 256;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors hover:border-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[focused=true]:border-primary/35";
+const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors hover:border-border/50 focus-visible:outline-none data-[focused=true]:border-primary/35";
 
 type ChatComposerReserveStyle = CSSProperties & {
   "--chat-composer-reserve": string;
@@ -1080,7 +1080,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </div>
                 {showScrollToBottom ? (
                   <Button
-                    className="absolute bottom-[var(--chat-composer-reserve)] left-1/2 z-20 h-8 -translate-x-1/2 border-white/25 bg-white/85 px-3.5 text-xs shadow-[0_8px_24px_rgba(0,0,0,0.24)] backdrop-blur-xl hover:bg-white/95"
+                    className="absolute bottom-[var(--chat-composer-reserve)] left-1/2 z-20 h-8 -translate-x-1/2 border-white/25 bg-white/85 px-3.5 text-xs shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
                     data-testid="slei-scroll-to-bottom"
                     onClick={requestTimelineScrollToBottom}
                     size="sm"
@@ -1093,7 +1093,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_18px_48px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl">
                 {mention && mentionTargets.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
                     <MentionPicker

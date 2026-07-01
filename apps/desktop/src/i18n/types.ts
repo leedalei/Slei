@@ -48,6 +48,9 @@ export type DesktopMessages = {
       preferences: string;
       savedMessages: string;
     };
+    appChrome: {
+      collaborationFlow: string;
+    };
     sidebarTitle: Record<AppView, string>;
     sidebarSubtitle: Record<AppView, string>;
     sectionLabel: Record<AppView, string>;
@@ -153,6 +156,7 @@ export type DesktopMessages = {
     projectUpdateSuccess: string;
     projectUpdateFailed: string;
     removeProject: (projectName: string) => string;
+    removeChannelMemberAction: string;
     removeChannelMember: (name: string) => string;
     selectAgents: string;
     clearSort: string;

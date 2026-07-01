@@ -15,8 +15,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       data-slot="card"
       className={cn(
         "relative overflow-visible rounded-2xl border border-white/20 bg-white/10 text-card-foreground backdrop-blur-xl",
-        "shadow-[0_8px_32px_rgba(0,0,0,0.37)]",
-        glowEffect && "shadow-[0_8px_32px_rgba(0,0,0,0.37),0_0_32px_rgba(59,130,246,0.22)]",
+        "shadow-[0_4px_4px_rgba(0,0,0,0.12)]",
+        glowEffect && "shadow-[0_4px_4px_rgba(0,0,0,0.12),0_0_4px_rgba(59,130,246,0.10)]",
         "before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:bg-linear-to-b before:from-white/20 before:to-transparent",
         "after:pointer-events-none after:absolute after:inset-px after:rounded-[calc(1rem-1px)] after:shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]",
         className,

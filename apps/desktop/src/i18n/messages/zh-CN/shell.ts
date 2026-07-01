@@ -23,6 +23,9 @@ export const shell = {
     preferences: "偏好设置",
     savedMessages: "已保存",
   },
+  appChrome: {
+    collaborationFlow: "协作流",
+  },
   sidebarTitle: {
     chat: "Slei",
     search: "Slei",

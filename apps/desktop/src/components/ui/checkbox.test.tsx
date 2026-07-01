@@ -42,7 +42,7 @@ describe("Checkbox", () => {
     expect(html).not.toContain("shadow-[0_4px_16px");
     expect(html).toContain("hover:bg-white/15");
     expect(html).toContain("focus-visible:border-white/40");
-    expect(html).toContain("focus-visible:ring-cyan-400/30");
+    expect(html).not.toContain("focus-visible:ring-cyan-400/30");
     expect(html).not.toContain("bg-transparent");
     expect(html).not.toContain("border-input");
     expect(html).not.toContain("dark:bg-input/30");

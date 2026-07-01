@@ -27,7 +27,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import sleiBubbleIcon from "../assets/brand/slei-bubble.svg";
 import { MemberAvatar, SelectableCard, SleiIcon, StatusDot, type ToastType } from "../components";
 import type { ChannelReceipt, ConversationView } from "../lib/daemon-bridge";
 import type { DesktopMessages } from "../i18n";
@@ -81,6 +80,14 @@ const sidebarSortStorageKeys = {
   channels: "slei:sidebar-sort:channels",
   directMessages: "slei:sidebar-sort:direct-messages",
 } as const;
+
+const sidebarFlatActiveClassName = "bg-[var(--workspace-sidebar-active-bg)] text-foreground";
+const sidebarPrimaryActionClassName =
+  "h-[32px] min-h-[32px] justify-start rounded-lg border-transparent px-2.5 py-0 shadow-none hover:bg-[var(--workspace-sidebar-hover-bg)]";
+const sidebarListRowClassName =
+  "group/channel grid h-[32px] min-h-[32px] grid-cols-[minmax(0,1fr)_auto] items-center";
+const sidebarListTriggerClassName =
+  "inline-flex h-full min-h-0 w-full min-w-0 items-center justify-start rounded-lg border border-transparent bg-transparent px-2.5 py-0 text-left text-sm font-medium leading-5 text-inherit transition-colors outline-none focus-visible:border-ring";
 
 function isSortDirection(value: string | null): value is SortDirection {
   return value === "default" || value === "asc" || value === "desc";
@@ -481,45 +488,38 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   return (
     <aside
       aria-label={input.messages.shell.workspaceSidebar.workspace}
-      className="slei-workspace-sidebar min-h-0 border-r border-sidebar-border/65 text-sidebar-foreground max-[760px]:hidden"
+      className="slei-workspace-sidebar h-full min-h-0 text-sidebar-foreground max-[760px]:hidden"
       data-tauri-drag-region="deep"
     >
       <div className="flex h-full min-h-0 flex-col">
-        <div className="slei-workspace-sidebar__header shrink-0 px-3 pb-3 pt-4">
-          <div className="flex items-center gap-2">
-            <img alt="" aria-hidden="true" className="slei-brand__icon" src={sleiBubbleIcon} />
-            <div className="min-w-0">
-              <h2 className="select-none truncate text-base font-bold leading-none">Slei</h2>
-              <p className="mt-1 select-none truncate text-xs text-muted-foreground">{input.messages.shell.workspaceSidebar.workspace}</p>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="slei-workspace-sidebar__header shrink-0 px-3 pb-2 pt-5" data-slot="workspace-sidebar-header">
+          <nav aria-label={input.messages.shell.workspaceSidebar.workspace} className="grid gap-1" data-slot="workspace-sidebar-primary-nav">
             <Button
               aria-current={input.activeView === "search" ? "page" : undefined}
-              className="justify-start"
+              className={cn(sidebarPrimaryActionClassName, input.activeView === "search" && sidebarFlatActiveClassName)}
               onClick={() => input.onViewChange?.("search")}
               type="button"
-              variant={input.activeView === "search" ? "primary" : "outline"}
+              variant="ghost"
             >
               <SleiIcon name="search" size={15} />
               {input.messages.shell.nav.search}
             </Button>
             <Button
               aria-current={input.activeView === "tasks" ? "page" : undefined}
-              className="justify-start"
+              className={cn(sidebarPrimaryActionClassName, input.activeView === "tasks" && sidebarFlatActiveClassName)}
               onClick={() => input.onViewChange?.("tasks")}
               type="button"
-              variant={input.activeView === "tasks" ? "primary" : "outline"}
+              variant="ghost"
             >
               <SleiIcon name="tasks" size={15} />
               {input.messages.shell.nav.tasks}
             </Button>
-          </div>
+          </nav>
         </div>
 
-        <ScrollArea className="-mx-2 -my-2 min-h-0 flex-1">
-          <div className="space-y-4 px-2 py-2" data-channel-scroll-content="">
-            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-3 px-3 py-2" data-channel-scroll-content="">
+            <div className="flex items-center justify-between px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <SidebarSectionTitle>{input.messages.chat.channels} {input.channels.length}</SidebarSectionTitle>
               <div className="flex items-center gap-1">
                 <Button
@@ -550,7 +550,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   >
                     <SelectableCard
                       selected={selected}
-                      className="group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center"
+                      className={sidebarListRowClassName}
                       data-channel-id={channel.id}
                       data-channel-list-item=""
                       data-testid={`workspace-channel-row-${channel.id}`}
@@ -564,11 +564,12 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                           setOpenChannelMenuId(channel.id);
                         }
                       }}
+                      selectedVariant="flat"
                       tabIndex={0}
                     >
                       <button
                         aria-current={selected ? "true" : undefined}
-                        className="inline-flex min-h-12 w-full min-w-0 items-center justify-start rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                        className={sidebarListTriggerClassName}
                         data-slot="channel-select-trigger"
                         onClick={() => input.onChannelSelect?.(channel.id)}
                         type="button"
@@ -587,7 +588,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                           type="button"
                           variant="ghost"
                         >
-                          <SleiIcon name="listDetails" size={14} />
+                          <SleiIcon name="ellipsis" size={14} />
                         </Button>
                       </DropdownMenuTrigger>
                     </SelectableCard>
@@ -611,7 +612,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               })}
             </div>
             <Separator />
-            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div className="flex items-center justify-between px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
               <Button
                 aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
@@ -641,7 +642,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   >
                     <SelectableCard
                       selected={selected}
-                      className="group/channel grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center"
+                      className={sidebarListRowClassName}
                       data-conversation-id={conversation.id}
                       data-direct-message-list-item=""
                       data-testid={`workspace-dm-row-${dmTestId(conversation)}`}
@@ -655,17 +656,19 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                           setOpenDmMenuId(conversation.id);
                         }
                       }}
+                      selectedVariant="flat"
                       tabIndex={0}
                     >
                       <button
                         aria-current={selected ? "true" : undefined}
-                        className="inline-flex min-h-12 w-full min-w-0 items-center justify-start gap-2 rounded-lg border border-transparent bg-transparent px-2 py-2 text-left text-sm font-medium text-inherit transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                        className={cn(sidebarListTriggerClassName, "gap-2")}
+                        data-slot="direct-message-select-trigger"
                         onClick={() => input.onConversationSelect?.(conversationId)}
                         type="button"
                       >
-                        <MemberAvatar identity={member} />
                         <StatusDot status={member.runtimeStatus} />
-                        <strong>{member.name}</strong>
+                        <MemberAvatar identity={member} size="small" />
+                        <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
                       </button>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -675,7 +678,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                           type="button"
                           variant="ghost"
                         >
-                          <SleiIcon name="listDetails" size={14} />
+                          <SleiIcon name="ellipsis" size={14} />
                         </Button>
                       </DropdownMenuTrigger>
                     </SelectableCard>
@@ -701,8 +704,8 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
 
         <AgentActivityPanel activity={input.activeAgentActivity} messages={input.messages} />
 
-        <div className="slei-workspace-sidebar__footer shrink-0 border-t p-3">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="slei-workspace-sidebar__footer shrink-0 border-t px-3 py-3">
+          <div className="flex min-w-0 items-center gap-2 px-1">
             <MemberAvatar identity={{ id: "local-user", name: profile.displayName, handle: profile.handle, avatar: profile.avatar }} />
             <div className="min-w-0 flex-1">
               <strong className="block truncate text-sm">{profile.displayName}</strong>

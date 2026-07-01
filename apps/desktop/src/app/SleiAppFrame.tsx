@@ -46,6 +46,7 @@ import { SearchRoute } from "./routes/SearchRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TasksRoute } from "./routes/TasksRoute";
 import { WorkspaceSidebar, type ChannelCardDraftRequest } from "./WorkspaceSidebar";
+import sleiBubbleIcon from "../assets/brand/slei-bubble.svg";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import {
   channelReadinessLabel,
@@ -193,7 +194,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const fontSize = fontSizeValue(appearance.fontSize);
   const textTokenValues = useMemo(() => fontSizeTextTokenValues(appearance.fontSize), [appearance.fontSize]);
   const shellStyle = {
-    "--app-sidebar-width": `${input.sidebarWidth ?? 240}px`,
+    "--app-sidebar-width": `${input.sidebarWidth ?? 260}px`,
     "--app-font-size": fontSize,
   } as CSSProperties;
 
@@ -267,59 +268,73 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
+      data-tauri-drag-region="deep"
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} onDismiss={input.onRuntimeToastDismiss} type={input.runtimeToastType} />
-      <WorkspaceSidebar
-        activeAgentActivity={activeAgentActivity}
-        activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
-        activeChatWorkspace={input.activeChatWorkspace}
-        activeConversationId={input.activeChatWorkspace === "saved" ? undefined : input.activeConversationId}
-        activeView={input.activeView}
-        cardDraftRequest={channelCardDraftRequest}
-        channels={input.data.channels}
-        conversations={input.data.conversations}
-        initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
-        members={input.data.members}
-        messages={messages}
-        onChannelCreate={input.onChannelCreate}
-        onChannelCreateClick={() => undefined}
-        onChannelCreateFailure={input.onChannelCreateFailure}
-        onChannelCreateLog={input.onChannelCreateLog}
-        onChannelCreateRefresh={input.onChannelCreateRefresh}
-        onChannelDelete={input.onChannelDelete}
-        onChannelEdit={handleChannelEdit}
-        onChannelSelect={input.onChannelSelect}
-        onConversationSelect={input.onConversationSelect}
-        onInteractiveCardComplete={input.onInteractiveCardComplete}
-        onMemberSelect={input.onMemberSelect}
-        onSavedMessagesOpen={input.onSavedMessagesOpen}
-        onSettingsPanelSelect={setActiveSettingsPanel}
-        onViewChange={input.onViewChange}
-        profile={profile}
-      />
+      <header className="slei-app-chrome" data-slot="app-chrome">
+        <span aria-hidden="true" className="slei-native-window-controls-space" data-slot="native-window-controls-space" />
+        <span aria-hidden="true" className="slei-app-chrome__divider" data-slot="app-chrome-divider" />
+        <div className="slei-brand" data-slot="app-brand">
+          <img alt="" className="slei-brand__icon" src={sleiBubbleIcon} />
+          <span className="slei-brand__name">Slei</span>
+        </div>
+      </header>
 
-      <Button
-        aria-label={messages.common.resizeSidebar}
-        aria-orientation="vertical"
-        className="slei-resize-handle h-full w-[3px] !cursor-col-resize rounded-none border-0 p-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
-        onPointerDown={input.onResizeStart}
-        role="separator"
-        type="button"
-        variant="ghost"
-      />
+      <div className="slei-app-content min-h-0 min-w-0" data-slot="app-content">
+        <div className="slei-workspace-sidebar-card min-h-0 max-[760px]:hidden" data-slot="sidebar-card">
+          <WorkspaceSidebar
+            activeAgentActivity={activeAgentActivity}
+            activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
+            activeChatWorkspace={input.activeChatWorkspace}
+            activeConversationId={input.activeChatWorkspace === "saved" ? undefined : input.activeConversationId}
+            activeView={input.activeView}
+            cardDraftRequest={channelCardDraftRequest}
+            channels={input.data.channels}
+            conversations={input.data.conversations}
+            initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
+            members={input.data.members}
+            messages={messages}
+            onChannelCreate={input.onChannelCreate}
+            onChannelCreateClick={() => undefined}
+            onChannelCreateFailure={input.onChannelCreateFailure}
+            onChannelCreateLog={input.onChannelCreateLog}
+            onChannelCreateRefresh={input.onChannelCreateRefresh}
+            onChannelDelete={input.onChannelDelete}
+            onChannelEdit={handleChannelEdit}
+            onChannelSelect={input.onChannelSelect}
+            onConversationSelect={input.onConversationSelect}
+            onInteractiveCardComplete={input.onInteractiveCardComplete}
+            onMemberSelect={input.onMemberSelect}
+            onSavedMessagesOpen={input.onSavedMessagesOpen}
+            onSettingsPanelSelect={setActiveSettingsPanel}
+            onViewChange={input.onViewChange}
+            profile={profile}
+          />
+        </div>
 
-      <main className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-visible bg-transparent">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
-        setAgentDraft(draft);
-        setActiveCardId(cardId);
-        setAgentCreateOpen(true);
-      }, async (draft, cardId) => {
-        setChannelCardDraftRequest((current) => ({
-          id: (current?.id ?? 0) + 1,
-          draft,
-          cardId,
-        }));
-      }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
+        <Button
+          aria-label={messages.common.resizeSidebar}
+          aria-orientation="vertical"
+          className="slei-resize-handle h-full w-[var(--app-resize-width)] !cursor-col-resize rounded-none border-0 p-0"
+          onPointerDown={input.onResizeStart}
+          role="separator"
+          type="button"
+          variant="ghost"
+        />
+
+        <main className="slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent" data-slot="workspace-card">{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
+          setAgentDraft(draft);
+          setActiveCardId(cardId);
+          setAgentCreateOpen(true);
+        }, async (draft, cardId) => {
+          setChannelCardDraftRequest((current) => ({
+            id: (current?.id ?? 0) + 1,
+            draft,
+            cardId,
+          }));
+        }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
+      </div>
 
       {computerCreateOpen ? (
         <ComputerCreateModal
@@ -694,24 +709,46 @@ function ComputerCreateModal(input: {
 function fontSizeValue(size: AppearancePreferences["fontSize"]) {
   return {
     sm: "14px",
-    md: "15px",
+    md: "14px",
     lg: "16px",
   }[size];
 }
 
 function fontSizeTextTokenValues(size: AppearancePreferences["fontSize"]) {
-  const offset = { sm: -1, md: 0, lg: 1 }[size];
-  const px = (value: number) => `${value + offset}px`;
-  return {
-    "--text-xs": px(11),
-    "--text-sm": px(13),
-    "--text-base": px(15),
-    "--text-md": px(15),
-    "--text-lg": px(16),
-    "--text-xl": px(18),
-    "--text-2xl": px(24),
-    "--text-display": px(30),
+  const tokenValues = {
+    sm: {
+      "--text-xs": "10px",
+      "--text-sm": "12px",
+      "--text-base": "14px",
+      "--text-md": "14px",
+      "--text-lg": "15px",
+      "--text-xl": "17px",
+      "--text-2xl": "23px",
+      "--text-display": "29px",
+    },
+    md: {
+      "--text-xs": "11px",
+      "--text-sm": "13px",
+      "--text-base": "14px",
+      "--text-md": "14px",
+      "--text-lg": "16px",
+      "--text-xl": "18px",
+      "--text-2xl": "24px",
+      "--text-display": "30px",
+    },
+    lg: {
+      "--text-xs": "12px",
+      "--text-sm": "14px",
+      "--text-base": "16px",
+      "--text-md": "16px",
+      "--text-lg": "17px",
+      "--text-xl": "19px",
+      "--text-2xl": "25px",
+      "--text-display": "31px",
+    },
   } as const;
+
+  return tokenValues[size];
 }
 
 function ShellDialog(input: {
