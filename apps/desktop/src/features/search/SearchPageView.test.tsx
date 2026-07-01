@@ -245,7 +245,8 @@ describe("SearchPage global search UI", () => {
     expect(searchInput.className).toContain("backdrop-blur-none");
     expect(searchInput.className).toContain("shadow-none");
     expect(searchInput.className).toContain("dark:bg-transparent");
-    expect(searchInput.parentElement?.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(searchInput.parentElement?.className).not.toContain("group");
+    expect(searchSurface?.innerHTML).not.toContain("group-focus-within:from-[var(--input-focus-glow-from)]");
     expect(searchInput.className).not.toContain("bg-white/10");
     expect(searchInput.className).not.toContain("focus:bg-white/15");
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
@@ -413,7 +414,8 @@ describe("SearchPage global search UI", () => {
       expect(triggerClasses).toContain("w-auto");
       expect(triggerClasses).not.toContain("w-full");
       expect(trigger.className).toContain("rounded-lg");
-      expect(trigger.className).toContain("shadow-[var(--tabs-pill-shadow)]");
+      expect(trigger.className).toContain("shadow-xs");
+      expect(trigger.className).not.toContain("shadow-[var(--tabs-pill-shadow)]");
       expect(trigger.className).not.toContain("shadow-none");
       expect(trigger.className).toContain("transition-[background-color,border-color,color,box-shadow]");
       expect(trigger.className).not.toContain("shadow-[var(--overlay-shadow");

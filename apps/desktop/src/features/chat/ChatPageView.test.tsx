@@ -589,7 +589,7 @@ describe("ChatPage mention panel", () => {
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
   });
 
-  it("renders the composer input as the EinUI glass textarea surface", async () => {
+  it("renders the composer input as the default shadcn textarea primitive", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -608,14 +608,14 @@ describe("ChatPage mention panel", () => {
 
     expect(composerInput?.tagName).toBe("TEXTAREA");
     expect(composerInput?.className).toContain("slei-composer-input");
-    expect(composerInput?.className).toContain("bg-white/10");
-    expect(composerInput?.className).toContain("backdrop-blur-xl");
-    expect(composerInput?.className).toContain("focus:bg-white/15");
-    expect(composerInput?.className).not.toContain("focus:ring-cyan-400/30");
-    expect(composerInput?.className).not.toContain("bg-transparent");
-    expect(composerInput?.parentElement?.className).toContain("group");
-    expect(composerInput?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.querySelector('[aria-hidden="true"]')).toBeNull();
+    expect(composerInput?.className).toContain("border-input");
+    expect(composerInput?.className).toContain("bg-transparent");
+    expect(composerInput?.className).toContain("dark:bg-input/30");
+    expect(composerInput?.className).toContain("focus-visible:border-ring");
+    expect(composerInput?.className).not.toContain("bg-white/10");
+    expect(composerInput?.className).not.toContain("backdrop-blur-xl");
+    expect(composerInput?.className).not.toContain("focus:bg-white/15");
+    expect(composerInput?.parentElement?.className).not.toContain("group");
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
@@ -2130,9 +2130,11 @@ describe("ChatPage mention panel", () => {
     const asTaskCheckbox = host.querySelector<HTMLElement>('[data-slot="checkbox"]');
 
     expect(html).toContain(messages.chat.asTask);
-    expect(asTaskCheckbox?.className).toContain("bg-white/10");
-    expect(asTaskCheckbox?.className).toContain("border-white/20");
-    expect(asTaskCheckbox?.className).not.toContain("bg-transparent");
+    expect(asTaskCheckbox?.className).toContain("border-input");
+    expect(asTaskCheckbox?.className).toContain("dark:bg-input/30");
+    expect(asTaskCheckbox?.className).toContain("data-[state=checked]:bg-primary");
+    expect(asTaskCheckbox?.className).not.toContain("bg-white/10");
+    expect(asTaskCheckbox?.className).not.toContain("border-white/20");
   });
 
   it("keeps timeline message selectors and actions available on transparent message rows", () => {
@@ -2364,7 +2366,7 @@ describe("ChatPage mention panel", () => {
       host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"]'),
       ...Array.from(host.querySelectorAll<HTMLElement>('[data-testid="slei-composer-shell"] div')),
     ].filter((element): element is HTMLElement => Boolean(element));
-    expect(composerFooterDivs.length).toBeGreaterThanOrEqual(6);
+    expect(composerFooterDivs.length).toBeGreaterThanOrEqual(5);
     for (const element of composerFooterDivs) {
       expect(element.className).toContain("overflow-visible");
       expect(element.className).not.toContain("overflow-hidden");

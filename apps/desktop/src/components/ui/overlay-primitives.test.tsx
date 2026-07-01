@@ -279,18 +279,29 @@ describe("overlay UI primitives", () => {
       await clickElement(disabledTrigger);
       expect(document.body.querySelector('[data-slot="select-content"]')).toBeNull();
 
-      await clickElement(document.body.querySelector('[aria-label="Agent status"]'));
+      const trigger = document.body.querySelector<HTMLElement>('[aria-label="Agent status"]');
+      expect(trigger?.className).toContain("border-input");
+      expect(trigger?.className).toContain("bg-transparent");
+      expect(trigger?.className).toContain("dark:bg-input/30");
+      expect(trigger?.className).toContain("focus-visible:border-ring");
+      expect(trigger?.className).toContain("focus-visible:ring-[3px]");
+      expect(trigger?.className).not.toContain("border-[var(--tabs-control-border)]");
+      expect(trigger?.className).not.toContain("bg-[var(--tabs-control-bg)]");
+
+      await clickElement(trigger);
 
       const content = document.body.querySelector<HTMLElement>('[data-slot="select-content"]');
       const option = byText("Online");
       const disabledOption = byText("Offline");
       expect(content).not.toBeNull();
       expect(content?.getAttribute("role")).toBe("listbox");
-      expect(content?.className).toContain("border-border/70");
+      expect(content?.className).toContain("border-border");
       expect(content?.className).toContain("bg-popover");
-      expect(content?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
+      expect(content?.className).toContain("shadow-md");
+      expect(content?.className).not.toContain("t-dropdown");
       expect(option?.getAttribute("role")).toBe("option");
-      expect(option?.className).toContain("focus:bg-muted/70");
+      expect(option?.className).toContain("focus:bg-accent");
+      expect(option?.className).toContain("focus:text-accent-foreground");
       expect(disabledOption?.getAttribute("aria-disabled")).toBe("true");
 
       await clickElement(option);

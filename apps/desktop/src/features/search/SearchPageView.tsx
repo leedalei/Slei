@@ -201,7 +201,6 @@ export function SearchPage({
               <Input
                 aria-label={messages.search.navigation.searchInput}
                 className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none backdrop-blur-none focus:bg-transparent dark:bg-transparent"
-                glowEffect={false}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={messages.search.placeholderTitle}
