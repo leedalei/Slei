@@ -229,7 +229,12 @@ describe("overlay UI primitives", () => {
       expect(content).not.toBeNull();
       expect(content?.getAttribute("role")).toBe("menu");
       expect(content?.getAttribute("data-state")).toBe("open");
+      expect(content?.className).toContain("border-border/70");
+      expect(content?.className).toContain("bg-popover");
+      expect(content?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
+      expect(content?.className).not.toContain("bg-white/10");
       expect(renameItem?.getAttribute("role")).toBe("menuitem");
+      expect(renameItem?.className).toContain("data-[highlighted]:bg-muted/70");
       expect(disabledItem?.getAttribute("aria-disabled")).toBe("true");
 
       await keyDown(content!, "ArrowDown");
@@ -281,7 +286,11 @@ describe("overlay UI primitives", () => {
       const disabledOption = byText("Offline");
       expect(content).not.toBeNull();
       expect(content?.getAttribute("role")).toBe("listbox");
+      expect(content?.className).toContain("border-border/70");
+      expect(content?.className).toContain("bg-popover");
+      expect(content?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
       expect(option?.getAttribute("role")).toBe("option");
+      expect(option?.className).toContain("focus:bg-muted/70");
       expect(disabledOption?.getAttribute("aria-disabled")).toBe("true");
 
       await clickElement(option);
@@ -340,6 +349,9 @@ describe("overlay UI primitives", () => {
       const content = document.body.querySelector<HTMLElement>('[data-slot="popover-content"]');
       expect(content).not.toBeNull();
       expect(content?.textContent).toContain("Only active");
+      expect(content?.className).toContain("border-border/70");
+      expect(content?.className).toContain("bg-popover");
+      expect(content?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.12)]");
       expect(document.body.querySelector('[aria-label="Open filters"]')?.getAttribute("aria-expanded")).toBe("true");
 
       await keyDown(content!, "Escape");

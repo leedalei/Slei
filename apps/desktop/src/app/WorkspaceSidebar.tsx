@@ -485,6 +485,11 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
     input.onViewChange?.("settings");
   }
 
+  function selectChannel(channelId: string) {
+    input.onChannelSelect?.(channelId);
+    input.onViewChange?.("chat");
+  }
+
   return (
     <aside
       aria-label={input.messages.shell.workspaceSidebar.workspace}
@@ -571,11 +576,17 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         aria-current={selected ? "true" : undefined}
                         className={sidebarListTriggerClassName}
                         data-slot="channel-select-trigger"
-                        onClick={() => input.onChannelSelect?.(channel.id)}
+                        onClick={() => selectChannel(channel.id)}
                         type="button"
                       >
                         <span className="flex min-w-0 flex-1 items-center gap-2">
-                          <SleiIcon name="hash" size={14} />
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 select-none text-[var(--text-color-3)] font-bold italic"
+                            data-slot="channel-hash-mark"
+                          >
+                            #
+                          </span>
                           <span className="truncate select-none">{channelName}</span>
                           {channel.unread > 0 ? <Badge className="ml-auto" variant="secondary">{channel.unread}</Badge> : null}
                         </span>
@@ -600,7 +611,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                       {channel.id !== "all" ? (
                         <>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={() => setPendingDeleteChannel(channel)} variant="destructive">
+                          <DropdownMenuItem onSelect={() => setPendingDeleteChannel(channel)}>
                             <SleiIcon name="delete" size={14} />
                             {input.messages.shell.workspaceSidebar.deleteChannel}
                           </DropdownMenuItem>

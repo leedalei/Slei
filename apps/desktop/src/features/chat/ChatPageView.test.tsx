@@ -421,7 +421,7 @@ describe("ChatPage mention panel", () => {
     expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
   });
 
-  it("renders channel titles with the literal hash prefix", () => {
+  it("renders channel titles with a styled literal hash prefix", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -436,10 +436,20 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(html).toContain('data-testid="slei-channel-title"');
-    expect(html).toContain("text-lg font-semibold");
-    expect(html).toContain('aria-label="# all"');
-    expect(html).toContain(">#all</span>");
+    const host = staticMarkupHost(html);
+    const title = host.querySelector<HTMLElement>('[data-testid="slei-channel-title"]');
+    const hashMark = title?.querySelector<HTMLElement>('[data-slot="channel-title-hash-mark"]');
+
+    expect(title?.textContent).toBe("#all");
+    expect(title?.className).toContain("text-lg font-semibold");
+    expect(title?.getAttribute("aria-label")).toBe("# all");
+    expect(hashMark?.tagName).toBe("SPAN");
+    expect(hashMark?.textContent).toBe("#");
+    expect(hashMark?.className).toContain("mr-1");
+    expect(hashMark?.className).toContain("font-bold");
+    expect(hashMark?.className).toContain("italic");
+    expect(hashMark?.className).toContain("text-[var(--text-color-3)]");
+    expect(hashMark?.querySelector('[data-slei-icon="hash"]')).toBeNull();
   });
 
   it("places the channel title copy button on the title row", () => {
@@ -458,7 +468,7 @@ describe("ChatPage mention panel", () => {
     );
 
     const titleStart = html.indexOf('aria-label="# all"');
-    const titleTextIndex = html.indexOf(">#all</span>", titleStart);
+    const titleTextIndex = html.indexOf('data-slot="channel-title-hash-mark"', titleStart);
     const copyButtonIndex = html.indexOf(`aria-label="${messages.chat.copyMessage}"`, titleStart);
 
     expect(titleStart).toBeGreaterThanOrEqual(0);
