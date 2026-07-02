@@ -529,7 +529,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
-  const composerReserveExpanded = attachments.length > 0 || (mention && mentionTargets.length > 0) || (composerSlash && composerCommandOptions.length > 0);
+  const composerOverlayOpen = Boolean((mention && mentionTargets.length > 0) || (composerSlash && composerCommandOptions.length > 0));
+  const composerReserveExpanded = attachments.length > 0;
   const composerBaselineReservePx = composerReserveExpanded
     ? COMPOSER_EXPANDED_RESERVE_PX
     : COMPOSER_RESERVE_PX;
@@ -1206,81 +1207,85 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3" ref={composerShellContentRef}>
-                {mention && mentionTargets.length > 0 ? (
-                  <div className="min-w-0 overflow-visible">
-                    <MentionPicker
-                      members={mentionTargets}
-                      messages={messages}
-                      onSelect={selectMention}
-                      optionRef={(index, node) => {
-                        mentionOptionRefs.current[index] = node;
-                      }}
-                      selectedIndex={selectedMentionIndex}
-                    />
-                  </div>
-                ) : null}
-                {composerSlash && composerCommandOptions.length > 0 ? (
-                  <div className="min-w-0 overflow-visible">
-                    <ComposerCommandPicker
-                      messages={messages}
-                      onSelect={selectComposerCommand}
-                      optionRef={(index, node) => {
-                        composerCommandOptionRefs.current[index] = node;
-                      }}
-                      options={composerCommandOptions}
-                      selectedIndex={selectedComposerCommandIndex}
-                    />
-                  </div>
-                ) : null}
-                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); submitComposerForm(); }}>
-                  <Card
-                    className={cn(
-                      CARD_FLAT_CLASS,
-                      "grid gap-2 overflow-visible p-0 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
-                    )}
-                    data-drag-active={composerDragActive ? "true" : undefined}
-                    data-testid="slei-composer-surface"
-                    onDragEnter={(event) => {
-                      if (!dragEventHasFiles(event)) return;
-                      event.preventDefault();
-                      setComposerDragActive(true);
-                    }}
-                    onDragLeave={(event) => {
-                      if (!dragEventHasFiles(event)) return;
-                      setComposerDragActive(false);
-                    }}
-                    onDragOver={(event) => {
-                      if (!dragEventHasFiles(event)) return;
-                      event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      if (!dragEventHasFiles(event)) return;
-                      event.preventDefault();
-                      setComposerDragActive(false);
-                      void addFiles(event.dataTransfer.files);
-                    }}
-                    onPaste={(event) => {
-                      const files = clipboardFiles(event);
-                      if (files.length === 0) return;
-                      event.preventDefault();
-                      void addFiles(files);
-                    }}
-                  >
-                    {attachments.length > 0 ? (
-                      <AttachmentList
-                        attachments={attachments}
-                        onRemove={(attachmentId) => setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
-                      />
+                {composerOverlayOpen ? (
+                  <div className="pointer-events-auto absolute inset-x-4 bottom-full z-40 mx-auto mb-2 grid max-w-full gap-2 overflow-visible" data-testid="slei-composer-overlay">
+                    {mention && mentionTargets.length > 0 ? (
+                      <div className="min-w-0 overflow-visible">
+                        <MentionPicker
+                          members={mentionTargets}
+                          messages={messages}
+                          onSelect={selectMention}
+                          optionRef={(index, node) => {
+                            mentionOptionRefs.current[index] = node;
+                          }}
+                          selectedIndex={selectedMentionIndex}
+                        />
+                      </div>
                     ) : null}
-                    <Textarea
-                      aria-label={composerPlaceholder}
-                      className={cn("slei-composer-input max-h-[500px] min-h-12 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0")}
-                      data-testid="slei-composer-input"
-                      onChange={(event) => setDraft(event.currentTarget.value)}
-                      onCompositionEnd={() => setIsComposing(false)}
-                      onCompositionStart={() => setIsComposing(true)}
-                      onKeyDown={(event) => {
+                    {composerSlash && composerCommandOptions.length > 0 ? (
+                      <div className="min-w-0 overflow-visible">
+                        <ComposerCommandPicker
+                          messages={messages}
+                          onSelect={selectComposerCommand}
+                          optionRef={(index, node) => {
+                            composerCommandOptionRefs.current[index] = node;
+                          }}
+                          options={composerCommandOptions}
+                          selectedIndex={selectedComposerCommandIndex}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3" ref={composerShellContentRef}>
+                  <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); submitComposerForm(); }}>
+                    <Card
+                      className={cn(
+                        CARD_FLAT_CLASS,
+                        "grid gap-2 overflow-visible p-0 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
+                      )}
+                      data-drag-active={composerDragActive ? "true" : undefined}
+                      data-testid="slei-composer-surface"
+                      onDragEnter={(event) => {
+                        if (!dragEventHasFiles(event)) return;
+                        event.preventDefault();
+                        setComposerDragActive(true);
+                      }}
+                      onDragLeave={(event) => {
+                        if (!dragEventHasFiles(event)) return;
+                        setComposerDragActive(false);
+                      }}
+                      onDragOver={(event) => {
+                        if (!dragEventHasFiles(event)) return;
+                        event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        if (!dragEventHasFiles(event)) return;
+                        event.preventDefault();
+                        setComposerDragActive(false);
+                        void addFiles(event.dataTransfer.files);
+                      }}
+                      onPaste={(event) => {
+                        const files = clipboardFiles(event);
+                        if (files.length === 0) return;
+                        event.preventDefault();
+                        void addFiles(files);
+                      }}
+                    >
+                      {attachments.length > 0 ? (
+                        <AttachmentList
+                          attachments={attachments}
+                          onRemove={(attachmentId) => setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))}
+                        />
+                      ) : null}
+                      <Textarea
+                        aria-label={composerPlaceholder}
+                        className={cn("slei-composer-input max-h-[500px] min-h-12 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0")}
+                        data-testid="slei-composer-input"
+                        onChange={(event) => setDraft(event.currentTarget.value)}
+                        onCompositionEnd={() => setIsComposing(false)}
+                        onCompositionStart={() => setIsComposing(true)}
+                        onKeyDown={(event) => {
                       const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
                       const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
                       const hasComposerCommandOptions = Boolean(composerSlash && composerCommandOptions.length > 0);

@@ -279,6 +279,76 @@ describe("ChatPage mention panel", () => {
     expect(host.textContent).toContain(messages.chat.convertToTaskCommand);
   });
 
+  it("renders the mention panel in the composer outer overlay instead of the input surface", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      members: [member],
+    });
+
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="@"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+
+    const shell = host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"]');
+    const overlay = host.querySelector<HTMLElement>('[data-testid="slei-composer-overlay"]');
+    const glass = host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"] > .slei-composer-glass');
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const mentionPanel = host.querySelector<HTMLElement>('[data-testid="slei-mention-panel"]');
+    const chatColumn = host.querySelector<HTMLElement>('[data-testid="slei-channel-chat-column"]');
+
+    expect(overlay).not.toBeNull();
+    expect(mentionPanel).not.toBeNull();
+    expect(shell?.contains(overlay!)).toBe(true);
+    expect(overlay?.contains(mentionPanel!)).toBe(true);
+    expect(glass?.contains(mentionPanel!)).toBe(false);
+    expect(surface?.contains(mentionPanel!)).toBe(false);
+    expect(overlay?.className).toContain("absolute");
+    expect(overlay?.className).toContain("bottom-full");
+    expect(chatColumn?.style.getPropertyValue("--chat-composer-reserve")).toBe("144px");
+  });
+
+  it("renders the composer command panel in the composer outer overlay instead of the input surface", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+
+    const shell = host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"]');
+    const overlay = host.querySelector<HTMLElement>('[data-testid="slei-composer-overlay"]');
+    const glass = host.querySelector<HTMLElement>('[data-testid="slei-composer-shell"] > .slei-composer-glass');
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const commandPanel = host.querySelector<HTMLElement>('[data-testid="slei-composer-command-panel"]');
+    const chatColumn = host.querySelector<HTMLElement>('[data-testid="slei-channel-chat-column"]');
+
+    expect(overlay).not.toBeNull();
+    expect(commandPanel).not.toBeNull();
+    expect(shell?.contains(overlay!)).toBe(true);
+    expect(overlay?.contains(commandPanel!)).toBe(true);
+    expect(glass?.contains(commandPanel!)).toBe(false);
+    expect(surface?.contains(commandPanel!)).toBe(false);
+    expect(overlay?.className).toContain("absolute");
+    expect(overlay?.className).toContain("bottom-full");
+    expect(chatColumn?.style.getPropertyValue("--chat-composer-reserve")).toBe("144px");
+  });
+
   it("renders the merged composer command panel for a middle slash trigger", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
