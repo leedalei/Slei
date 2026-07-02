@@ -566,7 +566,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(primaryNav?.className).toContain("grid");
     expect(header?.querySelector<HTMLElement>('[data-slot="workspace-sidebar-titlebar"]')).toBeNull();
     expect(primaryNav?.className).toContain("gap-1");
-    expect(primaryNav?.querySelectorAll("button")).toHaveLength(2);
+    const primaryNavButtons = Array.from(primaryNav?.querySelectorAll("button") ?? []);
+    expect(primaryNavButtons.map((button) => button.textContent)).toEqual(["搜索", "任务", "已保存"]);
     expect(primaryNav?.querySelector("button")?.className).toContain("h-[32px]");
     expect(primaryNav?.querySelector("button")?.className).toContain("min-h-[32px]");
     expect(primaryNav?.querySelector("button")?.className).toContain("hover:bg-[var(--workspace-sidebar-hover-bg)]");
@@ -710,7 +711,130 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).not.toContain("grid h-14 w-14 place-items-center");
   });
 
-  it("routes bottom settings menu entries to existing views", async () => {
+  it("renders primary sidebar navigation in search, tasks, saved order", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    const searchIndex = html.indexOf(">搜索<");
+    const tasksIndex = html.indexOf(">任务<");
+    const savedIndex = html.indexOf('data-testid="slei-sidebar-saved"');
+
+    expect(searchIndex).toBeGreaterThanOrEqual(0);
+    expect(tasksIndex).toBeGreaterThan(searchIndex);
+    expect(savedIndex).toBeGreaterThan(tasksIndex);
+  });
+
+  it("opens saved messages from the primary sidebar navigation without opening settings overlay", async () => {
+    const onSavedMessagesOpen = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onSavedMessagesOpen={onSavedMessagesOpen}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-saved"]'));
+
+    expect(onSavedMessagesOpen).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
+  });
+
+  it("removes saved messages from the bottom settings menu", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+
+    const menu = document.querySelector('[data-testid="slei-sidebar-settings-menu"]');
+    expect(menu).toBeTruthy();
+    expect(menu?.textContent).not.toContain("已保存");
+  });
+
+  it("opens matching settings overlay panels from every bottom settings menu entry", async () => {
+    const entries = [
+      { testId: "slei-sidebar-settings-members", marker: '[data-settings-embedded-detail="members"]', text: "成员管理" },
+      { testId: "slei-sidebar-settings-devices", marker: '[data-settings-embedded-detail="devices"]', text: "设备管理" },
+      { testId: "slei-sidebar-settings-account", marker: '[data-settings-panel="account"]', text: "账号资料" },
+      { testId: "slei-sidebar-settings-preferences", marker: '[data-settings-panel="preferences"]', text: "偏好设置" },
+    ];
+
+    for (const entry of entries) {
+      const container = await mount(
+        <SleiAppFrame
+          activeView="chat"
+          data={createSleiFixtures()}
+          locale="zh-CN"
+          runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+        />,
+      );
+
+      await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+      await clickElement(document.querySelector(`[data-testid="${entry.testId}"]`));
+
+      const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
+      expect(overlay).toBeTruthy();
+      expect(overlay?.textContent).toContain(entry.text);
+      expect(overlay?.querySelector(entry.marker)).toBeTruthy();
+
+      await act(async () => {
+        mountedRoot?.unmount();
+      });
+      mountedContainer?.remove();
+      mountedRoot = undefined;
+      mountedContainer = undefined;
+      document.body.innerHTML = "";
+    }
+  });
+
+  it("renders language appearance and notification controls in the preferences overlay", async () => {
+    const onAppearanceChange = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        appearance={{ theme: "light", fontSize: "md" }}
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onAppearanceChange={onAppearanceChange}
+        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-preferences"]'));
+
+    const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
+    expect(overlay).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-panel="preferences"]')).toBeTruthy();
+    expect(overlay?.textContent).toContain("语言");
+    expect(overlay?.textContent).toContain("外观");
+    expect(overlay?.textContent).toContain("通知");
+    expect(overlay?.querySelector('[aria-label="语言"]')).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-theme-option="dark"]')).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-notification="mentions"]')).toBeTruthy();
+
+    await clickElement(overlay?.querySelector('[data-settings-theme-option="dark"]'));
+
+    expect(onAppearanceChange).toHaveBeenCalledWith({ theme: "dark", fontSize: "md" });
+  });
+
+  it("opens settings as an overlay from the account menu entry without changing the active workspace view", async () => {
     const onViewChange = vi.fn();
     const container = await mount(
       <SleiAppFrame
@@ -722,11 +846,49 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]'));
-    await clickElement(Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-      .find((item) => item.textContent?.includes("运行设备")));
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
 
-    expect(onViewChange).toHaveBeenCalledWith("computers");
+    expect(onViewChange).not.toHaveBeenCalledWith("settings");
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-overlay-hidden")).toBe("true");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.textContent).toContain("账号资料");
+  });
+
+  it("returns from settings overlay to the previously visible workspace", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="tasks"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
+    await clickElement(container.querySelector('[data-testid="slei-settings-return"]'));
+
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
+    expect(container.querySelector('[data-active-view="tasks"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("aria-hidden")).toBe(false);
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("keeps legacy activeView settings route available for compatibility", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={createSleiFixtures()}
+        initialSettingsPanel="account"
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('data-settings-panel="account"');
   });
 
   it("uses shadcn primitives for the sidebar create overlay and settings menu", async () => {

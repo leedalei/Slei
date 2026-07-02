@@ -70,4 +70,27 @@ export const settings = {
     notifications: "控制提及、人工回复和审批类通知。",
     about: "查看当前桌面端和本地 daemon 的版本信息。",
   },
+  overlay: {
+    returnToApp: "返回应用",
+    searchPlaceholder: "搜索设置...",
+    groups: {
+      personal: "个人",
+      workspace: "工作区",
+      system: "系统",
+    },
+    panels: {
+      account: "账号资料",
+      preferences: "偏好设置",
+      members: "成员管理",
+      devices: "设备管理",
+      about: "关于",
+    },
+    panelDescriptions: {
+      account: "设置展示名称、@ handle 和头像。",
+      preferences: "配置语言、外观和通知偏好。",
+      members: "管理工作区成员与智能体。",
+      devices: "管理已连接设备与运行环境。",
+      about: "查看当前桌面端和本地 daemon 的版本信息。",
+    },
+  },
 };

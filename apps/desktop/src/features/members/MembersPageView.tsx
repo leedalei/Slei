@@ -54,6 +54,7 @@ const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card/30 text-card-for
 export function MembersPage(input: {
   activeMemberId?: string;
   data: SleiFixtures;
+  layout?: "workspace" | "settings";
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
   memberFieldErrors?: Record<string, string>;
@@ -66,6 +67,7 @@ export function MembersPage(input: {
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
   savingMemberField?: string;
 }) {
+  const layout = input.layout ?? "workspace";
   const selectedMember = input.data.members.find((member) => member.id === input.activeMemberId) ?? input.data.members[0];
   const selectedNode = input.nodes.find((node) => node.id === selectedMember?.nodeId);
   const [activeTab, setActiveTab] = useState<MemberTab>("profile");
@@ -290,7 +292,10 @@ export function MembersPage(input: {
 
   if (!selectedMember) {
     return (
-      <section className="grid min-h-full place-items-center p-6">
+      <section
+        className="grid min-h-full place-items-center p-6"
+        data-settings-embedded-detail={layout === "settings" ? "members" : undefined}
+      >
         <Empty
           centered
           description={input.messages.members.emptyDescription}
@@ -315,7 +320,11 @@ export function MembersPage(input: {
   const memberSkills = selectedMember.skills ?? [];
 
   return (
-    <section className="!grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden" aria-label={input.messages.members.detail}>
+    <section
+      className="!grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden"
+      aria-label={input.messages.members.detail}
+      data-settings-embedded-detail={layout === "settings" ? "members" : undefined}
+    >
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
         <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
