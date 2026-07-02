@@ -80,6 +80,7 @@ export const chat = {
   hash: "Hash",
   stopFollowingRuns: "停止后续运行",
   typing: "正在输入",
+  timeline: "会话消息列表",
   inputToChannel: (name: string) => `输入消息到 #${name}`,
   inputToMember: (name: string) => `输入消息给 ${name}`,
   memoryUpdated: (handle: string) => `${handle} 已更新 MEMORY.md`,

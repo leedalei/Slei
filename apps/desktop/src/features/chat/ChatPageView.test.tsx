@@ -1048,6 +1048,34 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("pb-[var(--chat-composer-reserve)]");
   });
 
+  it("keeps the chat timeline scrollbar subtle until the timeline is focused", () => {
+    const source = readChatPageSource();
+    const css = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+    });
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+    const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+
+    expect(timeline?.className).toContain("slei-chat-timeline-scrollbar");
+    expect(timeline?.getAttribute("tabindex")).toBe("0");
+    expect(source).toContain('aria-label={messages.chat.timeline}');
+    expect(css).toContain(".slei-chat-timeline-scrollbar {");
+    expect(css).toContain("scrollbar-color: color-mix(in srgb, var(--border) 20%, transparent) transparent;");
+    expect(css).toContain(".slei-chat-timeline-scrollbar:focus");
+    expect(css).toContain(".slei-chat-timeline-scrollbar:focus-within");
+    expect(css).toContain(".slei-chat-timeline-scrollbar::-webkit-scrollbar-thumb");
+    expect(css).toContain("background-color: color-mix(in srgb, var(--border) 20%, transparent);");
+  });
+
   it("enables timeline virtualization only when there are more than 50 messages", () => {
     const source = readChatPageSource();
 

@@ -965,7 +965,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     {messages.chat.loadingOlderMessages}
                   </div>
                 ) : null}
-                <div className="h-full min-h-0 overflow-y-auto" data-testid="slei-chat-timeline" onScroll={handleTimelineScroll} ref={timelineViewportRef}>
+                <div
+                  aria-label={messages.chat.timeline}
+                  className="slei-chat-timeline-scrollbar h-full min-h-0 overflow-y-auto"
+                  data-testid="slei-chat-timeline"
+                  onScroll={handleTimelineScroll}
+                  ref={timelineViewportRef}
+                  tabIndex={0}
+                >
                   <div
                     className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3 pb-[var(--chat-composer-reserve)]")}
                     data-testid="slei-chat-timeline-content"

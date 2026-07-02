@@ -80,6 +80,7 @@ export const chat = {
   hash: "Hash",
   stopFollowingRuns: "Stop following runs",
   typing: "Typing",
+  timeline: "Conversation messages",
   inputToChannel: (name: string) => `Message #${name}`,
   inputToMember: (name: string) => `Message ${name}`,
   memoryUpdated: (handle: string) => `${handle} updated MEMORY.md`,

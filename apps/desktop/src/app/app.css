@@ -462,6 +462,25 @@
   scrollbar-width: thin;
 }
 
+.slei-chat-timeline-scrollbar {
+  scrollbar-color: color-mix(in srgb, var(--border) 20%, transparent) transparent;
+}
+
+.slei-chat-timeline-scrollbar:focus,
+.slei-chat-timeline-scrollbar:focus-within {
+  scrollbar-color: color-mix(in srgb, var(--border) 62%, transparent) transparent;
+}
+
+.slei-chat-timeline-scrollbar::-webkit-scrollbar-track,
+.slei-chat-timeline-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--border) 20%, transparent);
+}
+
+.slei-chat-timeline-scrollbar:focus::-webkit-scrollbar-thumb,
+.slei-chat-timeline-scrollbar:focus-within::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--border) 62%, transparent);
+}
+
 * {
   box-sizing: border-box;
 }

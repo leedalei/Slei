@@ -136,6 +136,7 @@ export type DesktopMessages = {
     hash: string;
     stopFollowingRuns: string;
     typing: string;
+    timeline: string;
     inputToChannel: (name: string) => string;
     inputToMember: (name: string) => string;
     memoryUpdated: (handle: string) => string;
