@@ -96,6 +96,14 @@ function staticMarkupHost(html: string) {
   return host;
 }
 
+function fileDropData(files: File[]) {
+  return {
+    files,
+    types: ["Files"],
+    items: files.map((file) => ({ kind: "file", getAsFile: () => file })),
+  };
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -248,7 +256,86 @@ describe("ChatPage DM skill message highlight", () => {
 });
 
 describe("ChatPage mention panel", () => {
-  it("renders the DM skill slash picker for a leading slash draft", () => {
+  it("renders the merged composer command panel for a channel slash draft", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const host = staticMarkupHost(html);
+
+    expect(host.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
+    expect(host.textContent).toContain(messages.chat.insertFileCommand);
+    expect(host.textContent).toContain(messages.chat.convertToTaskCommand);
+  });
+
+  it("renders the merged composer command panel for a middle slash trigger", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="帮我 /"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const host = staticMarkupHost(html);
+
+    expect(host.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
+    expect(host.textContent).toContain(messages.chat.insertFileCommand);
+    expect(host.textContent).toContain(messages.chat.convertToTaskCommand);
+  });
+
+  it("filters fixed composer commands by aliases in Chinese locale", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    for (const initialDraft of ["/fi", "/file"]) {
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={initialDraft}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      expect(staticMarkupHost(html).textContent).toContain(messages.chat.insertFileCommand);
+    }
+
+    for (const initialDraft of ["/task", "/转为"]) {
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={initialDraft}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      expect(staticMarkupHost(html).textContent).toContain(messages.chat.convertToTaskCommand);
+    }
+  });
+
+  it("merges fixed commands and DM skill slash options", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
     const data = createSleiFixtures({
@@ -272,94 +359,152 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(html).toContain(messages.chat.chooseSkill);
+    expect(html).toContain(messages.chat.chooseComposerCommand);
+    expect(html).toContain(messages.chat.insertFileCommand);
+    expect(html).toContain(messages.chat.convertToTaskCommand);
     expect(html).toContain("/memory");
   });
 
-  it("renders DM skill slash options with the expected DOM contract and click behavior", async () => {
+  it("clicking convert to task removes the slash query and turns on the task switch", async () => {
     const messages = createDesktopMessages("zh-CN");
-    const member = memberWithLongMentionText();
-    const data = createSleiFixtures({
-      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
-      members: [
-        {
-          ...member,
-          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
-        },
-      ],
-    });
-
-    const host = await mountChatPage(
-      <ChatPage
-        activeChannel={data.channels[0]}
-        activeConversation={data.conversations[0]}
-        data={data}
-        initialDraft="/"
-        messages={messages}
-        profile={defaultProfile}
-      />,
-    );
-
-    const panel = host.querySelector('[data-testid="slei-skill-slash-panel"]');
-    const option = host.querySelector<HTMLButtonElement>('[data-skill-slash-option-index="0"]');
-
-    expect(panel).not.toBeNull();
-    expect(option).not.toBeNull();
-    expect(option?.getAttribute("aria-current")).toBe("true");
-    expect(option?.textContent).toContain("Remember facts");
-
-    await act(async () => {
-      option?.click();
-    });
-
-    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("/memory ");
-  });
-
-  it("does not render the skill slash picker for channel drafts", async () => {
-    const messages = createDesktopMessages("zh-CN");
-    const member = memberWithLongMentionText();
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
-      members: [
-        {
-          ...member,
-          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
-        },
-      ],
     });
 
     const host = await mountChatPage(
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialDraft="/"
+        initialDraft="/task"
         messages={messages}
         profile={defaultProfile}
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-composer-command-id="convert-to-task"]')?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("selects a DM skill slash option with keyboard", async () => {
+  it("clicking insert file removes the slash query and opens the file input", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/file"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const fileInput = host.querySelector<HTMLInputElement>('[data-testid="slei-composer-file-input"]')!;
+    const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => undefined);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-composer-command-id="insert-file"]')?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("send button executes an active fixed task command instead of submitting command text", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
     const onSendMessage = vi.fn();
-    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/task"
+        messages={messages}
+        onSendMessage={onSendMessage}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
+    });
+
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("send button executes an active fixed file command instead of submitting command text", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onSendMessage = vi.fn();
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/file"
+        messages={messages}
+        onSendMessage={onSendMessage}
+        profile={defaultProfile}
+      />,
+    );
+    const fileInput = host.querySelector<HTMLInputElement>('[data-testid="slei-composer-file-input"]')!;
+    const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => undefined);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
+    });
+
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("selecting a DM skill option inserts the skill at the slash trigger position", async () => {
+    const { element } = dmSkillSlashFixture("帮我 /me");
+    const container = await mountChatPage(element);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-composer-skill-id="memory"]')?.click();
+    });
+
+    expect(container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("帮我 /memory ");
+  });
+
+  it("selects a merged composer command option with keyboard", async () => {
+    const onSendMessage = vi.fn();
+    const { element } = dmSkillSlashFixture("/", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
     await act(async () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
-    expect(input.value).toBe("/memory ");
+    expect(input.value).toBe("");
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 
-  it("moves the selected DM skill slash option with arrow keys", async () => {
+  it("moves the selected merged composer command option with arrow keys", async () => {
     const { element } = dmSkillSlashFixture("/");
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
-    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-skill-slash-option-index]"));
+    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-composer-option-index]"));
 
     expect(options()[0]?.getAttribute("aria-current")).toBe("true");
     expect(options()[1]?.getAttribute("aria-current")).toBeNull();
@@ -381,7 +526,7 @@ describe("ChatPage mention panel", () => {
 
   it("selects a DM skill slash option with Tab", async () => {
     const onSendMessage = vi.fn();
-    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const { element } = dmSkillSlashFixture("/memo", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
@@ -404,7 +549,7 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("/me");
-    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 
@@ -418,7 +563,7 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("");
-    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+    expect(container.querySelector('[data-testid="slei-composer-command-panel"]')).toBeNull();
   });
 
   it("renders channel titles with a styled literal hash prefix", () => {
@@ -616,12 +761,11 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("backdrop-blur-xl");
     expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
     expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
-    expect(source).toContain('className="slei-composer-input min-h-20 resize-none px-3 py-3"');
-    expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-transparent px-3 py-3"');
+    expect(source).toContain("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0");
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
   });
 
-  it("renders the composer input as the default shadcn textarea primitive", async () => {
+  it("renders the composer input inside a unified autosizing composer surface", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -636,18 +780,177 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
     const composerInput = host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]');
+    const toolbar = host.querySelector<HTMLElement>('[data-testid="slei-composer-toolbar"]');
 
+    expect(surface).not.toBeNull();
+    expect(surface?.contains(composerInput!)).toBe(true);
+    expect(surface?.contains(toolbar!)).toBe(true);
     expect(composerInput?.tagName).toBe("TEXTAREA");
     expect(composerInput?.className).toContain("slei-composer-input");
-    expect(composerInput?.className).toContain("border-input");
+    expect(composerInput?.className).toContain("max-h-[500px]");
+    expect(composerInput?.className).toContain("resize-none");
+    expect(composerInput?.className).toContain("border-0");
     expect(composerInput?.className).toContain("bg-transparent");
-    expect(composerInput?.className).toContain("dark:bg-input/30");
-    expect(composerInput?.className).toContain("focus-visible:border-ring");
+    expect(composerInput?.className).toContain("shadow-none");
+    expect(composerInput?.className).toContain("focus-visible:ring-0");
+    expect(composerInput?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
+    expect(composerInput?.getAttribute("aria-label")).toBe("输入消息到 #all，输入 / 打开功能菜单");
     expect(composerInput?.className).not.toContain("bg-white/10");
     expect(composerInput?.className).not.toContain("backdrop-blur-xl");
     expect(composerInput?.className).not.toContain("focus:bg-white/15");
     expect(composerInput?.parentElement?.className).not.toContain("group");
+  });
+
+  it("renders one unrestricted multi-file composer input and one insert file button", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const fileInputs = host.querySelectorAll<HTMLInputElement>('input[type="file"]');
+
+    expect(fileInputs).toHaveLength(1);
+    expect(fileInputs[0]?.getAttribute("accept")).toBeNull();
+    expect(fileInputs[0]?.multiple).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-insert-file-button"]')).not.toBeNull();
+  });
+
+  it("uploads dropped composer files and renders image and file previews", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => ({
+      attachment: {
+        id: `att-${request.name}`,
+        name: request.name,
+        mimeType: request.mimeType,
+        size: 12,
+        url: request.mimeType.startsWith("image/") ? "data:image/png;base64,aaa" : undefined,
+      },
+    }));
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const imageFile = new File(["image"], "screen.png", { type: "image/png" });
+    const textFile = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: fileDropData([imageFile, textFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(2));
+    });
+
+    expect(host.querySelector('img[src="data:image/png;base64,aaa"]')).not.toBeNull();
+    expect(host.textContent).toContain("notes.txt");
+  });
+
+  it("uploads pasted composer files and renders an attachment preview", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => ({
+      attachment: {
+        id: `att-${request.name}`,
+        name: request.name,
+        mimeType: request.mimeType,
+        size: 24,
+        url: undefined,
+      },
+    }));
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const pastedFile = new File(["clip"], "clipboard.pdf", { type: "application/pdf" });
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: fileDropData([pastedFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(1));
+    });
+
+    expect(host.textContent).toContain("clipboard.pdf");
+  });
+
+  it("keeps successful dropped attachments and shows a toast when another upload fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => {
+      if (request.name === "broken.txt") {
+        throw new Error("upload failed");
+      }
+      return {
+        attachment: {
+          id: `att-${request.name}`,
+          name: request.name,
+          mimeType: request.mimeType,
+          size: 16,
+          url: undefined,
+        },
+      };
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const okFile = new File(["ok"], "ok.txt", { type: "text/plain" });
+    const brokenFile = new File(["broken"], "broken.txt", { type: "text/plain" });
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: fileDropData([okFile, brokenFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(2));
+    });
+
+    expect(host.textContent).toContain("ok.txt");
+    expect(host.textContent).not.toContain("broken.txt");
+    expect(host.textContent).toContain(messages.chat.sendFailed);
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
@@ -1074,6 +1377,99 @@ describe("ChatPage mention panel", () => {
     expect(css).toContain(".slei-chat-timeline-scrollbar:focus-within");
     expect(css).toContain(".slei-chat-timeline-scrollbar::-webkit-scrollbar-thumb");
     expect(css).toContain("background-color: color-mix(in srgb, var(--border) 20%, transparent);");
+  });
+
+  it("uses measured composer height when autosized content exceeds the baseline reserve", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (typeof this.className === "string" && this.className.includes("slei-composer-glass")) {
+        return {
+          bottom: 320,
+          height: 320,
+          left: 0,
+          right: 0,
+          top: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={"长输入\n".repeat(30)}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      await act(async () => undefined);
+
+      expect(host.querySelector<HTMLElement>('[data-testid="slei-channel-chat-column"]')?.style.getPropertyValue("--chat-composer-reserve")).toBe("344px");
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
+  });
+
+  it("measures composer reserve after switching from a non-chat view back to chat", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (typeof this.className === "string" && this.className.includes("slei-composer-glass")) {
+        return {
+          bottom: 344,
+          height: 344,
+          left: 0,
+          right: 0,
+          top: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+
+    try {
+      const element = (initialChannelView: "tasks" | "chat") => (
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialChannelView={initialChannelView}
+          initialDraft={"长输入\n".repeat(30)}
+          messages={messages}
+          profile={defaultProfile}
+        />
+      );
+      const host = await mountChatPage(element("tasks"));
+
+      expect(host.querySelector('[data-testid="slei-composer-shell"]')).toBeNull();
+      expect(host.querySelector('[data-testid="slei-channel-chat-column"]')).toBeNull();
+
+      await act(async () => {
+        mountedRoot?.render(element("chat"));
+      });
+      await act(async () => undefined);
+
+      expect(host.querySelector('[data-testid="slei-composer-shell"]')).not.toBeNull();
+      expect(host.querySelector<HTMLElement>('[data-testid="slei-channel-chat-column"]')?.style.getPropertyValue("--chat-composer-reserve")).toBe("368px");
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
   });
 
   it("enables timeline virtualization only when there are more than 50 messages", () => {
@@ -2219,14 +2615,14 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const host = staticMarkupHost(html);
-    const asTaskCheckbox = host.querySelector<HTMLElement>('[data-slot="checkbox"]');
+    const asTaskSwitch = host.querySelector<HTMLElement>('[data-testid="slei-as-task-switch"]');
 
     expect(html).toContain(messages.chat.asTask);
-    expect(asTaskCheckbox?.className).toContain("border-input");
-    expect(asTaskCheckbox?.className).toContain("dark:bg-input/30");
-    expect(asTaskCheckbox?.className).toContain("data-[state=checked]:bg-primary");
-    expect(asTaskCheckbox?.className).not.toContain("bg-white/10");
-    expect(asTaskCheckbox?.className).not.toContain("border-white/20");
+    expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(asTaskSwitch?.getAttribute("data-slot")).toBe("switch");
+    expect(asTaskSwitch?.className).toContain("data-[state=checked]:bg-primary");
+    expect(asTaskSwitch?.className).not.toContain("bg-white/10");
+    expect(asTaskSwitch?.className).not.toContain("border-white/20");
   });
 
   it("keeps timeline message selectors and actions available on transparent message rows", () => {
@@ -2451,14 +2847,27 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-slot")).toBe("card");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("overflow-visible");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("overflow-hidden");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("p-1");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("p-3");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const textarea = host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]');
+    const toolbar = host.querySelector<HTMLElement>('[data-testid="slei-composer-toolbar"]');
+    const switchControl = host.querySelector<HTMLElement>('[data-testid="slei-as-task-switch"]');
+
+    expect(surface).not.toBeNull();
+    expect(surface?.contains(textarea!)).toBe(true);
+    expect(surface?.contains(toolbar!)).toBe(true);
+    expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(switchControl?.getAttribute("data-slot")).toBe("switch");
+    expect(textarea?.className).toContain("max-h-[500px]");
+    expect(textarea?.className).toContain("resize-none");
+    expect(textarea?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
+    expect(surface?.getAttribute("data-slot")).toBe("card");
+    expect(surface?.className).toContain("overflow-visible");
+    expect(surface?.className).not.toContain("overflow-hidden");
+    expect(surface?.className).toContain("p-1");
+    expect(surface?.className).not.toContain("p-3");
+    expect(surface?.className).toContain("border-transparent");
+    expect(surface?.className).not.toContain("border-border");
+    expect(surface?.className).not.toContain("slei-shadow-inset");
     expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).toContain("overflow-visible");
     expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).not.toContain("overflow-hidden");
     expect(host.querySelector('[data-testid="slei-composer-shell"] > .slei-composer-glass')?.className).toContain("overflow-visible");
@@ -2474,17 +2883,16 @@ describe("ChatPage mention panel", () => {
       expect(element.className).toContain("overflow-visible");
       expect(element.className).not.toContain("overflow-hidden");
     }
-    const composerInput = host.querySelector('[data-testid="slei-composer-input"]');
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(composerInput?.className).toContain("slei-composer-input");
-    expect(composerInput?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.className).not.toContain("overflow-hidden");
-    expect(composerInput?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.className).not.toContain("border-border/60");
+    expect(textarea?.className).toContain("slei-composer-input");
+    expect(textarea?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.className).not.toContain("overflow-hidden");
+    expect(textarea?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
     expect(appCss).toContain("border-color: var(--glass-border);");
     expect(appCss).not.toContain("--composer-input-bg");

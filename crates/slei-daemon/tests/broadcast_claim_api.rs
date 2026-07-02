@@ -1605,7 +1605,7 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
                 "doneLabel": "完成",
                 "draft": {
                     "name": "Temp",
-                    "handle": "@temp-activity",
+                    "handle": "@tempactivity",
                     "runtimeKind": "ClaudeCode",
                     "model": "Sonnet",
                     "nodeId": "local-node",

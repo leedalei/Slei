@@ -15,9 +15,10 @@ mod tests {
     use super::migrations::MIGRATIONS;
     use super::repositories::{
         sanitize_activity_payload_preview, AgentMessageTodoQueryRow, AgentStatusRow,
-        ChannelSessionRow, ConversationMessageRow, ConversationRow, MessageReadQueryRow,
-        NewAgentActivityEventRow, NewAgentMessageTodoRow, NewChannelMessageRow, Repositories,
-        TaskRootRow, UserProfileRow, RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
+        ChannelSessionRow, ConversationAttachmentRow, ConversationMessageRow, ConversationRow,
+        MessageReadQueryRow, NewAgentActivityEventRow, NewAgentMessageTodoRow,
+        NewChannelMessageRow, Repositories, TaskRootRow, UserProfileRow,
+        RESET_MUTABLE_SEQUENCE_TABLES, RESET_MUTABLE_TABLES,
     };
 
     fn sqlite_file_url(name: &str) -> (String, std::path::PathBuf) {
@@ -39,6 +40,46 @@ mod tests {
             claim_owner_agent_id: agent_id.to_string(),
             note: None,
         }
+    }
+
+    #[tokio::test]
+    async fn channel_messages_persist_attachment_ids() {
+        let (url, _path) = sqlite_file_url("channel-message-attachments");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        repos
+            .upsert_conversation_attachment(ConversationAttachmentRow {
+                id: "att_1".to_string(),
+                name: "diagram.png".to_string(),
+                mime_type: "image/png".to_string(),
+                size: 128,
+                url: Some("data:image/png;base64,aW1n".to_string()),
+                cache_path: None,
+                bytes_base64: None,
+            })
+            .await
+            .unwrap();
+        repos
+            .insert_channel_message(NewChannelMessageRow {
+                id: "msg_attachments".to_string(),
+                channel_id: "all".to_string(),
+                session_id: None,
+                author_id: "human:local".to_string(),
+                body: Some("".to_string()),
+                as_task: false,
+                kind: "human".to_string(),
+            })
+            .await
+            .unwrap();
+        repos
+            .update_channel_message_attachment_ids("msg_attachments", "[\"att_1\"]")
+            .await
+            .unwrap();
+
+        let messages = repos.channel_messages_by_channel("all").await.unwrap();
+        assert_eq!(messages[0].attachment_ids, "[\"att_1\"]");
     }
 
     #[tokio::test]
@@ -98,7 +139,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     }
 
     #[tokio::test]
@@ -115,7 +156,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions.last().copied(), Some(11));
+        assert_eq!(versions.last().copied(), Some(12));
     }
 
     #[tokio::test]
@@ -677,7 +718,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     }
 
     #[tokio::test]
@@ -1029,7 +1070,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     }
 
     #[tokio::test]
@@ -2583,7 +2624,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 11);
+        assert_eq!(migration_count, 12);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")

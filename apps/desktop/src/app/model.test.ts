@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SleiMember } from "./types";
 import {
+  activeComposerSlashQuery,
   activeSkillSlashQuery,
   agentAvatarSeedFromName,
   agentHandleFromName,
+  composerCommandMatchesQuery,
   isProfileImageAvatar,
   formatMemberCreatedDate,
   formatLocalRecordDateTime,
@@ -16,6 +18,7 @@ import {
   mentionSuggestions,
   mergeMessagePage,
   profileAvatarImageUrl,
+  removeComposerSlashQuery,
   sendChatComposerMessage,
   shouldRefreshChannelMessages,
   skillSlashSuggestions,
@@ -120,6 +123,12 @@ describe("skill slash helpers", () => {
     expect(insertSkillSlash("/me", slash!, skills[0])).toBe("/memory ");
   });
 
+  it("inserts a selected slash skill at the active trigger position", () => {
+    const slash = activeComposerSlashQuery("请记住 /me");
+    expect(slash).not.toBeNull();
+    expect(insertSkillSlash("请记住 /me", slash!, skills[0])).toBe("请记住 /memory ");
+  });
+
   it("matches only known leading skill tokens", () => {
     expect(leadingSkillSlashToken("/memory remember this", skills)).toEqual({
       skill: skills[0],
@@ -130,6 +139,40 @@ describe("skill slash helpers", () => {
     expect(leadingSkillSlashToken(" /memory", skills)).toBeNull();
     expect(leadingSkillSlashToken("please /memory", skills)).toBeNull();
     expect(leadingSkillSlashToken("/unknown", skills)).toBeNull();
+  });
+});
+
+describe("composer command slash helpers", () => {
+  it("detects a slash query at the start or after a literal space", () => {
+    expect(activeComposerSlashQuery("/")).toEqual({ query: "", start: 0, end: 1 });
+    expect(activeComposerSlashQuery("/task")).toEqual({ query: "task", start: 0, end: 5 });
+    expect(activeComposerSlashQuery("/转为")).toEqual({ query: "转为", start: 0, end: 3 });
+    expect(activeComposerSlashQuery("帮我 /")).toEqual({ query: "", start: 3, end: 4 });
+    expect(activeComposerSlashQuery("帮我 /file")).toEqual({ query: "file", start: 3, end: 8 });
+    expect(activeComposerSlashQuery("帮我 /插入")).toEqual({ query: "插入", start: 3, end: 6 });
+  });
+
+  it("does not detect urls, paths, tabs, newlines, or completed slash tokens", () => {
+    expect(activeComposerSlashQuery("https://example.com/")).toBeNull();
+    expect(activeComposerSlashQuery("path/to/file")).toBeNull();
+    expect(activeComposerSlashQuery("帮我\t/")).toBeNull();
+    expect(activeComposerSlashQuery("帮我\n/")).toBeNull();
+    expect(activeComposerSlashQuery("/task now")).toBeNull();
+    expect(activeComposerSlashQuery("帮我 /task now")).toBeNull();
+  });
+
+  it("removes a fixed command query while preserving previous text", () => {
+    const slash = activeComposerSlashQuery("帮我 /task");
+    expect(slash).not.toBeNull();
+    expect(removeComposerSlashQuery("帮我 /task", slash!)).toBe("帮我 ");
+  });
+
+  it("matches fixed commands by localized title or explicit aliases", () => {
+    expect(composerCommandMatchesQuery("fi", ["插入文件", "file", "fi"])).toBe(true);
+    expect(composerCommandMatchesQuery("file", ["插入文件", "file", "fi"])).toBe(true);
+    expect(composerCommandMatchesQuery("task", ["转为任务", "task", "todo"])).toBe(true);
+    expect(composerCommandMatchesQuery("转为", ["转为任务", "task", "todo"])).toBe(true);
+    expect(composerCommandMatchesQuery("memory", ["转为任务", "task", "todo"])).toBe(false);
   });
 });
 
@@ -270,6 +313,26 @@ describe("chat composer bridge requests", () => {
     expect(bridge.sendConversationMessage).toHaveBeenCalledWith(
       "dm:agent",
       expect.objectContaining({ asTask: true }),
+    );
+  });
+
+  it("forwards attachment ids for channel messages", async () => {
+    const bridge = {
+      sendConversationMessage: vi.fn(),
+      sendChannelMessage: vi.fn().mockResolvedValue({ outcome: { messageId: "msg_1", action: "broadcast_delivered" } }),
+    };
+
+    await sendChatComposerMessage({
+      activeChannelId: "all",
+      attachmentIds: ["att_1"],
+      body: "",
+      bridge,
+      profile: null,
+    });
+
+    expect(bridge.sendChannelMessage).toHaveBeenCalledWith(
+      "all",
+      expect.objectContaining({ attachmentIds: ["att_1"], body: "" }),
     );
   });
 });

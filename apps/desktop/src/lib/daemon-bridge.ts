@@ -328,6 +328,7 @@ export type ChannelMessageView = {
   sessionId?: string;
   authorId: string;
   body?: string;
+  attachments?: ConversationAttachmentView[];
   cards?: InteractiveCardView[];
   kind: "human" | "agent" | "task_card" | "tombstone" | string;
   deleted?: boolean;

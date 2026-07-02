@@ -168,7 +168,7 @@ export async function submitComposerDraft(input: {
   asTask: boolean;
   attachments: ConversationAttachmentView[];
   sessionId?: string;
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void;
 }) {
   if (!input.draft.trim() && input.attachments.length === 0) {
     return {
@@ -179,9 +179,11 @@ export async function submitComposerDraft(input: {
     };
   }
 
+  const attachmentIds = input.attachments.map((attachment) => attachment.id);
   await input.onSendMessage?.(input.draft, {
     asTask: input.asTask,
-    attachmentIds: input.attachments.map((attachment) => attachment.id),
+    attachmentIds,
+    ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
     sessionId: input.sessionId,
   });
   return { sent: true, draft: "", attachments: [], asTask: false };
@@ -194,7 +196,7 @@ export async function submitComposerDraftWithFeedback(input: {
   sessionId?: string;
   sendFailedMessage: string;
   onSendFailure?: (message: string) => void;
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void;
 }) {
   try {
     return await submitComposerDraft(input);
@@ -251,6 +253,7 @@ export async function sendChatComposerMessage(input: {
     receipt: await input.bridge.sendChannelMessage(input.activeChannelId, {
       authorId: `human:${handle}`,
       asTask: Boolean(input.asTask),
+      attachmentIds: input.attachmentIds,
       body,
     }),
   };
@@ -533,6 +536,24 @@ export function activeSkillSlashQuery(draft: string): ActiveSkillSlashQuery | nu
     start: 0,
     end: draft.length,
   };
+}
+
+export function activeComposerSlashQuery(draft: string): ActiveSkillSlashQuery | null {
+  const match = /(^| )\/([^/\s]*)$/u.exec(draft);
+  if (!match) return null;
+  const prefix = match[1] ?? "";
+  const start = match.index + prefix.length;
+  return { query: match[2] ?? "", start, end: draft.length };
+}
+
+export function removeComposerSlashQuery(draft: string, slash: ActiveSkillSlashQuery): string {
+  return `${draft.slice(0, slash.start)}${draft.slice(slash.end)}`;
+}
+
+export function composerCommandMatchesQuery(query: string, values: string[]): boolean {
+  const normalized = normalizeSearch(query);
+  if (!normalized) return true;
+  return values.some((value) => normalizeSearch(value).includes(normalized));
 }
 
 export function moveMentionSelection(current: number, delta: number, count: number): number {

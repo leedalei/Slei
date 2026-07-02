@@ -810,6 +810,18 @@ impl ConversationService {
         Ok(attachment)
     }
 
+    pub async fn attachments_by_ids(
+        &self,
+        attachment_ids: &[String],
+    ) -> Result<Vec<ConversationAttachmentRecord>, ConversationError> {
+        self.ensure_loaded().await?;
+        let state = self.inner.lock().await;
+        Ok(attachment_ids
+            .iter()
+            .filter_map(|id| state.attachments.get(id).cloned())
+            .collect())
+    }
+
     pub fn prompt_with_attachments(message: &ConversationMessageRecord) -> String {
         if message.attachments.is_empty() {
             return message.body.clone();

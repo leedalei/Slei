@@ -1,26 +1,27 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage, markdownForegroundStyle } from "./MarkdownMessage";
-import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeComposerSlashQuery, activeMentionQuery, composerCommandMatchesQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, removeComposerSlashQuery, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SelectableCard, SleiIcon, SleiIconSwap, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Checkbox } from "../../components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
+import { Switch } from "../../components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
+import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
-import { SkillSlashPicker } from "./SkillSlashPicker";
+import { ComposerCommandPicker, type ComposerCommandOption } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 import { ChannelMemberGroup } from "./ChannelMemberGroup";
 
@@ -31,6 +32,7 @@ const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
 const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
 const COMPOSER_RESERVE_PX = 184;
 const COMPOSER_EXPANDED_RESERVE_PX = 256;
+const COMPOSER_RESERVE_BUFFER_PX = 24;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors duration-[2s] hover:bg-muted/45 focus-visible:outline-none data-[focused=true]:border-primary/35";
@@ -168,6 +170,19 @@ function formatAttachmentSize(size: number) {
   const kilobytes = size / 1024;
   if (kilobytes < 1024) return `${Math.round(kilobytes)} KB`;
   return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
+function dragEventHasFiles(event: DragEvent<HTMLElement>) {
+  return Array.from(event.dataTransfer.types).includes("Files");
+}
+
+function clipboardFiles(event: ClipboardEvent<HTMLElement>): File[] {
+  const files = Array.from(event.clipboardData.files ?? []);
+  if (files.length > 0) return files;
+  return Array.from(event.clipboardData.items ?? [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
 }
 
 function taskStatusLabel(status: SleiFixtures["tasks"][number]["status"], messages: DesktopMessages) {
@@ -408,7 +423,7 @@ function MessageBody({
   );
 }
 
-export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadClose, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadClose?: (taskId: string) => void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
+export function ChatPage({ activeChannel, activeConversation, data, focusedMessageId, initialAttachments, initialChannelView, initialDraft, messages, onAgentDraftCreate, onAttachmentUpload, onChannelDraftCreate, onChannelMemberAdd, onChannelMemberRemove, onChannelProjectPathsChange, onMessageSaveToggle, onMessageThreadOpen, onMessageThreadReply, onMessageThreadReplyFromSource, onOlderMessagesLoad, onPermissionResolve, onSendFailure, onSendMessage, onTaskReply, onTaskStatusChange, onTaskThreadClose, onTaskThreadOpen, profile, savedMessageIds = [], sending }: { activeChannel: SleiFixtures["channels"][number]; activeConversation?: ConversationView; activeSessionId?: string; data: SleiFixtures; focusedMessageId?: string; initialAttachments?: ConversationAttachmentView[]; initialChannelView?: ChannelEmbeddedView; initialDraft?: string; messages: DesktopMessages; onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void; onAttachmentUpload?: (request: ConversationAttachmentUploadRequest) => Promise<{ attachment: ConversationAttachmentView }>; onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void; onChannelMemberAdd?: (agentId: string) => Promise<void> | void; onChannelMemberRemove?: (agentId: string) => Promise<void> | void; onChannelProjectPathsChange?: (channelId: string, projectPaths: string[]) => Promise<void> | void; onConversationHistoryToggle?: () => void; onConversationNewSession?: (conversationId: string) => Promise<void> | void; onConversationSessionSelect?: (conversationId: string, sessionId: string) => Promise<void> | void; onMessageSaveToggle?: (message: SleiMessage) => Promise<void> | void; onMessageThreadOpen?: (message: SleiMessage) => Promise<void> | void; onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void; onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void; onOlderMessagesLoad?: () => Promise<void> | void; onPermissionResolve?: (requestId: string, decision: PermissionDecision) => Promise<void> | void; onSendFailure?: (message: string, type?: ToastType) => void; onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void; onTaskReply?: (taskId: string, body: string) => Promise<void> | void; onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void; onTaskThreadClose?: (taskId: string) => void; onTaskThreadOpen?: (taskId: string) => Promise<void> | void; profile: UserProfile; savedMessageIds?: string[]; sending?: boolean; sessionDrawerOpen?: boolean }) {
   const [draft, setDraft] = useState(initialDraft ?? "");
   const [asTask, setAsTask] = useState(false);
   const [attachments, setAttachments] = useState<ConversationAttachmentView[]>(initialAttachments ?? []);
@@ -416,7 +431,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
+  const [selectedComposerCommandIndex, setSelectedComposerCommandIndex] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
@@ -424,12 +439,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [projectEditorOpen, setProjectEditorOpen] = useState(false);
   const [projectDraftPaths, setProjectDraftPaths] = useState<string[]>(activeChannel.projectPaths ?? []);
   const [projectSaving, setProjectSaving] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [composerDragActive, setComposerDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerCommandOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerShellContentRef = useRef<HTMLDivElement | null>(null);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
@@ -440,11 +456,41 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const pendingOlderMessagesScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | undefined>(undefined);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
+  const [measuredComposerReservePx, setMeasuredComposerReservePx] = useState(COMPOSER_RESERVE_PX);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
-  const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
-  const skillSlashTargets = skillSlash && dmMember ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
+  const composerSlash = activeComposerSlashQuery(draft);
+  const composerCommands = [
+    {
+      kind: "command",
+      id: "insert-file",
+      title: messages.chat.insertFileCommand,
+      description: messages.chat.insertFileCommandDescription,
+      aliases: ["file", "fi", "insert", "attachment", "附件", "文件", "插入文件"],
+      icon: "attachment",
+    },
+    {
+      kind: "command",
+      id: "convert-to-task",
+      title: messages.chat.convertToTaskCommand,
+      description: messages.chat.convertToTaskCommandDescription,
+      aliases: ["task", "todo", "convert", "任务", "转为任务"],
+      icon: "check",
+    },
+  ] satisfies ComposerCommandOption[];
+  const composerCommandOptions: ComposerCommandOption[] = composerSlash
+    ? [
+        ...composerCommands.filter((command) =>
+          composerCommandMatchesQuery(composerSlash.query, [command.title, ...command.aliases]),
+        ),
+        ...(dmMember ? skillSlashSuggestions(composerSlash.query, dmMember.skills ?? []).map((skill) => ({ kind: "skill" as const, id: skill.id, name: skill.name, trigger: skill.trigger })) : []),
+      ]
+    : [];
+  const composerInputRef = useAutosizeTextarea(draft, { maxHeight: 500 });
+  const composerPlaceholder = dmMember
+    ? messages.chat.inputToMemberWithActions(dmMember.name)
+    : messages.chat.inputToChannelWithActions(stripChannelHash(activeChannel.name));
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
@@ -483,9 +529,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
-  const composerReservePx = attachments.length > 0 || (mention && mentionTargets.length > 0) || (skillSlash && skillSlashTargets.length > 0)
+  const composerReserveExpanded = attachments.length > 0 || (mention && mentionTargets.length > 0) || (composerSlash && composerCommandOptions.length > 0);
+  const composerBaselineReservePx = composerReserveExpanded
     ? COMPOSER_EXPANDED_RESERVE_PX
     : COMPOSER_RESERVE_PX;
+  const composerReservePx = Math.max(composerBaselineReservePx, measuredComposerReservePx);
   const composerReserveStyle: ChatComposerReserveStyle = {
     "--chat-composer-reserve": `${composerReservePx}px`,
   };
@@ -561,13 +609,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   useEffect(() => {
-    if (!skillSlash || skillSlashTargets.length === 0) return;
-    skillOptionRefs.current[selectedSkillIndex]?.scrollIntoView({ block: "nearest" });
-  }, [skillSlash, skillSlashTargets.length, selectedSkillIndex]);
+    if (!composerSlash || composerCommandOptions.length === 0) return;
+    composerCommandOptionRefs.current[selectedComposerCommandIndex]?.scrollIntoView({ block: "nearest" });
+  }, [composerSlash, composerCommandOptions.length, selectedComposerCommandIndex]);
 
   useEffect(() => {
-    setSelectedSkillIndex(0);
-  }, [skillSlash?.query, dmMember?.id]);
+    setSelectedComposerCommandIndex(0);
+  }, [composerSlash?.query, dmMember?.id]);
 
   useEffect(() => {
     if (effectiveChannelView !== "chat" || focusedMessageId) return;
@@ -582,6 +630,23 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     pendingScrollToBottomRef.current = false;
     return requestTimelineScrollToBottom();
   }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
+
+  useLayoutEffect(() => {
+    const node = composerShellContentRef.current;
+    if (!node || typeof window === "undefined") return undefined;
+
+    const measureComposerReserve = () => {
+      const measuredHeight = node.getBoundingClientRect().height || node.offsetHeight;
+      const nextReserve = Math.ceil(measuredHeight + COMPOSER_RESERVE_BUFFER_PX);
+      setMeasuredComposerReservePx((current) => current === nextReserve ? current : nextReserve);
+    };
+
+    measureComposerReserve();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measureComposerReserve);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [draft, attachments.length, composerReserveExpanded, effectiveChannelView, activeTargetId]);
 
   useLayoutEffect(() => {
     restoreOlderMessagesScrollPosition();
@@ -631,11 +696,21 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     }
   }
 
-  async function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const files = Array.from(fileList);
-    const uploaded = await Promise.all(files.map((file) => uploadComposerFile(file, onAttachmentUpload)));
-    setAttachments((current) => [...current, ...uploaded.filter((attachment): attachment is ConversationAttachmentView => Boolean(attachment))]);
+  async function addFiles(fileList: FileList | File[] | null) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    const results = await Promise.allSettled(files.map((file) => uploadComposerFile(file, onAttachmentUpload)));
+    const uploaded = results
+      .filter((result): result is PromiseFulfilledResult<ConversationAttachmentView> => result.status === "fulfilled")
+      .map((result) => result.value)
+      .filter((attachment): attachment is ConversationAttachmentView => Boolean(attachment));
+    const failed = results.some((result) => result.status === "rejected");
+    if (uploaded.length > 0) {
+      setAttachments((current) => [...current, ...uploaded]);
+    }
+    if (failed) {
+      showToast(messages.chat.sendFailed, "error");
+    }
   }
 
   function selectMention(index = selectedMentionIndex) {
@@ -644,10 +719,29 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     setSelectedMentionIndex(0);
   }
 
-  function selectSkillSlash(index = selectedSkillIndex) {
-    if (!skillSlash || !skillSlashTargets[index]) return;
-    setDraft(insertSkillSlash(draft, skillSlash, skillSlashTargets[index]));
-    setSelectedSkillIndex(0);
+  function selectComposerCommand(index = selectedComposerCommandIndex) {
+    if (!composerSlash || !composerCommandOptions[index]) return;
+    const option = composerCommandOptions[index];
+    if (option.kind === "command") {
+      setDraft(removeComposerSlashQuery(draft, composerSlash));
+      setSelectedComposerCommandIndex(0);
+      if (option.id === "insert-file") {
+        fileInputRef.current?.click();
+        return;
+      }
+      setAsTask(true);
+      return;
+    }
+    setDraft(insertSkillSlash(draft, composerSlash, option));
+    setSelectedComposerCommandIndex(0);
+  }
+
+  function submitComposerForm() {
+    if (composerSlash && composerCommandOptions.length > 0) {
+      selectComposerCommand();
+      return;
+    }
+    void submitMessage();
   }
 
   async function copyMessage(message: SleiMessage) {
@@ -1112,7 +1206,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl" ref={composerShellContentRef}>
                 {mention && mentionTargets.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
                     <MentionPicker
@@ -1126,21 +1220,53 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
-                {skillSlash && skillSlashTargets.length > 0 ? (
+                {composerSlash && composerCommandOptions.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
-                    <SkillSlashPicker
+                    <ComposerCommandPicker
                       messages={messages}
-                      onSelect={selectSkillSlash}
+                      onSelect={selectComposerCommand}
                       optionRef={(index, node) => {
-                        skillOptionRefs.current[index] = node;
+                        composerCommandOptionRefs.current[index] = node;
                       }}
-                      selectedIndex={selectedSkillIndex}
-                      skills={skillSlashTargets}
+                      options={composerCommandOptions}
+                      selectedIndex={selectedComposerCommandIndex}
                     />
                   </div>
                 ) : null}
-                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-                  <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 overflow-visible p-1")} data-testid="slei-composer-surface">
+                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); submitComposerForm(); }}>
+                  <Card
+                    className={cn(
+                      CARD_FLAT_CLASS,
+                      "grid gap-2 overflow-visible p-1 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
+                    )}
+                    data-drag-active={composerDragActive ? "true" : undefined}
+                    data-testid="slei-composer-surface"
+                    onDragEnter={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                      setComposerDragActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      setComposerDragActive(false);
+                    }}
+                    onDragOver={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                      setComposerDragActive(false);
+                      void addFiles(event.dataTransfer.files);
+                    }}
+                    onPaste={(event) => {
+                      const files = clipboardFiles(event);
+                      if (files.length === 0) return;
+                      event.preventDefault();
+                      void addFiles(files);
+                    }}
+                  >
                     {attachments.length > 0 ? (
                       <AttachmentList
                         attachments={attachments}
@@ -1148,8 +1274,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       />
                     ) : null}
                     <Textarea
-                      aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-                      className="slei-composer-input min-h-20 resize-none px-3 py-3"
+                      aria-label={composerPlaceholder}
+                      className={cn("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0")}
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -1157,27 +1283,27 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       onKeyDown={(event) => {
                       const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
                       const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                      const hasSkillSlashTargets = Boolean(skillSlash && skillSlashTargets.length > 0);
-                      if (!composing && skillSlash && hasSkillSlashTargets) {
+                      const hasComposerCommandOptions = Boolean(composerSlash && composerCommandOptions.length > 0);
+                      if (!composing && composerSlash && hasComposerCommandOptions) {
                         if (event.key === "ArrowDown") {
                           event.preventDefault();
-                          setSelectedSkillIndex((current) => moveMentionSelection(current, 1, skillSlashTargets.length));
+                          setSelectedComposerCommandIndex((current) => moveMentionSelection(current, 1, composerCommandOptions.length));
                           return;
                         }
                         if (event.key === "ArrowUp") {
                           event.preventDefault();
-                          setSelectedSkillIndex((current) => moveMentionSelection(current, -1, skillSlashTargets.length));
+                          setSelectedComposerCommandIndex((current) => moveMentionSelection(current, -1, composerCommandOptions.length));
                           return;
                         }
                         if (event.key === "Escape") {
                           event.preventDefault();
-                          setDraft(draft.slice(0, skillSlash.start));
-                          setSelectedSkillIndex(0);
+                          setDraft(removeComposerSlashQuery(draft, composerSlash));
+                          setSelectedComposerCommandIndex(0);
                           return;
                         }
                         if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
                           event.preventDefault();
-                          selectSkillSlash();
+                          selectComposerCommand();
                           return;
                         }
                       }
@@ -1209,21 +1335,20 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         void submitMessage();
                       }
                     }}
-                      placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
+                      placeholder={composerPlaceholder}
+                      ref={composerInputRef}
                       value={draft}
                     />
-                    <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible">
+                    <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible" data-testid="slei-composer-toolbar">
                       {allowAsTask ? (
                         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                          <Checkbox checked={asTask} onCheckedChange={(checked) => setAsTask(checked === true)} />
+                          <Switch checked={asTask} data-testid="slei-as-task-switch" onCheckedChange={setAsTask} />
                           <span>{messages.chat.asTask}</span>
                         </label>
                       ) : <span />}
                       <div className="flex items-center gap-2 overflow-visible">
-                        <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
-                        <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                        <Button aria-label={messages.common.addImage} className="size-8 [&_svg]:size-3.5" onClick={() => imageInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>
-                        <Button aria-label={messages.common.addAttachment} className="size-8 [&_svg]:size-3.5" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
+                        <input data-testid="slei-composer-file-input" hidden multiple onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
+                        <Button aria-label={messages.chat.insertFileCommand} className="size-8 [&_svg]:size-3.5" data-testid="slei-insert-file-button" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
                         <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>
