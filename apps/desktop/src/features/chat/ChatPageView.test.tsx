@@ -2425,11 +2425,11 @@ describe("ChatPage mention panel", () => {
     expect(taskRootCard?.className).not.toContain("hover:shadow");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
-    expect(replyIcon?.className.baseVal).toContain("size-3");
-    expect(copyIcon?.className.baseVal).toContain("size-3");
-    expect(bookmarkIcon?.className.baseVal).toContain("size-3");
-    expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-3");
-    expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).some((button) => button.className.includes("[&_svg]:size-3"))).toBe(false);
+    expect(replyIcon?.className.baseVal).toContain("size-2.5");
+    expect(copyIcon?.className.baseVal).toContain("size-2.5");
+    expect(bookmarkIcon?.className.baseVal).toContain("size-2.5");
+    expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-2.5");
+    expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).every((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(true);
     expect(taskRootCard?.textContent).toContain("把这条变成任务。");
   });
 
