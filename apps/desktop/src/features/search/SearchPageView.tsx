@@ -191,28 +191,8 @@ export function SearchPage({
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
-        <div className="grid w-full max-w-5xl gap-3">
-          <div
-            className="flex h-10 max-w-2xl items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
-            data-search-input-surface="true"
-          >
-            <SleiIcon className="size-4 text-muted-foreground" name="search" />
-            <Input
-              aria-label={messages.search.navigation.searchInput}
-              className="h-9 min-w-0 border-0 bg-transparent px-0 text-sm shadow-none backdrop-blur-none focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder={messages.search.placeholderTitle}
-              value={query}
-            />
-            {query ? (
-              <Button aria-label={messages.search.navigation.clearQuery} className="-mr-1 size-7 [&_svg]:size-3.5" onClick={clearQuery} size="icon" type="button" variant="ghost">
-                <SleiIcon className="size-4" name="x" />
-              </Button>
-            ) : null}
-          </div>
-
-          <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2">
+        <div className="grid w-full max-w-5xl gap-3 md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] md:items-center" data-search-control-layout="true">
+          <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2 md:justify-start" data-search-filter-panel="true">
             <FilterSelect
               icon={<SleiIcon className="size-4" name="user" />}
               label={messages.search.filters.from}
@@ -239,6 +219,28 @@ export function SearchPage({
               selectedLabel={selectedTime.label}
               onSelect={(id) => setTimeRange(id as GlobalSearchTimeRangeFilter)}
             />
+          </div>
+
+          <div className="flex min-w-0 md:justify-end" data-search-input-panel="true">
+            <div
+              className="flex h-10 w-full md:max-w-xl items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
+              data-search-input-surface="true"
+            >
+              <SleiIcon className="size-4 text-muted-foreground" name="search" />
+              <Input
+                aria-label={messages.search.navigation.searchInput}
+                className="h-9 min-w-0 border-0 bg-transparent px-0 text-sm shadow-none backdrop-blur-none focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={handleSearchKeyDown}
+                placeholder={messages.search.placeholderTitle}
+                value={query}
+              />
+              {query ? (
+                <Button aria-label={messages.search.navigation.clearQuery} className="-mr-1 size-7 [&_svg]:size-3.5" onClick={clearQuery} size="icon" type="button" variant="ghost">
+                  <SleiIcon className="size-4" name="x" />
+                </Button>
+              ) : null}
+            </div>
           </div>
         </div>
       </form>

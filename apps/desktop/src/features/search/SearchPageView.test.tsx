@@ -265,6 +265,26 @@ describe("SearchPage global search UI", () => {
     expect(onGlobalSearch).not.toHaveBeenCalled();
   });
 
+  it("places search filters in the left column and the input in the right column on the same control row", async () => {
+    const rootElement = await renderSearchPage();
+    const controlLayout = rootElement.querySelector<HTMLElement>('[data-search-control-layout="true"]');
+    const filterPanel = rootElement.querySelector<HTMLElement>('[data-search-filter-panel="true"]');
+    const inputPanel = rootElement.querySelector<HTMLElement>('[data-search-input-panel="true"]');
+    const searchSurface = rootElement.querySelector<HTMLElement>('[data-search-input-surface="true"]');
+
+    expect(controlLayout).toBeInstanceOf(HTMLElement);
+    expect(filterPanel).toBeInstanceOf(HTMLElement);
+    expect(inputPanel).toBeInstanceOf(HTMLElement);
+    expect(controlLayout?.firstElementChild).toBe(filterPanel);
+    expect(controlLayout?.lastElementChild).toBe(inputPanel);
+    expect(controlLayout?.className).toContain("md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]");
+    expect(filterPanel?.className).toContain("md:justify-start");
+    expect(inputPanel?.className).toContain("md:justify-end");
+    expect(searchSurface?.parentElement).toBe(inputPanel);
+    expect(searchSurface?.className).toContain("w-full");
+    expect(searchSurface?.className).toContain("md:max-w-xl");
+  });
+
   it("does not call daemon search when submitting a whitespace query and keeps the placeholder state", async () => {
     const onGlobalSearch = vi.fn();
     const rootElement = await renderSearchPage({ onGlobalSearch });
