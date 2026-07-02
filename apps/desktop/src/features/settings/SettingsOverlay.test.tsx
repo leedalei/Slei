@@ -111,13 +111,16 @@ describe("SettingsOverlay", () => {
 
   it("places the return-to-chat control in the bottom settings slot without rendering settings search", async () => {
     const { container } = await mountOverlay();
+    const footer = container.querySelector('[data-testid="slei-settings-overlay-footer"]');
+    const footerLabel = container.querySelector('[data-testid="slei-settings-overlay-footer-label"]');
     const returnButton = container.querySelector<HTMLButtonElement>('[data-testid="slei-settings-return"]');
 
+    expect(footer).toBeTruthy();
+    expect(footerLabel?.textContent).toBe("设置");
     expect(returnButton?.textContent).toContain("返回聊天");
     expect(returnButton?.getAttribute("data-settings-return-placement")).toBe("bottom-settings-slot");
     expect(returnButton?.querySelector('[data-slei-icon="arrowLeft"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="slei-settings-overlay-chrome"]')).toBeNull();
-    expect(container.querySelector('[data-testid="slei-settings-overlay-footer"]')).toBeTruthy();
     expect(container.querySelector('input[role="searchbox"]')).toBeNull();
     expect(container.textContent).not.toContain("搜索设置");
   });

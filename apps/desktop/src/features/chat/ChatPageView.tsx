@@ -1341,14 +1341,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                     <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible" data-testid="slei-composer-toolbar">
                       {allowAsTask ? (
-                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <label className="inline-flex items-center gap-1.5 text-muted-foreground">
                           <Switch
                             checked={asTask}
                             className="h-5 w-9 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb][data-state=checked]]:translate-x-4"
                             data-testid="slei-as-task-switch"
                             onCheckedChange={setAsTask}
                           />
-                          <span>{messages.chat.asTask}</span>
+                          <span className="text-sm" data-testid="slei-as-task-label">{messages.chat.asTask}</span>
                         </label>
                       ) : <span />}
                       <div className="flex items-center gap-2 overflow-visible">

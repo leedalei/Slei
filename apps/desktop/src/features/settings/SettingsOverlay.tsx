@@ -235,7 +235,12 @@ export function SettingsOverlayNav({
           data-testid="slei-settings-overlay-footer"
         >
           <div className="flex min-w-0 items-center gap-2 px-1">
-            <div aria-hidden="true" className="min-w-0 flex-1" />
+            <span
+              className="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground"
+              data-testid="slei-settings-overlay-footer-label"
+            >
+              {messages.settings.title}
+            </span>
             <Button
               aria-label={labels.returnToChat}
               className="size-8 [&_svg]:size-3.5"
