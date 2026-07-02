@@ -36,6 +36,8 @@ export function SettingsDetailHost(props: {
     case "about":
       return props.renderAbout();
   }
+  const exhaustivePanel: never = props.panel;
+  return exhaustivePanel;
 }
 
 type SettingsOverlayGroup = {
