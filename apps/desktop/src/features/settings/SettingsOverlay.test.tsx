@@ -90,6 +90,13 @@ describe("SettingsOverlay", () => {
     expect(container.querySelector('[data-testid="detail-account"]')).toBeTruthy();
   });
 
+  it("marks the active nav item as the current page", async () => {
+    const { container } = await mountOverlay({ activePanel: "devices" });
+
+    expect(buttonByText(container, "设备管理").getAttribute("aria-current")).toBe("page");
+    expect(buttonByText(container, "账号资料").getAttribute("aria-current")).toBeNull();
+  });
+
   it("calls onClose exactly once when returning to the app", async () => {
     const { container, onClose } = await mountOverlay();
 
