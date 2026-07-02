@@ -596,6 +596,43 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain("搜索");
   });
 
+  it("keeps search active mutually exclusive from channel and direct message rows", () => {
+    const members = createDemoMembers();
+    const data = createSleiFixtures({
+      members,
+      channels: [
+        { id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" },
+        { id: "dev", name: "dev", description: "研发频道描述", unread: 0, activeSessionId: "session:dev" },
+      ],
+      conversations: [
+        { id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" },
+      ],
+    });
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeChannelId="dev"
+        activeConversationId="dm:a1"
+        activeView="search"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const sidebar = host.querySelector(".slei-workspace-sidebar");
+    const currentItems = Array.from(sidebar?.querySelectorAll<HTMLElement>('[aria-current]') ?? []);
+    const selectedChannel = sidebar?.querySelector<HTMLElement>('[data-channel-id="dev"]');
+    const selectedDm = sidebar?.querySelector<HTMLElement>('[data-conversation-id="dm:a1"]');
+
+    expect(currentItems).toHaveLength(1);
+    expect(currentItems[0]?.textContent).toContain("搜索");
+    expect(selectedChannel?.querySelector('[aria-current="true"]')).toBeNull();
+    expect(selectedChannel?.className).not.toContain("bg-[var(--workspace-sidebar-active-bg)]");
+    expect(selectedDm?.querySelector('[aria-current="true"]')).toBeNull();
+    expect(selectedDm?.className).not.toContain("bg-[var(--workspace-sidebar-active-bg)]");
+  });
+
   it("keeps the workspace sidebar visible for tasks", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

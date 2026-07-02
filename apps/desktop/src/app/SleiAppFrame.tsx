@@ -197,6 +197,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     "--app-sidebar-width": `${input.sidebarWidth ?? 260}px`,
     "--app-font-size": fontSize,
   } as CSSProperties;
+  const sidebarChatSelectionActive = input.activeView === "chat";
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -285,9 +286,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         <div className="slei-workspace-sidebar-card min-h-0 max-[760px]:hidden" data-slot="sidebar-card">
           <WorkspaceSidebar
             activeAgentActivity={activeAgentActivity}
-            activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
-            activeChatWorkspace={input.activeChatWorkspace}
-            activeConversationId={input.activeChatWorkspace === "saved" ? undefined : input.activeConversationId}
+            activeChannelId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" && !input.activeConversationId ? activeChannel?.id : undefined}
+            activeChatWorkspace={sidebarChatSelectionActive ? input.activeChatWorkspace : undefined}
+            activeConversationId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" ? input.activeConversationId : undefined}
             activeView={input.activeView}
             cardDraftRequest={channelCardDraftRequest}
             channels={input.data.channels}
