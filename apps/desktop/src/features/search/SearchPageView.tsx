@@ -191,7 +191,7 @@ export function SearchPage({
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
-        <div className="grid w-full max-w-5xl gap-3 md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] md:items-center" data-search-control-layout="true">
+        <div className="grid w-full max-w-5xl gap-3 md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] md:items-center" data-search-control-layout="true">
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2 md:justify-start" data-search-filter-panel="true">
             <FilterSelect
               icon={<SleiIcon className="size-4" name="user" />}
@@ -223,7 +223,7 @@ export function SearchPage({
 
           <div className="flex min-w-0 md:justify-end" data-search-input-panel="true">
             <div
-              className="flex h-10 w-full md:max-w-xl items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
+              className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
               data-search-input-surface="true"
             >
               <SleiIcon className="size-4 text-muted-foreground" name="search" />

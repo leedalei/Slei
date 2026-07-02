@@ -277,12 +277,12 @@ describe("SearchPage global search UI", () => {
     expect(inputPanel).toBeInstanceOf(HTMLElement);
     expect(controlLayout?.firstElementChild).toBe(filterPanel);
     expect(controlLayout?.lastElementChild).toBe(inputPanel);
-    expect(controlLayout?.className).toContain("md:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]");
+    expect(controlLayout?.className).toContain("md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)]");
     expect(filterPanel?.className).toContain("md:justify-start");
     expect(inputPanel?.className).toContain("md:justify-end");
     expect(searchSurface?.parentElement).toBe(inputPanel);
     expect(searchSurface?.className).toContain("w-full");
-    expect(searchSurface?.className).toContain("md:max-w-xl");
+    expect(searchSurface?.className).not.toContain("max-w");
   });
 
   it("does not call daemon search when submitting a whitespace query and keeps the placeholder state", async () => {
