@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { MemberAvatar } from "./MemberAvatar";
+import { AvatarBadge } from "@/components/ui/avatar";
 import { createMemberAvatar, type MemberAvatarIdentity } from "./member-avatar";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -133,7 +134,36 @@ describe("MemberAvatar", () => {
       expect(image).not.toBeNull();
       expect(image?.getAttribute("src")).toBe(createMemberAvatar(identity));
       expect(image?.getAttribute("alt")).toBe("");
+      expect(image?.className).toContain("rounded-full");
       expect(host.querySelector("[data-slei-panel]")).toBeNull();
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
+  it("renders badge children inside the shadcn avatar root", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "LW",
+      avatarSeed: "lin-wen-badge",
+      handle: "lin",
+      id: "member-badge",
+      name: "Lin Wen",
+    };
+
+    const { host, root } = await renderMemberAvatar(
+      <MemberAvatar identity={identity}>
+        <AvatarBadge data-testid="avatar-badge-child">+</AvatarBadge>
+      </MemberAvatar>,
+    );
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+      const badge = host.querySelector<HTMLElement>('[data-testid="avatar-badge-child"]');
+
+      expect(avatar).not.toBeNull();
+      expect(badge).not.toBeNull();
+      expect(badge?.parentElement).toBe(avatar);
     } finally {
       cleanupMemberAvatar(root, host);
     }
@@ -258,6 +288,8 @@ describe("MemberAvatar", () => {
       const fallback = host.querySelector<HTMLElement>('[data-slot="avatar-fallback"]');
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("large");
+      expect(avatar?.className).toContain("size-[3.75rem]");
+      expect(avatar?.className).not.toContain("size-16");
       expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("pixelated");
       expect(fallback).not.toBeNull();
       expect(fallback?.textContent).toBe("ZX");

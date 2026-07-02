@@ -42,6 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AvatarBadge } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -326,21 +327,34 @@ export function MembersPage(input: {
       data-settings-embedded-detail={layout === "settings" ? "members" : undefined}
     >
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-      <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
-        <div className="flex min-w-0 items-start gap-3" data-tauri-drag-region="deep">
-          <span className="inline-flex shrink-0" data-tauri-drag-region="deep">
-            <MemberAvatar identity={selectedMember} large />
-          </span>
-          <PageHeader
-            className="min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto]"
-            data-slot="workspace-titlebar"
-            data-tauri-drag-region="deep"
-            icon={undefined}
-            title={<span className="min-w-0 truncate" data-tauri-drag-region="deep">{memberDetails.name}</span>}
-            subtitle={(
-              <span className="grid min-w-0 gap-2" data-tauri-drag-region="deep">
+      <Tabs className="contents" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
+        <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header" data-tauri-drag-region="deep">
+          <div className="flex min-w-0 items-center gap-3" data-tauri-drag-region="deep">
+            <span className="relative inline-flex shrink-0" data-slot="member-avatar" data-tauri-drag-region="deep">
+              <MemberAvatar identity={selectedMember} large>
+                {canMessage ? (
+                  <AvatarBadge asChild>
+                    <button
+                      aria-label={input.messages.members.message}
+                      data-testid="slei-member-header-message-button"
+                      onClick={() => input.onMessage?.(selectedMember.id)}
+                      type="button"
+                    >
+                      <SleiIcon name="messageCircleMore" />
+                    </button>
+                  </AvatarBadge>
+                ) : null}
+              </MemberAvatar>
+            </span>
+            <PageHeader
+              className="min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto]"
+              data-slot="workspace-titlebar"
+              data-tauri-drag-region="deep"
+              icon={undefined}
+              title={(
                 <span className="flex min-w-0 flex-wrap items-center gap-2" data-tauri-drag-region="deep">
-                  {showHandle ? <span className="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
+                  <span className="min-w-0 truncate" data-tauri-drag-region="deep">{memberDetails.name}</span>
+                  {showHandle ? <span className="truncate text-sm font-medium text-muted-foreground" data-tauri-drag-region="deep">{selectedMember.handle}</span> : null}
                   <StatusBadge
                     className="w-fit"
                     data-tauri-drag-region="deep"
@@ -348,69 +362,63 @@ export function MembersPage(input: {
                     status={selectedMember.runtimeStatus}
                   />
                 </span>
+              )}
+              subtitle={(
                 <span className="flex min-w-0 items-center gap-1.5" data-tauri-drag-region="deep">
                   <span className="truncate text-sm text-muted-foreground" data-tauri-drag-region="deep">{memberDetails.description}</span>
                   <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyDescription()} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                     <SleiIcon className="size-3.5" name="copy" />
                   </TooltipButton>
                 </span>
-              </span>
-            )}
-            actions={canMessage ? (
-              <>
-                <Button onClick={() => input.onMessage?.(selectedMember.id)} type="button">
-                  <SleiIcon name="chat" />
-                  {input.messages.members.message}
-                </Button>
-                {canDelete ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        disabled={deleting}
-                        type="button"
-                        variant="destructive"
-                      >
-                        <SleiIcon name="delete" />
-                        {input.messages.members.deleteAgent}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{input.messages.members.deleteAgent}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {input.messages.members.deleteAgentConfirm(selectedMember.name)}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => void deleteSelectedAgent()} variant="destructive">
-                          {input.messages.common.delete}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ) : null}
-              </>
-            ) : null}
-          />
-        </div>
-        {deleteError ? (
-          <Alert className="mt-4" variant="destructive">
-            <AlertDescription>{deleteError}</AlertDescription>
-          </Alert>
-        ) : null}
-      </div>
-      <Separator />
-
-      <Tabs className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-0" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
-        <div className="px-4 py-2" data-testid="slei-member-detail-tabs">
-          <TabsList aria-label={input.messages.members.memberConfig} variant="line">
-            <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
-            <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
-            <TabsTrigger value="capabilities">{input.messages.members.capabilities}</TabsTrigger>
-            <TabsTrigger value="permissions">{input.messages.members.permissions}</TabsTrigger>
-            <TabsTrigger value="activity">{input.messages.members.activity}</TabsTrigger>
-          </TabsList>
+              )}
+              actions={(
+                <>
+                  <div className="px-4 py-2" data-testid="slei-member-detail-tabs">
+                    <TabsList aria-label={input.messages.members.memberConfig} variant="line">
+                      <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
+                      <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
+                      <TabsTrigger value="capabilities">{input.messages.members.capabilities}</TabsTrigger>
+                      <TabsTrigger value="permissions">{input.messages.members.permissions}</TabsTrigger>
+                      <TabsTrigger value="activity">{input.messages.members.activity}</TabsTrigger>
+                    </TabsList>
+                  </div>
+                  {canDelete ? (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          disabled={deleting}
+                          type="button"
+                          variant="destructive"
+                        >
+                          <SleiIcon name="delete" />
+                          {input.messages.members.deleteAgent}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{input.messages.members.deleteAgent}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {input.messages.members.deleteAgentConfirm(selectedMember.name)}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => void deleteSelectedAgent()} variant="destructive">
+                            {input.messages.common.delete}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  ) : null}
+                </>
+              )}
+            />
+          </div>
+          {deleteError ? (
+            <Alert className="mt-4" variant="destructive">
+              <AlertDescription>{deleteError}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
         <Separator />
 

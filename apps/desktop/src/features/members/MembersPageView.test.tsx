@@ -133,8 +133,10 @@ describe("MembersPage agent details", () => {
     const headerStart = html.indexOf('data-testid="slei-member-detail-header"');
     const headerEnd = html.indexOf("</header>", headerStart);
     const headerHtml = html.slice(headerStart, headerEnd);
-    const messageButtonStart = headerHtml.indexOf(`>${messages.members.message}<`);
+    const messageButtonStart = headerHtml.indexOf('data-testid="slei-member-header-message-button"');
     const deleteButtonStart = headerHtml.indexOf(`>${messages.members.deleteAgent}<`);
+    const messageButtonHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", messageButtonStart), headerHtml.indexOf("</button>", messageButtonStart));
+    const deleteButtonHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", deleteButtonStart), headerHtml.indexOf("</button>", deleteButtonStart));
 
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(html).toContain("data-slei-page-header");
@@ -146,16 +148,16 @@ describe("MembersPage agent details", () => {
     expect(html.slice(headerEnd, headerEnd + 260)).toContain('data-slot="separator"');
     expect(headerHtml).toContain('data-tauri-drag-region="deep"');
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml.slice(messageButtonStart - 160, messageButtonStart + 80)).not.toContain("data-tauri-drag-region");
+    expect(messageButtonHtml).not.toContain("data-tauri-drag-region");
     expect(deleteButtonStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml.slice(deleteButtonStart - 180, deleteButtonStart + 80)).not.toContain("data-tauri-drag-region");
+    expect(deleteButtonHtml).not.toContain("data-tauri-drag-region");
   });
 
   it("keeps the member header message action clickable inside the drag-enabled header", async () => {
     const messages = createDesktopMessages("zh-CN");
     const onMessage = vi.fn();
     const host = await mount(renderMembersPage({ messages, onMessage }));
-    const messageButton = Array.from(host.querySelectorAll("button")).find((button) => button.textContent?.includes(messages.members.message));
+    const messageButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-member-header-message-button"]');
 
     expect(messageButton).toBeDefined();
     await act(async () => {
@@ -165,10 +167,52 @@ describe("MembersPage agent details", () => {
     expect(onMessage).toHaveBeenCalledWith("agent_coda");
   });
 
+  it("places identity metadata and the message action in the compact member header", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(renderMembersPage({ messages }));
+    const headerStart = html.indexOf('data-testid="slei-member-detail-header"');
+    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+    const titleStart = headerHtml.indexOf('data-slei-page-header-title');
+    const titleHtml = headerHtml.slice(titleStart, headerHtml.indexOf("</h1>", titleStart));
+    const tabsStart = headerHtml.indexOf('data-testid="slei-member-detail-tabs"');
+    const messageButtonStart = headerHtml.indexOf('data-testid="slei-member-header-message-button"');
+    const avatarStart = headerHtml.indexOf('data-slot="member-avatar"');
+    const avatarHtml = headerHtml.slice(avatarStart, titleStart);
+    const badgeStart = avatarHtml.indexOf('data-slot="avatar-badge"');
+    const badgeHtml = avatarHtml.slice(avatarHtml.lastIndexOf("<button", badgeStart), avatarHtml.indexOf("</button>", badgeStart));
+
+    expect(titleStart).toBeGreaterThanOrEqual(0);
+    expect(titleHtml).toContain("Coda");
+    expect(titleHtml).toContain("@coda");
+    expect(titleHtml).toContain(messages.members.online);
+    expect(tabsStart).toBeGreaterThanOrEqual(0);
+    expect(tabsStart).toBeGreaterThan(titleStart);
+    expect(messageButtonStart).toBeGreaterThan(avatarStart);
+    expect(messageButtonStart).toBeLessThan(titleStart);
+    expect(headerHtml).toContain('data-slot="avatar-badge"');
+    expect(avatarHtml).toContain('data-slot="avatar-badge"');
+    expect(badgeHtml).toContain('data-slot="avatar-badge"');
+    expect(badgeHtml).not.toContain("tooltip-trigger");
+    expect(badgeHtml).not.toContain("size-7");
+    expect(badgeHtml).not.toContain("border-2");
+    expect(badgeHtml).not.toContain("bg-background");
+    expect(badgeHtml).not.toContain("shadow-sm");
+    expect(badgeHtml).not.toContain("[&amp;_svg]");
+    expect(badgeHtml).toContain('data-slei-icon="messageCircleMore"');
+    expect(badgeHtml).not.toContain('data-slei-icon="messageSquare"');
+    expect(headerHtml).toContain('<div class="flex min-w-0 items-center gap-3"');
+    expect(headerHtml).toContain(`aria-label="${messages.members.message}"`);
+    expect(headerHtml).not.toContain(`>${messages.members.message}<`);
+  });
+
   it("keeps the page title text free of avatar fallback glyphs", async () => {
     const host = await mount(renderMembersPage());
 
-    expect(host.querySelector("[data-slei-page-header-title]")?.textContent).toBe("Coda");
+    const titleText = host.querySelector("[data-slei-page-header-title]")?.textContent ?? "";
+    expect(titleText).toContain("Coda");
+    expect(titleText).toContain("@coda");
+    expect(titleText).not.toContain("CO");
   });
 
   it("uses the shared channel tab bar height for member detail tabs", () => {
@@ -260,7 +304,8 @@ describe("MembersPage agent details", () => {
     expect(html).toContain("ClaudeCode");
     expect(html).toContain("Capabilities");
     expect(html).toContain("Workspace");
-    expect(html).toContain(`>${messages.members.message}<`);
+    expect(html).toContain(`aria-label="${messages.members.message}"`);
+    expect(html).not.toContain(`>${messages.members.message}<`);
   });
 
   it("uses shadcn card slots and secondary detail blocks in member profile details", () => {
@@ -347,10 +392,11 @@ describe("MembersPage agent details", () => {
       />,
     );
 
-    expect(html).toContain(`>${messages.members.message}<`);
+    expect(html).toContain(`aria-label="${messages.members.message}"`);
+    expect(html).not.toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
-    expect(html).toContain('<span class="truncate text-xs text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
+    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('aria-haspopup="dialog"');

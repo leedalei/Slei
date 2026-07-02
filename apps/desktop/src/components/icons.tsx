@@ -32,6 +32,7 @@ import {
   ListFilter,
   LoaderCircle,
   MessageCircle,
+  MessageCircleMore,
   MessageSquare,
   Monitor,
   Palette,
@@ -88,6 +89,7 @@ export type SleiIconName =
   | "loader"
   | "members"
   | "membersFilled"
+  | "messageCircleMore"
   | "messageSquare"
   | "image"
   | "panelClose"
@@ -151,6 +153,7 @@ export const sleiIcons: Record<SleiIconName, SleiLucideIcon> = {
   loader: LoaderCircle,
   members: Users,
   membersFilled: UsersRound,
+  messageCircleMore: MessageCircleMore,
   messageSquare: MessageSquare,
   image: Image,
   panelClose: PanelRightClose,

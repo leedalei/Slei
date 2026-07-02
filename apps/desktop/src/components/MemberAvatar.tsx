@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { createMemberAvatarImage, memberAvatarFallback, type MemberAvatarIdentity } from "./member-avatar";
 
 type MemberAvatarSize = "small" | "default" | "large";
 
-export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: boolean; size?: MemberAvatarSize }) {
+export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvatarIdentity; large?: boolean; size?: MemberAvatarSize }) {
   const { identity, large = false } = input;
   const size = large ? "large" : input.size ?? "default";
   const avatarImage = createMemberAvatarImage(identity);
@@ -13,6 +15,7 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
     <Avatar
       aria-label={identity.name}
       className={avatarSizeClassName(size)}
+      size={avatarPrimitiveSize(size)}
       data-avatar-image-rendering={avatarImage?.imageRendering ?? "fallback"}
       data-avatar-size={size}
     >
@@ -24,12 +27,19 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
         />
       ) : null}
       <AvatarFallback className={size === "small" ? "text-[10px] leading-none" : undefined}>{fallback}</AvatarFallback>
+      {input.children}
     </Avatar>
   );
 }
 
 function avatarSizeClassName(size: MemberAvatarSize) {
-  if (size === "large") return "size-16";
+  if (size === "large") return "size-[3.75rem]";
   if (size === "small") return "size-6";
   return "size-8";
+}
+
+function avatarPrimitiveSize(size: MemberAvatarSize) {
+  if (size === "large") return "lg";
+  if (size === "small") return "sm";
+  return "default";
 }

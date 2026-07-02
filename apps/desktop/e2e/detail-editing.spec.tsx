@@ -336,7 +336,7 @@ describe("detail page editing pattern", () => {
     const { host, root } = renderMemberDetails(onAgentUpdate);
 
     try {
-      expect(host.querySelector("h1")?.textContent).toBe("Coda");
+      expect(host.querySelector("h1")?.textContent).toContain("Coda");
 
       await clickElement(host.querySelector('[aria-label="编辑显示名称"]'));
       const input = host.querySelector('[aria-label="显示名称输入"]');
@@ -346,14 +346,16 @@ describe("detail page editing pattern", () => {
       await submitClosestForm(input);
 
       expect(onAgentUpdate).toHaveBeenCalledWith("a1", { name: "Rejected Name" });
-      expect(host.querySelector("h1")?.textContent).toBe("Coda");
+      expect(host.querySelector("h1")?.textContent).toContain("Coda");
+      expect(host.querySelector("h1")?.textContent).not.toContain("Rejected Name");
       expect(input.value).toBe("Rejected Name");
       expect(host.querySelector('[role="alert"]')?.textContent).toBe("保存失败");
 
       await clickElement(buttonByText(host, "取消"));
 
       expect(host.querySelector("form")).toBeNull();
-      expect(host.querySelector("h1")?.textContent).toBe("Coda");
+      expect(host.querySelector("h1")?.textContent).toContain("Coda");
+      expect(host.querySelector("h1")?.textContent).not.toContain("Rejected Name");
       expect(host.textContent).toContain("Coda");
       expect(host.textContent).not.toContain("Rejected Name");
     } finally {
