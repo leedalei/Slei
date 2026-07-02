@@ -2714,9 +2714,12 @@ describe("ChatPage mention panel", () => {
     );
     const host = staticMarkupHost(html);
     const asTaskSwitch = host.querySelector<HTMLElement>('[data-testid="slei-as-task-switch"]');
+    const asTaskLabel = host.querySelector<HTMLElement>('[data-testid="slei-as-task-label"]');
 
     expect(html).toContain(messages.chat.asTask);
     expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(asTaskLabel?.textContent).toBe(messages.chat.asTask);
+    expect(asTaskLabel?.className).toContain("text-sm");
     expect(asTaskSwitch?.getAttribute("data-slot")).toBe("switch");
     expect(asTaskSwitch?.className).toContain("h-5");
     expect(asTaskSwitch?.className).toContain("w-9");
