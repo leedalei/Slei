@@ -7,6 +7,8 @@ import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
 
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const TASK_ROOT_ACTION_BUTTON_CLASS = "size-6";
+const TASK_ROOT_ACTION_ICON_CLASS = "size-3";
 
 const STATUS_CLASS: Record<SleiTask["status"], string> = {
   pending_assignment: "text-amber-700 dark:text-amber-300",
@@ -57,7 +59,7 @@ export function TaskRootEntry(input: {
   };
   return (
     <Card
-      className={cn(CARD_FLAT_CLASS, "group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors hover:border-border/50")}
+      className={cn(CARD_FLAT_CLASS, "group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors duration-[2s] hover:bg-muted/45")}
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
     >
@@ -79,7 +81,7 @@ export function TaskRootEntry(input: {
               type="button"
               variant="ghost"
             >
-              <SleiIcon className="size-3" name="messageSquare" />
+              <SleiIcon className={TASK_ROOT_ACTION_ICON_CLASS} name="messageSquare" />
               {replyCountLabel}
             </Button>
             <span aria-hidden="true">｜</span>
@@ -88,11 +90,11 @@ export function TaskRootEntry(input: {
               {input.messages.tasks.status[input.task.status]}
             </span>
             <span aria-hidden="true">｜</span>
-            <TooltipButton aria-label={copyLabel} className="size-6 [&_svg]:size-3" onClick={() => void input.onCopy?.()} size="icon" tooltip={copyLabel} type="button" variant="ghost">
-              <SleiIcon name="copy" size={14} />
+            <TooltipButton aria-label={copyLabel} className={TASK_ROOT_ACTION_BUTTON_CLASS} onClick={() => void input.onCopy?.()} size="icon" tooltip={copyLabel} type="button" variant="ghost">
+              <SleiIcon className={TASK_ROOT_ACTION_ICON_CLASS} name="copy" />
             </TooltipButton>
-            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} className="size-6 [&_svg]:size-3" onClick={() => void input.onSaveToggle?.()} size="icon" tooltip={saveLabel} type="button" variant="ghost">
-              <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
+            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} className={TASK_ROOT_ACTION_BUTTON_CLASS} onClick={() => void input.onSaveToggle?.()} size="icon" tooltip={saveLabel} type="button" variant="ghost">
+              <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" className={TASK_ROOT_ACTION_ICON_CLASS} iconClassName={TASK_ROOT_ACTION_ICON_CLASS} inactiveName="bookmarkOutline" />
             </TooltipButton>
             {timestamp ? (
               <>

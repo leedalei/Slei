@@ -23,11 +23,11 @@ export function MessageStatusSquare({ status }: { status?: SleiMessage["status"]
   );
 }
 
-export function StatusDot({ status }: { status: "idle" | "busy" | "offline" }) {
+export function StatusDot({ className, status }: { className?: string; status: "idle" | "busy" | "offline" }) {
   return (
     <span
       aria-label={status}
-      className={cn("inline-block size-2 shrink-0 rounded-full align-middle", getSleiStatusIndicatorClassName(status))}
+      className={cn("inline-block size-2 shrink-0 rounded-full align-middle", getSleiStatusIndicatorClassName(status), className)}
       role="img"
     />
   );

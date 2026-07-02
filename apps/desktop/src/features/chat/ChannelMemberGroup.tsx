@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
@@ -241,11 +241,26 @@ function ChannelMemberAvatar(input: {
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!input.open || confirming) return undefined;
+    function closeOnOutsidePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (triggerRef.current?.contains(target) || contentRef.current?.contains(target)) return;
+      input.onOpenChange(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown, true);
+  }, [confirming, input]);
 
   return (
     <Popover open={input.open} onOpenChange={input.onOpenChange}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           aria-label={`${input.member.name} ${input.member.handle}`}
           className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           data-testid="slei-channel-member-avatar-trigger"
@@ -255,6 +270,7 @@ function ChannelMemberAvatar(input: {
         </button>
       </PopoverTrigger>
       <PopoverContent
+        ref={contentRef}
         align="end"
         className="w-72 p-3"
         data-testid="slei-channel-member-info-card"
@@ -281,7 +297,7 @@ function ChannelMemberAvatar(input: {
               }}
             >
               <AlertDialogTrigger asChild>
-                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} className="text-[14px] leading-5 text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={input.mutating} size="sm" type="button" variant="ghost">
+                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} disabled={input.mutating} size="sm" type="button" variant="destructive">
                   <SleiIcon name="delete" size={14} />
                   {input.messages.chat.removeChannelMemberAction}
                 </Button>

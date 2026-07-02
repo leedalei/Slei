@@ -183,7 +183,7 @@ describe("MembersPage agent details", () => {
     expect(tabsHtml).toContain('data-slot="tabs-list"');
     expect(tabsHtml).toContain('data-variant="line"');
     expect(tabsHtml).toContain("h-8");
-    expect(tabsHtml).toContain("rounded-[10px]");
+    expect(tabsHtml).toContain("rounded-lg");
     expect(html.indexOf('data-slot="separator"', markerIndex)).toBeGreaterThan(markerIndex);
   });
 

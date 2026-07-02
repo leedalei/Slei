@@ -206,7 +206,7 @@ describe("TasksPage filters", () => {
       expect(classes).not.toContain("w-full");
     }
     expect(tabsList?.className).toContain("h-8");
-    expect(tabsList?.className).toContain("rounded-[10px]");
+    expect(tabsList?.className).toContain("rounded-lg");
     expect(tabsList?.className).toContain("p-0.5");
     expect(tabsList?.className).not.toContain("bg-white/10");
     expect(tabsList?.className).not.toContain("backdrop-blur-xl");

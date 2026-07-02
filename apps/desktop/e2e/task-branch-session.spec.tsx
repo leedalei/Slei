@@ -148,7 +148,9 @@ describe("task branch sessions", () => {
     const taskEntryHtml = taskEntry.html;
     const taskEntryOpenTag = taskEntry.openTag;
     expect(taskEntryOpenTag).toContain("bg-transparent");
-    expect(taskEntryOpenTag).toContain("hover:border-border/50");
+    expect(taskEntryOpenTag).toContain("hover:bg-muted/45");
+    expect(taskEntryOpenTag).toContain("duration-[2s]");
+    expect(taskEntryOpenTag).not.toContain("hover:border-border");
     expect(taskEntryOpenTag).toContain("shadow-none");
     expect(taskEntryOpenTag).toContain("after:hidden");
     expect(taskEntryOpenTag).not.toContain("hover:shadow");

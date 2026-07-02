@@ -23,13 +23,13 @@ export function MemberAvatar(input: { identity: MemberAvatarIdentity; large?: bo
           src={avatarImage.src}
         />
       ) : null}
-      <AvatarFallback className={size === "small" ? "text-[8px] leading-none" : undefined}>{fallback}</AvatarFallback>
+      <AvatarFallback className={size === "small" ? "text-[10px] leading-none" : undefined}>{fallback}</AvatarFallback>
     </Avatar>
   );
 }
 
 function avatarSizeClassName(size: MemberAvatarSize) {
   if (size === "large") return "size-16";
-  if (size === "small") return "size-[16px]";
+  if (size === "small") return "size-6";
   return "size-8";
 }

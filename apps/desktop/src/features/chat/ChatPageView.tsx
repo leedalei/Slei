@@ -33,7 +33,7 @@ const COMPOSER_RESERVE_PX = 184;
 const COMPOSER_EXPANDED_RESERVE_PX = 256;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors hover:border-border/50 focus-visible:outline-none data-[focused=true]:border-primary/35";
+const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors duration-[2s] hover:bg-muted/45 focus-visible:outline-none data-[focused=true]:border-primary/35";
 
 type ChatComposerReserveStyle = CSSProperties & {
   "--chat-composer-reserve": string;
@@ -900,7 +900,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       />
                       <div className="flex items-center justify-between gap-2">
                         <strong className="text-sm text-foreground">{messages.chat.project}</strong>
-                        <Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">
+                        <Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">
                           <SleiIcon name="folderPlus" size={14} />
                           {messages.chat.projectFolderPicker}
                         </Button>
@@ -920,8 +920,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         <p className="text-xs text-muted-foreground">{messages.chat.noLinkedProjects}</p>
                       )}
                       <div className="flex justify-end gap-2">
-                        <Button disabled={projectSaving} onClick={() => setProjectEditorOpen(false)} size="sm" type="button" variant="ghost">{messages.common.cancel}</Button>
-                        <Button disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button">{messages.common.save}</Button>
+                        <Button className="h-7 px-2.5 text-xs" disabled={projectSaving} onClick={() => setProjectEditorOpen(false)} size="sm" type="button" variant="ghost">{messages.common.cancel}</Button>
+                        <Button className="h-7 px-2.5 text-xs" disabled={projectSaving || !onChannelProjectPathsChange} onClick={() => void saveProjectPaths()} size="sm" type="button">{messages.common.save}</Button>
                       </div>
                     </div>
                   </PopoverContent>
@@ -1042,13 +1042,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6 [&_svg]:size-3" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
+                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6 [&_svg]:size-2.5" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
                                     <SleiIcon name="messageSquare" size={14} />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6 [&_svg]:size-2.5" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
                                     <SleiIcon name="copy" size={14} />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6 [&_svg]:size-3" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
+                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6 [&_svg]:size-2.5" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
                                     <SleiIconSwap active={saved} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
                                   </TooltipButton>
                                   <span aria-hidden="true">｜</span>

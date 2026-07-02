@@ -677,7 +677,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         onClick={() => input.onConversationSelect?.(conversationId)}
                         type="button"
                       >
-                        <StatusDot status={member.runtimeStatus} />
+                        <StatusDot className="size-1.5" status={member.runtimeStatus} />
                         <MemberAvatar identity={member} size="small" />
                         <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
                       </button>

@@ -99,8 +99,8 @@ describe("Tabs", () => {
     expect(html).toContain('data-slot="tabs-pill"');
     expect(html).toContain('data-slot="tabs-trigger"');
     expect(html).toContain("Chat");
-    expect(list?.className.split(/\s+/)).toEqual(expect.arrayContaining(["h-8", "gap-0.5", "rounded-[10px]", "p-0.5"]));
-    expect(trigger?.className.split(/\s+/)).toEqual(expect.arrayContaining(["rounded-lg", "px-3", "py-1.5", "text-[12.5px]"]));
+    expect(list?.className.split(/\s+/)).toEqual(expect.arrayContaining(["h-8", "gap-0.5", "rounded-lg", "p-0.5"]));
+    expect(trigger?.className.split(/\s+/)).toEqual(expect.arrayContaining(["rounded-md", "px-3", "py-1.5", "text-[12.5px]"]));
     expect(list?.className).not.toContain("backdrop-blur");
     expect(list?.className).not.toContain("bg-white/10");
     expect(html).not.toContain("data-slei-tabs-pill");

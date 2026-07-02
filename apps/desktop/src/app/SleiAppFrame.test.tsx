@@ -666,7 +666,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("grid-template-rows: var(--app-chrome-height) minmax(0, 1fr)");
     expect(appCss).toContain(".slei-app-content {");
     expect(appCss).toContain("grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr)");
-    expect(appCss).toContain("padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset)");
+    expect(appCss).toContain("padding: var(--app-gap-xs) var(--app-shell-inline-inset) var(--app-shell-bottom-inset)");
     expect(appCss).toContain(".slei-workspace-sidebar-card {");
     expect(appCss).toContain(".slei-workspace-card {");
     expect(html).not.toContain("5.25rem");
@@ -1479,7 +1479,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(selectedDm?.className).not.toContain("text-accent-foreground");
   });
 
-  it("renders direct message rows with a leading status dot, 16px avatar, and regular 14px name", () => {
+  it("renders direct message rows with a smaller leading status dot, larger avatar, and regular 14px name", () => {
     const members = createDemoMembers();
     const data = createSleiFixtures({
       members,
@@ -1507,8 +1507,9 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(statusDot?.getAttribute("role")).toBe("img");
     expect(statusDot?.className).toContain("rounded-full");
+    expect(statusDot?.className.split(/\s+/)).toContain("size-1.5");
     expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
-    expect(avatar?.className.split(/\s+/)).toContain("size-[16px]");
+    expect(avatar?.className.split(/\s+/)).toContain("size-6");
     expect(name?.tagName).toBe("SPAN");
     expect(name?.textContent).toBe("Coda");
     expect(name?.className).toContain("text-[14px]");

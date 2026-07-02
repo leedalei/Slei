@@ -767,7 +767,7 @@ select:focus-visible {
   display: grid;
   grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr);
   gap: var(--app-card-gap);
-  padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
+  padding: var(--app-gap-xs) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
   overflow: hidden;
 }
 
@@ -815,7 +815,7 @@ select:focus-visible {
 
 .slei-resize-handle {
   position: absolute;
-  top: var(--app-card-gap);
+  top: var(--app-gap-xs);
   bottom: var(--app-shell-bottom-inset);
   left: calc(var(--app-shell-inline-inset) + max(var(--app-sidebar-width, 260px), 260px));
   z-index: 3;
@@ -1105,7 +1105,7 @@ select:focus-visible {
   .slei-app-content {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
-    padding: var(--app-card-gap) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
+    padding: var(--app-gap-xs) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
   }
 
   .slei-native-window-controls-space {

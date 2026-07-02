@@ -47,6 +47,19 @@ describe("Button", () => {
     expect(classes).toContain("hover:text-accent-foreground");
   });
 
+  it("lets callers compact a small button with local sizing classes", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(<Button className="h-7 gap-1 px-2.5 text-xs" size="sm">保存</Button>);
+
+    const classes = host.querySelector<HTMLElement>('[data-slot="button"]')?.className.split(/\s+/) ?? [];
+
+    expect(classes).toContain("h-7");
+    expect(classes).not.toContain("h-8");
+    expect(classes).toContain("px-2.5");
+    expect(classes).toContain("text-xs");
+    expect(classes).toContain("gap-1");
+  });
+
   it("keeps the caller child as the styled root when rendered asChild", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(

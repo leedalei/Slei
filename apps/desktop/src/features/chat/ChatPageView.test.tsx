@@ -497,6 +497,38 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain('data-testid="slei-channel-project-edit"');
   });
 
+  it("opens the linked project editor with compact action buttons", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "kol-content", name: "kol-content", description: "kol-content", projectName: "kol-content", projectPaths: ["/workspace/kol-content"], unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onChannelProjectPathsChange={vi.fn()}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-project-edit"]')?.click();
+    });
+
+    const folderButton = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${messages.chat.projectFolderPicker}"]`);
+    const cancelButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === messages.common.cancel);
+    const saveButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.trim() === messages.common.save);
+
+    expect(folderButton?.className).toContain("h-7");
+    expect(folderButton?.className).toContain("text-xs");
+    expect(cancelButton?.className).toContain("h-7");
+    expect(cancelButton?.className).toContain("text-xs");
+    expect(saveButton?.className).toContain("h-7");
+    expect(saveButton?.className).toContain("text-xs");
+  });
+
   it("shows an empty linked project label instead of the channel description when no project is linked", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
@@ -582,8 +614,8 @@ describe("ChatPage mention panel", () => {
     expect(source).not.toContain("absolute inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3");
     expect(source).toContain("slei-composer-glass");
     expect(source).toContain("backdrop-blur-xl");
-    expect(source).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
-    expect(source).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
+    expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
+    expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
     expect(source).toContain('className="slei-composer-input min-h-20 resize-none px-3 py-3"');
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-transparent px-3 py-3"');
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
@@ -738,6 +770,9 @@ describe("ChatPage mention panel", () => {
     const timestampIndex = messageHtml.indexOf("06-16");
     const copyIndex = messageHtml.indexOf(`aria-label="${messages.chat.copyMessage}"`);
     const saveIndex = messageHtml.indexOf(`aria-label="${messages.chat.saveMessage}"`);
+    const host = document.createElement("div");
+    host.innerHTML = messageHtml;
+    const actionButtons = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="message-actions"] button'));
 
     expect(messageHtml).toContain('data-slot="message-actions"');
     expect(messageHtml).not.toContain("2026-06-16");
@@ -746,6 +781,9 @@ describe("ChatPage mention panel", () => {
     expect(messageHtml).not.toContain("06-16</span><span>09:08:07");
     expect(messageHtml).toContain("flex shrink-0 items-center gap-1");
     expect(messageHtml).not.toContain("min-w-[7.5rem]");
+    expect(actionButtons).toHaveLength(3);
+    expect(actionButtons.every((button) => button.className.includes("size-6"))).toBe(true);
+    expect(actionButtons.every((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(true);
     expect(timestampIndex).toBeGreaterThan(-1);
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
@@ -1825,7 +1863,12 @@ describe("ChatPage mention panel", () => {
     expect(card?.className).not.toContain("shadow-[0_0_4px");
     expect(removeButton?.textContent?.trim()).toBe("移除");
     expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
-    expect(removeButton?.className).toContain("text-[14px]");
+    expect(removeButton?.className).toContain("bg-destructive");
+    expect(removeButton?.className).toContain("text-white");
+    expect(removeButton?.className).toContain("hover:bg-destructive/90");
+    expect(removeButton?.className).not.toContain("variant=\"ghost\"");
+    expect(removeButton?.className).not.toContain("text-[14px]");
+    expect(removeButton?.className).not.toContain("hover:bg-destructive/10");
   });
 
   it("does not open the member popover from hover-only pointer movement", async () => {
@@ -1895,6 +1938,44 @@ describe("ChatPage mention panel", () => {
 
     await act(async () => {
       card?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+    });
+
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
+  });
+
+  it("closes the member popover when clicking outside after opening from click", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+    await act(async () => {
+      avatar?.click();
+    });
+
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
+
+    await act(async () => {
+      host.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
     });
 
     expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
@@ -2154,12 +2235,13 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-slot="card"][data-message-id="msg-contract"]')).toBeNull();
     expect(messageRow?.className).toContain("border-transparent");
     expect(messageRow?.className).toContain("bg-transparent");
-    expect(messageRow?.className).toContain("hover:border-border/50");
+    expect(messageRow?.className).toContain("hover:bg-muted/45");
+    expect(messageRow?.className).toContain("duration-[2s]");
     expect(messageRow?.className).not.toContain("bg-white/10");
     expect(messageRow?.className).not.toContain("backdrop-blur-xl");
     expect(messageRow?.className).not.toContain("bg-card");
-    expect(messageRow?.className).not.toContain("bg-muted");
     expect(messageRow?.className).not.toContain("bg-primary/5");
+    expect(messageRow?.className).not.toContain("hover:border-border");
     expect(messageRow?.className).not.toContain("hover:shadow");
     expect(messageRow?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
     expect(messageRow?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
@@ -2299,17 +2381,27 @@ describe("ChatPage mention panel", () => {
     );
     const host = staticMarkupHost(html);
     const taskRootCard = host.querySelector<HTMLElement>('[data-task-root-entry="task-msg-task-source"]');
+    const replyIcon = taskRootCard?.querySelector<SVGElement>('[data-task-root-entry-replies] [data-slei-icon="messageSquare"]');
+    const copyIcon = taskRootCard?.querySelector<SVGElement>('[data-slei-icon="copy"]');
+    const bookmarkIcon = taskRootCard?.querySelector<SVGElement>('[data-slei-icon="bookmarkOutline"]');
 
     expect(taskRootCard).not.toBeNull();
     expect(taskRootCard?.dataset.sourceMessageId).toBe("msg-task-source");
     expect(taskRootCard?.dataset.slot).toBe("card");
     expect(taskRootCard?.className).toContain("bg-transparent");
-    expect(taskRootCard?.className).toContain("hover:border-border/50");
+    expect(taskRootCard?.className).toContain("hover:bg-muted/45");
+    expect(taskRootCard?.className).toContain("duration-[2s]");
     expect(taskRootCard?.className).toContain("shadow-none");
     expect(taskRootCard?.className).toContain("after:hidden");
+    expect(taskRootCard?.className).not.toContain("hover:border-border");
     expect(taskRootCard?.className).not.toContain("hover:shadow");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
+    expect(replyIcon?.className.baseVal).toContain("size-3");
+    expect(copyIcon?.className.baseVal).toContain("size-3");
+    expect(bookmarkIcon?.className.baseVal).toContain("size-3");
+    expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-3");
+    expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).some((button) => button.className.includes("[&_svg]:size-3"))).toBe(false);
     expect(taskRootCard?.textContent).toContain("把这条变成任务。");
   });
 
@@ -2565,7 +2657,9 @@ describe("ChatPage mention panel", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
 
     expect(source).toContain("bg-transparent");
-    expect(source).toContain("hover:border-border/50");
+    expect(source).toContain("hover:bg-muted/45");
+    expect(source).toContain("duration-[2s]");
+    expect(source).not.toContain("hover:border-border");
     expect(source).toContain("CARD_FLAT_CLASS");
     expect(source).toContain("<Card");
     expect(source).not.toContain("border border-primary");
