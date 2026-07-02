@@ -126,7 +126,7 @@ describe("settings preferences", () => {
     expect(html).toContain('aria-pressed="true"');
   });
 
-  it("renders account profile unavailable when profile is null", () => {
+  it("renders account profile controls with the local fallback when profile is null", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="settings"
@@ -138,8 +138,10 @@ describe("settings preferences", () => {
       />,
     );
 
-    expect(html).toContain("账户资料暂不可用");
-    expect(html).not.toContain("data-settings-avatar-option");
+    expect(html).not.toContain("账户资料暂不可用");
+    expect(html).toContain('aria-label="编辑显示名称"');
+    expect(html).toContain("@local");
+    expect(html).toContain('data-settings-avatar-option="pixel-sun"');
   });
 
   it("renders pending preference and save error state without preference save buttons", () => {

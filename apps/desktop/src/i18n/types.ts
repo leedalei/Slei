@@ -391,14 +391,14 @@ export type DesktopMessages = {
     panelTitle: Record<SettingsPanel, string>;
     panelSubtitle: Record<SettingsPanel, string>;
     overlay: {
-      returnToApp: string;
-      searchPlaceholder: string;
+      returnToChat: string;
       groups: {
         personal: string;
         workspace: string;
         system: string;
       };
       panels: Record<SettingsOverlayPanel, string>;
+      panelItems: Partial<Record<SettingsOverlayPanel, string>>;
       panelDescriptions: Record<SettingsOverlayPanel, string>;
     };
   };

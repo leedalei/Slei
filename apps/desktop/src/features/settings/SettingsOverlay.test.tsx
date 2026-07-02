@@ -50,17 +50,6 @@ function buttonByText(root: HTMLElement, text: string) {
   return button;
 }
 
-async function search(root: HTMLElement, query: string) {
-  const input = root.querySelector<HTMLInputElement>('input[role="searchbox"]');
-  if (!input) throw new Error("Missing settings search input");
-
-  await act(async () => {
-    input.value = query;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => undefined);
-}
-
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -75,10 +64,18 @@ afterEach(async () => {
 describe("SettingsOverlay", () => {
   it("renders a continuous full-page settings layout with left nav and right detail", async () => {
     const { container } = await mountOverlay();
+    const nav = container.querySelector('[data-testid="slei-settings-overlay-nav"]');
+    const detail = container.querySelector('[data-testid="slei-settings-overlay-detail"]');
 
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.getAttribute("data-settings-overlay-layout")).toBe("continuous");
-    expect(container.querySelector('[data-testid="slei-settings-overlay-nav"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="slei-settings-overlay-detail"]')?.getAttribute("data-settings-detail-surface")).toBe("border-left-shadow-left");
+    expect(nav?.getAttribute("data-settings-nav-surface")).toBe("workspace-sidebar-bg");
+    expect(nav?.className).toContain("bg-[var(--workspace-sidebar-bg)]");
+    expect(nav?.className).not.toContain("border-r");
+    expect(detail?.getAttribute("data-settings-detail-surface")).toBe("right-raised-left-shadow");
+    expect(detail?.getAttribute("data-settings-divider-shadow")).toBe("casts-left");
+    expect(detail?.className).toContain("bg-[var(--workspace-glass-bg)]");
+    expect(detail?.className).toContain("border-l");
+    expect(detail?.className).toContain("shadow-[-12px_0_24px_-18px_rgba(15,23,42,0.16)]");
   });
 
   it("groups settings entries and renders account detail by default", async () => {
@@ -90,50 +87,54 @@ describe("SettingsOverlay", () => {
     expect(container.querySelector('[data-testid="detail-account"]')).toBeTruthy();
   });
 
+  it("places the return-to-chat control in the native chrome row without rendering settings search", async () => {
+    const { container } = await mountOverlay();
+    const returnButton = container.querySelector<HTMLButtonElement>('[data-testid="slei-settings-return"]');
+
+    expect(returnButton?.textContent).toContain("返回聊天");
+    expect(returnButton?.getAttribute("data-settings-return-placement")).toBe("top-right");
+    expect(returnButton?.querySelector('[data-slei-icon="arrowLeft"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="slei-settings-overlay-chrome"]')?.getAttribute("data-settings-chrome-align")).toBe("native-controls-center");
+    expect(container.querySelector('input[role="searchbox"]')).toBeNull();
+    expect(container.textContent).not.toContain("搜索设置");
+  });
+
   it("marks the active nav item as the current page", async () => {
     const { container } = await mountOverlay({ activePanel: "devices" });
 
-    expect(buttonByText(container, "设备管理").getAttribute("aria-current")).toBe("page");
+    expect(buttonByText(container, "设备列表").getAttribute("aria-current")).toBe("page");
     expect(buttonByText(container, "账号资料").getAttribute("aria-current")).toBeNull();
   });
 
-  it("calls onClose exactly once when returning to the app", async () => {
+  it("calls onClose exactly once when returning to chat", async () => {
     const { container, onClose } = await mountOverlay();
 
     await act(async () => {
-      buttonByText(container, "返回应用").click();
+      buttonByText(container, "返回聊天").click();
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps all workspace children visible when search matches the group label", async () => {
+  it("renders members and devices as expandable workspace menus with list children", async () => {
     const { container } = await mountOverlay();
 
-    await search(container, "工作区");
+    const membersMenu = buttonByText(container, "成员管理");
+    const devicesMenu = buttonByText(container, "设备管理");
 
-    expect(container.textContent).toContain("工作区");
-    expect(container.textContent).toContain("成员管理");
-    expect(container.textContent).toContain("设备管理");
-    expect(container.textContent).not.toContain("账号资料");
-  });
-
-  it("shows only matching children when search matches a child label", async () => {
-    const { container } = await mountOverlay();
-
-    await search(container, "设备");
-
-    expect(container.textContent).toContain("工作区");
-    expect(container.textContent).toContain("设备管理");
-    expect(container.textContent).not.toContain("成员管理");
-    expect(container.textContent).not.toContain("账号资料");
+    expect(membersMenu.getAttribute("aria-expanded")).toBe("true");
+    expect(devicesMenu.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector('[data-settings-submenu="members"]')).toBeTruthy();
+    expect(container.querySelector('[data-settings-submenu="devices"]')).toBeTruthy();
+    expect(buttonByText(container, "成员列表")).toBeTruthy();
+    expect(buttonByText(container, "设备列表")).toBeTruthy();
   });
 
   it("calls onPanelChange when a nav item is clicked", async () => {
     const { container, onPanelChange } = await mountOverlay();
 
     await act(async () => {
-      buttonByText(container, "设备管理").click();
+      buttonByText(container, "设备列表").click();
     });
 
     expect(onPanelChange).toHaveBeenCalledWith("devices");

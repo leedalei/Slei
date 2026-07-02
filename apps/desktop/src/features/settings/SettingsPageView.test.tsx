@@ -394,8 +394,10 @@ describe("SettingsPage header", () => {
     expect(document.activeElement).toBe(button);
   });
 
-  it("does not render an active avatar upload control when profile is unavailable", async () => {
+  it("keeps account profile controls available when profile data is not loaded yet", async () => {
     const messages = createDesktopMessages("zh-CN");
+    const onProfileChange = vi.fn();
+    const onProfileAvatarUpload = vi.fn();
     const root = await mountSettingsPage(
       <SettingsPage
         activePanel="account"
@@ -404,12 +406,17 @@ describe("SettingsPage header", () => {
         messages={messages}
         nodes={[localNode]}
         notifications={{ approvals: true, humanReplies: false, mentions: true }}
-        onProfileAvatarUpload={vi.fn()}
+        onProfileAvatarUpload={onProfileAvatarUpload}
+        onProfileChange={onProfileChange}
         profile={null}
         timeZone="Asia/Shanghai"
       />,
     );
 
-    expect(root.querySelector('input[aria-label="上传头像图片"]:not(:disabled)')).toBeNull();
+    expect(root.textContent).not.toContain("账户资料暂不可用");
+    expect(root.textContent).toContain("显示名称");
+    expect(root.textContent).toContain("@local");
+    expect(root.querySelector<HTMLButtonElement>('button[data-settings-avatar-upload-trigger="true"]')?.disabled).toBe(false);
+    expect(root.querySelector('input[aria-label="上传头像图片"]:not(:disabled)')).toBeTruthy();
   });
 });

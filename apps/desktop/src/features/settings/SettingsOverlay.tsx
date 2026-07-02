@@ -1,9 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { SettingsOverlayPanel } from "../../app/model";
 import type { DesktopMessages } from "../../i18n";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SleiIcon, type SleiIconName } from "../../components";
 import { cn } from "@/lib/utils";
@@ -45,6 +44,8 @@ type SettingsOverlayGroup = {
   panels: SettingsOverlayPanel[];
 };
 
+type WorkspacePanel = Extract<SettingsOverlayPanel, "members" | "devices">;
+
 const settingsOverlayGroups: SettingsOverlayGroup[] = [
   { id: "personal", panels: ["account", "preferences"] },
   { id: "workspace", panels: ["members", "devices"] },
@@ -67,21 +68,46 @@ export function SettingsOverlay({
   renderDetail,
 }: SettingsOverlayProps) {
   const labels = messages.settings.overlay;
-  const [searchQuery, setSearchQuery] = useState("");
-  const filteredGroups = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase();
-    if (!query) return settingsOverlayGroups;
+  const [expandedWorkspacePanels, setExpandedWorkspacePanels] = useState<Record<WorkspacePanel, boolean>>({
+    members: true,
+    devices: true,
+  });
 
-    return settingsOverlayGroups.flatMap((group) => {
-      const groupLabel = labels.groups[group.id];
-      if (groupLabel.toLocaleLowerCase().includes(query)) {
-        return [group];
-      }
+  function toggleWorkspacePanel(panel: WorkspacePanel) {
+    setExpandedWorkspacePanels((current) => ({
+      ...current,
+      [panel]: !current[panel],
+    }));
+  }
 
-      const panels = group.panels.filter((panel) => labels.panels[panel].toLocaleLowerCase().includes(query));
-      return panels.length > 0 ? [{ ...group, panels }] : [];
-    });
-  }, [labels, searchQuery]);
+  function renderPanelButton(panel: SettingsOverlayPanel, options: { nested?: boolean } = {}) {
+    const active = panel === activePanel;
+    const label = options.nested ? labels.panelItems[panel] ?? labels.panels[panel] : labels.panels[panel];
+    return (
+      <Button
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "h-auto justify-start gap-3 rounded-md text-left",
+          options.nested ? "ml-6 px-2 py-1.5" : "px-2 py-2",
+          active && "bg-accent text-accent-foreground",
+        )}
+        key={panel}
+        onClick={() => onPanelChange(panel)}
+        type="button"
+        variant="ghost"
+      >
+        <SleiIcon className="size-4 shrink-0" name={settingsOverlayPanelIcons[panel]} />
+        <span className="grid min-w-0 gap-0.5">
+          <span className="truncate text-sm font-medium">{label}</span>
+          {!options.nested ? (
+            <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+              {labels.panelDescriptions[panel]}
+            </span>
+          ) : null}
+        </span>
+      </Button>
+    );
+  }
 
   return (
     <section
@@ -90,64 +116,65 @@ export function SettingsOverlay({
       data-testid="slei-settings-overlay"
     >
       <aside
-        className="flex w-72 shrink-0 flex-col border-r bg-muted/25 md:w-80"
+        className="flex w-72 shrink-0 flex-col bg-[var(--workspace-sidebar-bg)] md:w-80"
+        data-settings-nav-surface="workspace-sidebar-bg"
         data-testid="slei-settings-overlay-nav"
       >
-        <div className="grid gap-3 border-b px-4 py-4">
+        <div
+          className="flex h-[var(--app-chrome-height)] shrink-0 items-center border-b px-3 pl-[calc(var(--app-native-controls-width)+var(--app-gap-sm))]"
+          data-settings-chrome-align="native-controls-center"
+          data-testid="slei-settings-overlay-chrome"
+        >
           <Button
-            aria-label={labels.returnToApp}
-            className="w-fit"
+            aria-label={labels.returnToChat}
+            className="ml-auto h-8 gap-1.5 px-2.5"
+            data-settings-return-placement="top-right"
             onClick={onClose}
             data-testid="slei-settings-return"
             type="button"
             variant="ghost"
           >
-            <SleiIcon className="size-4" name="panelClose" />
-            {labels.returnToApp}
+            <SleiIcon className="size-4" name="arrowLeft" />
+            {labels.returnToChat}
           </Button>
-          <div className="relative">
-            <SleiIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" name="search" />
-            <Input
-              aria-label={labels.searchPlaceholder}
-              className="pl-9"
-              onInput={(event) => setSearchQuery(event.currentTarget.value)}
-              placeholder={labels.searchPlaceholder}
-              role="searchbox"
-              type="search"
-              value={searchQuery}
-            />
-          </div>
         </div>
 
         <ScrollArea className="min-h-0 flex-1">
           <nav aria-label={messages.settings.title} className="grid gap-5 px-3 py-4">
-            {filteredGroups.map((group) => (
+            {settingsOverlayGroups.map((group) => (
               <section className="grid gap-2" key={group.id}>
                 <h2 className="px-2 text-xs font-medium text-muted-foreground">{labels.groups[group.id]}</h2>
                 <div className="grid gap-1">
                   {group.panels.map((panel) => {
-                    const active = panel === activePanel;
-                    return (
-                      <Button
-                        aria-current={active ? "page" : undefined}
-                        className={cn(
-                          "h-auto justify-start gap-3 rounded-md px-2 py-2 text-left",
-                          active && "bg-accent text-accent-foreground",
-                        )}
-                        key={panel}
-                        onClick={() => onPanelChange(panel)}
-                        type="button"
-                        variant="ghost"
-                      >
-                        <SleiIcon className="size-4" name={settingsOverlayPanelIcons[panel]} />
-                        <span className="grid min-w-0 gap-0.5">
-                          <span className="truncate text-sm font-medium">{labels.panels[panel]}</span>
-                          <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
-                            {labels.panelDescriptions[panel]}
-                          </span>
-                        </span>
-                      </Button>
-                    );
+                    if (panel === "members" || panel === "devices") {
+                      const expanded = expandedWorkspacePanels[panel] || activePanel === panel;
+                      return (
+                        <div className="grid gap-1" key={panel}>
+                          <Button
+                            aria-expanded={expanded}
+                            className="h-auto justify-start gap-3 rounded-md px-2 py-2 text-left"
+                            onClick={() => toggleWorkspacePanel(panel)}
+                            type="button"
+                            variant="ghost"
+                          >
+                            <SleiIcon className="size-4 shrink-0" name={settingsOverlayPanelIcons[panel]} />
+                            <span className="grid min-w-0 flex-1 gap-0.5">
+                              <span className="truncate text-sm font-medium">{labels.panels[panel]}</span>
+                              <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+                                {labels.panelDescriptions[panel]}
+                              </span>
+                            </span>
+                            <SleiIcon className="size-4 shrink-0 text-muted-foreground" name={expanded ? "chevronDown" : "chevronRight"} />
+                          </Button>
+                          {expanded ? (
+                            <div className="grid gap-1" data-settings-submenu={panel}>
+                              {renderPanelButton(panel, { nested: true })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    }
+                    return renderPanelButton(panel);
                   })}
                 </div>
               </section>
@@ -157,8 +184,9 @@ export function SettingsOverlay({
       </aside>
 
       <main
-        className="min-w-0 flex-1 border-l bg-background shadow-[-4px_0_4px_-4px_rgba(15,23,42,0.16)]"
-        data-settings-detail-surface="border-left-shadow-left"
+        className="relative z-10 min-w-0 flex-1 border-l border-border/70 bg-[var(--workspace-glass-bg)] shadow-[-12px_0_24px_-18px_rgba(15,23,42,0.16)]"
+        data-settings-detail-surface="right-raised-left-shadow"
+        data-settings-divider-shadow="casts-left"
         data-testid="slei-settings-overlay-detail"
       >
         <ScrollArea className="h-full min-h-0">

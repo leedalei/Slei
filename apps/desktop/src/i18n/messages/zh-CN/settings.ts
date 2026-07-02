@@ -71,8 +71,7 @@ export const settings = {
     about: "查看当前桌面端和本地 daemon 的版本信息。",
   },
   overlay: {
-    returnToApp: "返回应用",
-    searchPlaceholder: "搜索设置...",
+    returnToChat: "返回聊天",
     groups: {
       personal: "个人",
       workspace: "工作区",
@@ -84,6 +83,10 @@ export const settings = {
       members: "成员管理",
       devices: "设备管理",
       about: "关于",
+    },
+    panelItems: {
+      members: "成员列表",
+      devices: "设备列表",
     },
     panelDescriptions: {
       account: "设置展示名称、@ handle 和头像。",

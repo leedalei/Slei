@@ -3,6 +3,7 @@ import type { LucideIcon, LucideProps } from "lucide-react";
 import {
   ArrowDown,
   ArrowDownUp,
+  ArrowLeft,
   ArrowUp,
   Bell,
   Bookmark,
@@ -57,6 +58,7 @@ import {
 export type SleiIconName =
   | "approval"
   | "arrowDown"
+  | "arrowLeft"
   | "arrowUp"
   | "attachment"
   | "bell"
@@ -119,6 +121,7 @@ BookmarkFilled.displayName = "BookmarkFilled";
 export const sleiIcons: Record<SleiIconName, SleiLucideIcon> = {
   approval: CircleAlert,
   arrowDown: ArrowDown,
+  arrowLeft: ArrowLeft,
   arrowUp: ArrowUp,
   attachment: Paperclip,
   bell: Bell,

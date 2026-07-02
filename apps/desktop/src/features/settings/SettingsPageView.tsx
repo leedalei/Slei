@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
-import { defaultTimeZone, desktopVersion, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
+import { defaultTimeZone, desktopVersion, localHumanPresentation, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
 import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ const settingsControlStackClass = "grid gap-3";
 export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
   const activeTheme = normalizeAppearanceTheme(input.appearance.theme);
-  const profile = input.profile;
+  const profile = localHumanPresentation(input.profile, input.messages);
   const preferencePending = Boolean(input.pendingPreference);
   const profilePending = Boolean(input.pendingProfileField);
   const avatarUploadId = "settings-profile-avatar-upload";
@@ -80,17 +80,7 @@ export function SettingsPage(input: SettingsPageInput) {
             title={<span data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</span>}
           />
 
-          {input.activePanel === "account" && !profile ? (
-            <Card className="text-card-foreground shadow-none">
-              <CardContent className="p-4">
-                <div className="text-sm text-muted-foreground">
-                  {labels.profileUnavailable}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {input.activePanel === "account" && profile ? (
+          {input.activePanel === "account" ? (
             <Card className="text-card-foreground shadow-none">
               <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <div className="grid gap-4 sm:grid-cols-2">

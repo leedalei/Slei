@@ -71,8 +71,7 @@ export const settings = {
     about: "Review desktop and local daemon version information.",
   },
   overlay: {
-    returnToApp: "Return to app",
-    searchPlaceholder: "Search settings...",
+    returnToChat: "Return to chat",
     groups: {
       personal: "Personal",
       workspace: "Workspace",
@@ -84,6 +83,10 @@ export const settings = {
       members: "Member management",
       devices: "Device management",
       about: "About",
+    },
+    panelItems: {
+      members: "Member list",
+      devices: "Device list",
     },
     panelDescriptions: {
       account: "Set display name, @ handle, and avatar.",
