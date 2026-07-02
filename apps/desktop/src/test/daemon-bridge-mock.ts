@@ -345,7 +345,8 @@ export function createDaemonBridgeMock(input: {
       const channel = channels.find((candidate) => candidate.id === channelId);
       if (!channel) throw new Error("channel not found");
       const body = request.body.trim();
-      if (!body) throw new Error("message body is required");
+      const selectedAttachments = attachments.filter((attachment) => request.attachmentIds?.includes(attachment.id));
+      if (!body && selectedAttachments.length === 0) throw new Error("message body is required");
       channelMessageCounter += 1;
       const messageId = `msg_channel_${channelId}_${channelMessageCounter}`;
       channelMessages = [
@@ -356,6 +357,7 @@ export function createDaemonBridgeMock(input: {
           sessionId: channel.activeSessionId,
           authorId: request.authorId,
           body,
+          attachments: selectedAttachments,
           kind: "human",
           deleted: false,
           edited: false,

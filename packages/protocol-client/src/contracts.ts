@@ -52,6 +52,7 @@ export interface ChannelCreateRequest {
 export interface SendChannelMessageRequest {
   authorId: string;
   body: string;
+  attachmentIds?: string[];
   asTask?: boolean;
 }
 

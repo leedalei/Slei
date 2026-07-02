@@ -315,4 +315,24 @@ describe("chat composer bridge requests", () => {
       expect.objectContaining({ asTask: true }),
     );
   });
+
+  it("forwards attachment ids for channel messages", async () => {
+    const bridge = {
+      sendConversationMessage: vi.fn(),
+      sendChannelMessage: vi.fn().mockResolvedValue({ outcome: { messageId: "msg_1", action: "broadcast_delivered" } }),
+    };
+
+    await sendChatComposerMessage({
+      activeChannelId: "all",
+      attachmentIds: ["att_1"],
+      body: "",
+      bridge,
+      profile: null,
+    });
+
+    expect(bridge.sendChannelMessage).toHaveBeenCalledWith(
+      "all",
+      expect.objectContaining({ attachmentIds: ["att_1"], body: "" }),
+    );
+  });
 });

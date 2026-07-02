@@ -12,6 +12,7 @@ use crate::services::channel_orchestrator_service::{
 };
 use crate::services::channel_service::ChannelError;
 use crate::services::claim_service::ClaimError;
+use crate::services::conversation_service::ConversationAttachmentRecord;
 use crate::services::member_service::MemberError;
 use crate::services::message_service::{MessageError, MessageKind, MessageRecord};
 use crate::services::message_thread_service::{MessageThreadError, MessageThreadSummaryView};
@@ -27,6 +28,8 @@ const BEFORE_MESSAGE_LIMIT: i64 = 30;
 pub struct SendChannelMessageRequest {
     author_id: String,
     body: String,
+    #[serde(default)]
+    attachment_ids: Vec<String>,
     #[serde(default)]
     as_task: bool,
 }
@@ -76,6 +79,8 @@ struct ChannelMessageView {
     session_id: Option<String>,
     author_id: String,
     body: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    attachments: Vec<ConversationAttachmentRecord>,
     #[serde(default)]
     as_task: bool,
     kind: MessageKind,
@@ -93,6 +98,7 @@ struct ChannelMessageView {
 impl ChannelMessageView {
     fn from_record(
         record: MessageRecord,
+        attachments: Vec<ConversationAttachmentRecord>,
         thread: Option<MessageThreadSummaryView>,
         task: Option<TaskSummaryView>,
     ) -> Self {
@@ -103,6 +109,7 @@ impl ChannelMessageView {
             session_id: record.session_id,
             author_id: record.author_id,
             body: record.body,
+            attachments,
             as_task: record.as_task,
             kind: record.kind,
             deleted: record.deleted,
@@ -179,7 +186,17 @@ pub async fn list_channel_messages(
         } else {
             None
         };
-        messages.push(ChannelMessageView::from_record(message, thread, task));
+        let attachments = state
+            .conversations()
+            .attachments_by_ids(&message.attachment_ids)
+            .await
+            .unwrap_or_default();
+        messages.push(ChannelMessageView::from_record(
+            message,
+            attachments,
+            thread,
+            task,
+        ));
     }
     let page_info = channel_page_info(&state, &channel_id, &messages).await;
     Json(json!({ "messages": messages, "pageInfo": page_info })).into_response()
@@ -292,7 +309,7 @@ pub async fn send_agent_message(
             let message_id = message.id.clone();
             Json(SendAgentMessageResponse {
                 message_id,
-                message: ChannelMessageView::from_record(message, None, None),
+                message: ChannelMessageView::from_record(message, Vec::new(), None, None),
             })
             .into_response()
         }
@@ -349,6 +366,7 @@ pub async fn send_channel_message(
                 channel_id,
                 author_id: payload.author_id,
                 body: payload.body,
+                attachment_ids: payload.attachment_ids,
                 idempotency_key: idempotency_key.to_string(),
                 as_task: payload.as_task,
             },

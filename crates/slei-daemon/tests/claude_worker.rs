@@ -117,7 +117,7 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         Some("dm-activity-agent"),
         json!({
             "name": "Coda",
-            "handle": "@coda-dm-activity",
+            "handle": "@codadmactivity",
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",

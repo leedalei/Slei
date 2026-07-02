@@ -75,6 +75,10 @@ impl SleiDb {
         if version >= 7 {
             self.repair_message_thread_columns().await?;
         }
+        if version >= 12 {
+            self.add_column_if_missing("messages", "attachment_ids", "TEXT NOT NULL DEFAULT '[]'")
+                .await?;
+        }
         Ok(())
     }
 

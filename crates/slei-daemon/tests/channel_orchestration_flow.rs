@@ -149,6 +149,7 @@ async fn channel_agent_replies_and_cards_inherit_source_message_session() {
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "@nova 帮我改 alert 文案".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-explicit-session".to_string(),
         as_task: true,
     };
@@ -261,6 +262,7 @@ async fn task_message_without_explicit_mentions_creates_task_and_broadcasts_sour
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: command_body.to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-command".to_string(),
         as_task: true,
     };
@@ -350,6 +352,7 @@ async fn broadcast_channel_message_creates_deliveries_for_all_regular_targets() 
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "大家好，报数".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-broadcast-multi".to_string(),
         as_task: false,
     };
@@ -443,6 +446,7 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_all_channel
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "大家看一下这个发布风险".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-plain-broadcast-delivery".to_string(),
         as_task: false,
     };
@@ -523,6 +527,7 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_central_r
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "@alice-win 你先看一下，Coda 也可以决定是否 claim".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "send-mention-broadcast-delivery".to_string(),
             as_task: false,
         })
@@ -575,6 +580,7 @@ async fn broadcast_start_failure_rolls_delivery_back_for_retry() {
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "这次启动 worker 会先失败，然后重试".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-broadcast-start-failure".to_string(),
         as_task: false,
     };
@@ -649,6 +655,7 @@ async fn broadcast_worker_completed_marks_delivery_completed_and_logs_diagnostic
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "看一下这条广播".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "send-broadcast-completed".to_string(),
             as_task: false,
         })
@@ -1000,6 +1007,7 @@ async fn agent_message_todo_human_no_mention_broadcast_may_inject_todos_without_
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "大家同步一下进展".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "human-broadcast-with-todos".to_string(),
             as_task: false,
         })
@@ -1203,6 +1211,7 @@ async fn agent_message_todo_deleted_source_is_terminal_and_does_not_starve_five_
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "触发待办注入".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "deleted-source-valid-fill".to_string(),
             as_task: false,
         })
@@ -1347,6 +1356,7 @@ async fn agent_message_todo_worker_completed_marks_run_bound_todos_done() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "请处理广播并带上待办".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "completed-run-binds-todo".to_string(),
             as_task: false,
         })
@@ -1394,6 +1404,7 @@ async fn agent_message_todo_worker_failed_and_start_failure_restore_run_bound_to
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "这次 worker 会失败".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "failed-run-restores-todo".to_string(),
             as_task: false,
         })
@@ -1422,6 +1433,7 @@ async fn agent_message_todo_worker_failed_and_start_failure_restore_run_bound_to
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "这次 start_run 会失败".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "start-failure-restores-todo".to_string(),
             as_task: false,
         })
@@ -1452,6 +1464,7 @@ async fn agent_message_todo_reset_clears_in_flight_todos_and_later_worker_events
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "启动后马上 reset".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "reset-in-flight-todo".to_string(),
             as_task: false,
         })
@@ -1511,6 +1524,7 @@ async fn pure_consultation_broadcasts_without_creating_task() {
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "这个架构方案应该先怎么拆？".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-pure-consultation".to_string(),
         as_task: false,
     };
@@ -1586,6 +1600,7 @@ async fn normal_channel_message_replay_uses_broadcast_delivery() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: false,
         })
@@ -1635,6 +1650,7 @@ async fn explicit_multi_mention_routes_all_targets_with_broadcast_delivery() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "send-explicit-multi".to_string(),
             as_task: false,
         })
@@ -1697,6 +1713,7 @@ async fn explicit_task_mentions_create_assignment_inbox_events_for_all_targets()
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "@alice-win @coda-win 一起实现导出功能".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-task-multi-target".to_string(),
         as_task: true,
     };
@@ -1768,6 +1785,7 @@ async fn task_message_without_mentions_broadcasts_without_fallback_assignment() 
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "请看看这个问题".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-as-task-broadcast".to_string(),
         as_task: true,
     };
@@ -1823,6 +1841,7 @@ async fn explicit_mention_creates_readiness_aware_inbox_without_overriding_targe
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "@alice-win 帮我看下".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-explicit".to_string(),
         as_task: false,
     };
@@ -2654,6 +2673,7 @@ async fn command_message_retry_replays_outcome_without_duplicate_side_effects() 
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "实现频道创建时选择 Agent 的功能".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-command-retry".to_string(),
         as_task: true,
     };
@@ -2743,6 +2763,7 @@ async fn deleted_idempotent_message_retry_is_noop_without_routing_changed_body()
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "实现一个不该被路由的新任务".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: false,
         })
@@ -2814,6 +2835,7 @@ async fn idempotent_retry_with_changed_fields_uses_persisted_message_fields() {
         channel_id: "qa".to_string(),
         author_id: "human_other".to_string(),
         body: "实现一个不该被采用的新任务".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: idempotency_key.to_string(),
         as_task: false,
     };
@@ -2902,6 +2924,7 @@ async fn channel_message_replay_uses_original_non_task_flag() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: true,
         })
@@ -2924,6 +2947,7 @@ async fn channel_message_replay_uses_original_non_task_flag() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: true,
         })
@@ -2983,6 +3007,7 @@ async fn channel_message_replay_uses_original_as_task_flag() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: false,
         })
@@ -3004,6 +3029,7 @@ async fn channel_message_replay_uses_original_as_task_flag() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: body.to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: idempotency_key.to_string(),
             as_task: false,
         })
@@ -3046,6 +3072,7 @@ async fn concurrent_command_retries_share_outcome_without_duplicate_side_effects
         channel_id: "dev".to_string(),
         author_id: "human_lei".to_string(),
         body: "实现频道创建时选择 Agent 的功能".to_string(),
+        attachment_ids: Vec::new(),
         idempotency_key: "send-command-concurrent".to_string(),
         as_task: true,
     };
@@ -3658,6 +3685,7 @@ async fn broadcast_channel_agent_worker_completed_or_failed_output_is_suppressed
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "广播消息的 stdout 不应自动可见".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "broadcast-output-suppressed-completed".to_string(),
             as_task: false,
         })
@@ -3671,6 +3699,7 @@ async fn broadcast_channel_agent_worker_completed_or_failed_output_is_suppressed
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "广播消息的 failed 也不应自动可见".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "broadcast-output-suppressed-failed".to_string(),
             as_task: false,
         })

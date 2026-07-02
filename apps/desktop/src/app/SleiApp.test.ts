@@ -1066,6 +1066,33 @@ describe("createChannelAgentReplyMessage", () => {
     expect(converted?.sentAt).toBe(expected.sentAt);
   });
 
+  it("maps channel message attachments into chat messages", () => {
+    const attachment = {
+      id: "att_1",
+      name: "diagram.png",
+      mimeType: "image/png",
+      size: 128,
+      url: "data:image/png;base64,aW1n",
+    };
+    const converted = channelMessageToSleiMessage(
+      {
+        id: "channel_msg_attachments",
+        channelId: "all",
+        authorId: "human:lei",
+        body: "",
+        attachments: [attachment],
+        kind: "human",
+        deleted: false,
+        createdAt: "2026-06-16 09:08:07",
+      },
+      [],
+      defaultProfile,
+      createDesktopMessages("zh-CN"),
+    );
+
+    expect(converted?.attachments).toEqual([attachment]);
+  });
+
   it("renders local human messages with a presentation fallback when profile is unavailable", () => {
     const messages = createDesktopMessages("zh-CN");
     const message = conversationMessageToSleiMessage(

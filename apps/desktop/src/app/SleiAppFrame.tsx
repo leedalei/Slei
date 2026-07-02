@@ -158,7 +158,7 @@ export type SleiAppFrameProps = {
   onListAgentActivity?: (agentId: string, limit?: number) => Promise<AgentActivityListReceipt> | AgentActivityListReceipt;
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
   onReadAgentWorkspaceFile?: (agentId: string, relativePath: string) => Promise<AgentWorkspaceFileReceipt> | AgentWorkspaceFileReceipt;
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void;
   onMessageSendFailure?: (message: string, type?: ToastType) => void;
   onTaskReply?: (taskId: string, body: string) => Promise<void> | void;
   onTaskStatusChange?: (taskId: string, status: SleiFixtures["tasks"][number]["status"]) => Promise<void> | void;
@@ -542,7 +542,7 @@ function renderWorkspace(
   onTimeZoneChange?: (timeZone: string) => Promise<void> | void,
   onAppearanceChange?: (appearance: AppearancePreferences) => Promise<void> | void,
   onNotificationsChange?: (notifications: NotificationPreferences) => Promise<void> | void,
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void,
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void,
   onMessageSendFailure?: (message: string, type?: ToastType) => void,
   initialChatDraft?: string,
   initialChannelView?: ChannelEmbeddedView,

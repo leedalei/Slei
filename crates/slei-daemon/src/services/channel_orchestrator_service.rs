@@ -42,6 +42,7 @@ pub struct SendChannelMessageInput {
     pub channel_id: String,
     pub author_id: String,
     pub body: String,
+    pub attachment_ids: Vec<String>,
     pub idempotency_key: String,
     pub as_task: bool,
 }
@@ -182,13 +183,14 @@ impl ChannelOrchestratorService {
             None => {
                 self.channels.channel_members(&input.channel_id).await?;
                 self.messages
-                    .create_human_channel_message_with_session(
+                    .create_human_channel_message_with_session_and_attachments(
                         &input.channel_id,
                         Some(&active_session.id),
                         &input.author_id,
                         &input.body,
                         &input.idempotency_key,
                         input.as_task,
+                        &input.attachment_ids,
                     )
                     .await?
             }
@@ -2524,6 +2526,7 @@ mod tests {
                 session_id: Some("session_all".to_string()),
                 author_id: "human_lei".to_string(),
                 body: Some("@all 早上好".to_string()),
+                attachment_ids: Vec::new(),
                 as_task: false,
                 kind: MessageKind::Human,
                 deleted: false,
@@ -2560,6 +2563,7 @@ mod tests {
             session_id: Some("session_all".to_string()),
             author_id: "agent_coda".to_string(),
             body: Some("Agent progress signal without a mention".to_string()),
+            attachment_ids: Vec::new(),
             as_task: false,
             kind: MessageKind::Agent,
             deleted: false,

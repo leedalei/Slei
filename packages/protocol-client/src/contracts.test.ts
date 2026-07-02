@@ -73,6 +73,7 @@ describe("Slei protocol contract fixtures", () => {
     const request = {
       authorId: "human_lei",
       body: "实现一个 API 路由",
+      attachmentIds: ["att_spec"],
     } satisfies SendChannelMessageRequest;
     const outcome = {
       messageId: "msg_1",
@@ -87,6 +88,7 @@ describe("Slei protocol contract fixtures", () => {
 
     expect(request.authorId).toBe("human_lei");
     expect(request.body).toContain("API");
+    expect(request.attachmentIds).toEqual(["att_spec"]);
     expect(receipt.outcome.messageId).toBe("msg_1");
     expect(receipt.outcome.action).toBe("create_task_and_assign");
     expect(receipt.outcome.taskId).toBe("task_1");

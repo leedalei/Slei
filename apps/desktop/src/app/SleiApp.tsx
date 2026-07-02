@@ -8,6 +8,7 @@ import {
   type ChannelMemberView,
   type ChannelMessageView,
   type ChannelView,
+  type ConversationAttachmentView,
   type ConversationAttachmentUploadRequest,
   type ConversationView,
   type ConversationMessageView,
@@ -191,6 +192,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
     time,
     sentAt,
     body: message.body ?? "",
+    attachments: message.attachments,
     cards: message.cards,
     channelId: message.channelId,
     sessionId: message.sessionId,
@@ -1806,7 +1808,7 @@ export function SleiApp() {
     return bridge.uploadConversationAttachment(request);
   }
 
-  async function handleSendMessage(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) {
+  async function handleSendMessage(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) {
     const targetId = activeConversationId ?? activeChannelId;
     const memoryRequest = detectAgentMemoryRequest(body, data.members);
     if (activeConversationId) {
@@ -1864,10 +1866,26 @@ export function SleiApp() {
       }
         return;
     }
-    const message = createLocalChatMessage({ body, messages, profile, channelId: targetId });
-    if (!message) return;
+    const attachmentIds = options?.attachmentIds ?? [];
+    if (!body.trim() && attachmentIds.length === 0) return;
+    const humanProfile = localHumanPresentation(profile, messages);
+    const now = new Date().toISOString();
+    const message = createLocalChatMessage({ body, messages, profile, channelId: targetId })
+      ?? {
+        id: `local-${Date.now()}`,
+        author: humanProfile.displayName,
+        handle: displayUserHandle(humanProfile.handle),
+        avatar: humanProfile.avatar,
+        role: "human" as const,
+        time: formatMessageTime(now),
+        sentAt: formatMessageDateTime(now),
+        body: "",
+        attachments: options?.attachments,
+        channelId: targetId,
+      };
     const result = await sendChatComposerMessage({
       activeChannelId,
+      attachmentIds,
       asTask: options?.asTask,
       body,
       bridge,
@@ -1875,7 +1893,7 @@ export function SleiApp() {
       profile,
     });
     if (result.kind !== "channel") return;
-    const channelMessage = { ...message, id: result.receipt.outcome.messageId };
+    const channelMessage = { ...message, id: result.receipt.outcome.messageId, attachments: options?.attachments ?? message.attachments };
     logAppEvent(bridge, "channel-send", "daemon-outcome", {
       channelId: targetId,
       messageId: result.receipt.outcome.messageId,
@@ -1934,7 +1952,7 @@ export function SleiApp() {
     }
   }
 
-  async function handleSendMessageWithBackendState(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) {
+  async function handleSendMessageWithBackendState(body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) {
     try {
       await handleSendMessage(body, options);
     } catch (error) {

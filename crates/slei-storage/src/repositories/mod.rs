@@ -375,6 +375,7 @@ pub struct ChannelMessageRow {
     pub session_id: Option<String>,
     pub author_id: String,
     pub body: Option<String>,
+    pub attachment_ids: String,
     pub as_task: bool,
     pub kind: String,
     pub deleted: bool,
@@ -1653,6 +1654,26 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn update_channel_message_attachment_ids(
+        &self,
+        message_id: &str,
+        attachment_ids: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE messages SET attachment_ids = ? WHERE id = ?")
+            .bind(attachment_ids)
+            .bind(message_id)
+            .execute(&self.pool)
+            .await
+            .and_then(|result| {
+                if result.rows_affected() == 0 {
+                    Err(sqlx::Error::RowNotFound)
+                } else {
+                    Ok(result)
+                }
+            })?;
+        Ok(())
+    }
+
     pub async fn channel_messages_by_channel(
         &self,
         channel_id: &str,
@@ -1667,7 +1688,7 @@ impl Repositories {
         session_id: Option<&str>,
     ) -> Result<Vec<ChannelMessageRow>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE channel_id = ?
                AND (? IS NULL OR session_id = ?)
@@ -1688,7 +1709,7 @@ impl Repositories {
         message_id: &str,
     ) -> Result<Option<ChannelMessageRow>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE id = ?",
         )
@@ -1728,7 +1749,7 @@ impl Repositories {
                     if endpoints.len() == 2 || from_message_id == to_message_id =>
                 {
                     sqlx::query(
-                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                          FROM messages
                          WHERE channel_id = ?
                            AND rowid >= ?
@@ -1764,7 +1785,7 @@ impl Repositories {
             match center {
                 Some(center) => {
                     sqlx::query(
-                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                        "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                          FROM messages
                          WHERE rowid IN (
                             SELECT rowid
@@ -1787,9 +1808,9 @@ impl Repositories {
             }
         } else if query.before_sequence.is_some() && query.after_sequence.is_none() {
             sqlx::query(
-                "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                "SELECT sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                  FROM (
-                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                     FROM messages
                     WHERE channel_id = ?
                       AND rowid < ?
@@ -1807,7 +1828,7 @@ impl Repositories {
             .await?
         } else if query.after_sequence.is_some() {
             sqlx::query(
-                "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                  FROM messages
                  WHERE channel_id = ?
                    AND rowid > ?
@@ -1826,9 +1847,9 @@ impl Repositories {
             .await?
         } else {
             sqlx::query(
-                "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                "SELECT sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                  FROM (
-                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+                    SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
                     FROM messages
                     WHERE channel_id = ?
                       AND deleted = 0
@@ -1855,7 +1876,7 @@ impl Repositories {
         let limit = normalize_repository_limit(Some(limit));
         let pattern = format!("%{}%", escape_like_pattern(query));
         let rows = sqlx::query(
-            "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
              FROM messages
              WHERE content LIKE ? ESCAPE '\\'
                AND deleted = 0
@@ -1886,9 +1907,9 @@ impl Repositories {
         // strings, or RFC3339 UTC strings. Normalize before comparison so source-specific
         // storage formats cannot silently exclude one result class.
         let rows = sqlx::query(
-            "SELECT sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at
+            "SELECT sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at
              FROM (
-                SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, as_task, kind, deleted, edited, created_at,
+                SELECT rowid AS sequence, id, channel_id, session_id, author_id, content, attachment_ids, as_task, kind, deleted, edited, created_at,
                        unixepoch(created_at) AS created_at_epoch
                 FROM messages
                 WHERE content LIKE ? ESCAPE '\\'
@@ -4663,6 +4684,9 @@ fn channel_message_row_from_sql(
             .try_get::<Option<String>, _>("author_id")?
             .unwrap_or_default(),
         body: row.try_get("content")?,
+        attachment_ids: row
+            .try_get("attachment_ids")
+            .unwrap_or_else(|_| "[]".to_string()),
         as_task: as_task != 0,
         kind: row.try_get("kind")?,
         deleted: deleted != 0,

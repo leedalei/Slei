@@ -163,6 +163,7 @@ async fn dev_reset_clears_live_in_memory_product_state() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "please route before reset".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "message-before-memory-reset".to_string(),
             as_task: false,
         })
@@ -328,6 +329,7 @@ async fn dev_reset_in_progress_blocks_new_channel_runs() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "please launch".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "blocked-by-reset".to_string(),
             as_task: false,
         })
@@ -449,6 +451,7 @@ async fn dev_reset_queued_behind_channel_send_guard_does_not_deadlock_inner_laun
                     channel_id: "dev".to_string(),
                     author_id: "human_lei".to_string(),
                     body: "please route while reset is queued".to_string(),
+                    attachment_ids: Vec::new(),
                     idempotency_key: "nested-channel-guard".to_string(),
                     as_task: false,
                 },
@@ -729,6 +732,7 @@ async fn dev_reset_clears_channel_orchestrator_outcome_idempotency_cache() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "please route".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "cache-reset-key".to_string(),
             as_task: false,
         })
@@ -758,6 +762,7 @@ async fn dev_reset_clears_channel_orchestrator_outcome_idempotency_cache() {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
             body: "please route".to_string(),
+            attachment_ids: Vec::new(),
             idempotency_key: "cache-reset-key".to_string(),
             as_task: false,
         })

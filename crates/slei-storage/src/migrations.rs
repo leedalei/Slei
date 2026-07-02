@@ -136,6 +136,7 @@ pub const MIGRATION_0008: &str = include_str!("../migrations/0008_drop_legacy_co
 pub const MIGRATION_0009: &str = include_str!("../migrations/0009_agent_handle_lower_unique.sql");
 pub const MIGRATION_0010: &str = include_str!("../migrations/0010_agent_message_todos.sql");
 pub const MIGRATION_0011: &str = include_str!("../migrations/0011_agent_role_presets.sql");
+pub const MIGRATION_0012: &str = include_str!("../migrations/0012_channel_message_attachments.sql");
 
 pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, MIGRATION_0001),
@@ -149,4 +150,5 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (9, MIGRATION_0009),
     (10, MIGRATION_0010),
     (11, MIGRATION_0011),
+    (12, MIGRATION_0012),
 ];

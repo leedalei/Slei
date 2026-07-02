@@ -168,7 +168,7 @@ export async function submitComposerDraft(input: {
   asTask: boolean;
   attachments: ConversationAttachmentView[];
   sessionId?: string;
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void;
 }) {
   if (!input.draft.trim() && input.attachments.length === 0) {
     return {
@@ -179,9 +179,11 @@ export async function submitComposerDraft(input: {
     };
   }
 
+  const attachmentIds = input.attachments.map((attachment) => attachment.id);
   await input.onSendMessage?.(input.draft, {
     asTask: input.asTask,
-    attachmentIds: input.attachments.map((attachment) => attachment.id),
+    attachmentIds,
+    ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
     sessionId: input.sessionId,
   });
   return { sent: true, draft: "", attachments: [], asTask: false };
@@ -194,7 +196,7 @@ export async function submitComposerDraftWithFeedback(input: {
   sessionId?: string;
   sendFailedMessage: string;
   onSendFailure?: (message: string) => void;
-  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; sessionId?: string }) => Promise<void> | void;
+  onSendMessage?: (body: string, options?: { asTask?: boolean; attachmentIds?: string[]; attachments?: ConversationAttachmentView[]; sessionId?: string }) => Promise<void> | void;
 }) {
   try {
     return await submitComposerDraft(input);
@@ -251,6 +253,7 @@ export async function sendChatComposerMessage(input: {
     receipt: await input.bridge.sendChannelMessage(input.activeChannelId, {
       authorId: `human:${handle}`,
       asTask: Boolean(input.asTask),
+      attachmentIds: input.attachmentIds,
       body,
     }),
   };

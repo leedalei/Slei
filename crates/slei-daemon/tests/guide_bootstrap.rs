@@ -128,7 +128,7 @@ async fn legacy_agent_index_import_does_not_overwrite_existing_sqlite_agents() {
         .update_product_agent(
             "agent_legacy",
             ProductAgentUpdate {
-                name: Some("Fresh SQLite Name".to_string()),
+                name: Some("FreshSQLiteName".to_string()),
                 description: Some("fresh sqlite description".to_string()),
                 runtime_kind: None,
                 model: None,
@@ -145,7 +145,7 @@ async fn legacy_agent_index_import_does_not_overwrite_existing_sqlite_agents() {
         .await
         .expect("agent reloads from sqlite");
 
-    assert_eq!(restored.name, "Fresh SQLite Name");
+    assert_eq!(restored.name, "FreshSQLiteName");
     assert_eq!(restored.description, "fresh sqlite description");
     assert!(root.join("agents/index.json").exists());
 }

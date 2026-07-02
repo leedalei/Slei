@@ -34,6 +34,8 @@ pub struct MessageRecord {
     pub session_id: Option<String>,
     pub author_id: String,
     pub body: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachment_ids: Vec<String>,
     #[serde(default)]
     pub as_task: bool,
     pub kind: MessageKind,
@@ -348,9 +350,31 @@ impl MessageService {
         idempotency_key: &str,
         as_task: bool,
     ) -> Result<MessageRecord, MessageError> {
+        self.create_human_channel_message_with_session_and_attachments(
+            channel_id,
+            session_id,
+            author_id,
+            body,
+            idempotency_key,
+            as_task,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn create_human_channel_message_with_session_and_attachments(
+        &self,
+        channel_id: &str,
+        session_id: Option<&str>,
+        author_id: &str,
+        body: &str,
+        idempotency_key: &str,
+        as_task: bool,
+        attachment_ids: &[String],
+    ) -> Result<MessageRecord, MessageError> {
         if channel_id.trim().is_empty()
             || author_id.trim().is_empty()
-            || body.trim().is_empty()
+            || (body.trim().is_empty() && attachment_ids.is_empty())
             || idempotency_key.trim().is_empty()
         {
             return Err(MessageError::InvalidMessage);
@@ -384,7 +408,8 @@ impl MessageService {
             return self.message(&message_id).await;
         }
 
-        let message = build_message_with_as_task(
+        let attachment_ids = self.validate_channel_attachment_ids(attachment_ids).await?;
+        let mut message = build_message_with_as_task(
             channel_id,
             session_id,
             author_id,
@@ -392,6 +417,7 @@ impl MessageService {
             MessageKind::Human,
             as_task,
         );
+        message.attachment_ids = attachment_ids;
         self.insert_record_idempotent(
             message.clone(),
             &idempotency_key,
@@ -406,6 +432,30 @@ impl MessageService {
             .event_payloads
             .push(format!("message.created:{}", message.id));
         Ok(message)
+    }
+
+    async fn validate_channel_attachment_ids(
+        &self,
+        attachment_ids: &[String],
+    ) -> Result<Vec<String>, MessageError> {
+        let mut resolved = Vec::new();
+        for attachment_id in attachment_ids {
+            let attachment_id = attachment_id.trim();
+            if attachment_id.is_empty() {
+                return Err(MessageError::InvalidMessage);
+            }
+            let exists = self
+                .repos
+                .conversation_attachment(attachment_id)
+                .await
+                .map_err(message_storage_error)?
+                .is_some();
+            if !exists {
+                return Err(MessageError::InvalidMessage);
+            }
+            resolved.push(attachment_id.to_string());
+        }
+        Ok(resolved)
     }
 
     pub async fn read_agent_messages(
@@ -767,6 +817,8 @@ impl MessageService {
     }
 
     async fn insert_record(&self, message: MessageRecord) -> Result<(), MessageError> {
+        let attachment_ids = message.attachment_ids.clone();
+        let message_id = message.id.clone();
         self.repos
             .insert_channel_message(NewChannelMessageRow {
                 id: message.id,
@@ -779,6 +831,16 @@ impl MessageService {
             })
             .await
             .map_err(message_storage_error)?;
+        if !attachment_ids.is_empty() {
+            self.repos
+                .update_channel_message_attachment_ids(
+                    &message_id,
+                    &serde_json::to_string(&attachment_ids)
+                        .map_err(|error| MessageError::Storage(error.to_string()))?,
+                )
+                .await
+                .map_err(message_storage_error)?;
+        }
         Ok(())
     }
 
@@ -788,6 +850,8 @@ impl MessageService {
         idempotency_key: &str,
         response_payload: &str,
     ) -> Result<(), MessageError> {
+        let attachment_ids = message.attachment_ids.clone();
+        let message_id = message.id.clone();
         self.repos
             .insert_channel_message_idempotent(
                 NewChannelMessageRow {
@@ -804,6 +868,16 @@ impl MessageService {
             )
             .await
             .map_err(message_storage_error)?;
+        if !attachment_ids.is_empty() {
+            self.repos
+                .update_channel_message_attachment_ids(
+                    &message_id,
+                    &serde_json::to_string(&attachment_ids)
+                        .map_err(|error| MessageError::Storage(error.to_string()))?,
+                )
+                .await
+                .map_err(message_storage_error)?;
+        }
         Ok(())
     }
 }
@@ -931,6 +1005,7 @@ fn build_message_with_as_task(
         session_id: session_id.map(ToString::to_string),
         author_id: author_id.to_string(),
         body: body.map(ToString::to_string),
+        attachment_ids: Vec::new(),
         as_task,
         kind,
         deleted: false,
@@ -948,6 +1023,8 @@ fn message_row_to_record(row: ChannelMessageRow) -> MessageRecord {
         session_id: row.session_id,
         author_id: row.author_id,
         body: row.body,
+        attachment_ids: serde_json::from_str::<Vec<String>>(&row.attachment_ids)
+            .unwrap_or_default(),
         as_task: row.as_task,
         kind: kind_from_storage(&row.kind),
         deleted: row.deleted,
