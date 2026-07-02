@@ -584,12 +584,11 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("backdrop-blur-xl");
     expect(source).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
     expect(source).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
-    expect(source).toContain('className="slei-composer-input min-h-20 resize-none px-3 py-3"');
-    expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-transparent px-3 py-3"');
+    expect(source).toContain("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0");
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
   });
 
-  it("renders the composer input as the default shadcn textarea primitive", async () => {
+  it("renders the composer input inside a unified autosizing composer surface", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -604,14 +603,23 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
     const composerInput = host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]');
+    const toolbar = host.querySelector<HTMLElement>('[data-testid="slei-composer-toolbar"]');
 
+    expect(surface).not.toBeNull();
+    expect(surface?.contains(composerInput!)).toBe(true);
+    expect(surface?.contains(toolbar!)).toBe(true);
     expect(composerInput?.tagName).toBe("TEXTAREA");
     expect(composerInput?.className).toContain("slei-composer-input");
-    expect(composerInput?.className).toContain("border-input");
+    expect(composerInput?.className).toContain("max-h-[500px]");
+    expect(composerInput?.className).toContain("resize-none");
+    expect(composerInput?.className).toContain("border-0");
     expect(composerInput?.className).toContain("bg-transparent");
-    expect(composerInput?.className).toContain("dark:bg-input/30");
-    expect(composerInput?.className).toContain("focus-visible:border-ring");
+    expect(composerInput?.className).toContain("shadow-none");
+    expect(composerInput?.className).toContain("focus-visible:ring-0");
+    expect(composerInput?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
+    expect(composerInput?.getAttribute("aria-label")).toBe("输入消息到 #all，输入 / 打开功能菜单");
     expect(composerInput?.className).not.toContain("bg-white/10");
     expect(composerInput?.className).not.toContain("backdrop-blur-xl");
     expect(composerInput?.className).not.toContain("focus:bg-white/15");
@@ -2110,14 +2118,14 @@ describe("ChatPage mention panel", () => {
       />,
     );
     const host = staticMarkupHost(html);
-    const asTaskCheckbox = host.querySelector<HTMLElement>('[data-slot="checkbox"]');
+    const asTaskSwitch = host.querySelector<HTMLElement>('[data-testid="slei-as-task-switch"]');
 
     expect(html).toContain(messages.chat.asTask);
-    expect(asTaskCheckbox?.className).toContain("border-input");
-    expect(asTaskCheckbox?.className).toContain("dark:bg-input/30");
-    expect(asTaskCheckbox?.className).toContain("data-[state=checked]:bg-primary");
-    expect(asTaskCheckbox?.className).not.toContain("bg-white/10");
-    expect(asTaskCheckbox?.className).not.toContain("border-white/20");
+    expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(asTaskSwitch?.getAttribute("data-slot")).toBe("switch");
+    expect(asTaskSwitch?.className).toContain("data-[state=checked]:bg-primary");
+    expect(asTaskSwitch?.className).not.toContain("bg-white/10");
+    expect(asTaskSwitch?.className).not.toContain("border-white/20");
   });
 
   it("keeps timeline message selectors and actions available on transparent message rows", () => {
@@ -2331,14 +2339,27 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.getAttribute("data-slot")).toBe("card");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("overflow-visible");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("overflow-hidden");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("p-1");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("p-3");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).toContain("border-transparent");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("border-border");
-    expect(host.querySelector('[data-testid="slei-composer-surface"]')?.className).not.toContain("slei-shadow-inset");
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const textarea = host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]');
+    const toolbar = host.querySelector<HTMLElement>('[data-testid="slei-composer-toolbar"]');
+    const switchControl = host.querySelector<HTMLElement>('[data-testid="slei-as-task-switch"]');
+
+    expect(surface).not.toBeNull();
+    expect(surface?.contains(textarea!)).toBe(true);
+    expect(surface?.contains(toolbar!)).toBe(true);
+    expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
+    expect(switchControl?.getAttribute("data-slot")).toBe("switch");
+    expect(textarea?.className).toContain("max-h-[500px]");
+    expect(textarea?.className).toContain("resize-none");
+    expect(textarea?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
+    expect(surface?.getAttribute("data-slot")).toBe("card");
+    expect(surface?.className).toContain("overflow-visible");
+    expect(surface?.className).not.toContain("overflow-hidden");
+    expect(surface?.className).toContain("p-1");
+    expect(surface?.className).not.toContain("p-3");
+    expect(surface?.className).toContain("border-transparent");
+    expect(surface?.className).not.toContain("border-border");
+    expect(surface?.className).not.toContain("slei-shadow-inset");
     expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).toContain("overflow-visible");
     expect(host.querySelector('[data-testid="slei-composer-shell"]')?.className).not.toContain("overflow-hidden");
     expect(host.querySelector('[data-testid="slei-composer-shell"] > .slei-composer-glass')?.className).toContain("overflow-visible");
@@ -2354,17 +2375,16 @@ describe("ChatPage mention panel", () => {
       expect(element.className).toContain("overflow-visible");
       expect(element.className).not.toContain("overflow-hidden");
     }
-    const composerInput = host.querySelector('[data-testid="slei-composer-input"]');
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    expect(composerInput?.className).toContain("slei-composer-input");
-    expect(composerInput?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.className).not.toContain("overflow-hidden");
-    expect(composerInput?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
-    expect(composerInput?.className).not.toContain("border-border/60");
+    expect(textarea?.className).toContain("slei-composer-input");
+    expect(textarea?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.className).not.toContain("overflow-hidden");
+    expect(textarea?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
     expect(appCss).toContain("border-color: var(--glass-border);");
     expect(appCss).not.toContain("--composer-input-bg");

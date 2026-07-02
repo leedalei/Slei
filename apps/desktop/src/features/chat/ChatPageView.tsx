@@ -10,12 +10,13 @@ import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Selectable
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { Checkbox } from "../../components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
+import { Switch } from "../../components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Textarea } from "../../components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
+import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
@@ -445,6 +446,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
   const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
   const skillSlashTargets = skillSlash && dmMember ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
+  const composerInputRef = useAutosizeTextarea(draft, { maxHeight: 500 });
+  const composerPlaceholder = dmMember
+    ? messages.chat.inputToMemberWithActions(dmMember.name)
+    : messages.chat.inputToChannelWithActions(stripChannelHash(activeChannel.name));
   const activeTargetId = activeConversation?.id ?? activeChannel.id;
   const visibleMessages = filterConversationMessages(data.messages, {
     channel: activeTargetId,
@@ -1141,8 +1146,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       />
                     ) : null}
                     <Textarea
-                      aria-label={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
-                      className="slei-composer-input min-h-20 resize-none px-3 py-3"
+                      aria-label={composerPlaceholder}
+                      className={cn("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0")}
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -1202,13 +1207,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         void submitMessage();
                       }
                     }}
-                      placeholder={dmMember ? messages.chat.inputToMember(dmMember.name) : messages.chat.inputToChannel(stripChannelHash(activeChannel.name))}
+                      placeholder={composerPlaceholder}
+                      ref={composerInputRef}
                       value={draft}
                     />
-                    <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible">
+                    <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible" data-testid="slei-composer-toolbar">
                       {allowAsTask ? (
                         <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                          <Checkbox checked={asTask} onCheckedChange={(checked) => setAsTask(checked === true)} />
+                          <Switch checked={asTask} data-testid="slei-as-task-switch" onCheckedChange={setAsTask} />
                           <span>{messages.chat.asTask}</span>
                         </label>
                       ) : <span />}
