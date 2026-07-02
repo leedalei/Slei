@@ -1018,6 +1018,48 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("pb-[var(--chat-composer-reserve)]");
   });
 
+  it("uses measured composer height when autosized content exceeds the baseline reserve", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (typeof this.className === "string" && this.className.includes("slei-composer-glass")) {
+        return {
+          bottom: 320,
+          height: 320,
+          left: 0,
+          right: 0,
+          top: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        };
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={"长输入\n".repeat(30)}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+
+      await act(async () => undefined);
+
+      expect(host.querySelector<HTMLElement>('[data-testid="slei-channel-chat-column"]')?.style.getPropertyValue("--chat-composer-reserve")).toBe("344px");
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+    }
+  });
+
   it("enables timeline virtualization only when there are more than 50 messages", () => {
     const source = readChatPageSource();
 

@@ -32,6 +32,7 @@ const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
 const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
 const COMPOSER_RESERVE_PX = 184;
 const COMPOSER_EXPANDED_RESERVE_PX = 256;
+const COMPOSER_RESERVE_BUFFER_PX = 24;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors hover:border-border/50 focus-visible:outline-none data-[focused=true]:border-primary/35";
@@ -431,6 +432,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerShellContentRef = useRef<HTMLDivElement | null>(null);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
   const initialTimelineScrollTargetRef = useRef<string | undefined>(undefined);
@@ -441,6 +443,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const pendingOlderMessagesScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | undefined>(undefined);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
+  const [measuredComposerReservePx, setMeasuredComposerReservePx] = useState(COMPOSER_RESERVE_PX);
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
@@ -488,9 +491,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
-  const composerReservePx = attachments.length > 0 || (mention && mentionTargets.length > 0) || (skillSlash && skillSlashTargets.length > 0)
+  const composerReserveExpanded = attachments.length > 0 || (mention && mentionTargets.length > 0) || (skillSlash && skillSlashTargets.length > 0);
+  const composerBaselineReservePx = composerReserveExpanded
     ? COMPOSER_EXPANDED_RESERVE_PX
     : COMPOSER_RESERVE_PX;
+  const composerReservePx = Math.max(composerBaselineReservePx, measuredComposerReservePx);
   const composerReserveStyle: ChatComposerReserveStyle = {
     "--chat-composer-reserve": `${composerReservePx}px`,
   };
@@ -587,6 +592,23 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     pendingScrollToBottomRef.current = false;
     return requestTimelineScrollToBottom();
   }, [timelineMessages.length, timelineScrollTarget, effectiveChannelView]);
+
+  useLayoutEffect(() => {
+    const node = composerShellContentRef.current;
+    if (!node || typeof window === "undefined") return undefined;
+
+    const measureComposerReserve = () => {
+      const measuredHeight = node.getBoundingClientRect().height || node.offsetHeight;
+      const nextReserve = Math.ceil(measuredHeight + COMPOSER_RESERVE_BUFFER_PX);
+      setMeasuredComposerReservePx((current) => current === nextReserve ? current : nextReserve);
+    };
+
+    measureComposerReserve();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(measureComposerReserve);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [draft, attachments.length, composerReserveExpanded]);
 
   useLayoutEffect(() => {
     restoreOlderMessagesScrollPosition();
@@ -1110,7 +1132,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl" ref={composerShellContentRef}>
                 {mention && mentionTargets.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
                     <MentionPicker
