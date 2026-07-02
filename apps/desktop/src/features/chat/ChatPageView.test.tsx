@@ -761,7 +761,8 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("backdrop-blur-xl");
     expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
     expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
-    expect(source).toContain("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0");
+    expect(source).toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 shadow-[0_0_4px_rgba(15,23,42,0.10)] backdrop-blur-xl");
+    expect(source).toContain("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0");
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
   });
 
@@ -785,6 +786,8 @@ describe("ChatPage mention panel", () => {
     const toolbar = host.querySelector<HTMLElement>('[data-testid="slei-composer-toolbar"]');
 
     expect(surface).not.toBeNull();
+    expect(surface?.className).toContain("p-0");
+    expect(surface?.className).not.toContain("p-1");
     expect(surface?.contains(composerInput!)).toBe(true);
     expect(surface?.contains(toolbar!)).toBe(true);
     expect(composerInput?.tagName).toBe("TEXTAREA");
@@ -793,6 +796,9 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).toContain("resize-none");
     expect(composerInput?.className).toContain("border-0");
     expect(composerInput?.className).toContain("bg-transparent");
+    expect(composerInput?.className).toContain("px-0");
+    expect(composerInput?.className).toContain("py-0");
+    expect(composerInput?.className).not.toContain("py-3");
     expect(composerInput?.className).toContain("shadow-none");
     expect(composerInput?.className).toContain("focus-visible:ring-0");
     expect(composerInput?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
@@ -803,7 +809,7 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.parentElement?.className).not.toContain("group");
   });
 
-  it("renders one unrestricted multi-file composer input and one insert file button", async () => {
+  it("keeps one unrestricted multi-file composer input without a toolbar attachment button", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -823,7 +829,7 @@ describe("ChatPage mention panel", () => {
     expect(fileInputs).toHaveLength(1);
     expect(fileInputs[0]?.getAttribute("accept")).toBeNull();
     expect(fileInputs[0]?.multiple).toBe(true);
-    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-insert-file-button"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-insert-file-button"]')).toBeNull();
   });
 
   it("uploads dropped composer files and renders image and file previews", async () => {
@@ -1328,6 +1334,8 @@ describe("ChatPage mention panel", () => {
     const sendButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]');
     expect(sendButton?.className).toContain("bg-primary");
     expect(sendButton?.className).toContain("text-primary-foreground");
+    expect(sendButton?.className).toContain("h-8");
+    expect(sendButton?.className).toContain("px-3");
   });
 
   it("uses the virtualizer last item when scrolling to the latest message", () => {
@@ -2620,6 +2628,10 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain(messages.chat.asTask);
     expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
     expect(asTaskSwitch?.getAttribute("data-slot")).toBe("switch");
+    expect(asTaskSwitch?.className).toContain("h-5");
+    expect(asTaskSwitch?.className).toContain("w-9");
+    expect(asTaskSwitch?.className).toContain("[&_[data-slot=switch-thumb]]:size-4");
+    expect(asTaskSwitch?.className).toContain("[&_[data-slot=switch-thumb][data-state=checked]]:translate-x-4");
     expect(asTaskSwitch?.className).toContain("data-[state=checked]:bg-primary");
     expect(asTaskSwitch?.className).not.toContain("bg-white/10");
     expect(asTaskSwitch?.className).not.toContain("border-white/20");
@@ -2753,14 +2765,20 @@ describe("ChatPage mention panel", () => {
         profile={defaultProfile}
       />,
     );
+    const host = staticMarkupHost(html);
 
     for (const kind of ["createAgent", "createChannel"]) {
       const cardHtml = html.slice(html.indexOf(`data-card-kind="${kind}"`));
       const cardOpenTag = cardHtml.slice(0, cardHtml.indexOf(">"));
+      const actionButtonClasses = host.querySelector<HTMLElement>(`[data-card-kind="${kind}"] [data-slot="button"]`)?.className.split(/\s+/) ?? [];
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
       expect(cardHtml).toContain('data-slot="card"');
-      expect(cardHtml).not.toContain('data-size="xs"');
+      expect(actionButtonClasses).toContain("h-7");
+      expect(actionButtonClasses).toContain("px-2.5");
+      expect(actionButtonClasses).toContain("text-xs");
+      expect(actionButtonClasses).toContain("gap-1");
+      expect(actionButtonClasses).not.toContain("h-8");
       expect(cardOpenTag).not.toContain("shadow-[");
       expect(cardOpenTag).not.toContain("hover:shadow");
     }
@@ -2863,7 +2881,8 @@ describe("ChatPage mention panel", () => {
     expect(surface?.getAttribute("data-slot")).toBe("card");
     expect(surface?.className).toContain("overflow-visible");
     expect(surface?.className).not.toContain("overflow-hidden");
-    expect(surface?.className).toContain("p-1");
+    expect(surface?.className).toContain("p-0");
+    expect(surface?.className).not.toContain("p-1");
     expect(surface?.className).not.toContain("p-3");
     expect(surface?.className).toContain("border-transparent");
     expect(surface?.className).not.toContain("border-border");
@@ -2892,18 +2911,26 @@ describe("ChatPage mention panel", () => {
     expect(textarea?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
     expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
     expect(textarea?.parentElement?.parentElement?.parentElement?.parentElement?.parentElement?.className).toContain("overflow-visible");
+    expect(textarea?.className).toContain("border-0");
+    expect(textarea?.className).toContain("px-0");
+    expect(textarea?.className).toContain("py-0");
+    expect(textarea?.className).not.toContain("px-3");
+    expect(textarea?.className).not.toContain("py-3");
     expect(textarea?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
-    expect(appCss).toContain("border-color: var(--glass-border);");
     expect(appCss).not.toContain("--composer-input-bg");
     expect(appCss).not.toContain("background: var(--composer-input-bg);");
-    expect(appCss).toContain("box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);");
     expect(appCss).toContain(".slei-composer-glass {");
     expect(appCss).toContain("overflow: visible;");
+    expect(appCss).toContain("--composer-glass-border: rgba(0, 0, 0, 0.14);");
+    expect(appCss).toContain("border-color: var(--composer-glass-border);");
+    expect(appCss).toContain("0 0 4px var(--composer-glass-shadow),");
+    expect(appCss).not.toContain("0 2px 4px var(--composer-glass-shadow),");
     expect(appCss).toContain("-webkit-backdrop-filter: blur(24px) saturate(180%);");
     expect(appCss).toContain("backdrop-filter: blur(24px) saturate(180%);");
-    expect(appCss).toContain("--composer-glass-bg: rgba(28, 35, 50, 0.7);");
-    expect(appCss).toContain("--composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);");
+    expect(appCss).toContain("--composer-glass-bg: var(--workspace-glass-bg);");
+    expect(appCss).not.toContain("--composer-glass-bg: rgba(28, 35, 50, 0.7);");
+    expect(appCss).not.toContain("--composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);");
     expect(appCss).toContain(".slei-composer-glass::before {");
     expect(appCss).toContain("-webkit-backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
     expect(appCss).toContain("backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");

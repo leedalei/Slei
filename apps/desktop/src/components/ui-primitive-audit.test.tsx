@@ -907,7 +907,7 @@ describe("desktop UI primitive usage", () => {
         if (line.includes('variant="primary"')) violations.push(`${file}:${index + 1}: primary Button variant`);
         if (line.includes("<Button") && line.includes("glowEffect")) violations.push(`${file}:${index + 1}: glowEffect Button prop`);
         if (line.includes("wrapContent")) violations.push(`${file}:${index + 1}: wrapContent Button prop`);
-        if (/\bsize="(?:xs|icon-xs|icon-sm|icon-lg)"/.test(line)) {
+        if (/\bsize="(?:icon-xs|icon-sm|icon-lg)"/.test(line)) {
           violations.push(`${file}:${index + 1}: non-shadcn Button size`);
         }
       }

@@ -109,7 +109,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
       </div>
-      <Button disabled={done} onClick={onCreate} size="sm" type="button">
+      <Button disabled={done} onClick={onCreate} size="xs" type="button">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
     </Card>
@@ -1206,7 +1206,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 ) : null}
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-transparent p-3 shadow-[0_2px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl" ref={composerShellContentRef}>
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 shadow-[0_0_4px_rgba(15,23,42,0.10)] backdrop-blur-xl" ref={composerShellContentRef}>
                 {mention && mentionTargets.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
                     <MentionPicker
@@ -1237,7 +1237,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   <Card
                     className={cn(
                       CARD_FLAT_CLASS,
-                      "grid gap-2 overflow-visible p-1 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
+                      "grid gap-2 overflow-visible p-0 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
                     )}
                     data-drag-active={composerDragActive ? "true" : undefined}
                     data-testid="slei-composer-surface"
@@ -1275,7 +1275,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     ) : null}
                     <Textarea
                       aria-label={composerPlaceholder}
-                      className={cn("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-3 py-3 shadow-none focus-visible:ring-0")}
+                      className={cn("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0")}
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -1341,15 +1341,19 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                     <div className="flex flex-wrap items-center justify-between gap-2 overflow-visible" data-testid="slei-composer-toolbar">
                       {allowAsTask ? (
-                        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                          <Switch checked={asTask} data-testid="slei-as-task-switch" onCheckedChange={setAsTask} />
+                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Switch
+                            checked={asTask}
+                            className="h-5 w-9 [&_[data-slot=switch-thumb]]:size-4 [&_[data-slot=switch-thumb][data-state=checked]]:translate-x-4"
+                            data-testid="slei-as-task-switch"
+                            onCheckedChange={setAsTask}
+                          />
                           <span>{messages.chat.asTask}</span>
                         </label>
                       ) : <span />}
                       <div className="flex items-center gap-2 overflow-visible">
                         <input data-testid="slei-composer-file-input" hidden multiple onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                        <Button aria-label={messages.chat.insertFileCommand} className="size-8 [&_svg]:size-3.5" data-testid="slei-insert-file-button" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
-                        <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
+                        <Button data-testid="slei-send-button" disabled={sendDisabled} size="sm" type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>
                   </Card>

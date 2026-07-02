@@ -64,7 +64,8 @@
   --text-primary: var(--text-color-1);
   --text-secondary: var(--text-color-2);
   --text-muted: var(--text-color-3);
-  --composer-glass-bg: rgba(28, 35, 50, 0.7);
+  --composer-glass-border: rgba(255, 255, 255, 0.16);
+  --composer-glass-bg: var(--workspace-glass-bg);
   --composer-glass-shadow: rgb(0 0 0 / 0.10);
   --composer-glass-highlight: rgb(255 255 255 / 0.18);
   --radius-xs: 6px;
@@ -310,7 +311,8 @@
   --text-primary: var(--text-color-1);
   --text-secondary: var(--text-color-2);
   --text-muted: var(--text-color-3);
-  --composer-glass-bg: rgba(28, 35, 50, 0.7);
+  --composer-glass-border: rgba(255, 255, 255, 0.16);
+  --composer-glass-bg: var(--workspace-glass-bg);
   --composer-glass-shadow: rgb(0 0 0 / 0.10);
   --composer-glass-highlight: rgb(255 255 255 / 0.18);
 }
@@ -385,7 +387,8 @@
   --text-muted: var(--text-color-3);
   --overlay-shadow-color: rgb(15 23 42 / 0.10);
   --glass-highlight: color-mix(in srgb, white 72%, transparent);
-  --composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);
+  --composer-glass-border: rgba(0, 0, 0, 0.14);
+  --composer-glass-bg: var(--workspace-glass-bg);
   --composer-glass-shadow: rgb(15 23 42 / 0.14);
   --composer-glass-highlight: rgb(255 255 255 / 0.72);
 }
@@ -394,11 +397,12 @@
   .slei-composer-glass {
     position: relative;
     overflow: visible;
+    border-color: var(--composer-glass-border);
     background: var(--composer-glass-bg);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     backdrop-filter: blur(24px) saturate(180%);
     box-shadow:
-      0 2px 4px var(--composer-glass-shadow),
+      0 0 4px var(--composer-glass-shadow),
       inset 0 1px 0 var(--composer-glass-highlight);
   }
 
@@ -420,12 +424,11 @@
   }
 
   .slei-composer-input {
-    border-color: var(--glass-border);
-    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);
+    box-shadow: none;
   }
 
   .slei-composer-input:focus-visible {
-    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--overlay-shadow-color) 22%, transparent);
+    box-shadow: none;
   }
 
   .slei-channel-member-group {
