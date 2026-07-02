@@ -103,6 +103,7 @@ function currentDialogSubmit() {
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (mountedRoot) {
     await act(async () => {
       mountedRoot?.unmount();
@@ -764,11 +765,104 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(onViewChange).not.toHaveBeenCalledWith("settings");
     expect(document.querySelector('[data-testid="slei-sidebar-settings-menu"]')).toBeNull();
-    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
-    expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-overlay-hidden")).toBe("true");
-    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(true);
-    expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.textContent).toContain("账号资料");
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("enter");
+    expect(container.querySelector('[data-testid="slei-settings-detail-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("enter");
+    expect(container.querySelector('[data-testid="slei-sidebar-chat-page"]')?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector('[data-testid="slei-sidebar-chat-page"]')?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector('[data-testid="slei-workspace-chat-page"]')?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector('[data-testid="slei-workspace-chat-page"]')?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.className.split(/\s+/)).not.toContain("slei-settings-page-sidebar-content");
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.className.split(/\s+/)).not.toContain("hidden");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-slot="workspace-card"]')?.className.split(/\s+/)).not.toContain("slei-settings-page-detail-content");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("aria-hidden")).toBeNull();
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(false);
+    expect(container.querySelector('[data-testid="slei-settings-overlay-nav"]')?.textContent).toContain("账号资料");
+    expect(container.querySelector('[data-testid="slei-settings-overlay-detail"]')?.textContent).toContain("个人资料");
+  });
+
+  it("keeps settings overlay mounted in an exit motion state before unmounting on return", async () => {
+    vi.useFakeTimers();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("enter");
+    expect(container.querySelector('[data-testid="slei-settings-detail-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("enter");
+
+    await clickElement(container.querySelector('[data-testid="slei-settings-return"]'));
+
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("exit");
+    expect(container.querySelector('[data-testid="slei-settings-detail-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("exit");
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.className.split(/\s+/)).not.toContain("hidden");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-slot="workspace-card"]')?.className.split(/\s+/)).not.toContain("slei-settings-page-detail-content");
+
+    await act(async () => {
+      vi.advanceTimersByTime(220);
+    });
+
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-testid="slei-settings-detail-swiper"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+    expect(container.querySelector('[data-testid="slei-sidebar-settings-page"]')).toBeNull();
+    expect(container.querySelector('[data-testid="slei-detail-settings-page"]')).toBeNull();
+  });
+
+  it("uses horizontal block page transitions for settings without opacity fading", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const overlayCss = appCss.slice(appCss.indexOf(".slei-settings-block-swiper {"), appCss.indexOf(".slei-workspace-sidebar-card {"));
+
+    expect(overlayCss).toContain("transform: translateX(-100%)");
+    expect(overlayCss).toContain("transform: translateX(100%)");
+    expect(overlayCss).toContain(".slei-settings-block-swiper[data-settings-page-motion=\"enter\"] .slei-settings-sidebar-chat-page");
+    expect(overlayCss).toContain(".slei-settings-block-swiper[data-settings-page-motion=\"enter\"] .slei-settings-detail-chat-page");
+    expect(overlayCss).not.toContain(".slei-settings-page-sidebar-content[data-settings-page-motion=\"enter\"]");
+    expect(overlayCss).not.toContain(".slei-settings-page-detail-content[data-settings-page-motion=\"enter\"]");
+    expect(overlayCss).not.toContain("translateY(100%)");
+    expect(overlayCss).not.toContain("opacity:");
+  });
+
+  it("renders real members and devices in settings overlay workspace submenus", async () => {
+    const onMemberSelect = vi.fn();
+    const data = createSleiFixtures({ members: createDemoMembers() });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onMemberSelect={onMemberSelect}
+        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+
+    const overlay = container.querySelector('[data-testid="slei-settings-overlay-nav"]');
+    expect(overlay?.textContent).toContain("Coda");
+    expect(overlay?.textContent).toContain("@Coda");
+    expect(overlay?.textContent).toContain("Cindy");
+    expect(overlay?.textContent).toContain("本机设备");
+    expect(overlay?.textContent).not.toContain("成员列表");
+    expect(overlay?.textContent).not.toContain("设备列表");
+
+    await clickElement(Array.from(overlay?.querySelectorAll("button") ?? []).find((button) => button.textContent?.includes("Cindy")));
+
+    expect(onMemberSelect).toHaveBeenCalledWith("a2");
+    expect(container.querySelector('[data-settings-embedded-detail="members"]')).toBeTruthy();
+
+    await clickElement(Array.from(overlay?.querySelectorAll("button") ?? []).find((button) => button.textContent?.includes("本机设备")));
+
+    expect(container.querySelector('[data-settings-embedded-detail="devices"]')).toBeTruthy();
   });
 
   it("keeps legacy activeView settings route available for compatibility", () => {
@@ -801,7 +895,8 @@ describe("SleiAppFrame global search navigation", () => {
     await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置"]'));
 
     expect(onViewChange).not.toHaveBeenCalledWith("settings");
-    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("enter");
+    expect(container.querySelector('[data-testid="slei-settings-overlay-nav"]')).toBeTruthy();
     expect(document.body.querySelector('[data-testid="slei-sidebar-settings-menu"]')).toBeNull();
     expect(sidebarSource).not.toContain('data-slot="dialog-portal"');
     expect(sidebarSource).not.toContain('role="dialog"');
@@ -1073,6 +1168,7 @@ describe("SleiAppFrame global search navigation", () => {
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const sidebarCss = appCss.slice(appCss.indexOf(".slei-workspace-sidebar {"), appCss.indexOf(".slei-app-shell {"));
+    const shellCss = appCss.slice(appCss.indexOf(".slei-app-shell {"), appCss.indexOf(".slei-app-chrome {"));
 
     expect(appCss).toContain("--glass-bg:");
     expect(appCss).toContain("--glass-border:");
@@ -1091,6 +1187,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--app-card-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7)");
     expect(appCss).toContain("--workspace-sidebar-bg: rgba(255, 255, 255, 0.62)");
     expect(appCss).toContain("--workspace-glass-bg: rgba(255, 255, 255, 0.76)");
+    expect(appCss).toContain("--settings-sidebar-bg: rgb(248 249 251)");
+    expect(appCss).toContain("--settings-detail-bg: rgb(249 249 250)");
     expect(appCss).toContain("--workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04)");
     expect(appCss).toContain("--workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08)");
     expect(appCss).toContain("--glass-surface-filter: blur(20px) saturate(150%)");
@@ -1104,7 +1202,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).not.toContain("padding-top:");
     expect(appCss).toContain("backdrop-filter: var(--chrome-surface-filter)");
     expect(appCss).not.toContain("--app-shell-bg: #");
-    expect(appCss).not.toContain("border-radius: 28px");
+    expect(shellCss).not.toContain("border-radius: 28px");
     expect(appCss).not.toContain("0 3px 4px color-mix(in srgb, rgb(61 74 95");
     expect(sidebarSource).not.toContain("bg-sidebar/");
     expect(frameSource).not.toContain("bg-sidebar/");
@@ -1153,7 +1251,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(frameSource).toContain("overflow-hidden bg-transparent text-foreground");
     expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
     expect(frameSource).not.toContain('className="slei-workspace slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
-    expect(frameSource).toContain('className="slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
+    expect(frameSource).toContain('"slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent"');
     expect(appCss).toContain(".slei-glass-workspace {");
     expect(appCss).toContain("backdrop-filter: var(--glass-surface-filter)");
     expect(appCss).toContain("--background: oklch(1 0 0)");

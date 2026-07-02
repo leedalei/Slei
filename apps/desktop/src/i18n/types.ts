@@ -398,7 +398,6 @@ export type DesktopMessages = {
         system: string;
       };
       panels: Record<SettingsOverlayPanel, string>;
-      panelItems: Partial<Record<SettingsOverlayPanel, string>>;
       panelDescriptions: Record<SettingsOverlayPanel, string>;
     };
   };

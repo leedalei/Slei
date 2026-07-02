@@ -143,6 +143,10 @@
   --workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04);
   --workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08);
   --workspace-glass-bg: rgba(255, 255, 255, 0.76);
+  --settings-sidebar-bg: rgb(248 249 251);
+  --settings-detail-bg: rgb(249 249 250);
+  --settings-overlay-motion-dur: 200ms;
+  --settings-overlay-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
   --glass-surface-filter: blur(20px) saturate(150%);
   --chrome-surface-filter: blur(40px) saturate(150%);
@@ -299,6 +303,8 @@
   --workspace-sidebar-hover-bg: color-mix(in srgb, white 8%, transparent);
   --workspace-sidebar-active-bg: color-mix(in srgb, white 14%, transparent);
   --workspace-glass-bg: var(--app-card-bg);
+  --settings-sidebar-bg: rgb(31 41 57);
+  --settings-detail-bg: rgb(31 41 57);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 20px;
@@ -373,6 +379,8 @@
   --workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04);
   --workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08);
   --workspace-glass-bg: rgba(255, 255, 255, 0.76);
+  --settings-sidebar-bg: rgb(248 249 251);
+  --settings-detail-bg: rgb(249 249 250);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-blur: 16px;
@@ -788,6 +796,197 @@ select:focus-visible {
   gap: var(--app-card-gap);
   padding: var(--app-gap-xs) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
   overflow: hidden;
+}
+
+.slei-settings-overlay {
+  inset: var(--app-chrome-height) 0 0;
+  pointer-events: none;
+}
+
+.slei-settings-overlay-content {
+  display: grid;
+  grid-template-columns: max(var(--app-sidebar-width, 260px), 260px) minmax(0, 1fr);
+  gap: var(--app-card-gap);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: var(--app-gap-xs) var(--app-shell-inline-inset) var(--app-shell-bottom-inset);
+  pointer-events: none;
+}
+
+.slei-settings-overlay-card {
+  min-height: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--app-card-border);
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  -webkit-backdrop-filter: var(--glass-surface-filter);
+  backdrop-filter: var(--glass-surface-filter);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.slei-settings-overlay-nav-card {
+  min-width: 260px;
+}
+
+.slei-settings-overlay[data-settings-motion="enter"] .slei-settings-overlay-nav-card {
+  animation: slei-settings-nav-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-overlay[data-settings-motion="exit"] .slei-settings-overlay-nav-card {
+  animation: slei-settings-nav-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-overlay[data-settings-motion="enter"] .slei-settings-overlay-detail-card {
+  animation: slei-settings-detail-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-overlay[data-settings-motion="exit"] .slei-settings-overlay-detail-card {
+  animation: slei-settings-detail-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-overlay-nav-page,
+.slei-settings-overlay-detail-page {
+  width: 100%;
+  height: 100%;
+}
+
+.slei-settings-block-swiper {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.slei-settings-block-page {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  transform: translateX(0);
+  will-change: transform;
+}
+
+.slei-settings-sidebar-settings-page,
+.slei-settings-detail-settings-page {
+  z-index: 1;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-chat-page {
+  animation: slei-settings-sidebar-chat-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-chat-page {
+  animation: slei-settings-sidebar-chat-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-settings-page {
+  animation: slei-settings-sidebar-settings-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-settings-page {
+  animation: slei-settings-sidebar-settings-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-chat-page {
+  animation: slei-settings-detail-chat-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-chat-page {
+  animation: slei-settings-detail-chat-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-settings-page {
+  animation: slei-settings-detail-settings-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+.slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-settings-page {
+  animation: slei-settings-detail-settings-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+}
+
+@keyframes slei-settings-nav-enter {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-nav-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes slei-settings-detail-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-detail-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes slei-settings-sidebar-chat-enter {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes slei-settings-sidebar-chat-exit {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-sidebar-settings-enter {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-sidebar-settings-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes slei-settings-detail-chat-enter {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes slei-settings-detail-chat-exit {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-detail-settings-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slei-settings-detail-settings-exit {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slei-settings-overlay-card,
+  .slei-settings-block-page {
+    animation: none !important;
+  }
+
+  .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-chat-page,
+  .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-settings-page {
+    transform: translateX(100%);
+  }
+
+  .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-settings-page,
+  .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-chat-page {
+    transform: translateX(-100%);
+  }
+
+  .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-settings-page,
+  .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-chat-page,
+  .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-settings-page,
+  .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-chat-page {
+    transform: translateX(0);
+  }
 }
 
 .slei-workspace-sidebar-card {

@@ -84,10 +84,6 @@ export const settings = {
       devices: "Device management",
       about: "About",
     },
-    panelItems: {
-      members: "Member list",
-      devices: "Device list",
-    },
     panelDescriptions: {
       account: "Set display name, @ handle, and avatar.",
       preferences: "Configure language, appearance, and notification preferences.",

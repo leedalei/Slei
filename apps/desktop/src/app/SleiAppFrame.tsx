@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ import { SearchRoute } from "./routes/SearchRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TasksRoute } from "./routes/TasksRoute";
 import { WorkspaceSidebar, type ChannelCardDraftRequest } from "./WorkspaceSidebar";
-import { SettingsDetailHost, SettingsOverlay } from "../features/settings/SettingsOverlay";
+import { SettingsDetailHost, SettingsOverlayDetail, SettingsOverlayNav, type SettingsOverlayNavItem } from "../features/settings/SettingsOverlay";
 import sleiBubbleIcon from "../assets/brand/slei-bubble.svg";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import {
@@ -71,6 +71,8 @@ import {
 } from "./model";
 
 export type ChatWorkspaceMode = "chat" | "saved";
+
+const settingsOverlayExitMs = 200;
 
 export type SleiAppFrameProps = {
   activeView: AppView;
@@ -183,9 +185,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const [agentCreateOpen, setAgentCreateOpen] = useState(input.initialAgentCreateModalOpen ?? false);
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
   const [settingsOverlayOpen, setSettingsOverlayOpen] = useState(false);
+  const [settingsOverlayMotion, setSettingsOverlayMotion] = useState<"enter" | "exit">("enter");
   const [activeSettingsOverlayPanel, setActiveSettingsOverlayPanel] = useState<SettingsOverlayPanel>(
     settingsOverlayPanelFromLegacyPanel(input.initialSettingsPanel ?? "account"),
   );
+  const settingsOverlayCloseTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [activeSettingsMemberId, setActiveSettingsMemberId] = useState(input.activeMemberId);
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
   const [channelCardDraftRequest, setChannelCardDraftRequest] = useState<ChannelCardDraftRequest | undefined>(undefined);
@@ -205,6 +210,18 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     "--app-font-size": fontSize,
   } as CSSProperties;
   const sidebarChatSelectionActive = input.activeView === "chat";
+  const settingsMemberItems: SettingsOverlayNavItem[] = input.data.members.map((member) => ({
+    id: member.id,
+    label: member.name,
+    description: member.handle,
+  }));
+  const settingsDeviceItems: SettingsOverlayNavItem[] = input.runtimeSetup.nodes.map((node) => ({
+    id: node.id,
+    label: node.name,
+    description: node.device.hostname,
+  }));
+  const settingsPageMotion = settingsOverlayOpen ? settingsOverlayMotion : undefined;
+  const settingsOverlayBlocksApp = settingsOverlayOpen && settingsOverlayMotion === "enter";
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -260,6 +277,16 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     setActiveComputerId(firstComputer?.id ?? "");
   }, [activeComputerId, firstComputer?.id, input.runtimeSetup.nodes]);
 
+  useEffect(() => {
+    setActiveSettingsMemberId(input.activeMemberId);
+  }, [input.activeMemberId]);
+
+  useEffect(() => () => {
+    if (settingsOverlayCloseTimer.current) {
+      clearTimeout(settingsOverlayCloseTimer.current);
+    }
+  }, []);
+
   function handleChannelEdit(channelId: string) {
     if (input.onChannelEdit) {
       input.onChannelEdit(channelId);
@@ -270,8 +297,25 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   }
 
   function openSettingsOverlay(panel: SettingsOverlayPanel = "account") {
+    if (settingsOverlayCloseTimer.current) {
+      clearTimeout(settingsOverlayCloseTimer.current);
+      settingsOverlayCloseTimer.current = undefined;
+    }
     setActiveSettingsOverlayPanel(panel);
+    setSettingsOverlayMotion("enter");
     setSettingsOverlayOpen(true);
+  }
+
+  function closeSettingsOverlay() {
+    setSettingsOverlayMotion("exit");
+    if (settingsOverlayCloseTimer.current) {
+      clearTimeout(settingsOverlayCloseTimer.current);
+    }
+    settingsOverlayCloseTimer.current = setTimeout(() => {
+      settingsOverlayCloseTimer.current = undefined;
+      setSettingsOverlayOpen(false);
+      setSettingsOverlayMotion("enter");
+    }, settingsOverlayExitMs);
   }
 
   function renderSettingsRoutePanel(panel: SettingsPanel) {
@@ -313,7 +357,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         )}
         renderMembers={() => (
           <MembersRoute
-            activeMemberId={input.activeMemberId}
+            activeMemberId={activeSettingsMemberId ?? input.activeMemberId}
             data={input.data}
             layout="settings"
             memberFieldErrors={input.memberFieldErrors}
@@ -369,54 +413,101 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
 
       <div className="slei-app-content min-h-0 min-w-0" data-slot="app-content">
         <div
-          aria-hidden={settingsOverlayOpen ? true : undefined}
-          className={cn("slei-workspace-sidebar-card min-h-0 max-[760px]:hidden", settingsOverlayOpen && "hidden")}
-          data-settings-overlay-hidden={settingsOverlayOpen ? "true" : undefined}
+          className="slei-workspace-sidebar-card min-h-0 max-[760px]:hidden"
           data-slot="sidebar-card"
         >
-          <WorkspaceSidebar
-            activeAgentActivity={activeAgentActivity}
-            activeChannelId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" && !input.activeConversationId ? activeChannel?.id : undefined}
-            activeChatWorkspace={sidebarChatSelectionActive ? input.activeChatWorkspace : undefined}
-            activeConversationId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" ? input.activeConversationId : undefined}
-            activeView={input.activeView}
-            cardDraftRequest={channelCardDraftRequest}
-            channels={input.data.channels}
-            conversations={input.data.conversations}
-            initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
-            members={input.data.members}
-            messages={messages}
-            onChannelCreate={input.onChannelCreate}
-            onChannelCreateClick={() => undefined}
-            onChannelCreateFailure={input.onChannelCreateFailure}
-            onChannelCreateLog={input.onChannelCreateLog}
-            onChannelCreateRefresh={input.onChannelCreateRefresh}
-            onChannelDelete={input.onChannelDelete}
-            onChannelEdit={handleChannelEdit}
-            onChannelSelect={input.onChannelSelect}
-            onConversationSelect={input.onConversationSelect}
-            onInteractiveCardComplete={input.onInteractiveCardComplete}
-            onMemberSelect={input.onMemberSelect}
-            onSavedMessagesOpen={input.onSavedMessagesOpen}
-            onSettingsOpen={openSettingsOverlay}
-            onViewChange={input.onViewChange}
-            profile={profile}
-          />
+          <div
+            className="slei-settings-block-swiper h-full min-h-0"
+            data-settings-block="sidebar"
+            data-settings-page-motion={settingsPageMotion}
+            data-testid="slei-settings-sidebar-swiper"
+          >
+            <div
+              aria-hidden={settingsOverlayBlocksApp ? true : undefined}
+              className="slei-settings-block-page slei-settings-sidebar-chat-page"
+              data-testid="slei-sidebar-chat-page"
+              inert={settingsOverlayBlocksApp ? true : undefined}
+            >
+              <WorkspaceSidebar
+                activeAgentActivity={activeAgentActivity}
+                activeChannelId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" && !input.activeConversationId ? activeChannel?.id : undefined}
+                activeChatWorkspace={sidebarChatSelectionActive ? input.activeChatWorkspace : undefined}
+                activeConversationId={sidebarChatSelectionActive && input.activeChatWorkspace !== "saved" ? input.activeConversationId : undefined}
+                activeView={input.activeView}
+                cardDraftRequest={channelCardDraftRequest}
+                channels={input.data.channels}
+                conversations={input.data.conversations}
+                initialCreateChannelModalOpen={input.initialCreateChannelModalOpen}
+                members={input.data.members}
+                messages={messages}
+                onChannelCreate={input.onChannelCreate}
+                onChannelCreateClick={() => undefined}
+                onChannelCreateFailure={input.onChannelCreateFailure}
+                onChannelCreateLog={input.onChannelCreateLog}
+                onChannelCreateRefresh={input.onChannelCreateRefresh}
+                onChannelDelete={input.onChannelDelete}
+                onChannelEdit={handleChannelEdit}
+                onChannelSelect={input.onChannelSelect}
+                onConversationSelect={input.onConversationSelect}
+                onInteractiveCardComplete={input.onInteractiveCardComplete}
+                onMemberSelect={input.onMemberSelect}
+                onSavedMessagesOpen={input.onSavedMessagesOpen}
+                onSettingsOpen={openSettingsOverlay}
+                onViewChange={input.onViewChange}
+                profile={profile}
+              />
+            </div>
+            {settingsOverlayOpen ? (
+              <div
+                className="slei-settings-block-page slei-settings-sidebar-settings-page"
+                data-testid="slei-sidebar-settings-page"
+              >
+                <SettingsOverlayNav
+                  activePanel={activeSettingsOverlayPanel}
+                  activeDeviceId={activeComputerId}
+                  activeMemberId={activeSettingsMemberId ?? input.activeMemberId}
+                  deviceItems={settingsDeviceItems}
+                  memberItems={settingsMemberItems}
+                  messages={messages}
+                  onClose={closeSettingsOverlay}
+                  onDeviceItemSelect={setActiveComputerId}
+                  onMemberItemSelect={(memberId) => {
+                    setActiveSettingsMemberId(memberId);
+                    input.onMemberSelect?.(memberId);
+                  }}
+                  onPanelChange={setActiveSettingsOverlayPanel}
+                  surface="page"
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <Button
           aria-label={messages.common.resizeSidebar}
           aria-orientation="vertical"
-          aria-hidden={settingsOverlayOpen ? true : undefined}
+          aria-hidden={settingsOverlayBlocksApp ? true : undefined}
           className={cn("slei-resize-handle h-full w-[var(--app-resize-width)] !cursor-col-resize rounded-none border-0 p-0", settingsOverlayOpen && "hidden")}
-          data-settings-overlay-hidden={settingsOverlayOpen ? "true" : undefined}
           onPointerDown={input.onResizeStart}
           role="separator"
           type="button"
           variant="ghost"
         />
 
-        <main aria-hidden={settingsOverlayOpen ? true : undefined} className="slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent" data-slot="workspace-card" inert={settingsOverlayOpen ? true : undefined}>{renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
+        <main className="slei-workspace slei-workspace-card slei-glass-workspace min-h-0 min-w-0 overflow-hidden bg-transparent" data-slot="workspace-card">
+          <div
+            className="slei-settings-block-swiper h-full min-h-0"
+            data-settings-block="detail"
+            data-settings-page-motion={settingsPageMotion}
+            data-testid="slei-settings-detail-swiper"
+          >
+            <div
+              aria-hidden={settingsOverlayBlocksApp ? true : undefined}
+              className="slei-settings-block-page slei-settings-detail-chat-page"
+              data-testid="slei-workspace-chat-page"
+              inert={settingsOverlayBlocksApp ? true : undefined}
+            >
+              {renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
           setAgentDraft(draft);
           setActiveCardId(cardId);
           setAgentCreateOpen(true);
@@ -426,18 +517,23 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             draft,
             cardId,
           }));
-        }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
+        }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}
+            </div>
+            {settingsOverlayOpen ? (
+              <div
+                className="slei-settings-block-page slei-settings-detail-settings-page"
+                data-testid="slei-detail-settings-page"
+              >
+                <SettingsOverlayDetail
+                  activePanel={activeSettingsOverlayPanel}
+                  renderDetail={renderSettingsOverlayDetail}
+                  surface="page"
+                />
+              </div>
+            ) : null}
+          </div>
+        </main>
       </div>
-
-      {settingsOverlayOpen ? (
-        <SettingsOverlay
-          activePanel={activeSettingsOverlayPanel}
-          messages={messages}
-          onClose={() => setSettingsOverlayOpen(false)}
-          onPanelChange={setActiveSettingsOverlayPanel}
-          renderDetail={renderSettingsOverlayDetail}
-        />
-      ) : null}
 
       {computerCreateOpen ? (
         <ComputerCreateModal

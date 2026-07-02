@@ -26,13 +26,27 @@ async function mountOverlay(overrides: Partial<Parameters<typeof SettingsOverlay
   mountedRoot = createRoot(mountedContainer);
   const onClose = vi.fn();
   const onPanelChange = vi.fn();
+  const onMemberItemSelect = vi.fn();
+  const onDeviceItemSelect = vi.fn();
 
   await act(async () => {
     mountedRoot?.render(
       <SettingsOverlay
         activePanel="account"
+        activeDeviceId="node-local"
+        activeMemberId="agent-yeal"
+        deviceItems={[
+          { id: "node-local", label: "Mac Studio", description: "local" },
+          { id: "node-lab", label: "Lab Mini", description: "lab" },
+        ]}
+        memberItems={[
+          { id: "agent-yeal", label: "Yeal", description: "@yeal" },
+          { id: "agent-theo", label: "Theo", description: "@theo" },
+        ]}
         messages={messages}
         onClose={onClose}
+        onDeviceItemSelect={onDeviceItemSelect}
+        onMemberItemSelect={onMemberItemSelect}
         onPanelChange={onPanelChange}
         renderDetail={(panel) => <section data-testid={`detail-${panel}`}>{panel}</section>}
         {...overrides}
@@ -41,7 +55,7 @@ async function mountOverlay(overrides: Partial<Parameters<typeof SettingsOverlay
   });
   await act(async () => undefined);
 
-  return { container: mountedContainer, onClose, onPanelChange };
+  return { container: mountedContainer, onClose, onDeviceItemSelect, onMemberItemSelect, onPanelChange };
 }
 
 function buttonByText(root: HTMLElement, text: string) {
@@ -62,20 +76,28 @@ afterEach(async () => {
 });
 
 describe("SettingsOverlay", () => {
-  it("renders a continuous full-page settings layout with left nav and right detail", async () => {
+  it("renders settings as the same two-card split layout as the app shell", async () => {
     const { container } = await mountOverlay();
+    const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
     const nav = container.querySelector('[data-testid="slei-settings-overlay-nav"]');
     const detail = container.querySelector('[data-testid="slei-settings-overlay-detail"]');
 
-    expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.getAttribute("data-settings-overlay-layout")).toBe("continuous");
-    expect(nav?.getAttribute("data-settings-nav-surface")).toBe("workspace-sidebar-bg");
-    expect(nav?.className).toContain("bg-[var(--workspace-sidebar-bg)]");
-    expect(nav?.className).not.toContain("border-r");
-    expect(detail?.getAttribute("data-settings-detail-surface")).toBe("right-raised-left-shadow");
-    expect(detail?.getAttribute("data-settings-divider-shadow")).toBe("casts-left");
-    expect(detail?.className).toContain("bg-[var(--workspace-glass-bg)]");
-    expect(detail?.className).toContain("border-l");
-    expect(detail?.className).toContain("shadow-[-12px_0_24px_-18px_rgba(15,23,42,0.16)]");
+    expect(overlay?.getAttribute("data-settings-overlay-layout")).toBe("split-cards");
+    expect(overlay?.getAttribute("data-settings-motion")).toBe("enter");
+    expect(overlay?.className).toContain("absolute");
+    expect(overlay?.className).not.toContain("fixed");
+    expect(overlay?.firstElementChild?.getAttribute("data-testid")).toBe("slei-settings-overlay-content");
+    expect(container.querySelector('[data-testid="slei-settings-overlay-content"]')).toBeTruthy();
+    expect(nav?.getAttribute("data-settings-nav-surface")).toBe("settings-sidebar-card");
+    expect(nav?.className).toContain("slei-settings-overlay-card");
+    expect(nav?.className).toContain("slei-settings-overlay-nav-card");
+    expect(nav?.className).toContain("bg-[var(--settings-sidebar-bg)]");
+    expect(detail?.getAttribute("data-settings-detail-surface")).toBe("settings-detail-card");
+    expect(detail?.getAttribute("data-settings-divider-shadow")).toBeNull();
+    expect(detail?.className).toContain("slei-settings-overlay-card");
+    expect(detail?.className).toContain("slei-settings-overlay-detail-card");
+    expect(detail?.className).toContain("bg-[var(--settings-detail-bg)]");
+    expect(detail?.className).not.toContain("border-l");
   });
 
   it("groups settings entries and renders account detail by default", async () => {
@@ -87,23 +109,40 @@ describe("SettingsOverlay", () => {
     expect(container.querySelector('[data-testid="detail-account"]')).toBeTruthy();
   });
 
-  it("places the return-to-chat control in the native chrome row without rendering settings search", async () => {
+  it("places the return-to-chat control in the bottom settings slot without rendering settings search", async () => {
     const { container } = await mountOverlay();
     const returnButton = container.querySelector<HTMLButtonElement>('[data-testid="slei-settings-return"]');
 
     expect(returnButton?.textContent).toContain("返回聊天");
-    expect(returnButton?.getAttribute("data-settings-return-placement")).toBe("top-right");
+    expect(returnButton?.getAttribute("data-settings-return-placement")).toBe("bottom-settings-slot");
     expect(returnButton?.querySelector('[data-slei-icon="arrowLeft"]')).toBeTruthy();
-    expect(container.querySelector('[data-testid="slei-settings-overlay-chrome"]')?.getAttribute("data-settings-chrome-align")).toBe("native-controls-center");
+    expect(container.querySelector('[data-testid="slei-settings-overlay-chrome"]')).toBeNull();
+    expect(container.querySelector('[data-testid="slei-settings-overlay-footer"]')).toBeTruthy();
     expect(container.querySelector('input[role="searchbox"]')).toBeNull();
     expect(container.textContent).not.toContain("搜索设置");
   });
 
-  it("marks the active nav item as the current page", async () => {
-    const { container } = await mountOverlay({ activePanel: "devices" });
+  it("marks the active real device nav item as the current page", async () => {
+    const { container } = await mountOverlay({ activePanel: "devices", activeDeviceId: "node-lab" });
 
-    expect(buttonByText(container, "设备列表").getAttribute("aria-current")).toBe("page");
+    expect(buttonByText(container, "Lab Mini").getAttribute("aria-current")).toBe("page");
     expect(buttonByText(container, "账号资料").getAttribute("aria-current")).toBeNull();
+  });
+
+  it("uses the workspace sidebar active background for selected settings nav items", async () => {
+    const accountOverlay = await mountOverlay();
+    const accountButton = buttonByText(accountOverlay.container, "账号资料");
+
+    expect(accountButton.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
+    expect(accountButton.classList.contains("bg-accent")).toBe(false);
+    expect(accountButton.classList.contains("text-accent-foreground")).toBe(false);
+
+    const deviceOverlay = await mountOverlay({ activePanel: "devices", activeDeviceId: "node-lab" });
+    const activeDeviceButton = buttonByText(deviceOverlay.container, "Lab Mini");
+
+    expect(activeDeviceButton.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
+    expect(activeDeviceButton.classList.contains("bg-accent")).toBe(false);
+    expect(activeDeviceButton.classList.contains("text-accent-foreground")).toBe(false);
   });
 
   it("calls onClose exactly once when returning to chat", async () => {
@@ -116,7 +155,7 @@ describe("SettingsOverlay", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("renders members and devices as expandable workspace menus with list children", async () => {
+  it("renders real members and devices as expandable workspace menu children", async () => {
     const { container } = await mountOverlay();
 
     const membersMenu = buttonByText(container, "成员管理");
@@ -126,19 +165,30 @@ describe("SettingsOverlay", () => {
     expect(devicesMenu.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('[data-settings-submenu="members"]')).toBeTruthy();
     expect(container.querySelector('[data-settings-submenu="devices"]')).toBeTruthy();
-    expect(buttonByText(container, "成员列表")).toBeTruthy();
-    expect(buttonByText(container, "设备列表")).toBeTruthy();
+    expect(buttonByText(container, "Yeal")).toBeTruthy();
+    expect(buttonByText(container, "Theo")).toBeTruthy();
+    expect(buttonByText(container, "Mac Studio")).toBeTruthy();
+    expect(buttonByText(container, "Lab Mini")).toBeTruthy();
+    expect(container.textContent).not.toContain("成员列表");
+    expect(container.textContent).not.toContain("设备列表");
   });
 
-  it("calls onPanelChange when a nav item is clicked", async () => {
-    const { container, onPanelChange } = await mountOverlay();
+  it("calls onPanelChange and item selection when a real workspace child is clicked", async () => {
+    const { container, onDeviceItemSelect, onMemberItemSelect, onPanelChange } = await mountOverlay();
 
     await act(async () => {
-      buttonByText(container, "设备列表").click();
+      buttonByText(container, "Theo").click();
+    });
+
+    expect(onPanelChange).toHaveBeenCalledWith("members");
+    expect(onMemberItemSelect).toHaveBeenCalledWith("agent-theo");
+
+    await act(async () => {
+      buttonByText(container, "Lab Mini").click();
     });
 
     expect(onPanelChange).toHaveBeenCalledWith("devices");
-    expect(onPanelChange).toHaveBeenCalledTimes(1);
+    expect(onDeviceItemSelect).toHaveBeenCalledWith("node-lab");
   });
 
   it("hosts the members detail panel by panel key", async () => {

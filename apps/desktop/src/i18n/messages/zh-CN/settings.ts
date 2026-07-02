@@ -84,10 +84,6 @@ export const settings = {
       devices: "设备管理",
       about: "关于",
     },
-    panelItems: {
-      members: "成员列表",
-      devices: "设备列表",
-    },
     panelDescriptions: {
       account: "设置展示名称、@ handle 和头像。",
       preferences: "配置语言、外观和通知偏好。",
