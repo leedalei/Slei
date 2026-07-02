@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 import type { DesktopMessages } from "../../i18n";
@@ -170,6 +170,19 @@ function formatAttachmentSize(size: number) {
   const kilobytes = size / 1024;
   if (kilobytes < 1024) return `${Math.round(kilobytes)} KB`;
   return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
+function dragEventHasFiles(event: DragEvent<HTMLElement>) {
+  return Array.from(event.dataTransfer.types).includes("Files");
+}
+
+function clipboardFiles(event: ClipboardEvent<HTMLElement>): File[] {
+  const files = Array.from(event.clipboardData.files ?? []);
+  if (files.length > 0) return files;
+  return Array.from(event.clipboardData.items ?? [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
 }
 
 function taskStatusLabel(status: SleiFixtures["tasks"][number]["status"], messages: DesktopMessages) {
@@ -426,7 +439,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [projectEditorOpen, setProjectEditorOpen] = useState(false);
   const [projectDraftPaths, setProjectDraftPaths] = useState<string[]>(activeChannel.projectPaths ?? []);
   const [projectSaving, setProjectSaving] = useState(false);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [composerDragActive, setComposerDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -658,11 +671,21 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     }
   }
 
-  async function addFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    const files = Array.from(fileList);
-    const uploaded = await Promise.all(files.map((file) => uploadComposerFile(file, onAttachmentUpload)));
-    setAttachments((current) => [...current, ...uploaded.filter((attachment): attachment is ConversationAttachmentView => Boolean(attachment))]);
+  async function addFiles(fileList: FileList | File[] | null) {
+    const files = Array.from(fileList ?? []);
+    if (files.length === 0) return;
+    const results = await Promise.allSettled(files.map((file) => uploadComposerFile(file, onAttachmentUpload)));
+    const uploaded = results
+      .filter((result): result is PromiseFulfilledResult<ConversationAttachmentView> => result.status === "fulfilled")
+      .map((result) => result.value)
+      .filter((attachment): attachment is ConversationAttachmentView => Boolean(attachment));
+    const failed = results.some((result) => result.status === "rejected");
+    if (uploaded.length > 0) {
+      setAttachments((current) => [...current, ...uploaded]);
+    }
+    if (failed) {
+      showToast(messages.chat.sendFailed, "error");
+    }
   }
 
   function selectMention(index = selectedMentionIndex) {
@@ -1160,7 +1183,39 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </div>
                 ) : null}
                 <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
-                  <Card className={cn(CARD_FLAT_CLASS, "grid gap-2 overflow-visible p-1")} data-testid="slei-composer-surface">
+                  <Card
+                    className={cn(
+                      CARD_FLAT_CLASS,
+                      "grid gap-2 overflow-visible p-1 transition-colors data-[drag-active=true]:border-primary/40 data-[drag-active=true]:bg-primary/5",
+                    )}
+                    data-drag-active={composerDragActive ? "true" : undefined}
+                    data-testid="slei-composer-surface"
+                    onDragEnter={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                      setComposerDragActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      setComposerDragActive(false);
+                    }}
+                    onDragOver={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (!dragEventHasFiles(event)) return;
+                      event.preventDefault();
+                      setComposerDragActive(false);
+                      void addFiles(event.dataTransfer.files);
+                    }}
+                    onPaste={(event) => {
+                      const files = clipboardFiles(event);
+                      if (files.length === 0) return;
+                      event.preventDefault();
+                      void addFiles(files);
+                    }}
+                  >
                     {attachments.length > 0 ? (
                       <AttachmentList
                         attachments={attachments}
@@ -1241,10 +1296,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         </label>
                       ) : <span />}
                       <div className="flex items-center gap-2 overflow-visible">
-                        <input accept="image/*" hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={imageInputRef} type="file" />
-                        <input hidden onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                        <Button aria-label={messages.common.addImage} className="size-8 [&_svg]:size-3.5" onClick={() => imageInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="image" size={15} /></Button>
-                        <Button aria-label={messages.common.addAttachment} className="size-8 [&_svg]:size-3.5" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
+                        <input data-testid="slei-composer-file-input" hidden multiple onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
+                        <Button aria-label={messages.chat.insertFileCommand} className="size-8 [&_svg]:size-3.5" data-testid="slei-insert-file-button" onClick={() => fileInputRef.current?.click()} size="icon" type="button" variant="ghost"><SleiIcon name="attachment" size={15} /></Button>
                         <Button data-testid="slei-send-button" disabled={sendDisabled} type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
                       </div>
                     </div>

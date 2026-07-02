@@ -96,6 +96,14 @@ function staticMarkupHost(html: string) {
   return host;
 }
 
+function fileDropData(files: File[]) {
+  return {
+    files,
+    types: ["Files"],
+    items: files.map((file) => ({ kind: "file", getAsFile: () => file })),
+  };
+}
+
 afterEach(async () => {
   if (mountedRoot) {
     await act(async () => {
@@ -624,6 +632,156 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.className).not.toContain("backdrop-blur-xl");
     expect(composerInput?.className).not.toContain("focus:bg-white/15");
     expect(composerInput?.parentElement?.className).not.toContain("group");
+  });
+
+  it("renders one unrestricted multi-file composer input and one insert file button", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const fileInputs = host.querySelectorAll<HTMLInputElement>('input[type="file"]');
+
+    expect(fileInputs).toHaveLength(1);
+    expect(fileInputs[0]?.getAttribute("accept")).toBeNull();
+    expect(fileInputs[0]?.multiple).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-insert-file-button"]')).not.toBeNull();
+  });
+
+  it("uploads dropped composer files and renders image and file previews", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => ({
+      attachment: {
+        id: `att-${request.name}`,
+        name: request.name,
+        mimeType: request.mimeType,
+        size: 12,
+        url: request.mimeType.startsWith("image/") ? "data:image/png;base64,aaa" : undefined,
+      },
+    }));
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const imageFile = new File(["image"], "screen.png", { type: "image/png" });
+    const textFile = new File(["notes"], "notes.txt", { type: "text/plain" });
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: fileDropData([imageFile, textFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(2));
+    });
+
+    expect(host.querySelector('img[src="data:image/png;base64,aaa"]')).not.toBeNull();
+    expect(host.textContent).toContain("notes.txt");
+  });
+
+  it("uploads pasted composer files and renders an attachment preview", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => ({
+      attachment: {
+        id: `att-${request.name}`,
+        name: request.name,
+        mimeType: request.mimeType,
+        size: 24,
+        url: undefined,
+      },
+    }));
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const pastedFile = new File(["clip"], "clipboard.pdf", { type: "application/pdf" });
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: fileDropData([pastedFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(1));
+    });
+
+    expect(host.textContent).toContain("clipboard.pdf");
+  });
+
+  it("keeps successful dropped attachments and shows a toast when another upload fails", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onAttachmentUpload = vi.fn(async (request) => {
+      if (request.name === "broken.txt") {
+        throw new Error("upload failed");
+      }
+      return {
+        attachment: {
+          id: `att-${request.name}`,
+          name: request.name,
+          mimeType: request.mimeType,
+          size: 16,
+          url: undefined,
+        },
+      };
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onAttachmentUpload={onAttachmentUpload}
+        profile={defaultProfile}
+      />,
+    );
+    const surface = host.querySelector<HTMLElement>('[data-testid="slei-composer-surface"]');
+    const okFile = new File(["ok"], "ok.txt", { type: "text/plain" });
+    const brokenFile = new File(["broken"], "broken.txt", { type: "text/plain" });
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: fileDropData([okFile, brokenFile]) });
+
+    await act(async () => {
+      surface?.dispatchEvent(event);
+    });
+    await act(async () => {
+      await vi.waitFor(() => expect(onAttachmentUpload).toHaveBeenCalledTimes(2));
+    });
+
+    expect(host.textContent).toContain("ok.txt");
+    expect(host.textContent).not.toContain("broken.txt");
+    expect(host.textContent).toContain(messages.chat.sendFailed);
   });
 
   it("keeps long message role descriptions on one truncated header row", () => {
