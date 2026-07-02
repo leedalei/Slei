@@ -398,7 +398,6 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             onMemberSelect={input.onMemberSelect}
             onSavedMessagesOpen={input.onSavedMessagesOpen}
             onSettingsOpen={openSettingsOverlay}
-            onSettingsPanelSelect={setActiveSettingsPanel}
             onViewChange={input.onViewChange}
             profile={profile}
           />

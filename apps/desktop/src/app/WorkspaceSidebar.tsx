@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { MemberAvatar, SelectableCard, SleiIcon, StatusDot, type ToastType } from "../components";
 import type { ChannelReceipt, ConversationView } from "../lib/daemon-bridge";
 import type { DesktopMessages } from "../i18n";
-import { localHumanPresentation, stripChannelHash, type AppView, type SettingsOverlayPanel, type SettingsPanel, type UserProfile } from "./model";
+import { localHumanPresentation, stripChannelHash, type AppView, type SettingsOverlayPanel, type UserProfile } from "./model";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import type { ChatWorkspaceMode } from "./SleiAppFrame";
 
@@ -62,7 +62,6 @@ export type WorkspaceSidebarProps = {
   profile: UserProfile | null;
   onViewChange?: (view: AppView) => void;
   onSettingsOpen?: (panel: SettingsOverlayPanel) => void;
-  onSettingsPanelSelect?: (panel: SettingsPanel) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
   onMemberSelect?: (memberId: string) => void;
@@ -481,11 +480,6 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
     setChannelDraft((current) => ({ ...current, projectPaths: current.projectPaths.filter((candidate) => candidate !== path) }));
   }
 
-  function openSettingsPanel(panel: SettingsPanel) {
-    input.onSettingsPanelSelect?.(panel);
-    input.onViewChange?.("settings");
-  }
-
   function selectChannel(channelId: string) {
     input.onChannelSelect?.(channelId);
     input.onViewChange?.("chat");
@@ -519,6 +513,17 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             >
               <SleiIcon name="tasks" size={15} />
               {input.messages.shell.nav.tasks}
+            </Button>
+            <Button
+              aria-current={input.activeChatWorkspace === "saved" ? "page" : undefined}
+              className={cn(sidebarPrimaryActionClassName, input.activeChatWorkspace === "saved" && sidebarFlatActiveClassName)}
+              data-testid="slei-sidebar-saved"
+              onClick={() => input.onSavedMessagesOpen?.()}
+              type="button"
+              variant="ghost"
+            >
+              <SleiIcon name="bookmark" size={15} />
+              {input.messages.shell.workspaceSidebar.savedMessages}
             </Button>
           </nav>
         </div>
@@ -736,12 +741,12 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   <SleiIcon name="settings" size={15} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="top">
-                <DropdownMenuItem onSelect={() => input.onViewChange?.("members")}>
+              <DropdownMenuContent align="end" data-testid="slei-sidebar-settings-menu" side="top">
+                <DropdownMenuItem data-testid="slei-sidebar-settings-members" onSelect={() => input.onSettingsOpen?.("members")}>
                   <SleiIcon name="members" size={14} />
                   {input.messages.shell.workspaceSidebar.memberManagement}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => input.onViewChange?.("computers")}>
+                <DropdownMenuItem data-testid="slei-sidebar-settings-devices" onSelect={() => input.onSettingsOpen?.("devices")}>
                   <SleiIcon name="computer" size={14} />
                   {input.messages.shell.workspaceSidebar.runtimeDevices}
                 </DropdownMenuItem>
@@ -750,13 +755,9 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   <SleiIcon name="user" size={14} />
                   {input.messages.shell.workspaceSidebar.accountProfile}
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openSettingsPanel("appearance")}>
+                <DropdownMenuItem data-testid="slei-sidebar-settings-preferences" onSelect={() => input.onSettingsOpen?.("preferences")}>
                   <SleiIcon name="settings" size={14} />
                   {input.messages.shell.workspaceSidebar.preferences}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => input.onSavedMessagesOpen?.()}>
-                  <SleiIcon name="bookmark" size={14} />
-                  {input.messages.shell.workspaceSidebar.savedMessages}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
