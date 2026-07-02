@@ -4,6 +4,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiTask, SleiTaskReply, SleiTaskStatus } from "../../app/types";
 import { activeMentionQuery, composerShortcutAction, insertMention, isComposerImeComposing, mentionSuggestions, moveMentionSelection } from "../../app/model";
 import { MemberAvatar, SleiIcon, Toast, TOAST_VISIBLE_MS, TooltipButton, type MemberAvatarIdentity, type SleiIconName, type ToastType } from "../../components";
+import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
@@ -55,6 +56,7 @@ export function TaskThreadDrawer(input: {
   const latestReplyId = task?.replies?.at(-1)?.id ?? "";
   const replyActionDisabled = replySubmitting || statusSubmitting || !input.onReply || !replyDraft.trim();
   const statusActionDisabled = replySubmitting || statusSubmitting;
+  const replyTextareaRef = useAutosizeTextarea(replyDraft, { maxHeight: () => Math.min(320, window.innerHeight * 0.4) });
   openRef.current = input.open;
   activeTaskIdRef.current = taskId;
 
@@ -276,7 +278,7 @@ export function TaskThreadDrawer(input: {
             <div className="relative rounded-xl shadow-[0_2px_4px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
               <Textarea
                 aria-label={input.messages.tasks.replyPlaceholder}
-                className="min-h-20 border border-slate-300/90 bg-white/55 pr-16 shadow-none"
+                className="max-h-[min(320px,40vh)] min-h-20 resize-none border border-slate-300/90 bg-white/55 pr-16 shadow-none"
                 disabled={replySubmitting || statusSubmitting}
                 onChange={(event) => setReplyDraft(event.currentTarget.value)}
                 onCompositionEnd={() => setIsComposing(false)}
@@ -312,6 +314,7 @@ export function TaskThreadDrawer(input: {
                   }
                 }}
                 placeholder={input.messages.tasks.replyPlaceholder}
+                ref={replyTextareaRef}
                 value={replyDraft}
               />
               <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit">

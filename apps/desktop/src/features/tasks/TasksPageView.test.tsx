@@ -379,7 +379,9 @@ describe("TasksPage filters", () => {
     expect(textarea?.getAttribute("placeholder")).toBe("请输入回复");
     expect(textarea?.className).toContain("border");
     expect(textarea?.className).toContain("border-slate-300/90");
+    expect(textarea?.className).toContain("max-h-[min(320px,40vh)]");
     expect(textarea?.className).toContain("pr-16");
+    expect(textarea?.style.overflowY).toBe("hidden");
     expect(sendButton).toBeDefined();
     expect(sendButton?.textContent?.trim()).toBe("");
     expect(sendButton?.className).toContain("absolute");
