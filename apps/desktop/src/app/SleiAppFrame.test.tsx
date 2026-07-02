@@ -748,93 +748,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
   });
 
-  it("removes saved messages from the bottom settings menu", async () => {
-    const container = await mount(
-      <SleiAppFrame
-        activeView="chat"
-        data={createSleiFixtures()}
-        locale="zh-CN"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
-
-    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
-
-    const menu = document.querySelector('[data-testid="slei-sidebar-settings-menu"]');
-    expect(menu).toBeTruthy();
-    expect(menu?.textContent).not.toContain("已保存");
-  });
-
-  it("opens matching settings overlay panels from every bottom settings menu entry", async () => {
-    const entries = [
-      { testId: "slei-sidebar-settings-members", marker: '[data-settings-embedded-detail="members"]', text: "成员管理" },
-      { testId: "slei-sidebar-settings-devices", marker: '[data-settings-embedded-detail="devices"]', text: "设备管理" },
-      { testId: "slei-sidebar-settings-account", marker: '[data-settings-panel="account"]', text: "账号资料" },
-      { testId: "slei-sidebar-settings-preferences", marker: '[data-settings-panel="preferences"]', text: "偏好设置" },
-    ];
-
-    for (const entry of entries) {
-      const container = await mount(
-        <SleiAppFrame
-          activeView="chat"
-          data={createSleiFixtures()}
-          locale="zh-CN"
-          runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
-        />,
-      );
-
-      await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
-      await clickElement(document.querySelector(`[data-testid="${entry.testId}"]`));
-
-      const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
-      expect(overlay).toBeTruthy();
-      expect(overlay?.textContent).toContain(entry.text);
-      expect(overlay?.querySelector(entry.marker)).toBeTruthy();
-
-      await act(async () => {
-        mountedRoot?.unmount();
-      });
-      mountedContainer?.remove();
-      mountedRoot = undefined;
-      mountedContainer = undefined;
-      document.body.innerHTML = "";
-    }
-  });
-
-  it("renders language appearance and notification controls in the preferences overlay", async () => {
-    const onAppearanceChange = vi.fn();
-    const container = await mount(
-      <SleiAppFrame
-        activeView="chat"
-        appearance={{ theme: "light", fontSize: "md" }}
-        data={createSleiFixtures()}
-        locale="zh-CN"
-        notifications={{ approvals: true, humanReplies: false, mentions: true }}
-        onAppearanceChange={onAppearanceChange}
-        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
-        timeZone="Asia/Shanghai"
-      />,
-    );
-
-    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
-    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-preferences"]'));
-
-    const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
-    expect(overlay).toBeTruthy();
-    expect(overlay?.querySelector('[data-settings-panel="preferences"]')).toBeTruthy();
-    expect(overlay?.textContent).toContain("语言");
-    expect(overlay?.textContent).toContain("外观");
-    expect(overlay?.textContent).toContain("通知");
-    expect(overlay?.querySelector('[aria-label="语言"]')).toBeTruthy();
-    expect(overlay?.querySelector('[data-settings-theme-option="dark"]')).toBeTruthy();
-    expect(overlay?.querySelector('[data-settings-notification="mentions"]')).toBeTruthy();
-
-    await clickElement(overlay?.querySelector('[data-settings-theme-option="dark"]'));
-
-    expect(onAppearanceChange).toHaveBeenCalledWith({ theme: "dark", fontSize: "md" });
-  });
-
-  it("opens settings as an overlay from the account menu entry without changing the active workspace view", async () => {
+  it("opens the full settings page directly from the footer settings button", async () => {
     const onViewChange = vi.fn();
     const container = await mount(
       <SleiAppFrame
@@ -847,34 +761,14 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
-    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
 
     expect(onViewChange).not.toHaveBeenCalledWith("settings");
+    expect(document.querySelector('[data-testid="slei-sidebar-settings-menu"]')).toBeNull();
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
     expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-overlay-hidden")).toBe("true");
     expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("aria-hidden")).toBe("true");
     expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(true);
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.textContent).toContain("账号资料");
-  });
-
-  it("returns from settings overlay to the previously visible workspace", async () => {
-    const container = await mount(
-      <SleiAppFrame
-        activeView="tasks"
-        data={createSleiFixtures()}
-        locale="zh-CN"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
-
-    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
-    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
-    await clickElement(container.querySelector('[data-testid="slei-settings-return"]'));
-
-    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
-    expect(container.querySelector('[data-active-view="tasks"]')).toBeTruthy();
-    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("aria-hidden")).toBe(false);
-    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(false);
   });
 
   it("keeps legacy activeView settings route available for compatibility", () => {
@@ -891,22 +785,24 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain('data-settings-panel="account"');
   });
 
-  it("uses shadcn primitives for the sidebar create overlay and settings menu", async () => {
+  it("uses shadcn primitives for the sidebar create overlay while settings opens the full page directly", async () => {
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
+    const onViewChange = vi.fn();
     const container = await mount(
       <SleiAppFrame
         activeView="chat"
         data={createSleiFixtures()}
         locale="zh-CN"
+        onViewChange={onViewChange}
         runtimeSetup={runtimeSetup}
       />,
     );
 
-    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置菜单"]'));
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="打开设置"]'));
 
-    expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')?.getAttribute("role")).toBe("menu");
-    expect(document.body.querySelectorAll('[data-slot="dropdown-menu-item"]').length).toBeGreaterThan(0);
-    expect(sidebarSource).toContain("DropdownMenuContent");
+    expect(onViewChange).not.toHaveBeenCalledWith("settings");
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
+    expect(document.body.querySelector('[data-testid="slei-sidebar-settings-menu"]')).toBeNull();
     expect(sidebarSource).not.toContain('data-slot="dialog-portal"');
     expect(sidebarSource).not.toContain('role="dialog"');
     expect(sidebarSource).not.toContain("typeof document");
@@ -1324,12 +1220,11 @@ describe("SleiAppFrame global search navigation", () => {
     expect(searchButtonOpenTag).not.toContain("slei-shell-nav__button--flow");
   });
 
-  it("keeps search and member icons available for sidebar and menu actions", () => {
+  it("keeps search icons in the sidebar and member icons registered for shared use", () => {
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const iconsSource = readFileSync(join(process.cwd(), "src/components/icons.tsx"), "utf8");
 
     expect(sidebarSource).toContain('name="search"');
-    expect(sidebarSource).toContain('name="members"');
     expect(iconsSource).toContain("SearchCheck");
     expect(iconsSource).toContain("UsersRound");
     expect(iconsSource).toContain("searchFilled: SearchCheck");

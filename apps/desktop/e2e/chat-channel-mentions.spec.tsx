@@ -517,7 +517,7 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('data-slot="button"');
     expect(html).toContain(">搜索</");
     expect(html).toContain(">任务</");
-    expect(html).toContain('aria-label="打开设置菜单"');
+    expect(html).toContain('aria-label="打开设置"');
     expect(html).toContain('data-slei-icon="search"');
     expect(html).toContain('data-slei-icon="tasks"');
     expect(html).not.toContain("text-[11px]");

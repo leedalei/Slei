@@ -10,7 +10,7 @@ export const shell = {
   },
   workspaceSidebar: {
     workspace: "工作区",
-    openSettingsMenu: "打开设置菜单",
+    openSettingsMenu: "打开设置",
     channelMore: (name: string) => `频道 ${name} 更多操作`,
     dmMore: (name: string) => `${name} 更多操作`,
     editChannel: "编辑频道",

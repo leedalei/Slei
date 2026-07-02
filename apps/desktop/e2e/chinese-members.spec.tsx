@@ -30,7 +30,7 @@ describe("Chinese-first desktop MVP", () => {
     );
 
     expect(html).toContain('aria-label="工作区"');
-    expect(html).toContain('aria-label="打开设置菜单"');
+    expect(html).toContain('aria-label="打开设置"');
     expect(html).toContain("频道");
     expect(html).toContain("输入消息到 #all");
     expect(html).toContain("转为任务");

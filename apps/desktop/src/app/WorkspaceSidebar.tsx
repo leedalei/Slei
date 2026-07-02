@@ -728,39 +728,17 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               <strong className="block truncate text-sm">{profile.displayName}</strong>
               <small className="block truncate text-xs text-muted-foreground">{profile.handle}</small>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}
-                  className="size-8 [&_svg]:size-3.5"
-                  data-testid="slei-sidebar-settings-trigger"
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <SleiIcon name="settings" size={15} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" data-testid="slei-sidebar-settings-menu" side="top">
-                <DropdownMenuItem data-testid="slei-sidebar-settings-members" onSelect={() => input.onSettingsOpen?.("members")}>
-                  <SleiIcon name="members" size={14} />
-                  {input.messages.shell.workspaceSidebar.memberManagement}
-                </DropdownMenuItem>
-                <DropdownMenuItem data-testid="slei-sidebar-settings-devices" onSelect={() => input.onSettingsOpen?.("devices")}>
-                  <SleiIcon name="computer" size={14} />
-                  {input.messages.shell.workspaceSidebar.runtimeDevices}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem data-testid="slei-sidebar-settings-account" onSelect={() => input.onSettingsOpen?.("account")}>
-                  <SleiIcon name="user" size={14} />
-                  {input.messages.shell.workspaceSidebar.accountProfile}
-                </DropdownMenuItem>
-                <DropdownMenuItem data-testid="slei-sidebar-settings-preferences" onSelect={() => input.onSettingsOpen?.("preferences")}>
-                  <SleiIcon name="settings" size={14} />
-                  {input.messages.shell.workspaceSidebar.preferences}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}
+              className="size-8 [&_svg]:size-3.5"
+              data-testid="slei-sidebar-settings-trigger"
+              onClick={() => input.onSettingsOpen?.("account")}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <SleiIcon name="settings" size={15} />
+            </Button>
           </div>
         </div>
       </div>

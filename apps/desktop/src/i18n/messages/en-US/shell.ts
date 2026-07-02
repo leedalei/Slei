@@ -10,7 +10,7 @@ export const shell = {
   },
   workspaceSidebar: {
     workspace: "Workspace",
-    openSettingsMenu: "Open settings menu",
+    openSettingsMenu: "Open settings",
     channelMore: (name: string) => `More actions for channel ${name}`,
     dmMore: (name: string) => `More actions for ${name}`,
     editChannel: "Edit channel",

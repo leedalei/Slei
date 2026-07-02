@@ -20,7 +20,7 @@ describe("desktop interaction fixes", () => {
     expect(html).toContain('aria-label="工作区"');
     expect(html).toContain(">搜索</");
     expect(html).toContain(">任务</");
-    expect(html).toContain('aria-label="打开设置菜单"');
+    expect(html).toContain('aria-label="打开设置"');
     expect(html).not.toContain("data-nav-icon");
     expect(html).not.toContain("<small>Chat</small>");
   });
