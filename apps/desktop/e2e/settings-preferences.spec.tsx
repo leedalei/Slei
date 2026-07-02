@@ -265,6 +265,24 @@ describe("settings preferences", () => {
     expect(aboutHtml).toContain("Daemon 版本");
   });
 
+  it("keeps the legacy settings route on the requested appearance panel", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        appearance={{ theme: "dark", fontSize: "lg" }}
+        data={data}
+        initialSettingsPanel="appearance"
+        locale="zh-CN"
+        runtimeSetup={readyRuntime}
+      />,
+    );
+
+    expect(html).toContain('data-settings-panel="appearance"');
+    expect(html).toContain("外观");
+    expect(html).toContain('data-settings-theme-option="dark"');
+    expect(html).toContain('data-settings-font-size-option="lg"');
+  });
+
   it("normalizes legacy appearance themes to light", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame

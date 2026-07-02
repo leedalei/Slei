@@ -764,6 +764,39 @@ describe("SleiAppFrame global search navigation", () => {
     }
   });
 
+  it("renders language appearance and notification controls in the preferences overlay", async () => {
+    const onAppearanceChange = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        appearance={{ theme: "light", fontSize: "md" }}
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onAppearanceChange={onAppearanceChange}
+        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-preferences"]'));
+
+    const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');
+    expect(overlay).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-panel="preferences"]')).toBeTruthy();
+    expect(overlay?.textContent).toContain("语言");
+    expect(overlay?.textContent).toContain("外观");
+    expect(overlay?.textContent).toContain("通知");
+    expect(overlay?.querySelector('[aria-label="语言"]')).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-theme-option="dark"]')).toBeTruthy();
+    expect(overlay?.querySelector('[data-settings-notification="mentions"]')).toBeTruthy();
+
+    await clickElement(overlay?.querySelector('[data-settings-theme-option="dark"]'));
+
+    expect(onAppearanceChange).toHaveBeenCalledWith({ theme: "dark", fontSize: "md" });
+  });
+
   it("opens settings as an overlay from the account menu entry without changing the active workspace view", async () => {
     const onViewChange = vi.fn();
     const container = await mount(
