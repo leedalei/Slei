@@ -70,7 +70,12 @@ export type DesktopMessages = {
     channelView: string;
     channels: string;
     chooseMentionMember: string;
+    chooseComposerCommand: string;
     chooseSkill: string;
+    insertFileCommand: string;
+    insertFileCommandDescription: string;
+    convertToTaskCommand: string;
+    convertToTaskCommandDescription: string;
     createChannel: string;
     createChannelDescription: string;
     createChannelFailed: string;
@@ -137,7 +142,9 @@ export type DesktopMessages = {
     stopFollowingRuns: string;
     typing: string;
     inputToChannel: (name: string) => string;
+    inputToChannelWithActions: (name: string) => string;
     inputToMember: (name: string) => string;
+    inputToMemberWithActions: (name: string) => string;
     memoryUpdated: (handle: string) => string;
     memberJoining: string;
     memorySyncing: string;

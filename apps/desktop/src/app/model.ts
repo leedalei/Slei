@@ -535,6 +535,24 @@ export function activeSkillSlashQuery(draft: string): ActiveSkillSlashQuery | nu
   };
 }
 
+export function activeComposerSlashQuery(draft: string): ActiveSkillSlashQuery | null {
+  const match = /(^| )\/([^/\s]*)$/u.exec(draft);
+  if (!match) return null;
+  const prefix = match[1] ?? "";
+  const start = match.index + prefix.length;
+  return { query: match[2] ?? "", start, end: draft.length };
+}
+
+export function removeComposerSlashQuery(draft: string, slash: ActiveSkillSlashQuery): string {
+  return `${draft.slice(0, slash.start)}${draft.slice(slash.end)}`;
+}
+
+export function composerCommandMatchesQuery(query: string, values: string[]): boolean {
+  const normalized = normalizeSearch(query);
+  if (!normalized) return true;
+  return values.some((value) => normalizeSearch(value).includes(normalized));
+}
+
 export function moveMentionSelection(current: number, delta: number, count: number): number {
   if (count <= 0) return 0;
   return (current + delta + count) % count;
