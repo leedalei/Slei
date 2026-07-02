@@ -70,4 +70,27 @@ export const settings = {
     notifications: "Control mentions, human replies, and approval notifications.",
     about: "Review desktop and local daemon version information.",
   },
+  overlay: {
+    returnToApp: "Return to app",
+    searchPlaceholder: "Search settings...",
+    groups: {
+      personal: "Personal",
+      workspace: "Workspace",
+      system: "System",
+    },
+    panels: {
+      account: "Account profile",
+      preferences: "Preferences",
+      members: "Member management",
+      devices: "Device management",
+      about: "About",
+    },
+    panelDescriptions: {
+      account: "Set display name, @ handle, and avatar.",
+      preferences: "Configure language, appearance, and notification preferences.",
+      members: "Manage workspace members and agents.",
+      devices: "Manage connected devices and runtimes.",
+      about: "Review desktop and local daemon version information.",
+    },
+  },
 };

@@ -18,9 +18,11 @@ import {
   profileAvatarImageUrl,
   sendChatComposerMessage,
   shouldRefreshChannelMessages,
+  settingsOverlayPanelFromLegacyPanel,
   skillSlashSuggestions,
   timeZoneFromSystemValue,
   validateAgentDisplayName,
+  type SettingsOverlayPanel,
 } from "./model";
 import type { SleiMessage } from "./types";
 
@@ -210,6 +212,24 @@ describe("system preference defaults", () => {
     expect(timeZoneFromSystemValue("Asia/Shanghai")).toBe("Asia/Shanghai");
     expect(timeZoneFromSystemValue("UTC")).toBe("Asia/Shanghai");
     expect(timeZoneFromSystemValue(undefined)).toBe("Asia/Shanghai");
+  });
+});
+
+describe("settings overlay panel mapping", () => {
+  it("maps legacy preference panels into the preferences overlay panel", () => {
+    expect(settingsOverlayPanelFromLegacyPanel("language-region")).toBe("preferences");
+    expect(settingsOverlayPanelFromLegacyPanel("appearance")).toBe("preferences");
+    expect(settingsOverlayPanelFromLegacyPanel("notifications")).toBe("preferences");
+  });
+
+  it("keeps account and about as direct overlay panels", () => {
+    expect(settingsOverlayPanelFromLegacyPanel("account")).toBe("account");
+    expect(settingsOverlayPanelFromLegacyPanel("about")).toBe("about");
+  });
+
+  it("accepts workspace management panels as overlay-only panels", () => {
+    const panels: SettingsOverlayPanel[] = ["members", "devices"];
+    expect(panels).toEqual(["members", "devices"]);
   });
 });
 

@@ -74,6 +74,19 @@ export type AgentMemoryRequest = {
 export type EmptyVariant = "nodata" | "noresult";
 export type EmptySize = "sm" | "md" | "lg";
 export type SettingsPanel = "account" | "language-region" | "appearance" | "notifications" | "about";
+export type SettingsOverlayPanel = "account" | "preferences" | "members" | "devices" | "about";
+
+export function settingsOverlayPanelFromLegacyPanel(panel: SettingsPanel): SettingsOverlayPanel {
+  switch (panel) {
+    case "language-region":
+    case "appearance":
+    case "notifications":
+      return "preferences";
+    case "account":
+    case "about":
+      return panel;
+  }
+}
 
 export const defaultProfile: UserProfile = {
   displayName: "Lei",

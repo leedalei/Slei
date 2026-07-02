@@ -1,4 +1,5 @@
 import type { AppView, EmptySize, EmptyVariant, SettingsPanel } from "../app/SleiApp";
+import type { SettingsOverlayPanel } from "../app/model";
 import type { AppearancePreferences } from "../lib/daemon-bridge";
 import type { SleiTaskStatus } from "../app/types";
 
@@ -381,6 +382,17 @@ export type DesktopMessages = {
     title: string;
     panelTitle: Record<SettingsPanel, string>;
     panelSubtitle: Record<SettingsPanel, string>;
+    overlay: {
+      returnToApp: string;
+      searchPlaceholder: string;
+      groups: {
+        personal: string;
+        workspace: string;
+        system: string;
+      };
+      panels: Record<SettingsOverlayPanel, string>;
+      panelDescriptions: Record<SettingsOverlayPanel, string>;
+    };
   };
   onboarding: {
     connectionConnected: string;
