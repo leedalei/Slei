@@ -7,8 +7,8 @@ import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
 
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const TASK_ROOT_ACTION_BUTTON_CLASS = "size-6";
-const TASK_ROOT_ACTION_ICON_CLASS = "size-3";
+const TASK_ROOT_ACTION_BUTTON_CLASS = "size-6 [&_svg]:size-2.5";
+const TASK_ROOT_ACTION_ICON_CLASS = "size-2.5";
 
 const STATUS_CLASS: Record<SleiTask["status"], string> = {
   pending_assignment: "text-amber-700 dark:text-amber-300",
@@ -75,7 +75,7 @@ export function TaskRootEntry(input: {
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-task-root-entry-actions>
             <Button
               aria-label={openLabel}
-              className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[11px]"
+              className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[11px] [&_svg]:size-2.5"
               data-task-root-entry-replies
               onClick={input.onOpen}
               type="button"
