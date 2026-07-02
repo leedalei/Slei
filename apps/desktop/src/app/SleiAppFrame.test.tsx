@@ -692,6 +692,59 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onViewChange).toHaveBeenCalledWith("computers");
   });
 
+  it("opens settings as an overlay from the account menu entry without changing the active workspace view", async () => {
+    const onViewChange = vi.fn();
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        onViewChange={onViewChange}
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
+
+    expect(onViewChange).not.toHaveBeenCalledWith("settings");
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-overlay-hidden")).toBe("true");
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.textContent).toContain("账号资料");
+  });
+
+  it("returns from settings overlay to the previously visible workspace", async () => {
+    const container = await mount(
+      <SleiAppFrame
+        activeView="tasks"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(document.querySelector('[data-testid="slei-sidebar-settings-account"]'));
+    await clickElement(container.querySelector('[data-testid="slei-settings-return"]'));
+
+    expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
+    expect(container.querySelector('[data-active-view="tasks"]')).toBeTruthy();
+  });
+
+  it("keeps legacy activeView settings route available for compatibility", () => {
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="settings"
+        data={createSleiFixtures()}
+        initialSettingsPanel="account"
+        locale="zh-CN"
+        runtimeSetup={runtimeSetup}
+      />,
+    );
+
+    expect(html).toContain('data-settings-panel="account"');
+  });
+
   it("uses shadcn primitives for the sidebar create overlay and settings menu", async () => {
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
     const container = await mount(

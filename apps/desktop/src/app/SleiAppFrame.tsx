@@ -46,6 +46,7 @@ import { SearchRoute } from "./routes/SearchRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { TasksRoute } from "./routes/TasksRoute";
 import { WorkspaceSidebar, type ChannelCardDraftRequest } from "./WorkspaceSidebar";
+import { SettingsDetailHost, SettingsOverlay } from "../features/settings/SettingsOverlay";
 import sleiBubbleIcon from "../assets/brand/slei-bubble.svg";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import {
@@ -59,9 +60,11 @@ import {
   localHumanPresentation,
   normalizeAppearanceTheme,
   refreshedAgentAvatarSeed,
+  settingsOverlayPanelFromLegacyPanel,
   type AgentDraftInput,
   type AppView,
   type ChatSearchFilters,
+  type SettingsOverlayPanel,
   type SettingsPanel,
   type UserProfile,
   validateAgentDisplayName,
@@ -179,6 +182,10 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const [computerCreateOpen, setComputerCreateOpen] = useState(false);
   const [agentCreateOpen, setAgentCreateOpen] = useState(input.initialAgentCreateModalOpen ?? false);
   const [activeSettingsPanel, setActiveSettingsPanel] = useState<SettingsPanel>(input.initialSettingsPanel ?? "account");
+  const [settingsOverlayOpen, setSettingsOverlayOpen] = useState(false);
+  const [activeSettingsOverlayPanel, setActiveSettingsOverlayPanel] = useState<SettingsOverlayPanel>(
+    settingsOverlayPanelFromLegacyPanel(input.initialSettingsPanel ?? "account"),
+  );
   const [agentDraft, setAgentDraft] = useState<Partial<AgentDraftInput> | undefined>(undefined);
   const [activeCardId, setActiveCardId] = useState<string | undefined>(undefined);
   const [channelCardDraftRequest, setChannelCardDraftRequest] = useState<ChannelCardDraftRequest | undefined>(undefined);
@@ -261,6 +268,84 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     input.onViewChange?.("chat");
   }
 
+  function openSettingsOverlay(panel: SettingsOverlayPanel = "account") {
+    setActiveSettingsOverlayPanel(panel);
+    setSettingsOverlayOpen(true);
+  }
+
+  function renderSettingsRoutePanel(panel: SettingsPanel) {
+    return (
+      <SettingsRoute
+        activePanel={panel}
+        appearance={normalizedAppearance}
+        locale={input.locale}
+        messages={messages}
+        notifications={input.notifications ?? defaultNotifications}
+        nodes={input.runtimeSetup.nodes}
+        onAppearanceChange={input.onAppearanceChange}
+        onLocaleChange={input.onLocaleChange}
+        onNotificationsChange={input.onNotificationsChange}
+        onProfileAvatarUpload={input.onProfileAvatarUpload}
+        onProfileChange={input.onProfileChange}
+        onTimeZoneChange={input.onTimeZoneChange}
+        pendingPreference={input.pendingPreference}
+        preferenceError={input.preferenceError}
+        profile={profile}
+        pendingProfileField={input.pendingProfileField}
+        profileErrors={input.profileErrors}
+        timeZone={input.timeZone ?? defaultTimeZone}
+      />
+    );
+  }
+
+  function renderSettingsOverlayDetail(panel: SettingsOverlayPanel) {
+    return (
+      <SettingsDetailHost
+        panel={panel}
+        renderAccount={() => renderSettingsRoutePanel("account")}
+        renderPreferences={() => (
+          <div className="grid min-h-full gap-4" data-settings-panel="preferences">
+            {renderSettingsRoutePanel("language-region")}
+            {renderSettingsRoutePanel("appearance")}
+            {renderSettingsRoutePanel("notifications")}
+          </div>
+        )}
+        renderMembers={() => (
+          <MembersRoute
+            activeMemberId={input.activeMemberId}
+            data={input.data}
+            layout="settings"
+            memberFieldErrors={input.memberFieldErrors}
+            messages={messages}
+            nodes={input.runtimeSetup.nodes}
+            onAgentDelete={input.onAgentDelete}
+            onAgentUpdate={input.onAgentUpdate}
+            onMessage={input.onMemberMessage}
+            onOpenAgentPath={input.onOpenAgentPath}
+            onListAgentActivity={input.onListAgentActivity}
+            onListAgentWorkspace={input.onListAgentWorkspace}
+            onReadAgentWorkspaceFile={input.onReadAgentWorkspaceFile}
+            savingMemberField={input.savingMemberField}
+          />
+        )}
+        renderDevices={() => (
+          <ComputersRoute
+            activeNodeId={activeComputerId}
+            computerRenameError={input.computerRenameError}
+            layout="settings"
+            members={input.data.members}
+            messages={messages}
+            nodes={input.runtimeSetup.nodes}
+            onComputerCreateRequest={() => setComputerCreateOpen(true)}
+            onComputerRename={input.onComputerRename}
+            renamingComputerId={input.renamingComputerId}
+          />
+        )}
+        renderAbout={() => renderSettingsRoutePanel("about")}
+      />
+    );
+  }
+
   return (
     <TooltipProvider>
     <div
@@ -282,7 +367,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       </header>
 
       <div className="slei-app-content min-h-0 min-w-0" data-slot="app-content">
-        <div className="slei-workspace-sidebar-card min-h-0 max-[760px]:hidden" data-slot="sidebar-card">
+        <div
+          aria-hidden={settingsOverlayOpen ? true : undefined}
+          className={cn("slei-workspace-sidebar-card min-h-0 max-[760px]:hidden", settingsOverlayOpen && "hidden")}
+          data-settings-overlay-hidden={settingsOverlayOpen ? "true" : undefined}
+          data-slot="sidebar-card"
+        >
           <WorkspaceSidebar
             activeAgentActivity={activeAgentActivity}
             activeChannelId={input.activeChatWorkspace === "saved" || input.activeConversationId ? undefined : activeChannel?.id}
@@ -307,6 +397,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             onInteractiveCardComplete={input.onInteractiveCardComplete}
             onMemberSelect={input.onMemberSelect}
             onSavedMessagesOpen={input.onSavedMessagesOpen}
+            onSettingsOpen={openSettingsOverlay}
             onSettingsPanelSelect={setActiveSettingsPanel}
             onViewChange={input.onViewChange}
             profile={profile}
@@ -316,7 +407,9 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
         <Button
           aria-label={messages.common.resizeSidebar}
           aria-orientation="vertical"
-          className="slei-resize-handle h-full w-[var(--app-resize-width)] !cursor-col-resize rounded-none border-0 p-0"
+          aria-hidden={settingsOverlayOpen ? true : undefined}
+          className={cn("slei-resize-handle h-full w-[var(--app-resize-width)] !cursor-col-resize rounded-none border-0 p-0", settingsOverlayOpen && "hidden")}
+          data-settings-overlay-hidden={settingsOverlayOpen ? "true" : undefined}
           onPointerDown={input.onResizeStart}
           role="separator"
           type="button"
@@ -335,6 +428,16 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
           }));
         }, input.pendingPreference, input.preferenceError, input.pendingProfileField, input.profileErrors, input.memberFieldErrors, input.savingMemberField, input.computerRenameError, input.renamingComputerId)}</main>
       </div>
+
+      {settingsOverlayOpen ? (
+        <SettingsOverlay
+          activePanel={activeSettingsOverlayPanel}
+          messages={messages}
+          onClose={() => setSettingsOverlayOpen(false)}
+          onPanelChange={setActiveSettingsOverlayPanel}
+          renderDetail={renderSettingsOverlayDetail}
+        />
+      ) : null}
 
       {computerCreateOpen ? (
         <ComputerCreateModal

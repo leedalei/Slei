@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { MemberAvatar, SelectableCard, SleiIcon, StatusDot, type ToastType } from "../components";
 import type { ChannelReceipt, ConversationView } from "../lib/daemon-bridge";
 import type { DesktopMessages } from "../i18n";
-import { localHumanPresentation, stripChannelHash, type AppView, type SettingsPanel, type UserProfile } from "./model";
+import { localHumanPresentation, stripChannelHash, type AppView, type SettingsOverlayPanel, type SettingsPanel, type UserProfile } from "./model";
 import type { SleiFixtures, SleiMember, SleiMessage } from "./types";
 import type { ChatWorkspaceMode } from "./SleiAppFrame";
 
@@ -61,6 +61,7 @@ export type WorkspaceSidebarProps = {
   messages: DesktopMessages;
   profile: UserProfile | null;
   onViewChange?: (view: AppView) => void;
+  onSettingsOpen?: (panel: SettingsOverlayPanel) => void;
   onSettingsPanelSelect?: (panel: SettingsPanel) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
@@ -727,6 +728,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                 <Button
                   aria-label={input.messages.shell.workspaceSidebar.openSettingsMenu}
                   className="size-8 [&_svg]:size-3.5"
+                  data-testid="slei-sidebar-settings-trigger"
                   size="icon"
                   type="button"
                   variant="ghost"
@@ -744,7 +746,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   {input.messages.shell.workspaceSidebar.runtimeDevices}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => openSettingsPanel("account")}>
+                <DropdownMenuItem data-testid="slei-sidebar-settings-account" onSelect={() => input.onSettingsOpen?.("account")}>
                   <SleiIcon name="user" size={14} />
                   {input.messages.shell.workspaceSidebar.accountProfile}
                 </DropdownMenuItem>
