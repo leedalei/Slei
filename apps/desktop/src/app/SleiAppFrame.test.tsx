@@ -710,6 +710,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onViewChange).not.toHaveBeenCalledWith("settings");
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeTruthy();
     expect(container.querySelector('[data-slot="sidebar-card"]')?.getAttribute("data-settings-overlay-hidden")).toBe("true");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(true);
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')?.textContent).toContain("账号资料");
   });
 
@@ -729,6 +731,8 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(container.querySelector('[data-testid="slei-settings-overlay"]')).toBeNull();
     expect(container.querySelector('[data-active-view="tasks"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("aria-hidden")).toBe(false);
+    expect(container.querySelector('[data-slot="workspace-card"]')?.hasAttribute("inert")).toBe(false);
   });
 
   it("keeps legacy activeView settings route available for compatibility", () => {
