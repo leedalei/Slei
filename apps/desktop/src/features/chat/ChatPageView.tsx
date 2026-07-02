@@ -608,7 +608,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     const observer = new ResizeObserver(measureComposerReserve);
     observer.observe(node);
     return () => observer.disconnect();
-  }, [draft, attachments.length, composerReserveExpanded]);
+  }, [draft, attachments.length, composerReserveExpanded, effectiveChannelView, activeTargetId]);
 
   useLayoutEffect(() => {
     restoreOlderMessagesScrollPosition();
