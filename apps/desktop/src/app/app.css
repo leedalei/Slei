@@ -145,6 +145,8 @@
   --workspace-glass-bg: rgba(255, 255, 255, 0.76);
   --settings-sidebar-bg: rgb(248 249 251);
   --settings-detail-bg: rgb(249 249 250);
+  --settings-section-bg: var(--card);
+  --settings-section-border: var(--border);
   --settings-overlay-motion-dur: 200ms;
   --settings-overlay-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
@@ -305,6 +307,8 @@
   --workspace-glass-bg: var(--app-card-bg);
   --settings-sidebar-bg: rgb(31 41 57);
   --settings-detail-bg: rgb(31 41 57);
+  --settings-section-bg: rgb(25 32 43);
+  --settings-section-border: rgb(255 255 255 / 0.08);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 20px;
@@ -381,6 +385,8 @@
   --workspace-glass-bg: rgba(255, 255, 255, 0.76);
   --settings-sidebar-bg: rgb(248 249 251);
   --settings-detail-bg: rgb(249 249 250);
+  --settings-section-bg: var(--card);
+  --settings-section-border: var(--border);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-blur: 16px;
@@ -429,6 +435,8 @@
   }
 
   .slei-composer-input {
+    background: transparent;
+    background-color: transparent;
     box-shadow: none;
   }
 

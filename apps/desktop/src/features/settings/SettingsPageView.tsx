@@ -41,6 +41,7 @@ type SelectOption<TValue extends string> = {
 };
 
 const settingsControlStackClass = "grid gap-3";
+const settingsSectionCardClass = "border-[var(--settings-section-border)] bg-[var(--settings-section-bg)] text-card-foreground shadow-none";
 
 export function SettingsPage(input: SettingsPageInput) {
   const labels = input.messages.settings;
@@ -81,7 +82,7 @@ export function SettingsPage(input: SettingsPageInput) {
           />
 
           {input.activePanel === "account" ? (
-            <Card className="text-card-foreground shadow-none">
+            <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <div className="grid gap-4 sm:grid-cols-2">
                 <EditableDetailField
@@ -172,7 +173,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "language-region" ? (
-            <Card className="text-card-foreground shadow-none">
+            <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <div data-preference-pending={input.pendingPreference === "locale" ? "locale" : undefined}>
                 <SettingsSelect
@@ -209,7 +210,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "appearance" ? (
-            <Card className="text-card-foreground shadow-none">
+            <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-preference-pending={input.pendingPreference === "appearance" ? "appearance" : undefined} data-settings-control-stack="true">
               <PreferenceRow
                 control={(
@@ -267,7 +268,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "notifications" ? (
-            <Card className="text-card-foreground shadow-none">
+            <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-preference-pending={input.pendingPreference === "notifications" ? "notifications" : undefined} data-settings-control-stack="true">
               <NotificationSwitch
                 checked={input.notifications.mentions}
@@ -300,7 +301,7 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "about" ? (
-            <Card className="text-card-foreground shadow-none">
+            <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
               <AboutRow label={labels.desktopVersion} value={desktopVersion} />
               <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
