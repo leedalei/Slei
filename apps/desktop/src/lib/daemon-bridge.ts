@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type {
   ChannelCreateRequest as ProtocolChannelCreateRequest,
   ChannelMemberAddRequest as ProtocolChannelMemberAddRequest,
@@ -660,6 +661,8 @@ export type EventReconnectReceipt = {
   events: DaemonEventView[];
 };
 
+export type DaemonEventBatchHandler = (receipt: EventReconnectReceipt) => void;
+
 export type DiagnosticsSnapshotView = {
   node: string;
   runtime: string;
@@ -729,6 +732,7 @@ export type DaemonBridge = {
   renameLocalNode(name: string): Promise<NodeRenameReceipt>;
   refreshRuntimeStatus(): Promise<NodeListReceipt>;
   subscribeEvents(after: number): Promise<EventReconnectReceipt>;
+  listenDaemonEvents(handler: DaemonEventBatchHandler): Promise<() => void>;
 };
 
 function defaultAppLocale(): AppLocale {
@@ -899,6 +903,9 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async subscribeEvents(after) {
       return { after, events: [] };
     },
+    async listenDaemonEvents() {
+      return () => undefined;
+    },
   };
 }
 
@@ -961,6 +968,8 @@ export function createDaemonBridge(): DaemonBridge {
       renameLocalNode: (name: string) => invoke<NodeRenameReceipt>("rename_local_node_command", { name }),
       refreshRuntimeStatus: () => invoke<NodeListReceipt>("refresh_runtime_status_command"),
       subscribeEvents: (after: number) => invoke<EventReconnectReceipt>("reconnect_events_command", { after }),
+      listenDaemonEvents: async (handler: DaemonEventBatchHandler) =>
+        listen<EventReconnectReceipt>("slei://daemon-events", (event) => handler(event.payload)),
     };
   }
 

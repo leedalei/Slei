@@ -4,8 +4,12 @@ pub mod daemon_broker;
 use std::{
     fs,
     path::{Path, PathBuf},
+    thread,
+    time::Duration,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+const DAEMON_EVENTS_TOPIC: &str = "slei://daemon-events";
 
 pub fn run() {
     tauri::Builder::default()
@@ -16,6 +20,7 @@ pub fn run() {
         })
         .setup(|app| {
             configure_transparent_window(app)?;
+            start_daemon_event_forwarder(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -79,6 +84,41 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Slei desktop app");
+}
+
+fn start_daemon_event_forwarder(app_handle: tauri::AppHandle) {
+    thread::spawn(move || {
+        let mut after = 0_u64;
+        let mut empty_attempts = 0_u32;
+        loop {
+            let broker = app_handle.state::<daemon_broker::DaemonBroker>();
+            let receipt = broker.reconnect_events(after);
+            let has_events = !receipt.events.is_empty();
+            if has_events {
+                for event in &receipt.events {
+                    after = after.max(event.sequence);
+                }
+                empty_attempts = 0;
+                if let Err(error) = app_handle.emit(DAEMON_EVENTS_TOPIC, &receipt) {
+                    eprintln!("[slei-desktop][events] forward failed: {error}");
+                }
+            } else {
+                empty_attempts = empty_attempts.saturating_add(1);
+            }
+            thread::sleep(daemon_event_forwarder_delay(has_events, empty_attempts));
+        }
+    });
+}
+
+fn daemon_event_forwarder_delay(has_events: bool, empty_attempts: u32) -> Duration {
+    if has_events {
+        return Duration::from_millis(250);
+    }
+    let exponent = empty_attempts.saturating_sub(1).min(4);
+    let delay_ms = 1_000_u64
+        .saturating_mul(2_u64.saturating_pow(exponent))
+        .min(10_000);
+    Duration::from_millis(delay_ms)
 }
 
 fn configure_transparent_window(app: &tauri::App) -> tauri::Result<()> {
@@ -185,6 +225,7 @@ mod tests {
         RuntimeDescriptor, SaveMessageRequest, SendChannelMessageRequest, TaskListQuery,
         TaskReplyRequest,
     };
+    use super::daemon_event_forwarder_delay;
     use std::fs;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
@@ -248,6 +289,26 @@ mod tests {
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
         assert!(!serialized.contains("ws://"));
+    }
+
+    #[test]
+    fn daemon_event_forwarder_backs_off_when_no_events_or_errors() {
+        assert_eq!(
+            daemon_event_forwarder_delay(true, 0),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            daemon_event_forwarder_delay(false, 0),
+            Duration::from_millis(1_000)
+        );
+        assert_eq!(
+            daemon_event_forwarder_delay(false, 3),
+            Duration::from_millis(4_000)
+        );
+        assert_eq!(
+            daemon_event_forwarder_delay(false, 12),
+            Duration::from_millis(10_000)
+        );
     }
 
     #[test]

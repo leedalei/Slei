@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { invokeMock } = vi.hoisted(() => ({
+const { invokeMock, listenMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
+  listenMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: listenMock,
 }));
 
 import { createDaemonBridge } from "./daemon-bridge";
@@ -15,6 +20,7 @@ import { createDaemonBridgeMock } from "../test/daemon-bridge-mock";
 describe("createDaemonBridge non-Tauri fallback", () => {
   afterEach(() => {
     invokeMock.mockReset();
+    listenMock.mockReset();
     Reflect.deleteProperty(globalThis as Record<string, unknown>, "window");
   });
 
@@ -78,6 +84,60 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       agentId: "agent_coda",
       limit: 200,
     });
+  });
+
+  it("listens for daemon event batches through the Tauri event bridge", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: { __TAURI_INTERNALS__: {} },
+    });
+    const unlisten = vi.fn();
+    listenMock.mockImplementationOnce(async (_eventName, handler) => {
+      handler({
+        payload: {
+          after: 7,
+          events: [
+            {
+              sequence: 8,
+              eventType: "task_thread.updated",
+              occurredAtUnixMs: 1,
+              payload: { taskId: "task_1", channelId: "all" },
+            },
+          ],
+        },
+      });
+      return unlisten;
+    });
+
+    const bridge = createDaemonBridge();
+    const handler = vi.fn();
+    const cleanup = await bridge.listenDaemonEvents(handler);
+
+    expect(listenMock).toHaveBeenCalledWith("slei://daemon-events", expect.any(Function));
+    expect(handler).toHaveBeenCalledWith({
+      after: 7,
+      events: [
+        {
+          sequence: 8,
+          eventType: "task_thread.updated",
+          occurredAtUnixMs: 1,
+          payload: { taskId: "task_1", channelId: "all" },
+        },
+      ],
+    });
+    cleanup();
+    expect(unlisten).toHaveBeenCalledOnce();
+  });
+
+  it("returns a no-op daemon event listener while offline", async () => {
+    const bridge = createDaemonBridge();
+    const handler = vi.fn();
+
+    const cleanup = await bridge.listenDaemonEvents(handler);
+
+    cleanup();
+    expect(handler).not.toHaveBeenCalled();
+    expect(listenMock).not.toHaveBeenCalled();
   });
 
   it("invokes paged message lists and message thread commands", async () => {

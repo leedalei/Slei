@@ -935,6 +935,14 @@ describe("createChannelAgentReplyMessage", () => {
     expect(source).toContain("showAppToast(formatAppErrorToast");
   });
 
+  it("subscribes to daemon events without a frontend replay polling interval", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("bridge.listenDaemonEvents");
+    expect(source).toContain("bridge.subscribeEvents(lastDaemonEventSequenceRef.current)");
+    expect(source).not.toContain("const interval = window.setInterval(() => {\n      void replayDaemonEvents()");
+  });
+
   it("keeps the channel activity id stable across progress and completion", () => {
     const outcome: SendChannelMessageOutcome = {
       messageId: "msg_123",

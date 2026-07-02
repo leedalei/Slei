@@ -185,12 +185,13 @@ describe("desktop startup contract", () => {
     expect(cargoToml).not.toContain('name = "slei-desktop"');
   });
 
-  it("allows only the window permission needed by overlay drag regions", async () => {
+  it("allows only the window and event permissions needed by the desktop shell", async () => {
     const capability = JSON.parse(
       await readFile(join(desktopRoot, "src-tauri/capabilities/default.json"), "utf8"),
     ) as { permissions?: string[] };
 
     expect(capability.permissions).toEqual([
+      "core:event:allow-listen",
       "core:window:allow-start-dragging",
       "core:window:allow-internal-toggle-maximize",
     ]);

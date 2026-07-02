@@ -815,6 +815,9 @@ export function createDaemonBridgeMock(input: {
       eventSubscriptions.push({ after });
       return { after, events: [] };
     },
+    async listenDaemonEvents() {
+      return () => undefined;
+    },
   };
 }
 

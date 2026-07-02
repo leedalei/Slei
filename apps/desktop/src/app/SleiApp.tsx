@@ -1208,8 +1208,7 @@ export function SleiApp() {
 
   useEffect(() => {
     let mounted = true;
-    const replayDaemonEvents = async () => {
-      const receipt = await bridge.subscribeEvents(lastDaemonEventSequenceRef.current);
+    const processDaemonEvents = (receipt: { events: DaemonEventView[] }) => {
       if (!mounted) return;
       const events = [...receipt.events].sort((left, right) => left.sequence - right.sequence);
       let shouldRefreshAgents = false;
@@ -1238,17 +1237,27 @@ export function SleiApp() {
         });
       }
     };
+    const replayDaemonEvents = async () => {
+      processDaemonEvents(await bridge.subscribeEvents(lastDaemonEventSequenceRef.current));
+    };
     void replayDaemonEvents().catch((error: unknown) => {
       logAppEvent(bridge, "events", "replay-failed", { error: formatLogError(error) });
     });
-    const interval = window.setInterval(() => {
-      void replayDaemonEvents().catch((error: unknown) => {
-        logAppEvent(bridge, "events", "replay-failed", { error: formatLogError(error) });
+    let unlisten: (() => void) | undefined;
+    void bridge.listenDaemonEvents(processDaemonEvents)
+      .then((cleanup) => {
+        if (mounted) {
+          unlisten = cleanup;
+        } else {
+          cleanup();
+        }
+      })
+      .catch((error: unknown) => {
+        logAppEvent(bridge, "events", "listen-failed", { error: formatLogError(error) });
       });
-    }, 1000);
     return () => {
       mounted = false;
-      window.clearInterval(interval);
+      unlisten?.();
     };
   }, [bridge, backendErrorToastsEnabled]);
 
