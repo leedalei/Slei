@@ -415,6 +415,62 @@ describe("ChatPage mention panel", () => {
     expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("send button executes an active fixed task command instead of submitting command text", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onSendMessage = vi.fn();
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/task"
+        messages={messages}
+        onSendMessage={onSendMessage}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
+    });
+
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("send button executes an active fixed file command instead of submitting command text", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+    const onSendMessage = vi.fn();
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/file"
+        messages={messages}
+        onSendMessage={onSendMessage}
+        profile={defaultProfile}
+      />,
+    );
+    const fileInput = host.querySelector<HTMLInputElement>('[data-testid="slei-composer-file-input"]')!;
+    const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => undefined);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]')?.click();
+    });
+
+    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("selecting a DM skill option inserts the skill at the slash trigger position", async () => {
     const { element } = dmSkillSlashFixture("帮我 /me");
     const container = await mountChatPage(element);

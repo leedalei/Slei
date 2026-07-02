@@ -736,6 +736,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     setSelectedComposerCommandIndex(0);
   }
 
+  function submitComposerForm() {
+    if (composerSlash && composerCommandOptions.length > 0) {
+      selectComposerCommand();
+      return;
+    }
+    void submitMessage();
+  }
+
   async function copyMessage(message: SleiMessage) {
     const copied = await copyPlainText(message.body);
     if (!copied) return;
@@ -1218,7 +1226,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
-                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); void submitMessage(); }}>
+                <form className="grid gap-0 overflow-visible" onSubmit={(event) => { event.preventDefault(); submitComposerForm(); }}>
                   <Card
                     className={cn(
                       CARD_FLAT_CLASS,
