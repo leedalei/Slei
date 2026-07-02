@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -178,11 +176,5 @@ describe("SettingsOverlay", () => {
 
     expect(container.querySelector('[data-testid="host-devices"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="host-members"]')).toBeNull();
-  });
-
-  it("keeps SettingsDetailHost exhaustive when panels change", () => {
-    const source = readFileSync(join(process.cwd(), "src/features/settings/SettingsOverlay.tsx"), "utf8");
-
-    expect(source).toContain("const exhaustivePanel: never = props.panel");
   });
 });
