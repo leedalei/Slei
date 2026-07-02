@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDesktopMessages } from "../../i18n";
-import { SettingsOverlay } from "./SettingsOverlay";
+import { SettingsDetailHost, SettingsOverlay } from "./SettingsOverlay";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -138,5 +138,43 @@ describe("SettingsOverlay", () => {
 
     expect(onPanelChange).toHaveBeenCalledWith("devices");
     expect(onPanelChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("hosts the members detail panel by panel key", async () => {
+    const { container } = await mountOverlay({
+      activePanel: "members",
+      renderDetail: (panel) => (
+        <SettingsDetailHost
+          panel={panel}
+          renderAbout={() => <section data-testid="host-about">about</section>}
+          renderAccount={() => <section data-testid="host-account">account</section>}
+          renderDevices={() => <section data-testid="host-devices">devices</section>}
+          renderMembers={() => <section data-testid="host-members">members</section>}
+          renderPreferences={() => <section data-testid="host-preferences">preferences</section>}
+        />
+      ),
+    });
+
+    expect(container.querySelector('[data-testid="host-members"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="host-devices"]')).toBeNull();
+  });
+
+  it("hosts the devices detail panel by panel key", async () => {
+    const { container } = await mountOverlay({
+      activePanel: "devices",
+      renderDetail: (panel) => (
+        <SettingsDetailHost
+          panel={panel}
+          renderAbout={() => <section data-testid="host-about">about</section>}
+          renderAccount={() => <section data-testid="host-account">account</section>}
+          renderDevices={() => <section data-testid="host-devices">devices</section>}
+          renderMembers={() => <section data-testid="host-members">members</section>}
+          renderPreferences={() => <section data-testid="host-preferences">preferences</section>}
+        />
+      ),
+    });
+
+    expect(container.querySelector('[data-testid="host-devices"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="host-members"]')).toBeNull();
   });
 });

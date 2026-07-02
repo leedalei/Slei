@@ -16,6 +16,28 @@ export type SettingsOverlayProps = {
   renderDetail: (panel: SettingsOverlayPanel) => ReactNode;
 };
 
+export function SettingsDetailHost(props: {
+  panel: SettingsOverlayPanel;
+  renderAccount: () => ReactNode;
+  renderPreferences: () => ReactNode;
+  renderMembers: () => ReactNode;
+  renderDevices: () => ReactNode;
+  renderAbout: () => ReactNode;
+}) {
+  switch (props.panel) {
+    case "account":
+      return props.renderAccount();
+    case "preferences":
+      return props.renderPreferences();
+    case "members":
+      return props.renderMembers();
+    case "devices":
+      return props.renderDevices();
+    case "about":
+      return props.renderAbout();
+  }
+}
+
 type SettingsOverlayGroup = {
   id: "personal" | "workspace" | "system";
   panels: SettingsOverlayPanel[];

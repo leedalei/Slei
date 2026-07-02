@@ -240,6 +240,55 @@ describe("detail page editing pattern", () => {
     expect(computersHtml).not.toContain('aria-label="编辑系统信息"');
   });
 
+  it("renders member details in the settings embedded layout without dropping tabs or actions", () => {
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="a1"
+        data={data}
+        layout="settings"
+        messages={messages}
+        nodes={data.nodes}
+      />,
+    );
+
+    expect(html).toContain('data-settings-embedded-detail="members"');
+    expect(html).toContain('data-testid="slei-member-detail-tabs"');
+    expect(html).toContain(messages.members.profile);
+    expect(html).toContain(messages.members.workspace);
+    expect(html).toContain(messages.members.capabilities);
+    expect(html).toContain(messages.members.permissions);
+    expect(html).toContain(messages.members.activity);
+    expect(html).toContain(messages.members.message);
+    expect(html).toContain(messages.members.deleteAgent);
+    expect(html).toContain(messages.members.openInFileManager);
+    expect(html).toContain('aria-label="编辑显示名称"');
+    expect(html).toContain('aria-label="编辑描述"');
+    expect(html).toContain('aria-label="编辑运行时"');
+    expect(html).toContain('aria-label="编辑 Model"');
+  });
+
+  it("renders computer details in the settings embedded layout without dropping rename, runtime, or hosted agents", () => {
+    const html = renderToStaticMarkup(
+      <ComputersPage
+        activeNodeId={data.nodes[0]?.id}
+        layout="settings"
+        members={data.members}
+        messages={messages}
+        nodes={data.nodes}
+      />,
+    );
+
+    expect(html).toContain('data-settings-embedded-detail="devices"');
+    expect(html).toContain('aria-label="编辑设备名称"');
+    expect(html).toContain(messages.computers.deviceName);
+    expect(html).toContain(messages.computers.info);
+    expect(html).toContain(messages.computers.systemInfo);
+    expect(html).toContain(messages.computers.detectedRuntimes);
+    expect(html).toContain('data-detail-block-kind="runtime"');
+    expect(html).toContain(messages.computers.agentsOnThisComputer);
+    expect(html).toContain('data-detail-block-kind="hosted-agent"');
+  });
+
   it("renders member field save failure state from the frame contract", () => {
     const membersHtml = renderToStaticMarkup(
       <SleiAppFrame

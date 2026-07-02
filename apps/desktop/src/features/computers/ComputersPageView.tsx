@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ComputersPage(input: {
   activeNodeId?: string;
+  layout?: "workspace" | "settings";
   members: SleiMember[];
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
@@ -20,6 +21,7 @@ export function ComputersPage(input: {
   onComputerRename?: (nodeId: string, name: string) => Promise<void> | void;
   renamingComputerId?: string;
 }) {
+  const layout = input.layout ?? "workspace";
   const firstNode = input.nodes[0];
   const selectedNode = input.nodes.find((node) => node.id === input.activeNodeId) ?? firstNode;
   const [renamingNodeId, setRenamingNodeId] = useState<string | undefined>();
@@ -45,7 +47,10 @@ export function ComputersPage(input: {
 
   if (!selectedNode) {
     return (
-      <section className="grid min-h-full place-items-center p-6">
+      <section
+        className="grid min-h-full place-items-center p-6"
+        data-settings-embedded-detail={layout === "settings" ? "devices" : undefined}
+      >
         <Empty
           centered
           description={input.messages.computers.emptyDescription}
@@ -67,7 +72,11 @@ export function ComputersPage(input: {
   const effectiveRenamingNodeId = input.renamingComputerId ?? renamingNodeId;
 
   return (
-    <section aria-label={input.messages.computers.computer} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
+    <section
+      aria-label={input.messages.computers.computer}
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent"
+      data-settings-embedded-detail={layout === "settings" ? "devices" : undefined}
+    >
       <div className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-tauri-drag-region="deep">
         <PageHeader
           data-slot="workspace-titlebar"
