@@ -256,7 +256,86 @@ describe("ChatPage DM skill message highlight", () => {
 });
 
 describe("ChatPage mention panel", () => {
-  it("renders the DM skill slash picker for a leading slash draft", () => {
+  it("renders the merged composer command panel for a channel slash draft", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const host = staticMarkupHost(html);
+
+    expect(host.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
+    expect(host.textContent).toContain(messages.chat.insertFileCommand);
+    expect(host.textContent).toContain(messages.chat.convertToTaskCommand);
+  });
+
+  it("renders the merged composer command panel for a middle slash trigger", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="帮我 /"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    const host = staticMarkupHost(html);
+
+    expect(host.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
+    expect(host.textContent).toContain(messages.chat.insertFileCommand);
+    expect(host.textContent).toContain(messages.chat.convertToTaskCommand);
+  });
+
+  it("filters fixed composer commands by aliases in Chinese locale", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    for (const initialDraft of ["/fi", "/file"]) {
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={initialDraft}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      expect(staticMarkupHost(html).textContent).toContain(messages.chat.insertFileCommand);
+    }
+
+    for (const initialDraft of ["/task", "/转为"]) {
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          initialDraft={initialDraft}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      expect(staticMarkupHost(html).textContent).toContain(messages.chat.convertToTaskCommand);
+    }
+  });
+
+  it("merges fixed commands and DM skill slash options", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
     const data = createSleiFixtures({
@@ -280,94 +359,96 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(html).toContain(messages.chat.chooseSkill);
+    expect(html).toContain(messages.chat.chooseComposerCommand);
+    expect(html).toContain(messages.chat.insertFileCommand);
+    expect(html).toContain(messages.chat.convertToTaskCommand);
     expect(html).toContain("/memory");
   });
 
-  it("renders DM skill slash options with the expected DOM contract and click behavior", async () => {
+  it("clicking convert to task removes the slash query and turns on the task switch", async () => {
     const messages = createDesktopMessages("zh-CN");
-    const member = memberWithLongMentionText();
-    const data = createSleiFixtures({
-      conversations: [{ id: "dm_agent_architect", kind: "dm", agentId: member.id, createdAt: "0", updatedAt: "0" }],
-      members: [
-        {
-          ...member,
-          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
-        },
-      ],
-    });
-
-    const host = await mountChatPage(
-      <ChatPage
-        activeChannel={data.channels[0]}
-        activeConversation={data.conversations[0]}
-        data={data}
-        initialDraft="/"
-        messages={messages}
-        profile={defaultProfile}
-      />,
-    );
-
-    const panel = host.querySelector('[data-testid="slei-skill-slash-panel"]');
-    const option = host.querySelector<HTMLButtonElement>('[data-skill-slash-option-index="0"]');
-
-    expect(panel).not.toBeNull();
-    expect(option).not.toBeNull();
-    expect(option?.getAttribute("aria-current")).toBe("true");
-    expect(option?.textContent).toContain("Remember facts");
-
-    await act(async () => {
-      option?.click();
-    });
-
-    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("/memory ");
-  });
-
-  it("does not render the skill slash picker for channel drafts", async () => {
-    const messages = createDesktopMessages("zh-CN");
-    const member = memberWithLongMentionText();
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
-      members: [
-        {
-          ...member,
-          skills: [{ id: "memory", name: "memory", trigger: "Remember facts", path: "/tmp/memory/SKILL.md" }],
-        },
-      ],
     });
 
     const host = await mountChatPage(
       <ChatPage
         activeChannel={data.channels[0]}
         data={data}
-        initialDraft="/"
+        initialDraft="/task"
         messages={messages}
         profile={defaultProfile}
       />,
     );
 
-    expect(host.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-composer-command-id="convert-to-task"]')?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("selects a DM skill slash option with keyboard", async () => {
+  it("clicking insert file removes the slash query and opens the file input", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialDraft="/file"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const fileInput = host.querySelector<HTMLInputElement>('[data-testid="slei-composer-file-input"]')!;
+    const clickSpy = vi.spyOn(fileInput, "click").mockImplementation(() => undefined);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-composer-command-id="insert-file"]')?.click();
+    });
+
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("");
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("selecting a DM skill option inserts the skill at the slash trigger position", async () => {
+    const { element } = dmSkillSlashFixture("帮我 /me");
+    const container = await mountChatPage(element);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-composer-skill-id="memory"]')?.click();
+    });
+
+    expect(container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')?.value).toBe("帮我 /memory ");
+  });
+
+  it("selects a merged composer command option with keyboard", async () => {
     const onSendMessage = vi.fn();
-    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const { element } = dmSkillSlashFixture("/", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
     await act(async () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
 
-    expect(input.value).toBe("/memory ");
+    expect(input.value).toBe("");
+    expect(container.querySelector<HTMLButtonElement>('[data-testid="slei-as-task-switch"]')?.getAttribute("aria-checked")).toBe("true");
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 
-  it("moves the selected DM skill slash option with arrow keys", async () => {
+  it("moves the selected merged composer command option with arrow keys", async () => {
     const { element } = dmSkillSlashFixture("/");
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
-    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-skill-slash-option-index]"));
+    const options = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[data-composer-option-index]"));
 
     expect(options()[0]?.getAttribute("aria-current")).toBe("true");
     expect(options()[1]?.getAttribute("aria-current")).toBeNull();
@@ -389,7 +470,7 @@ describe("ChatPage mention panel", () => {
 
   it("selects a DM skill slash option with Tab", async () => {
     const onSendMessage = vi.fn();
-    const { element } = dmSkillSlashFixture("/me", { onSendMessage });
+    const { element } = dmSkillSlashFixture("/memo", { onSendMessage });
     const container = await mountChatPage(element);
     const input = container.querySelector<HTMLTextAreaElement>('[data-testid="slei-composer-input"]')!;
 
@@ -412,7 +493,7 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("/me");
-    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="slei-composer-command-panel"]')).not.toBeNull();
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 
@@ -426,7 +507,7 @@ describe("ChatPage mention panel", () => {
     });
 
     expect(input.value).toBe("");
-    expect(container.querySelector('[data-testid="slei-skill-slash-panel"]')).toBeNull();
+    expect(container.querySelector('[data-testid="slei-composer-command-panel"]')).toBeNull();
   });
 
   it("renders channel titles with a styled literal hash prefix", () => {

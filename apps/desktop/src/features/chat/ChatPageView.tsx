@@ -5,7 +5,7 @@ import type { DesktopMessages } from "../../i18n";
 import type { ConversationAttachmentUploadRequest, ConversationAttachmentView, ConversationView, InteractiveCardView, PermissionDecision } from "../../lib/daemon-bridge";
 import type { SleiFixtures, SleiMember, SleiMessage } from "../../app/types";
 import { MarkdownMessage, markdownForegroundStyle } from "./MarkdownMessage";
-import { activeMentionQuery, activeSkillSlashQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
+import { activeComposerSlashQuery, activeMentionQuery, composerCommandMatchesQuery, composerShortcutAction, filterConversationMessages, formatLocalRecordDateTime, insertMention, insertSkillSlash, isComposerImeComposing, leadingSkillSlashToken, mentionSuggestions, moveMentionSelection, removeComposerSlashQuery, skillSlashSuggestions, stripChannelHash, submitComposerDraftWithFeedback, type AgentDraftInput, type UserProfile } from "../../app/model";
 import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, SelectableCard, SleiIcon, SleiIconSwap, Toast, TOAST_VISIBLE_MS, TooltipButton, type ToastType } from "../../components";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -21,7 +21,7 @@ import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "../../lib/utils";
 import { TaskThreadDrawer } from "../tasks/TaskThreadDrawer";
 import { MentionPicker } from "./MentionPicker";
-import { SkillSlashPicker } from "./SkillSlashPicker";
+import { ComposerCommandPicker, type ComposerCommandOption } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 import { ChannelMemberGroup } from "./ChannelMemberGroup";
 
@@ -431,7 +431,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [isComposing, setIsComposing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
-  const [selectedSkillIndex, setSelectedSkillIndex] = useState(0);
+  const [selectedComposerCommandIndex, setSelectedComposerCommandIndex] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
@@ -444,7 +444,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mentionOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const skillOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const composerCommandOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const composerShellContentRef = useRef<HTMLDivElement | null>(null);
   const timelineViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToBottomRef = useRef(false);
@@ -460,8 +460,33 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const mention = activeMentionQuery(draft);
   const mentionTargets = mention ? mentionSuggestions(mention.query, data.members) : [];
   const dmMember = activeConversation?.kind === "dm" ? data.members.find((member) => member.id === activeConversation.agentId) : undefined;
-  const skillSlash = dmMember ? activeSkillSlashQuery(draft) : null;
-  const skillSlashTargets = skillSlash && dmMember ? skillSlashSuggestions(skillSlash.query, dmMember.skills ?? []) : [];
+  const composerSlash = activeComposerSlashQuery(draft);
+  const composerCommands = [
+    {
+      kind: "command",
+      id: "insert-file",
+      title: messages.chat.insertFileCommand,
+      description: messages.chat.insertFileCommandDescription,
+      aliases: ["file", "fi", "insert", "attachment", "附件", "文件", "插入文件"],
+      icon: "attachment",
+    },
+    {
+      kind: "command",
+      id: "convert-to-task",
+      title: messages.chat.convertToTaskCommand,
+      description: messages.chat.convertToTaskCommandDescription,
+      aliases: ["task", "todo", "convert", "任务", "转为任务"],
+      icon: "check",
+    },
+  ] satisfies ComposerCommandOption[];
+  const composerCommandOptions: ComposerCommandOption[] = composerSlash
+    ? [
+        ...composerCommands.filter((command) =>
+          composerCommandMatchesQuery(composerSlash.query, [command.title, ...command.aliases]),
+        ),
+        ...(dmMember ? skillSlashSuggestions(composerSlash.query, dmMember.skills ?? []).map((skill) => ({ kind: "skill" as const, id: skill.id, name: skill.name, trigger: skill.trigger })) : []),
+      ]
+    : [];
   const composerInputRef = useAutosizeTextarea(draft, { maxHeight: 500 });
   const composerPlaceholder = dmMember
     ? messages.chat.inputToMemberWithActions(dmMember.name)
@@ -504,7 +529,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const renderedTimelineItems = timelineUsesVirtualization && timelineVirtualItems.length > 0
     ? timelineVirtualItems.map((item) => ({ key: item.key, message: timelineMessages[item.index], virtualItem: item }))
     : timelineMessages.map((message, index) => ({ key: message.id, message, virtualItem: undefined, fallbackIndex: index }));
-  const composerReserveExpanded = attachments.length > 0 || (mention && mentionTargets.length > 0) || (skillSlash && skillSlashTargets.length > 0);
+  const composerReserveExpanded = attachments.length > 0 || (mention && mentionTargets.length > 0) || (composerSlash && composerCommandOptions.length > 0);
   const composerBaselineReservePx = composerReserveExpanded
     ? COMPOSER_EXPANDED_RESERVE_PX
     : COMPOSER_RESERVE_PX;
@@ -584,13 +609,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   }, [mention, mentionTargets.length, selectedMentionIndex]);
 
   useEffect(() => {
-    if (!skillSlash || skillSlashTargets.length === 0) return;
-    skillOptionRefs.current[selectedSkillIndex]?.scrollIntoView({ block: "nearest" });
-  }, [skillSlash, skillSlashTargets.length, selectedSkillIndex]);
+    if (!composerSlash || composerCommandOptions.length === 0) return;
+    composerCommandOptionRefs.current[selectedComposerCommandIndex]?.scrollIntoView({ block: "nearest" });
+  }, [composerSlash, composerCommandOptions.length, selectedComposerCommandIndex]);
 
   useEffect(() => {
-    setSelectedSkillIndex(0);
-  }, [skillSlash?.query, dmMember?.id]);
+    setSelectedComposerCommandIndex(0);
+  }, [composerSlash?.query, dmMember?.id]);
 
   useEffect(() => {
     if (effectiveChannelView !== "chat" || focusedMessageId) return;
@@ -694,10 +719,21 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     setSelectedMentionIndex(0);
   }
 
-  function selectSkillSlash(index = selectedSkillIndex) {
-    if (!skillSlash || !skillSlashTargets[index]) return;
-    setDraft(insertSkillSlash(draft, skillSlash, skillSlashTargets[index]));
-    setSelectedSkillIndex(0);
+  function selectComposerCommand(index = selectedComposerCommandIndex) {
+    if (!composerSlash || !composerCommandOptions[index]) return;
+    const option = composerCommandOptions[index];
+    if (option.kind === "command") {
+      setDraft(removeComposerSlashQuery(draft, composerSlash));
+      setSelectedComposerCommandIndex(0);
+      if (option.id === "insert-file") {
+        fileInputRef.current?.click();
+        return;
+      }
+      setAsTask(true);
+      return;
+    }
+    setDraft(insertSkillSlash(draft, composerSlash, option));
+    setSelectedComposerCommandIndex(0);
   }
 
   async function copyMessage(message: SleiMessage) {
@@ -1169,16 +1205,16 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     />
                   </div>
                 ) : null}
-                {skillSlash && skillSlashTargets.length > 0 ? (
+                {composerSlash && composerCommandOptions.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
-                    <SkillSlashPicker
+                    <ComposerCommandPicker
                       messages={messages}
-                      onSelect={selectSkillSlash}
+                      onSelect={selectComposerCommand}
                       optionRef={(index, node) => {
-                        skillOptionRefs.current[index] = node;
+                        composerCommandOptionRefs.current[index] = node;
                       }}
-                      selectedIndex={selectedSkillIndex}
-                      skills={skillSlashTargets}
+                      options={composerCommandOptions}
+                      selectedIndex={selectedComposerCommandIndex}
                     />
                   </div>
                 ) : null}
@@ -1232,27 +1268,27 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       onKeyDown={(event) => {
                       const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
                       const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                      const hasSkillSlashTargets = Boolean(skillSlash && skillSlashTargets.length > 0);
-                      if (!composing && skillSlash && hasSkillSlashTargets) {
+                      const hasComposerCommandOptions = Boolean(composerSlash && composerCommandOptions.length > 0);
+                      if (!composing && composerSlash && hasComposerCommandOptions) {
                         if (event.key === "ArrowDown") {
                           event.preventDefault();
-                          setSelectedSkillIndex((current) => moveMentionSelection(current, 1, skillSlashTargets.length));
+                          setSelectedComposerCommandIndex((current) => moveMentionSelection(current, 1, composerCommandOptions.length));
                           return;
                         }
                         if (event.key === "ArrowUp") {
                           event.preventDefault();
-                          setSelectedSkillIndex((current) => moveMentionSelection(current, -1, skillSlashTargets.length));
+                          setSelectedComposerCommandIndex((current) => moveMentionSelection(current, -1, composerCommandOptions.length));
                           return;
                         }
                         if (event.key === "Escape") {
                           event.preventDefault();
-                          setDraft(draft.slice(0, skillSlash.start));
-                          setSelectedSkillIndex(0);
+                          setDraft(removeComposerSlashQuery(draft, composerSlash));
+                          setSelectedComposerCommandIndex(0);
                           return;
                         }
                         if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
                           event.preventDefault();
-                          selectSkillSlash();
+                          selectComposerCommand();
                           return;
                         }
                       }
