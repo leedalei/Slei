@@ -46,7 +46,7 @@ type SelectOption = {
   subtitle?: string;
 };
 
-const filterSelectTriggerClassName = "w-auto min-w-36 max-w-full rounded-lg border-border/55 bg-muted/45 transition-[background-color,border-color,color,box-shadow] hover:bg-muted/65 data-[state=open]:bg-muted/70 dark:bg-muted/25 dark:hover:bg-muted/35";
+const filterSelectTriggerClassName = "w-auto min-w-36 max-w-full rounded-md border-input bg-transparent transition-[background-color,border-color,color,box-shadow] hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground dark:bg-input/30 dark:hover:bg-input/50";
 const searchResultPanelClassName = "shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25";
 
 export function SearchPage({
@@ -191,28 +191,26 @@ export function SearchPage({
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
-        <div className="mx-auto grid w-full max-w-5xl gap-3">
-          <Card
-            className="rounded-full border border-border/55 text-card-foreground shadow-none transition-[border-color] focus-within:border-primary"
+        <div className="grid w-full max-w-5xl gap-3">
+          <div
+            className="flex h-10 max-w-2xl items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
             data-search-input-surface="true"
           >
-            <CardContent className="flex min-h-12 items-center gap-3 px-3 py-0">
-              <SleiIcon className="size-5 text-muted-foreground" name="search" />
-              <Input
-                aria-label={messages.search.navigation.searchInput}
-                className="h-11 min-w-0 border-0 bg-transparent px-0 text-base shadow-none backdrop-blur-none focus:bg-transparent dark:bg-transparent"
-                onChange={(event) => setQuery(event.currentTarget.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder={messages.search.placeholderTitle}
-                value={query}
-              />
-              {query ? (
-                <Button aria-label={messages.search.navigation.clearQuery} className="size-8 [&_svg]:size-3.5" onClick={clearQuery} size="icon" type="button" variant="ghost">
-                  <SleiIcon className="size-4" name="x" />
-                </Button>
-              ) : null}
-            </CardContent>
-          </Card>
+            <SleiIcon className="size-4 text-muted-foreground" name="search" />
+            <Input
+              aria-label={messages.search.navigation.searchInput}
+              className="h-9 min-w-0 border-0 bg-transparent px-0 text-sm shadow-none backdrop-blur-none focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder={messages.search.placeholderTitle}
+              value={query}
+            />
+            {query ? (
+              <Button aria-label={messages.search.navigation.clearQuery} className="-mr-1 size-7 [&_svg]:size-3.5" onClick={clearQuery} size="icon" type="button" variant="ghost">
+                <SleiIcon className="size-4" name="x" />
+              </Button>
+            ) : null}
+          </div>
 
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2">
             <FilterSelect
@@ -247,7 +245,7 @@ export function SearchPage({
 
       <ScrollArea className="min-h-0">
         <div className="px-6 py-6">
-          <div className="mx-auto grid w-full max-w-5xl gap-5" data-slot="search-results">
+          <div className="grid w-full max-w-5xl gap-5" data-slot="search-results">
             {status === "idle" ? (
               <Empty
                 chrome="none"

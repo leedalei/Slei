@@ -1193,41 +1193,52 @@ describe("desktop UI primitive usage", () => {
     expect(selectSource).not.toContain("shadow-[0_8px_32px_rgba(0,0,0,0.4)]");
   });
 
-  it("keeps transition hooks wired through neutral dropdown, modal, and icon-swap contracts", () => {
+  it("keeps shadcn base focus from adding a global outline on top of component rings", () => {
     const appCss = readSource("app/app.css");
 
-    expect(appCss).toContain("--dropdown-open-dur:");
-    expect(appCss).toContain("--dropdown-close-dur:");
+    expect(appCss).toContain("@import \"shadcn/tailwind.css\";");
+    expect(appCss).toContain("@custom-variant dark");
+    expect(appCss).toContain("@theme inline");
+    expect(appCss).toContain("@apply border-border outline-ring/50");
+    expect(appCss).not.toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\)/);
+  });
+
+  it("keeps transition hooks wired through neutral modal and icon-swap contracts", () => {
+    const appCss = readSource("app/app.css");
+
     expect(appCss).toContain("--modal-open-dur:");
     expect(appCss).toContain("--modal-close-dur:");
     expect(appCss).toContain("--icon-swap-dur:");
-    expect(appCss).toContain(".t-dropdown");
-    expect(appCss).toContain('.t-dropdown[data-state="open"]');
-    expect(appCss).toContain('.t-dropdown[data-state="closed"]');
+    expect(appCss).not.toContain(".t-dropdown");
     expect(appCss).toContain(".t-icon-swap");
     expect(appCss).toContain('.t-icon-swap[data-state="a"] > .t-icon[data-icon="a"]');
     expect(appCss).not.toContain('.t-icon-swap[data-state="a"] .t-icon[data-icon="a"]');
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(appCss).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.t-dropdown\s*\{[\s\S]*animation: none !important;/);
     expect(appCss).toContain(".t-icon-swap .t-icon { transition: none !important; }");
   });
 
-  it("keeps dropdown and modal primitives on Radix content APIs without old data-open animation classes", () => {
+  it("keeps dropdown and popover primitives on shadcn Radix content APIs", () => {
     for (const file of [
       "components/ui/dropdown-menu.tsx",
       "components/ui/popover.tsx",
     ]) {
       const source = readSource(file);
-      expect(source).toContain("t-dropdown");
-      expect(source).not.toContain("data-open:animate-in");
-      expect(source).not.toContain("data-open:zoom-in-95");
-      expect(source).not.toContain("data-closed:zoom-out-95");
+      expect(source).not.toMatch(/["'`\s]t-dropdown(?:\s|["'`])/);
+      expect(source).toContain("data-[state=open]:animate-in");
+      expect(source).toContain("data-[state=closed]:animate-out");
+      expect(source).toContain("data-[side=bottom]:slide-in-from-top-2");
+      expect(source).toContain("rounded-md border bg-popover");
+      expect(source).toContain("shadow-md");
+      expect(source).not.toContain("shadow-[0_0_4px_rgba");
     }
 
     const dropdownSource = readSource("components/ui/dropdown-menu.tsx");
     expect(dropdownSource).toContain("<DropdownMenuPrimitive.Content");
     expect(dropdownSource).toContain("<DropdownMenuPrimitive.SubContent");
-    expect(dropdownSource).toContain("forceMount");
+    expect(dropdownSource).not.toContain("forceMount");
+    expect(dropdownSource).toContain("focus:bg-accent");
+    expect(dropdownSource).toContain("data-[highlighted]:bg-accent");
+    expect(dropdownSource).not.toContain("bg-muted/70");
 
     const selectSource = readSource("components/ui/select.tsx");
     expect(selectSource).not.toContain("t-dropdown");

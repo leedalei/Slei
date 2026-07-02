@@ -4,7 +4,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 export const selectableCardSelectedClassName =
-  "relative overflow-hidden border border-white/30 bg-white/20 text-foreground shadow-[0_2px_4px_rgba(6,182,212,0.10)] backdrop-blur-xl before:pointer-events-none before:absolute before:inset-0 before:block before:rounded-lg before:bg-linear-to-b before:from-white/25 before:to-transparent";
+  "border-border bg-accent text-accent-foreground shadow-none";
 
 export const selectableCardFlatSelectedClassName =
   "border-transparent bg-[var(--workspace-sidebar-active-bg)] text-foreground shadow-none backdrop-blur-none";

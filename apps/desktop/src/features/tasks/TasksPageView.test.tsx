@@ -272,8 +272,9 @@ describe("TasksPage filters", () => {
 
     expect(selectedTask?.getAttribute("data-slot")).toBe("selectable-card");
     expect(selectedTask?.getAttribute("data-selected")).toBe("true");
-    expect(selectedTask?.className).toContain("bg-white/20");
-    expect(selectedTask?.className).not.toContain("bg-accent");
+    expect(selectedTask?.className).toContain("bg-accent");
+    expect(selectedTask?.className).toContain("text-accent-foreground");
+    expect(selectedTask?.className).not.toContain("bg-white/20");
   });
 
   it("filters tasks by channel and assignee before switching views", async () => {

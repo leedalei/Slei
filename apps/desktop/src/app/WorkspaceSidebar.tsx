@@ -824,18 +824,18 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             {agentMembers.length > 0 ? (
               <fieldset className="grid gap-2">
                 <legend className="text-sm font-medium">{input.messages.chat.selectAgents}</legend>
-                <ScrollArea className="max-h-60 rounded-lg border border-white/20 bg-transparent">
+                <ScrollArea className="max-h-60 rounded-md border bg-background">
                   <div className="grid gap-1 p-2">
                     {agentMembers.map((member) => {
                       const selected = channelDraft.selectedAgentIds.includes(member.id);
                       return (
                         <SelectableCard
-                          className="rounded-lg"
+                          className="rounded-md"
                           data-testid="slei-create-channel-agent-option"
                           key={member.id}
                           selected={selected}
                         >
-                          <Label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2">
+                          <Label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2">
                             <Checkbox
                               aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
                               checked={selected}

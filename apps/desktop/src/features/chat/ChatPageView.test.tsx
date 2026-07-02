@@ -1807,7 +1807,7 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.click();
     });
 
     const card = document.body.querySelector('[data-testid="slei-channel-member-info-card"]');
@@ -1818,16 +1818,17 @@ describe("ChatPage mention panel", () => {
     expect(card?.textContent).toContain("产品研究 Agent");
     expect(card?.textContent).toContain(messages.chat.memberReady);
     expect(card?.textContent).not.toContain("ready");
-    expect(card?.className).toContain("border-border/60");
-    expect(card?.className).toContain("shadow-[0_0_4px_rgba(0,0,0,0.14)]");
-    expect(card?.className).not.toContain("shadow-[0_4px_4px");
+    expect(card?.className).toContain("rounded-md");
+    expect(card?.className).toContain("border");
+    expect(card?.className).toContain("bg-popover");
+    expect(card?.className).toContain("shadow-md");
+    expect(card?.className).not.toContain("shadow-[0_0_4px");
     expect(removeButton?.textContent?.trim()).toBe("移除");
     expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
     expect(removeButton?.className).toContain("text-[14px]");
   });
 
-  it("closes the member popover after pointer leaves the avatar and info card", async () => {
-    vi.useFakeTimers();
+  it("does not open the member popover from hover-only pointer movement", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1842,45 +1843,25 @@ describe("ChatPage mention panel", () => {
       ],
     });
 
-    try {
-      const host = await mountChatPage(
-        <ChatPage
-          activeChannel={data.channels[0]}
-          data={data}
-          messages={messages}
-          profile={defaultProfile}
-        />,
-      );
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
 
-      const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
-      await act(async () => {
-        avatar?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
-      });
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+    await act(async () => {
+      avatar?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
+      avatar?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    });
 
-      const card = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-info-card"]');
-      expect(card).not.toBeNull();
-
-      await act(async () => {
-        avatar?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: card }));
-        card?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: avatar }));
-        vi.advanceTimersByTime(200);
-      });
-
-      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
-
-      await act(async () => {
-        card?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
-        vi.advanceTimersByTime(200);
-      });
-
-      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
   });
 
-  it("closes the member popover immediately after pointer leaves the info card", async () => {
-    vi.useFakeTimers();
+  it("closes the member popover with Escape after opening from click", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1895,39 +1876,28 @@ describe("ChatPage mention panel", () => {
       ],
     });
 
-    try {
-      const host = await mountChatPage(
-        <ChatPage
-          activeChannel={data.channels[0]}
-          data={data}
-          messages={messages}
-          profile={defaultProfile}
-        />,
-      );
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
 
-      const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
-      await act(async () => {
-        avatar?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: document.body }));
-      });
+    const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+    await act(async () => {
+      avatar?.click();
+    });
 
-      const card = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-info-card"]');
-      expect(card).not.toBeNull();
+    const card = document.body.querySelector<HTMLElement>('[data-testid="slei-channel-member-info-card"]');
+    expect(card).not.toBeNull();
 
-      await act(async () => {
-        avatar?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: card }));
-        card?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, relatedTarget: avatar }));
-      });
+    await act(async () => {
+      card?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+    });
 
-      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
-
-      await act(async () => {
-        card?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
-      });
-
-      expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).toBeNull();
   });
 
   it("keeps the member popover open while focus moves from avatar to remove button", async () => {
@@ -1956,7 +1926,7 @@ describe("ChatPage mention panel", () => {
 
     const avatar = host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
     await act(async () => {
-      avatar?.focus();
+      avatar?.click();
     });
 
     const removeButton = document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`);
@@ -2002,7 +1972,7 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.click();
     });
 
     expect(document.body.querySelector('[data-testid="slei-channel-member-info-card"]')).not.toBeNull();
@@ -2053,7 +2023,7 @@ describe("ChatPage mention panel", () => {
     );
 
     await act(async () => {
-      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.focus();
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.click();
     });
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

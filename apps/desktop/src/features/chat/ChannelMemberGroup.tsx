@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
@@ -111,7 +111,6 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
         {overflowMemberCount > 0 ? (
           <AvatarGroupCount
             aria-label={`${overflowMemberCount} ${input.messages.chat.channelMembers}`}
-            className="slei-channel-member-overflow size-8 text-xs font-semibold"
             data-testid="slei-channel-member-overflow-count"
           >
             +{overflowMemberCount}
@@ -238,79 +237,27 @@ function ChannelMemberAvatar(input: {
   open: boolean;
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
   const readiness = input.member.channelReadiness?.[input.channelId];
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
 
-  useEffect(() => () => {
-    if (closeTimerRef.current !== undefined) {
-      clearTimeout(closeTimerRef.current);
-    }
-  }, []);
-
-  function clearScheduledClose() {
-    if (closeTimerRef.current !== undefined) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = undefined;
-    }
-  }
-
-  function openFromPointer() {
-    clearScheduledClose();
-    input.onOpenChange(true);
-  }
-
-  function isInsideHoverSurface(target: EventTarget | null) {
-    return target instanceof Node && (
-      triggerRef.current?.contains(target) ||
-      contentRef.current?.contains(target)
-    );
-  }
-
-  function closeAfterTriggerPointerLeave(event: MouseEvent<HTMLElement>) {
-    if (confirming) return;
-    clearScheduledClose();
-    if (isInsideHoverSurface(event.relatedTarget)) return;
-    closeTimerRef.current = setTimeout(() => {
-      input.onOpenChange(false);
-      closeTimerRef.current = undefined;
-    }, 120);
-  }
-
-  function closeAfterContentPointerLeave(event: MouseEvent<HTMLElement>) {
-    if (confirming) return;
-    clearScheduledClose();
-    if (isInsideHoverSurface(event.relatedTarget)) return;
-    input.onOpenChange(false);
-  }
-
   return (
     <Popover open={input.open} onOpenChange={input.onOpenChange}>
       <PopoverTrigger asChild>
         <button
-          ref={triggerRef}
           aria-label={`${input.member.name} ${input.member.handle}`}
-          className="slei-channel-member-avatar-button"
+          className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           data-testid="slei-channel-member-avatar-trigger"
-          onFocus={() => input.onOpenChange(true)}
-          onMouseEnter={openFromPointer}
-          onMouseLeave={closeAfterTriggerPointerLeave}
           type="button"
         >
           <MemberAvatar identity={input.member} />
         </button>
       </PopoverTrigger>
       <PopoverContent
-        ref={contentRef}
         align="end"
-        className="w-72 border-border/60 p-3 shadow-[0_0_4px_rgba(0,0,0,0.14)]"
+        className="w-72 p-3"
         data-testid="slei-channel-member-info-card"
-        onMouseEnter={openFromPointer}
-        onMouseLeave={closeAfterContentPointerLeave}
       >
         <div className="grid gap-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">

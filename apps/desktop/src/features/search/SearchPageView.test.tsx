@@ -232,13 +232,14 @@ describe("SearchPage global search UI", () => {
 
     expect(rootElement.textContent).toContain("Search agents, channels, and messages");
     expect(searchSurface).toBeInstanceOf(HTMLElement);
-    expect(searchSurface?.getAttribute("data-slot")).toBe("card");
-    expect(searchSurface?.querySelector('[data-slot="card-content"]')).not.toBeNull();
-    expect(searchSurface?.className).toContain("rounded-full");
+    expect(searchSurface?.getAttribute("data-slot")).not.toBe("card");
+    expect(searchSurface?.querySelector('[data-slot="card-content"]')).toBeNull();
+    expect(searchSurface?.className).toContain("rounded-md");
+    expect(searchSurface?.className).toContain("h-10");
     expect(searchSurface?.className).toContain("border");
-    expect(searchSurface?.className).toContain("border-border/55");
-    expect(searchSurface?.className).toContain("focus-within:border-primary");
-    expect(searchSurface?.className).not.toContain("focus-within:ring-ring");
+    expect(searchSurface?.className).toContain("border-input");
+    expect(searchSurface?.className).toContain("focus-within:border-ring");
+    expect(searchSurface?.className).not.toContain("focus-within:ring-[3px]");
     expect(searchSurface?.className).not.toContain("focus-within:shadow-[var(--overlay-shadow");
     expect(searchInput.className).toContain("bg-transparent");
     expect(searchInput.className).toContain("focus:bg-transparent");
@@ -252,7 +253,8 @@ describe("SearchPage global search UI", () => {
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(Array.from(rootElement.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Search")).toBe(false);
     expect(results).toBeInstanceOf(HTMLDivElement);
-    expect(results?.className).toContain("mx-auto grid w-full max-w-5xl");
+    expect(results?.className).toContain("grid w-full max-w-5xl");
+    expect(results?.className).not.toContain("mx-auto");
     expect(results?.className).not.toContain("p-6");
     expect(results?.parentElement?.className).toContain("px-6 py-6");
     expect(emptyState?.dataset.emptySize).toBe("lg");
@@ -413,7 +415,7 @@ describe("SearchPage global search UI", () => {
       expect(trigger.getAttribute("data-filter-select-trigger")).toBe("true");
       expect(triggerClasses).toContain("w-auto");
       expect(triggerClasses).not.toContain("w-full");
-      expect(trigger.className).toContain("rounded-lg");
+      expect(trigger.className).toContain("rounded-md");
       expect(trigger.className).toContain("shadow-xs");
       expect(trigger.className).not.toContain("shadow-[var(--tabs-pill-shadow)]");
       expect(trigger.className).not.toContain("shadow-none");

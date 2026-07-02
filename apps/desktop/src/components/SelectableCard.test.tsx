@@ -15,10 +15,13 @@ describe("SelectableCard", () => {
 
     expect(html).toContain('data-slot="selectable-card"');
     expect(html).toContain('data-selected="true"');
-    expect(html).toContain("bg-white/20");
-    expect(html).toContain("backdrop-blur-xl");
-    expect(html).toContain("shadow-[0_2px_4px");
-    expect(selectableCardSelectedClassName).toContain("bg-white/20");
+    expect(html).toContain("bg-accent");
+    expect(html).toContain("text-accent-foreground");
+    expect(html).toContain("shadow-none");
+    expect(html).not.toContain("bg-white/20");
+    expect(html).not.toContain("backdrop-blur-xl");
+    expect(html).not.toContain("bg-linear");
+    expect(selectableCardSelectedClassName).toContain("bg-accent");
   });
 
   it("supports using an existing card or button element as the root", () => {

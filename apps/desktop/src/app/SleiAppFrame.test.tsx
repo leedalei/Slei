@@ -1744,8 +1744,9 @@ describe("SleiAppFrame global search navigation", () => {
     expect(document.body.textContent).toContain("Coda");
     const agentCheckbox = document.body.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
-    expect(agentList?.className).toContain("bg-transparent");
-    expect(agentList?.className).toContain("border-white/20");
+    expect(agentList?.className).toContain("bg-background");
+    expect(agentList?.className).toContain("border");
+    expect(agentList?.className).not.toContain("border-white/20");
     expect(agentCheckbox?.className).toContain("border-input");
     expect(agentCheckbox?.className).toContain("dark:bg-input/30");
     expect(agentCheckbox?.className).toContain("data-[state=checked]:bg-primary");
@@ -1759,7 +1760,8 @@ describe("SleiAppFrame global search navigation", () => {
 
     const selectedAgentOption = agentCheckbox?.closest<HTMLElement>('[data-testid="slei-create-channel-agent-option"]');
     expect(selectedAgentOption?.dataset.selected).toBe("true");
-    expect(selectedAgentOption?.className).toContain("bg-white/20");
+    expect(selectedAgentOption?.className).toContain("bg-accent");
+    expect(selectedAgentOption?.className).not.toContain("bg-white/20");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
   });

@@ -149,11 +149,6 @@
   --glass-button-hover-border: color-mix(in srgb, var(--glass-border) 52%, var(--glow-cyan));
   --glass-button-shadow: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent), inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
   --glass-button-primary-bg: var(--primary);
-  --dropdown-open-dur: 250ms;
-  --dropdown-close-dur: 150ms;
-  --dropdown-pre-scale: 0.97;
-  --dropdown-closing-scale: 0.99;
-  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --modal-open-dur: 250ms;
   --modal-close-dur: 150ms;
   --modal-scale: 0.96;
@@ -439,51 +434,12 @@
     align-items: center;
   }
 
-  .slei-channel-member-avatar-button {
-    position: relative;
-    display: inline-flex;
-    width: 2rem;
-    height: 2rem;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    outline: none;
-    transition:
-      transform var(--duration-interaction) var(--ease-ui),
-      filter var(--duration-interaction) var(--ease-ui);
-  }
-
-  .slei-channel-member-avatar-button:hover,
-  .slei-channel-member-avatar-button:focus-visible {
-    z-index: 1;
-    transform: translateY(-1px);
-  }
-
   .slei-channel-member-add-button {
     position: relative;
     z-index: 2;
     width: 2rem;
     height: 2rem;
     border-radius: 999px;
-  }
-
-  .slei-channel-member-overflow {
-    position: relative;
-    z-index: 1;
-    display: inline-flex;
-    width: 2rem;
-    height: 2rem;
-    flex: 0 0 auto;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid color-mix(in srgb, white 30%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--muted) 68%, transparent);
-    color: var(--muted-foreground);
-    font-size: var(--text-xs);
-    font-weight: var(--app-weight-semibold);
-    backdrop-filter: blur(12px);
   }
 
 }
@@ -558,11 +514,6 @@ select:focus-visible {
   outline: none;
 }
 
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
 [data-slot="select-item"]:focus-visible {
   outline: none;
   outline-offset: 0;
@@ -581,80 +532,6 @@ select:focus-visible {
     animation-duration: 1ms !important;
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
-  }
-}
-
-.t-dropdown {
-  transform-origin: var(--radix-dropdown-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-select-content-transform-origin, top left)));
-  transform: scale(var(--dropdown-pre-scale));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--dropdown-open-dur) var(--dropdown-ease),
-    opacity var(--dropdown-open-dur) var(--dropdown-ease);
-  will-change: transform, opacity;
-}
-
-.t-dropdown[data-origin="top-right"] {
-  transform-origin: top right;
-}
-
-.t-dropdown[data-origin="top-center"] {
-  transform-origin: top center;
-}
-
-.t-dropdown[data-origin="bottom-left"] {
-  transform-origin: bottom left;
-}
-
-.t-dropdown[data-origin="bottom-center"] {
-  transform-origin: bottom center;
-}
-
-.t-dropdown[data-origin="bottom-right"] {
-  transform-origin: bottom right;
-}
-
-.t-dropdown[data-state="open"],
-.t-dropdown.is-open {
-  transform: scale(1);
-  opacity: 1;
-  pointer-events: auto;
-  animation: slei-dropdown-open var(--dropdown-open-dur) var(--dropdown-ease);
-}
-
-.t-dropdown[data-state="closed"],
-.t-dropdown.is-closing {
-  transform: scale(var(--dropdown-closing-scale));
-  opacity: 0;
-  pointer-events: none;
-  animation: slei-dropdown-close var(--dropdown-close-dur) var(--dropdown-ease);
-  transition:
-    transform var(--dropdown-close-dur) var(--dropdown-ease),
-    opacity var(--dropdown-close-dur) var(--dropdown-ease);
-}
-
-@keyframes slei-dropdown-open {
-  from {
-    transform: scale(var(--dropdown-pre-scale));
-    opacity: 0;
-  }
-
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes slei-dropdown-close {
-  from {
-    transform: scale(1);
-    opacity: 1;
-  }
-
-  to {
-    transform: scale(var(--dropdown-closing-scale));
-    opacity: 0;
   }
 }
 
@@ -777,10 +654,6 @@ select:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-dropdown {
-    animation: none !important;
-    transition: none !important;
-  }
   .t-modal { transition: none !important; }
   .t-icon-swap .t-icon { transition: none !important; }
   .t-tabs-pill { transition: none !important; }
