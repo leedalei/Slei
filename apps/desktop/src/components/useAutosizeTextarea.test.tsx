@@ -71,4 +71,37 @@ describe("useAutosizeTextarea", () => {
     expect(textarea?.style.height).toBe("240px");
     expect(textarea?.style.overflowY).toBe("auto");
   });
+
+  it("recomputes callback max height on resize without a value change", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+    const maxHeight = () => Math.min(320, window.innerHeight * 0.4);
+    const value = "dynamic drawer content";
+
+    await act(async () => {
+      root?.render(<Harness value="initial" maxHeight={maxHeight} />);
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('[data-testid="autosize"]');
+    expect(textarea).not.toBeNull();
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 500 });
+
+    await act(async () => {
+      root?.render(<Harness value={value} maxHeight={maxHeight} />);
+    });
+
+    expect(textarea?.style.maxHeight).toBe("320px");
+    expect(textarea?.style.height).toBe("320px");
+
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 500 });
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(textarea?.style.maxHeight).toBe("200px");
+    expect(textarea?.style.height).toBe("200px");
+    expect(textarea?.style.overflowY).toBe("auto");
+  });
 });
