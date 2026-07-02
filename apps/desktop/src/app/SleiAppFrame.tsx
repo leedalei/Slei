@@ -461,11 +461,11 @@ function SavedMessagesWorkspace(input: {
             const savedTime = formatSavedDate(savedMessage.savedAt);
             return (
               <Card
-                className="rounded-lg text-card-foreground shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25"
+                className="gap-0 rounded-lg py-0 text-card-foreground shadow-none transition-colors hover:bg-muted/35 dark:hover:bg-muted/25"
                 data-saved-message-row
                 key={savedMessage.id}
               >
-                <CardContent className="p-3">
+                <CardContent className="px-3 py-2.5">
                   <Button
                     aria-label={input.messages.search.openConversation(savedMessage.messageId)}
                     className={cn("h-auto w-full justify-start whitespace-normal rounded-[inherit] bg-transparent p-0 text-left hover:border-transparent hover:bg-transparent", isUnavailable && "opacity-70")}
@@ -474,7 +474,7 @@ function SavedMessagesWorkspace(input: {
                     type="button"
                     variant="ghost"
                   >
-                    <span className="grid min-w-0 flex-1 gap-2">
+                    <span className="grid min-w-0 flex-1 gap-1.5">
                       <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground">
                         <span className="inline-flex items-center gap-1">
                           <SleiIcon className="size-3.5" name="bookmark" />

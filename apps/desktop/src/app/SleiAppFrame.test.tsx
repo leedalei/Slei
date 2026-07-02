@@ -1348,7 +1348,10 @@ describe("SleiAppFrame global search navigation", () => {
     const deletedButton = rows[1]?.querySelector<HTMLButtonElement>("button");
 
     expect(rows).toHaveLength(2);
+    expect(rows[0]?.className).toContain("py-0");
     expect(rows.every((row) => row.querySelector('[data-slot="card-content"]'))).toBe(true);
+    expect(rows[0]?.querySelector('[data-slot="card-content"]')?.className).toContain("px-3 py-2.5");
+    expect(rows[0]?.querySelector(".grid.min-w-0")?.className).toContain("gap-1.5");
     expect(workspace?.querySelector('[data-slei-icon="bookmark"]')).not.toBeNull();
     expect(availableButton?.disabled).toBe(false);
     expect(deletedButton?.disabled).toBe(true);
