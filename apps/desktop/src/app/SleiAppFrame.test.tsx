@@ -1032,7 +1032,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--app-card-border: rgba(255, 255, 255, 0.8)");
     expect(appCss).toContain("--app-card-shadow: 0 1px 3px rgba(16, 24, 40, 0.05), 0 12px 28px rgba(16, 24, 40, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7)");
     expect(appCss).toContain("--workspace-sidebar-bg: rgba(255, 255, 255, 0.62)");
-    expect(appCss).toContain("--workspace-glass-bg: rgba(255, 255, 255, 0.86)");
+    expect(appCss).toContain("--workspace-glass-bg: rgba(255, 255, 255, 0.76)");
     expect(appCss).toContain("--workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04)");
     expect(appCss).toContain("--workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08)");
     expect(appCss).toContain("--glass-surface-filter: blur(20px) saturate(150%)");

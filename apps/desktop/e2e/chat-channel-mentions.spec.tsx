@@ -472,7 +472,8 @@ describe("chat search, channel management, and mentions", () => {
     expect(html).toContain('data-slei-icon="settings"');
     expect(html).toContain('data-slei-icon="ellipsis"');
     expect(html).not.toContain('data-slei-icon="listDetails"');
-    expect(html).toContain('data-slei-icon="send"');
+    expect(html).toContain('data-slei-icon="arrowUp"');
+    expect(html).not.toContain('data-slei-icon="send"');
     expect(workspaceSidebarSource()).toContain('name="delete"');
     expect(html).not.toContain("⌕");
     expect(html).not.toContain("⌘");

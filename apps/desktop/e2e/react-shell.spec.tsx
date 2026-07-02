@@ -208,8 +208,10 @@ describe("Slei React desktop shell", () => {
 
     const sendButton = sendButtonMarkup(html);
     expect(sendButton).toContain('data-testid="slei-send-button"');
+    expect(sendButton).toContain('aria-label="发送"');
     expect(sendButton).not.toContain(' disabled=""');
-    expect(html).toMatch(/<button\b(?=[^>]*data-testid="slei-send-button")[\s\S]*?>[\s\S]*发送[\s\S]*?<\/button>/);
+    expect(html).toMatch(/<button\b(?=[^>]*data-testid="slei-send-button")[\s\S]*?data-slei-icon="arrowUp"[\s\S]*?<\/button>/);
+    expect(html).not.toMatch(/<button\b(?=[^>]*data-testid="slei-send-button")[\s\S]*?>[\s\S]*发送[\s\S]*?<\/button>/);
   });
 
   it("renders broadcast-delivered agent activity feedback in the shell", () => {

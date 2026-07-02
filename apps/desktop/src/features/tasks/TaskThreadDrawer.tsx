@@ -318,7 +318,7 @@ export function TaskThreadDrawer(input: {
                 value={replyDraft}
               />
               <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit">
-                <SleiIcon className="size-4" name="send" />
+                <SleiIcon className="size-4" name="arrowUp" />
               </Button>
             </div>
             {replyError ? <p className="text-sm text-destructive" role="alert">{replyError}</p> : null}

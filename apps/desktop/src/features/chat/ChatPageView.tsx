@@ -30,7 +30,7 @@ export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 200;
 const HISTORY_LOAD_SCROLL_TOP_THRESHOLD_PX = 48;
 const TIMELINE_VIRTUALIZATION_THRESHOLD = 50;
-const COMPOSER_RESERVE_PX = 184;
+const COMPOSER_RESERVE_PX = 144;
 const COMPOSER_EXPANDED_RESERVE_PX = 256;
 const COMPOSER_RESERVE_BUFFER_PX = 24;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
@@ -1143,14 +1143,14 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6 [&_svg]:size-2.5" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
-                                    <SleiIcon name="messageSquare" size={14} />
+                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
+                                    <SleiIcon className="size-3" name="messageSquare" />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6 [&_svg]:size-2.5" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
-                                    <SleiIcon name="copy" size={14} />
+                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                                    <SleiIcon className="size-3" name="copy" />
                                   </TooltipButton>
-                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6 [&_svg]:size-2.5" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
-                                    <SleiIconSwap active={saved} activeName="bookmark" inactiveName="bookmarkOutline" size={14} />
+                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
+                                    <SleiIconSwap active={saved} activeName="bookmark" className="size-3" iconClassName="size-3" inactiveName="bookmarkOutline" />
                                   </TooltipButton>
                                   <span aria-hidden="true">｜</span>
                                   <span className="inline-flex items-center gap-1">
@@ -1205,8 +1205,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                   </Button>
                 ) : null}
               </div>
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible p-3" data-testid="slei-composer-shell">
-                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 shadow-[0_0_4px_rgba(15,23,42,0.10)] backdrop-blur-xl" ref={composerShellContentRef}>
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3" data-testid="slei-composer-shell">
+                <div className="slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3" ref={composerShellContentRef}>
                 {mention && mentionTargets.length > 0 ? (
                   <div className="min-w-0 overflow-visible">
                     <MentionPicker
@@ -1275,7 +1275,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     ) : null}
                     <Textarea
                       aria-label={composerPlaceholder}
-                      className={cn("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0")}
+                      className={cn("slei-composer-input max-h-[500px] min-h-12 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0")}
                       data-testid="slei-composer-input"
                       onChange={(event) => setDraft(event.currentTarget.value)}
                       onCompositionEnd={() => setIsComposing(false)}
@@ -1353,7 +1353,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       ) : <span />}
                       <div className="flex items-center gap-2 overflow-visible">
                         <input data-testid="slei-composer-file-input" hidden multiple onChange={(event) => void addFiles(event.currentTarget.files)} ref={fileInputRef} type="file" />
-                        <Button data-testid="slei-send-button" disabled={sendDisabled} size="sm" type="submit"><SleiIcon name="send" size={15} />{messages.common.send}</Button>
+                        <Button aria-label={messages.common.send} className="rounded-full" data-testid="slei-send-button" disabled={sendDisabled} size="icon" type="submit">
+                          <SleiIcon className="size-4" name="arrowUp" />
+                        </Button>
                       </div>
                     </div>
                   </Card>

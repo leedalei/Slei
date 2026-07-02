@@ -755,14 +755,18 @@ describe("ChatPage mention panel", () => {
     expect(source).not.toContain('<footer className="border-t bg-transparent">');
     expect(source).not.toContain('<footer className="border-t bg-background/95">');
     expect(source).toContain('data-testid="slei-composer-shell"');
-    expect(source).toContain("absolute inset-x-0 bottom-0 z-30 overflow-visible p-3");
+    expect(source).toContain("absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3");
+    expect(source).not.toContain("absolute inset-x-0 bottom-0 z-30 overflow-visible p-3");
     expect(source).not.toContain("absolute inset-x-0 bottom-0 z-30 px-4 pb-4 pt-3");
     expect(source).toContain("slei-composer-glass");
-    expect(source).toContain("backdrop-blur-xl");
+    expect(source).toContain("slei-scroll-to-bottom");
+    expect(source).toContain("shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl");
     expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
     expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
-    expect(source).toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 shadow-[0_0_4px_rgba(15,23,42,0.10)] backdrop-blur-xl");
-    expect(source).toContain("slei-composer-input max-h-[500px] min-h-20 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0");
+    expect(source).toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3");
+    expect(source).not.toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 backdrop-blur-xl");
+    expect(source).toContain("slei-composer-input max-h-[500px] min-h-12 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0");
+    expect(source).not.toContain("slei-composer-input max-h-[500px] min-h-20");
     expect(source).not.toContain('className="slei-composer-input min-h-20 resize-none bg-background/80"');
   });
 
@@ -793,6 +797,8 @@ describe("ChatPage mention panel", () => {
     expect(composerInput?.tagName).toBe("TEXTAREA");
     expect(composerInput?.className).toContain("slei-composer-input");
     expect(composerInput?.className).toContain("max-h-[500px]");
+    expect(composerInput?.className).toContain("min-h-12");
+    expect(composerInput?.className).not.toContain("min-h-20");
     expect(composerInput?.className).toContain("resize-none");
     expect(composerInput?.className).toContain("border-0");
     expect(composerInput?.className).toContain("bg-transparent");
@@ -1082,6 +1088,9 @@ describe("ChatPage mention panel", () => {
     const host = document.createElement("div");
     host.innerHTML = messageHtml;
     const actionButtons = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="message-actions"] button'));
+    const threadIcon = host.querySelector<SVGElement>('[data-message-thread-open="msg_timestamp"] [data-slei-icon="messageSquare"]');
+    const copyIcon = host.querySelector<SVGElement>('[data-slei-icon="copy"]');
+    const bookmarkIcon = host.querySelector<SVGElement>('[data-slei-icon="bookmarkOutline"]');
 
     expect(messageHtml).toContain('data-slot="message-actions"');
     expect(messageHtml).not.toContain("2026-06-16");
@@ -1092,7 +1101,11 @@ describe("ChatPage mention panel", () => {
     expect(messageHtml).not.toContain("min-w-[7.5rem]");
     expect(actionButtons).toHaveLength(3);
     expect(actionButtons.every((button) => button.className.includes("size-6"))).toBe(true);
-    expect(actionButtons.every((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(true);
+    expect(actionButtons.some((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(false);
+    expect(threadIcon?.className.baseVal).toContain("size-3");
+    expect(copyIcon?.className.baseVal).toContain("size-3");
+    expect(bookmarkIcon?.className.baseVal).toContain("size-3");
+    expect(host.querySelector(".t-icon-swap")?.className).toContain("size-3");
     expect(timestampIndex).toBeGreaterThan(-1);
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
@@ -1316,7 +1329,7 @@ describe("ChatPage mention panel", () => {
     }
   });
 
-  it("renders the composer send action as the default shadcn button", () => {
+  it("renders the composer send action as an upward arrow icon button", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1334,8 +1347,14 @@ describe("ChatPage mention panel", () => {
     const sendButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-send-button"]');
     expect(sendButton?.className).toContain("bg-primary");
     expect(sendButton?.className).toContain("text-primary-foreground");
-    expect(sendButton?.className).toContain("h-8");
-    expect(sendButton?.className).toContain("px-3");
+    expect(sendButton?.className).toContain("size-9");
+    expect(sendButton?.className).toContain("rounded-full");
+    expect(sendButton?.className).not.toContain("h-8");
+    expect(sendButton?.className).not.toContain("px-3");
+    expect(sendButton?.textContent?.trim()).toBe("");
+    expect(sendButton?.getAttribute("aria-label")).toBe(messages.common.send);
+    expect(sendButton?.querySelector('[data-slei-icon="arrowUp"]')).not.toBeNull();
+    expect(sendButton?.querySelector('[data-slei-icon="send"]')).toBeNull();
   });
 
   it("uses the virtualizer last item when scrolling to the latest message", () => {
@@ -1351,6 +1370,7 @@ describe("ChatPage mention panel", () => {
     const source = readChatPageSource();
 
     expect(source).toContain("const COMPOSER_RESERVE_PX");
+    expect(source).toContain("const COMPOSER_RESERVE_PX = 144;");
     expect(source).toContain("const COMPOSER_EXPANDED_RESERVE_PX");
     expect(source).toContain("composerReservePx");
     expect(source).toContain('"--chat-composer-reserve"');
@@ -2029,7 +2049,7 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("relative h-full min-h-0 overflow-visible");
     expect(html).toContain('data-testid="slei-chat-timeline"');
     expect(html).toContain("h-full min-h-0 overflow-y-auto");
-    expect(html).toContain("--chat-composer-reserve:184px");
+    expect(html).toContain("--chat-composer-reserve:144px");
     expect(html).not.toContain("pointer-events-none translate-x-full");
   });
 
@@ -2876,6 +2896,8 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-slot="checkbox"]')).toBeNull();
     expect(switchControl?.getAttribute("data-slot")).toBe("switch");
     expect(textarea?.className).toContain("max-h-[500px]");
+    expect(textarea?.className).toContain("min-h-12");
+    expect(textarea?.className).not.toContain("min-h-20");
     expect(textarea?.className).toContain("resize-none");
     expect(textarea?.getAttribute("placeholder")).toBe("输入消息到 #all，输入 / 打开功能菜单");
     expect(surface?.getAttribute("data-slot")).toBe("card");
@@ -2922,18 +2944,27 @@ describe("ChatPage mention panel", () => {
     expect(appCss).not.toContain("background: var(--composer-input-bg);");
     expect(appCss).toContain(".slei-composer-glass {");
     expect(appCss).toContain("overflow: visible;");
-    expect(appCss).toContain("--composer-glass-border: rgba(0, 0, 0, 0.14);");
+    expect(appCss).toContain("--composer-glass-border: rgba(0, 0, 0, 0.10);");
     expect(appCss).toContain("border-color: var(--composer-glass-border);");
-    expect(appCss).toContain("0 0 4px var(--composer-glass-shadow),");
+    expect(appCss).toContain("0 0 8px var(--composer-glass-shadow),");
+    expect(appCss).toContain("--composer-glass-shadow: rgb(15 23 42 / 0.10);");
     expect(appCss).not.toContain("0 2px 4px var(--composer-glass-shadow),");
-    expect(appCss).toContain("-webkit-backdrop-filter: blur(24px) saturate(180%);");
-    expect(appCss).toContain("backdrop-filter: blur(24px) saturate(180%);");
-    expect(appCss).toContain("--composer-glass-bg: var(--workspace-glass-bg);");
+    expect(appCss).toContain("-webkit-backdrop-filter: blur(20px);");
+    expect(appCss).toContain("backdrop-filter: blur(20px);");
+    expect(appCss).not.toContain("saturate(180%)");
+    expect(appCss).not.toContain("contrast(1.05)");
+    const darkComposerCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf(".light {"));
+    const lightComposerCss = appCss.slice(appCss.indexOf(".light {"), appCss.indexOf("@layer utilities"));
+    expect(appCss).toContain("--composer-glass-bg: rgba(255, 255, 255, 0.60);");
+    expect(appCss).not.toContain("--composer-glass-veil-bg");
+    expect(darkComposerCss).toContain("--composer-glass-bg: var(--workspace-glass-bg);");
+    expect(darkComposerCss).not.toContain("--composer-glass-bg: rgba(255, 255, 255, 0.60);");
+    expect(lightComposerCss).toContain("--composer-glass-bg: rgba(255, 255, 255, 0.60);");
     expect(appCss).not.toContain("--composer-glass-bg: rgba(28, 35, 50, 0.7);");
     expect(appCss).not.toContain("--composer-glass-bg: color-mix(in srgb, var(--workspace-glass-bg) 90%, white 10%);");
-    expect(appCss).toContain(".slei-composer-glass::before {");
-    expect(appCss).toContain("-webkit-backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
-    expect(appCss).toContain("backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
+    expect(appCss).not.toContain(".slei-composer-glass::before {");
+    expect(appCss).not.toContain("backdrop-filter: blur(28px) saturate(185%) contrast(1.05);");
+    expect(appCss).not.toContain("backdrop-filter: blur(56px)");
     expect(appCss).toContain("background: var(--composer-glass-bg);");
     expect(appCss).toContain(".slei-composer-glass > * {");
     const composerGlassCss = appCss.slice(appCss.indexOf(".slei-composer-glass {"), appCss.indexOf(".slei-composer-input {"));

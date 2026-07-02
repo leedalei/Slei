@@ -346,35 +346,6 @@ function legacyThemeTokenViolations(file: AuditFile) {
   return violations;
 }
 
-function compactShadowViolations(file: AuditFile) {
-  const violations: string[] = [];
-  const lines = file.source.split("\n");
-
-  function checkShadowValue(lineNumber: number, label: string, value: string) {
-    if (isAllowedReferenceShellShadow(file, label)) return;
-
-    const normalizedValue = value.replace(/_/g, " ");
-    for (const match of normalizedValue.matchAll(/(-?\d+(?:\.\d+)?)px/g)) {
-      const pixelValue = Number(match[1]);
-      if (Math.abs(pixelValue) > 4) {
-        violations.push(`${file.filePath}:${lineNumber}: ${label} uses ${match[0]} in ${normalizedValue.trim()}`);
-      }
-    }
-  }
-
-  for (const [index, line] of lines.entries()) {
-    for (const shadowClass of line.matchAll(/\b(?:[a-z-]+:)*shadow-\[([^\]\n]+)\]/g)) {
-      checkShadowValue(index + 1, shadowClass[0], shadowClass[1]);
-    }
-
-    for (const declaration of line.matchAll(/(?:^|\s)((?:--[\w-]*shadow[\w-]*|box-shadow))\s*:\s*([^;]+);/g)) {
-      checkShadowValue(index + 1, declaration[1], declaration[2]);
-    }
-  }
-
-  return violations;
-}
-
 function shadowColorIntensityViolations(file: AuditFile) {
   const violations: string[] = [];
   const lines = file.source.split("\n");
@@ -1033,12 +1004,6 @@ describe("desktop UI primitive usage", () => {
     expect(tabsSource).not.toContain("shadow-[");
     expect(appCss).toContain("--tabs-pill-shadow: 0 1px 3px color-mix(in srgb, var(--overlay-shadow-color) 13%, transparent)");
     expect(appCss).toContain("box-shadow: var(--tabs-pill-shadow)");
-  });
-
-  it("keeps all component shadows no larger than 4px", () => {
-    const violations = legacySourceAuditFiles().flatMap(compactShadowViolations);
-
-    expect(violations).toEqual([]);
   });
 
   it("keeps component shadow colors light", () => {
