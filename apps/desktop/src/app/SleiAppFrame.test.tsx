@@ -397,6 +397,16 @@ describe("SleiAppFrame agent creation modal", () => {
 
     const presetDescription = dialog.querySelector<HTMLElement>("[data-agent-preset-description]");
     expect(presetDescription?.className).toContain("text-[13px]");
+    expect(presetDescription?.className).toContain("text-muted-foreground");
+
+    const presetCard = presetDescription?.closest<HTMLButtonElement>("button");
+    await act(async () => {
+      presetCard?.click();
+    });
+    await act(async () => undefined);
+
+    expect(presetCard?.getAttribute("aria-pressed")).toBe("true");
+    expect(presetDescription?.className).toContain("text-muted-foreground");
   });
 
   it("loads role presets, selects a card, and submits the preset description", async () => {

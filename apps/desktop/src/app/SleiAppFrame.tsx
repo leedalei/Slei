@@ -1243,7 +1243,7 @@ function AgentCreateModal(input: {
                             type="button"
                           >
                             <span className="font-medium text-foreground">{preset.title}</span>
-                            <span className="line-clamp-3 text-[13px] leading-5" data-agent-preset-description>{preset.description}</span>
+                            <span className="line-clamp-3 text-[13px] leading-5 text-muted-foreground" data-agent-preset-description>{preset.description}</span>
                           </button>
                         ))}
                       </div>
