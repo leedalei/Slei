@@ -456,6 +456,7 @@ export type DesktopMessages = {
     rolePresetsFailed: string;
     retryRolePresets: string;
     refreshAvatar: string;
+    runtime: string;
     nameRequired: string;
     nameInvalid: string;
     nameTooLong: string;

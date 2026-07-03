@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -76,6 +78,19 @@ afterEach(async () => {
 });
 
 describe("SettingsOverlay", () => {
+  it("uses separate slide timings for the sidebar and detail panels", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+
+    expect(appCss).toContain("--settings-sidebar-motion-dur: 500ms;");
+    expect(appCss).toContain("--settings-detail-motion-dur: 750ms;");
+    expect(appCss).toContain(
+      "animation: slei-settings-nav-enter var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;",
+    );
+    expect(appCss).toContain(
+      "animation: slei-settings-detail-enter var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;",
+    );
+  });
+
   it("renders settings as the same two-card split layout as the app shell", async () => {
     const { container } = await mountOverlay();
     const overlay = container.querySelector('[data-testid="slei-settings-overlay"]');

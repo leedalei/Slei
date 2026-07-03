@@ -354,6 +354,51 @@ describe("SleiAppFrame agent creation modal", () => {
     expect(document.body.querySelector("#slei-agent-description")).toBeTruthy();
   });
 
+  it("uses refined labels, required description, and aligned avatar refresh chrome", async () => {
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        initialAgentCreateModalOpen
+        locale="zh-CN"
+        onAgentRolePresetsLoad={() => ({
+          presets: [{ id: "researcher", title: "资料调研员", description: "负责围绕指定主题收集资料。", sortOrder: 10 }],
+        })}
+        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+      />,
+    );
+
+    const dialog = currentDialog();
+    const title = dialog.querySelector('[data-slot="dialog-title"]');
+    const avatarButton = dialog.querySelector<HTMLElement>("[data-agent-create-avatar]");
+    const avatarMask = dialog.querySelector<HTMLElement>("[data-agent-create-avatar-mask]");
+    const description = dialog.querySelector<HTMLTextAreaElement>("#slei-agent-description");
+
+    expect(title?.textContent).toBe("创建智能体");
+    expect(dialog.querySelector('[data-slot="badge"]')).toBeNull();
+    expect(dialog.querySelector('[data-slot="dialog-description"]')).toBeNull();
+    expect(dialog.textContent).toContain("运行时");
+    expect(dialog.textContent).toContain("模型");
+    expect(dialog.textContent).toContain("描述");
+    expect(dialog.textContent).not.toContain("描述来源");
+    expect(dialog.textContent).not.toContain("Runtime");
+    expect(dialog.textContent).not.toContain("Model");
+    expect(dialog.querySelectorAll("label[for='slei-agent-description']")).toHaveLength(0);
+    expect(description?.required).toBe(true);
+    expect(description?.getAttribute("aria-required")).toBe("true");
+    expect(avatarButton?.className).toContain("size-[3.75rem]");
+    expect(avatarMask?.className).toContain("inset-0");
+    expect(avatarMask?.className).toContain("rounded-full");
+
+    await act(async () => {
+      dialog.querySelector<HTMLElement>('[data-slot="radio-group-item"][value="preset"]')?.click();
+    });
+    await act(async () => undefined);
+
+    const presetDescription = dialog.querySelector<HTMLElement>("[data-agent-preset-description]");
+    expect(presetDescription?.className).toContain("text-[13px]");
+  });
+
   it("loads role presets, selects a card, and submits the preset description", async () => {
     const onAgentCreate = vi.fn();
     const onAgentRolePresetsLoad = vi.fn(async () => ({
@@ -429,6 +474,9 @@ describe("SleiAppFrame agent creation modal", () => {
     expect(currentDialogSubmit()?.disabled).toBe(true);
 
     await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "系统架构师");
+    expect(currentDialogSubmit()?.disabled).toBe(true);
+
+    await changeField(currentDialog().querySelector<HTMLTextAreaElement>("#slei-agent-description"), "负责拆解系统设计并维护架构边界。");
     expect(currentDialogSubmit()?.disabled).toBe(false);
   });
 
@@ -446,6 +494,7 @@ describe("SleiAppFrame agent creation modal", () => {
     );
 
     await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "法律研究员");
+    await changeField(currentDialog().querySelector<HTMLTextAreaElement>("#slei-agent-description"), "负责法律资料调研。");
     await act(async () => {
       document.body.querySelector<HTMLButtonElement>("[data-agent-create-avatar]")?.click();
     });
@@ -831,11 +880,18 @@ describe("SleiAppFrame global search navigation", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const overlayCss = appCss.slice(appCss.indexOf(".slei-settings-block-swiper {"), appCss.indexOf(".slei-workspace-sidebar-card {"));
 
-    expect(appCss).toContain("--settings-overlay-motion-dur: 1s;");
+    expect(appCss).toContain("--settings-sidebar-motion-dur: 500ms;");
+    expect(appCss).toContain("--settings-detail-motion-dur: 750ms;");
     expect(overlayCss).toContain("transform: translateX(-100%)");
     expect(overlayCss).toContain("transform: translateX(100%)");
     expect(overlayCss).toContain(".slei-settings-block-swiper[data-settings-page-motion=\"enter\"] .slei-settings-sidebar-chat-page");
     expect(overlayCss).toContain(".slei-settings-block-swiper[data-settings-page-motion=\"enter\"] .slei-settings-detail-chat-page");
+    expect(overlayCss).toContain(
+      "animation: slei-settings-sidebar-settings-enter var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;",
+    );
+    expect(overlayCss).toContain(
+      "animation: slei-settings-detail-settings-enter var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;",
+    );
     expect(overlayCss).not.toContain(".slei-settings-page-sidebar-content[data-settings-page-motion=\"enter\"]");
     expect(overlayCss).not.toContain(".slei-settings-page-detail-content[data-settings-page-motion=\"enter\"]");
     expect(overlayCss).not.toContain("translateY(100%)");
