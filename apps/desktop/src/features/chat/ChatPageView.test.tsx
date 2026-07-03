@@ -3052,6 +3052,9 @@ describe("ChatPage mention panel", () => {
     expect(textarea?.className).not.toContain("py-3");
     expect(textarea?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
+    const composerInputCss = appCss.slice(appCss.indexOf(".slei-composer-input {"), appCss.indexOf(".slei-composer-input:focus-visible {"));
+    expect(composerInputCss).toContain("background: transparent;");
+    expect(composerInputCss).toContain("background-color: transparent;");
     expect(appCss).not.toContain("--composer-input-bg");
     expect(appCss).not.toContain("background: var(--composer-input-bg);");
     expect(appCss).toContain(".slei-composer-glass {");

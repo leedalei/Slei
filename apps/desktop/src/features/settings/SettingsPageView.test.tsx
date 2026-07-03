@@ -126,10 +126,14 @@ describe("SettingsPage header", () => {
 
     expect(notificationsHtml).toContain('data-slot="card"');
     expect(notificationsHtml).toContain('data-slot="card-content"');
+    expect(notificationsHtml).toContain("bg-[var(--settings-section-bg)]");
+    expect(notificationsHtml).toContain("border-[var(--settings-section-border)]");
     expect(notificationsHtml).toContain("data-slei-preference-row");
     expect(notificationsHtml).toContain('data-settings-notification="mentions"');
     expect(aboutHtml).toContain('data-slot="card"');
     expect(aboutHtml).toContain('data-slot="card-content"');
+    expect(aboutHtml).toContain("bg-[var(--settings-section-bg)]");
+    expect(aboutHtml).toContain("border-[var(--settings-section-border)]");
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 

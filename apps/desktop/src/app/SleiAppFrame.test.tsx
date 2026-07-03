@@ -1235,6 +1235,12 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--workspace-glass-bg: rgba(255, 255, 255, 0.76)");
     expect(appCss).toContain("--settings-sidebar-bg: rgb(248 249 251)");
     expect(appCss).toContain("--settings-detail-bg: rgb(249 249 250)");
+    expect(appCss).toContain("--settings-section-bg: var(--card)");
+    expect(appCss).toContain("--settings-section-border: var(--border)");
+    const darkThemeCss = appCss.slice(appCss.indexOf(".dark {"), appCss.indexOf(".light {"));
+    expect(darkThemeCss).toContain("--settings-section-bg: rgb(25 32 43)");
+    expect(darkThemeCss).toContain("--settings-section-border: rgb(255 255 255 / 0.08)");
+    expect(darkThemeCss).not.toContain("--settings-section-bg: var(--card)");
     expect(appCss).toContain("--workspace-sidebar-hover-bg: rgba(0, 0, 0, 0.04)");
     expect(appCss).toContain("--workspace-sidebar-active-bg: rgba(0, 0, 0, 0.08)");
     expect(appCss).toContain("--glass-surface-filter: blur(20px) saturate(150%)");
