@@ -809,7 +809,16 @@ describe("SleiAppFrame global search navigation", () => {
     expect(container.querySelector('[data-slot="workspace-card"]')?.className.split(/\s+/)).not.toContain("slei-settings-page-detail-content");
 
     await act(async () => {
-      vi.advanceTimersByTime(220);
+      vi.advanceTimersByTime(999);
+    });
+
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("exit");
+    expect(container.querySelector('[data-testid="slei-settings-detail-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("exit");
+    expect(container.querySelector('[data-testid="slei-sidebar-settings-page"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="slei-detail-settings-page"]')).toBeTruthy();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
     });
 
     expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBeNull();
@@ -822,6 +831,7 @@ describe("SleiAppFrame global search navigation", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     const overlayCss = appCss.slice(appCss.indexOf(".slei-settings-block-swiper {"), appCss.indexOf(".slei-workspace-sidebar-card {"));
 
+    expect(appCss).toContain("--settings-overlay-motion-dur: 1s;");
     expect(overlayCss).toContain("transform: translateX(-100%)");
     expect(overlayCss).toContain("transform: translateX(100%)");
     expect(overlayCss).toContain(".slei-settings-block-swiper[data-settings-page-motion=\"enter\"] .slei-settings-sidebar-chat-page");
@@ -913,6 +923,8 @@ describe("SleiAppFrame global search navigation", () => {
     const onMemberSelect = vi.fn();
     const onViewChange = vi.fn();
     const onConversationSelect = vi.fn();
+    const onConversationMessagesClear = vi.fn();
+    const onAgentDelete = vi.fn();
     const data = createSleiFixtures({
       members: createDemoMembers(),
       channels: [
@@ -927,6 +939,8 @@ describe("SleiAppFrame global search navigation", () => {
         data={data}
         locale="zh-CN"
         onConversationSelect={onConversationSelect}
+        onConversationMessagesClear={onConversationMessagesClear}
+        onAgentDelete={onAgentDelete}
         onMemberSelect={onMemberSelect}
         onViewChange={onViewChange}
         runtimeSetup={runtimeSetup}
@@ -966,7 +980,9 @@ describe("SleiAppFrame global search navigation", () => {
       dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
     expect(document.body.textContent).toContain("打开成员资料");
-    expect(document.body.textContent).toContain("打开私聊");
+    expect(document.body.textContent).toContain("清空聊天记录");
+    expect(document.body.textContent).toContain("删除成员");
+    expect(document.body.textContent).not.toContain("打开私聊");
 
     await act(async () => {
       Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
@@ -981,10 +997,40 @@ describe("SleiAppFrame global search navigation", () => {
     });
     await act(async () => {
       Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("打开私聊"))
+        .find((item) => item.textContent?.includes("清空聊天记录"))
         ?.click();
     });
-    expect(onConversationSelect).toHaveBeenCalledWith("dm:agent_coda");
+    expect(document.body.textContent).toContain("确定清空与 Coda 的聊天记录");
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.includes("清空聊天记录"))
+        ?.click();
+    });
+    expect(onConversationMessagesClear).toHaveBeenCalledWith("dm:agent_coda");
+    expect(onConversationSelect).not.toHaveBeenCalled();
+
+    await act(async () => {
+      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+        .find((item) => item.textContent?.includes("删除成员"))
+        ?.click();
+    });
+    expect(document.body.textContent).toContain("确定删除 Coda 吗");
+    await act(async () => {
+      Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.includes("删除"))
+        ?.click();
+    });
+    expect(onAgentDelete).toHaveBeenCalledWith("a1");
+
+    const dmWithoutConversationRow = container.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a2"]');
+    await act(async () => {
+      dmWithoutConversationRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(document.body.textContent).not.toContain("清空聊天记录");
+    expect(document.body.textContent).toContain("删除成员");
   });
 
   it("keeps the sidebar channel delete menu item visually neutral before confirmation", async () => {
@@ -1466,7 +1512,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain('data-slot="card-content"');
     expect(html).toContain('data-slei-icon="bookmark"');
     expect(html).toContain(">频道 1</");
-    expect(html).toContain(">私聊 1</");
+    expect(html).toContain(">私聊 4</");
     expect(html).toContain("这是一条保存消息正文");
     expect(html).toContain("群聊 · #all");
     expect(html).toContain("Coda");
@@ -1558,6 +1604,32 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(onSavedMessageSelect).toHaveBeenCalledTimes(1);
     expect(onSavedMessageSelect).toHaveBeenCalledWith(availableMessage);
+  });
+
+  it("routes the chat header member direct-message button through onMemberMessage", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onMemberMessage = vi.fn();
+    const [member] = createDemoMembers();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
+      members: [{ ...member, channelReadiness: { all: "ready" } }],
+    });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onMemberMessage={onMemberMessage}
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-channel-member-avatar-trigger"]'));
+    await clickElement(document.body.querySelector('[data-testid="slei-channel-member-message-button"]'));
+
+    expect(onMemberMessage).toHaveBeenCalledTimes(1);
+    expect(onMemberMessage).toHaveBeenCalledWith(member.id);
   });
 
   it("renders channel names only in the workspace sidebar", () => {
@@ -1711,6 +1783,121 @@ describe("SleiAppFrame global search navigation", () => {
     expect(name?.className).toContain("font-normal");
   });
 
+  it("shows every direct-message enabled agent before a DM conversation exists", async () => {
+    const members = createDemoMembers();
+    const onMemberMessage = vi.fn();
+    const data = createSleiFixtures({
+      members,
+      conversations: [],
+    });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onMemberMessage={onMemberMessage}
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    const dmRows = Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]"));
+    const agentMembers = members.filter((member) => member.type === "agent" && member.directMessageEnabled !== false);
+    expect(container.textContent).toContain(`私聊 ${agentMembers.length}`);
+    expect(dmRows.map((row) => row.dataset.memberId)).toEqual(agentMembers.map((member) => member.id));
+    expect(container.querySelector('[data-testid="workspace-dm-row-a1"]')?.textContent).toContain("Coda");
+
+    await clickElement(container.querySelector('[data-testid="workspace-dm-row-a1"] [data-slot="direct-message-select-trigger"]'));
+
+    expect(onMemberMessage).toHaveBeenCalledTimes(1);
+    expect(onMemberMessage).toHaveBeenCalledWith("a1");
+  });
+
+  it("opens a direct-message member picker from the sidebar plus action", async () => {
+    const members = createDemoMembers();
+    const onMemberMessage = vi.fn();
+    const data = createSleiFixtures({ members, conversations: [] });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onMemberMessage={onMemberMessage}
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-direct-message-create-trigger"]'));
+
+    const dialog = document.body.querySelector('[data-testid="slei-direct-message-create-dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain("Coda");
+    expect(dialog?.textContent).toContain("@Coda");
+
+    await clickElement(document.body.querySelector('[data-testid="slei-direct-message-agent-option-a2"]'));
+
+    expect(onMemberMessage).toHaveBeenCalledTimes(1);
+    expect(onMemberMessage).toHaveBeenCalledWith("a2");
+    expect(document.body.querySelector('[data-testid="slei-direct-message-create-dialog"]')).toBeNull();
+  });
+
+  it("selects existing direct-message conversations without recreating them", async () => {
+    const members = createDemoMembers();
+    const onConversationSelect = vi.fn();
+    const onMemberMessage = vi.fn();
+    const data = createSleiFixtures({
+      members,
+      conversations: [{ id: "dm:a1", agentId: "a1", kind: "dm", activeSessionId: "session-dm-a1", createdAt: "0", updatedAt: "0" }],
+    });
+
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onConversationSelect={onConversationSelect}
+        onMemberMessage={onMemberMessage}
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="workspace-dm-row-a1"] [data-slot="direct-message-select-trigger"]'));
+
+    expect(onConversationSelect).toHaveBeenCalledTimes(1);
+    expect(onConversationSelect).toHaveBeenCalledWith("dm:a1");
+    expect(onMemberMessage).not.toHaveBeenCalled();
+  });
+
+  it("closes the settings overlay before opening a member direct message", async () => {
+    vi.useFakeTimers();
+    const members = createDemoMembers();
+    const onMemberMessage = vi.fn();
+    const data = createSleiFixtures({ members });
+    const container = await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        onMemberMessage={onMemberMessage}
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+
+    await clickElement(container.querySelector('[data-testid="slei-sidebar-settings-trigger"]'));
+    await clickElement(container.querySelector('[data-settings-submenu="members"] button'));
+    await clickElement(container.querySelector('[data-testid="slei-member-header-message-button"]'));
+
+    expect(onMemberMessage).toHaveBeenCalledWith("a1");
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBe("exit");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(container.querySelector('[data-testid="slei-settings-sidebar-swiper"]')?.getAttribute("data-settings-page-motion")).toBeNull();
+  });
+
   it("keeps the workspace sidebar visible while secondary destinations render in the workspace", () => {
     const data = createSleiFixtures({ members: createDemoMembers() });
     const nodes = [
@@ -1795,7 +1982,7 @@ describe("SleiAppFrame global search navigation", () => {
     const channelSortButton = () => container.querySelector<HTMLButtonElement>('[data-sort-target="channels"]');
     const directMessageSortButton = () => container.querySelector<HTMLButtonElement>('[data-sort-target="direct-messages"]');
     const channelOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-channel-list-item]")).map((item) => item.dataset.channelId);
-    const directMessageOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.conversationId);
+    const directMessageOrder = () => Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.memberId);
     const sortIconState = (button: HTMLButtonElement | null | undefined) => button?.querySelector<HTMLElement>("[data-sort-icon-swap]")?.dataset.state;
     const sortDirectionIconState = (button: HTMLButtonElement | null | undefined) => button?.querySelector<HTMLElement>("[data-sort-direction-swap]")?.dataset.state;
     const activeSortIcon = (button: HTMLButtonElement | null | undefined) => {
@@ -1814,7 +2001,7 @@ describe("SleiAppFrame global search navigation", () => {
     };
 
     expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
-    expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
+    expect(directMessageOrder()).toEqual(["a1", "a2", "a3", "a4"]);
     expect(channelSortButton()?.dataset.sortState).toBe("default");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("升序");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(false);
@@ -1824,7 +2011,7 @@ describe("SleiAppFrame global search navigation", () => {
 
     await click(channelSortButton()!);
     expect(channelOrder()).toEqual(["alpha", "beta", "zeta"]);
-    expect(directMessageOrder()).toEqual(["dm:a1", "dm:a2", "dm:a3"]);
+    expect(directMessageOrder()).toEqual(["a1", "a2", "a3", "a4"]);
     expect(channelSortButton()?.dataset.sortState).toBe("asc");
     expect(channelSortButton()?.getAttribute("aria-label")).toBe("降序");
     expect(channelSortButton()?.classList.contains("bg-muted/70")).toBe(true);
@@ -1860,7 +2047,7 @@ describe("SleiAppFrame global search navigation", () => {
 
     await click(directMessageSortButton()!);
     expect(channelOrder()).toEqual(["zeta", "alpha", "beta"]);
-    expect(directMessageOrder()).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
+    expect(directMessageOrder()).toEqual(["a3", "a2", "a1", "a4"]);
     expect(directMessageSortButton()?.dataset.sortState).toBe("asc");
     expect(directMessageSortButton()?.getAttribute("aria-label")).toBe("降序");
     expect(directMessageSortButton()?.classList.contains("bg-muted/70")).toBe(true);
@@ -1900,7 +2087,7 @@ describe("SleiAppFrame global search navigation", () => {
     );
 
     expect(Array.from(container.querySelectorAll<HTMLElement>("[data-channel-list-item]")).map((item) => item.dataset.channelId)).toEqual(["zeta", "beta", "alpha"]);
-    expect(Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.conversationId)).toEqual(["dm:a3", "dm:a2", "dm:a1"]);
+    expect(Array.from(container.querySelectorAll<HTMLElement>("[data-direct-message-list-item]")).map((item) => item.dataset.memberId)).toEqual(["a3", "a2", "a1", "a4"]);
     expect(container.querySelector<HTMLButtonElement>('[data-sort-target="channels"]')?.dataset.sortState).toBe("desc");
     expect(container.querySelector<HTMLButtonElement>('[data-sort-target="direct-messages"]')?.dataset.sortState).toBe("asc");
   });
@@ -2016,7 +2203,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(chatHtml).toContain('data-slot="sidebar-section-title"');
     expect(chatHtml).toContain('class="select-none');
     expect(chatHtml).toContain(">频道 1</");
-    expect(chatHtml).toContain(">私聊 1</");
+    expect(chatHtml).toContain(">私聊 4</");
     const titleMatches = chatHtml.match(/data-slot="sidebar-section-title"[^>]*class="([^"]*)"/g) ?? [];
     expect(titleMatches.length).toBeGreaterThan(0);
     expect(titleMatches.every((match) => match.includes("select-none"))).toBe(true);

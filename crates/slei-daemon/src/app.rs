@@ -131,7 +131,9 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/v1/conversations/{id}/messages",
-            get(api::conversations::messages).post(api::conversations::send_message),
+            get(api::conversations::messages)
+                .post(api::conversations::send_message)
+                .delete(api::conversations::clear_messages),
         )
         .route(
             "/v1/conversations/{id}/runtime-session/reset",

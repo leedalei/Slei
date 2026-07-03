@@ -43,6 +43,12 @@ export type DesktopMessages = {
       deleteChannel: string;
       openMemberProfile: string;
       openDirectMessage: string;
+      clearDirectMessageHistory: string;
+      clearDirectMessageHistoryTitle: (name: string) => string;
+      clearDirectMessageHistoryConfirm: (name: string) => string;
+      deleteMember: string;
+      deleteMemberTitle: (name: string) => string;
+      deleteMemberConfirm: (name: string) => string;
       memberManagement: string;
       runtimeDevices: string;
       accountProfile: string;

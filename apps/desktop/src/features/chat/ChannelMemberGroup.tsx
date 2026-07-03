@@ -5,7 +5,7 @@ import type { SleiMember } from "../../app/types";
 import { channelReadinessLabel } from "../../app/model";
 import { Empty, MemberAvatar, SelectableCard, SleiIcon } from "../../components";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../../components/ui/alert-dialog";
-import { AvatarGroup, AvatarGroupCount } from "../../components/ui/avatar";
+import { AvatarBadge, AvatarGroup, AvatarGroupCount } from "../../components/ui/avatar";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../components/ui/dialog";
@@ -20,6 +20,7 @@ type ChannelMemberGroupProps = {
   members: SleiMember[];
   messages: DesktopMessages;
   onAdd?: (agentId: string) => Promise<void> | void;
+  onMessage?: (agentId: string) => void;
   onRemove?: (agentId: string) => Promise<void> | void;
 };
 
@@ -103,6 +104,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
             mutating={mutatingMemberId === member.id}
             onOpenChange={(open) => setActiveMemberId(open ? member.id : undefined)}
             open={activeMemberId === member.id || confirmingRemoveId === member.id}
+            onMessage={() => input.onMessage?.(member.id)}
             onRemove={() => void mutate(member.id, "remove")}
             confirmingRemoveId={confirmingRemoveId}
             setConfirmingRemoveId={setConfirmingRemoveId}
@@ -232,6 +234,7 @@ function ChannelMemberAvatar(input: {
   member: SleiMember;
   messages: DesktopMessages;
   mutating: boolean;
+  onMessage?: () => void;
   onOpenChange: (open: boolean) => void;
   onRemove: () => void;
   open: boolean;
@@ -241,6 +244,7 @@ function ChannelMemberAvatar(input: {
   const readinessLabel = channelReadinessLabel(readiness, input.messages);
   const description = input.member.role || input.member.description || input.member.activity;
   const confirming = input.confirmingRemoveId === input.member.id;
+  const canMessage = input.member.directMessageEnabled !== false;
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -277,7 +281,23 @@ function ChannelMemberAvatar(input: {
       >
         <div className="grid gap-3">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-            <MemberAvatar identity={input.member} />
+            <MemberAvatar identity={input.member}>
+              {canMessage ? (
+                <AvatarBadge asChild>
+                  <button
+                    aria-label={input.messages.members.message}
+                    data-testid="slei-channel-member-message-button"
+                    onClick={() => {
+                      input.onOpenChange(false);
+                      input.onMessage?.();
+                    }}
+                    type="button"
+                  >
+                    <SleiIcon name="messageCircleMore" />
+                  </button>
+                </AvatarBadge>
+              ) : null}
+            </MemberAvatar>
             <div className="grid min-w-0 gap-0.5">
               <strong className="truncate text-sm text-foreground">{input.member.name}</strong>
               <span className="truncate text-xs text-muted-foreground">{input.member.handle}</span>

@@ -714,6 +714,7 @@ export type DaemonBridge = {
   createConversationSession(conversationId: string): Promise<ConversationSessionReceipt>;
   activateConversationSession(conversationId: string, sessionId: string): Promise<ConversationSessionReceipt>;
   listConversationMessages(conversationId: string, query?: MessagePageQuery): Promise<ConversationMessageListReceipt>;
+  clearConversationMessages(conversationId: string): Promise<void>;
   createMessageThreadFromSource(request: CreateMessageThreadRequest): Promise<MessageThreadReceipt>;
   getMessageThread(threadId: string): Promise<MessageThreadReceipt>;
   replyToMessageThread(threadId: string, request: ReplyToMessageThreadRequest): Promise<MessageThreadReplyReceipt>;
@@ -867,6 +868,7 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async listConversationMessages() {
       return { messages: [], pageInfo: { hasMoreBefore: false } };
     },
+    clearConversationMessages: rejectDaemonOffline,
     createMessageThreadFromSource: rejectDaemonOffline,
     getMessageThread: rejectDaemonOffline,
     replyToMessageThread: rejectDaemonOffline,
@@ -950,6 +952,7 @@ export function createDaemonBridge(): DaemonBridge {
       createConversationSession: (conversationId: string) => invoke<ConversationSessionReceipt>("create_conversation_session_command", { conversationId }),
       activateConversationSession: (conversationId: string, sessionId: string) => invoke<ConversationSessionReceipt>("activate_conversation_session_command", { conversationId, sessionId }),
       listConversationMessages: (conversationId: string, query?: MessagePageQuery) => invoke<ConversationMessageListReceipt>("list_conversation_messages_command", { conversationId, query }),
+      clearConversationMessages: (conversationId: string) => invoke<void>("clear_conversation_messages_command", { conversationId }),
       createMessageThreadFromSource: (request: CreateMessageThreadRequest) => invoke<MessageThreadReceipt>("create_message_thread_from_source_command", { request }),
       getMessageThread: (threadId: string) => invoke<MessageThreadReceipt>("get_message_thread_command", { threadId }),
       replyToMessageThread: (threadId: string, request: ReplyToMessageThreadRequest) => invoke<MessageThreadReplyReceipt>("reply_to_message_thread_command", { threadId, request }),

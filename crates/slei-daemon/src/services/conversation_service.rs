@@ -402,6 +402,30 @@ impl ConversationService {
         Ok(updated)
     }
 
+    pub async fn clear_messages(&self, conversation_id: &str) -> Result<(), ConversationError> {
+        self.ensure_loaded().await?;
+        let mut state = self.inner.lock().await;
+        let conversation = state
+            .conversations
+            .get_mut(conversation_id)
+            .ok_or(ConversationError::ConversationNotFound)?;
+        conversation.updated_at = current_timestamp();
+        let updated = conversation.clone();
+        let removed_attachments = clear_all_messages(&mut state, conversation_id);
+        self.repos
+            .delete_conversation_messages(conversation_id)
+            .await
+            .map_err(storage_error)?;
+        for attachment in removed_attachments {
+            self.repos
+                .delete_conversation_attachment(&attachment.id)
+                .await
+                .map_err(storage_error)?;
+        }
+        self.persist_conversation(&updated).await?;
+        Ok(())
+    }
+
     pub async fn list_sessions(
         &self,
         conversation_id: &str,
@@ -1535,6 +1559,57 @@ fn clear_session_messages(
             removed.push(attachment);
         }
     }
+    removed
+}
+
+fn clear_all_messages(
+    state: &mut ConversationState,
+    conversation_id: &str,
+) -> Vec<ConversationAttachmentRecord> {
+    let removed_attachment_ids = state
+        .messages
+        .remove(conversation_id)
+        .unwrap_or_default()
+        .into_iter()
+        .flat_map(|message| {
+            message
+                .attachments
+                .into_iter()
+                .map(|attachment| attachment.id)
+        })
+        .collect::<HashSet<_>>();
+    if removed_attachment_ids.is_empty() {
+        state
+            .messages
+            .insert(conversation_id.to_string(), Vec::new());
+        return Vec::new();
+    }
+    let referenced_attachment_ids = state
+        .messages
+        .values()
+        .flat_map(|messages| messages.iter())
+        .flat_map(|message| {
+            message
+                .attachments
+                .iter()
+                .map(|attachment| attachment.id.clone())
+        })
+        .collect::<HashSet<_>>();
+    let mut removed = Vec::new();
+    for attachment_id in removed_attachment_ids.difference(&referenced_attachment_ids) {
+        if let Some(attachment) = state.attachments.remove(attachment_id) {
+            if let Some(path) = attachment.cache_path.as_deref() {
+                let _ = fs::remove_file(&path);
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    let _ = fs::remove_dir(parent);
+                }
+            }
+            removed.push(attachment);
+        }
+    }
+    state
+        .messages
+        .insert(conversation_id.to_string(), Vec::new());
     removed
 }
 

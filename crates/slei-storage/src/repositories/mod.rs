@@ -3771,6 +3771,20 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn delete_conversation_messages(
+        &self,
+        conversation_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "DELETE FROM conversation_messages
+             WHERE conversation_id = ?",
+        )
+        .bind(conversation_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn upsert_conversation_attachment(
         &self,
         row: ConversationAttachmentRow,

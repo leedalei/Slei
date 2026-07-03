@@ -650,6 +650,9 @@ export function createDaemonBridgeMock(input: {
         pageInfo: { hasMoreBefore: false },
       };
     },
+    async clearConversationMessages(conversationId) {
+      messages = messages.filter((message) => message.conversationId !== conversationId);
+    },
     async createMessageThreadFromSource(request) {
       const existing = [...messageThreads.values()].find((thread) => thread.sourceMessageId === request.sourceMessageId);
       if (existing) return { thread: existing };

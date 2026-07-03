@@ -98,7 +98,7 @@ describe("real agent members and direct messages", () => {
     expect(html).not.toContain(">Lei</strong>");
   });
 
-  it("keeps the chat direct message list empty until a conversation exists", () => {
+  it("shows real agents in the chat direct message list before a conversation exists", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -108,9 +108,10 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("私聊 0");
-    expect(html).not.toContain("@coda");
-    expect(html).not.toContain("Coda");
+    expect(html).toContain("私聊 1");
+    expect(html).toContain("Coda");
+    expect(html).toContain('data-member-id="agent_coda"');
+    expect(html).not.toContain("真实创建的开发 Agent。");
   });
 
   it("shows direct messages in chat sidebar from created conversations", () => {

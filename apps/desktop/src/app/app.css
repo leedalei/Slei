@@ -145,7 +145,7 @@
   --workspace-glass-bg: rgba(255, 255, 255, 0.76);
   --settings-sidebar-bg: rgb(248 249 251);
   --settings-detail-bg: rgb(249 249 250);
-  --settings-overlay-motion-dur: 200ms;
+  --settings-overlay-motion-dur: 1s;
   --settings-overlay-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
   --glass-surface-filter: blur(20px) saturate(150%);

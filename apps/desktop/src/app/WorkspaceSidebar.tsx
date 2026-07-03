@@ -64,6 +64,9 @@ export type WorkspaceSidebarProps = {
   onSettingsOpen?: (panel: SettingsOverlayPanel) => void;
   onChannelSelect?: (channelId: string) => void;
   onConversationSelect?: (conversationId: string) => void;
+  onConversationMessagesClear?: (conversationId: string) => Promise<void> | void;
+  onAgentDelete?: (agentId: string) => Promise<void> | void;
+  onMemberMessage?: (memberId: string) => void;
   onMemberSelect?: (memberId: string) => void;
   onSavedMessagesOpen?: () => void;
   onChannelCreate?: (input: { name: string; projectName?: string; projectPaths?: string[]; agentIds?: string[] }) => Promise<ChannelReceipt | void> | ChannelReceipt | void;
@@ -135,13 +138,14 @@ function sortChannelsByName(channels: SleiFixtures["channels"], direction: SortD
   return [...channels].sort((left, right) => compareDisplayNames(stripChannelHash(left.name), stripChannelHash(right.name), direction));
 }
 
-function sortDirectMessagesByName(conversations: ConversationView[], members: SleiMember[], direction: SortDirection) {
-  if (direction === "default") return conversations;
-  return [...conversations].sort((left, right) => {
-    const leftName = members.find((member) => member.id === left.agentId)?.name ?? "";
-    const rightName = members.find((member) => member.id === right.agentId)?.name ?? "";
-    return compareDisplayNames(leftName, rightName, direction);
-  });
+type DirectMessageEntry = {
+  conversation?: ConversationView;
+  member: SleiMember;
+};
+
+function sortDirectMessageEntriesByName(entries: DirectMessageEntry[], direction: SortDirection) {
+  if (direction === "default") return entries;
+  return [...entries].sort((left, right) => compareDisplayNames(left.member.name, right.member.name, direction));
 }
 
 function SortDirectionIcon(input: { direction: SortDirection }) {
@@ -389,9 +393,12 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   const [activeChannelCardId, setActiveChannelCardId] = useState<string | undefined>(undefined);
   const [channelSortDirection, setChannelSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.channels));
   const [directMessageSortDirection, setDirectMessageSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.directMessages));
+  const [directMessageCreateOpen, setDirectMessageCreateOpen] = useState(false);
   const [openChannelMenuId, setOpenChannelMenuId] = useState<string | undefined>();
   const [openDmMenuId, setOpenDmMenuId] = useState<string | undefined>();
   const [pendingDeleteChannel, setPendingDeleteChannel] = useState<SleiFixtures["channels"][number] | undefined>();
+  const [pendingClearDirectMessage, setPendingClearDirectMessage] = useState<DirectMessageEntry | undefined>();
+  const [pendingDeleteDirectMessageMember, setPendingDeleteDirectMessageMember] = useState<SleiMember | undefined>();
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
   const profile = localHumanPresentation(input.profile, input.messages);
   const directMessageConversations = input.conversations.filter((conversation) => {
@@ -400,8 +407,13 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
     return member?.directMessageEnabled !== false;
   });
   const sortedChannels = sortChannelsByName(input.channels, channelSortDirection);
-  const sortedDirectMessageConversations = sortDirectMessagesByName(directMessageConversations, input.members, directMessageSortDirection);
   const agentMembers = input.members.filter((member) => member.type === "agent" && member.directMessageEnabled !== false);
+  const conversationByAgentId = new Map(directMessageConversations.map((conversation) => [conversation.agentId, conversation]));
+  const directMessageEntries = agentMembers.map((member) => ({
+    conversation: conversationByAgentId.get(member.id),
+    member,
+  }));
+  const sortedDirectMessageEntries = sortDirectMessageEntriesByName(directMessageEntries, directMessageSortDirection);
 
   useEffect(() => {
     const request = input.cardDraftRequest;
@@ -483,6 +495,14 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   function selectChannel(channelId: string) {
     input.onChannelSelect?.(channelId);
     input.onViewChange?.("chat");
+  }
+
+  function selectDirectMessage(entry: DirectMessageEntry) {
+    if (entry.conversation) {
+      input.onConversationSelect?.(entry.conversation.id);
+      return;
+    }
+    input.onMemberMessage?.(entry.member.id);
   }
 
   return (
@@ -630,47 +650,60 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             </div>
             <Separator />
             <div className="flex items-center justify-between px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageConversations.length}</SidebarSectionTitle>
-              <Button
-                aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
-                className={cn("size-6 [&_svg]:size-3", directMessageSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
-                data-sort-state={directMessageSortDirection}
-                data-sort-target="direct-messages"
-                onClick={cycleDirectMessageSort}
-                size="icon"
-                title={sortActionLabel(input.messages, directMessageSortDirection)}
-                type="button"
-                variant="ghost"
-              >
-                <SortDirectionIcon direction={directMessageSortDirection} />
-              </Button>
+              <SidebarSectionTitle>{input.messages.chat.directMessages} {directMessageEntries.length}</SidebarSectionTitle>
+              <div className="flex items-center gap-1">
+                <Button
+                  aria-label={sortActionLabel(input.messages, directMessageSortDirection)}
+                  className={cn("size-6 [&_svg]:size-3", directMessageSortDirection !== "default" && "bg-muted/70 text-foreground dark:bg-muted/50")}
+                  data-sort-state={directMessageSortDirection}
+                  data-sort-target="direct-messages"
+                  onClick={cycleDirectMessageSort}
+                  size="icon"
+                  title={sortActionLabel(input.messages, directMessageSortDirection)}
+                  type="button"
+                  variant="ghost"
+                >
+                  <SortDirectionIcon direction={directMessageSortDirection} />
+                </Button>
+                <Button
+                  aria-label={input.messages.chat.directMessage}
+                  className="size-6 [&_svg]:size-3"
+                  data-testid="slei-direct-message-create-trigger"
+                  onClick={() => setDirectMessageCreateOpen(true)}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <SleiIcon name="plus" size={14} />
+                </Button>
+              </div>
             </div>
             <div className="space-y-1">
-              {sortedDirectMessageConversations.map((conversation) => {
-                const member = input.members.find((candidate) => candidate.id === conversation.agentId && candidate.type === "agent");
-                if (!member) return null;
-                const conversationId = conversation.id;
-                const selected = input.activeChatWorkspace !== "saved" && input.activeConversationId === conversationId;
+              {sortedDirectMessageEntries.map((entry) => {
+                const { conversation, member } = entry;
+                const conversationId = conversation?.id;
+                const selected = Boolean(input.activeChatWorkspace !== "saved" && conversationId && input.activeConversationId === conversationId);
                 return (
                   <DropdownMenu
-                    key={conversation.id}
-                    open={openDmMenuId === conversation.id}
-                    onOpenChange={(open) => setOpenDmMenuId(open ? conversation.id : undefined)}
+                    key={member.id}
+                    open={openDmMenuId === member.id}
+                    onOpenChange={(open) => setOpenDmMenuId(open ? member.id : undefined)}
                   >
                     <SelectableCard
                       selected={selected}
                       className={sidebarListRowClassName}
-                      data-conversation-id={conversation.id}
+                      data-conversation-id={conversationId}
                       data-direct-message-list-item=""
-                      data-testid={`workspace-dm-row-${dmTestId(conversation)}`}
+                      data-member-id={member.id}
+                      data-testid={`workspace-dm-row-${conversation ? dmTestId(conversation) : member.id}`}
                       onContextMenu={(event: MouseEvent) => {
                         event.preventDefault();
-                        setOpenDmMenuId(conversation.id);
+                        setOpenDmMenuId(member.id);
                       }}
                       onKeyDown={(event: KeyboardEvent) => {
                         if (event.key === "F10" && event.shiftKey) {
                           event.preventDefault();
-                          setOpenDmMenuId(conversation.id);
+                          setOpenDmMenuId(member.id);
                         }
                       }}
                       selectedVariant="flat"
@@ -680,7 +713,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         aria-current={selected ? "true" : undefined}
                         className={cn(sidebarListTriggerClassName, "gap-2")}
                         data-slot="direct-message-select-trigger"
-                        onClick={() => input.onConversationSelect?.(conversationId)}
+                        onClick={() => selectDirectMessage(entry)}
                         type="button"
                       >
                         <StatusDot className="size-1.5" status={member.runtimeStatus} />
@@ -707,10 +740,19 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         <SleiIcon name="user" size={14} />
                         {input.messages.shell.workspaceSidebar.openMemberProfile}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => input.onConversationSelect?.(conversationId)}>
-                        <SleiIcon name="messageSquare" size={14} />
-                        {input.messages.shell.workspaceSidebar.openDirectMessage}
-                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {conversation ? (
+                        <DropdownMenuItem onSelect={() => setPendingClearDirectMessage(entry)}>
+                          <SleiIcon name="delete" size={14} />
+                          {input.messages.shell.workspaceSidebar.clearDirectMessageHistory}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {!member.systemOwned ? (
+                        <DropdownMenuItem onSelect={() => setPendingDeleteDirectMessageMember(member)}>
+                          <SleiIcon name="delete" size={14} />
+                          {input.messages.shell.workspaceSidebar.deleteMember}
+                        </DropdownMenuItem>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 );
@@ -844,6 +886,38 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
           </form>
       </ShellDialog>
 
+      <ShellDialog closeLabel={input.messages.common.cancel} contentTestId="slei-direct-message-create-dialog" open={directMessageCreateOpen} onOpenChange={(open) => {
+        setDirectMessageCreateOpen(open);
+      }} className="max-h-[min(90vh,32rem)] overflow-hidden sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><SleiIcon name="messageCircleMore" size={20} />{input.messages.chat.directMessage}</DialogTitle>
+          <DialogDescription>{input.messages.chat.selectAgents}</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="max-h-80 rounded-md border bg-background">
+          <div className="grid gap-1 p-2">
+            {agentMembers.map((member) => (
+              <SelectableCard className="rounded-md" key={member.id}>
+                <button
+                  className="flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left"
+                  data-testid={`slei-direct-message-agent-option-${member.id}`}
+                  onClick={() => {
+                    setDirectMessageCreateOpen(false);
+                    selectDirectMessage({ conversation: conversationByAgentId.get(member.id), member });
+                  }}
+                  type="button"
+                >
+                  <MemberAvatar identity={member} />
+                  <span className="grid min-w-0 flex-1">
+                    <strong className="truncate text-sm">{member.name}</strong>
+                    <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
+                  </span>
+                </button>
+              </SelectableCard>
+            ))}
+          </div>
+        </ScrollArea>
+      </ShellDialog>
+
       <AlertDialog open={Boolean(pendingDeleteChannel)} onOpenChange={(open) => {
         if (!open) setPendingDeleteChannel(undefined);
       }}>
@@ -870,6 +944,61 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={Boolean(pendingClearDirectMessage)} onOpenChange={(open) => {
+        if (!open) setPendingClearDirectMessage(undefined);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {input.messages.shell.workspaceSidebar.clearDirectMessageHistoryTitle(pendingClearDirectMessage?.member.name ?? "")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {input.messages.shell.workspaceSidebar.clearDirectMessageHistoryConfirm(pendingClearDirectMessage?.member.name ?? "")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const conversationId = pendingClearDirectMessage?.conversation?.id;
+                if (conversationId) void input.onConversationMessagesClear?.(conversationId);
+                setPendingClearDirectMessage(undefined);
+              }}
+            >
+              {input.messages.shell.workspaceSidebar.clearDirectMessageHistory}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={Boolean(pendingDeleteDirectMessageMember)} onOpenChange={(open) => {
+        if (!open) setPendingDeleteDirectMessageMember(undefined);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {input.messages.shell.workspaceSidebar.deleteMemberTitle(pendingDeleteDirectMessageMember?.name ?? "")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {input.messages.shell.workspaceSidebar.deleteMemberConfirm(pendingDeleteDirectMessageMember?.name ?? "")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{input.messages.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingDeleteDirectMessageMember) void input.onAgentDelete?.(pendingDeleteDirectMessageMember.id);
+                setPendingDeleteDirectMessageMember(undefined);
+              }}
+            >
+              {input.messages.common.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
@@ -878,12 +1007,13 @@ function ShellDialog(input: {
   children: ReactNode;
   className?: string;
   closeLabel?: string;
+  contentTestId?: string;
   onOpenChange?: (open: boolean) => void;
   open: boolean;
 }) {
   return (
     <Dialog open={input.open} onOpenChange={input.onOpenChange}>
-      <DialogContent className={input.className} closeLabel={input.closeLabel}>
+      <DialogContent className={input.className} closeLabel={input.closeLabel} data-testid={input.contentTestId}>
         {input.children}
       </DialogContent>
     </Dialog>

@@ -1712,6 +1712,16 @@ export function SleiApp() {
     });
   }
 
+  async function handleClearConversationMessages(conversationId: string) {
+    await bridge.clearConversationMessages(conversationId);
+    setData((current) =>
+      createEmptySleiData({
+        ...current,
+        messages: current.messages.filter((message) => message.channelId !== conversationId),
+      }),
+    );
+  }
+
   function handleCreateComputer(name: string, osLabel: string) {
     const node = createDraftComputerNode(name, osLabel);
     setData((current) => createEmptySleiData({ ...current, nodes: [...current.nodes, node] }));
@@ -2578,6 +2588,7 @@ export function SleiApp() {
       onChannelProjectPathsChange={handleReplaceChannelProjectPaths}
       onInteractiveCardComplete={handleInteractiveCardComplete}
       onPermissionResolve={handlePermissionResolve}
+      onConversationMessagesClear={handleClearConversationMessages}
       onChannelEdit={handleEditChannel}
       onChannelSelect={selectChannelForChat}
       onComputerCreate={handleCreateComputer}

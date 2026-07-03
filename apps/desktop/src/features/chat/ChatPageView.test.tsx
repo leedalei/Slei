@@ -2393,6 +2393,45 @@ describe("ChatPage mention panel", () => {
     expect(removeButton?.className).not.toContain("hover:bg-destructive/10");
   });
 
+  it("opens direct message navigation from the channel member info card", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onMemberMessage = vi.fn();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [
+        {
+          ...memberWithLongMentionText(),
+          id: "agent_luna",
+          name: "Luna",
+          handle: "@luna",
+          channelReadiness: { all: "ready" },
+          directMessageEnabled: true,
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMemberMessage={onMemberMessage}
+        profile={defaultProfile}
+      />,
+    );
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.click();
+    });
+
+    await act(async () => {
+      document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.members.message}"]`)?.click();
+    });
+
+    expect(onMemberMessage).toHaveBeenCalledTimes(1);
+    expect(onMemberMessage).toHaveBeenCalledWith("agent_luna");
+  });
+
   it("does not open the member popover from hover-only pointer movement", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({

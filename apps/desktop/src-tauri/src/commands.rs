@@ -391,6 +391,13 @@ pub fn list_conversation_messages(
     broker.list_conversation_messages(conversation_id, query)
 }
 
+pub fn clear_conversation_messages(
+    broker: &DaemonBroker,
+    conversation_id: &str,
+) -> Result<(), ConversationError> {
+    broker.clear_conversation_messages(conversation_id)
+}
+
 pub fn create_message_thread_from_source(
     broker: &DaemonBroker,
     request: CreateMessageThreadRequest,
@@ -767,6 +774,14 @@ pub fn list_conversation_messages_command(
     query: Option<MessagePageQuery>,
 ) -> ConversationMessageListReceipt {
     list_conversation_messages(state.inner(), &conversation_id, query.as_ref())
+}
+
+#[tauri::command]
+pub fn clear_conversation_messages_command(
+    state: tauri::State<'_, DaemonBroker>,
+    conversation_id: String,
+) -> Result<(), String> {
+    clear_conversation_messages(state.inner(), &conversation_id).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

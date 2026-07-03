@@ -73,6 +73,7 @@ pub fn run() {
             commands::list_agent_workspace_command,
             commands::read_agent_workspace_file_command,
             commands::list_conversation_messages_command,
+            commands::clear_conversation_messages_command,
             commands::send_conversation_message_command,
             commands::upload_conversation_attachment_command,
             commands::resolve_permission_command,
@@ -204,15 +205,15 @@ fn profile_avatar_not_found_response() -> tauri::http::Response<Vec<u8>> {
 mod tests {
     use super::commands::{
         activate_conversation_session, add_channel_member, app_runtime_flags,
-        bootstrap_guide_agent, complete_interactive_card, create_agent, create_channel,
-        create_conversation_session, create_dm_conversation, daemon_status, delete_agent,
-        format_frontend_crash_log, global_search, list_agent_activity, list_agent_role_presets,
-        list_agent_skills, list_agent_workspace, list_agents, list_channel_members,
-        list_channel_messages, list_conversation_messages, list_conversation_sessions,
-        list_conversations, list_diagnostics, list_nodes, list_preferences, list_profile,
-        list_saved_messages, list_tasks, open_agent_path, read_agent_workspace_file,
-        reconnect_events, remember_agent_fact, remove_channel_member, rename_local_node,
-        reply_to_message_thread, reply_to_task, request_artifact_open,
+        bootstrap_guide_agent, clear_conversation_messages, complete_interactive_card,
+        create_agent, create_channel, create_conversation_session, create_dm_conversation,
+        daemon_status, delete_agent, format_frontend_crash_log, global_search, list_agent_activity,
+        list_agent_role_presets, list_agent_skills, list_agent_workspace, list_agents,
+        list_channel_members, list_channel_messages, list_conversation_messages,
+        list_conversation_sessions, list_conversations, list_diagnostics, list_nodes,
+        list_preferences, list_profile, list_saved_messages, list_tasks, open_agent_path,
+        read_agent_workspace_file, reconnect_events, remember_agent_fact, remove_channel_member,
+        rename_local_node, reply_to_message_thread, reply_to_task, request_artifact_open,
         reset_conversation_runtime_session, save_message, send_channel_message,
         send_conversation_message, unsave_message, update_agent, update_preferences,
         update_profile, upload_conversation_attachment, upload_profile_avatar, FrontendCrashReport,
@@ -2593,6 +2594,10 @@ mod tests {
         let serialized = serde_json::to_string(&messages).unwrap();
         assert!(!serialized.contains("secret-token"));
         assert!(!serialized.contains("127.0.0.1"));
+
+        clear_conversation_messages(&broker, &dm.id).unwrap();
+        let cleared = list_conversation_messages(&broker, &dm.id, None);
+        assert!(cleared.messages.is_empty());
         std::env::remove_var("SLEI_DATA_ROOT");
     }
 

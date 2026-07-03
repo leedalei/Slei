@@ -1880,6 +1880,94 @@ async fn dm_conversation_and_messages_persist_through_daemon_reload() {
 }
 
 #[tokio::test]
+async fn clearing_dm_conversation_messages_deletes_persisted_history() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("conversation-clear");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    let app = build_router(state.clone());
+
+    let created_response = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-clear-dm-agent"),
+        json!({
+            "name": "CodaClear",
+            "handle": "@codaclear",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created = response_json(created_response).await;
+    let agent_id = created["agent"]["id"].as_str().unwrap();
+    let conversation = response_json(
+        post_json(
+            &app,
+            &token,
+            "/v1/conversations/dm",
+            Some("clear-dm"),
+            json!({ "agentId": agent_id }),
+        )
+        .await,
+    )
+    .await;
+    let conversation_id = conversation["conversation"]["id"].as_str().unwrap();
+
+    let sent = post_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+        Some("clear-message-1"),
+        json!({
+            "body": "这条稍后要清空",
+            "authorId": "human:local"
+        }),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::CREATED);
+
+    let listed = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{conversation_id}/messages"),
+        )
+        .await,
+    )
+    .await;
+    assert!(!listed["messages"].as_array().unwrap().is_empty());
+
+    let cleared = delete_json(
+        &app,
+        &token,
+        &format!("/v1/conversations/{conversation_id}/messages"),
+    )
+    .await;
+    assert_eq!(cleared.status(), StatusCode::NO_CONTENT);
+
+    let after = response_json(
+        get_json(
+            &app,
+            &token,
+            &format!("/v1/conversations/{conversation_id}/messages"),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(after["messages"].as_array().unwrap().len(), 0);
+    assert!(state
+        .conversations()
+        .list_messages(conversation_id)
+        .await
+        .unwrap()
+        .is_empty());
+}
+
+#[tokio::test]
 async fn conversation_service_initial_load_uses_constructor_repositories() {
     let root = make_temp_dir("conversation-shared-repo-root");
     let db_root = make_temp_dir("conversation-shared-repo-db");

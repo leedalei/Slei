@@ -235,7 +235,8 @@ describe("SearchPage global search UI", () => {
     expect(searchSurface?.getAttribute("data-slot")).not.toBe("card");
     expect(searchSurface?.querySelector('[data-slot="card-content"]')).toBeNull();
     expect(searchSurface?.className).toContain("rounded-md");
-    expect(searchSurface?.className).toContain("h-10");
+    expect(searchSurface?.className).toContain("h-9");
+    expect(searchSurface?.className).not.toContain("h-10");
     expect(searchSurface?.className).toContain("border");
     expect(searchSurface?.className).toContain("border-input");
     expect(searchSurface?.className).toContain("focus-within:border-ring");
@@ -253,7 +254,8 @@ describe("SearchPage global search UI", () => {
     expect(searchInput.className).not.toContain("dark:bg-muted/30");
     expect(Array.from(rootElement.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Search")).toBe(false);
     expect(results).toBeInstanceOf(HTMLDivElement);
-    expect(results?.className).toContain("grid w-full max-w-5xl");
+    expect(results?.className).toContain("grid w-full gap-5");
+    expect(results?.className).not.toContain("max-w-5xl");
     expect(results?.className).not.toContain("mx-auto");
     expect(results?.className).not.toContain("p-6");
     expect(results?.parentElement?.className).toContain("px-6 py-6");
@@ -277,8 +279,12 @@ describe("SearchPage global search UI", () => {
     expect(inputPanel).toBeInstanceOf(HTMLElement);
     expect(controlLayout?.firstElementChild).toBe(filterPanel);
     expect(controlLayout?.lastElementChild).toBe(inputPanel);
-    expect(controlLayout?.className).toContain("md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)]");
+    expect(controlLayout?.className).toContain("flex w-full");
+    expect(controlLayout?.className).toContain("justify-between");
+    expect(controlLayout?.className).not.toContain("max-w-5xl");
+    expect(controlLayout?.className).not.toContain("md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)]");
     expect(filterPanel?.className).toContain("md:justify-start");
+    expect(inputPanel?.className).toContain("flex-1");
     expect(inputPanel?.className).toContain("md:justify-end");
     expect(searchSurface?.parentElement).toBe(inputPanel);
     expect(searchSurface?.className).toContain("w-full");

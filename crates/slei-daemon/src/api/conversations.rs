@@ -149,6 +149,25 @@ pub async fn messages(
     }
 }
 
+pub async fn clear_messages(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let _activity_guard = match crate::api::begin_resettable_write(&state).await {
+        Ok(guard) => guard,
+        Err(response) => return response,
+    };
+
+    match state.conversations().clear_messages(&id).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(error) => conversation_error_response(error),
+    }
+}
+
 pub async fn sessions(
     State(state): State<AppState>,
     Path(id): Path<String>,

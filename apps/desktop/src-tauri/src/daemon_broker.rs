@@ -2519,6 +2519,35 @@ impl DaemonBroker {
             .any(|message| message.conversation_id == conversation_id)
     }
 
+    pub fn clear_conversation_messages(
+        &self,
+        conversation_id: &str,
+    ) -> Result<(), ConversationError> {
+        if self.clear_conversation_messages_in_daemon(conversation_id) {
+            let mut messages = self
+                .conversation_messages
+                .lock()
+                .expect("conversation messages mutex poisoned");
+            messages.retain(|message| message.conversation_id != conversation_id);
+            persist_local_conversation_messages_at_root(
+                &self.data_root,
+                conversation_id,
+                &messages,
+            )?;
+            return Ok(());
+        }
+        if self.offline_fallback == OfflineFallback::Empty {
+            return Err(ConversationError::DaemonUnavailable);
+        }
+
+        let mut messages = self
+            .conversation_messages
+            .lock()
+            .expect("conversation messages mutex poisoned");
+        messages.retain(|message| message.conversation_id != conversation_id);
+        persist_local_conversation_messages_at_root(&self.data_root, conversation_id, &messages)
+    }
+
     pub fn send_conversation_message(
         &self,
         conversation_id: &str,
@@ -3380,6 +3409,16 @@ impl DaemonBroker {
         );
         let response = self.send_daemon_request("GET", &path, None, &[])?;
         serde_json::from_str::<ConversationMessageListReceipt>(&response).ok()
+    }
+
+    fn clear_conversation_messages_in_daemon(&self, conversation_id: &str) -> bool {
+        self.send_daemon_request(
+            "DELETE",
+            &format!("/v1/conversations/{conversation_id}/messages"),
+            None,
+            &[],
+        )
+        .is_some()
     }
 
     fn list_conversation_sessions_from_daemon(

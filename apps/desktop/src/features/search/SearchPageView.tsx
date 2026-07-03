@@ -191,7 +191,7 @@ export function SearchPage({
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
       <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-tauri-drag-region="deep" onSubmit={submitSearch}>
-        <div className="grid w-full max-w-5xl gap-3 md:grid-cols-[minmax(0,max-content)_minmax(0,1fr)] md:items-center" data-search-control-layout="true">
+        <div className="flex w-full flex-col justify-between gap-3 md:flex-row md:items-center" data-search-control-layout="true">
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2 md:justify-start" data-search-filter-panel="true">
             <FilterSelect
               icon={<SleiIcon className="size-4" name="user" />}
@@ -221,15 +221,15 @@ export function SearchPage({
             />
           </div>
 
-          <div className="flex min-w-0 md:justify-end" data-search-input-panel="true">
+          <div className="flex min-w-0 flex-1 md:justify-end" data-search-input-panel="true">
             <div
-              className="flex h-10 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
+              className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-card-foreground shadow-xs transition-[color,box-shadow] focus-within:border-ring dark:bg-input/30"
               data-search-input-surface="true"
             >
               <SleiIcon className="size-4 text-muted-foreground" name="search" />
               <Input
                 aria-label={messages.search.navigation.searchInput}
-                className="h-9 min-w-0 border-0 bg-transparent px-0 text-sm shadow-none backdrop-blur-none focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+                className="h-8 min-w-0 border-0 bg-transparent px-0 text-sm shadow-none backdrop-blur-none focus:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder={messages.search.placeholderTitle}
@@ -247,7 +247,7 @@ export function SearchPage({
 
       <ScrollArea className="min-h-0">
         <div className="px-6 py-6">
-          <div className="grid w-full max-w-5xl gap-5" data-slot="search-results">
+          <div className="grid w-full gap-5" data-slot="search-results">
             {status === "idle" ? (
               <Empty
                 chrome="none"

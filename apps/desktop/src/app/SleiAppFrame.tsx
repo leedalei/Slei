@@ -72,7 +72,7 @@ import {
 
 export type ChatWorkspaceMode = "chat" | "saved";
 
-const settingsOverlayExitMs = 200;
+const settingsOverlayExitMs = 1000;
 
 export type SleiAppFrameProps = {
   activeView: AppView;
@@ -159,6 +159,7 @@ export type SleiAppFrameProps = {
   onOlderMessagesLoad?: () => Promise<void> | void;
   onMemberSelect?: (memberId: string) => void;
   onMemberMessage?: (memberId: string) => void;
+  onConversationMessagesClear?: (conversationId: string) => Promise<void> | void;
   onOpenAgentPath?: (agentId: string, target: AgentPathTarget) => Promise<void> | void;
   onListAgentActivity?: (agentId: string, limit?: number) => Promise<AgentActivityListReceipt> | AgentActivityListReceipt;
   onListAgentWorkspace?: (agentId: string, relativePath?: string) => Promise<AgentWorkspaceListReceipt> | AgentWorkspaceListReceipt;
@@ -318,6 +319,11 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     }, settingsOverlayExitMs);
   }
 
+  function handleMemberMessage(memberId: string) {
+    if (settingsOverlayOpen) closeSettingsOverlay();
+    input.onMemberMessage?.(memberId);
+  }
+
   function renderSettingsRoutePanel(panel: SettingsPanel) {
     return (
       <SettingsRoute
@@ -365,7 +371,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             nodes={input.runtimeSetup.nodes}
             onAgentDelete={input.onAgentDelete}
             onAgentUpdate={input.onAgentUpdate}
-            onMessage={input.onMemberMessage}
+            onMessage={handleMemberMessage}
             onOpenAgentPath={input.onOpenAgentPath}
             onListAgentActivity={input.onListAgentActivity}
             onListAgentWorkspace={input.onListAgentWorkspace}
@@ -449,7 +455,10 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
                 onChannelEdit={handleChannelEdit}
                 onChannelSelect={input.onChannelSelect}
                 onConversationSelect={input.onConversationSelect}
+                onConversationMessagesClear={input.onConversationMessagesClear}
                 onInteractiveCardComplete={input.onInteractiveCardComplete}
+                onAgentDelete={input.onAgentDelete}
+                onMemberMessage={handleMemberMessage}
                 onMemberSelect={input.onMemberSelect}
                 onSavedMessagesOpen={input.onSavedMessagesOpen}
                 onSettingsOpen={openSettingsOverlay}
@@ -507,7 +516,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
               data-testid="slei-workspace-chat-page"
               inert={settingsOverlayBlocksApp ? true : undefined}
             >
-              {renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, input.onMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, (draft, cardId) => {
+              {renderWorkspace(input.activeView, input.activeChatWorkspace ?? "chat", input.data, activeChannel, activeConversation, activeSessionId, input.runtimeSetup, profile, input.locale, messages, input.timeZone ?? defaultTimeZone, normalizedAppearance, input.notifications ?? defaultNotifications, activeSettingsPanel, input.onProfileChange, input.onProfileAvatarUpload, input.onLocaleChange, input.onTimeZoneChange, input.onAppearanceChange, input.onNotificationsChange, input.onSendMessage, input.onMessageSendFailure, input.initialChatDraft, input.initialChannelView, input.initialComposerAttachments, input.initialSearchFilters, input.onGlobalSearch, input.onAgentResultSelect, input.onChannelResultSelect, input.onMessageResultSelect, input.onSearchResultSelect, activeComputerId, () => setComputerCreateOpen(true), input.onComputerRename, input.activeMemberId, input.activeTaskId, input.onTaskReply, input.onTaskStatusChange, input.onTaskThreadOpen, input.onTaskThreadClose, input.onAgentUpdate, input.onAgentDelete, handleMemberMessage, input.onOpenAgentPath, input.onListAgentActivity, input.onListAgentWorkspace, input.onReadAgentWorkspaceFile, input.onConversationNewSession, input.onConversationHistoryToggle, input.onConversationSessionSelect, input.onAttachmentUpload, input.onPermissionResolve, input.onChannelMemberAdd, input.onChannelMemberRemove, input.onChannelProjectPathsChange, input.sessionDrawerOpen ?? input.initialConversationHistoryOpen, input.sendingConversationIds ?? [], input.savedMessages ?? [], input.onSavedMessageSelect, input.focusedMessageId, input.onMessageSaveToggle, input.onMessageThreadOpen, input.onMessageThreadReply, input.onMessageThreadReplyFromSource, input.onOlderMessagesLoad, input.onConversationMessagesClear, (draft, cardId) => {
           setAgentDraft(draft);
           setActiveCardId(cardId);
           setAgentCreateOpen(true);
@@ -786,6 +795,7 @@ function renderWorkspace(
   onMessageThreadReply?: (threadId: string, body: string) => Promise<void> | void,
   onMessageThreadReplyFromSource?: (message: SleiMessage, body: string) => Promise<void> | void,
   onOlderMessagesLoad?: () => Promise<void> | void,
+  onConversationMessagesClear?: (conversationId: string) => Promise<void> | void,
   onAgentDraftCreate?: (draft: Partial<AgentDraftInput>, cardId?: string) => void,
   onChannelDraftCreate?: (draft: Record<string, unknown>, cardId?: string) => void,
   pendingPreference?: "locale" | "timeZone" | "appearance" | "notifications",
@@ -862,7 +872,7 @@ function renderWorkspace(
       </div>
     );
   }
-  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onChannelProjectPathsChange={onChannelProjectPathsChange} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMessageSaveToggle={onMessageSaveToggle} onMessageThreadOpen={onMessageThreadOpen} onMessageThreadReply={onMessageThreadReply} onMessageThreadReplyFromSource={onMessageThreadReplyFromSource} onOlderMessagesLoad={onOlderMessagesLoad} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadClose={onTaskThreadClose} onTaskThreadOpen={onTaskThreadOpen} profile={localHumanPresentation(profile, messages)} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
+  return <ChatRoute activeChannel={activeChannel} activeConversation={activeConversation} activeSessionId={activeSessionId} data={data} focusedMessageId={focusedMessageId} initialAttachments={initialComposerAttachments} initialChannelView={initialChannelView} initialDraft={initialChatDraft} messages={messages} onAgentDraftCreate={onAgentDraftCreate} onAttachmentUpload={onAttachmentUpload} onChannelDraftCreate={onChannelDraftCreate} onChannelMemberAdd={onChannelMemberAdd} onChannelMemberRemove={onChannelMemberRemove} onChannelProjectPathsChange={onChannelProjectPathsChange} onConversationHistoryToggle={onConversationHistoryToggle} onConversationNewSession={onConversationNewSession} onConversationSessionSelect={onConversationSessionSelect} onMemberMessage={onMemberMessage} onMessageSaveToggle={onMessageSaveToggle} onMessageThreadOpen={onMessageThreadOpen} onMessageThreadReply={onMessageThreadReply} onMessageThreadReplyFromSource={onMessageThreadReplyFromSource} onOlderMessagesLoad={onOlderMessagesLoad} onPermissionResolve={onPermissionResolve} onSendFailure={onMessageSendFailure} onSendMessage={onSendMessage} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadClose={onTaskThreadClose} onTaskThreadOpen={onTaskThreadOpen} profile={localHumanPresentation(profile, messages)} savedMessageIds={savedMessages.map((savedMessage) => savedMessage.messageId)} sending={activeConversation ? sendingConversationIds.includes(activeConversation.id) : false} sessionDrawerOpen={sessionDrawerOpen} />;
 }
 
 function ComputerCreateModal(input: {

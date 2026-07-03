@@ -155,6 +155,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
 
     await bridge.listChannelMessages("all", { before: 10 });
     await bridge.listConversationMessages("dm:agent", { aroundMessageId: "msg_1", limit: 9 });
+    await bridge.clearConversationMessages("dm:agent");
     await bridge.createMessageThreadFromSource({ sourceMessageId: "msg_1", createdBy: "human:local" });
     await bridge.replyToMessageThread("thread_1", { senderId: "human:local", body: "hi" });
 
@@ -166,10 +167,13 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       conversationId: "dm:agent",
       query: { aroundMessageId: "msg_1", limit: 9 },
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(3, "create_message_thread_from_source_command", {
+    expect(invokeMock).toHaveBeenNthCalledWith(3, "clear_conversation_messages_command", {
+      conversationId: "dm:agent",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(4, "create_message_thread_from_source_command", {
       request: { sourceMessageId: "msg_1", createdBy: "human:local" },
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(4, "reply_to_message_thread_command", {
+    expect(invokeMock).toHaveBeenNthCalledWith(5, "reply_to_message_thread_command", {
       threadId: "thread_1",
       request: { senderId: "human:local", body: "hi" },
     });
@@ -186,6 +190,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       messages: [],
       pageInfo: { hasMoreBefore: false },
     });
+    await expect(bridge.clearConversationMessages("dm:agent")).rejects.toThrow("daemon offline");
     await expect(bridge.createMessageThreadFromSource({ sourceMessageId: "msg_1", createdBy: "human:local" })).rejects.toThrow("daemon offline");
     await expect(bridge.replyToMessageThread("thread_1", { senderId: "human:local", body: "hi" })).rejects.toThrow("daemon offline");
   });

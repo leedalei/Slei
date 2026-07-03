@@ -2060,6 +2060,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_conversation_messages_clears_only_target_conversation() {
+        let (url, _path) = sqlite_file_url("clear-conversation-messages");
+        let db = SleiDb::connect(&url).await.unwrap();
+        db.migrate().await.unwrap();
+        let repos = Repositories::new(db.pool().clone());
+
+        for conversation_id in ["dm:agent_coda", "dm:agent_iris"] {
+            repos
+                .upsert_conversation(ConversationRow {
+                    id: conversation_id.to_string(),
+                    kind: "dm".to_string(),
+                    agent_id: conversation_id.replace("dm:", ""),
+                    active_session_id: Some(format!("session:{conversation_id}:default")),
+                    runtime_status: Some("ready".to_string()),
+                    created_at: "2026-07-02T00:00:00Z".to_string(),
+                    updated_at: "2026-07-02T00:00:00Z".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        for (id, conversation_id, body) in [
+            ("msg_coda_1", "dm:agent_coda", "Coda one"),
+            ("msg_coda_2", "dm:agent_coda", "Coda two"),
+            ("msg_iris_1", "dm:agent_iris", "Iris one"),
+        ] {
+            repos
+                .insert_conversation_message(ConversationMessageRow {
+                    id: id.to_string(),
+                    conversation_id: conversation_id.to_string(),
+                    session_id: Some(format!("session:{conversation_id}:default")),
+                    author_id: "human:local".to_string(),
+                    body: body.to_string(),
+                    status: Some("complete".to_string()),
+                    run_id: None,
+                    attachment_ids: "[]".to_string(),
+                    cards_payload: "[]".to_string(),
+                    created_at: "1780390800".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        repos
+            .delete_conversation_messages("dm:agent_coda")
+            .await
+            .unwrap();
+
+        assert!(repos
+            .conversation_messages("dm:agent_coda")
+            .await
+            .unwrap()
+            .is_empty());
+        let iris_messages = repos.conversation_messages("dm:agent_iris").await.unwrap();
+        assert_eq!(iris_messages.len(), 1);
+        assert_eq!(iris_messages[0].body, "Iris one");
+    }
+
+    #[tokio::test]
     async fn global_search_agents_and_channels_clamp_to_twenty() {
         let (url, _path) = sqlite_file_url("global-search-agents-channels");
         let db = SleiDb::connect(&url).await.unwrap();
