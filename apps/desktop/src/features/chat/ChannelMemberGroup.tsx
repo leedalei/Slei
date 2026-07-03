@@ -165,6 +165,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
                           }}
                           role="option"
                           selected={selected}
+                          selectedVariant="checkboxField"
                           tabIndex={0}
                         >
                           <Checkbox

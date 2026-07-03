@@ -2215,6 +2215,11 @@ describe("ChatPage mention panel", () => {
       candidateButtons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       candidateButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    const selectedCandidateRows = candidateButtons.filter((candidate) => candidate.getAttribute("data-selected") === "true");
+    expect(selectedCandidateRows).toHaveLength(2);
+    expect(selectedCandidateRows.every((candidate) => candidate.className.includes("border-input"))).toBe(true);
+    expect(selectedCandidateRows.every((candidate) => candidate.className.includes("bg-muted/30"))).toBe(true);
+    expect(selectedCandidateRows.every((candidate) => !candidate.className.includes("bg-accent"))).toBe(true);
 
     const checkedBoxes = [...document.body.querySelectorAll('[data-testid="slei-channel-member-add-candidate-checkbox"]')]
       .filter((checkbox) => checkbox.getAttribute("data-state") === "checked");
