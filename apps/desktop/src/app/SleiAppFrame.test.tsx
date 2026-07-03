@@ -2126,6 +2126,10 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(document.body.textContent).toContain("选择 Agent");
     expect(document.body.textContent).toContain("Coda");
+    const nameInput = document.body.querySelector<HTMLInputElement>("#slei-channel-name");
+    const nameInputClasses = nameInput?.className.split(/\s+/) ?? [];
+    expect(nameInputClasses).toContain("bg-background");
+    expect(nameInputClasses).not.toContain("bg-transparent");
     const agentCheckbox = document.body.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
     expect(agentList?.className).toContain("bg-background");
@@ -2144,8 +2148,13 @@ describe("SleiAppFrame global search navigation", () => {
 
     const selectedAgentOption = agentCheckbox?.closest<HTMLElement>('[data-testid="slei-create-channel-agent-option"]');
     expect(selectedAgentOption?.dataset.selected).toBe("true");
-    expect(selectedAgentOption?.className).toContain("bg-accent");
+    expect(selectedAgentOption?.className).toContain("border-input");
+    expect(selectedAgentOption?.className).toContain("bg-muted/30");
+    expect(selectedAgentOption?.className).toContain("text-foreground");
+    expect(selectedAgentOption?.className).not.toContain("bg-accent");
     expect(selectedAgentOption?.className).not.toContain("bg-white/20");
+    expect(agentCheckbox?.className).toContain("data-[state=checked]:bg-primary");
+    expect(agentCheckbox?.className).toContain("data-[state=checked]:text-primary-foreground");
     expect(document.body.textContent).not.toContain("记忆同步中");
     expect(document.body.textContent).not.toContain("记忆失败");
   });

@@ -3,7 +3,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { SelectableCard, selectableCardFlatSelectedClassName, selectableCardSelectedClassName } from "./SelectableCard";
+import {
+  SelectableCard,
+  selectableCardCheckboxFieldSelectedClassName,
+  selectableCardFlatSelectedClassName,
+  selectableCardSelectedClassName,
+} from "./SelectableCard";
 
 describe("SelectableCard", () => {
   it("centralizes the sidebar selected-card visual treatment", () => {
@@ -49,5 +54,23 @@ describe("SelectableCard", () => {
     expect(selectedHtml).toContain("shadow-none");
     expect(selectedHtml).toContain("backdrop-blur-none");
     expect(selectableCardFlatSelectedClassName).toContain("bg-[var(--workspace-sidebar-active-bg)]");
+  });
+
+  it("supports shadcn checkbox field styling for selectable form rows", () => {
+    const idleHtml = renderToStaticMarkup(<SelectableCard selectedVariant="checkboxField">Idle</SelectableCard>);
+    const selectedHtml = renderToStaticMarkup(
+      <SelectableCard selected selectedVariant="checkboxField">
+        Selected
+      </SelectableCard>,
+    );
+
+    expect(idleHtml).toContain("hover:border-input");
+    expect(idleHtml).toContain("hover:bg-muted/30");
+    expect(selectedHtml).toContain("border-input");
+    expect(selectedHtml).toContain("bg-muted/30");
+    expect(selectedHtml).toContain("text-foreground");
+    expect(selectedHtml).toContain("shadow-none");
+    expect(selectedHtml).not.toContain("bg-accent");
+    expect(selectableCardCheckboxFieldSelectedClassName).toContain("bg-muted/30");
   });
 });

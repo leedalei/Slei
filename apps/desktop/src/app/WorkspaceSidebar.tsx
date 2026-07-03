@@ -857,8 +857,9 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                           data-testid="slei-create-channel-agent-option"
                           key={member.id}
                           selected={selected}
+                          selectedVariant="checkboxField"
                         >
-                          <Label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2">
+                          <Label className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-3">
                             <Checkbox
                               aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
                               checked={selected}

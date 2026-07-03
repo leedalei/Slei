@@ -150,7 +150,10 @@ describe("overlay UI primitives", () => {
       expect(content?.textContent).toContain("Channel details");
       expect(content?.textContent).toContain("Review channel metadata.");
       expect(content?.className).toContain("bg-background");
+      expect(content?.className).toContain("text-foreground");
       expect(content?.className).toContain("shadow-lg");
+      expect(content?.className).not.toContain("bg-popover");
+      expect(content?.className).not.toContain("text-popover-foreground");
       expect(content?.className).not.toContain("bg-white/30");
       expect(content?.className).not.toContain("backdrop-blur-2xl");
       expect(content?.className).not.toContain("before:from-white/45");
@@ -191,7 +194,10 @@ describe("overlay UI primitives", () => {
       expect(content?.textContent).toContain("Remove member?");
       expect(content?.textContent).toContain("This action removes the member from the channel.");
       expect(content?.className).toContain("bg-background");
+      expect(content?.className).toContain("text-foreground");
       expect(content?.className).toContain("shadow-lg");
+      expect(content?.className).not.toContain("bg-popover");
+      expect(content?.className).not.toContain("text-popover-foreground");
       expect(content?.className).not.toContain("bg-white/30");
       expect(content?.className).not.toContain("backdrop-blur-2xl");
       expect(content?.className).not.toContain("before:from-white/45");

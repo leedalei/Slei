@@ -13,17 +13,20 @@ describe("Input", () => {
 
     expect(input?.parentElement).toBe(host);
     expect(input?.getAttribute("type")).toBe("search");
-    expect(input?.className).toContain("border-input");
-    expect(input?.className).toContain("bg-transparent");
-    expect(input?.className).toContain("dark:bg-input/30");
-    expect(input?.className).toContain("shadow-xs");
-    expect(input?.className).toContain("transition-[color,box-shadow]");
-    expect(input?.className).toContain("focus-visible:border-ring");
-    expect(input?.className).toContain("focus-visible:ring-[3px]");
-    expect(input?.className).toContain("aria-invalid:border-destructive");
-    expect(input?.className).not.toContain("bg-white/10");
-    expect(input?.className).not.toContain("backdrop-blur-xl");
-    expect(input?.className).not.toContain("border-white/20");
-    expect(input?.className).not.toContain("focus:bg-white/15");
+    const classes = input?.className.split(/\s+/) ?? [];
+
+    expect(classes).toContain("border-input");
+    expect(classes).toContain("bg-background");
+    expect(classes).toContain("dark:bg-input/30");
+    expect(classes).toContain("shadow-xs");
+    expect(classes).toContain("transition-[color,box-shadow]");
+    expect(classes).toContain("focus-visible:border-ring");
+    expect(classes).toContain("focus-visible:ring-[3px]");
+    expect(classes).toContain("aria-invalid:border-destructive");
+    expect(classes).not.toContain("bg-white/10");
+    expect(classes).not.toContain("bg-transparent");
+    expect(classes).not.toContain("backdrop-blur-xl");
+    expect(classes).not.toContain("border-white/20");
+    expect(classes).not.toContain("focus:bg-white/15");
   });
 });
