@@ -1,6 +1,8 @@
 /* @vitest-environment jsdom */
 
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -125,6 +127,18 @@ afterEach(() => {
 });
 
 describe("overlay UI primitives", () => {
+  it("keeps modal and sheet surfaces themed from the app shell without primitive-specific Slei classes", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    const surfaceCss = appCss.slice(appCss.indexOf('[data-slot="dialog-content"],'), appCss.indexOf(".slei-modal-panel {"));
+
+    expect(surfaceCss).toContain('[data-slot="dialog-content"],');
+    expect(surfaceCss).toContain('[data-slot="alert-dialog-content"],');
+    expect(surfaceCss).toContain('[data-slot="sheet-content"]');
+    expect(surfaceCss).toContain("background: var(--modal-surface-bg);");
+    expect(surfaceCss).toContain("border-color: var(--modal-border);");
+    expect(surfaceCss).toContain("box-shadow: var(--modal-shadow);");
+  });
+
   it("opens dialog content with accessible labels and closes from the icon button", async () => {
     const rendered = renderUi(
       <Dialog>
@@ -154,6 +168,7 @@ describe("overlay UI primitives", () => {
       expect(content?.className).toContain("shadow-lg");
       expect(content?.className).not.toContain("bg-popover");
       expect(content?.className).not.toContain("text-popover-foreground");
+      expect(content?.className).not.toContain("slei-modal-surface");
       expect(content?.className).not.toContain("bg-white/30");
       expect(content?.className).not.toContain("backdrop-blur-2xl");
       expect(content?.className).not.toContain("before:from-white/45");
@@ -198,6 +213,7 @@ describe("overlay UI primitives", () => {
       expect(content?.className).toContain("shadow-lg");
       expect(content?.className).not.toContain("bg-popover");
       expect(content?.className).not.toContain("text-popover-foreground");
+      expect(content?.className).not.toContain("slei-modal-surface");
       expect(content?.className).not.toContain("bg-white/30");
       expect(content?.className).not.toContain("backdrop-blur-2xl");
       expect(content?.className).not.toContain("before:from-white/45");
@@ -404,6 +420,7 @@ describe("overlay UI primitives", () => {
       expect(content?.getAttribute("role")).toBe("dialog");
       expect(content?.getAttribute("data-side")).toBe("left");
       expect(content?.className.split(/\s+/)).toContain("bg-background");
+      expect(content?.className.split(/\s+/)).not.toContain("slei-modal-surface");
       expect(content?.className).toContain("data-[state=open]:animate-in");
       expect(content?.className).toContain("data-[state=closed]:animate-out");
       expect(content?.className).not.toContain("bg-white/30");

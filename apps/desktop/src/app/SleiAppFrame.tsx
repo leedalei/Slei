@@ -1044,10 +1044,11 @@ function AgentCreateModal(input: {
   const trimmedName = name.trim();
   const nameError = validateAgentDisplayName(trimmedName, input.members);
   const selectedPreset = rolePresets.find((preset) => preset.id === selectedPresetId);
+  const descriptionReady = descriptionMode === "preset" ? Boolean(selectedPreset) : description.trim().length > 0;
   const avatarSeed = avatarManuallyRefreshed
     ? refreshedAgentAvatarSeed(trimmedName, avatarRefreshIndex)
     : agentAvatarSeedFromName(trimmedName);
-  const createDisabled = Boolean(nameError) || (descriptionMode === "preset" && !selectedPreset);
+  const createDisabled = Boolean(nameError) || !descriptionReady;
 
   async function loadRolePresets() {
     if (!input.onRolePresetsLoad) {
@@ -1083,7 +1084,7 @@ function AgentCreateModal(input: {
       nodeId,
       description: descriptionMode === "preset"
         ? selectedPreset?.description ?? input.messages.agentCreate.defaultDescription(trimmedName)
-        : description.trim() || input.messages.agentCreate.defaultDescription(trimmedName),
+        : description.trim(),
       avatarSeed,
     });
   }
@@ -1093,9 +1094,7 @@ function AgentCreateModal(input: {
       if (!open) input.onClose();
     }} className="slei-agent-modal max-h-[min(90vh,46rem)] overflow-hidden sm:max-w-4xl">
         <DialogHeader>
-          <Badge className="w-fit" variant="secondary">{input.messages.agentCreate.fallbackAgent}</Badge>
           <DialogTitle>{input.messages.agentCreate.title}</DialogTitle>
-          <DialogDescription>{input.messages.agentCreate.associatedDevice} / {input.messages.agentCreate.model} / {input.messages.agentCreate.description}</DialogDescription>
         </DialogHeader>
         <form className="grid min-h-0 gap-4" onSubmit={submitCreate}>
           <div className="grid min-h-0 gap-5 md:grid-cols-[minmax(14rem,0.78fr)_minmax(0,1.22fr)]">
@@ -1113,10 +1112,10 @@ function AgentCreateModal(input: {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="slei-agent-runtime">Runtime</Label>
+                <Label htmlFor="slei-agent-runtime">{input.messages.agentCreate.runtime}</Label>
                 <Select value={runtimeKind} onValueChange={setRuntimeKind}>
-                  <SelectTrigger aria-label="Runtime" className="w-full" id="slei-agent-runtime">
-                    <SelectValue placeholder="Runtime" />
+                  <SelectTrigger aria-label={input.messages.agentCreate.runtime} className="w-full" id="slei-agent-runtime">
+                    <SelectValue placeholder={input.messages.agentCreate.runtime} />
                   </SelectTrigger>
                   <SelectContent>
                     {input.nodes
@@ -1136,7 +1135,7 @@ function AgentCreateModal(input: {
               <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
                 <button
                   aria-label={input.messages.agentCreate.refreshAvatar}
-                  className="group relative size-14 shrink-0 rounded-full"
+                  className="group relative size-[3.75rem] shrink-0 rounded-full"
                   data-agent-create-avatar
                   onClick={() => {
                     setAvatarRefreshIndex((current) => current + 1);
@@ -1154,7 +1153,10 @@ function AgentCreateModal(input: {
                     }}
                     large
                   />
-                  <span className="absolute inset-0 hidden place-items-center rounded-full bg-background/75 text-foreground group-hover:grid">
+                  <span
+                    className="absolute inset-0 hidden place-items-center rounded-full bg-background/75 text-foreground group-hover:grid"
+                    data-agent-create-avatar-mask
+                  >
                     <SleiIcon name="refreshCw" size={16} />
                   </span>
                 </button>
@@ -1184,16 +1186,30 @@ function AgentCreateModal(input: {
                 </div>
               </div>
               <div className="grid gap-3">
-                <Label>{input.messages.agentCreate.descriptionMode}</Label>
-                <RadioGroup className="flex flex-wrap gap-4" onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")} value={descriptionMode}>
+                <Label className="gap-1">
+                  {input.messages.agentCreate.descriptionMode}
+                  <span aria-hidden="true" className="text-destructive">*</span>
+                </Label>
+                <RadioGroup
+                  aria-label={input.messages.agentCreate.descriptionMode}
+                  className="flex flex-wrap gap-4"
+                  onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")}
+                  value={descriptionMode}
+                >
                   <RadioGroupItem label={input.messages.agentCreate.customDescription} value="custom" />
                   <RadioGroupItem label={input.messages.agentCreate.presetDescription} value="preset" />
                 </RadioGroup>
               </div>
               {descriptionMode === "custom" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="slei-agent-description">{input.messages.agentCreate.description}</Label>
-                  <Textarea id="slei-agent-description" onChange={(event) => setDescription(event.currentTarget.value)} value={description} />
+                  <Textarea
+                    aria-label={input.messages.agentCreate.description}
+                    aria-required="true"
+                    id="slei-agent-description"
+                    onChange={(event) => setDescription(event.currentTarget.value)}
+                    required
+                    value={description}
+                  />
                 </div>
               ) : (
                 <div className="grid gap-2">
@@ -1227,7 +1243,7 @@ function AgentCreateModal(input: {
                             type="button"
                           >
                             <span className="font-medium text-foreground">{preset.title}</span>
-                            <span className="line-clamp-3">{preset.description}</span>
+                            <span className="line-clamp-3 text-[13px] leading-5" data-agent-preset-description>{preset.description}</span>
                           </button>
                         ))}
                       </div>

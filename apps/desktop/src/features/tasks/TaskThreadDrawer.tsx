@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const CARD_INSET_CLASS = "rounded-lg border-border/60 bg-card/80 text-card-foreground shadow-xs backdrop-blur before:hidden after:hidden dark:bg-card/65";
+const CARD_INSET_CLASS = "slei-task-thread-card rounded-lg border text-card-foreground shadow-xs backdrop-blur before:hidden after:hidden";
 const TASK_STATUSES: SleiTaskStatus[] = ["pending_assignment", "in_progress", "in_review", "done"];
 const TASK_STATUS_ICONS: Record<SleiTaskStatus, SleiIconName> = {
   pending_assignment: "user",
@@ -186,7 +186,7 @@ export function TaskThreadDrawer(input: {
     return (
       <>
         <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-        <SheetHeader className="relative border-b border-border/60 bg-background/35 p-5 pr-14 dark:bg-background/20">
+        <SheetHeader className="slei-task-thread-header relative border-b p-5 pr-14">
           <TaskStatusTimeline
             blockedStatuses={blockedStatusTargets}
             disabled={statusActionDisabled}
@@ -276,12 +276,12 @@ export function TaskThreadDrawer(input: {
               />
             ) : null}
             <div
-              className="relative rounded-lg border border-border/60 bg-background/55 p-1 shadow-lg shadow-foreground/5 backdrop-blur-xl dark:bg-background/35"
+              className="slei-modal-composer slei-task-thread-composer relative rounded-lg border p-1 backdrop-blur-xl"
               data-slot="task-thread-composer"
             >
               <Textarea
                 aria-label={input.messages.tasks.replyPlaceholder}
-                className="max-h-[min(320px,40vh)] min-h-20 resize-none border border-border/60 bg-transparent pr-16 shadow-none placeholder:text-muted-foreground focus-visible:bg-background/40 dark:focus-visible:bg-background/25"
+                className="slei-composer-input slei-task-thread-input max-h-[min(320px,40vh)] min-h-20 resize-none border-0 bg-transparent pr-16 shadow-none placeholder:text-muted-foreground"
                 disabled={replySubmitting || statusSubmitting}
                 onChange={(event) => setReplyDraft(event.currentTarget.value)}
                 onCompositionEnd={() => setIsComposing(false)}
@@ -338,7 +338,7 @@ export function TaskThreadDrawer(input: {
       {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
       <SheetContent
         aria-label={input.messages.tasks.thread}
-        className="w-[min(100vw,680px)] gap-0 border-border/60 bg-background/80 p-0 text-foreground shadow-[0_4px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl before:hidden dark:bg-background/70 sm:max-w-[680px]"
+        className="slei-task-thread-surface w-[min(100vw,680px)] gap-0 p-0 text-foreground backdrop-blur-xl before:hidden sm:max-w-[680px]"
         showCloseButton={false}
         showOverlay={false}
       >

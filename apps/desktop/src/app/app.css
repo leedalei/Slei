@@ -147,7 +147,19 @@
   --settings-detail-bg: rgb(249 249 250);
   --settings-section-bg: var(--card);
   --settings-section-border: var(--border);
-  --settings-overlay-motion-dur: 1s;
+  --modal-surface-bg: var(--app-card-bg);
+  --modal-panel-bg: rgba(255, 255, 255, 0.62);
+  --modal-composer-bg: var(--workspace-glass-bg);
+  --modal-border: var(--app-card-border);
+  --modal-shadow: var(--app-card-shadow);
+  --task-thread-surface-bg: var(--app-card-bg);
+  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-card-bg: var(--modal-panel-bg);
+  --task-thread-composer-bg: var(--workspace-glass-bg);
+  --task-thread-border: var(--modal-border);
+  --task-thread-shadow: var(--modal-shadow);
+  --settings-sidebar-motion-dur: 500ms;
+  --settings-detail-motion-dur: 750ms;
   --settings-overlay-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass-highlight: color-mix(in srgb, white 16%, transparent);
   --glass-surface-filter: blur(20px) saturate(150%);
@@ -309,6 +321,17 @@
   --settings-detail-bg: rgb(31 41 57);
   --settings-section-bg: rgb(25 32 43);
   --settings-section-border: rgb(255 255 255 / 0.08);
+  --modal-surface-bg: var(--app-card-bg);
+  --modal-panel-bg: color-mix(in srgb, var(--app-card-bg) 88%, transparent);
+  --modal-composer-bg: var(--workspace-glass-bg);
+  --modal-border: var(--app-card-border);
+  --modal-shadow: var(--app-card-shadow);
+  --task-thread-surface-bg: var(--app-card-bg);
+  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-card-bg: var(--modal-panel-bg);
+  --task-thread-composer-bg: var(--workspace-glass-bg);
+  --task-thread-border: var(--modal-border);
+  --task-thread-shadow: var(--modal-shadow);
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: 20px;
@@ -387,6 +410,17 @@
   --settings-detail-bg: rgb(249 249 250);
   --settings-section-bg: var(--card);
   --settings-section-border: var(--border);
+  --modal-surface-bg: var(--app-card-bg);
+  --modal-panel-bg: rgba(255, 255, 255, 0.62);
+  --modal-composer-bg: var(--workspace-glass-bg);
+  --modal-border: var(--app-card-border);
+  --modal-shadow: var(--app-card-shadow);
+  --task-thread-surface-bg: var(--app-card-bg);
+  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-card-bg: var(--modal-panel-bg);
+  --task-thread-composer-bg: var(--workspace-glass-bg);
+  --task-thread-border: var(--modal-border);
+  --task-thread-shadow: var(--modal-shadow);
   --glass-bg: rgba(0, 0, 0, 0.03);
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-blur: 16px;
@@ -408,6 +442,72 @@
 }
 
 @layer utilities {
+  .slei-modal-surface {
+    border-color: var(--modal-border);
+    background: var(--modal-surface-bg);
+    box-shadow: var(--modal-shadow);
+    -webkit-backdrop-filter: var(--glass-surface-filter);
+    backdrop-filter: var(--glass-surface-filter);
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"] {
+    border-color: var(--modal-border);
+    background: var(--modal-surface-bg);
+    box-shadow: var(--modal-shadow);
+    -webkit-backdrop-filter: var(--glass-surface-filter);
+    backdrop-filter: var(--glass-surface-filter);
+  }
+
+  .slei-modal-panel {
+    border-color: var(--modal-border);
+    background: var(--modal-panel-bg);
+  }
+
+  .slei-modal-composer {
+    border-color: var(--modal-border);
+    background: var(--modal-composer-bg);
+    -webkit-backdrop-filter: var(--glass-surface-filter);
+    backdrop-filter: var(--glass-surface-filter);
+  }
+
+  .slei-task-thread-surface {
+    border-color: var(--task-thread-border);
+    background: var(--task-thread-surface-bg);
+    box-shadow: var(--task-thread-shadow);
+  }
+
+  .slei-task-thread-header {
+    border-color: var(--task-thread-border);
+    background: var(--task-thread-header-bg);
+  }
+
+  .slei-task-thread-card {
+    border-color: var(--task-thread-border);
+    background: var(--task-thread-card-bg);
+  }
+
+  .slei-task-thread-composer {
+    border-color: var(--task-thread-border);
+    background: var(--task-thread-composer-bg);
+    box-shadow:
+      0 0 8px rgb(0 0 0 / 0.10),
+      inset 0 1px 0 rgb(255 255 255 / 0.08);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+  }
+
+  .slei-task-thread-input {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
+  .slei-task-thread-input:focus-visible {
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+
   .slei-composer-glass {
     position: relative;
     overflow: visible;
@@ -435,12 +535,14 @@
   }
 
   .slei-composer-input {
-    background: transparent;
-    background-color: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none;
   }
 
   .slei-composer-input:focus-visible {
+    background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none;
   }
 
@@ -839,19 +941,19 @@ select:focus-visible {
 }
 
 .slei-settings-overlay[data-settings-motion="enter"] .slei-settings-overlay-nav-card {
-  animation: slei-settings-nav-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-nav-enter var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-overlay[data-settings-motion="exit"] .slei-settings-overlay-nav-card {
-  animation: slei-settings-nav-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-nav-exit var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-overlay[data-settings-motion="enter"] .slei-settings-overlay-detail-card {
-  animation: slei-settings-detail-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-enter var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-overlay[data-settings-motion="exit"] .slei-settings-overlay-detail-card {
-  animation: slei-settings-detail-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-exit var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-overlay-nav-page,
@@ -882,35 +984,35 @@ select:focus-visible {
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-chat-page {
-  animation: slei-settings-sidebar-chat-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-sidebar-chat-enter var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-chat-page {
-  animation: slei-settings-sidebar-chat-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-sidebar-chat-exit var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-sidebar-settings-page {
-  animation: slei-settings-sidebar-settings-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-sidebar-settings-enter var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-sidebar-settings-page {
-  animation: slei-settings-sidebar-settings-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-sidebar-settings-exit var(--settings-sidebar-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-chat-page {
-  animation: slei-settings-detail-chat-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-chat-enter var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-chat-page {
-  animation: slei-settings-detail-chat-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-chat-exit var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="enter"] .slei-settings-detail-settings-page {
-  animation: slei-settings-detail-settings-enter var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-settings-enter var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 .slei-settings-block-swiper[data-settings-page-motion="exit"] .slei-settings-detail-settings-page {
-  animation: slei-settings-detail-settings-exit var(--settings-overlay-motion-dur) var(--settings-overlay-motion-ease) both;
+  animation: slei-settings-detail-settings-exit var(--settings-detail-motion-dur) var(--settings-overlay-motion-ease) both;
 }
 
 @keyframes slei-settings-nav-enter {

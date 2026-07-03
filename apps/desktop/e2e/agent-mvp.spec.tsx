@@ -207,15 +207,16 @@ describe("agent creation, device association, and memory MVP", () => {
 
     expect(html).toContain("slei-agent-modal");
     expect(html).toContain("创建智能体");
-    expect(html).toContain("Runtime");
+    expect(html).toContain("运行时");
+    expect(html).toContain("模型");
     expect(html).toContain("名字");
     expect(html).not.toContain("@handle");
     expect(html).toContain("运行环境");
     expect(html).toContain("成员信息");
-    expect(html).toContain("描述来源");
+    expect(html).not.toContain("描述来源");
     expect(html).toContain("关联设备");
     expect(html).toContain("描述");
-    expect(html.match(/class="text-destructive">\*<\/span>/g) ?? []).toHaveLength(1);
+    expect(html.match(/class="text-destructive">\*<\/span>/g) ?? []).toHaveLength(2);
   });
 
   it("detects explicit remember requests without deriving guide-created agent drafts", () => {

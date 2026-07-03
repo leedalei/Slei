@@ -2197,8 +2197,17 @@ describe("ChatPage mention panel", () => {
     });
 
     const dialog = document.body.querySelector('[data-testid="slei-channel-member-add-dialog"]');
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
     expect(dialog).not.toBeNull();
     expect(dialog?.getAttribute("role")).toBe("dialog");
+    expect(dialog?.className).toContain("bg-background");
+    expect(dialog?.className).not.toContain("slei-modal-surface");
+    expect(appCss).toContain('[data-slot="dialog-content"],');
+    expect(appCss).toContain("background: var(--modal-surface-bg);");
+    const addPanels = [...document.body.querySelectorAll<HTMLElement>('[data-slot="channel-member-add-panel"]')];
+    expect(addPanels).toHaveLength(2);
+    expect(addPanels.every((panel) => panel.className.includes("slei-modal-panel"))).toBe(true);
+    expect(addPanels.every((panel) => !panel.className.includes("bg-background") && !panel.className.includes("bg-muted/30"))).toBe(true);
 
     const candidateButtons = [...document.body.querySelectorAll<HTMLButtonElement>('[data-testid="slei-channel-member-add-candidate"]')];
     expect(candidateButtons).toHaveLength(2);
@@ -3053,8 +3062,8 @@ describe("ChatPage mention panel", () => {
     expect(textarea?.className).not.toContain("border-border/60");
     expect(appCss).toContain(".slei-composer-input {");
     const composerInputCss = appCss.slice(appCss.indexOf(".slei-composer-input {"), appCss.indexOf(".slei-composer-input:focus-visible {"));
-    expect(composerInputCss).toContain("background: transparent;");
-    expect(composerInputCss).toContain("background-color: transparent;");
+    expect(composerInputCss).toContain("background: transparent !important;");
+    expect(composerInputCss).toContain("background-color: transparent !important;");
     expect(appCss).not.toContain("--composer-input-bg");
     expect(appCss).not.toContain("background: var(--composer-input-bg);");
     expect(appCss).toContain(".slei-composer-glass {");

@@ -145,7 +145,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
               <DialogDescription>{input.messages.chat.addChannelMemberDescription}</DialogDescription>
             </DialogHeader>
             <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
-              <ScrollArea className="max-h-[22rem] min-h-0 rounded-lg border bg-background">
+              <ScrollArea className="slei-modal-panel max-h-[22rem] min-h-0 rounded-lg border" data-slot="channel-member-add-panel">
                 <div aria-multiselectable="true" className="grid gap-1 p-2" role="listbox">
                   {input.availableMembers.length > 0 ? (
                     input.availableMembers.map((member) => {
@@ -202,7 +202,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
                   )}
                 </div>
               </ScrollArea>
-              <div className="grid min-h-40 content-start gap-2 rounded-lg border bg-muted/30 p-3">
+              <div className="slei-modal-panel grid min-h-40 content-start gap-2 rounded-lg border p-3" data-slot="channel-member-add-panel">
                 <strong className="text-sm">{input.messages.chat.selectedChannelMembers(selectedAddIds.length)}</strong>
                 {selectedAddIds.length > 0 ? (
                   <div className="grid gap-1">
