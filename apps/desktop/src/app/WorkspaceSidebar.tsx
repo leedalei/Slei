@@ -66,6 +66,7 @@ export type WorkspaceSidebarProps = {
   onConversationSelect?: (conversationId: string) => void;
   onConversationMessagesClear?: (conversationId: string) => Promise<void> | void;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
+  onMemberCreateClick?: () => void;
   onMemberMessage?: (memberId: string) => void;
   onMemberSelect?: (memberId: string) => void;
   onSavedMessagesOpen?: () => void;
@@ -393,7 +394,6 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
   const [activeChannelCardId, setActiveChannelCardId] = useState<string | undefined>(undefined);
   const [channelSortDirection, setChannelSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.channels));
   const [directMessageSortDirection, setDirectMessageSortDirection] = useState<SortDirection>(() => readFrontendSortPreference(sidebarSortStorageKeys.directMessages));
-  const [directMessageCreateOpen, setDirectMessageCreateOpen] = useState(false);
   const [openChannelMenuId, setOpenChannelMenuId] = useState<string | undefined>();
   const [openDmMenuId, setOpenDmMenuId] = useState<string | undefined>();
   const [pendingDeleteChannel, setPendingDeleteChannel] = useState<SleiFixtures["channels"][number] | undefined>();
@@ -666,10 +666,10 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   <SortDirectionIcon direction={directMessageSortDirection} />
                 </Button>
                 <Button
-                  aria-label={input.messages.chat.directMessage}
+                  aria-label={input.messages.agentCreate.title}
                   className="size-6 [&_svg]:size-3"
                   data-testid="slei-direct-message-create-trigger"
-                  onClick={() => setDirectMessageCreateOpen(true)}
+                  onClick={input.onMemberCreateClick}
                   size="icon"
                   type="button"
                   variant="ghost"
@@ -884,38 +884,6 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
               </Button>
             </DialogFooter>
           </form>
-      </ShellDialog>
-
-      <ShellDialog closeLabel={input.messages.common.cancel} contentTestId="slei-direct-message-create-dialog" open={directMessageCreateOpen} onOpenChange={(open) => {
-        setDirectMessageCreateOpen(open);
-      }} className="max-h-[min(90vh,32rem)] overflow-hidden sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><SleiIcon name="messageCircleMore" size={20} />{input.messages.chat.directMessage}</DialogTitle>
-          <DialogDescription>{input.messages.chat.selectAgents}</DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="max-h-80 rounded-md border bg-background">
-          <div className="grid gap-1 p-2">
-            {agentMembers.map((member) => (
-              <SelectableCard className="rounded-md" key={member.id}>
-                <button
-                  className="flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left"
-                  data-testid={`slei-direct-message-agent-option-${member.id}`}
-                  onClick={() => {
-                    setDirectMessageCreateOpen(false);
-                    selectDirectMessage({ conversation: conversationByAgentId.get(member.id), member });
-                  }}
-                  type="button"
-                >
-                  <MemberAvatar identity={member} />
-                  <span className="grid min-w-0 flex-1">
-                    <strong className="truncate text-sm">{member.name}</strong>
-                    <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
-                  </span>
-                </button>
-              </SelectableCard>
-            ))}
-          </div>
-        </ScrollArea>
       </ShellDialog>
 
       <AlertDialog open={Boolean(pendingDeleteChannel)} onOpenChange={(open) => {

@@ -297,6 +297,12 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     input.onViewChange?.("chat");
   }
 
+  function openAgentCreateModal() {
+    setAgentDraft(undefined);
+    setActiveCardId(undefined);
+    setAgentCreateOpen(true);
+  }
+
   function openSettingsOverlay(panel: SettingsOverlayPanel = "account") {
     if (settingsOverlayCloseTimer.current) {
       clearTimeout(settingsOverlayCloseTimer.current);
@@ -458,6 +464,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
                 onConversationMessagesClear={input.onConversationMessagesClear}
                 onInteractiveCardComplete={input.onInteractiveCardComplete}
                 onAgentDelete={input.onAgentDelete}
+                onMemberCreateClick={openAgentCreateModal}
                 onMemberMessage={handleMemberMessage}
                 onMemberSelect={input.onMemberSelect}
                 onSavedMessagesOpen={input.onSavedMessagesOpen}

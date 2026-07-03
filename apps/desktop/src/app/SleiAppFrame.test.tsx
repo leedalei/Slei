@@ -1819,7 +1819,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onMemberMessage).toHaveBeenCalledWith("a1");
   });
 
-  it("opens a direct-message member picker from the sidebar plus action", async () => {
+  it("opens the member creation modal from the direct-message sidebar plus action", async () => {
     const members = createDemoMembers();
     const onMemberMessage = vi.fn();
     const data = createSleiFixtures({ members, conversations: [] });
@@ -1836,16 +1836,11 @@ describe("SleiAppFrame global search navigation", () => {
 
     await clickElement(container.querySelector('[data-testid="slei-direct-message-create-trigger"]'));
 
-    const dialog = document.body.querySelector('[data-testid="slei-direct-message-create-dialog"]');
-    expect(dialog).not.toBeNull();
-    expect(dialog?.textContent).toContain("Coda");
-    expect(dialog?.textContent).toContain("@Coda");
-
-    await clickElement(document.body.querySelector('[data-testid="slei-direct-message-agent-option-a2"]'));
-
-    expect(onMemberMessage).toHaveBeenCalledTimes(1);
-    expect(onMemberMessage).toHaveBeenCalledWith("a2");
     expect(document.body.querySelector('[data-testid="slei-direct-message-create-dialog"]')).toBeNull();
+    expect(document.body.textContent).toContain("创建智能体");
+    expect(document.body.textContent).toContain("成员信息");
+    expect(document.body.querySelector("#slei-agent-name")).not.toBeNull();
+    expect(onMemberMessage).not.toHaveBeenCalled();
   });
 
   it("selects existing direct-message conversations without recreating them", async () => {
