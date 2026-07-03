@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const CARD_INSET_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
+const CARD_INSET_CLASS = "rounded-lg border-border/60 bg-card/80 text-card-foreground shadow-xs backdrop-blur before:hidden after:hidden dark:bg-card/65";
 const TASK_STATUSES: SleiTaskStatus[] = ["pending_assignment", "in_progress", "in_review", "done"];
 const TASK_STATUS_ICONS: Record<SleiTaskStatus, SleiIconName> = {
   pending_assignment: "user",
@@ -186,7 +186,7 @@ export function TaskThreadDrawer(input: {
     return (
       <>
         <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-        <SheetHeader className="relative border-b p-5 pr-14">
+        <SheetHeader className="relative border-b border-border/60 bg-background/35 p-5 pr-14 dark:bg-background/20">
           <TaskStatusTimeline
             blockedStatuses={blockedStatusTargets}
             disabled={statusActionDisabled}
@@ -275,10 +275,13 @@ export function TaskThreadDrawer(input: {
                 selectedIndex={selectedMentionIndex}
               />
             ) : null}
-            <div className="relative rounded-xl shadow-[0_2px_4px_rgba(15,23,42,0.12)]" data-slot="task-thread-composer">
+            <div
+              className="relative rounded-lg border border-border/60 bg-background/55 p-1 shadow-lg shadow-foreground/5 backdrop-blur-xl dark:bg-background/35"
+              data-slot="task-thread-composer"
+            >
               <Textarea
                 aria-label={input.messages.tasks.replyPlaceholder}
-                className="max-h-[min(320px,40vh)] min-h-20 resize-none border border-slate-300/90 bg-white/55 pr-16 shadow-none"
+                className="max-h-[min(320px,40vh)] min-h-20 resize-none border border-border/60 bg-transparent pr-16 shadow-none placeholder:text-muted-foreground focus-visible:bg-background/40 dark:focus-visible:bg-background/25"
                 disabled={replySubmitting || statusSubmitting}
                 onChange={(event) => setReplyDraft(event.currentTarget.value)}
                 onCompositionEnd={() => setIsComposing(false)}
@@ -335,7 +338,7 @@ export function TaskThreadDrawer(input: {
       {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
       <SheetContent
         aria-label={input.messages.tasks.thread}
-        className="w-[min(100vw,680px)] gap-0 border-white/35 bg-white/70 p-0 text-foreground shadow-[0_4px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl before:hidden sm:max-w-[680px]"
+        className="w-[min(100vw,680px)] gap-0 border-border/60 bg-background/80 p-0 text-foreground shadow-[0_4px_4px_rgba(15,23,42,0.10)] backdrop-blur-xl before:hidden dark:bg-background/70 sm:max-w-[680px]"
         showCloseButton={false}
         showOverlay={false}
       >
@@ -357,7 +360,7 @@ function TaskStatusTimeline(input: {
   return (
     <div
       aria-label={input.messages.tasks.changeStatus}
-      className="inline-grid w-auto grid-cols-[repeat(4,4.75rem)] justify-start gap-0 py-0.5"
+      className="inline-grid w-auto grid-cols-[repeat(4,4.75rem)] justify-start gap-0 rounded-lg bg-muted/35 p-1 dark:bg-muted/20"
       data-slot="task-status-timeline"
       role="list"
     >
@@ -371,8 +374,8 @@ function TaskStatusTimeline(input: {
             aria-current={isCurrent ? "step" : undefined}
             aria-label={`${input.messages.tasks.changeStatus}: ${input.messages.tasks.status[status]}`}
             className={cn(
-              "group relative grid min-w-0 rounded-md py-1 text-xs transition",
-              "focus-visible:outline-none",
+              "group relative grid min-w-0 rounded-md py-1 text-xs transition-colors",
+              "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
               isCurrent ? "text-foreground" : "text-muted-foreground hover:text-foreground",
               input.disabled || isBlocked ? "cursor-not-allowed opacity-60" : "cursor-pointer",
               index === 0 ? "justify-items-start" : index === TASK_STATUSES.length - 1 ? "justify-items-end" : "justify-items-center",
@@ -388,15 +391,15 @@ function TaskStatusTimeline(input: {
             role="listitem"
             type="button"
           >
-            {index > 0 ? <span className="absolute left-0 top-3.5 h-px w-1/2 bg-border/70" aria-hidden="true" /> : null}
-            {index < TASK_STATUSES.length - 1 ? <span className="absolute right-0 top-3.5 h-px w-1/2 bg-border/70" aria-hidden="true" /> : null}
+            {index > 0 ? <span className="absolute left-0 top-3.5 h-px w-1/2 bg-border" aria-hidden="true" /> : null}
+            {index < TASK_STATUSES.length - 1 ? <span className="absolute right-0 top-3.5 h-px w-1/2 bg-border" aria-hidden="true" /> : null}
             <span className="relative z-10 grid justify-items-center gap-2" data-task-status-node-content={status}>
               <span
                 className={cn(
-                  "grid size-6 place-items-center rounded-full border ring-4 ring-white/75",
+                  "grid size-6 place-items-center rounded-full border ring-4 ring-background transition-colors",
                   isReached
-                    ? "border-cyan-400/40 bg-linear-to-r from-cyan-500 to-blue-500 text-primary-foreground shadow-[0_0_4px_rgba(6,182,212,0.12)]"
-                    : "border-slate-300/80 bg-slate-100 text-slate-500 shadow-none",
+                    ? "border-primary/40 bg-primary text-primary-foreground shadow-xs"
+                    : "border-border bg-muted text-muted-foreground shadow-none",
                 )}
                 data-reached={isReached ? "true" : "false"}
                 data-task-status-icon={status}
