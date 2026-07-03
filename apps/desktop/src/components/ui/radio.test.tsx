@@ -5,38 +5,40 @@ import { describe, expect, it } from "vitest";
 import { RadioGroup, RadioGroupItem } from "./radio";
 
 describe("RadioGroupItem", () => {
-  it("generates unique fallback ids for repeated values across groups", () => {
+  it("keeps labels composed outside of the default shadcn item", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(
       <>
         <RadioGroup value="email">
-          <RadioGroupItem label="Email" value="email" />
+          <div className="flex items-center gap-3">
+            <RadioGroupItem id="email-one" value="email" />
+            <label htmlFor="email-one">Email</label>
+          </div>
         </RadioGroup>
         <RadioGroup value="email">
-          <RadioGroupItem label="Email" value="email" />
+          <RadioGroupItem value="email" />
         </RadioGroup>
       </>,
     );
 
     const groups = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="radio-group"]'));
     const items = groups.map((group) => group.querySelector<HTMLElement>('[data-slot="radio-group-item"]'));
-    const labels = groups.map((group) => group.querySelector<HTMLLabelElement>("label"));
-    const ids = items.map((item) => item?.id);
 
     expect(groups).toHaveLength(2);
-    expect(new Set(ids).size).toBe(2);
-    for (const [index, item] of items.entries()) {
-      expect(item?.id).toBeTruthy();
-      expect(labels[index]?.htmlFor).toBe(item?.id);
-      expect(groups[index]?.contains(labels[index] ?? null)).toBe(true);
-    }
+    expect(items[0]?.id).toBe("email-one");
+    expect(groups[0]?.querySelector("label")?.htmlFor).toBe("email-one");
+    expect(items[1]?.id).toBe("");
+    expect(groups[1]?.querySelector("label")).toBeNull();
   });
 
   it("preserves explicit ids for label binding", () => {
     const host = document.createElement("div");
     host.innerHTML = renderToStaticMarkup(
       <RadioGroup value="manual">
-        <RadioGroupItem id="manual-radio" label="Manual" value="manual" />
+        <div className="flex items-center gap-3">
+          <RadioGroupItem id="manual-radio" value="manual" />
+          <label htmlFor="manual-radio">Manual</label>
+        </div>
       </RadioGroup>,
     );
 

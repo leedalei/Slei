@@ -1192,12 +1192,21 @@ function AgentCreateModal(input: {
                 </Label>
                 <RadioGroup
                   aria-label={input.messages.agentCreate.descriptionMode}
-                  className="flex flex-wrap gap-4"
                   onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")}
                   value={descriptionMode}
                 >
-                  <RadioGroupItem label={input.messages.agentCreate.customDescription} value="custom" />
-                  <RadioGroupItem label={input.messages.agentCreate.presetDescription} value="preset" />
+                  <div className="flex items-center gap-3">
+                    <RadioGroupItem id="slei-agent-description-mode-custom" value="custom" />
+                    <Label htmlFor="slei-agent-description-mode-custom">
+                      {input.messages.agentCreate.customDescription}
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <RadioGroupItem id="slei-agent-description-mode-preset" value="preset" />
+                    <Label htmlFor="slei-agent-description-mode-preset">
+                      {input.messages.agentCreate.presetDescription}
+                    </Label>
+                  </div>
                 </RadioGroup>
               </div>
               {descriptionMode === "custom" ? (
