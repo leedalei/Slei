@@ -6,7 +6,7 @@ import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceR
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -335,8 +335,8 @@ function SettingsSelect<TValue extends string>(input: {
   const renderStaticItems = typeof window === "undefined";
 
   return (
-    <div className="grid gap-2">
-      <Label id={labelId}>{input.label}</Label>
+    <Field>
+      <FieldLabel id={labelId}>{input.label}</FieldLabel>
       <Select {...(renderStaticItems ? { open: true } : {})} disabled={input.disabled} onValueChange={input.onValueChange} value={input.value}>
         <SelectTrigger aria-label={input.ariaLabel} aria-labelledby={labelId} className="w-full sm:max-w-sm" disabled={input.disabled}>
           <SelectValue placeholder={selectedLabel} />
@@ -360,7 +360,7 @@ function SettingsSelect<TValue extends string>(input: {
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </Field>
   );
 }
 

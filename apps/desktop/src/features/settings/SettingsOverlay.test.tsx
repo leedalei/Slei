@@ -191,6 +191,15 @@ describe("SettingsOverlay", () => {
     expect(container.textContent).not.toContain("设备列表");
   });
 
+  it("aligns workspace child labels with parent labels", async () => {
+    const { container } = await mountOverlay();
+
+    const memberItem = container.querySelector<HTMLButtonElement>('[data-settings-submenu="members"] button');
+
+    expect(memberItem?.className).toContain("pl-9");
+    expect(memberItem?.className).not.toContain("ml-6");
+  });
+
   it("calls onPanelChange and item selection when a real workspace child is clicked", async () => {
     const { container, onDeviceItemSelect, onMemberItemSelect, onPanelChange } = await mountOverlay();
 

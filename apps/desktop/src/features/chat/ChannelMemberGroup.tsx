@@ -144,7 +144,7 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
               <DialogTitle>{input.messages.chat.addChannelMember}</DialogTitle>
               <DialogDescription>{input.messages.chat.addChannelMemberDescription}</DialogDescription>
             </DialogHeader>
-            <div className="grid min-h-0 gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
+            <div className="grid min-h-0 gap-3">
               <ScrollArea className="slei-modal-panel max-h-[22rem] min-h-0 rounded-lg border" data-slot="channel-member-add-panel">
                 <div aria-multiselectable="true" className="grid gap-1 p-2" role="listbox">
                   {input.availableMembers.length > 0 ? (
@@ -203,18 +203,6 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
                   )}
                 </div>
               </ScrollArea>
-              <div className="slei-modal-panel grid min-h-40 content-start gap-2 rounded-lg border p-3" data-slot="channel-member-add-panel">
-                <strong className="text-sm">{input.messages.chat.selectedChannelMembers(selectedAddIds.length)}</strong>
-                {selectedAddIds.length > 0 ? (
-                  <div className="grid gap-1">
-                    {input.availableMembers.filter((member) => selectedAddIds.includes(member.id)).map((member) => (
-                      <span className="truncate text-sm text-muted-foreground" key={member.id}>{member.name} {member.handle}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{input.messages.chat.noSelectedChannelMembers}</p>
-                )}
-              </div>
             </div>
             <DialogFooter>
               <Button disabled={addingSelected} onClick={closeAddDialog} type="button" variant="outline">{input.messages.common.cancel}</Button>

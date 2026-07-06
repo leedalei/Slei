@@ -146,7 +146,7 @@ export function SettingsOverlayNav({
       <Button
         aria-current={active ? "page" : undefined}
         className={cn(
-          "ml-6 h-auto justify-start rounded-md px-2 py-1.5 text-left",
+          "h-auto justify-start rounded-md py-1.5 pl-9 pr-2 text-left",
           settingsOverlayNavButtonClassName,
           active && settingsOverlayActiveNavClassName,
         )}

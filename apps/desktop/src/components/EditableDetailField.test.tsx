@@ -227,6 +227,22 @@ describe("EditableDetailField", () => {
     }
   });
 
+  it("renders editor controls inside the shared field primitive", () => {
+    const { host, root } = renderEditableDetailField();
+
+    try {
+      const field = getEditorInput(host).closest<HTMLElement>('[data-slot="field"]');
+      const label = field?.querySelector<HTMLElement>('[data-slot="field-label"]');
+
+      expect(field?.getAttribute("role")).toBe("group");
+      expect(field?.className).toContain("flex");
+      expect(field?.className).toContain("gap-3");
+      expect(label?.className).toContain("sr-only");
+    } finally {
+      cleanupEditableDetailField(root, host);
+    }
+  });
+
   it("keeps the real editor and draft value visible when DOM save rejects", async () => {
     const onSave = vi.fn(async () => {
       throw new Error("保存失败");

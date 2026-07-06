@@ -109,7 +109,7 @@ export function ComputersPage(input: {
                 messages={input.messages}
                 onSave={renameSelectedComputer}
                 saving={effectiveRenamingNodeId === selectedNode.id}
-                sectionClassName="grid gap-2"
+                sectionClassName="grid gap-3"
                 titleTag="h2"
                 value={selectedNode.name}
               />

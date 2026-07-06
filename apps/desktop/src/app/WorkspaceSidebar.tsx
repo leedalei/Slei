@@ -21,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -793,97 +794,99 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
             <DialogTitle className="flex items-center gap-2"><SleiIcon name="hash" size={20} />{input.messages.chat.createChannel}</DialogTitle>
             <DialogDescription>{input.messages.chat.createChannelDescription}</DialogDescription>
           </DialogHeader>
-          <form className="grid min-h-0 gap-4" onSubmit={submitChannel}>
-            <div className="grid gap-2">
-              <Label className="gap-1" htmlFor="slei-channel-name">
-                {input.messages.chat.channelName}
-                <span aria-hidden="true" className="text-destructive">*</span>
-              </Label>
-              <Input
-                aria-label={input.messages.chat.channelName}
-                id="slei-channel-name"
-                onChange={(event) => setChannelDraft((current) => ({ ...current, name: event.currentTarget.value }))}
-                placeholder="请输入"
-                value={channelDraft.name}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="slei-channel-project-picker">{input.messages.chat.project}</Label>
-              <div className="grid gap-2">
-                <input
-                  aria-label={input.messages.chat.projectFolderPicker}
-                  className="sr-only"
-                  id="slei-channel-project-picker"
-                  multiple
-                  onChange={(event) => {
-                    addProjectFolders(event.currentTarget.files);
-                    event.currentTarget.value = "";
-                  }}
-                  ref={projectFolderInputRef}
-                  type="file"
-                  {...{ directory: "", webkitdirectory: "" }}
+          <form onSubmit={submitChannel}>
+            <FieldGroup className="min-h-0">
+              <Field>
+                <FieldLabel className="gap-1" htmlFor="slei-channel-name">
+                  {input.messages.chat.channelName}
+                  <span aria-hidden="true" className="text-destructive">*</span>
+                </FieldLabel>
+                <Input
+                  aria-label={input.messages.chat.channelName}
+                  id="slei-channel-name"
+                  onChange={(event) => setChannelDraft((current) => ({ ...current, name: event.currentTarget.value }))}
+                  placeholder="请输入"
+                  value={channelDraft.name}
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={() => projectFolderInputRef.current?.click()} type="button">
-                    <SleiIcon name="folderPlus" size={14} />
-                    {input.messages.chat.projectFolderPicker}
-                  </Button>
-                  <span className="text-xs text-muted-foreground">{input.messages.chat.projectFolderHint}</span>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="slei-channel-project-picker">{input.messages.chat.project}</FieldLabel>
+                <div className="grid gap-3">
+                  <input
+                    aria-label={input.messages.chat.projectFolderPicker}
+                    className="sr-only"
+                    id="slei-channel-project-picker"
+                    multiple
+                    onChange={(event) => {
+                      addProjectFolders(event.currentTarget.files);
+                      event.currentTarget.value = "";
+                    }}
+                    ref={projectFolderInputRef}
+                    type="file"
+                    {...{ directory: "", webkitdirectory: "" }}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">
+                      <SleiIcon name="folderPlus" size={14} />
+                      {input.messages.chat.projectFolderPicker}
+                    </Button>
+                    <FieldDescription className="text-xs">{input.messages.chat.projectFolderHint}</FieldDescription>
+                  </div>
+                  {channelDraft.projectPaths.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {channelDraft.projectPaths.map((path) => (
+                        <Badge className="max-w-full gap-1" key={path} variant="secondary">
+                          <span className="truncate">{path}</span>
+                          <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 size-6 hover:bg-background/70 [&_svg]:size-3" onClick={() => removeProjectFolder(path)} size="icon" type="button" variant="ghost">
+                            <SleiIcon className="size-3" name="x" />
+                          </Button>
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                {channelDraft.projectPaths.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {channelDraft.projectPaths.map((path) => (
-                      <Badge className="max-w-full gap-1" key={path} variant="secondary">
-                        <span className="truncate">{path}</span>
-                        <Button aria-label={input.messages.chat.removeProject(path)} className="-mr-1 ml-0.5 size-6 hover:bg-background/70 [&_svg]:size-3" onClick={() => removeProjectFolder(path)} size="icon" type="button" variant="ghost">
-                          <SleiIcon className="size-3" name="x" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            {agentMembers.length > 0 ? (
-              <fieldset className="grid gap-2">
-                <legend className="text-sm font-medium">{input.messages.chat.selectAgents}</legend>
-                <ScrollArea className="max-h-60 rounded-md border bg-background">
-                  <div className="grid gap-1 p-2">
-                    {agentMembers.map((member) => {
-                      const selected = channelDraft.selectedAgentIds.includes(member.id);
-                      return (
-                        <SelectableCard
-                          className="rounded-md"
-                          data-testid="slei-create-channel-agent-option"
-                          key={member.id}
-                          selected={selected}
-                          selectedVariant="checkboxField"
-                        >
-                          <Label className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-3">
-                            <Checkbox
-                              aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
-                              checked={selected}
-                              onCheckedChange={() => toggleSelectedAgent(member.id)}
-                            />
-                            <MemberAvatar identity={member} />
-                            <span className="grid min-w-0 flex-1">
-                              <strong className="truncate text-sm">{member.name}</strong>
-                              <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
-                            </span>
-                          </Label>
-                        </SelectableCard>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </fieldset>
-            ) : null}
-            <DialogFooter>
-              <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
-              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
-                {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
-              </Button>
-            </DialogFooter>
+              </Field>
+              {agentMembers.length > 0 ? (
+                <FieldSet>
+                  <FieldLegend>{input.messages.chat.selectAgents}</FieldLegend>
+                  <ScrollArea className="max-h-60 rounded-md border bg-background">
+                    <div className="grid gap-1 p-2">
+                      {agentMembers.map((member) => {
+                        const selected = channelDraft.selectedAgentIds.includes(member.id);
+                        return (
+                          <SelectableCard
+                            className="rounded-md"
+                            data-testid="slei-create-channel-agent-option"
+                            key={member.id}
+                            selected={selected}
+                            selectedVariant="checkboxField"
+                          >
+                            <Label className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-3">
+                              <Checkbox
+                                aria-label={`${input.messages.chat.selectAgents} ${member.name}`}
+                                checked={selected}
+                                onCheckedChange={() => toggleSelectedAgent(member.id)}
+                              />
+                              <MemberAvatar identity={member} />
+                              <span className="grid min-w-0 flex-1">
+                                <strong className="truncate text-sm">{member.name}</strong>
+                                <small className="truncate text-xs text-muted-foreground">{member.handle} / {member.role}</small>
+                              </span>
+                            </Label>
+                          </SelectableCard>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </FieldSet>
+              ) : null}
+              <DialogFooter>
+                <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
+                <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
+                  {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
+                </Button>
+              </DialogFooter>
+            </FieldGroup>
           </form>
       </ShellDialog>
 

@@ -738,6 +738,9 @@ describe("ChatPage mention panel", () => {
 
     expect(folderButton?.className).toContain("h-7");
     expect(folderButton?.className).toContain("text-xs");
+    expect(folderButton?.className).toContain("bg-background");
+    expect(folderButton?.className).not.toContain("bg-primary");
+    expect(folderButton?.className).not.toContain("text-primary-foreground");
     expect(cancelButton?.className).toContain("h-7");
     expect(cancelButton?.className).toContain("text-xs");
     expect(saveButton?.className).toContain("h-7");
@@ -831,8 +834,8 @@ describe("ChatPage mention panel", () => {
     expect(source).toContain("slei-composer-glass");
     expect(source).toContain("slei-scroll-to-bottom");
     expect(source).toContain("shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl");
-    expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
-    expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
+    expect(source).toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">');
+    expect(source).not.toContain('<Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">');
     expect(source).toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3");
     expect(source).not.toContain("slei-composer-glass pointer-events-auto mx-auto grid max-w-full gap-3 overflow-visible rounded-2xl border border-border/60 p-3 backdrop-blur-xl");
     expect(source).toContain("slei-composer-input max-h-[500px] min-h-12 resize-none border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0");
@@ -2202,12 +2205,15 @@ describe("ChatPage mention panel", () => {
     expect(dialog?.getAttribute("role")).toBe("dialog");
     expect(dialog?.className).toContain("bg-background");
     expect(dialog?.className).not.toContain("slei-modal-surface");
-    expect(appCss).toContain('[data-slot="dialog-content"],');
+    expect(appCss).not.toContain('[data-slot="dialog-content"],');
+    expect(appCss).toContain('[data-slot="sheet-content"]');
     expect(appCss).toContain("background: var(--modal-surface-bg);");
     const addPanels = [...document.body.querySelectorAll<HTMLElement>('[data-slot="channel-member-add-panel"]')];
-    expect(addPanels).toHaveLength(2);
+    expect(addPanels).toHaveLength(1);
     expect(addPanels.every((panel) => panel.className.includes("slei-modal-panel"))).toBe(true);
     expect(addPanels.every((panel) => !panel.className.includes("bg-background") && !panel.className.includes("bg-muted/30"))).toBe(true);
+    expect(dialog?.textContent).not.toContain(messages.chat.selectedChannelMembers(0));
+    expect(dialog?.textContent).not.toContain(messages.chat.noSelectedChannelMembers);
 
     const candidateButtons = [...document.body.querySelectorAll<HTMLButtonElement>('[data-testid="slei-channel-member-add-candidate"]')];
     expect(candidateButtons).toHaveLength(2);

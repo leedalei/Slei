@@ -19,6 +19,21 @@ import type { SleiMessage } from "./types";
   observe() {}
   unobserve() {}
 };
+class TestPointerEvent extends window.MouseEvent {
+  pointerId: number;
+  pointerType: string;
+
+  constructor(type: string, init: PointerEventInit = {}) {
+    super(type, init);
+    this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? "mouse";
+  }
+}
+window.PointerEvent = TestPointerEvent as typeof PointerEvent;
+HTMLElement.prototype.hasPointerCapture ??= () => false;
+HTMLElement.prototype.setPointerCapture ??= () => undefined;
+HTMLElement.prototype.releasePointerCapture ??= () => undefined;
+HTMLElement.prototype.scrollIntoView ??= () => undefined;
 
 const runtimeSetup = {
   loading: false,
@@ -79,6 +94,17 @@ async function clickElement(element: Element | null | undefined) {
     target.click();
   });
   await act(async () => undefined);
+}
+
+async function clickSelectItem(text: string) {
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="select-item"]'))
+    .find((candidate) => candidate.textContent?.includes(text));
+  expect(item).toBeInstanceOf(HTMLElement);
+  await act(async () => {
+    item?.click();
+  });
+  await act(async () => undefined);
+  return item;
 }
 
 const readyNodes = [{
@@ -336,7 +362,7 @@ describe("SleiAppFrame appearance preferences", () => {
 });
 
 describe("SleiAppFrame agent creation modal", () => {
-  it("renders split sections with avatar and hides the handle input", async () => {
+  it("renders vertical shadcn fieldset sections with avatar and hides the handle input", async () => {
     await mount(
       <SleiAppFrame
         activeView="chat"
@@ -349,7 +375,34 @@ describe("SleiAppFrame agent creation modal", () => {
 
     expect(document.body.textContent).toContain("运行环境");
     expect(document.body.textContent).toContain("成员信息");
-    expect(document.body.querySelector("[data-agent-create-avatar]")).toBeTruthy();
+    const dialog = currentDialog();
+    const formGroup = document.body.querySelector<HTMLElement>("[data-agent-create-form-group]");
+    const legends = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="field-legend"]')).map((legend) => legend.textContent?.replace("*", ""));
+    expect(dialog.className).toContain("sm:max-w-lg");
+    expect(dialog.className).not.toContain("sm:max-w-4xl");
+    expect(formGroup?.getAttribute("data-slot")).toBe("field-group");
+    expect(formGroup?.className).toContain("flex");
+    expect(formGroup?.className).toContain("flex-col");
+    expect(formGroup?.querySelector(".md\\:grid-cols-\\[minmax\\(14rem\\,0\\.78fr\\)_minmax\\(0\\,1\\.22fr\\)\\]")).toBeNull();
+    expect(document.body.querySelectorAll('[data-slot="field-set"]')).toHaveLength(3);
+    expect(document.body.querySelectorAll('[data-slot="field-separator"]')).toHaveLength(2);
+    expect(legends).toEqual(["运行环境", "成员信息", "描述"]);
+    expect(document.body.querySelector('[data-slot="field-legend"] .text-destructive')?.textContent).toBe("*");
+    const memberInline = document.body.querySelector<HTMLElement>("[data-agent-create-member-inline]");
+    const avatarButton = document.body.querySelector<HTMLElement>("[data-agent-create-avatar]");
+    const nameInput = document.body.querySelector<HTMLInputElement>("#slei-agent-name");
+    const runtimeInline = document.body.querySelector<HTMLElement>("[data-agent-runtime-inline]");
+    const deviceTrigger = document.body.querySelector<HTMLButtonElement>('[data-slot="select-trigger"][aria-label="关联设备"]');
+    const runtimeTrigger = document.body.querySelector<HTMLButtonElement>('[data-slot="select-trigger"][aria-label="运行时"]');
+    const modelInput = document.body.querySelector<HTMLInputElement>("#slei-agent-model");
+    expect(runtimeInline?.className).toContain("sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]");
+    expect(document.body.querySelector("[data-agent-runtime-cascade] [data-slot='field-content'] .sm\\:grid-cols-2")).toBeTruthy();
+    expect(deviceTrigger?.closest("[data-agent-runtime-inline]")).toBe(runtimeInline);
+    expect(runtimeTrigger?.closest("[data-agent-runtime-inline]")).toBe(runtimeInline);
+    expect(modelInput?.closest("[data-agent-runtime-inline]")).toBe(runtimeInline);
+    expect(memberInline?.className).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(avatarButton?.closest("[data-agent-create-member-inline]")).toBe(memberInline);
+    expect(nameInput?.closest("[data-agent-create-member-inline]")).toBe(memberInline);
     expect(document.body.querySelector("#slei-agent-handle")).toBeNull();
     expect(document.body.querySelector("#slei-agent-description")).toBeTruthy();
   });
@@ -386,7 +439,12 @@ describe("SleiAppFrame agent creation modal", () => {
     expect(dialog.querySelectorAll("label[for='slei-agent-description']")).toHaveLength(0);
     expect(description?.required).toBe(true);
     expect(description?.getAttribute("aria-required")).toBe("true");
+    const avatar = avatarButton?.querySelector<HTMLElement>('[data-slot="avatar"]');
     expect(avatarButton?.className).toContain("size-[3.75rem]");
+    expect(avatarButton?.className).toContain("[&>[data-slot=avatar]]:size-full");
+    expect(avatarButton?.className).not.toContain("size-[3.25rem]");
+    expect(avatar?.getAttribute("data-avatar-size")).toBe("large");
+    expect(avatarMask?.closest("[data-agent-create-avatar]")).toBe(avatarButton);
     expect(avatarMask?.className).toContain("inset-0");
     expect(avatarMask?.className).toContain("rounded-full");
 
@@ -396,17 +454,118 @@ describe("SleiAppFrame agent creation modal", () => {
     await act(async () => undefined);
 
     const presetDescription = dialog.querySelector<HTMLElement>("[data-agent-preset-description]");
-    expect(presetDescription?.className).toContain("text-[13px]");
+    const presetTitle = presetDescription?.previousElementSibling as HTMLElement | null;
+    expect(presetTitle?.className).toContain("text-sm");
+    expect(presetTitle?.className).toContain("font-medium");
+    expect(presetDescription?.className).toContain("text-xs");
     expect(presetDescription?.className).toContain("text-muted-foreground");
+    expect(presetDescription?.className).toContain("font-normal");
 
-    const presetCard = presetDescription?.closest<HTMLButtonElement>("button");
+    const presetGroup = presetDescription?.closest<HTMLElement>('[data-slot="radio-group"]');
+    const presetCard = presetDescription?.closest<HTMLElement>("[data-agent-preset-card]");
+    const presetRadio = presetCard?.querySelector<HTMLElement>('[data-slot="radio-group-item"]');
+    const presetField = presetDescription?.closest<HTMLElement>('[data-slot="field"]');
+    expect(presetGroup).toBeTruthy();
+    expect(presetCard?.getAttribute("data-slot")).toBe("field-label");
+    expect(presetCard?.className).toContain("has-data-[state=checked]:border-primary");
+    expect(presetCard?.className).toContain("has-data-[state=checked]:bg-primary/5");
+    expect(presetField?.getAttribute("data-orientation")).toBe("horizontal");
+    expect(presetField?.className).toContain("flex-row");
+    expect(presetRadio).toBeTruthy();
     await act(async () => {
       presetCard?.click();
     });
     await act(async () => undefined);
 
-    expect(presetCard?.getAttribute("aria-pressed")).toBe("true");
+    expect(presetRadio?.getAttribute("data-state")).toBe("checked");
+    expect(presetCard?.getAttribute("aria-pressed")).toBeNull();
     expect(presetDescription?.className).toContain("text-muted-foreground");
+  });
+
+  it("renders device and runtime as one shadcn cascade field before the model input", async () => {
+    const onAgentCreate = vi.fn();
+    const cascadeNodes = [
+      readyNodes[0],
+      {
+        id: "remote-node",
+        name: "远程设备",
+        status: "connected" as const,
+        daemonVersion: "dev",
+        device: { hostname: "remote", platform: "linux", arch: "x64" },
+        runtimes: [{ kind: "Codex", readiness: "ready" as const }],
+      },
+    ];
+
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        initialAgentCreateModalOpen
+        locale="zh-CN"
+        onAgentCreate={onAgentCreate}
+        runtimeSetup={{ ...runtimeSetup, nodes: cascadeNodes }}
+      />,
+    );
+
+    const dialog = currentDialog();
+    const cascade = dialog.querySelector<HTMLElement>("[data-agent-runtime-cascade]");
+    const runtimeInline = dialog.querySelector<HTMLElement>("[data-agent-runtime-inline]");
+    const deviceTrigger = dialog.querySelector<HTMLButtonElement>('[data-slot="select-trigger"][aria-label="关联设备"]');
+    const runtimeTrigger = dialog.querySelector<HTMLButtonElement>('[data-slot="select-trigger"][aria-label="运行时"]');
+    const modelInput = dialog.querySelector<HTMLInputElement>("#slei-agent-model");
+
+    expect(cascade).toBeTruthy();
+    expect(deviceTrigger?.closest('[data-slot="field"]')).toBe(cascade);
+    expect(runtimeTrigger?.closest('[data-slot="field"]')).toBe(cascade);
+    expect(cascade?.closest("[data-agent-runtime-inline]")).toBe(runtimeInline);
+    expect(modelInput?.closest("[data-agent-runtime-inline]")).toBe(runtimeInline);
+    expect(cascade?.className).toContain("flex");
+    expect(cascade?.querySelector('[data-slot="field-content"]')).toBeTruthy();
+    expect(modelInput?.closest('[data-slot="field"]')).not.toBe(cascade);
+
+    await clickElement(deviceTrigger);
+    await clickSelectItem("远程设备");
+
+    const updatedRuntimeTrigger = dialog.querySelector<HTMLButtonElement>('[data-slot="select-trigger"][aria-label="运行时"]');
+    expect(updatedRuntimeTrigger?.textContent).toContain("Codex");
+
+    await changeField(dialog.querySelector<HTMLInputElement>("#slei-agent-name"), "远程助手");
+    await changeField(dialog.querySelector<HTMLTextAreaElement>("#slei-agent-description"), "处理远程任务。");
+    await act(async () => {
+      currentDialogSubmit().click();
+    });
+
+    expect(onAgentCreate).toHaveBeenCalledWith(expect.objectContaining({
+      nodeId: "remote-node",
+      runtimeKind: "Codex",
+      model: "Sonnet",
+    }));
+  });
+
+  it("keeps the avatar seed stable while editing the agent name until refresh", async () => {
+    const onAgentCreate = vi.fn();
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        initialAgentCreateModalOpen
+        locale="zh-CN"
+        onAgentCreate={onAgentCreate}
+        runtimeSetup={{ ...runtimeSetup, nodes: readyNodes }}
+      />,
+    );
+
+    await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "法");
+    await changeField(currentDialog().querySelector<HTMLInputElement>("#slei-agent-name"), "法律研究员");
+    await changeField(currentDialog().querySelector<HTMLTextAreaElement>("#slei-agent-description"), "负责法律资料调研。");
+    await act(async () => {
+      currentDialogSubmit()?.click();
+    });
+
+    expect(onAgentCreate).toHaveBeenCalledWith(expect.objectContaining({
+      name: "法律研究员",
+      avatarSeed: "agent-avatar-new",
+    }));
   });
 
   it("loads role presets, selects a card, and submits the preset description", async () => {
@@ -434,16 +593,27 @@ describe("SleiAppFrame agent creation modal", () => {
     await act(async () => undefined);
 
     const presetList = document.body.querySelector<HTMLElement>("[data-agent-preset-list]");
-    expect(presetList?.className).toContain("max-h-72");
+    const scrollBody = document.body.querySelector<HTMLElement>("[data-agent-create-scroll-body]");
+    const footer = document.body.querySelector<HTMLElement>("[data-agent-create-footer]");
+    expect(currentDialog().className).toContain("grid-rows-[auto_minmax(0,1fr)]");
+    expect(scrollBody?.className).toContain("overflow-y-auto");
+    expect(scrollBody?.querySelector("[data-agent-preset-list]")).toBe(presetList);
+    expect(footer?.closest("[data-agent-create-scroll-body]")).toBeNull();
+    expect(footer?.textContent).toContain("取消");
+    expect(footer?.textContent).toContain("创建");
+    expect(presetList?.className).toContain("max-h-56");
     expect(presetList?.className).toContain("overflow-y-auto");
     expect(document.body.textContent).toContain("教师");
 
-    const presetCard = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
-      .find((button) => button.textContent?.includes("教师") && button.textContent?.includes("课程讲解"));
+    const presetGroup = document.body.querySelector<HTMLElement>("[data-agent-preset-list] [data-slot='radio-group']");
+    expect(presetGroup?.className).toContain("sm:grid-cols-2");
+    const presetCard = Array.from(document.body.querySelectorAll<HTMLElement>("[data-agent-preset-card]"))
+      .find((card) => card.textContent?.includes("教师") && card.textContent?.includes("课程讲解"));
     await act(async () => {
       presetCard?.click();
     });
-    expect(presetCard?.getAttribute("aria-pressed")).toBe("true");
+    expect(presetCard?.querySelector('[data-slot="radio-group-item"]')?.getAttribute("data-state")).toBe("checked");
+    expect(presetCard?.getAttribute("aria-pressed")).toBeNull();
     await act(async () => {
       currentDialogSubmit()?.click();
     });
@@ -452,7 +622,7 @@ describe("SleiAppFrame agent creation modal", () => {
       name: "教师助手",
       handle: "@教师助手",
       description: "负责课程讲解和练习反馈。",
-      avatarSeed: "agent-avatar-教师助手",
+      avatarSeed: "agent-avatar-new",
     }));
   });
 
@@ -925,7 +1095,8 @@ describe("SleiAppFrame global search navigation", () => {
 
     const overlay = container.querySelector('[data-testid="slei-settings-overlay-nav"]');
     expect(overlay?.textContent).toContain("Coda");
-    expect(overlay?.textContent).toContain("@Coda");
+    expect(overlay?.textContent).toContain("研发团队开发工程师。");
+    expect(overlay?.textContent).not.toContain("@Coda");
     expect(overlay?.textContent).toContain("Cindy");
     expect(overlay?.textContent).toContain("本机设备");
     expect(overlay?.textContent).not.toContain("成员列表");
@@ -1486,8 +1657,8 @@ describe("SleiAppFrame global search navigation", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const sidebarSource = readFileSync(join(process.cwd(), "src/app/WorkspaceSidebar.tsx"), "utf8");
 
-    expect(sidebarSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
-    expect(sidebarSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
+    expect(sidebarSource).toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button" variant="outline">');
+    expect(sidebarSource).not.toContain('<Button onClick={() => projectFolderInputRef.current?.click()} type="button">');
     expect(sidebarSource).toContain('aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit"');
     expect(frameSource).toContain('<Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>');
     expect(frameSource).toContain('<Button disabled={createDisabled} type="submit">{input.messages.common.create}</Button>');
@@ -2194,9 +2365,23 @@ describe("SleiAppFrame global search navigation", () => {
     expect(document.body.textContent).toContain("Coda");
     const nameInput = document.body.querySelector<HTMLInputElement>("#slei-channel-name");
     const nameInputClasses = nameInput?.className.split(/\s+/) ?? [];
+    const nameField = nameInput?.closest<HTMLElement>('[data-slot="field"]');
+    expect(nameField?.getAttribute("role")).toBe("group");
+    expect(nameField?.className).toContain("flex");
+    expect(nameField?.className).toContain("gap-3");
     expect(nameInputClasses).toContain("bg-background");
     expect(nameInputClasses).not.toContain("bg-transparent");
+    const projectFolderButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("选择项目文件夹"));
+    const projectFolderButtonClasses = projectFolderButton?.className.split(/\s+/) ?? [];
+    const projectField = projectFolderButton?.closest<HTMLElement>('[data-slot="field"]');
+    expect(projectField?.className).toContain("gap-3");
+    expect(projectField?.querySelector('[data-slot="field-description"]')?.textContent).toContain("可关联多个项目文件夹");
+    expect(projectFolderButtonClasses).toContain("bg-background");
+    expect(projectFolderButtonClasses).not.toContain("bg-primary");
+    expect(projectFolderButtonClasses).not.toContain("text-primary-foreground");
     const agentCheckbox = document.body.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
+    const agentFieldSet = agentCheckbox?.closest<HTMLElement>('[data-slot="field-set"]');
+    expect(agentFieldSet?.querySelector('[data-slot="field-legend"]')?.textContent).toBe("选择 Agent");
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
     expect(agentList?.className).toContain("bg-background");
     expect(agentList?.className).toContain("border");

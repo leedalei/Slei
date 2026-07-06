@@ -995,7 +995,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       />
                       <div className="flex items-center justify-between gap-2">
                         <strong className="text-sm text-foreground">{messages.chat.project}</strong>
-                        <Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button">
+                        <Button aria-label={messages.chat.projectFolderPicker} className="h-7 gap-1 px-2.5 text-xs has-[>svg]:px-2" onClick={() => projectFolderInputRef.current?.click()} size="sm" type="button" variant="outline">
                           <SleiIcon name="folderPlus" size={14} />
                           {messages.chat.projectFolderPicker}
                         </Button>

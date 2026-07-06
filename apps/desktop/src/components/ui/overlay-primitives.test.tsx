@@ -127,13 +127,13 @@ afterEach(() => {
 });
 
 describe("overlay UI primitives", () => {
-  it("keeps modal and sheet surfaces themed from the app shell without primitive-specific Slei classes", () => {
+  it("keeps dialogs on default shadcn surfaces while sheet content keeps the shell surface", () => {
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const surfaceCss = appCss.slice(appCss.indexOf('[data-slot="dialog-content"],'), appCss.indexOf(".slei-modal-panel {"));
+    const surfaceCss = appCss.slice(appCss.indexOf(".slei-modal-surface {"), appCss.indexOf(".slei-modal-panel {"));
 
-    expect(surfaceCss).toContain('[data-slot="dialog-content"],');
-    expect(surfaceCss).toContain('[data-slot="alert-dialog-content"],');
     expect(surfaceCss).toContain('[data-slot="sheet-content"]');
+    expect(surfaceCss).not.toContain('[data-slot="dialog-content"]');
+    expect(surfaceCss).not.toContain('[data-slot="alert-dialog-content"]');
     expect(surfaceCss).toContain("background: var(--modal-surface-bg);");
     expect(surfaceCss).toContain("border-color: var(--modal-border);");
     expect(surfaceCss).toContain("box-shadow: var(--modal-shadow);");

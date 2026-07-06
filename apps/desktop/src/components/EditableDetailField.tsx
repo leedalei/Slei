@@ -2,8 +2,8 @@ import { type ComponentProps, type FormEvent, type KeyboardEvent, useEffect, use
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +88,7 @@ export function EditableDetailField(input: {
 
   return (
     <section
-      className={cn("slei-editable-field grid gap-2", input.sectionClassName ?? "slei-detail-section")}
+      className={cn("slei-editable-field grid gap-3", input.sectionClassName ?? "slei-detail-section")}
       data-editable-saving={isSaving ? "true" : undefined}
     >
       <div className="slei-editable-field__label flex items-center justify-between gap-2">
@@ -108,39 +108,37 @@ export function EditableDetailField(input: {
       </div>
       {editing ? (
         <form className="slei-editable-field__editor grid gap-3" onSubmit={save}>
-          <Label className="sr-only" htmlFor={fieldId}>
-            {input.label}
-          </Label>
-          {input.multiline ? (
-            <Textarea
-              aria-label={input.inputAriaLabel ?? `${input.label}${messages.common.input}`}
-              aria-describedby={errorMessage ? errorId : undefined}
-              aria-disabled={isSaving ? true : undefined}
-              aria-invalid={errorMessage ? true : undefined}
-              disabled={isSaving}
-              id={fieldId}
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={onEditorKeyDown}
-              value={draft}
-            />
-          ) : (
-            <Input
-              aria-label={input.inputAriaLabel ?? `${input.label}${messages.common.input}`}
-              aria-describedby={errorMessage ? errorId : undefined}
-              aria-disabled={isSaving ? true : undefined}
-              aria-invalid={errorMessage ? true : undefined}
-              disabled={isSaving}
-              id={fieldId}
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={onEditorKeyDown}
-              value={draft}
-            />
-          )}
-          {errorMessage ? (
-            <p className="text-sm text-destructive" id={errorId} role="alert">
-              {errorMessage}
-            </p>
-          ) : null}
+          <Field>
+            <FieldLabel className="sr-only" htmlFor={fieldId}>
+              {input.label}
+            </FieldLabel>
+            {input.multiline ? (
+              <Textarea
+                aria-label={input.inputAriaLabel ?? `${input.label}${messages.common.input}`}
+                aria-describedby={errorMessage ? errorId : undefined}
+                aria-disabled={isSaving ? true : undefined}
+                aria-invalid={errorMessage ? true : undefined}
+                disabled={isSaving}
+                id={fieldId}
+                onChange={(event) => setDraft(event.currentTarget.value)}
+                onKeyDown={onEditorKeyDown}
+                value={draft}
+              />
+            ) : (
+              <Input
+                aria-label={input.inputAriaLabel ?? `${input.label}${messages.common.input}`}
+                aria-describedby={errorMessage ? errorId : undefined}
+                aria-disabled={isSaving ? true : undefined}
+                aria-invalid={errorMessage ? true : undefined}
+                disabled={isSaving}
+                id={fieldId}
+                onChange={(event) => setDraft(event.currentTarget.value)}
+                onKeyDown={onEditorKeyDown}
+                value={draft}
+              />
+            )}
+            <FieldError id={errorId}>{errorMessage}</FieldError>
+          </Field>
           <div className="slei-editable-field__actions flex flex-wrap gap-2">
             <Button aria-disabled={isSaving ? true : undefined} disabled={isSaving} size="sm" type="submit">
               {messages.common.save}

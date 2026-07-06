@@ -198,7 +198,7 @@ describe("detail page editing pattern", () => {
     expect(html).toContain("<input");
     expect(html).toContain('aria-label="描述输入"');
     expect(html).not.toContain('role="alert"');
-    expect(html).not.toContain("text-destructive");
+    expect(html).not.toContain('data-slot="field-error"');
   });
 
   it("keeps compact editable field compatibility hooks", () => {

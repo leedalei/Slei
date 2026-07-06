@@ -450,8 +450,6 @@
     backdrop-filter: var(--glass-surface-filter);
   }
 
-  [data-slot="dialog-content"],
-  [data-slot="alert-dialog-content"],
   [data-slot="sheet-content"] {
     border-color: var(--modal-border);
     background: var(--modal-surface-bg);

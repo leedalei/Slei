@@ -188,6 +188,33 @@ describe("SettingsPage header", () => {
     }
   });
 
+  it("renders setting selects with shared shadcn-style field spacing", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activePanel="language-region"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+    const languageControlIndex = html.indexOf(`aria-label="${messages.settings.language}"`);
+    const fieldStart = html.lastIndexOf('data-slot="field"', languageControlIndex);
+    const fieldOpenTagStart = html.lastIndexOf("<", fieldStart);
+    const fieldOpenTagEnd = html.indexOf(">", fieldStart);
+    const fieldOpenTag = html.slice(fieldOpenTagStart, fieldOpenTagEnd);
+
+    expect(languageControlIndex).toBeGreaterThanOrEqual(0);
+    expect(fieldStart).toBeGreaterThanOrEqual(0);
+    expect(fieldOpenTag).toContain('role="group"');
+    expect(fieldOpenTag).toContain("flex w-full gap-3");
+    expect(html).toContain('data-slot="field-label"');
+  });
+
   it("keeps panel titles and descriptions only in the page header", () => {
     const messages = createDesktopMessages("zh-CN");
     const shared = {

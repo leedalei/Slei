@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSeparator, FieldSet, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -214,7 +214,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
   const settingsMemberItems: SettingsOverlayNavItem[] = input.data.members.map((member) => ({
     id: member.id,
     label: member.name,
-    description: member.handle,
+    description: member.description,
   }));
   const settingsDeviceItems: SettingsOverlayNavItem[] = input.runtimeSetup.nodes.map((node) => ({
     id: node.id,
@@ -904,19 +904,21 @@ function ComputerCreateModal(input: {
           <DialogTitle className="flex items-center gap-2"><SleiIcon name="computer" size={20} />{input.messages.computers.newComputer}</DialogTitle>
           <DialogDescription>{input.messages.computers.deviceName} / {input.messages.computers.os}</DialogDescription>
         </DialogHeader>
-        <form className="grid gap-4" onSubmit={submitCreate}>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-computer-name">{input.messages.computers.deviceName}</Label>
-            <Input aria-label={input.messages.computers.deviceName} id="slei-computer-name" onChange={(event) => setNewName(event.currentTarget.value)} placeholder="Design Mac" value={newName} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="slei-computer-os">{input.messages.computers.os}</Label>
-            <Input aria-label={input.messages.computers.os} id="slei-computer-os" onChange={(event) => setNewOs(event.currentTarget.value)} placeholder="darwin arm64" value={newOs} />
-          </div>
-          <DialogFooter>
-            <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
-          </DialogFooter>
+        <form onSubmit={submitCreate}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="slei-computer-name">{input.messages.computers.deviceName}</FieldLabel>
+              <Input aria-label={input.messages.computers.deviceName} id="slei-computer-name" onChange={(event) => setNewName(event.currentTarget.value)} placeholder="Design Mac" value={newName} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="slei-computer-os">{input.messages.computers.os}</FieldLabel>
+              <Input aria-label={input.messages.computers.os} id="slei-computer-os" onChange={(event) => setNewOs(event.currentTarget.value)} placeholder="darwin arm64" value={newOs} />
+            </Field>
+            <DialogFooter>
+              <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
+              <Button type="submit"><SleiIcon name="plus" size={14} />{input.messages.common.create}</Button>
+            </DialogFooter>
+          </FieldGroup>
         </form>
     </ShellDialog>
   );
@@ -1039,16 +1041,37 @@ function AgentCreateModal(input: {
   const [rolePresetsLoading, setRolePresetsLoading] = useState(false);
   const [rolePresetsError, setRolePresetsError] = useState<string | undefined>();
   const [selectedPresetId, setSelectedPresetId] = useState<string | undefined>();
+  const [avatarSeed, setAvatarSeed] = useState(input.draft?.avatarSeed ?? agentAvatarSeedFromName(input.draft?.name ?? ""));
   const [avatarRefreshIndex, setAvatarRefreshIndex] = useState(0);
-  const [avatarManuallyRefreshed, setAvatarManuallyRefreshed] = useState(false);
   const trimmedName = name.trim();
   const nameError = validateAgentDisplayName(trimmedName, input.members);
   const selectedPreset = rolePresets.find((preset) => preset.id === selectedPresetId);
+  const selectedNode = input.nodes.find((node) => node.id === nodeId) ?? firstNode;
+  const selectedNodeRuntimeKinds = useMemo(
+    () => selectedNode?.runtimes
+      .map((runtime) => runtime.kind)
+      .filter((kind, index, all) => all.indexOf(kind) === index) ?? [],
+    [selectedNode],
+  );
   const descriptionReady = descriptionMode === "preset" ? Boolean(selectedPreset) : description.trim().length > 0;
-  const avatarSeed = avatarManuallyRefreshed
-    ? refreshedAgentAvatarSeed(trimmedName, avatarRefreshIndex)
-    : agentAvatarSeedFromName(trimmedName);
   const createDisabled = Boolean(nameError) || !descriptionReady;
+
+  function selectNode(nextNodeId: string) {
+    const nextNode = input.nodes.find((node) => node.id === nextNodeId);
+    const nextRuntimeKinds = nextNode?.runtimes
+      .map((runtime) => runtime.kind)
+      .filter((kind, index, all) => all.indexOf(kind) === index) ?? [];
+    setNodeId(nextNodeId);
+    if (nextRuntimeKinds.length > 0 && !nextRuntimeKinds.includes(runtimeKind)) {
+      setRuntimeKind(nextRuntimeKinds[0]);
+    }
+  }
+
+  useEffect(() => {
+    if (selectedNodeRuntimeKinds.length > 0 && !selectedNodeRuntimeKinds.includes(runtimeKind)) {
+      setRuntimeKind(selectedNodeRuntimeKinds[0]);
+    }
+  }, [runtimeKind, selectedNodeRuntimeKinds]);
 
   async function loadRolePresets() {
     if (!input.onRolePresetsLoad) {
@@ -1092,170 +1115,184 @@ function AgentCreateModal(input: {
   return (
     <ShellDialog closeLabel={input.messages.common.cancel} open onOpenChange={(open) => {
       if (!open) input.onClose();
-    }} className="slei-agent-modal max-h-[min(90vh,46rem)] overflow-hidden sm:max-w-4xl">
+    }} className="slei-agent-modal grid-rows-[auto_minmax(0,1fr)] max-h-[min(90vh,46rem)] overflow-hidden">
         <DialogHeader>
           <DialogTitle>{input.messages.agentCreate.title}</DialogTitle>
         </DialogHeader>
-        <form className="grid min-h-0 gap-4" onSubmit={submitCreate}>
-          <div className="grid min-h-0 gap-5 md:grid-cols-[minmax(14rem,0.78fr)_minmax(0,1.22fr)]">
-            <section className="grid content-start gap-4">
-              <h3 className="text-sm font-semibold text-foreground">{input.messages.agentCreate.runtimeSection}</h3>
-              <div className="grid gap-2">
-                <Label htmlFor="slei-agent-node">{input.messages.agentCreate.associatedDevice}</Label>
-                <Select value={nodeId} onValueChange={setNodeId}>
-                  <SelectTrigger aria-label={input.messages.agentCreate.associatedDevice} className="w-full" id="slei-agent-node">
-                    <SelectValue placeholder={input.messages.agentCreate.associatedDevice} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {input.nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="slei-agent-runtime">{input.messages.agentCreate.runtime}</Label>
-                <Select value={runtimeKind} onValueChange={setRuntimeKind}>
-                  <SelectTrigger aria-label={input.messages.agentCreate.runtime} className="w-full" id="slei-agent-runtime">
-                    <SelectValue placeholder={input.messages.agentCreate.runtime} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {input.nodes
-                      .flatMap((node) => node.runtimes.map((runtime) => runtime.kind))
-                      .filter((kind, index, all) => all.indexOf(kind) === index)
-                      .map((kind) => <SelectItem key={kind} value={kind}>{kind}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="slei-agent-model">{input.messages.agentCreate.model}</Label>
-                <Input id="slei-agent-model" onChange={(event) => setModel(event.currentTarget.value)} value={model} />
-              </div>
-            </section>
-            <section className="grid min-h-0 content-start gap-4">
-              <h3 className="text-sm font-semibold text-foreground">{input.messages.agentCreate.memberSection}</h3>
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-                <button
-                  aria-label={input.messages.agentCreate.refreshAvatar}
-                  className="group relative size-[3.75rem] shrink-0 rounded-full"
-                  data-agent-create-avatar
-                  onClick={() => {
-                    setAvatarRefreshIndex((current) => current + 1);
-                    setAvatarManuallyRefreshed(true);
-                  }}
-                  type="button"
-                >
-                  <MemberAvatar
-                    identity={{
-                      id: "agent-create-preview",
-                      name: trimmedName || input.messages.agentCreate.fallbackAgent,
-                      handle: agentHandleFromName(trimmedName || "agent"),
-                      avatar: (trimmedName || input.messages.agentCreate.fallbackAgent).slice(0, 2).toUpperCase(),
-                      avatarSeed,
+        <form className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4" onSubmit={submitCreate}>
+          <FieldGroup className="min-h-0 gap-6 overflow-y-auto pr-1" data-agent-create-form-group data-agent-create-scroll-body>
+            <FieldSet>
+              <FieldLegend>{input.messages.agentCreate.runtimeSection}</FieldLegend>
+              <FieldGroup className="gap-3 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]" data-agent-runtime-inline>
+                <Field data-agent-runtime-cascade>
+                  <FieldLabel>{input.messages.agentCreate.associatedDevice} / {input.messages.agentCreate.runtime}</FieldLabel>
+                  <FieldContent>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Select value={nodeId} onValueChange={selectNode}>
+                        <SelectTrigger aria-label={input.messages.agentCreate.associatedDevice} className="w-full" id="slei-agent-node">
+                          <SelectValue placeholder={input.messages.agentCreate.associatedDevice} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {input.nodes.map((node) => <SelectItem key={node.id} value={node.id}>{node.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={runtimeKind} onValueChange={setRuntimeKind}>
+                        <SelectTrigger aria-label={input.messages.agentCreate.runtime} className="w-full" id="slei-agent-runtime">
+                          <SelectValue placeholder={input.messages.agentCreate.runtime} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectedNodeRuntimeKinds.map((kind) => <SelectItem key={kind} value={kind}>{kind}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </FieldContent>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="slei-agent-model">{input.messages.agentCreate.model}</FieldLabel>
+                  <Input id="slei-agent-model" onChange={(event) => setModel(event.currentTarget.value)} value={model} />
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+            <FieldSeparator />
+            <FieldSet>
+              <FieldLegend>{input.messages.agentCreate.memberSection}</FieldLegend>
+              <FieldGroup>
+                <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3" data-agent-create-member-inline>
+                  <button
+                    aria-label={input.messages.agentCreate.refreshAvatar}
+                    className="group relative size-[3.75rem] shrink-0 rounded-full [&>[data-slot=avatar]]:size-full"
+                    data-agent-create-avatar
+                    onClick={() => {
+                      setAvatarRefreshIndex((current) => {
+                        const next = current + 1;
+                        setAvatarSeed(refreshedAgentAvatarSeed(trimmedName, next));
+                        return next;
+                      });
                     }}
-                    large
-                  />
-                  <span
-                    className="absolute inset-0 hidden place-items-center rounded-full bg-background/75 text-foreground group-hover:grid"
-                    data-agent-create-avatar-mask
+                    type="button"
                   >
-                    <SleiIcon name="refreshCw" size={16} />
-                  </span>
-                </button>
-                <div className="grid min-w-0 gap-2">
-                  <Label className="gap-1" htmlFor="slei-agent-name">
-                    {input.messages.agentCreate.name}
-                    <span aria-hidden="true" className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    aria-invalid={Boolean(nameError)}
-                    id="slei-agent-name"
-                    onChange={(event) => setName(event.currentTarget.value)}
-                    required
-                    value={name}
-                  />
-                  {nameError ? (
-                    <p className="text-xs text-destructive">
+                    <MemberAvatar
+                      identity={{
+                        id: "agent-create-preview",
+                        name: trimmedName || input.messages.agentCreate.fallbackAgent,
+                        handle: agentHandleFromName(trimmedName || "agent"),
+                        avatar: (trimmedName || input.messages.agentCreate.fallbackAgent).slice(0, 2).toUpperCase(),
+                        avatarSeed,
+                      }}
+                      large
+                    />
+                    <span
+                      className="absolute inset-0 hidden place-items-center rounded-full bg-background/75 text-foreground group-hover:grid"
+                      data-agent-create-avatar-mask
+                    >
+                      <SleiIcon name="refreshCw" size={16} />
+                    </span>
+                  </button>
+                  <Field className="min-w-0">
+                    <FieldLabel className="gap-1" htmlFor="slei-agent-name">
+                      {input.messages.agentCreate.name}
+                      <span aria-hidden="true" className="text-destructive">*</span>
+                    </FieldLabel>
+                    <Input
+                      aria-invalid={Boolean(nameError)}
+                      id="slei-agent-name"
+                      onChange={(event) => setName(event.currentTarget.value)}
+                      required
+                      value={name}
+                    />
+                    <FieldError className="text-xs">
                       {nameError === "required"
                         ? input.messages.agentCreate.nameRequired
                         : nameError === "duplicate"
                           ? input.messages.agentCreate.nameDuplicate
                           : nameError === "length"
                             ? input.messages.agentCreate.nameTooLong
-                          : input.messages.agentCreate.nameInvalid}
-                    </p>
-                  ) : null}
+                          : nameError === "format"
+                            ? input.messages.agentCreate.nameInvalid
+                          : undefined}
+                    </FieldError>
+                  </Field>
                 </div>
-              </div>
-              <div className="grid gap-3">
-                <Label className="gap-1">
-                  {input.messages.agentCreate.descriptionMode}
-                  <span aria-hidden="true" className="text-destructive">*</span>
-                </Label>
-                <RadioGroup
-                  aria-label={input.messages.agentCreate.descriptionMode}
-                  className="flex flex-wrap gap-4"
-                  onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")}
-                  value={descriptionMode}
-                >
-                  <RadioGroupItem label={input.messages.agentCreate.customDescription} value="custom" />
-                  <RadioGroupItem label={input.messages.agentCreate.presetDescription} value="preset" />
-                </RadioGroup>
-              </div>
-              {descriptionMode === "custom" ? (
-                <div className="grid gap-2">
-                  <Textarea
-                    aria-label={input.messages.agentCreate.description}
-                    aria-required="true"
-                    id="slei-agent-description"
-                    onChange={(event) => setDescription(event.currentTarget.value)}
-                    required
-                    value={description}
-                  />
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  <div className="max-h-72 overflow-y-auto pr-1" data-agent-preset-list>
-                    {rolePresetsLoading ? (
-                      <p className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                        <SleiIcon className="animate-spin" name="loader" size={14} />
-                        {input.messages.agentCreate.rolePresetsLoading}
-                      </p>
-                    ) : rolePresetsError ? (
-                      <div className="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                        <p>{input.messages.agentCreate.rolePresetsFailed}</p>
-                        <Button onClick={() => void loadRolePresets()} size="sm" type="button" variant="outline">{input.messages.agentCreate.retryRolePresets}</Button>
-                      </div>
-                    ) : rolePresets.length === 0 ? (
-                      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">{input.messages.agentCreate.rolePresetsEmpty}</p>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        {rolePresets.map((preset) => (
-                          <button
-                            aria-pressed={selectedPresetId === preset.id}
-                            className={cn(
-                              "grid gap-1 rounded-md border p-3 text-left text-sm transition-colors",
-                              selectedPresetId === preset.id
-                                ? "border-primary bg-primary/10 text-foreground"
-                                : "border-border bg-card/70 text-muted-foreground hover:border-primary/60 hover:text-foreground",
-                            )}
-                            data-selected={selectedPresetId === preset.id ? "true" : "false"}
-                            key={preset.id}
-                            onClick={() => setSelectedPresetId(preset.id)}
-                            type="button"
-                          >
-                            <span className="font-medium text-foreground">{preset.title}</span>
-                            <span className="line-clamp-3 text-[13px] leading-5 text-muted-foreground" data-agent-preset-description>{preset.description}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </section>
-          </div>
-          <DialogFooter>
-            <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
-            <Button disabled={createDisabled} type="submit">{input.messages.common.create}</Button>
+              </FieldGroup>
+            </FieldSet>
+            <FieldSeparator />
+            <FieldSet>
+              <FieldLegend>
+                {input.messages.agentCreate.descriptionMode}
+                <span aria-hidden="true" className="text-destructive">*</span>
+              </FieldLegend>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel className="sr-only">{input.messages.agentCreate.descriptionMode}</FieldLabel>
+                  <RadioGroup
+                    aria-label={input.messages.agentCreate.descriptionMode}
+                    className="flex flex-wrap gap-4"
+                    onValueChange={(value) => setDescriptionMode(value as "custom" | "preset")}
+                    value={descriptionMode}
+                  >
+                    <RadioGroupItem label={input.messages.agentCreate.customDescription} value="custom" />
+                    <RadioGroupItem label={input.messages.agentCreate.presetDescription} value="preset" />
+                  </RadioGroup>
+                </Field>
+                {descriptionMode === "custom" ? (
+                  <Field>
+                    <Textarea
+                      aria-label={input.messages.agentCreate.description}
+                      aria-required="true"
+                      id="slei-agent-description"
+                      onChange={(event) => setDescription(event.currentTarget.value)}
+                      required
+                      value={description}
+                    />
+                  </Field>
+                ) : (
+                  <Field>
+                    <div className="max-h-56 overflow-y-auto pr-1" data-agent-preset-list>
+                      {rolePresetsLoading ? (
+                        <p className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                          <SleiIcon className="animate-spin" name="loader" size={14} />
+                          {input.messages.agentCreate.rolePresetsLoading}
+                        </p>
+                      ) : rolePresetsError ? (
+                        <div className="grid gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                          <p>{input.messages.agentCreate.rolePresetsFailed}</p>
+                          <Button onClick={() => void loadRolePresets()} size="sm" type="button" variant="outline">{input.messages.agentCreate.retryRolePresets}</Button>
+                        </div>
+                      ) : rolePresets.length === 0 ? (
+                        <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">{input.messages.agentCreate.rolePresetsEmpty}</p>
+                      ) : (
+                        <RadioGroup
+                          aria-label={input.messages.agentCreate.presetDescription}
+                          className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                          onValueChange={setSelectedPresetId}
+                          value={selectedPresetId ?? ""}
+                        >
+                          {rolePresets.map((preset) => (
+                            <FieldLabel
+                              className="cursor-pointer bg-card/70 transition-colors hover:border-primary/60"
+                              data-agent-preset-card={preset.id}
+                              key={preset.id}
+                            >
+                              <Field orientation="horizontal">
+                                <FieldContent className="min-w-0">
+                                  <FieldTitle>{preset.title}</FieldTitle>
+                                  <FieldDescription className="line-clamp-3 text-xs leading-5" data-agent-preset-description>{preset.description}</FieldDescription>
+                                </FieldContent>
+                                <RadioGroupItem value={preset.id} />
+                              </Field>
+                            </FieldLabel>
+                          ))}
+                        </RadioGroup>
+                      )}
+                    </div>
+                  </Field>
+                )}
+              </FieldGroup>
+            </FieldSet>
+          </FieldGroup>
+          <DialogFooter data-agent-create-footer>
+              <Button onClick={input.onClose} type="button" variant="outline">{input.messages.common.cancel}</Button>
+              <Button disabled={createDisabled} type="submit">{input.messages.common.create}</Button>
           </DialogFooter>
         </form>
     </ShellDialog>
@@ -1278,11 +1315,11 @@ function RuntimeOnboardingModal(input: {
           <DialogTitle>{input.messages.onboarding.title}</DialogTitle>
           <DialogDescription>{input.messages.onboarding.description}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="slei-runtime-device-name">{input.messages.onboarding.deviceName}</Label>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="slei-runtime-device-name">{input.messages.onboarding.deviceName}</FieldLabel>
             <Input id="slei-runtime-device-name" value={name} onChange={(event) => setName(event.currentTarget.value)} />
-          </div>
+          </Field>
           <div className="rounded-lg border">
             {(localNode?.runtimes ?? []).map((runtime, index) => (
               <div className={cn("flex items-center justify-between gap-3 px-3 py-2", index > 0 && "border-t")} key={runtime.kind}>
@@ -1297,7 +1334,7 @@ function RuntimeOnboardingModal(input: {
               <div className="flex items-center justify-between gap-3"><dt className="text-muted-foreground">{input.messages.onboarding.hostname}</dt><dd>{localNode.device.hostname}</dd></div>
             </dl>
           ) : null}
-        </div>
+        </FieldGroup>
         <DialogFooter>
           <Button onClick={() => input.onRenameLocalNode?.(name)} type="button" variant="outline">{input.messages.onboarding.saveDeviceName}</Button>
           <Button disabled={input.loading} onClick={() => input.onRefreshRuntime?.()} type="button">{input.messages.onboarding.refreshRuntime}</Button>

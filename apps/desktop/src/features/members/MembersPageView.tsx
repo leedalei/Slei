@@ -435,7 +435,7 @@ export function MembersPage(input: {
                     messages={input.messages}
                     onSave={(value) => updateMemberDetail("name", value)}
                     saving={effectiveSavingField === "name"}
-                    sectionClassName="grid gap-2"
+                    sectionClassName="grid gap-3"
                     value={memberDetails.name}
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.name} />
@@ -448,7 +448,7 @@ export function MembersPage(input: {
                     multiline
                     onSave={(value) => updateMemberDetail("description", value)}
                     saving={effectiveSavingField === "description"}
-                    sectionClassName="grid gap-2"
+                    sectionClassName="grid gap-3"
                     value={memberDetails.description}
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.description} />
@@ -489,7 +489,7 @@ export function MembersPage(input: {
                     onSave={(value) => updateMemberDetail("runtime", value)}
                     readBadgeVariant="outline"
                     saving={effectiveSavingField === "runtime"}
-                    sectionClassName="grid gap-2"
+                    sectionClassName="grid gap-3"
                     value={memberDetails.runtime}
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.runtime} />
@@ -501,7 +501,7 @@ export function MembersPage(input: {
                     onSave={(value) => updateMemberDetail("model", value)}
                     readBadgeVariant="outline"
                     saving={effectiveSavingField === "model"}
-                    sectionClassName="grid gap-2"
+                    sectionClassName="grid gap-3"
                     value={memberDetails.model}
                   />
                   <ControlledFieldAlert message={input.memberFieldErrors?.model} />
