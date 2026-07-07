@@ -54,6 +54,35 @@ describe("daemon rpc handler", () => {
     expect(logger.mock.calls[0]?.[0]).not.toContain("/v1/diagnostics");
   });
 
+  it("logs frontend crashes locally without calling daemon routes", async () => {
+    const request = vi.fn();
+    const logger = vi.fn();
+    const rpc = createDaemonRpcHandler({ request } as never, { logger });
+
+    await expect(
+      rpc.call("frontend.crash.log", {
+        report: {
+          kind: "react",
+          message: "render failed",
+          stack: "Error: render failed",
+          componentStack: "at SleiApp",
+          url: "http://127.0.0.1:1420/",
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(request).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledOnce();
+    const output = logger.mock.calls[0]?.[0] as string;
+    expect(output).toContain("[slei-frontend-crash]");
+    expect(output).toContain("kind=react");
+    expect(output).toContain("url=http://127.0.0.1:1420/");
+    expect(output).toContain("message=render failed");
+    expect(output).toContain("stack=Error: render failed");
+    expect(output).toContain("component_stack=at SleiApp");
+    expect(output).not.toContain("/v1/diagnostics");
+  });
+
   it("maps event reconnect to the daemon replay route", async () => {
     const event = {
       sequence: 43,
