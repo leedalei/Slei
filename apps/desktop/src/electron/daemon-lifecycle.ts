@@ -11,6 +11,8 @@ import {
 } from "./constants.js";
 import { createDaemonHttpClient, DesktopDaemonError } from "./daemon-http.js";
 
+export const EXPECTED_PROTOCOL_VERSION = "v1";
+
 export type DaemonHealth = {
   daemon_version: string;
   protocol_version: string;
@@ -27,8 +29,11 @@ export type DaemonHandle =
     };
 
 type SpawnDaemon = typeof nodeSpawn;
+type KillProcess = (pid: number, signal: NodeJS.Signals) => boolean | void;
+type TerminateProcess = (process: ChildProcess) => void;
 
 type LifecycleDependencies = {
+  authCheck?: () => Promise<unknown>;
   endpoint?: string;
   health?: () => Promise<DaemonHealth>;
   host?: string;
@@ -38,10 +43,12 @@ type LifecycleDependencies = {
   repoRoot?: string;
   sleep?: (ms: number) => Promise<void>;
   spawn?: SpawnDaemon;
+  terminateProcess?: TerminateProcess;
   timeoutMs?: number;
 };
 
 type WaitForDaemonReadyOptions = {
+  authCheck?: () => Promise<unknown>;
   health: () => Promise<DaemonHealth>;
   host?: string;
   now?: () => number;
@@ -49,6 +56,10 @@ type WaitForDaemonReadyOptions = {
   probePort?: (host: string, port: number) => Promise<boolean>;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
+};
+
+type TerminateOwnedProcessOptions = {
+  killProcess?: KillProcess;
 };
 
 export function probePort(host: string, port: number): Promise<boolean> {
@@ -80,21 +91,37 @@ export async function waitForDaemonReady(options: WaitForDaemonReadyOptions): Pr
   const deadline = now() + timeoutMs;
   let lastError: unknown;
 
-  while (now() <= deadline) {
+  while (now() < deadline) {
     try {
       if (await checkPort(host, port)) {
-        const health = await options.health();
+        const health = await runBeforeDeadline(options.health, {
+          deadline,
+          message: "Timed out waiting for Slei daemon health",
+          now,
+          sleep,
+        });
         assertCompatibleHealth(health);
+        if (options.authCheck) {
+          await runBeforeDeadline(options.authCheck, {
+            deadline,
+            message: "Timed out validating Slei daemon authorization",
+            now,
+            sleep,
+          });
+        }
         return health;
       }
     } catch (error) {
-      if (isDesktopDaemonError(error, "daemon_auth_failed")) {
+      if (isFatalValidationError(error)) {
         throw error;
       }
       lastError = error;
     }
 
-    await sleep(100);
+    const remainingMs = deadline - now();
+    if (remainingMs > 0) {
+      await sleep(Math.min(100, remainingMs));
+    }
   }
 
   throw new DesktopDaemonError("daemon_unavailable", "Timed out waiting for Slei daemon to become ready", {
@@ -107,12 +134,22 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
   const port = dependencies.port ?? DAEMON_PORT;
   const endpoint = dependencies.endpoint ?? DAEMON_ENDPOINT;
   const checkPort = dependencies.probePort ?? probePort;
-  const health = dependencies.health ?? createDefaultHealth(endpoint);
+  const client = createDaemonHttpClient({ endpoint, token: DESKTOP_DAEMON_TOKEN });
+  const health = dependencies.health ?? createDefaultHealth(client);
+  const authCheck = dependencies.authCheck ?? createDefaultAuthCheck(client);
 
   if (await checkPort(host, port)) {
     try {
-      const response = await health();
-      assertCompatibleHealth(response);
+      await waitForDaemonReady({
+        authCheck,
+        health,
+        host,
+        now: dependencies.now,
+        port,
+        probePort: checkPort,
+        sleep: dependencies.sleep,
+        timeoutMs: dependencies.timeoutMs,
+      });
       return { owned: false };
     } catch (error) {
       throw normalizeExistingDaemonError(error);
@@ -121,8 +158,10 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
 
   const repoRoot = dependencies.repoRoot ?? defaultRepoRoot();
   const spawnDaemon = dependencies.spawn ?? nodeSpawn;
+  const terminateProcess = dependencies.terminateProcess ?? terminateOwnedProcess;
   const daemonProcess = spawnDaemon("cargo", ["run", "-p", "slei-daemon"], {
     cwd: repoRoot,
+    detached: true,
     env: {
       ...process.env,
       PATH: prependPath(resolve(repoRoot, "target/debug"), process.env.PATH),
@@ -131,36 +170,63 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
     },
     stdio: "inherit",
   });
+  const spawnFailure = waitForSpawnError(daemonProcess);
+  spawnFailure.catch(() => undefined);
 
   try {
-    await waitForDaemonReady({
-      health,
-      host,
-      now: dependencies.now,
-      port,
-      probePort: checkPort,
-      sleep: dependencies.sleep,
-      timeoutMs: dependencies.timeoutMs,
-    });
+    await Promise.race([
+      waitForDaemonReady({
+        authCheck,
+        health,
+        host,
+        now: dependencies.now,
+        port,
+        probePort: checkPort,
+        sleep: dependencies.sleep,
+        timeoutMs: dependencies.timeoutMs,
+      }),
+      spawnFailure,
+    ]);
   } catch (error) {
-    daemonProcess.kill("SIGTERM");
+    terminateProcess(daemonProcess);
     throw error;
   }
 
   return { owned: true, process: daemonProcess };
 }
 
-export function stopOwnedDaemon(handle: DaemonHandle): void {
+export function stopOwnedDaemon(handle: DaemonHandle, options: TerminateOwnedProcessOptions = {}): void {
   if (!handle.owned) {
     return;
   }
 
-  handle.process.kill("SIGTERM");
+  terminateOwnedProcess(handle.process, options);
 }
 
-function createDefaultHealth(endpoint: string): () => Promise<DaemonHealth> {
-  const client = createDaemonHttpClient({ endpoint, token: DESKTOP_DAEMON_TOKEN });
+export function terminateOwnedProcess(
+  childProcess: ChildProcess,
+  options: TerminateOwnedProcessOptions = {},
+): void {
+  const killProcess = options.killProcess ?? process.kill.bind(process);
+
+  if (typeof childProcess.pid === "number" && childProcess.pid > 0) {
+    try {
+      killProcess(-childProcess.pid, "SIGTERM");
+      return;
+    } catch {
+      // Fall back to the direct child if the process group is already gone or unavailable.
+    }
+  }
+
+  childProcess.kill("SIGTERM");
+}
+
+function createDefaultHealth(client: ReturnType<typeof createDaemonHttpClient>): () => Promise<DaemonHealth> {
   return () => client.request<DaemonHealth>("GET", "/health");
+}
+
+function createDefaultAuthCheck(client: ReturnType<typeof createDaemonHttpClient>): () => Promise<unknown> {
+  return () => client.request("GET", "/v1/nodes");
 }
 
 function assertCompatibleHealth(health: DaemonHealth): void {
@@ -168,11 +234,44 @@ function assertCompatibleHealth(health: DaemonHealth): void {
     health.status !== "ok" ||
     typeof health.daemon_version !== "string" ||
     health.daemon_version.length === 0 ||
-    typeof health.protocol_version !== "string" ||
-    health.protocol_version.length === 0
+    health.protocol_version !== EXPECTED_PROTOCOL_VERSION
   ) {
     throw new DesktopDaemonError("daemon_unavailable", "Slei daemon health response is incompatible");
   }
+}
+
+async function runBeforeDeadline<T>(
+  operation: () => Promise<T>,
+  options: {
+    deadline: number;
+    message: string;
+    now: () => number;
+    sleep: (ms: number) => Promise<void>;
+  },
+): Promise<T> {
+  const remainingMs = options.deadline - options.now();
+  if (remainingMs <= 0) {
+    throw new DesktopDaemonError("daemon_unavailable", options.message);
+  }
+
+  return Promise.race([
+    operation(),
+    options.sleep(remainingMs).then(() => {
+      throw new DesktopDaemonError("daemon_unavailable", options.message);
+    }),
+  ]);
+}
+
+function waitForSpawnError(childProcess: ChildProcess): Promise<never> {
+  return new Promise((_, reject) => {
+    childProcess.once("error", (error) => {
+      reject(
+        new DesktopDaemonError("daemon_unavailable", "Slei daemon process failed to start", {
+          cause: error,
+        }),
+      );
+    });
+  });
 }
 
 function defaultRepoRoot(): string {
@@ -185,6 +284,14 @@ function defaultSleep(ms: number): Promise<void> {
 
 function isDesktopDaemonError(error: unknown, code?: string): error is DesktopDaemonError {
   return error instanceof DesktopDaemonError && (code === undefined || error.code === code);
+}
+
+function isFatalValidationError(error: unknown): error is DesktopDaemonError {
+  return (
+    isDesktopDaemonError(error, "daemon_auth_failed") ||
+    (isDesktopDaemonError(error, "daemon_unavailable") &&
+      (error.message.includes("incompatible") || error.message.startsWith("Timed out ")))
+  );
 }
 
 function normalizeExistingDaemonError(error: unknown): DesktopDaemonError {
