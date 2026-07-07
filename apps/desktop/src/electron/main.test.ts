@@ -2,14 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRpcFailureEnvelope,
   handleRendererRpcForIpc,
+  registerIpcHandlers,
   registerElectronProtocolHandlers,
   registerElectronProtocolSchemes,
+  stopDaemonBridge,
 } from "./main";
 import { DesktopDaemonError } from "./daemon-http";
 
 const electronMock = vi.hoisted(() => ({
+  createEventForwarder: vi.fn(),
   handle: vi.fn(),
+  ipcHandle: vi.fn(),
+  ipcOn: vi.fn(),
   registerSchemesAsPrivileged: vi.fn(),
+}));
+
+vi.mock("./event-forwarder", () => ({
+  createEventForwarder: electronMock.createEventForwarder,
 }));
 
 vi.mock("electron", () => ({
@@ -21,8 +30,8 @@ vi.mock("electron", () => ({
     getAllWindows: vi.fn(() => []),
   },
   ipcMain: {
-    handle: vi.fn(),
-    on: vi.fn(),
+    handle: electronMock.ipcHandle,
+    on: electronMock.ipcOn,
   },
   protocol: {
     handle: electronMock.handle,
@@ -65,5 +74,35 @@ describe("electron main bootstrap helpers", () => {
         code: "daemon_unavailable",
       },
     });
+  });
+
+  it("clears daemon event subscriptions when the bridge stops", () => {
+    const forwarder = {
+      after: vi.fn(() => 0),
+      start: vi.fn(),
+      stop: vi.fn(),
+      unsubscribe: vi.fn(),
+      tick: vi.fn(),
+    };
+    electronMock.createEventForwarder.mockReturnValue(forwarder);
+    const sender = {
+      isDestroyed: vi.fn(() => false),
+      off: vi.fn(),
+      once: vi.fn(),
+      send: vi.fn(),
+    };
+
+    registerIpcHandlers();
+    const subscribeHandler = electronMock.ipcOn.mock.calls.find((call) => call[0] === "slei:events:subscribe")?.[1];
+    expect(subscribeHandler).toBeTypeOf("function");
+    subscribeHandler({ sender }, { channel: "daemon.events", subscriptionId: "sub_events" });
+
+    stopDaemonBridge();
+    const emitBatch = electronMock.createEventForwarder.mock.calls.at(-1)?.[0].emit;
+    emitBatch({ after: 1, events: [{ sequence: 1, eventType: "task_thread.updated", occurredAtUnixMs: 1, payload: {} }] });
+
+    expect(forwarder.unsubscribe).toHaveBeenCalled();
+    expect(sender.off).toHaveBeenCalledWith("destroyed", sender.once.mock.calls[0][1]);
+    expect(sender.send).not.toHaveBeenCalled();
   });
 });

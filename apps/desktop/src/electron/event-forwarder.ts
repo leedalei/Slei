@@ -31,6 +31,7 @@ export function createEventForwarder(options: EventForwarderOptions): EventForwa
   let running = false;
   let timerHandle: unknown;
   let tickInFlight: Promise<void> | undefined;
+  let lifecycleGeneration = 0;
   let nextDelayMs = INITIAL_EMPTY_BACKOFF_MS;
   let emptyBackoffMs = INITIAL_EMPTY_BACKOFF_MS;
 
@@ -47,6 +48,7 @@ export function createEventForwarder(options: EventForwarderOptions): EventForwa
   }
 
   function stop() {
+    lifecycleGeneration += 1;
     running = false;
     clearTimer();
   }
@@ -68,13 +70,14 @@ export function createEventForwarder(options: EventForwarderOptions): EventForwa
   }
 
   async function runTick() {
+    const tickGeneration = lifecycleGeneration;
     if (!subscribed) {
       return;
     }
 
     try {
       const receipt = await options.reconnect(afterSequence);
-      if (!subscribed) {
+      if (!subscribed || tickGeneration !== lifecycleGeneration) {
         return;
       }
 

@@ -152,7 +152,7 @@ export async function startDaemonBridge(): Promise<void> {
 }
 
 export function stopDaemonBridge(): void {
-  stopDaemonEventForwarder();
+  teardownDaemonEventSubscriptions();
   if (daemonHandle) {
     stopOwnedDaemon(daemonHandle);
   }
@@ -201,6 +201,17 @@ function removeDaemonEventSubscription(subscriptionId: string): void {
 
 function stopDaemonEventForwarder(): void {
   daemonEventForwarder?.stop();
+}
+
+function teardownDaemonEventSubscriptions(): void {
+  daemonEventForwarder?.unsubscribe();
+  daemonEventForwarder = undefined;
+  for (const subscription of daemonEventSubscriptions.values()) {
+    if (!subscription.sender.isDestroyed()) {
+      subscription.sender.off("destroyed", subscription.destroyedHandler);
+    }
+  }
+  daemonEventSubscriptions.clear();
 }
 
 function ensureDaemonEventForwarder(): EventForwarder {
