@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "desktop": "scripts/desktop-dev.sh",
     "build": "tsc -p tsconfig.json && vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && node scripts/assert-sandbox-preload.mjs",
     "generate:default-agent-assets": "node ../../scripts/generate-default-agent-assets.mjs",
     "check:default-agent-assets": "node ../../scripts/generate-default-agent-assets.mjs --check",
     "test": "vitest run",

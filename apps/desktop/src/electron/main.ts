@@ -39,7 +39,7 @@ export function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      preload: join(electronDirname, "preload.js"),
+      preload: join(electronDirname, "preload.cjs"),
     },
   });
 

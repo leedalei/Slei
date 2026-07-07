@@ -154,7 +154,9 @@ describe("desktop startup contract", () => {
     expect(packageJson.devDependencies?.electron).toBe("43.0.0");
     expect(packageJson.main).toBe(electronEntry);
     expect(packageJson.scripts?.desktop).toBe("scripts/desktop-dev.sh");
-    expect(packageJson.scripts?.["build:electron"]).toBe("tsc -p tsconfig.electron.json");
+    expect(packageJson.scripts?.["build:electron"]).toBe(
+      "tsc -p tsconfig.electron.json && node scripts/assert-sandbox-preload.mjs",
+    );
     expectInOrder(desktopDevScript, [
       "pnpm --filter @slei/claude-agent build",
       "cargo build -p slei-cli",

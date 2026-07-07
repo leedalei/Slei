@@ -1,4 +1,4 @@
-import type { createSleiPreloadApi } from "./preload.js";
+import type { createSleiPreloadApi } from "./preload-api.js";
 
 declare global {
   interface Window {

@@ -1,5 +1,3 @@
-import { contextBridge, ipcRenderer } from "electron";
-
 type SleiPreloadChannel = "daemon.events" | "daemon.state";
 type SleiPreloadHandler = (payload: unknown) => void;
 type IpcListener = (event: unknown, payload: unknown) => void;
@@ -23,10 +21,7 @@ const CHANNEL_EVENT_NAMES: Record<SleiPreloadChannel, string> = {
   "daemon.state": "slei:daemon-state",
 };
 
-export function createSleiPreloadApi(
-  ipc: SleiPreloadIpc = ipcRenderer,
-  options: SleiPreloadApiOptions = {},
-) {
+export function createSleiPreloadApi(ipc: SleiPreloadIpc, options: SleiPreloadApiOptions = {}) {
   const createSubscriptionId = options.createSubscriptionId ?? createDefaultSubscriptionId;
 
   return {
@@ -99,8 +94,4 @@ function createDefaultSubscriptionId(): string {
   }
 
   return `sub_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-}
-
-if (typeof contextBridge?.exposeInMainWorld === "function") {
-  contextBridge.exposeInMainWorld("slei", createSleiPreloadApi());
 }

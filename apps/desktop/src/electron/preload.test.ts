@@ -1,17 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSleiPreloadApi } from "./preload";
-
-vi.mock("electron", () => ({
-  contextBridge: {
-    exposeInMainWorld: vi.fn(),
-  },
-  ipcRenderer: {
-    invoke: vi.fn(),
-    off: vi.fn(),
-    on: vi.fn(),
-    send: vi.fn(),
-  },
-}));
+import { createSleiPreloadApi } from "./preload-api";
 
 describe("electron preload api", () => {
   it("exposes only narrow rpc and events APIs", async () => {
