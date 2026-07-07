@@ -40,11 +40,20 @@ node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 
 VITE_PID=$!
 
 attempts=0
-until nc -z 127.0.0.1 1420 2>/dev/null; do
+while true; do
   if ! kill -0 "$VITE_PID" 2>/dev/null; then
     wait "$VITE_PID" 2>/dev/null || true
     echo "[slei-desktop] Vite exited before becoming ready" >&2
     exit 1
+  fi
+  if nc -z 127.0.0.1 1420 2>/dev/null; then
+    sleep 0.2
+    if ! kill -0 "$VITE_PID" 2>/dev/null; then
+      wait "$VITE_PID" 2>/dev/null || true
+      echo "[slei-desktop] Vite exited after port 1420 became available" >&2
+      exit 1
+    fi
+    break
   fi
   attempts=$((attempts + 1))
   if [ "$attempts" -ge 300 ]; then

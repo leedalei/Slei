@@ -147,6 +147,8 @@ describe("desktop startup contract", () => {
     const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
     const electronEntry = "dist-electron/electron/main.js";
     const viteStart = 'node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 --strictPort';
+    const viteReadyPortCheck = "if nc -z 127.0.0.1 1420 2>/dev/null; then";
+    const stalePortGuard = 'sleep 0.2\n    if ! kill -0 "$VITE_PID" 2>/dev/null; then';
 
     expect(packageJson.devDependencies?.electron).toBe("43.0.0");
     expect(packageJson.main).toBe(electronEntry);
@@ -160,6 +162,7 @@ describe("desktop startup contract", () => {
       "pnpm build:electron",
       `electron ${electronEntry}`,
     ]);
+    expectInOrder(desktopDevScript, [viteStart, "while true; do", viteReadyPortCheck, stalePortGuard, "break"]);
     expect(desktopDevScript).toContain("terminate_process_tree");
     expect(desktopDevScript).not.toContain("tauri dev");
     expect(desktopDevScript).not.toContain("pnpm dev &");
