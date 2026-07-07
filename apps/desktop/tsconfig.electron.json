@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "declaration": false,
+    "lib": ["ESNext", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "dist-electron",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src/electron/**/*.ts", "src/lib/daemon-types.ts", "src/lib/desktop-rpc.ts"]
+}

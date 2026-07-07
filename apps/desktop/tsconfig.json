@@ -10,5 +10,12 @@
     "rootDir": ".",
     "types": ["node", "vite/client", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "e2e/**/*.ts", "e2e/**/*.tsx", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/electron/global.d.ts",
+    "e2e/**/*.ts",
+    "e2e/**/*.tsx",
+    "vite.config.ts"
+  ]
 }

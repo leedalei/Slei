@@ -126,19 +126,22 @@ describe("desktop startup contract", () => {
     expect(indexHtml).toContain("/src/web.ts");
   });
 
-  it("starts the local daemon before launching the Tauri desktop in dev", async () => {
+  it("starts Vite and then launches Electron in dev", async () => {
     const packageJson = JSON.parse(
       await readFile(join(desktopRoot, "package.json"), "utf8"),
-    ) as { scripts?: Record<string, string> };
+    ) as {
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
     const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
 
+    expect(packageJson.devDependencies?.electron).toBe("43.0.0");
     expect(packageJson.scripts?.desktop).toBe("scripts/desktop-dev.sh");
-    expect(desktopDevScript).toContain("cargo build -p slei-cli");
-    expect(desktopDevScript).toContain("cargo run -p slei-daemon");
-    expect(desktopDevScript.indexOf("cargo build -p slei-cli")).toBeLessThan(
-      desktopDevScript.indexOf("cargo run -p slei-daemon"),
-    );
-    expect(desktopDevScript).toContain("tauri dev");
+    expect(packageJson.scripts?.["build:electron"]).toBe("tsc -p tsconfig.electron.json");
+    expect(desktopDevScript).toContain("pnpm dev");
+    expect(desktopDevScript).toContain("pnpm build:electron");
+    expect(desktopDevScript).toContain("electron dist-electron/main.js");
+    expect(desktopDevScript).not.toContain("tauri dev");
   });
 
   it("uses transparent macOS sidebar material with native overlay titlebar controls", async () => {
