@@ -1,6 +1,6 @@
-import protocolVersionJson from "../../../tests/contract/protocol-version.json";
-import errorCodesJson from "../../../tests/contract/error-codes.json";
-import eventsJson from "../../../tests/contract/events.json";
+import protocolVersionJson from "../../../tests/contract/protocol-version.json" with { type: "json" };
+import errorCodesJson from "../../../tests/contract/error-codes.json" with { type: "json" };
+import eventsJson from "../../../tests/contract/events.json" with { type: "json" };
 
 export interface ProtocolVersionContract {
   version: "v1";

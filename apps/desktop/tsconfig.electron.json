@@ -10,5 +10,6 @@
     "rootDir": "src",
     "types": ["node"]
   },
-  "include": ["src/electron/**/*.ts", "src/lib/daemon-types.ts", "src/lib/desktop-rpc.ts"]
+  "include": ["src/electron/**/*.ts", "src/lib/daemon-types.ts", "src/lib/desktop-rpc.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

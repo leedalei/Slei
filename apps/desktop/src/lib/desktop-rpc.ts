@@ -10,7 +10,7 @@ import type {
   SendChannelMessageRequest,
   TaskListQuery,
   TaskListReceipt,
-} from "./daemon-types";
+} from "./daemon-types.js";
 
 export const desktopRpcMethods = [
   "daemon.status",
