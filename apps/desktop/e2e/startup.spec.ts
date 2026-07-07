@@ -166,18 +166,30 @@ describe("desktop startup contract", () => {
     expectInOrder(desktopDevScript, [viteStart, "while true; do", viteReadyPortCheck, stalePortGuard, "break"]);
     expect(desktopDevScript).toContain("terminate_process_tree");
     expect(desktopDevScript).toContain("DAEMON_WAS_FREE=");
+    expect(desktopDevScript).toContain("DAEMON_PID_FILE=");
+    expect(desktopDevScript).toContain("record_owned_daemon_pid");
+    expect(desktopDevScript).toContain("daemon_pid_is_owned_listener");
     expect(desktopDevScript).toContain("cleanup_owned_daemon");
+    const electronLaunchIndex = desktopDevScript.indexOf(`electron ${electronEntry} &`);
+    const recordDaemonCallIndex = desktopDevScript.indexOf("\nrecord_owned_daemon_pid\n", electronLaunchIndex);
+    expect(recordDaemonCallIndex).toBeGreaterThan(electronLaunchIndex);
     expectInOrder(desktopDevScript, [
       'if ! nc -z 127.0.0.1 4319 2>/dev/null; then',
       'DAEMON_WAS_FREE="1"',
-      `electron ${electronEntry}`,
+      `electron ${electronEntry} &`,
+      'wait "$ELECTRON_PID"',
     ]);
     expectInOrder(desktopDevScript, [
       'if [ "$DAEMON_WAS_FREE" = "1" ]; then',
-      "lsof -ti tcp:4319",
+      'daemon_pid=$(sed -n \'1p\' "$DAEMON_PID_FILE" 2>/dev/null || true)',
+      'if daemon_pid_is_owned_listener "$daemon_pid"; then',
       'terminate_process_tree "$daemon_pid"',
       'pkill -f "$REPO_ROOT/workers/claude-agent"',
     ]);
+    expect(desktopDevScript).toContain("lsof -nP -iTCP:4319 -sTCP:LISTEN -Fp");
+    expect(desktopDevScript).toContain('lsof -a -p "$pid" -d cwd -Fn');
+    expect(desktopDevScript).not.toContain("lsof -ti tcp:4319");
+    expect(desktopDevScript).not.toContain("lsof -ti -iTCP:4319");
     expect(desktopDevScript).not.toContain("tauri dev");
     expect(desktopDevScript).not.toContain("pnpm dev &");
     expect(desktopDevScript).not.toContain("cargo run -p slei-daemon");

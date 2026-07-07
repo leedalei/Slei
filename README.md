@@ -61,13 +61,13 @@ pnpm --filter @slei/desktop dev
 
 注意：只跑 `pnpm --filter @slei/desktop dev` 只能打开 Web 前端页面，不会启动 Electron shell，也不会自动启动 daemon。需要验证完整桌面集成时请使用 `desktop` 命令。
 
-如果首次运行时 Rust 编译超过脚本等待时间，可能看到：
+如果 Vite 端口被占用，或 dev server 没能在等待时间内 ready，可能看到：
 
 ```text
 [slei-desktop] timed out waiting for Vite
 ```
 
-可以先单独运行构建或 daemon，等看到 `slei-daemon listening on 127.0.0.1:4319` 后，再运行完整桌面命令：
+可以先检查端口占用，或单独运行 daemon，等看到 `slei-daemon listening on 127.0.0.1:4319` 后，再运行完整桌面命令：
 
 ```sh
 cargo run -p slei-daemon
