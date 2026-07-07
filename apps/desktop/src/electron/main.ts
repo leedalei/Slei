@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DAEMON_ENDPOINT, DESKTOP_DAEMON_TOKEN, VITE_DEV_URL } from "./constants.js";
@@ -19,6 +19,9 @@ type RpcEnvelope = {
   payload?: unknown;
 };
 type OfflineDaemonCode = Extract<MainDaemonState, { state: "offline" }>["code"];
+export type RendererRpcResult =
+  | { ok: true; value: unknown }
+  | { ok: false; error: { name: string; code: string; message: string } };
 
 let currentDaemonState: MainDaemonState = { state: "starting" };
 let daemonHandle: DaemonHandle | undefined;
@@ -44,13 +47,30 @@ export function createMainWindow(): BrowserWindow {
   return window;
 }
 
+export function registerElectronProtocolSchemes(): void {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: "slei-avatar",
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+      },
+    },
+  ]);
+}
+
+export function registerElectronProtocolHandlers(): void {
+  protocol.handle("slei-avatar", () => new Response(null, { status: 404 }));
+}
+
 export function registerIpcHandlers(): void {
   if (ipcRegistered) {
     return;
   }
   ipcRegistered = true;
 
-  ipcMain.handle("slei:rpc", (_event, envelope: RpcEnvelope) => handleRendererRpc(envelope));
+  ipcMain.handle("slei:rpc", (_event, envelope: RpcEnvelope) => handleRendererRpcForIpc(envelope));
 
   ipcMain.on("slei:events:subscribe", (event, payload: unknown) => {
     const subscription = readSubscriptionPayload(payload);
@@ -62,6 +82,37 @@ export function registerIpcHandlers(): void {
   ipcMain.on("slei:events:unsubscribe", () => {
     // Event forwarder subscriptions are wired in a later task.
   });
+}
+
+export async function handleRendererRpcForIpc(envelope: RpcEnvelope): Promise<RendererRpcResult> {
+  try {
+    return { ok: true, value: await handleRendererRpc(envelope) };
+  } catch (error) {
+    return createRpcFailureEnvelope(error);
+  }
+}
+
+export function createRpcFailureEnvelope(error: unknown): Extract<RendererRpcResult, { ok: false }> {
+  if (error instanceof DesktopDaemonError) {
+    return {
+      ok: false,
+      error: {
+        name: error.name,
+        code: error.code,
+        message: sanitizeIpcErrorMessage(error.message),
+      },
+    };
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    ok: false,
+    error: {
+      name: "DesktopDaemonError",
+      code: "daemon_unavailable",
+      message: sanitizeIpcErrorMessage(message),
+    },
+  };
 }
 
 export async function startDaemonBridge(): Promise<void> {
@@ -151,6 +202,13 @@ function sanitizeLogMessage(message: string): string {
   return message.replaceAll(DESKTOP_DAEMON_TOKEN, "[redacted]").slice(0, 1000);
 }
 
+function sanitizeIpcErrorMessage(message: string): string {
+  return message
+    .replaceAll(DESKTOP_DAEMON_TOKEN, "[redacted]")
+    .replaceAll(DAEMON_ENDPOINT, "[daemon-endpoint]")
+    .slice(0, 1000);
+}
+
 function readRpcMethod(envelope: RpcEnvelope): string {
   if (!envelope || typeof envelope.method !== "string" || envelope.method.length === 0) {
     throw new DesktopDaemonError("invalid_rpc_payload", "Invalid desktop RPC envelope");
@@ -172,8 +230,11 @@ function readSubscriptionPayload(payload: unknown): { channel: string; subscript
   return { channel, subscriptionId };
 }
 
+registerElectronProtocolSchemes();
+
 void app.whenReady().then(() => {
   registerIpcHandlers();
+  registerElectronProtocolHandlers();
   createMainWindow();
   void startDaemonBridge();
 });

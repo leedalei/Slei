@@ -14,6 +14,9 @@ type SleiPreloadIpc = {
 type SleiPreloadApiOptions = {
   createSubscriptionId?: () => string;
 };
+type RpcInvokeResult =
+  | { ok: true; value: unknown }
+  | { ok: false; error: { name?: unknown; code?: unknown; message?: unknown } };
 
 const CHANNEL_EVENT_NAMES: Record<SleiPreloadChannel, string> = {
   "daemon.events": "slei:daemon-events",
@@ -28,8 +31,8 @@ export function createSleiPreloadApi(
 
   return {
     rpc: {
-      call(method: string, payload: unknown) {
-        return ipc.invoke("slei:rpc", { method, payload });
+      async call(method: string, payload: unknown) {
+        return unwrapRpcInvokeResult(await ipc.invoke("slei:rpc", { method, payload }));
       },
     },
     events: {
@@ -52,6 +55,37 @@ export function createSleiPreloadApi(
       },
     },
   };
+}
+
+function unwrapRpcInvokeResult(result: unknown): unknown {
+  if (!isRpcInvokeResult(result)) {
+    return result;
+  }
+
+  if (result.ok) {
+    return result.value;
+  }
+
+  throw rehydrateRpcError(result.error);
+}
+
+function rehydrateRpcError(error: Extract<RpcInvokeResult, { ok: false }>["error"]): Error & { code?: string } {
+  const message = typeof error.message === "string" ? error.message : "Slei daemon request failed";
+  const rehydrated = new Error(message) as Error & { code?: string };
+  rehydrated.name = typeof error.name === "string" ? error.name : "DesktopDaemonError";
+  if (typeof error.code === "string") {
+    rehydrated.code = error.code;
+  }
+  return rehydrated;
+}
+
+function isRpcInvokeResult(value: unknown): value is RpcInvokeResult {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return record.ok === true || record.ok === false;
 }
 
 function createDefaultSubscriptionId(): string {

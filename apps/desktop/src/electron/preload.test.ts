@@ -44,4 +44,26 @@ describe("electron preload api", () => {
     cleanup();
     expect(off).toHaveBeenCalledWith("slei:daemon-state", expect.any(Function));
   });
+
+  it("rehydrates structured daemon errors from rpc envelopes", async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      ok: false,
+      error: {
+        name: "DesktopDaemonError",
+        code: "daemon_auth_failed",
+        message: "Slei daemon is offline: daemon_auth_failed",
+      },
+    });
+    const on = vi.fn();
+    const send = vi.fn();
+    const off = vi.fn();
+
+    const api = createSleiPreloadApi({ invoke, on, send, off }, { createSubscriptionId: () => "sub_1" });
+
+    await expect(api.rpc.call("channels.list", {})).rejects.toMatchObject({
+      name: "DesktopDaemonError",
+      code: "daemon_auth_failed",
+      message: "Slei daemon is offline: daemon_auth_failed",
+    });
+  });
 });
