@@ -112,8 +112,11 @@ request/response 类型优先复用 `@slei/protocol-client` 和当前 bridge DTO
 
 ```ts
 window.slei.events.subscribe("daemon.events", handler);
+window.slei.events.subscribe("daemon.state", handler);
 window.slei.events.reconnect(after);
 ```
+
+`daemon.state` 用于 Electron main 异步启动或连接 daemon 后通知 renderer。renderer 初始业务 RPC 如果遇到 `starting/offline`，应展示离线或加载状态；当 `daemon.state` 进入 `connected` 后，前端重新执行初始化数据加载或核心 refresh。
 
 IPC 设计要求：
 
@@ -134,13 +137,14 @@ Electron main 负责确保本地 daemon 可用，但只管理进程生命周期�
 pnpm --filter @slei/desktop desktop
   -> 构建/检查必要 worker 与 CLI
   -> 启动 Electron
-  -> Electron main 检查 127.0.0.1:4319
+  -> 创建 BrowserWindow
+  -> preload 注入 typed RPC API
+  -> renderer bootstrap，先展示 starting/loading/offline 兼容状态
+  -> Electron main 异步检查 127.0.0.1:4319
      - 已有 daemon：连接并校验 status/protocol
      - 没有 daemon：spawn cargo run -p slei-daemon
   -> 等待 daemon ready
-  -> 创建 BrowserWindow
-  -> preload 注入 typed RPC API
-  -> renderer bootstrap
+  -> 通过 RPC status/event 通知 renderer 进入 connected 或 error 状态
   -> event forwarder 开始轮询/订阅 daemon events
 ```
 
@@ -158,7 +162,7 @@ V1 的 daemon auth 规则：
 
 - 如果端口已有 daemon，Electron 不强杀，不抢所有权，记录 `owned=false`。
 - 如果 Electron main 自己 spawn daemon，记录 `owned=true`，App 退出时优雅终止。
-- daemon ready 等待必须有超时，例如 30 秒后返回 `daemon_start_timeout`。
+- daemon ready 等待必须有超时，例如 30 秒后返回 `daemon_start_timeout`；超时不能阻止窗口渲染，renderer 必须能看到离线或错误状态。
 - daemon 崩溃时，Electron main 记录退出码，并通过事件或 RPC 状态让 renderer 展示离线/错误状态。
 - V1 可以不实现无限自动重启；最多提供一次可控重启或重新连接 RPC。
 - 子进程环境必须保留 worker/CLI 所需约束：`SLEI_DAEMON_URL`、`SLEI_DAEMON_TOKEN`、repo `target/debug` PATH、worker build 输出路径。
