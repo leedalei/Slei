@@ -15,6 +15,7 @@ import type {
   ConversationMessageView,
   ConversationSessionView,
   ConversationView,
+  DaemonConnectionState,
   DaemonBridge,
   DiagnosticsSnapshotView,
   DesktopAgentView,
@@ -35,6 +36,7 @@ import type {
 
 export type DaemonBridgeMock = DaemonBridge & {
   eventSubscriptions: Array<{ after: number }>;
+  emitDaemonState(state: DaemonConnectionState): void;
   setConnected(connected: boolean): void;
 };
 
@@ -123,6 +125,7 @@ export function createDaemonBridgeMock(input: {
   let preferences = defaultUserPreferences();
   let profile: UserProfileView | null = input.profile ?? null;
   const eventSubscriptions: Array<{ after: number }> = [];
+  const daemonStateHandlers = new Set<(state: DaemonConnectionState) => void>();
 
   function savedMessageFromRequest(request: SaveMessageRequest): SavedMessageView {
     const channelMessage = request.sourceKind === "channel"
@@ -820,6 +823,17 @@ export function createDaemonBridgeMock(input: {
     },
     async listenDaemonEvents() {
       return () => undefined;
+    },
+    async listenDaemonState(handler) {
+      daemonStateHandlers.add(handler);
+      return () => {
+        daemonStateHandlers.delete(handler);
+      };
+    },
+    emitDaemonState(state) {
+      for (const handler of daemonStateHandlers) {
+        handler(state);
+      }
     },
   };
 }

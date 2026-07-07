@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 export type FrontendCrashKind = "react" | "window-error" | "unhandled-rejection";
 
 export type FrontendCrashReport = {
@@ -38,15 +36,22 @@ export function createFrontendCrashReport(
     message: sanitizeCrashText(normalized.message || "Unknown frontend crash"),
     stack: normalized.stack ? sanitizeCrashText(normalized.stack) : undefined,
     componentStack: componentStack ? sanitizeCrashText(componentStack) : undefined,
-    url: typeof window === "undefined" ? "" : window.location.href,
+    url: typeof window === "undefined" ? "" : sanitizeCrashText(window.location.href),
   };
 }
 
 export function logFrontendCrash(report: FrontendCrashReport) {
-  console.error("[slei-frontend-crash]", report);
-  void invoke("log_frontend_crash_command", { report }).catch((error) => {
-    console.error("[slei-frontend-crash] failed to send crash report", error);
-  });
+  const electronRpc = electronCrashRpc();
+  if (electronRpc) {
+    void electronRpc.call("frontend.crash.log", { report }).catch(logCrashReportFailure);
+    return;
+  }
+
+  if (hasLegacyTauriRuntime()) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("log_frontend_crash_command", { report }))
+      .catch(logCrashReportFailure);
+  }
 }
 
 export function reportFrontendCrash(
@@ -64,4 +69,24 @@ export function installFrontendCrashLogging() {
   window.addEventListener("unhandledrejection", (event) => {
     reportFrontendCrash("unhandled-rejection", event.reason);
   });
+}
+
+function logCrashReportFailure(error: unknown) {
+  console.error("[slei-frontend-crash] failed to send crash report", error);
+}
+
+function electronCrashRpc(): { call(method: string, payload: unknown): Promise<unknown> } | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const candidate = (window as Window & {
+    slei?: { rpc?: { call?: (method: string, payload: unknown) => Promise<unknown> } };
+  }).slei?.rpc;
+
+  return typeof candidate?.call === "function" ? { call: candidate.call } : undefined;
+}
+
+function hasLegacyTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }

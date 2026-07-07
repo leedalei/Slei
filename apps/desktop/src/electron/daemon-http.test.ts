@@ -32,6 +32,19 @@ describe("daemon http client", () => {
     await expect(client.request("GET", "/v1/nodes")).rejects.toMatchObject({ code: "daemon_auth_failed" });
   });
 
+  it("treats 204 No Content as a successful void response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => {
+        throw new Error("no body");
+      },
+    });
+    const client = createDaemonHttpClient({ endpoint: "http://127.0.0.1:4319", token: "desktop-session-token", fetchImpl });
+
+    await expect(client.request("DELETE", "/v1/saved-messages/msg_1")).resolves.toBeUndefined();
+  });
+
   it("filters caller-provided authorization headers case-insensitively", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

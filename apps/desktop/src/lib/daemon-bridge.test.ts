@@ -140,6 +140,77 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     expect(listenMock).not.toHaveBeenCalled();
   });
 
+  it("prefers the Electron preload RPC bridge over Tauri commands", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method === "preferences.list") return { preferences: { locale: "zh-CN", timeZone: "Asia/Shanghai", appearance: { theme: "light", fontSize: "md" }, notifications: { mentions: true, humanReplies: true, approvals: true } } };
+      if (method === "profile.get") return { profile: null };
+      if (method === "agents.list") return { agents: [] };
+      if (method === "conversations.list") return { conversations: [] };
+      if (method === "savedMessages.list") return { savedMessages: [] };
+      if (method === "search.global") return { query: "needle", totals: { agents: 0, channels: 0, messages: 0 }, agents: [], channels: [], messages: [] };
+      throw new Error(`unexpected method ${method}`);
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        __TAURI_INTERNALS__: {},
+        slei: {
+          rpc: { call },
+          events: { subscribe: vi.fn() },
+        },
+      },
+    });
+
+    const bridge = createDaemonBridge();
+    await bridge.listPreferences();
+    await bridge.listProfile();
+    await bridge.listAgents();
+    await bridge.listConversations();
+    await bridge.listSavedMessages();
+    await bridge.globalSearch({ q: "needle" });
+
+    expect(call.mock.calls.map(([method]) => method)).toEqual([
+      "preferences.list",
+      "profile.get",
+      "agents.list",
+      "conversations.list",
+      "savedMessages.list",
+      "search.global",
+    ]);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("subscribes to daemon state through Electron events and no-ops elsewhere", async () => {
+    const cleanup = vi.fn();
+    const subscribe = vi.fn((_channel, handler) => {
+      handler({ state: "connected" });
+      return cleanup;
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        slei: {
+          rpc: { call: vi.fn() },
+          events: { subscribe },
+        },
+      },
+    });
+
+    const bridge = createDaemonBridge();
+    const handler = vi.fn();
+    const unlisten = await bridge.listenDaemonState(handler);
+
+    expect(subscribe).toHaveBeenCalledWith("daemon.state", expect.any(Function));
+    expect(handler).toHaveBeenCalledWith({ state: "connected" });
+    unlisten();
+    expect(cleanup).toHaveBeenCalledOnce();
+
+    Reflect.deleteProperty(globalThis as Record<string, unknown>, "window");
+    const offlineCleanup = await createDaemonBridge().listenDaemonState(handler);
+    offlineCleanup();
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it("invokes paged message lists and message thread commands", async () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
@@ -360,6 +431,21 @@ describe("createDaemonBridgeMock global search", () => {
     });
 
     expect(created.agent.avatarSeed).toBe("preset-engineer");
+  });
+
+  it("supports daemon state subscriptions in tests", async () => {
+    const bridge = createDaemonBridgeMock({ connected: false });
+    const handler = vi.fn();
+
+    const cleanup = await bridge.listenDaemonState(handler);
+    bridge.emitDaemonState({ state: "starting" });
+    bridge.emitDaemonState({ state: "connected" });
+    cleanup();
+    bridge.emitDaemonState({ state: "offline", code: "daemon_unavailable" });
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenNthCalledWith(1, { state: "starting" });
+    expect(handler).toHaveBeenNthCalledWith(2, { state: "connected" });
   });
 });
 

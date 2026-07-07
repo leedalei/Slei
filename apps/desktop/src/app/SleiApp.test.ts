@@ -195,6 +195,15 @@ describe("ensureActiveDmAgentSkills", () => {
     expect(source).not.toContain("if (nextData !== data) setData(nextData)");
     expect(source).not.toContain("}, [activeConversationId, bridge.listAgentSkills, data]);");
   });
+
+  it("retries initial loading when daemon state becomes connected", () => {
+    const source = readFileSync(join(process.cwd(), "src/app/SleiApp.tsx"), "utf8");
+
+    expect(source).toContain("const initialLoadInFlightRef = useRef<Promise<void> | null>(null)");
+    expect(source).toContain("bridge.listenDaemonState");
+    expect(source).toContain("if (state.state === \"connected\")");
+    expect(source).toContain("void runInitialLoad()");
+  });
 });
 
 describe("daemon event routing", () => {

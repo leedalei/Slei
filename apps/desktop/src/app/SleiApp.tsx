@@ -957,6 +957,9 @@ export function SleiApp() {
   const exhaustedOlderMessageTargetsRef = useRef(new Set<string>());
   const messageNavigationSequenceRef = useRef(0);
   const activeDmSkillLoadsRef = useRef(new Set<string>());
+  const activeChannelIdRef = useRef(activeChannelId);
+  const initialLoadInFlightRef = useRef<Promise<void> | null>(null);
+  const pendingInitialLoadRetryRef = useRef(false);
   const bridge = useMemo(() => createDaemonBridge(), []);
   const messages = createDesktopMessages(locale);
   const activeDmAgentId = useMemo(() => {
@@ -1358,6 +1361,10 @@ export function SleiApp() {
   }, [activeChannelId, bridge]);
 
   useEffect(() => {
+    activeChannelIdRef.current = activeChannelId;
+  }, [activeChannelId]);
+
+  useEffect(() => {
     let mounted = true;
     async function loadInitialState() {
       const [next, preferencesReceipt, savedReceipt, profileReceipt] = await Promise.all([
@@ -1393,7 +1400,8 @@ export function SleiApp() {
       const conversationSessions = await loadSleiConversationSessions(bridge, conversationReceipt.conversations);
       const conversationMessages = await loadSleiConversationMessages(bridge, conversationReceipt.conversations, members, profileReceipt.profile, messagesForLocale);
       const channelMessages = await loadSleiChannelMessages(bridge, channelReceipt.channels, members, profileReceipt.profile, messagesForLocale);
-      const taskReceipt = await bridge.listTasks(activeChannelId ? { channelId: activeChannelId } : {}).catch(() => ({ tasks: [] }));
+      const initialActiveChannelId = activeChannelIdRef.current;
+      const taskReceipt = await bridge.listTasks(initialActiveChannelId ? { channelId: initialActiveChannelId } : {}).catch(() => ({ tasks: [] }));
       if (!mounted) return;
       setData((current) =>
         createEmptySleiData({
@@ -1409,7 +1417,7 @@ export function SleiApp() {
             channelReceipt.channels.map((channel) => channel.id),
           ),
           members,
-          tasks: mergeTaskSummariesIntoTasks(current.tasks, taskReceipt.tasks, members, activeChannelId),
+          tasks: mergeTaskSummariesIntoTasks(current.tasks, taskReceipt.tasks, members, initialActiveChannelId),
         }),
       );
       setActiveMemberId((current) => current ?? members[0]?.id);
@@ -1420,19 +1428,56 @@ export function SleiApp() {
         setActiveChannelId("all");
       }
     }
-    loadInitialState()
-      .catch((error: unknown) => {
-        if (!mounted) return;
-        setGuideBootstrapping(false);
-        setRuntimeSetup({
-          loading: false,
-          error: error instanceof Error ? error.message : createDesktopMessages("zh-CN").common.runtimeCheckFailed,
-          hasClaudeRuntimeReady: false,
-          nodes: data.nodes,
+    function runInitialLoad() {
+      if (initialLoadInFlightRef.current) {
+        pendingInitialLoadRetryRef.current = true;
+        return initialLoadInFlightRef.current;
+      }
+
+      pendingInitialLoadRetryRef.current = false;
+      let load: Promise<void>;
+      load = loadInitialState()
+        .catch((error: unknown) => {
+          if (!mounted) return;
+          setGuideBootstrapping(false);
+          setRuntimeSetup({
+            loading: false,
+            error: error instanceof Error ? error.message : createDesktopMessages("zh-CN").common.runtimeCheckFailed,
+            hasClaudeRuntimeReady: false,
+            nodes: data.nodes,
+          });
+        })
+        .finally(() => {
+          if (initialLoadInFlightRef.current === load) {
+            initialLoadInFlightRef.current = null;
+          }
+          if (mounted && pendingInitialLoadRetryRef.current) {
+            pendingInitialLoadRetryRef.current = false;
+            void runInitialLoad();
+          }
         });
-      });
+      initialLoadInFlightRef.current = load;
+      return load;
+    }
+
+    void runInitialLoad();
+    let cleanupDaemonState: (() => void) | undefined;
+    void bridge.listenDaemonState((state) => {
+      if (state.state === "connected") {
+        void runInitialLoad();
+      }
+    })
+      .then((cleanup) => {
+        if (mounted) {
+          cleanupDaemonState = cleanup;
+        } else {
+          cleanup();
+        }
+      })
+      .catch(() => undefined);
     return () => {
       mounted = false;
+      cleanupDaemonState?.();
     };
   }, [bridge]);
 

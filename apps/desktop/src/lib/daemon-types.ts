@@ -671,6 +671,7 @@ export type DaemonConnectionState =
   | { state: "offline"; code: "daemon_unavailable" | "daemon_auth_failed" | "daemon_start_timeout" };
 
 export type DaemonEventBatchHandler = (receipt: EventReconnectReceipt) => void;
+export type DaemonStateHandler = (state: DaemonConnectionState) => void;
 
 export type DiagnosticsSnapshotView = {
   node: string;
@@ -743,4 +744,5 @@ export type DaemonBridge = {
   refreshRuntimeStatus(): Promise<NodeListReceipt>;
   subscribeEvents(after: number): Promise<EventReconnectReceipt>;
   listenDaemonEvents(handler: DaemonEventBatchHandler): Promise<() => void>;
+  listenDaemonState(handler: DaemonStateHandler): Promise<() => void>;
 };

@@ -98,6 +98,10 @@ function normalizePath(path: string): string {
 }
 
 async function parseDaemonJson<T>(response: Response): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   try {
     return (await response.json()) as T;
   } catch (error) {

@@ -111,9 +111,11 @@ import type {
   EventReconnectReceipt,
   DaemonConnectionState,
   DaemonEventBatchHandler,
+  DaemonStateHandler,
   DiagnosticsSnapshotView,
   DaemonBridge,
 } from "./daemon-types";
+import { createDesktopRpcClient } from "./desktop-rpc";
 
 export type {
   SanitizedDaemonStatus,
@@ -226,6 +228,7 @@ export type {
   EventReconnectReceipt,
   DaemonConnectionState,
   DaemonEventBatchHandler,
+  DaemonStateHandler,
   DiagnosticsSnapshotView,
   DaemonBridge,
 } from "./daemon-types";
@@ -402,10 +405,18 @@ export function createOfflineDaemonBridge(): DaemonBridge {
     async listenDaemonEvents() {
       return () => undefined;
     },
+    async listenDaemonState() {
+      return () => undefined;
+    },
   };
 }
 
 export function createDaemonBridge(): DaemonBridge {
+  const electronBridge = createElectronDaemonBridge();
+  if (electronBridge) {
+    return electronBridge;
+  }
+
   if (hasTauriRuntime()) {
     return {
       logFrontendEvent: (report: FrontendEventReport) => invoke<void>("log_frontend_event_command", { report }),
@@ -467,12 +478,129 @@ export function createDaemonBridge(): DaemonBridge {
       subscribeEvents: (after: number) => invoke<EventReconnectReceipt>("reconnect_events_command", { after }),
       listenDaemonEvents: async (handler: DaemonEventBatchHandler) =>
         listen<EventReconnectReceipt>("slei://daemon-events", (event) => handler(event.payload)),
+      listenDaemonState: async () => () => undefined,
     };
   }
 
   return createOfflineDaemonBridge();
 }
 
+function createElectronDaemonBridge(): DaemonBridge | undefined {
+  const runtime = electronRuntime();
+  if (!runtime) {
+    return undefined;
+  }
+
+  const rpc = createDesktopRpcClient({ call: runtime.rpc.call });
+
+  return {
+    logFrontendEvent: (report: FrontendEventReport) => rpc.call("frontend.event.log", { report }),
+    daemonStatus: () => rpc.call("daemon.status", {}),
+    appRuntimeFlags: () => rpc.call("app.runtimeFlags", {}),
+    listDiagnostics: () => rpc.call("diagnostics.list", {}),
+    listNodes: () => rpc.call("nodes.list", {}),
+    bootstrapGuideAgent: () => rpc.call("agents.bootstrapGuide", {}),
+    listChannels: () => rpc.call("channels.list", {}),
+    createChannel: (request: ChannelCreateRequest) => rpc.call("channels.create", { request }),
+    deleteChannel: (channelId: string) => rpc.call("channels.delete", { channelId }),
+    replaceChannelProjectPaths: (channelId: string, request: ChannelProjectPathsRequest) =>
+      rpc.call("channels.projectPaths.replace", { channelId, request }),
+    listChannelMembers: (channelId: string) => rpc.call("channels.members.list", { channelId }),
+    addChannelMember: (channelId: string, request: ChannelMemberAddRequest) =>
+      rpc.call("channels.members.add", { channelId, request }),
+    removeChannelMember: (channelId: string, agentId: string) =>
+      rpc.call("channels.members.remove", { channelId, agentId }),
+    listChannelMessages: (channelId: string, query?: MessagePageQuery) =>
+      rpc.call("channels.messages.list", { channelId, query }),
+    sendChannelMessage: (channelId: string, request: SendChannelMessageRequest) =>
+      rpc.call("channels.messages.send", { channelId, request }),
+    listTasks: (query = {}) => rpc.call("tasks.list", { query }),
+    getTaskThread: (taskId: string) => rpc.call("tasks.thread.get", { taskId }),
+    replyToTask: (taskId: string, request: TaskReplyRequest) => rpc.call("tasks.reply", { taskId, request }),
+    updateTaskStatus: (taskId: string, request: TaskStatusUpdateRequest) =>
+      rpc.call("tasks.status.update", { taskId, request }),
+    completeInteractiveCard: (cardId: string) => rpc.call("interactiveCards.complete", { cardId }),
+    listAgents: () => rpc.call("agents.list", {}),
+    listAgentRolePresets: () => rpc.call("agentRolePresets.list", {}),
+    createAgent: (request: AgentCreateRequest) => rpc.call("agents.create", { request }),
+    updateAgent: (agentId: string, request: AgentUpdateRequest) => rpc.call("agents.update", { agentId, request }),
+    deleteAgent: (agentId: string) => rpc.call("agents.delete", { agentId }),
+    rememberAgentFact: (agentId: string, fact: string) => rpc.call("agents.remember", { agentId, fact }),
+    listAgentSkills: (agentId: string) => rpc.call("agents.skills.list", { agentId }),
+    openAgentPath: (agentId: string, target: AgentPathTarget) => rpc.call("agents.path.open", { agentId, target }),
+    listAgentWorkspace: (agentId: string, relativePath?: string) =>
+      rpc.call("agents.workspace.list", { agentId, relativePath }),
+    readAgentWorkspaceFile: (agentId: string, relativePath: string) =>
+      rpc.call("agents.workspace.file.read", { agentId, relativePath }),
+    listAgentActivity: (agentId: string, limit = 200) => rpc.call("agents.activity.list", { agentId, limit }),
+    listConversations: () => rpc.call("conversations.list", {}),
+    createDmConversation: (agentId: string) => rpc.call("conversations.dm.create", { agentId }),
+    resetConversationRuntimeSession: (conversationId: string) =>
+      rpc.call("conversations.runtimeSession.reset", { conversationId }),
+    listConversationSessions: (conversationId: string) => rpc.call("conversations.sessions.list", { conversationId }),
+    createConversationSession: (conversationId: string) =>
+      rpc.call("conversations.sessions.create", { conversationId }),
+    activateConversationSession: (conversationId: string, sessionId: string) =>
+      rpc.call("conversations.sessions.activate", { conversationId, sessionId }),
+    listConversationMessages: (conversationId: string, query?: MessagePageQuery) =>
+      rpc.call("conversations.messages.list", { conversationId, query }),
+    clearConversationMessages: (conversationId: string) => rpc.call("conversations.messages.clear", { conversationId }),
+    createMessageThreadFromSource: (request: CreateMessageThreadRequest) =>
+      rpc.call("messageThreads.createFromSource", { request }),
+    getMessageThread: (threadId: string) => rpc.call("messageThreads.get", { threadId }),
+    replyToMessageThread: (threadId: string, request: ReplyToMessageThreadRequest) =>
+      rpc.call("messageThreads.reply", { threadId, request }),
+    sendConversationMessage: (conversationId: string, request: ConversationMessageRequest, sessionId?: string) =>
+      rpc.call("conversations.messages.send", { conversationId, request, sessionId }),
+    resolvePermission: (request: PermissionResolveRequest) => rpc.call("permissions.resolve", { request }),
+    uploadConversationAttachment: (request: ConversationAttachmentUploadRequest) =>
+      rpc.call("attachments.upload", { request }),
+    listSavedMessages: () => rpc.call("savedMessages.list", {}),
+    saveMessage: (request: SaveMessageRequest) => rpc.call("savedMessages.save", { request }),
+    unsaveMessage: (messageId: string) => rpc.call("savedMessages.unsave", { messageId }),
+    globalSearch: (query: GlobalSearchQuery) => rpc.call("search.global", { query }),
+    listPreferences: () => rpc.call("preferences.list", {}),
+    updatePreferences: (request: PreferencesUpdateRequest) => rpc.call("preferences.update", { request }),
+    listProfile: () => rpc.call("profile.get", {}),
+    updateProfile: (request: ProfileUpdateRequest) => rpc.call("profile.update", { request }),
+    uploadProfileAvatar: (request: ProfileAvatarUploadRequest) => rpc.call("profile.avatar.upload", { request }),
+    renameLocalNode: (name: string) => rpc.call("nodes.renameLocal", { name }),
+    refreshRuntimeStatus: () => rpc.call("runtime.refreshStatus", {}),
+    subscribeEvents: (after: number) => rpc.call("events.reconnect", { after }),
+    async listenDaemonEvents(handler: DaemonEventBatchHandler) {
+      return runtime.events.subscribe("daemon.events", handler as (payload: unknown) => void);
+    },
+    async listenDaemonState(handler: DaemonStateHandler) {
+      return runtime.events.subscribe("daemon.state", handler as (payload: unknown) => void);
+    },
+  };
+}
+
 function hasTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+type ElectronRuntime = {
+  rpc: {
+    call(method: string, payload: unknown): Promise<unknown>;
+  };
+  events: {
+    subscribe(channel: "daemon.events" | "daemon.state", handler: (payload: unknown) => void): () => void;
+  };
+};
+
+function electronRuntime(): ElectronRuntime | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  const candidate = (window as Window & { slei?: Partial<ElectronRuntime> }).slei;
+  if (
+    typeof candidate?.rpc?.call !== "function" ||
+    typeof candidate.events?.subscribe !== "function"
+  ) {
+    return undefined;
+  }
+
+  return candidate as ElectronRuntime;
 }
