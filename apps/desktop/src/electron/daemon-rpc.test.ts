@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createDaemonHttpClient } from "./daemon-http.js";
 import { createDaemonRpcHandler } from "./daemon-rpc.js";
 
 describe("daemon rpc handler", () => {
@@ -28,10 +29,45 @@ describe("daemon rpc handler", () => {
       request: { authorId: "human:local", body: "hello" },
     });
 
-    expect(request).toHaveBeenCalledWith("POST", "/v1/channels/all/messages", {
-      authorId: "human:local",
-      body: "hello",
+    expect(request).toHaveBeenCalledOnce();
+    const [method, path, body, options] = request.mock.calls[0] as [
+      string,
+      string,
+      unknown,
+      { headers?: Record<string, string> },
+    ];
+    expect(method).toBe("POST");
+    expect(path).toBe("/v1/channels/all/messages");
+    expect(body).toEqual({ authorId: "human:local", body: "hello" });
+    expect(options.headers?.["Idempotency-Key"]).toEqual(expect.stringMatching(/^desktop-channel-message-.+/));
+  });
+
+  it("sends channel messages with authorization and idempotency headers through the HTTP client", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ message: { id: "msg_1" }, outcome: { action: "broadcast_delivered" } }),
     });
+    const client = createDaemonHttpClient({
+      endpoint: "http://127.0.0.1:4319",
+      token: "desktop-session-token",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const rpc = createDaemonRpcHandler(client);
+
+    await rpc.call("channels.messages.send", {
+      channelId: "team chat",
+      request: { authorId: "human:local", body: "hello" },
+    });
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(url).toBe("http://127.0.0.1:4319/v1/channels/team%20chat/messages");
+    expect(init.method).toBe("POST");
+    expect(headers.Authorization).toBe("Bearer desktop-session-token");
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(headers["Idempotency-Key"]).toEqual(expect.stringMatching(/^desktop-channel-message-.+/));
   });
 
   it("logs frontend events locally without calling daemon routes", async () => {
@@ -98,5 +134,15 @@ describe("daemon rpc handler", () => {
       events: [event],
     });
     expect(request).toHaveBeenCalledWith("GET", "/v1/events/ws?after=42");
+  });
+
+  it.each([-1, 1.5])("rejects invalid event reconnect cursor %s", async (after) => {
+    const request = vi.fn().mockResolvedValue({ events: [] });
+    const rpc = createDaemonRpcHandler({ request } as never);
+
+    await expect(rpc.call("events.reconnect", { after })).rejects.toMatchObject({
+      code: "invalid_rpc_payload",
+    });
+    expect(request).not.toHaveBeenCalled();
   });
 });

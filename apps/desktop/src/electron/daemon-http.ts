@@ -1,7 +1,16 @@
 export type DaemonHttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
+export type DaemonHttpRequestOptions = {
+  headers?: Record<string, string>;
+};
+
 export type DaemonHttpClient = {
-  request<T = unknown>(method: DaemonHttpMethod, path: string, body?: unknown): Promise<T>;
+  request<T = unknown>(
+    method: DaemonHttpMethod,
+    path: string,
+    body?: unknown,
+    requestOptions?: DaemonHttpRequestOptions,
+  ): Promise<T>;
 };
 
 export type DaemonHttpClientOptions = {
@@ -28,15 +37,25 @@ export function createDaemonHttpClient(options: DaemonHttpClientOptions): Daemon
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   return {
-    async request<T = unknown>(method: DaemonHttpMethod, path: string, body?: unknown): Promise<T> {
+    async request<T = unknown>(
+      method: DaemonHttpMethod,
+      path: string,
+      body?: unknown,
+      requestOptions: DaemonHttpRequestOptions = {},
+    ): Promise<T> {
       const url = `${endpoint}${normalizePath(path)}`;
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${options.token}`,
+        ...requestOptions.headers,
       };
-      const init: RequestInit = { method, headers };
 
       if (body !== undefined) {
         headers["Content-Type"] = "application/json";
+      }
+
+      headers.Authorization = `Bearer ${options.token}`;
+
+      const init: RequestInit = { method, headers };
+      if (body !== undefined) {
         init.body = JSON.stringify(body);
       }
 

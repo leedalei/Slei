@@ -71,7 +71,9 @@ function sendChannelMessage(client: DaemonHttpClient, payload: unknown) {
   const record = requireRecord(payload, "channels.messages.send");
   const channelId = readString(record, "channelId", "channels.messages.send");
   const request = requireRecord(record.request, "channels.messages.send");
-  return client.request("POST", `/v1/channels/${encodeURIComponent(channelId)}/messages`, request);
+  return client.request("POST", `/v1/channels/${encodeURIComponent(channelId)}/messages`, request, {
+    headers: { "Idempotency-Key": createIdempotencyKey("desktop-channel-message") },
+  });
 }
 
 function listTasks(client: DaemonHttpClient, payload: unknown) {
@@ -82,12 +84,17 @@ function listTasks(client: DaemonHttpClient, payload: unknown) {
 
 async function reconnectEvents(client: DaemonHttpClient, payload: unknown): Promise<EventReconnectReceipt> {
   const record = requireRecord(payload, "events.reconnect");
-  const after = readNumber(record, "after", "events.reconnect");
+  const after = readNonNegativeInteger(record, "after", "events.reconnect");
   const query = new URLSearchParams({ after: String(after) });
   const response = await client.request<{ events?: unknown[] }>("GET", `/v1/events/ws?${query.toString()}`);
   const events = Array.isArray(response.events) ? response.events : [];
 
   return { after, events: events as EventReconnectReceipt["events"] };
+}
+
+function createIdempotencyKey(prefix: string): string {
+  const random = Math.random().toString(36).slice(2) || "0";
+  return `${prefix}-${Date.now()}-${random}`;
 }
 
 function logFrontendCrash(payload: unknown, logger: (message: string) => void): void {
@@ -201,6 +208,14 @@ function readString(record: Record<string, unknown>, key: string, method: string
 function readNumber(record: Record<string, unknown>, key: string, method: string): number {
   const value = record[key];
   if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new DesktopDaemonError("invalid_rpc_payload", `Invalid desktop RPC payload for ${method}`);
+  }
+  return value;
+}
+
+function readNonNegativeInteger(record: Record<string, unknown>, key: string, method: string): number {
+  const value = readNumber(record, key, method);
+  if (!Number.isInteger(value) || value < 0) {
     throw new DesktopDaemonError("invalid_rpc_payload", `Invalid desktop RPC payload for ${method}`);
   }
   return value;
