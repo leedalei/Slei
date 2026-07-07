@@ -665,9 +665,17 @@ function diagnosticPayloadValue(event: DiagnosticEventView, key: string): string
   return match?.[1];
 }
 
+function daemonEventPayloadRecord(event: DaemonEventView): Record<string, unknown> | undefined {
+  return event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+    ? event.payload as Record<string, unknown>
+    : undefined;
+}
+
 function daemonEventPayloadString(event: DaemonEventView, ...keys: string[]): string | undefined {
+  const payload = daemonEventPayloadRecord(event);
+  if (!payload) return undefined;
   for (const key of keys) {
-    const value = event.payload[key];
+    const value = payload[key];
     if (typeof value === "string" && value.trim()) return value;
   }
   return undefined;
