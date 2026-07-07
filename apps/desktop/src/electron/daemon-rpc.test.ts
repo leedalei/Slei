@@ -33,4 +33,41 @@ describe("daemon rpc handler", () => {
       body: "hello",
     });
   });
+
+  it("logs frontend events locally without calling daemon routes", async () => {
+    const request = vi.fn();
+    const logger = vi.fn();
+    const rpc = createDaemonRpcHandler({ request } as never, { logger });
+
+    await expect(
+      rpc.call("frontend.event.log", {
+        report: {
+          scope: "events",
+          message: "listen-failed",
+          context: { reason: "offline" },
+        },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(request).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith('[slei-frontend] scope=events message=listen-failed context={"reason":"offline"}');
+    expect(logger.mock.calls[0]?.[0]).not.toContain("/v1/diagnostics");
+  });
+
+  it("maps event reconnect to the daemon replay route", async () => {
+    const event = {
+      sequence: 43,
+      eventType: "task_thread.updated",
+      occurredAtUnixMs: 1,
+      payload: { taskId: "task_1" },
+    };
+    const request = vi.fn().mockResolvedValue({ events: [event] });
+    const rpc = createDaemonRpcHandler({ request } as never);
+
+    await expect(rpc.call("events.reconnect", { after: 42 })).resolves.toEqual({
+      after: 42,
+      events: [event],
+    });
+    expect(request).toHaveBeenCalledWith("GET", "/v1/events/ws?after=42");
+  });
 });

@@ -11,7 +11,13 @@ export type DaemonRpcHandler = {
   call(method: string, payload: unknown): Promise<unknown>;
 };
 
-export function createDaemonRpcHandler(client: DaemonHttpClient): DaemonRpcHandler {
+export type DaemonRpcHandlerOptions = {
+  logger?: (message: string) => void;
+};
+
+export function createDaemonRpcHandler(client: DaemonHttpClient, options: DaemonRpcHandlerOptions = {}): DaemonRpcHandler {
+  const logger = options.logger ?? ((message: string) => console.error(message));
+
   return {
     async call(method: string, payload: unknown) {
       switch (method) {
@@ -32,9 +38,9 @@ export function createDaemonRpcHandler(client: DaemonHttpClient): DaemonRpcHandl
         case "events.reconnect":
           return reconnectEvents(client, payload);
         case "frontend.crash.log":
-          return logFrontendReport(client, payload, "/v1/diagnostics/frontend-crashes");
+          return logFrontendCrash(payload, logger);
         case "frontend.event.log":
-          return logFrontendReport(client, payload, "/v1/diagnostics/frontend-events");
+          return logFrontendEvent(payload, logger);
         default:
           throw new DesktopDaemonError("invalid_rpc_method", `Unsupported desktop RPC method: ${method}`);
       }
@@ -77,19 +83,64 @@ function listTasks(client: DaemonHttpClient, payload: unknown) {
 async function reconnectEvents(client: DaemonHttpClient, payload: unknown): Promise<EventReconnectReceipt> {
   const record = requireRecord(payload, "events.reconnect");
   const after = readNumber(record, "after", "events.reconnect");
-  const response = await client.request<{ events?: unknown[] }>("GET", `/v1/events/ws?after=${encodeURIComponent(String(after))}`);
+  const query = new URLSearchParams({ after: String(after) });
+  const response = await client.request<{ events?: unknown[] }>("GET", `/v1/events/ws?${query.toString()}`);
   const events = Array.isArray(response.events) ? response.events : [];
 
   return { after, events: events as EventReconnectReceipt["events"] };
 }
 
-async function logFrontendReport(client: DaemonHttpClient, payload: unknown, path: string): Promise<void> {
-  const record = requireRecord(payload, "frontend.log");
-  const report = record.report;
-  if (report === undefined) {
-    throw new DesktopDaemonError("invalid_rpc_payload", "Invalid desktop RPC payload for frontend log report");
+function logFrontendCrash(payload: unknown, logger: (message: string) => void): void {
+  const report = readReport(payload, "frontend.crash.log");
+  logger(
+    `[slei-frontend-crash] kind=${truncateLogValue(readString(report, "kind", "frontend.crash.log"))}` +
+      ` url=${truncateLogValue(readString(report, "url", "frontend.crash.log"))}` +
+      ` message=${truncateLogValue(readString(report, "message", "frontend.crash.log"))}` +
+      ` stack=${truncateLogValue(readOptionalString(report, "stack", "frontend.crash.log") ?? "")}` +
+      ` component_stack=${truncateLogValue(
+        readOptionalString(report, "componentStack", "frontend.crash.log") ??
+          readOptionalString(report, "component_stack", "frontend.crash.log") ??
+          "",
+      )}`,
+  );
+}
+
+function logFrontendEvent(payload: unknown, logger: (message: string) => void): void {
+  const report = readReport(payload, "frontend.event.log");
+  const context = report.context === undefined ? "{}" : stringifyLogContext(report.context);
+  logger(
+    `[slei-frontend] scope=${truncateLogValue(readString(report, "scope", "frontend.event.log"))}` +
+      ` message=${truncateLogValue(readString(report, "message", "frontend.event.log"))}` +
+      ` context=${truncateLogValue(context)}`,
+  );
+}
+
+function readReport(payload: unknown, method: string): Record<string, unknown> {
+  const record = requireRecord(payload, method);
+  return requireRecord(record.report, method);
+}
+
+function readOptionalString(record: Record<string, unknown>, key: string, method: string): string | undefined {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return undefined;
   }
-  await client.request("POST", path, { report });
+  if (typeof value !== "string") {
+    throw new DesktopDaemonError("invalid_rpc_payload", `Invalid desktop RPC payload for ${method}`);
+  }
+  return value;
+}
+
+function stringifyLogContext(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function truncateLogValue(value: string): string {
+  return Array.from(value).slice(0, 4000).join("");
 }
 
 function queryFromPayload(query: unknown, method: string): URLSearchParams {
