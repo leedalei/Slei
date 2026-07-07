@@ -44,9 +44,7 @@ export function createDaemonHttpClient(options: DaemonHttpClientOptions): Daemon
       requestOptions: DaemonHttpRequestOptions = {},
     ): Promise<T> {
       const url = `${endpoint}${normalizePath(path)}`;
-      const headers: Record<string, string> = {
-        ...requestOptions.headers,
-      };
+      const headers = requestHeadersWithoutAuthorization(requestOptions.headers);
 
       if (body !== undefined) {
         headers["Content-Type"] = "application/json";
@@ -83,6 +81,16 @@ export function createDaemonHttpClient(options: DaemonHttpClientOptions): Daemon
       return parseDaemonJson<T>(response);
     },
   };
+}
+
+function requestHeadersWithoutAuthorization(input: Record<string, string> | undefined): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input ?? {})) {
+    if (key.toLowerCase() !== "authorization") {
+      headers[key] = value;
+    }
+  }
+  return headers;
 }
 
 function normalizePath(path: string): string {
