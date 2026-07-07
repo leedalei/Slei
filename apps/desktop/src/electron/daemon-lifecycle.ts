@@ -10,6 +10,7 @@ import {
   DESKTOP_DAEMON_TOKEN,
 } from "./constants.js";
 import { createDaemonHttpClient, DesktopDaemonError } from "./daemon-http.js";
+import { defaultAvatarDataRoot } from "./avatar-protocol.js";
 
 export const EXPECTED_PROTOCOL_VERSION = "v1";
 
@@ -41,6 +42,7 @@ type LifecycleDependencies = {
   port?: number;
   probePort?: (host: string, port: number) => Promise<boolean>;
   repoRoot?: string;
+  dataRoot?: string;
   sleep?: (ms: number) => Promise<void>;
   spawn?: SpawnDaemon;
   terminateProcess?: TerminateProcess;
@@ -157,6 +159,7 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
   }
 
   const repoRoot = dependencies.repoRoot ?? defaultRepoRoot();
+  const dataRoot = dependencies.dataRoot ?? defaultAvatarDataRoot();
   const spawnDaemon = dependencies.spawn ?? nodeSpawn;
   const terminateProcess = dependencies.terminateProcess ?? terminateOwnedProcess;
   const daemonProcess = spawnDaemon("cargo", ["run", "-p", "slei-daemon"], {
@@ -165,6 +168,7 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
     env: {
       ...process.env,
       PATH: prependPath(resolve(repoRoot, "target/debug"), process.env.PATH),
+      SLEI_DATA_ROOT: dataRoot,
       SLEI_DAEMON_TOKEN: DESKTOP_DAEMON_TOKEN,
       SLEI_DAEMON_URL: endpoint,
     },

@@ -11,6 +11,7 @@ import { createDaemonRpcHandler } from "./daemon-rpc.js";
 import type { EventReconnectReceipt, SanitizedDaemonStatus } from "../lib/daemon-types.js";
 import type { EventForwarder } from "./event-forwarder.js";
 import { createEventForwarder } from "./event-forwarder.js";
+import { defaultAvatarDataRoot, profileAvatarProtocolResponse } from "./avatar-protocol.js";
 
 export type MainDaemonState =
   | { state: "starting" }
@@ -70,7 +71,9 @@ export function registerElectronProtocolSchemes(): void {
 }
 
 export function registerElectronProtocolHandlers(): void {
-  protocol.handle("slei-avatar", () => new Response(null, { status: 404 }));
+  protocol.handle("slei-avatar", (request) =>
+    profileAvatarProtocolResponse(defaultAvatarDataRoot(), request.url),
+  );
 }
 
 export function registerIpcHandlers(): void {

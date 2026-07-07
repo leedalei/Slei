@@ -78,12 +78,13 @@ describe("daemon lifecycle", () => {
       protocol_version: "v1",
     });
 
-    await expect(ensureDaemon({ authCheck, probePort, health, repoRoot: "/tmp/slei", spawn } as never)).resolves.toMatchObject({ owned: true });
+    await expect(ensureDaemon({ authCheck, dataRoot: "/tmp/slei-data", probePort, health, repoRoot: "/tmp/slei", spawn } as never)).resolves.toMatchObject({ owned: true });
     expect(spawn).toHaveBeenCalledWith("cargo", ["run", "-p", "slei-daemon"], expect.objectContaining({
       cwd: "/tmp/slei",
       detached: true,
       env: expect.objectContaining({
         PATH: expect.stringContaining("/tmp/slei/target/debug"),
+        SLEI_DATA_ROOT: "/tmp/slei-data",
         SLEI_DAEMON_TOKEN: "desktop-session-token",
         SLEI_DAEMON_URL: "http://127.0.0.1:4319",
       }),
