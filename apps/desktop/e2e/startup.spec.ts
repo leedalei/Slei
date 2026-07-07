@@ -167,6 +167,8 @@ describe("desktop startup contract", () => {
     expect(desktopDevScript).toContain("terminate_process_tree");
     expect(desktopDevScript).not.toContain("tauri dev");
     expect(desktopDevScript).not.toContain("pnpm dev &");
+    expect(desktopDevScript).not.toContain("cargo run -p slei-daemon");
+    expect(desktopDevScript).not.toContain("SLEI_DAEMON_PID");
   });
 
   it("uses transparent macOS sidebar material with native overlay titlebar controls", async () => {
