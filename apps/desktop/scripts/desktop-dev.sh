@@ -6,10 +6,25 @@ DESKTOP_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$DESKTOP_ROOT/../.." && pwd)
 VITE_PID=""
 
+terminate_process_tree() {
+  pid="$1"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return
+  fi
+
+  if command -v pgrep >/dev/null 2>&1; then
+    for child_pid in $(pgrep -P "$pid" 2>/dev/null || true); do
+      terminate_process_tree "$child_pid"
+    done
+  fi
+
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
-  if [ -n "$VITE_PID" ] && kill -0 "$VITE_PID" 2>/dev/null; then
-    kill "$VITE_PID" 2>/dev/null || true
-    wait "$VITE_PID" 2>/dev/null || true
+  if [ -n "$VITE_PID" ]; then
+    terminate_process_tree "$VITE_PID"
   fi
 }
 
@@ -21,7 +36,7 @@ cargo build -p slei-cli
 cargo build -p slei-daemon
 
 cd "$DESKTOP_ROOT"
-pnpm dev &
+node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 &
 VITE_PID=$!
 
 attempts=0
@@ -40,4 +55,4 @@ until nc -z 127.0.0.1 1420 2>/dev/null; do
 done
 
 pnpm build:electron
-electron dist-electron/main.js
+electron dist-electron/electron/main.js

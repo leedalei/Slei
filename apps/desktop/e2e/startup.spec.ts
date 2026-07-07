@@ -10,6 +10,17 @@ async function sha256(path: string) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
 }
 
+function expectInOrder(source: string, orderedSnippets: string[]) {
+  let previousIndex = -1;
+
+  for (const snippet of orderedSnippets) {
+    const index = source.indexOf(snippet);
+    expect(index, `${snippet} should exist`).toBeGreaterThanOrEqual(0);
+    expect(index, `${snippet} should appear after the previous startup step`).toBeGreaterThan(previousIndex);
+    previousIndex = index;
+  }
+}
+
 async function readRgbaPng(path: string) {
   const png = await readFile(path);
   expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
@@ -134,14 +145,24 @@ describe("desktop startup contract", () => {
       devDependencies?: Record<string, string>;
     };
     const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
+    const electronEntry = "dist-electron/electron/main.js";
+    const viteStart = 'node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420';
 
     expect(packageJson.devDependencies?.electron).toBe("43.0.0");
+    expect(packageJson.main).toBe(electronEntry);
     expect(packageJson.scripts?.desktop).toBe("scripts/desktop-dev.sh");
     expect(packageJson.scripts?.["build:electron"]).toBe("tsc -p tsconfig.electron.json");
-    expect(desktopDevScript).toContain("pnpm dev");
-    expect(desktopDevScript).toContain("pnpm build:electron");
-    expect(desktopDevScript).toContain("electron dist-electron/main.js");
+    expectInOrder(desktopDevScript, [
+      "pnpm --filter @slei/claude-agent build",
+      "cargo build -p slei-cli",
+      "cargo build -p slei-daemon",
+      viteStart,
+      "pnpm build:electron",
+      `electron ${electronEntry}`,
+    ]);
+    expect(desktopDevScript).toContain("terminate_process_tree");
     expect(desktopDevScript).not.toContain("tauri dev");
+    expect(desktopDevScript).not.toContain("pnpm dev &");
   });
 
   it("uses transparent macOS sidebar material with native overlay titlebar controls", async () => {
