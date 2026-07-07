@@ -1,12 +1,12 @@
 # Slei
 
-Slei 是一个本地优先的桌面协作应用。当前开发形态由 React/Vite 桌面 UI、Tauri shell、Rust daemon、SQLite 存储和 Claude Agent worker 组成。
+Slei 是一个本地优先的桌面协作应用。当前开发形态由 React/Vite 桌面 UI、Electron shell、Rust daemon、SQLite 存储和 Claude Agent worker 组成。
 
 ## 环境准备
 
 - Node.js 和 pnpm。
 - Rust stable toolchain；仓库通过 `rust-toolchain.toml` 固定使用 stable，并需要 `rustfmt`、`clippy` 组件。
-- macOS 上运行 Tauri 桌面壳需要本机图形环境和 Xcode Command Line Tools。
+- macOS 上运行 Electron 桌面壳需要本机图形环境；Rust 构建仍需要 Xcode Command Line Tools。
 
 首次拉取仓库后安装依赖：
 
@@ -25,18 +25,19 @@ pnpm --filter @slei/desktop desktop
 这个命令会执行 `apps/desktop/scripts/desktop-dev.sh`，依次完成：
 
 1. 构建 `@slei/claude-agent` worker。
-2. 检查本地 daemon 是否已监听 `127.0.0.1:4319`。
-3. 如果 daemon 未运行，则执行 `cargo run -p slei-daemon` 启动 daemon。
-4. 执行 `tauri dev`，并由 Tauri 的 `beforeDevCommand` 启动 Vite。
+2. 构建 `slei-cli` 和 `slei-daemon`。
+3. 启动 Vite dev server，固定监听 `127.0.0.1:1420`。
+4. 编译 Electron main/preload 到 `apps/desktop/dist-electron`。
+5. 启动 Electron 桌面窗口，由 Electron main 连接或拉起本地 daemon。
 
 启动成功后：
 
 - daemon API: `http://127.0.0.1:4319`
 - daemon events: `ws://127.0.0.1:4319/v1/events/ws`
 - Vite dev server: `http://127.0.0.1:1420/`
-- Tauri 会打开桌面窗口，这是完整 APP 的主要入口。
+- Electron 会打开桌面窗口，这是完整 APP 的主要入口。
 
-停止开发进程时，在启动命令所在终端按 `Ctrl-C`。
+停止开发进程时，在启动命令所在终端按 `Ctrl-C`。如果本次 Electron 启动前 daemon 端口是空闲的，脚本会清理本次启动的 daemon 和 agent worker；如果已有外部 daemon，脚本不会抢占或强杀它。
 
 ## 常见启动方式
 
@@ -58,15 +59,15 @@ cargo run -p slei-daemon
 pnpm --filter @slei/desktop dev
 ```
 
-注意：只跑 `pnpm --filter @slei/desktop dev` 只能打开 Web 前端页面，不会启动 Tauri shell，也不会自动启动 daemon。需要验证完整桌面集成时请使用 `desktop` 命令。
+注意：只跑 `pnpm --filter @slei/desktop dev` 只能打开 Web 前端页面，不会启动 Electron shell，也不会自动启动 daemon。需要验证完整桌面集成时请使用 `desktop` 命令。
 
 如果首次运行时 Rust 编译超过脚本等待时间，可能看到：
 
 ```text
-[slei-desktop] timed out waiting for local daemon
+[slei-desktop] timed out waiting for Vite
 ```
 
-可以先单独启动 daemon，等看到 `slei-daemon listening on 127.0.0.1:4319` 后，再运行完整桌面命令：
+可以先单独运行构建或 daemon，等看到 `slei-daemon listening on 127.0.0.1:4319` 后，再运行完整桌面命令：
 
 ```sh
 cargo run -p slei-daemon
@@ -125,8 +126,9 @@ SLEI_ENABLE_DEV_RESET=1 pnpm dev:reset
 
 ## 目录概览
 
-- `apps/desktop`: Tauri + React 桌面应用。
-- `apps/desktop/src-tauri`: Tauri shell 和桌面命令桥接。
+- `apps/desktop`: Electron + React 桌面应用。
+- `apps/desktop/src/electron`: Electron main/preload、daemon RPC、事件转发和本地安全协议。
+- `apps/desktop/src-tauri`: V1 中保留的旧 Tauri 参考路径，V2 会物理删除或归档。
 - `crates/slei-daemon`: 本地 daemon 和 API。
 - `crates/slei-storage`: SQLite schema、migration 和 repository。
 - `crates/slei-domain`: 领域模型。
@@ -136,4 +138,3 @@ SLEI_ENABLE_DEV_RESET=1 pnpm dev:reset
 - `workers/claude-agent`: Claude Agent worker。
 - `docs/architecture`: 架构决策和设计说明。
 - `docs/superpowers`: 历史规格和实施计划。
-

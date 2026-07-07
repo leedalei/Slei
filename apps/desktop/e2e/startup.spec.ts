@@ -165,6 +165,19 @@ describe("desktop startup contract", () => {
     ]);
     expectInOrder(desktopDevScript, [viteStart, "while true; do", viteReadyPortCheck, stalePortGuard, "break"]);
     expect(desktopDevScript).toContain("terminate_process_tree");
+    expect(desktopDevScript).toContain("DAEMON_WAS_FREE=");
+    expect(desktopDevScript).toContain("cleanup_owned_daemon");
+    expectInOrder(desktopDevScript, [
+      'if ! nc -z 127.0.0.1 4319 2>/dev/null; then',
+      'DAEMON_WAS_FREE="1"',
+      `electron ${electronEntry}`,
+    ]);
+    expectInOrder(desktopDevScript, [
+      'if [ "$DAEMON_WAS_FREE" = "1" ]; then',
+      "lsof -ti tcp:4319",
+      'terminate_process_tree "$daemon_pid"',
+      'pkill -f "$REPO_ROOT/workers/claude-agent"',
+    ]);
     expect(desktopDevScript).not.toContain("tauri dev");
     expect(desktopDevScript).not.toContain("pnpm dev &");
     expect(desktopDevScript).not.toContain("cargo run -p slei-daemon");

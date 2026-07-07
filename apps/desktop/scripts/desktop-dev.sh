@@ -5,6 +5,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DESKTOP_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$DESKTOP_ROOT/../.." && pwd)
 VITE_PID=""
+DAEMON_WAS_FREE="0"
 
 terminate_process_tree() {
   pid="$1"
@@ -22,10 +23,38 @@ terminate_process_tree() {
   wait "$pid" 2>/dev/null || true
 }
 
+cleanup_owned_daemon() {
+  if [ "$DAEMON_WAS_FREE" = "1" ]; then
+    if command -v lsof >/dev/null 2>&1; then
+      for daemon_pid in $(lsof -ti tcp:4319 2>/dev/null || true); do
+        terminate_process_tree "$daemon_pid"
+      done
+    fi
+    pkill -f "$REPO_ROOT/workers/claude-agent" 2>/dev/null || true
+
+    attempts=0
+    while lsof -ti tcp:4319 >/dev/null 2>&1 \
+      || pgrep -f "$REPO_ROOT/workers/claude-agent" >/dev/null 2>&1; do
+      attempts=$((attempts + 1))
+      if [ "$attempts" -ge 20 ]; then
+        if command -v lsof >/dev/null 2>&1; then
+          for daemon_pid in $(lsof -ti tcp:4319 2>/dev/null || true); do
+            kill -KILL "$daemon_pid" 2>/dev/null || true
+          done
+        fi
+        pkill -KILL -f "$REPO_ROOT/workers/claude-agent" 2>/dev/null || true
+        return
+      fi
+      sleep 0.1
+    done
+  fi
+}
+
 cleanup() {
   if [ -n "$VITE_PID" ]; then
     terminate_process_tree "$VITE_PID"
   fi
+  cleanup_owned_daemon
 }
 
 trap cleanup EXIT INT TERM
@@ -64,4 +93,7 @@ while true; do
 done
 
 pnpm build:electron
+if ! nc -z 127.0.0.1 4319 2>/dev/null; then
+  DAEMON_WAS_FREE="1"
+fi
 electron dist-electron/electron/main.js
