@@ -146,7 +146,7 @@ describe("desktop startup contract", () => {
     };
     const desktopDevScript = await readFile(join(desktopRoot, "scripts/desktop-dev.sh"), "utf8");
     const electronEntry = "dist-electron/electron/main.js";
-    const viteStart = 'node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420';
+    const viteStart = 'node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 --strictPort';
 
     expect(packageJson.devDependencies?.electron).toBe("43.0.0");
     expect(packageJson.main).toBe(electronEntry);

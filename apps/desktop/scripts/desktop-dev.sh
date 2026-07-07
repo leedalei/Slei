@@ -36,7 +36,7 @@ cargo build -p slei-cli
 cargo build -p slei-daemon
 
 cd "$DESKTOP_ROOT"
-node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 &
+node "$DESKTOP_ROOT/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 1420 --strictPort &
 VITE_PID=$!
 
 attempts=0
