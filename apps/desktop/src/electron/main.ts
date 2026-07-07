@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
+import type { WebContents } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DAEMON_ENDPOINT, DESKTOP_DAEMON_TOKEN, VITE_DEV_URL } from "./constants.js";
@@ -7,7 +8,9 @@ import type { DaemonHandle } from "./daemon-lifecycle.js";
 import { ensureDaemon, stopOwnedDaemon } from "./daemon-lifecycle.js";
 import type { DaemonRpcHandler } from "./daemon-rpc.js";
 import { createDaemonRpcHandler } from "./daemon-rpc.js";
-import type { SanitizedDaemonStatus } from "../lib/daemon-types.js";
+import type { EventReconnectReceipt, SanitizedDaemonStatus } from "../lib/daemon-types.js";
+import type { EventForwarder } from "./event-forwarder.js";
+import { createEventForwarder } from "./event-forwarder.js";
 
 export type MainDaemonState =
   | { state: "starting" }
@@ -19,6 +22,10 @@ type RpcEnvelope = {
   payload?: unknown;
 };
 type OfflineDaemonCode = Extract<MainDaemonState, { state: "offline" }>["code"];
+type DaemonEventSubscription = {
+  sender: WebContents;
+  destroyedHandler: () => void;
+};
 export type RendererRpcResult =
   | { ok: true; value: unknown }
   | { ok: false; error: { name: string; code: string; message: string } };
@@ -27,6 +34,8 @@ let currentDaemonState: MainDaemonState = { state: "starting" };
 let daemonHandle: DaemonHandle | undefined;
 let activeRpcHandler: DaemonRpcHandler | undefined;
 let ipcRegistered = false;
+let daemonEventForwarder: EventForwarder | undefined;
+const daemonEventSubscriptions = new Map<string, DaemonEventSubscription>();
 
 const electronDirname = dirname(fileURLToPath(import.meta.url));
 
@@ -76,11 +85,19 @@ export function registerIpcHandlers(): void {
     const subscription = readSubscriptionPayload(payload);
     if (subscription?.channel === "daemon.state") {
       event.sender.send("slei:daemon-state", currentDaemonState);
+      return;
+    }
+
+    if (subscription?.channel === "daemon.events") {
+      addDaemonEventSubscription(subscription.subscriptionId, event.sender);
     }
   });
 
-  ipcMain.on("slei:events:unsubscribe", () => {
-    // Event forwarder subscriptions are wired in a later task.
+  ipcMain.on("slei:events:unsubscribe", (_event, payload: unknown) => {
+    const subscriptionId = readUnsubscribePayload(payload);
+    if (subscriptionId) {
+      removeDaemonEventSubscription(subscriptionId);
+    }
   });
 }
 
@@ -135,6 +152,7 @@ export async function startDaemonBridge(): Promise<void> {
 }
 
 export function stopDaemonBridge(): void {
+  stopDaemonEventForwarder();
   if (daemonHandle) {
     stopOwnedDaemon(daemonHandle);
   }
@@ -152,6 +170,68 @@ async function handleRendererRpc(envelope: RpcEnvelope): Promise<unknown> {
   }
 
   return activeRpcHandler.call(method, envelope.payload);
+}
+
+function addDaemonEventSubscription(subscriptionId: string, sender: WebContents): void {
+  if (sender.isDestroyed()) {
+    return;
+  }
+
+  removeDaemonEventSubscription(subscriptionId);
+  const destroyedHandler = () => removeDaemonEventSubscription(subscriptionId);
+  sender.once("destroyed", destroyedHandler);
+  daemonEventSubscriptions.set(subscriptionId, { sender, destroyedHandler });
+  ensureDaemonEventForwarder().start();
+}
+
+function removeDaemonEventSubscription(subscriptionId: string): void {
+  const subscription = daemonEventSubscriptions.get(subscriptionId);
+  if (!subscription) {
+    return;
+  }
+
+  daemonEventSubscriptions.delete(subscriptionId);
+  if (!subscription.sender.isDestroyed()) {
+    subscription.sender.off("destroyed", subscription.destroyedHandler);
+  }
+  if (daemonEventSubscriptions.size === 0) {
+    stopDaemonEventForwarder();
+  }
+}
+
+function stopDaemonEventForwarder(): void {
+  daemonEventForwarder?.stop();
+}
+
+function ensureDaemonEventForwarder(): EventForwarder {
+  daemonEventForwarder ??= createEventForwarder({
+    reconnect: reconnectDaemonEvents,
+    emit: emitDaemonEventBatch,
+  });
+  return daemonEventForwarder;
+}
+
+async function reconnectDaemonEvents(after: number): Promise<EventReconnectReceipt> {
+  if (currentDaemonState.state !== "connected" || !activeRpcHandler) {
+    throw daemonUnavailableError(currentDaemonState);
+  }
+
+  return activeRpcHandler.call("events.reconnect", { after });
+}
+
+function emitDaemonEventBatch(batch: EventReconnectReceipt): void {
+  for (const [subscriptionId, subscription] of daemonEventSubscriptions) {
+    if (subscription.sender.isDestroyed()) {
+      removeDaemonEventSubscription(subscriptionId);
+      continue;
+    }
+
+    try {
+      subscription.sender.send("slei:daemon-events", batch);
+    } catch {
+      removeDaemonEventSubscription(subscriptionId);
+    }
+  }
 }
 
 function setDaemonState(state: MainDaemonState): void {
@@ -228,6 +308,15 @@ function readSubscriptionPayload(payload: unknown): { channel: string; subscript
   }
 
   return { channel, subscriptionId };
+}
+
+function readUnsubscribePayload(payload: unknown): string | undefined {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return undefined;
+  }
+
+  const subscriptionId = (payload as Record<string, unknown>).subscriptionId;
+  return typeof subscriptionId === "string" ? subscriptionId : undefined;
 }
 
 registerElectronProtocolSchemes();
