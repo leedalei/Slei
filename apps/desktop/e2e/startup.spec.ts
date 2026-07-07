@@ -141,6 +141,7 @@ describe("desktop startup contract", () => {
     const packageJson = JSON.parse(
       await readFile(join(desktopRoot, "package.json"), "utf8"),
     ) as {
+      main?: string;
       scripts?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
