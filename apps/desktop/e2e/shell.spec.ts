@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DesktopAgentView } from "../src/lib/daemon-bridge";
 import { createDaemonBridgeMock } from "../src/test/daemon-bridge-mock";
 import { createEventBridge } from "../src/lib/event-bridge";
 import { renderAppShell } from "../src/app/App";
+import { renderChatPage } from "../src/features/chat/ChatPage";
 
 describe("desktop shell daemon connectivity", () => {
   it("renders Chinese by default and reflects daemon connection state", async () => {
@@ -27,15 +28,86 @@ describe("desktop shell daemon connectivity", () => {
     expect(bridge.eventSubscriptions).toEqual([{ after: 41 }]);
   });
 
-  it("never exposes daemon endpoint, token or raw socket values to webview code", async () => {
+  it("recovers renderer shell status when daemon state becomes connected", async () => {
+    const bridge = createDaemonBridgeMock({ connected: false });
+    const daemonStates: unknown[] = [];
+    const cleanup = await bridge.listenDaemonState((state) => daemonStates.push(state));
+
+    expect(await renderAppShell({ bridge })).toContain("离线");
+
+    bridge.setConnected(true);
+    bridge.emitDaemonState({ state: "connected" });
+
+    expect(daemonStates).toContainEqual({ state: "connected" });
+    expect(await renderAppShell({ bridge })).toContain("已连接");
+
+    cleanup();
+  });
+
+  it("never exposes daemon endpoint, token or raw socket values to renderer status", async () => {
     const bridge = createDaemonBridgeMock({ connected: true });
 
     const status = await bridge.daemonStatus();
     const serialized = JSON.stringify(status);
 
+    expect(serialized).not.toContain("desktop-session-token");
     expect(serialized).not.toContain("secret-token");
     expect(serialized).not.toContain("127.0.0.1");
     expect(serialized).not.toContain("ws://");
+  });
+
+  it("keeps the connected channel core loop wired through daemon data", async () => {
+    const bridge = createDaemonBridgeMock({
+      connected: true,
+      channels: [{ id: "dev", name: "dev", description: "研发频道", activeSessionId: "session:dev", isDefault: false, projectPaths: [] }],
+      channelMessages: [
+        {
+          id: "msg_existing",
+          sequence: 41,
+          channelId: "dev",
+          sessionId: "session:dev",
+          authorId: "human:local",
+          body: "已有频道消息",
+          kind: "human",
+          deleted: false,
+          createdAt: "2026-07-07T00:00:00Z",
+        },
+      ],
+    });
+    const sendChannelMessage = vi.spyOn(bridge, "sendChannelMessage");
+
+    await expect(bridge.daemonStatus()).resolves.toMatchObject({ connected: true });
+    await expect(bridge.listChannels()).resolves.toMatchObject({ channels: [expect.objectContaining({ id: "dev" })] });
+
+    const beforeSend = await bridge.listChannelMessages("dev");
+    const beforeHtml = renderChatPage({
+      locale: "zh-CN",
+      channel: { name: "dev" },
+      messages: beforeSend.messages.map((message) => ({
+        sender: message.authorId,
+        body: message.body ?? "",
+        streaming: false,
+        toolCalls: [],
+      })),
+      composer: { asTask: false },
+      lastSequence: beforeSend.messages.at(-1)?.sequence ?? 0,
+    });
+    expect(beforeHtml).toContain("已有频道消息");
+    expect(beforeHtml).toContain("reconnect after 41");
+
+    await bridge.sendChannelMessage("dev", { authorId: "human:local", body: "Electron 发送消息", asTask: false });
+    expect(sendChannelMessage).toHaveBeenCalledWith("dev", {
+      authorId: "human:local",
+      body: "Electron 发送消息",
+      asTask: false,
+    });
+    const afterSend = await bridge.listChannelMessages("dev");
+    expect(afterSend.messages.map((message) => message.body)).toContain("Electron 发送消息");
+
+    const events = createEventBridge(bridge);
+    await events.reconnectFrom(beforeSend.messages.at(-1)?.sequence ?? 0);
+
+    expect(bridge.eventSubscriptions).toContainEqual({ after: 41 });
   });
 
   it("validates fake channel messages and mirrors coordinator outcome categories", async () => {

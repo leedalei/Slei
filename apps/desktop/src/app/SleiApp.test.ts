@@ -200,9 +200,12 @@ describe("ensureActiveDmAgentSkills", () => {
     const source = readFileSync(join(process.cwd(), "src/app/SleiApp.tsx"), "utf8");
 
     expect(source).toContain("const initialLoadInFlightRef = useRef<Promise<void> | null>(null)");
+    expect(source).toContain("const pendingInitialLoadRetryRef = useRef(false)");
     expect(source).toContain("bridge.listenDaemonState");
     expect(source).toContain("if (state.state === \"connected\")");
     expect(source).toContain("void runInitialLoad()");
+    expect(source).toContain("pendingInitialLoadRetryRef.current = true");
+    expect(source).toContain("if (mounted && pendingInitialLoadRetryRef.current)");
   });
 });
 

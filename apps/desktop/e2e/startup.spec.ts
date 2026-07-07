@@ -122,18 +122,16 @@ async function icnsPngHashes(path: string) {
 }
 
 describe("desktop startup contract", () => {
-  it("exposes a Vite dev entry that matches the Tauri dev URL", async () => {
+  it("exposes a Vite dev entry that matches the Electron dev URL", async () => {
     const packageJson = JSON.parse(
       await readFile(join(desktopRoot, "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
-    const tauriConfig = JSON.parse(
-      await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
-    ) as { build?: { devUrl?: string } };
+    const electronConstants = await readFile(join(desktopRoot, "src/electron/constants.ts"), "utf8");
     const indexHtml = await readFile(join(desktopRoot, "index.html"), "utf8");
 
     expect(packageJson.scripts?.dev).toContain("vite");
     expect(packageJson.scripts?.dev).toContain("1420");
-    expect(tauriConfig.build?.devUrl).toBe("http://127.0.0.1:1420");
+    expect(electronConstants).toContain('export const VITE_DEV_URL = "http://127.0.0.1:1420"');
     expect(indexHtml).toContain("/src/web.ts");
   });
 
@@ -173,75 +171,23 @@ describe("desktop startup contract", () => {
     expect(desktopDevScript).not.toContain("SLEI_DAEMON_PID");
   });
 
-  it("uses transparent macOS sidebar material with native overlay titlebar controls", async () => {
-    const tauriConfig = JSON.parse(
-      await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
-    ) as {
-      app?: {
-        macOSPrivateApi?: boolean;
-        windows?: Array<{
-          acceptFirstMouse?: boolean;
-          backgroundColor?: [number, number, number, number];
-          decorations?: boolean;
-          shadow?: boolean;
-          title?: string;
-          titleBarStyle?: string;
-          trafficLightPosition?: { x?: number; y?: number };
-          transparent?: boolean;
-          windowEffects?: { effects?: string[]; radius?: number; state?: string };
-        }>;
-      };
-    };
-    const windowConfig = tauriConfig.app?.windows?.[0];
+  it("creates the standard Electron BrowserWindow shell", async () => {
+    const mainSource = await readFile(join(desktopRoot, "src/electron/main.ts"), "utf8");
 
-    expect(windowConfig?.title).toBe("");
-    expect(windowConfig?.decorations).toBe(true);
-    expect(windowConfig?.titleBarStyle).toBe("Overlay");
-    expect(windowConfig?.trafficLightPosition).toEqual({ x: 8, y: 20 });
-    expect(windowConfig?.transparent).toBe(true);
-    expect(windowConfig?.backgroundColor).toEqual([0, 0, 0, 0]);
-    expect(windowConfig?.windowEffects).toEqual({
-      effects: ["sidebar"],
-      state: "active",
-      radius: 0,
-    });
-    expect(windowConfig).not.toHaveProperty("shadow");
-    expect(windowConfig?.acceptFirstMouse).toBe(true);
-    expect(tauriConfig.app?.macOSPrivateApi).toBe(true);
-  });
-
-  it("uses slei as the native app executable name", async () => {
-    const cargoToml = await readFile(join(desktopRoot, "src-tauri/Cargo.toml"), "utf8");
-
-    expect(cargoToml).toContain('name = "slei"');
-    expect(cargoToml).not.toContain('name = "slei-desktop"');
-  });
-
-  it("allows only the window and event permissions needed by the desktop shell", async () => {
-    const capability = JSON.parse(
-      await readFile(join(desktopRoot, "src-tauri/capabilities/default.json"), "utf8"),
-    ) as { permissions?: string[] };
-
-    expect(capability.permissions).toEqual([
-      "core:event:allow-listen",
-      "core:window:allow-start-dragging",
-      "core:window:allow-internal-toggle-maximize",
-    ]);
+    expect(mainSource).toContain("new BrowserWindow({");
+    expect(mainSource).toContain("width: 1280");
+    expect(mainSource).toContain("height: 800");
+    expect(mainSource).toContain('title: ""');
+    expect(mainSource).toContain("contextIsolation: true");
+    expect(mainSource).toContain("nodeIntegration: false");
+    expect(mainSource).toContain("sandbox: true");
+    expect(mainSource).toContain('preload: join(electronDirname, "preload.cjs")');
+    expect(mainSource).toContain("window.loadURL(VITE_DEV_URL)");
   });
 
   it("bundles the generated external app icon set", async () => {
-    const tauriConfig = JSON.parse(
-      await readFile(join(desktopRoot, "src-tauri/tauri.conf.json"), "utf8"),
-    ) as { bundle?: { icon?: string[] } };
     const iconRoot = join(desktopRoot, "src-tauri/icons");
 
-    expect(tauriConfig.bundle?.icon).toEqual([
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico",
-    ]);
     const sourceIcon = await readFile(join(iconRoot, "slei-icon.svg"), "utf8");
 
     expect(sourceIcon).toContain('stop-color="#0B9C67"');
