@@ -284,7 +284,12 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
             {(selectedTask.replies ?? []).map((reply, index) => (
               <article className="rounded-lg border bg-muted/20 p-3 text-sm" key={reply.id}>
                 <strong className="text-xs text-muted-foreground">{index === 0 ? messages.chat.rootMessage : reply.sender}</strong>
-                <p className="mt-1 leading-relaxed">{reply.body}</p>
+                <MarkdownMessage
+                  className="mt-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+                  copyCodeLabel={messages.chat.copyMessage}
+                  markdown={reply.body}
+                  tone="card"
+                />
               </article>
             ))}
             </div>

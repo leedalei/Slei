@@ -2098,6 +2098,49 @@ describe("ChatPage mention panel", () => {
     expect(tabsHtml).toContain(messages.chat.files);
   });
 
+  it("renders embedded channel task replies as markdown", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      tasks: [
+        {
+          id: "task_markdown",
+          title: "整理富文本框架",
+          owner: "Theo",
+          creatorId: "human:local",
+          assigneeId: "agent_theo",
+          status: "in_progress",
+          attentionRequired: false,
+          channelId: "all",
+          replyCount: 1,
+          replies: [
+            {
+              id: "reply_markdown",
+              sender: "Theo",
+              role: "agent",
+              body: "### 主流框架\n\n- **Tiptap**\n- **Slate.js**",
+            },
+          ],
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        initialChannelView="tasks"
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+
+    expect(html).toContain("<h3>主流框架</h3>");
+    expect(html).toContain("<strong>Tiptap</strong>");
+    expect(html).not.toContain("### 主流框架");
+    expect(html).not.toContain("**Tiptap**");
+  });
+
   it("does not render the channel member group in DM headers", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
