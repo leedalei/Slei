@@ -412,6 +412,7 @@ function packagedDaemonEnv(options: {
     SLEI_DAEMON_ADDR: DAEMON_DYNAMIC_BIND_ADDR,
     SLEI_DAEMON_TOKEN: options.token,
     SLEI_DATA_ROOT: options.dataRoot,
+    SLEI_OVERLAY_HOME: resolve(options.dataRoot, "runtime", "overlays"),
   };
 }
 

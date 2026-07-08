@@ -49,7 +49,6 @@ export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...createWindowVisualOptions({
       platform: process.platform,
-      isPackaged: app.isPackaged,
     }),
     title: "",
     webPreferences: {

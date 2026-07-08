@@ -3,7 +3,7 @@ import { createWindowVisualOptions } from "./window-options";
 
 describe("createWindowVisualOptions", () => {
   it("enables polished macOS chrome and keeps stable sizing", () => {
-    expect(createWindowVisualOptions({ platform: "darwin", isPackaged: true })).toEqual(
+    expect(createWindowVisualOptions({ platform: "darwin" })).toEqual(
       expect.objectContaining({
         width: 1280,
         height: 800,
@@ -20,7 +20,7 @@ describe("createWindowVisualOptions", () => {
   });
 
   it("keeps stable sizing in development on macOS", () => {
-    expect(createWindowVisualOptions({ platform: "darwin", isPackaged: false })).toMatchObject({
+    expect(createWindowVisualOptions({ platform: "darwin" })).toMatchObject({
       width: 1280,
       height: 800,
       minWidth: 960,
@@ -29,7 +29,7 @@ describe("createWindowVisualOptions", () => {
   });
 
   it("omits translucent macOS-only options on non-macOS platforms", () => {
-    const options = createWindowVisualOptions({ platform: "linux", isPackaged: true });
+    const options = createWindowVisualOptions({ platform: "linux" });
 
     expect(options).toMatchObject({
       width: 1280,

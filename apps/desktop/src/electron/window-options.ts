@@ -4,7 +4,6 @@ export function createWindowVisualOptions({
   platform,
 }: {
   platform: NodeJS.Platform;
-  isPackaged: boolean;
 }): BrowserWindowConstructorOptions {
   const baseOptions: BrowserWindowConstructorOptions = {
     width: 1280,

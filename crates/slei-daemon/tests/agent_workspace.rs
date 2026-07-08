@@ -1427,7 +1427,9 @@ async fn guide_dm_without_card_shortcut_starts_runtime() {
 async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("agent-validation");
-    let app = build_router(AppState::for_tests_with_agent_root(token.clone(), root));
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    state.nodes().set_runtime_ready_for_tests("1.2.3");
+    let app = build_router(state);
 
     let first = post_json(
         &app,

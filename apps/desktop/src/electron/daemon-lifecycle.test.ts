@@ -143,6 +143,7 @@ describe("daemon lifecycle", () => {
         SLEI_DAEMON_ADDR: "127.0.0.1:0",
         SLEI_DAEMON_TOKEN: randomToken,
         SLEI_DATA_ROOT: "/Users/leelei/Library/Application Support/Slei/data",
+        SLEI_OVERLAY_HOME: "/Users/leelei/Library/Application Support/Slei/data/runtime/overlays",
       }),
     }));
     const env = spawn.mock.calls[0][2].env as Record<string, string>;
