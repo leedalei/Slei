@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, protocol, shell } from "electron";
 import type { WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -193,6 +193,7 @@ export async function startDaemonBridge(): Promise<void> {
         endpoint: daemonHandle.endpoint,
         token: daemonHandle.token,
       }),
+      { openPath: (path) => shell.openPath(path) },
     );
     setDaemonState({ state: "connected", owned: daemonHandle.owned });
   } catch (error) {

@@ -244,6 +244,52 @@ describe("daemon rpc handler", () => {
     ]);
   });
 
+  it("maps agent workspace RPC methods to daemon routes and opens resolved paths locally", async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({
+        agentId: "agent_1",
+        target: "workspace",
+        path: "/tmp/slei/agents/agent_1",
+      })
+      .mockResolvedValueOnce({
+        agentId: "agent_1",
+        relativePath: "",
+        entries: [{ kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" }],
+      })
+      .mockResolvedValueOnce({
+        agentId: "agent_1",
+        name: "MEMORY.md",
+        relativePath: "MEMORY.md",
+        content: "# Memory",
+      });
+    const openPath = vi.fn().mockResolvedValue("");
+    const rpc = createDaemonRpcHandler({ request } as never, { openPath });
+
+    await expect(rpc.call("agents.path.open", { agentId: "agent_1", target: "workspace" })).resolves.toEqual({
+      agentId: "agent_1",
+      target: "workspace",
+      path: "/tmp/slei/agents/agent_1",
+    });
+    await expect(rpc.call("agents.workspace.list", { agentId: "agent_1" })).resolves.toEqual({
+      agentId: "agent_1",
+      relativePath: "",
+      entries: [{ kind: "file", name: "MEMORY.md", relativePath: "MEMORY.md" }],
+    });
+    await expect(rpc.call("agents.workspace.file.read", { agentId: "agent_1", relativePath: "MEMORY.md" })).resolves.toEqual({
+      agentId: "agent_1",
+      name: "MEMORY.md",
+      relativePath: "MEMORY.md",
+      content: "# Memory",
+    });
+
+    expect(request.mock.calls.map(([method, path]) => [method, path])).toEqual([
+      ["GET", "/v1/agents/agent_1/paths/workspace"],
+      ["GET", "/v1/agents/agent_1/workspace"],
+      ["GET", "/v1/agents/agent_1/workspace/file?relativePath=MEMORY.md"],
+    ]);
+    expect(openPath).toHaveBeenCalledWith("/tmp/slei/agents/agent_1");
+  });
+
   it("adds idempotency keys to write routes that require them", async () => {
     const request = vi.fn().mockResolvedValue({});
     const rpc = createDaemonRpcHandler({ request } as never);

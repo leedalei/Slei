@@ -104,6 +104,18 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/v1/agents/{id}/skills", get(api::members::list_skills))
         .route(
+            "/v1/agents/{id}/paths/{target}",
+            get(api::members::resolve_agent_path),
+        )
+        .route(
+            "/v1/agents/{id}/workspace",
+            get(api::members::list_agent_workspace),
+        )
+        .route(
+            "/v1/agents/{id}/workspace/file",
+            get(api::members::read_agent_workspace_file),
+        )
+        .route(
             "/v1/agents/{id}/memory/remember",
             post(api::members::remember_agent_fact),
         )

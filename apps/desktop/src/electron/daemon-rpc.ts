@@ -13,6 +13,7 @@ export type DaemonRpcHandler = {
 
 export type DaemonRpcHandlerOptions = {
   logger?: (message: string) => void;
+  openPath?: (path: string) => Promise<string>;
 };
 
 export function createDaemonRpcHandler(client: DaemonHttpClient, options: DaemonRpcHandlerOptions = {}): DaemonRpcHandler {
@@ -78,9 +79,11 @@ export function createDaemonRpcHandler(client: DaemonHttpClient, options: Daemon
         case "agents.skills.list":
           return listAgentSkills(client, payload);
         case "agents.path.open":
+          return openAgentPath(client, payload, options.openPath);
         case "agents.workspace.list":
+          return listAgentWorkspace(client, payload);
         case "agents.workspace.file.read":
-          throw new DesktopDaemonError("daemon_route_unavailable", `Desktop RPC method has no daemon HTTP route yet: ${method}`);
+          return readAgentWorkspaceFile(client, payload);
         case "agents.activity.list":
           return listAgentActivity(client, payload);
         case "conversations.list":
@@ -259,6 +262,37 @@ function listAgentSkills(client: DaemonHttpClient, payload: unknown) {
   const record = requireRecord(payload, "agents.skills.list");
   const agentId = readString(record, "agentId", "agents.skills.list");
   return client.request("GET", `/v1/agents/${encodeURIComponent(agentId)}/skills`);
+}
+
+async function openAgentPath(client: DaemonHttpClient, payload: unknown, openPath?: (path: string) => Promise<string>) {
+  const record = requireRecord(payload, "agents.path.open");
+  const agentId = readString(record, "agentId", "agents.path.open");
+  const target = readString(record, "target", "agents.path.open");
+  const receipt = await client.request<Record<string, unknown>>("GET", `/v1/agents/${encodeURIComponent(agentId)}/paths/${encodeURIComponent(target)}`);
+  const path = readString(receipt, "path", "agents.path.open");
+  if (openPath) {
+    const errorMessage = await openPath(path);
+    if (errorMessage) {
+      throw new DesktopDaemonError("open_path_failed", errorMessage);
+    }
+  }
+  return receipt;
+}
+
+function listAgentWorkspace(client: DaemonHttpClient, payload: unknown) {
+  const record = requireRecord(payload, "agents.workspace.list");
+  const agentId = readString(record, "agentId", "agents.workspace.list");
+  const relativePath = readOptionalString(record, "relativePath", "agents.workspace.list");
+  const query = queryFromPayload({ relativePath }, "agents.workspace.list");
+  return client.request("GET", appendQuery(`/v1/agents/${encodeURIComponent(agentId)}/workspace`, query));
+}
+
+function readAgentWorkspaceFile(client: DaemonHttpClient, payload: unknown) {
+  const record = requireRecord(payload, "agents.workspace.file.read");
+  const agentId = readString(record, "agentId", "agents.workspace.file.read");
+  const relativePath = readString(record, "relativePath", "agents.workspace.file.read");
+  const query = queryFromPayload({ relativePath }, "agents.workspace.file.read");
+  return client.request("GET", appendQuery(`/v1/agents/${encodeURIComponent(agentId)}/workspace/file`, query));
 }
 
 function listAgentActivity(client: DaemonHttpClient, payload: unknown) {

@@ -1,11 +1,15 @@
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::fs;
+use std::path::{Component, Path as FsPath, PathBuf};
 
-use crate::services::member_service::{MemberError, ProductAgentDraft, ProductAgentUpdate};
+use crate::services::member_service::{
+    MemberError, ProductAgentDraft, ProductAgentRecord, ProductAgentUpdate,
+};
 use crate::state::AppState;
 
 pub async fn list_agents(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -228,6 +232,98 @@ pub async fn list_skills(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct AgentWorkspaceQuery {
+    #[serde(rename = "relativePath")]
+    relative_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentWorkspaceEntryView {
+    kind: String,
+    name: String,
+    relative_path: String,
+}
+
+pub async fn resolve_agent_path(
+    State(state): State<AppState>,
+    Path((id, target)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.members().get_product_agent(&id).await {
+        Ok(agent) => match resolve_agent_target_path(&agent, &target) {
+            Ok(path) => Json(json!({
+                "agentId": id,
+                "target": target,
+                "path": path.to_string_lossy(),
+            }))
+            .into_response(),
+            Err(error) => member_error_response(error),
+        },
+        Err(error) => member_error_response(error),
+    }
+}
+
+pub async fn list_agent_workspace(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<AgentWorkspaceQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.members().get_product_agent(&id).await {
+        Ok(agent) => {
+            let relative_path = query.relative_path.unwrap_or_default();
+            match list_agent_workspace_entries(&agent, &relative_path) {
+                Ok(entries) => Json(json!({
+                    "agentId": id,
+                    "relativePath": normalize_relative_output(&relative_path),
+                    "entries": entries,
+                }))
+                .into_response(),
+                Err(error) => member_error_response(error),
+            }
+        }
+        Err(error) => member_error_response(error),
+    }
+}
+
+pub async fn read_agent_workspace_file(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(query): Query<AgentWorkspaceQuery>,
+    headers: HeaderMap,
+) -> Response {
+    if !state.auth_token.is_authorized(&headers) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    match state.members().get_product_agent(&id).await {
+        Ok(agent) => {
+            let relative_path = query.relative_path.unwrap_or_default();
+            match read_agent_workspace_file_content(&agent, &relative_path) {
+                Ok((path, content)) => Json(json!({
+                    "agentId": id,
+                    "name": path.file_name().and_then(|name| name.to_str()).unwrap_or_default(),
+                    "relativePath": normalize_relative_output(&relative_path),
+                    "content": content,
+                }))
+                .into_response(),
+                Err(error) => member_error_response(error),
+            }
+        }
+        Err(error) => member_error_response(error),
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RememberFactRequest {
     fact: String,
 }
@@ -269,6 +365,117 @@ fn has_ready_claude_runtime(state: &AppState, node_id: &str) -> bool {
         node.runtimes
             .iter()
             .any(|runtime| runtime.kind == "ClaudeCode" && runtime.readiness == "ready")
+    })
+}
+
+fn resolve_agent_target_path(
+    agent: &ProductAgentRecord,
+    target: &str,
+) -> Result<PathBuf, MemberError> {
+    let raw_path = match target {
+        "workspace" => &agent.workspace_path,
+        "memory" => &agent.memory_path,
+        "docs" => &agent.docs_path,
+        _ => return Err(MemberError::InvalidAgent),
+    };
+    resolve_workspace_path(agent, raw_path)
+}
+
+fn list_agent_workspace_entries(
+    agent: &ProductAgentRecord,
+    relative_path: &str,
+) -> Result<Vec<AgentWorkspaceEntryView>, MemberError> {
+    let directory = resolve_workspace_relative_path(agent, relative_path)?;
+    if !directory.is_dir() {
+        return Err(MemberError::InvalidAgent);
+    }
+
+    let mut entries = Vec::new();
+    for entry in fs::read_dir(directory).map_err(MemberError::Io)? {
+        let entry = entry.map_err(MemberError::Io)?;
+        let file_type = entry.file_type().map_err(MemberError::Io)?;
+        let name = entry.file_name().to_string_lossy().to_string();
+        let entry_relative_path = join_relative_path(relative_path, &name);
+        entries.push(AgentWorkspaceEntryView {
+            kind: if file_type.is_dir() {
+                "directory"
+            } else {
+                "file"
+            }
+            .to_string(),
+            name,
+            relative_path: entry_relative_path,
+        });
+    }
+    entries.sort_by(|left, right| {
+        left.kind
+            .cmp(&right.kind)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+            .then_with(|| left.name.cmp(&right.name))
+    });
+    Ok(entries)
+}
+
+fn read_agent_workspace_file_content(
+    agent: &ProductAgentRecord,
+    relative_path: &str,
+) -> Result<(PathBuf, String), MemberError> {
+    let path = resolve_workspace_relative_path(agent, relative_path)?;
+    if !path.is_file() {
+        return Err(MemberError::InvalidAgent);
+    }
+    let content = fs::read_to_string(&path).map_err(MemberError::Io)?;
+    Ok((path, content))
+}
+
+fn resolve_workspace_relative_path(
+    agent: &ProductAgentRecord,
+    relative_path: &str,
+) -> Result<PathBuf, MemberError> {
+    let normalized = normalize_relative_output(relative_path);
+    if !is_safe_relative_path(&normalized) {
+        return Err(MemberError::WorkspaceBoundary);
+    }
+    let workspace = PathBuf::from(&agent.workspace_path);
+    let target = if normalized.is_empty() {
+        workspace
+    } else {
+        workspace.join(&normalized)
+    };
+    resolve_workspace_path(agent, target)
+}
+
+fn resolve_workspace_path(
+    agent: &ProductAgentRecord,
+    raw_path: impl AsRef<FsPath>,
+) -> Result<PathBuf, MemberError> {
+    let workspace = fs::canonicalize(&agent.workspace_path).map_err(MemberError::Io)?;
+    let target = fs::canonicalize(raw_path).map_err(MemberError::Io)?;
+    if !target.starts_with(&workspace) {
+        return Err(MemberError::WorkspaceBoundary);
+    }
+    Ok(target)
+}
+
+fn normalize_relative_output(relative_path: &str) -> String {
+    relative_path.trim().trim_matches('/').to_string()
+}
+
+fn join_relative_path(parent: &str, name: &str) -> String {
+    let parent = normalize_relative_output(parent);
+    if parent.is_empty() {
+        name.to_string()
+    } else {
+        format!("{parent}/{name}")
+    }
+}
+
+fn is_safe_relative_path(relative_path: &str) -> bool {
+    !FsPath::new(relative_path).components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
     })
 }
 

@@ -225,6 +225,95 @@ async fn deleting_agent_removes_registry_membership_and_workspace() {
 }
 
 #[tokio::test]
+async fn agent_workspace_routes_list_read_and_resolve_paths_inside_workspace() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-workspace-browser");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root);
+    let app = build_router(state.clone());
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-workspace-browser-agent"),
+        json!({
+            "name": "Coda",
+            "handle": "@coda",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "description": "研发团队开发工程师。"
+        }),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let agent = response_json(created).await["agent"].clone();
+    let agent_id = agent["id"].as_str().unwrap();
+    let workspace = PathBuf::from(agent["workspacePath"].as_str().unwrap());
+    fs::write(workspace.join("docs/guide.md"), "workspace guide").unwrap();
+
+    let root_listing = get_json(&app, &token, &format!("/v1/agents/{agent_id}/workspace")).await;
+    assert_eq!(root_listing.status(), StatusCode::OK);
+    let root_body = response_json(root_listing).await;
+    assert_eq!(root_body["agentId"], agent_id);
+    assert_eq!(root_body["relativePath"], "");
+    assert!(root_body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["kind"] == "directory" && entry["relativePath"] == "docs"));
+    assert!(root_body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["kind"] == "file" && entry["relativePath"] == "MEMORY.md"));
+
+    let docs_listing = get_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{agent_id}/workspace?relativePath=docs"),
+    )
+    .await;
+    assert_eq!(docs_listing.status(), StatusCode::OK);
+    let docs_body = response_json(docs_listing).await;
+    assert!(docs_body["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|entry| entry["kind"] == "file" && entry["relativePath"] == "docs/guide.md"));
+
+    let file = get_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{agent_id}/workspace/file?relativePath=docs%2Fguide.md"),
+    )
+    .await;
+    assert_eq!(file.status(), StatusCode::OK);
+    let file_body = response_json(file).await;
+    assert_eq!(file_body["name"], "guide.md");
+    assert_eq!(file_body["relativePath"], "docs/guide.md");
+    assert_eq!(file_body["content"], "workspace guide");
+
+    let memory_path = get_json(&app, &token, &format!("/v1/agents/{agent_id}/paths/memory")).await;
+    assert_eq!(memory_path.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(memory_path).await["path"].as_str().unwrap(),
+        fs::canonicalize(workspace.join("MEMORY.md"))
+            .unwrap()
+            .to_string_lossy()
+            .as_ref()
+    );
+
+    let escaped = get_json(
+        &app,
+        &token,
+        &format!("/v1/agents/{agent_id}/workspace?relativePath=.."),
+    )
+    .await;
+    assert_eq!(escaped.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn system_agents_cannot_be_deleted() {
     let token = AuthToken::from_static("test-token");
     let root = make_temp_dir("system-agent-delete");
