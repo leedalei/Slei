@@ -1155,11 +1155,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           >
                             {side === "incoming" ? avatar : null}
                             <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
-                              <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
+                              <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")} data-slot="message-header">
                                 <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
-                                  <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
-                                  {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
-                                  <span aria-hidden="true">｜</span>
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">

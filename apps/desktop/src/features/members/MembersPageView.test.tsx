@@ -144,7 +144,7 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain('<header class="select-none border-b bg-background px-6 py-5"');
     expect(html).not.toContain('<div class="select-none border-b bg-background px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html).not.toContain('<div class="select-none border-b bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
-    expect(html).toContain('<div class="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
+    expect(html).toContain('<div class="select-none overflow-hidden bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html.slice(headerEnd, headerEnd + 260)).toContain('data-slot="separator"');
     expect(headerHtml).not.toContain("data-desktop-drag-region");
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
@@ -201,7 +201,7 @@ describe("MembersPage agent details", () => {
     expect(badgeHtml).not.toContain("[&amp;_svg]");
     expect(badgeHtml).toContain('data-slei-icon="messageCircleMore"');
     expect(badgeHtml).not.toContain('data-slei-icon="messageSquare"');
-    expect(headerHtml).toContain('<div class="flex min-w-0 items-center gap-3"');
+    expect(headerHtml).toContain('<div class="flex min-w-0 items-start gap-3"');
     expect(headerHtml).toContain(`aria-label="${messages.members.message}"`);
     expect(headerHtml).not.toContain(`>${messages.members.message}<`);
   });
@@ -350,9 +350,12 @@ describe("MembersPage agent details", () => {
     const runtimeCard = panel.querySelector<HTMLElement>('[data-member-runtime-card="compact"]');
 
     expect(compactLayout).not.toBeNull();
-    expect(compactLayout?.className).toContain("lg:grid-cols-[minmax(0,1fr)_24rem]");
+    expect(compactLayout?.className).toContain("xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]");
+    expect(compactLayout?.className).not.toContain("lg:grid-cols-[minmax(0,1fr)_24rem]");
+    expect(identityCard?.className).toContain("min-w-0");
     expect(identityCard?.className).toContain("p-3");
     expect(identityCard?.className).toContain("gap-3");
+    expect(runtimeCard?.className).toContain("min-w-0");
     expect(runtimeCard?.className).toContain("content-start");
     expect(identityCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
     expect(runtimeCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
@@ -368,6 +371,60 @@ describe("MembersPage agent details", () => {
     expect(panel.querySelector(`[aria-label="${messages.members.editDescription}"]`)).not.toBeNull();
     expect(panel.querySelector(`[aria-label="${messages.members.editRuntime}"]`)).not.toBeNull();
     expect(panel.querySelector(`[aria-label="${messages.members.editModel}"]`)).not.toBeNull();
+  });
+
+  it("lets long member profile text wrap inside responsive detail columns", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const description = "架构师 Agent，负责与用户进行头脑风暴、明确需求边界、撰写技术方案文档、制定验收标准和架构设计。";
+    const html = renderToStaticMarkup(
+      <MembersPage
+        activeMemberId="agent_theo"
+        data={createSleiFixtures({
+          members: [
+            {
+              ...agentMember("agent_theo", "Theo"),
+              description,
+              handle: "@theo",
+            },
+          ],
+        })}
+        messages={messages}
+        nodes={[
+          {
+            id: "local-node",
+            name: "本机设备",
+            status: "connected",
+            daemonVersion: "v0.54.1",
+            device: { platform: "darwin", arch: "arm64", hostname: "local" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
+          },
+        ]}
+        onAgentUpdate={() => undefined}
+        onMessage={() => undefined}
+      />,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const header = host.querySelector<HTMLElement>('[data-testid="slei-member-detail-header"]');
+    const subtitle = header?.querySelector<HTMLElement>("[data-slei-page-header-subtitle]");
+    const profileLayout = host.querySelector<HTMLElement>('[data-member-profile-layout="compact"]');
+    const descriptionField = Array.from(host.querySelectorAll<HTMLElement>(".slei-editable-field"))
+      .find((field) => field.textContent?.includes(messages.members.description));
+    const descriptionRead = descriptionField?.querySelector<HTMLElement>("p");
+    const detailBlocks = Array.from(host.querySelectorAll<HTMLElement>("[data-member-detail-block]"));
+
+    expect(header?.className).toContain("overflow-hidden");
+    expect(header?.querySelector("[data-slei-page-header-actions]")?.className).toContain("flex-wrap");
+    expect(subtitle?.className).toContain("min-w-0");
+    expect(subtitle?.innerHTML).toContain("whitespace-normal break-words");
+    expect(subtitle?.innerHTML).not.toContain("truncate text-sm text-muted-foreground");
+    expect(profileLayout?.className).toContain("min-w-0");
+    expect(descriptionField?.className).toContain("min-w-0");
+    expect(descriptionRead?.className).toContain("whitespace-normal");
+    expect(descriptionRead?.className).toContain("break-words");
+    for (const block of detailBlocks) {
+      expect(block.className).toContain("min-w-0");
+    }
   });
 
   it("shows a delete action for ordinary agents", () => {
@@ -425,7 +482,7 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
-    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground">@coda</span>');
+    expect(html).toContain('<span class="min-w-0 truncate text-sm font-medium text-muted-foreground">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('aria-haspopup="dialog"');

@@ -33,19 +33,19 @@ export function PageHeader({
             <Icon className="size-4" />
           </span>
         ) : null}
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <h1 className="font-heading text-xl font-semibold leading-tight" data-slei-page-header-title>
             {title}
           </h1>
           {subtitle ? (
-            <p className="text-sm text-muted-foreground" data-slei-page-header-subtitle>
+            <p className="min-w-0 text-sm text-muted-foreground" data-slei-page-header-subtitle>
               {subtitle}
             </p>
           ) : null}
         </div>
       </div>
       {actions ? (
-        <div className="flex shrink-0 items-center gap-2" data-slei-page-header-actions>
+        <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2" data-slei-page-header-actions>
           {actions}
         </div>
       ) : null}

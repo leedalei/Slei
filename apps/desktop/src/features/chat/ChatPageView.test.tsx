@@ -1068,8 +1068,8 @@ describe("ChatPage mention panel", () => {
 
     expect(html).toContain("overflow-hidden whitespace-nowrap");
     expect(html).toContain("min-w-0 flex-1 truncate");
-    expect(html).toContain("shrink-0 text-sm text-foreground");
-    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(2);
+    expect(html).not.toContain("shrink-0 text-sm text-foreground");
+    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(1);
   });
 
   it("uses the shared empty illustration for empty channel tasks and files panels", () => {
@@ -1183,6 +1183,44 @@ describe("ChatPage mention panel", () => {
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
     expect(timestampIndex).toBeGreaterThan(saveIndex);
+  });
+
+  it("hides author name and handle from normal timeline message headers", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg_no_identity_header",
+          author: "leelei",
+          handle: "@leelei",
+          role: "human",
+          time: "19:55",
+          sentAt: "07-07 19:55:00",
+          body: "Electron safe cleanup smoke 1782405205",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const html = renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const host = staticMarkupHost(html);
+    const row = host.querySelector<HTMLElement>('[data-message-id="msg_no_identity_header"]');
+    const header = row?.querySelector<HTMLElement>('[data-slot="message-header"]');
+
+    expect(header).not.toBeNull();
+    expect(header?.textContent).not.toContain("leelei");
+    expect(header?.textContent).not.toContain("@leelei");
+    expect(header?.textContent).toContain(messages.chat.roleLabels.human);
+    expect(header?.textContent).toContain("07-07 19:55");
+    expect(row?.textContent).toContain("Electron safe cleanup smoke 1782405205");
   });
 
   it("lets the real chat toast close control clear a copied-message toast", async () => {
