@@ -90,8 +90,12 @@ export function registerElectronProtocolSchemes(): void {
 
 export function registerElectronProtocolHandlers(): void {
   protocol.handle("slei-avatar", (request) =>
-    profileAvatarProtocolResponse(defaultAvatarDataRoot(), request.url),
+    profileAvatarProtocolResponse(resolveElectronAvatarDataRoot(), request.url),
   );
+}
+
+function resolveElectronAvatarDataRoot(): string {
+  return app.isPackaged ? join(app.getPath("userData"), "data") : defaultAvatarDataRoot();
 }
 
 export function registerIpcHandlers(): void {

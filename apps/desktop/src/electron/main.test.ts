@@ -1,4 +1,6 @@
 import { join } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { app } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -155,6 +157,34 @@ describe("electron main bootstrap helpers", () => {
     const response = await protocolHandler({ url: "slei-avatar:///avatar.png" });
 
     expect(response.status).toBe(404);
+  });
+
+  it("serves packaged avatars from Electron userData data root", async () => {
+    const userDataPath = await mkdtemp(join(tmpdir(), "slei-packaged-avatar-user-data-"));
+    const fileName = `${"a".repeat(64)}.png`;
+    const avatarBytes = Buffer.from("\x89PNG\r\n\x1a\npackaged-avatar");
+    await mkdir(join(userDataPath, "data", "profile", "avatars"), { recursive: true });
+    await writeFile(join(userDataPath, "data", "profile", "avatars", fileName), avatarBytes);
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    electronMock.appGetPath.mockReturnValue("/Applications/Slei.app/Contents/Resources/app.asar");
+    electronMock.appGetPath.mockImplementation((name?: string) =>
+      name === "userData" ? userDataPath : "/Applications/Slei.app/Contents/Resources/app.asar",
+    );
+    electronMock.handle.mockClear();
+
+    try {
+      registerElectronProtocolHandlers();
+      const protocolHandler = electronMock.handle.mock.calls.find((call) => call[0] === "slei-avatar")?.[1];
+      const response = await protocolHandler({ url: `slei-avatar:///${fileName}` });
+
+      expect(response.status).toBe(200);
+      expect(Buffer.from(await response.arrayBuffer())).toEqual(avatarBytes);
+    } finally {
+      (app as unknown as { isPackaged: boolean }).isPackaged = false;
+      electronMock.appGetPath.mockReset();
+      electronMock.appGetPath.mockReturnValue("/Applications/Slei.app/Contents/Resources/app.asar");
+      await rm(userDataPath, { recursive: true, force: true });
+    }
   });
 
   it("serializes daemon errors with a stable code for renderer rehydration", () => {
