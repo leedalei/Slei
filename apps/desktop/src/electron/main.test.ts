@@ -8,12 +8,14 @@ import {
   registerIpcHandlers,
   registerElectronProtocolHandlers,
   registerElectronProtocolSchemes,
+  startDaemonBridge,
   stopDaemonBridge,
 } from "./main";
 import { DesktopDaemonError } from "./daemon-http";
 
 const electronMock = vi.hoisted(() => ({
   appGetAppPath: vi.fn(() => "/Applications/Slei.app/Contents/Resources/app.asar"),
+  appGetPath: vi.fn(() => "/Users/leelei/Library/Application Support/Slei"),
   browserWindowInstances: [] as Array<{
     loadFile: ReturnType<typeof vi.fn>;
     loadURL: ReturnType<typeof vi.fn>;
@@ -36,13 +38,32 @@ const electronMock = vi.hoisted(() => ({
   registerSchemesAsPrivileged: vi.fn(),
 }));
 
+const cryptoMock = vi.hoisted(() => ({
+  randomUUID: vi.fn(() => "generated-packaged-token"),
+}));
+
+const lifecycleMock = vi.hoisted(() => ({
+  ensureDaemon: vi.fn(),
+  stopOwnedDaemon: vi.fn(),
+}));
+
 vi.mock("./event-forwarder", () => ({
   createEventForwarder: electronMock.createEventForwarder,
+}));
+
+vi.mock("./daemon-lifecycle", () => ({
+  ensureDaemon: lifecycleMock.ensureDaemon,
+  stopOwnedDaemon: lifecycleMock.stopOwnedDaemon,
+}));
+
+vi.mock("node:crypto", () => ({
+  randomUUID: cryptoMock.randomUUID,
 }));
 
 vi.mock("electron", () => ({
   app: {
     getAppPath: electronMock.appGetAppPath,
+    getPath: electronMock.appGetPath,
     isPackaged: false,
     on: vi.fn(),
     whenReady: vi.fn(() => new Promise(() => undefined)),
@@ -61,6 +82,25 @@ vi.mock("electron", () => ({
 }));
 
 describe("electron main bootstrap helpers", () => {
+  it("redacts the generated packaged daemon token when startup fails before connection", async () => {
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    lifecycleMock.ensureDaemon.mockRejectedValueOnce(
+      new DesktopDaemonError("daemon_unavailable", "spawn failed generated-packaged-token"),
+    );
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await startDaemonBridge();
+
+    expect(lifecycleMock.ensureDaemon).toHaveBeenCalledWith(expect.objectContaining({
+      generateToken: expect.any(Function),
+    }));
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("[redacted]"));
+    expect(consoleError.mock.calls[0][0]).not.toContain("generated-packaged-token");
+
+    consoleError.mockRestore();
+    (app as unknown as { isPackaged: boolean }).isPackaged = false;
+  });
+
   it("loads the dev renderer URL without daemon query parameters", () => {
     (app as unknown as { isPackaged: boolean }).isPackaged = false;
     electronMock.browserWindowInstances.length = 0;

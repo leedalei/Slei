@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, protocol } from "electron";
 import type { WebContents } from "electron";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DAEMON_ENDPOINT, DESKTOP_DAEMON_TOKEN, VITE_DEV_URL } from "./constants.js";
@@ -36,6 +37,8 @@ export type RendererRpcResult =
 let currentDaemonState: MainDaemonState = { state: "starting" };
 let daemonHandle: DaemonHandle | undefined;
 let activeRpcHandler: DaemonRpcHandler | undefined;
+let activeDaemonEndpoint = DAEMON_ENDPOINT;
+let activeDaemonToken = DESKTOP_DAEMON_TOKEN;
 let ipcRegistered = false;
 let daemonEventForwarder: EventForwarder | undefined;
 const daemonEventSubscriptions = new Map<string, DaemonEventSubscription>();
@@ -152,13 +155,24 @@ export function createRpcFailureEnvelope(error: unknown): Extract<RendererRpcRes
 
 export async function startDaemonBridge(): Promise<void> {
   setDaemonState({ state: "starting" });
+  const startupDaemonToken = app.isPackaged ? randomUUID() : DESKTOP_DAEMON_TOKEN;
+  activeDaemonToken = startupDaemonToken;
 
   try {
-    daemonHandle = await ensureDaemon();
+    daemonHandle = await ensureDaemon({
+      arch: process.arch,
+      generateToken: () => startupDaemonToken,
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      resourcesPath: (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? app.getAppPath(),
+      userDataPath: app.getPath("userData"),
+    });
+    activeDaemonEndpoint = daemonHandle.endpoint;
+    activeDaemonToken = daemonHandle.token;
     activeRpcHandler = createDaemonRpcHandler(
       createDaemonHttpClient({
-        endpoint: DAEMON_ENDPOINT,
-        token: DESKTOP_DAEMON_TOKEN,
+        endpoint: daemonHandle.endpoint,
+        token: daemonHandle.token,
       }),
     );
     setDaemonState({ state: "connected", owned: daemonHandle.owned });
@@ -308,14 +322,26 @@ function logDaemonStartupFailure(error: unknown, code: OfflineDaemonCode): void 
 }
 
 function sanitizeLogMessage(message: string): string {
-  return message.replaceAll(DESKTOP_DAEMON_TOKEN, "[redacted]").slice(0, 1000);
+  return sanitizeSensitiveDaemonText(message).slice(0, 1000);
 }
 
 function sanitizeIpcErrorMessage(message: string): string {
-  return message
-    .replaceAll(DESKTOP_DAEMON_TOKEN, "[redacted]")
-    .replaceAll(DAEMON_ENDPOINT, "[daemon-endpoint]")
-    .slice(0, 1000);
+  return sanitizeSensitiveDaemonText(message).slice(0, 1000);
+}
+
+function sanitizeSensitiveDaemonText(message: string): string {
+  let sanitized = message;
+  for (const token of new Set([DESKTOP_DAEMON_TOKEN, activeDaemonToken])) {
+    if (token.length > 0) {
+      sanitized = sanitized.replaceAll(token, "[redacted]");
+    }
+  }
+  for (const endpoint of new Set([DAEMON_ENDPOINT, activeDaemonEndpoint])) {
+    if (endpoint.length > 0) {
+      sanitized = sanitized.replaceAll(endpoint, "[daemon-endpoint]");
+    }
+  }
+  return sanitized;
 }
 
 function readRpcMethod(envelope: RpcEnvelope): string {

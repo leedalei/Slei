@@ -1,9 +1,11 @@
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { dirname, delimiter, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
 import {
   DAEMON_ENDPOINT,
+  DAEMON_DYNAMIC_BIND_ADDR,
   DAEMON_HOST,
   DAEMON_PORT,
   DAEMON_READY_TIMEOUT_MS,
@@ -11,8 +13,12 @@ import {
 } from "./constants.js";
 import { createDaemonHttpClient, DesktopDaemonError } from "./daemon-http.js";
 import { defaultAvatarDataRoot } from "./avatar-protocol.js";
+import { resolveNativeResources, type NativeResourceArch, type NativeResourcePlatform } from "./packaged-resources.js";
 
 export const EXPECTED_PROTOCOL_VERSION = "v1";
+const MAX_RECENT_OUTPUT_LINES = 20;
+const MAX_RECENT_OUTPUT_LINE_CHARS = 512;
+const MAX_RECENT_OUTPUT_TOTAL_CHARS = 4_096;
 
 export type DaemonHealth = {
   daemon_version: string;
@@ -23,10 +29,14 @@ export type DaemonHealth = {
 export type DaemonHandle =
   | {
       owned: false;
+      endpoint: string;
+      token: string;
     }
   | {
       owned: true;
+      endpoint: string;
       process: ChildProcess;
+      token: string;
     };
 
 type SpawnDaemon = typeof nodeSpawn;
@@ -35,18 +45,24 @@ type TerminateProcess = (process: ChildProcess) => void;
 
 type LifecycleDependencies = {
   authCheck?: () => Promise<unknown>;
+  arch?: NativeResourceArch;
   endpoint?: string;
+  generateToken?: () => string;
   health?: () => Promise<DaemonHealth>;
   host?: string;
+  isPackaged?: boolean;
   now?: () => number;
+  platform?: NativeResourcePlatform;
   port?: number;
   probePort?: (host: string, port: number) => Promise<boolean>;
   repoRoot?: string;
+  resourcesPath?: string;
   dataRoot?: string;
   sleep?: (ms: number) => Promise<void>;
   spawn?: SpawnDaemon;
   terminateProcess?: TerminateProcess;
   timeoutMs?: number;
+  userDataPath?: string;
 };
 
 type WaitForDaemonReadyOptions = {
@@ -132,6 +148,10 @@ export async function waitForDaemonReady(options: WaitForDaemonReadyOptions): Pr
 }
 
 export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Promise<DaemonHandle> {
+  if (dependencies.isPackaged) {
+    return startPackagedDaemon(dependencies);
+  }
+
   const host = dependencies.host ?? DAEMON_HOST;
   const port = dependencies.port ?? DAEMON_PORT;
   const endpoint = dependencies.endpoint ?? DAEMON_ENDPOINT;
@@ -152,7 +172,7 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
         sleep: dependencies.sleep,
         timeoutMs: dependencies.timeoutMs,
       });
-      return { owned: false };
+      return { owned: false, endpoint, token: DESKTOP_DAEMON_TOKEN };
     } catch (error) {
       throw normalizeExistingDaemonError(error);
     }
@@ -196,7 +216,41 @@ export async function ensureDaemon(dependencies: LifecycleDependencies = {}): Pr
     throw error;
   }
 
-  return { owned: true, process: daemonProcess };
+  return { owned: true, endpoint, process: daemonProcess, token: DESKTOP_DAEMON_TOKEN };
+}
+
+async function startPackagedDaemon(dependencies: LifecycleDependencies): Promise<DaemonHandle> {
+  const repoRoot = dependencies.repoRoot ?? defaultRepoRoot();
+  const resources = resolveNativeResources({
+    arch: dependencies.arch ?? process.arch,
+    isPackaged: true,
+    platform: dependencies.platform ?? process.platform,
+    repoRoot,
+    resourcesPath: dependencies.resourcesPath ?? defaultResourcesPath(),
+  });
+  const token = (dependencies.generateToken ?? generateDaemonToken)();
+  const spawnDaemon = dependencies.spawn ?? nodeSpawn;
+  const terminateProcess = dependencies.terminateProcess ?? terminateOwnedProcess;
+  const daemonProcess = spawnDaemon(resources.daemonPath, [], {
+    cwd: resources.nativeRoot,
+    detached: true,
+    env: packagedDaemonEnv({
+      dataRoot: resolve(dependencies.userDataPath ?? defaultAvatarDataRoot(), "data"),
+      nativeRoot: resources.nativeRoot,
+      nodeBinPath: resources.nodeBinPath,
+      token,
+      workerPath: resources.workerPath,
+    }),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  try {
+    const endpoint = await waitForPackagedDaemonEndpoint(daemonProcess, dependencies.timeoutMs ?? DAEMON_READY_TIMEOUT_MS);
+    return { owned: true, endpoint, process: daemonProcess, token };
+  } catch (error) {
+    terminateProcess(daemonProcess);
+    throw error;
+  }
 }
 
 export function stopOwnedDaemon(handle: DaemonHandle, options: TerminateOwnedProcessOptions = {}): void {
@@ -223,6 +277,142 @@ export function terminateOwnedProcess(
   }
 
   childProcess.kill("SIGTERM");
+}
+
+function waitForPackagedDaemonEndpoint(childProcess: ChildProcess, timeoutMs: number): Promise<string> {
+  const recentOutput: string[] = [];
+  let outputBuffer = "";
+  let settled = false;
+
+  return new Promise((resolveReady, rejectReady) => {
+    const timeout = setTimeout(() => {
+      rejectWithOutput("Timed out waiting for packaged Slei daemon to report its listening address");
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      childProcess.stdout?.off("data", onStdout);
+      childProcess.stderr?.off("data", onStderr);
+      childProcess.off("error", onError);
+      childProcess.off("exit", onExit);
+      childProcess.off("close", onClose);
+    };
+
+    const settle = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+
+    const rejectWithOutput = (message: string, cause?: unknown) => {
+      settle(() => {
+        rejectReady(new DesktopDaemonError("daemon_unavailable", outputAwareMessage(message, recentOutput), { cause }));
+      });
+    };
+
+    const resolveEndpoint = (endpoint: string) => {
+      settle(() => {
+        childProcess.stdout?.resume();
+        childProcess.stderr?.resume();
+        resolveReady(endpoint);
+      });
+    };
+
+    const onStdout = (chunk: Buffer | string) => {
+      const text = String(chunk);
+      rememberOutput(recentOutput, text);
+      outputBuffer = `${outputBuffer}${text}`.slice(-4_096);
+      const endpoint = parseDaemonListeningEndpoint(outputBuffer);
+      if (endpoint) {
+        resolveEndpoint(endpoint);
+      }
+    };
+
+    const onStderr = (chunk: Buffer | string) => {
+      rememberOutput(recentOutput, String(chunk));
+    };
+
+    const onError = (error: Error) => {
+      rejectWithOutput("Packaged Slei daemon process failed to start", error);
+    };
+
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      rejectWithOutput(`Packaged Slei daemon exited before readiness: code=${String(code)} signal=${String(signal)}`);
+    };
+
+    const onClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      rejectWithOutput(`Packaged Slei daemon closed before readiness: code=${String(code)} signal=${String(signal)}`);
+    };
+
+    childProcess.stdout?.on("data", onStdout);
+    childProcess.stderr?.on("data", onStderr);
+    childProcess.once("error", onError);
+    childProcess.once("exit", onExit);
+    childProcess.once("close", onClose);
+  });
+}
+
+function parseDaemonListeningEndpoint(output: string): string | undefined {
+  for (const line of output.split(/\r?\n/)) {
+    const match = line.match(/^slei-daemon listening on (127\.0\.0\.1):(\d+)$/);
+    if (!match) {
+      continue;
+    }
+    const port = Number(match[2]);
+    if (Number.isInteger(port) && port >= 1 && port <= 65_535) {
+      return `http://${match[1]}:${port}`;
+    }
+  }
+  return undefined;
+}
+
+function rememberOutput(recentOutput: string[], text: string): void {
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    recentOutput.push(truncateRecentOutputLine(trimmed));
+  }
+  while (recentOutput.length > MAX_RECENT_OUTPUT_LINES || recentOutput.join("\n").length > MAX_RECENT_OUTPUT_TOTAL_CHARS) {
+    recentOutput.shift();
+  }
+}
+
+function truncateRecentOutputLine(line: string): string {
+  if (line.length <= MAX_RECENT_OUTPUT_LINE_CHARS) {
+    return line;
+  }
+  return `${line.slice(0, MAX_RECENT_OUTPUT_LINE_CHARS)}...`;
+}
+
+function outputAwareMessage(message: string, recentOutput: string[]): string {
+  if (recentOutput.length === 0) {
+    return message;
+  }
+  return `${message}. Recent daemon output:\n${recentOutput.join("\n")}`;
+}
+
+function packagedDaemonEnv(options: {
+  dataRoot: string;
+  nativeRoot: string;
+  nodeBinPath: string;
+  token: string;
+  workerPath: string;
+}): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.SLEI_DAEMON_URL;
+  return {
+    ...env,
+    PATH: prependPathEntries([options.nodeBinPath, options.nativeRoot], process.env.PATH),
+    SLEI_CLAUDE_AGENT_RUNNER: options.workerPath,
+    SLEI_DAEMON_ADDR: DAEMON_DYNAMIC_BIND_ADDR,
+    SLEI_DAEMON_TOKEN: options.token,
+    SLEI_DATA_ROOT: options.dataRoot,
+  };
 }
 
 function createDefaultHealth(client: ReturnType<typeof createDaemonHttpClient>): () => Promise<DaemonHealth> {
@@ -282,6 +472,14 @@ function defaultRepoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 }
 
+function defaultResourcesPath(): string {
+  return (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? defaultRepoRoot();
+}
+
+function generateDaemonToken(): string {
+  return randomUUID();
+}
+
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
@@ -317,4 +515,8 @@ function normalizeExistingDaemonError(error: unknown): DesktopDaemonError {
 
 function prependPath(entry: string, currentPath: string | undefined): string {
   return currentPath ? `${entry}${delimiter}${currentPath}` : entry;
+}
+
+function prependPathEntries(entries: string[], currentPath: string | undefined): string {
+  return [...entries, currentPath].filter((entry): entry is string => Boolean(entry)).join(delimiter);
 }
