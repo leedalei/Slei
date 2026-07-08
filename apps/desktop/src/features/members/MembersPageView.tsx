@@ -328,8 +328,8 @@ export function MembersPage(input: {
     >
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <Tabs className="contents" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
-        <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="select-none overflow-hidden bg-transparent px-6 py-5" data-testid="slei-member-detail-header">
+          <div className="flex min-w-0 items-start gap-3">
             <span className="relative inline-flex shrink-0" data-slot="member-avatar">
               <MemberAvatar identity={selectedMember} large>
                 {canMessage ? (
@@ -347,13 +347,13 @@ export function MembersPage(input: {
               </MemberAvatar>
             </span>
             <PageHeader
-              className="min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto]"
+              className="min-w-0 flex-1 flex-wrap"
               data-slot="workspace-titlebar"
               icon={undefined}
               title={(
                 <span className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="min-w-0 truncate">{memberDetails.name}</span>
-                  {showHandle ? <span className="truncate text-sm font-medium text-muted-foreground">{selectedMember.handle}</span> : null}
+                  <span className="min-w-0 max-w-full truncate">{memberDetails.name}</span>
+                  {showHandle ? <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">{selectedMember.handle}</span> : null}
                   <StatusBadge
                     className="w-fit"
                     label={input.messages.members.online}
@@ -362,8 +362,8 @@ export function MembersPage(input: {
                 </span>
               )}
               subtitle={(
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate text-sm text-muted-foreground">{memberDetails.description}</span>
+                <span className="flex min-w-0 flex-wrap items-start gap-1.5">
+                  <span className="min-w-0 flex-1 whitespace-normal break-words text-sm text-muted-foreground">{memberDetails.description}</span>
                   <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyDescription()} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                     <SleiIcon className="size-3.5" name="copy" />
                   </TooltipButton>
@@ -424,30 +424,30 @@ export function MembersPage(input: {
           <div className="grid gap-3 p-4">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
               <div
-                className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem]"
+                className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]"
                 data-member-profile-layout="compact"
               >
-                <Card className={`${CARD_SURFACE_CLASS} grid gap-3 p-3`} data-member-profile-card="identity">
+                <Card className={`${CARD_SURFACE_CLASS} grid min-w-0 gap-3 p-3`} data-member-profile-card="identity">
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <h2 className="text-sm font-semibold">{input.messages.members.profile}</h2>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-                    <div className="grid gap-1">
+                  <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                    <div className="grid min-w-0 gap-1">
                       <EditableDetailField
                         ariaLabel={input.messages.members.editDisplayName}
                         error={fieldError.name}
                         label={input.messages.members.displayName}
                         messages={input.messages}
                         onSave={(value) => updateMemberDetail("name", value)}
-                        readClassName="text-[15px] leading-6"
+                        readClassName="min-w-0 whitespace-normal break-words text-[15px] leading-6"
                         saving={effectiveSavingField === "name"}
-                        sectionClassName="grid gap-2"
+                        sectionClassName="grid min-w-0 gap-2"
                         titleClassName="text-sm"
                         value={memberDetails.name}
                       />
                       <ControlledFieldAlert message={input.memberFieldErrors?.name} />
                     </div>
-                    <div className="grid gap-1">
+                    <div className="grid min-w-0 gap-1">
                       <EditableDetailField
                         allowEmpty
                         ariaLabel={input.messages.members.editDescription}
@@ -456,9 +456,9 @@ export function MembersPage(input: {
                         messages={input.messages}
                         multiline
                         onSave={(value) => updateMemberDetail("description", value)}
-                        readClassName="text-[15px] leading-6"
+                        readClassName="min-w-0 whitespace-normal break-words text-[15px] leading-6"
                         saving={effectiveSavingField === "description"}
-                        sectionClassName="grid gap-2"
+                        sectionClassName="grid min-w-0 gap-2"
                         titleClassName="text-sm"
                         value={memberDetails.description}
                       />
@@ -469,10 +469,10 @@ export function MembersPage(input: {
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <h2 className="text-sm font-semibold">{input.messages.members.info}</h2>
                   </div>
-                  <div className="grid gap-2 md:grid-cols-3">
+                  <div className="grid min-w-0 gap-2 md:grid-cols-3">
                     <InfoItem blockId="computer" icon="cpu" label={input.messages.members.computer}>
-                      <span>{selectedNode?.name ?? selectedMember.computer}</span>
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <span className="min-w-0 break-words">{selectedNode?.name ?? selectedMember.computer}</span>
+                      <span className="inline-flex min-w-0 flex-wrap items-center gap-1 text-muted-foreground">
                         <StatusBadge label={nodeStatus} status={nodeDotStatus} />
                         daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
                       </span>
@@ -487,7 +487,7 @@ export function MembersPage(input: {
                 </Card>
 
                 <Card
-                  className={`${CARD_SURFACE_CLASS} grid content-start gap-3 p-3`}
+                  className={`${CARD_SURFACE_CLASS} grid min-w-0 content-start gap-3 p-3`}
                   data-member-runtime-card="compact"
                 >
                   <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
@@ -784,12 +784,12 @@ function InfoItem(input: {
   label: string;
 }) {
   return (
-    <DetailBlock className="bg-transparent" data-member-detail-block={input.blockId}>
-      <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <DetailBlock className="min-w-0 bg-transparent" data-member-detail-block={input.blockId}>
+      <div className="mb-2 flex min-w-0 items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <SleiIcon className="size-3.5" name={input.icon} />
-        {input.label}
+        <span className="min-w-0 truncate">{input.label}</span>
       </div>
-      <div className="grid gap-1 text-sm">{input.children}</div>
+      <div className="grid min-w-0 gap-1 text-sm">{input.children}</div>
     </DetailBlock>
   );
 }

@@ -1135,11 +1135,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           >
                             <MemberAvatar identity={memberFromMessage(message, data.members)} />
                             <div className="min-w-0">
-                              <div className="flex min-w-0 items-center justify-between gap-2">
+                              <div className="flex min-w-0 items-center justify-between gap-2" data-slot="message-header">
                                 <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
-                                  <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
-                                  {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
-                                  <span aria-hidden="true">｜</span>
                                   <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">

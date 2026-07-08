@@ -418,7 +418,7 @@ describe("real agent members and direct messages", () => {
     expect(channelHtml).toContain("转为任务");
   });
 
-  it("renders direct message identity, role, time, and icon-only copy action in message cards", () => {
+  it("renders direct message role, time, and icon-only copy action without identity text in message cards", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -445,14 +445,20 @@ describe("real agent members and direct messages", () => {
         runtimeSetup={readyRuntime}
       />,
     );
+    const messageStart = html.indexOf('data-message-id="current-1"');
+    const rowHtml = html.slice(html.lastIndexOf("<article", messageStart), html.indexOf("</article>", messageStart));
+    const headerStart = rowHtml.indexOf('data-slot="message-header"');
+    const headerHtml = rowHtml.slice(rowHtml.lastIndexOf("<div", headerStart), rowHtml.indexOf("<div class=\"slei-markdown-message", headerStart));
 
-    expect(html).toContain("Coda");
-    expect(html).toContain("@coda");
-    expect(html).toContain("研发团队开发工程师");
-    expect(html).toContain("10:00");
-    expect(html).toContain('aria-label="复制"');
-    expect(html).not.toContain(">复制</button>");
-    expect(html.indexOf('aria-label="复制"')).toBeLessThan(html.indexOf(">10:00</time>"));
+    expect(messageStart).toBeGreaterThanOrEqual(0);
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml).not.toContain(">Coda<");
+    expect(headerHtml).not.toContain(">@coda<");
+    expect(headerHtml).toContain("研发团队开发工程师");
+    expect(headerHtml).toContain("10:00");
+    expect(headerHtml).toContain('aria-label="复制"');
+    expect(headerHtml).not.toContain(">复制</button>");
+    expect(headerHtml.indexOf('aria-label="复制"')).toBeLessThan(headerHtml.indexOf(">10:00</time>"));
   });
 
   it("uses localized fallback role labels for unmatched direct message authors", () => {
@@ -483,9 +489,16 @@ describe("real agent members and direct messages", () => {
       />,
     );
 
-    expect(html).toContain("Lei");
-    expect(html).toContain("@lei");
-    expect(html).toContain("用户");
+    const messageStart = html.indexOf('data-message-id="current-1"');
+    const rowHtml = html.slice(html.lastIndexOf("<article", messageStart), html.indexOf("</article>", messageStart));
+    const headerStart = rowHtml.indexOf('data-slot="message-header"');
+    const headerHtml = rowHtml.slice(rowHtml.lastIndexOf("<div", headerStart), rowHtml.indexOf("<div class=\"slei-markdown-message", headerStart));
+
+    expect(messageStart).toBeGreaterThanOrEqual(0);
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(headerHtml).not.toContain(">Lei<");
+    expect(headerHtml).not.toContain(">@lei<");
+    expect(headerHtml).toContain("用户");
   });
 
   it("uses the member name as the direct message detail title", () => {
