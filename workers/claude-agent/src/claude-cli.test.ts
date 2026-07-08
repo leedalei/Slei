@@ -133,15 +133,15 @@ describe("Claude CLI runtime helpers", () => {
       mcpServers: {
         slei: {
           type: "stdio",
-          command: "node",
-          args: ["/abs/dist/mcp-server.js"],
-            env: {
-              SLEI_RUN_ID: "run_1",
-              SLEI_AGENT_ID: "agent_guide",
-              PATH: expect.any(String),
-            },
+          command: process.execPath,
+          args: ["/abs/dist/mcp-server.js", "--slei-mcp-server"],
+          env: {
+            SLEI_RUN_ID: "run_1",
+            SLEI_AGENT_ID: "agent_guide",
+            PATH: expect.any(String),
           },
         },
+      },
     });
   });
 

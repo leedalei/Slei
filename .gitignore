@@ -6,5 +6,7 @@ target/
 .cargo-home/
 dist/
 apps/desktop/dist-electron/
+apps/desktop/dist-native/
+apps/desktop/.cache/
 .DS_Store
 *.log

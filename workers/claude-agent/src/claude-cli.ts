@@ -271,8 +271,8 @@ export function buildSleiMcpConfig(input: SleiMcpConfigInput) {
     mcpServers: {
       slei: {
         type: "stdio",
-        command: "node",
-        args: [input.serverPath],
+        command: process.execPath,
+        args: [input.serverPath, "--slei-mcp-server"],
         env,
       },
     },
@@ -480,7 +480,7 @@ function isTerminalEvent(event: RuntimeEvent): boolean {
 }
 
 function sleiMcpServerPath(): string {
-  return join(dirname(fileURLToPath(import.meta.url)), "mcp-server.js");
+  return join(dirname(fileURLToPath(import.meta.url)), "local-runner.js");
 }
 
 function failedResultMessage(event: Record<string, unknown>): string {
