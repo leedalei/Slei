@@ -1,5 +1,8 @@
+import { join } from "node:path";
+import { app } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createMainWindow,
   createRpcFailureEnvelope,
   handleRendererRpcForIpc,
   registerIpcHandlers,
@@ -10,6 +13,22 @@ import {
 import { DesktopDaemonError } from "./daemon-http";
 
 const electronMock = vi.hoisted(() => ({
+  appGetAppPath: vi.fn(() => "/Applications/Slei.app/Contents/Resources/app.asar"),
+  browserWindowInstances: [] as Array<{
+    loadFile: ReturnType<typeof vi.fn>;
+    loadURL: ReturnType<typeof vi.fn>;
+    options: Record<string, unknown>;
+  }>,
+  browserWindowGetAllWindows: vi.fn(() => []),
+  BrowserWindow: vi.fn((options: Record<string, unknown>) => {
+    const window = {
+      loadFile: vi.fn(),
+      loadURL: vi.fn(),
+      options,
+    };
+    electronMock.browserWindowInstances.push(window);
+    return window;
+  }),
   createEventForwarder: vi.fn(),
   handle: vi.fn(),
   ipcHandle: vi.fn(),
@@ -23,12 +42,14 @@ vi.mock("./event-forwarder", () => ({
 
 vi.mock("electron", () => ({
   app: {
+    getAppPath: electronMock.appGetAppPath,
+    isPackaged: false,
     on: vi.fn(),
     whenReady: vi.fn(() => new Promise(() => undefined)),
   },
-  BrowserWindow: {
-    getAllWindows: vi.fn(() => []),
-  },
+  BrowserWindow: Object.assign(electronMock.BrowserWindow, {
+    getAllWindows: electronMock.browserWindowGetAllWindows,
+  }),
   ipcMain: {
     handle: electronMock.ipcHandle,
     on: electronMock.ipcOn,
@@ -40,6 +61,46 @@ vi.mock("electron", () => ({
 }));
 
 describe("electron main bootstrap helpers", () => {
+  it("loads the dev renderer URL without daemon query parameters", () => {
+    (app as unknown as { isPackaged: boolean }).isPackaged = false;
+    electronMock.browserWindowInstances.length = 0;
+
+    createMainWindow();
+
+    const window = electronMock.browserWindowInstances.at(-1);
+    expect(window?.loadURL).toHaveBeenCalledWith("http://127.0.0.1:1420");
+    expect(window?.loadURL.mock.calls[0][0]).not.toContain("desktop-session-token");
+    expect(window?.loadURL.mock.calls[0][0]).not.toContain("4319");
+    expect(window?.loadFile).not.toHaveBeenCalled();
+  });
+
+  it("loads the packaged renderer file and preserves secure BrowserWindow options", () => {
+    const appPath = "/Applications/Slei.app/Contents/Resources/app.asar";
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    electronMock.appGetAppPath.mockReturnValue(appPath);
+    electronMock.browserWindowInstances.length = 0;
+
+    createMainWindow();
+
+    const window = electronMock.browserWindowInstances.at(-1);
+    expect(window?.loadFile).toHaveBeenCalledWith(join(appPath, "dist", "index.html"));
+    expect(window?.loadURL).not.toHaveBeenCalled();
+    expect(window?.options).toEqual(
+      expect.objectContaining({
+        width: 1280,
+        height: 800,
+        minWidth: 960,
+        minHeight: 640,
+        webPreferences: expect.objectContaining({
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          preload: expect.stringContaining("preload.cjs"),
+        }),
+      }),
+    );
+  });
+
   it("registers the slei-avatar protocol scheme and handler", async () => {
     registerElectronProtocolSchemes();
     registerElectronProtocolHandlers();

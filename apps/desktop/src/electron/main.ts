@@ -12,6 +12,8 @@ import type { EventReconnectReceipt, SanitizedDaemonStatus } from "../lib/daemon
 import type { EventForwarder } from "./event-forwarder.js";
 import { createEventForwarder } from "./event-forwarder.js";
 import { defaultAvatarDataRoot, profileAvatarProtocolResponse } from "./avatar-protocol.js";
+import { resolveRendererEntry } from "./renderer-entry.js";
+import { createWindowVisualOptions } from "./window-options.js";
 
 export type MainDaemonState =
   | { state: "starting" }
@@ -42,8 +44,10 @@ const electronDirname = dirname(fileURLToPath(import.meta.url));
 
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...createWindowVisualOptions({
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+    }),
     title: "",
     webPreferences: {
       contextIsolation: true,
@@ -53,7 +57,18 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
-  void window.loadURL(VITE_DEV_URL);
+  const rendererEntry = resolveRendererEntry({
+    isPackaged: app.isPackaged,
+    devUrl: VITE_DEV_URL,
+    appPath: app.getAppPath(),
+  });
+
+  if (rendererEntry.kind === "url") {
+    void window.loadURL(rendererEntry.value);
+  } else {
+    void window.loadFile(rendererEntry.value);
+  }
+
   return window;
 }
 
