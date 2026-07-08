@@ -627,6 +627,8 @@ export function findActiveAgentActivities(
     if (message.channelId !== targetId) return false;
     if (activeConversation && activeSessionId && message.sessionId !== activeSessionId) return false;
     if (message.role !== "agent" || (message.status !== "running" && message.status !== "pending" && message.status !== "failed")) return false;
+    const sourceMessageId = agentActivitySourceId(message);
+    if (sourceMessageId && hasVisibleAgentReplyAfterSource(data.messages, targetId, sourceMessageId)) return false;
     const member = data.members.find((candidate) => candidate.name === message.author || candidate.handle === message.handle);
     return member?.directMessageEnabled !== false;
   });
@@ -641,6 +643,18 @@ export function findActiveAgentActivities(
 export function selectAgentActivityForTick(activities: AgentActivityView[], _tick: number): AgentActivityView | undefined {
   if (activities.length === 0) return undefined;
   return activities[0];
+}
+
+function agentActivitySourceId(message: SleiMessage): string | undefined {
+  if (message.toolCall !== "channel_agent_reply") return undefined;
+  return message.sourceMessageId ?? message.id.match(/^agent-activity-(.+)-agent[_-]/)?.[1];
+}
+
+function hasVisibleAgentReplyAfterSource(messages: SleiMessage[], channelId: string, sourceMessageId: string) {
+  const channelMessages = messages.filter((message) => message.channelId === channelId);
+  const sourceIndex = channelMessages.findIndex((message) => message.id === sourceMessageId);
+  if (sourceIndex < 0) return false;
+  return channelMessages.slice(sourceIndex + 1).some((message) => message.role === "agent" && message.toolCall !== "channel_agent_reply");
 }
 
 function SavedMessagesWorkspace(input: {

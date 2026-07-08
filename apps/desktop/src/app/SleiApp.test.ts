@@ -504,6 +504,100 @@ describe("createChannelAgentReplyMessage", () => {
     ]);
   });
 
+  it("does not mark stale agent activity failed after a visible channel reply exists", () => {
+    const human = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "08:00",
+      sentAt: "2026-06-15T08:00:00.000Z",
+      body: "@nova 报个到",
+      channelId: "content",
+    } satisfies SleiMessage;
+    const pending = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "08:00",
+      sentAt: "2026-06-15T08:00:00.000Z",
+      body: "",
+      channelId: "content",
+      status: "running",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const reply = {
+      id: "msg_agent_1",
+      author: "Nova",
+      handle: "@nova",
+      role: "agent",
+      time: "08:01",
+      sentAt: "2026-06-15T08:01:00.000Z",
+      body: "到。",
+      channelId: "content",
+      status: "done",
+    } satisfies SleiMessage;
+
+    const result = failStaleAgentActivities(
+      [human, pending, reply],
+      Date.parse("2026-06-15T08:03:01.000Z"),
+      120_000,
+    );
+
+    expect(result.failedActivities).toEqual([]);
+    expect(result.messages).toEqual([human, pending, reply]);
+  });
+
+  it("does not select a stale channel activity after a visible agent reply exists", () => {
+    const member: SleiMember = {
+      ...dataWithDmAgent().members[0],
+      id: "agent_nova",
+      name: "Nova",
+      handle: "@nova",
+    };
+    const human = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "08:00",
+      body: "@nova 报个到",
+      channelId: "content",
+    } satisfies SleiMessage;
+    const failedActivity = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      author: "Nova",
+      handle: "@nova",
+      avatar: "NO",
+      role: "agent",
+      time: "08:00",
+      body: "",
+      channelId: "content",
+      status: "failed",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    } satisfies SleiMessage;
+    const reply = {
+      id: "msg_agent_1",
+      author: "Nova",
+      handle: "@nova",
+      role: "agent",
+      time: "08:01",
+      body: "到。",
+      channelId: "content",
+      status: "done",
+    } satisfies SleiMessage;
+    const data: SleiFixtures = {
+      ...dataWithDmAgent(),
+      channels: [{ id: "content", name: "content", description: "Content", unread: 0 }],
+      members: [member],
+      messages: [human, failedActivity, reply],
+    };
+
+    expect(findActiveAgentActivities(data, data.channels[0])).toEqual([]);
+  });
+
   it("detects pending agent activities for task summary refresh", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",

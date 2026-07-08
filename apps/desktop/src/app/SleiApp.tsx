@@ -228,7 +228,7 @@ function hasChannelAgentResultAfterSource(channelMessages: SleiMessage[], source
   if (sourceIndex < 0) return false;
   const task = channelMessages[sourceIndex].task;
   if (task?.sourceMessageId === sourceMessageId && (task.replyCount ?? task.replies?.length ?? 0) > 0) return true;
-  return channelMessages.slice(sourceIndex + 1).some((message) => message.role === "agent");
+  return channelMessages.slice(sourceIndex + 1).some((message) => message.role === "agent" && message.toolCall !== "channel_agent_reply");
 }
 
 export function replaceChannelMessages(current: SleiMessage[], channelMessages: SleiMessage[], channelIds: string[]): SleiMessage[] {
@@ -764,6 +764,8 @@ export function failStaleAgentActivities(
   const failedActivities: SleiMessage[] = [];
   const nextMessages = messages.map((message) => {
     if (!isPendingAgentActivity(message)) return message;
+    const sourceMessageId = channelAgentActivitySourceId(message);
+    if (sourceMessageId && hasChannelAgentResultAfterSource(messages, sourceMessageId)) return message;
     const sentAtMs = Date.parse(message.sentAt ?? "");
     if (!Number.isFinite(sentAtMs) || nowMs - sentAtMs < staleMs) return message;
     const failed = { ...message, status: "failed" as const };
