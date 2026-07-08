@@ -152,8 +152,8 @@
   --modal-composer-bg: var(--workspace-glass-bg);
   --modal-border: var(--app-card-border);
   --modal-shadow: var(--app-card-shadow);
-  --task-thread-surface-bg: var(--app-card-bg);
-  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-surface-bg: var(--card);
+  --task-thread-header-bg: var(--card);
   --task-thread-card-bg: var(--modal-panel-bg);
   --task-thread-composer-bg: var(--workspace-glass-bg);
   --task-thread-border: var(--modal-border);
@@ -326,8 +326,8 @@
   --modal-composer-bg: var(--workspace-glass-bg);
   --modal-border: var(--app-card-border);
   --modal-shadow: var(--app-card-shadow);
-  --task-thread-surface-bg: var(--app-card-bg);
-  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-surface-bg: var(--card);
+  --task-thread-header-bg: var(--card);
   --task-thread-card-bg: var(--modal-panel-bg);
   --task-thread-composer-bg: var(--workspace-glass-bg);
   --task-thread-border: var(--modal-border);
@@ -415,8 +415,8 @@
   --modal-composer-bg: var(--workspace-glass-bg);
   --modal-border: var(--app-card-border);
   --modal-shadow: var(--app-card-shadow);
-  --task-thread-surface-bg: var(--app-card-bg);
-  --task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);
+  --task-thread-surface-bg: var(--card);
+  --task-thread-header-bg: var(--card);
   --task-thread-card-bg: var(--modal-panel-bg);
   --task-thread-composer-bg: var(--workspace-glass-bg);
   --task-thread-border: var(--modal-border);

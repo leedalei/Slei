@@ -358,6 +358,7 @@ describe("TasksPage filters", () => {
     const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
     const footer = drawer?.querySelector<HTMLElement>('[data-slot="sheet-footer"]');
     const composer = footer?.querySelector<HTMLElement>('[data-slot="task-thread-composer"]');
+    const composerInner = composer?.querySelector<HTMLElement>('[data-slot="task-thread-composer-inner"]');
     const textarea = drawer?.querySelector<HTMLTextAreaElement>('textarea[placeholder="请输入回复"]');
     const sendButton = drawer?.querySelector<HTMLButtonElement>('button[aria-label="发送回复"]');
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
@@ -367,29 +368,43 @@ describe("TasksPage filters", () => {
     expect(drawer?.getAttribute("data-side")).toBe("right");
     expect(drawer?.className).toContain("data-[state=open]:slide-in-from-right");
     expect(drawer?.className).toContain("slei-task-thread-surface");
+    expect(drawer?.className).not.toContain("backdrop-blur");
     expect(drawer?.className).not.toContain("bg-background/80");
     expect(drawer?.className).not.toContain("dark:bg-background/70");
     expect(drawer?.className).not.toContain("bg-white/70");
     expect(drawer?.className).not.toContain("border-white/35");
     expect(drawer?.className).toContain("before:hidden");
     expect(document.body.querySelector('[data-slot="sheet-overlay"]')).toBeNull();
-    expect(appCss).toContain("--task-thread-surface-bg: var(--app-card-bg);");
-    expect(appCss).toContain("--task-thread-header-bg: color-mix(in srgb, var(--app-card-bg) 94%, transparent);");
+    expect(appCss).toContain("--task-thread-surface-bg: var(--card);");
+    expect(appCss).toContain("--task-thread-header-bg: var(--card);");
     expect(appCss).toContain("--task-thread-composer-bg: var(--workspace-glass-bg);");
     expect(taskThreadCss).not.toContain("28 35 50");
     expect(taskThreadCss).not.toContain("bg-background");
 
     expect(footer).not.toBeNull();
-    expect(footer?.className).toContain("sticky");
+    expect(footer?.className).toContain("absolute");
+    expect(footer?.className).toContain("inset-x-0");
     expect(footer?.className).toContain("bottom-0");
+    expect(footer?.className).toContain("pointer-events-none");
+    expect(footer?.className).toContain("bg-transparent");
+    expect(footer?.className).not.toContain("sticky");
+    expect(footer?.className).not.toContain("shrink-0");
     expect(footer?.className).not.toContain("border-t");
+    expect(footer?.querySelector("form")?.className).toContain("pointer-events-auto");
     expect(composer).not.toBeNull();
     expect(composer?.className).toContain("relative");
+    expect(composer?.className).toContain("slei-composer-glass");
     expect(composer?.className).toContain("slei-task-thread-composer");
     expect(composer?.className).toContain("backdrop-blur-xl");
+    expect(composer?.className).toContain("rounded-2xl");
+    expect(composer?.className).toContain("border-border/60");
     expect(composer?.className).not.toContain("bg-background/55");
     expect(composer?.className).not.toContain("dark:bg-background/35");
     expect(composer?.className).not.toContain("bg-white");
+    expect(composerInner).not.toBeNull();
+    expect(composerInner?.className).toContain("relative");
+    expect(composerInner?.className).toContain("grid");
+    expect(appCss).toContain(".slei-composer-glass > *");
     expect(textarea).not.toBeNull();
     expect(textarea?.getAttribute("placeholder")).toBe("请输入回复");
     expect(textarea?.className).toContain("border-0");
@@ -411,6 +426,7 @@ describe("TasksPage filters", () => {
     expect(sendButton?.className).toContain("rounded-full");
     expect(sendButton?.className).toContain("right-3");
     expect(sendButton?.className).toContain("size-9");
+    expect(sendButton?.parentElement?.getAttribute("data-slot")).toBe("task-thread-composer-inner");
     expect(sendButton?.querySelector('[data-slei-icon="arrowUp"]')).not.toBeNull();
     expect(sendButton?.querySelector('[data-slei-icon="send"]')).toBeNull();
     expect(sendButton?.disabled).toBe(true);
@@ -489,31 +505,54 @@ describe("TasksPage filters", () => {
         ...tasks[0],
         replies: [
           { id: "reply-agent", sender: "Coda", role: "agent", body: "Agent 回复", time: "06-17 10:30", sentAt: "2026-06-17 10:30:00" } satisfies SleiTaskReply,
+          { id: "reply-human", sender: "Lei", handle: "@lei", role: "human", body: "用户补充", time: "06-17 10:31", sentAt: "2026-06-17 10:31:00" } satisfies SleiTaskReply,
         ],
       },
     ]));
 
     const replies = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"] [data-reply-role]'));
     const reply = replies[0];
+    const humanReply = replies[1];
     const avatar = reply?.querySelector<HTMLElement>('[data-slot="avatar"]');
+    const humanAvatar = humanReply?.querySelector<HTMLElement>('[data-slot="avatar"]');
     const metadata = reply?.querySelector<HTMLElement>('[data-slot="task-reply-metadata"]');
+    const humanMetadata = humanReply?.querySelector<HTMLElement>('[data-slot="task-reply-metadata"]');
+    const bubble = reply?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
+    const humanBubble = humanReply?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
     const actions = reply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
     const copyButton = actions?.querySelector<HTMLButtonElement>('button[aria-label="复制"]');
     const time = actions?.querySelector<HTMLTimeElement>("time");
 
-    expect(replies).toHaveLength(1);
+    expect(replies).toHaveLength(2);
+    expect(reply?.dataset.messageSide).toBe("incoming");
+    expect(reply?.className).toContain("grid-cols-[auto_minmax(min(42rem,100%),1fr)]");
+    expect(reply?.className).toContain("justify-items-start");
+    expect(reply?.className).not.toContain("slei-task-thread-card");
+    expect(humanReply?.dataset.messageSide).toBe("outgoing");
+    expect(humanReply?.className).toContain("grid-cols-[minmax(0,42rem)_auto]");
+    expect(humanReply?.className).toContain("justify-items-end");
     expect(avatar).not.toBeNull();
     expect(avatar?.getAttribute("data-avatar-size")).toBe("default");
     expect(avatar?.className.split(/\s+/)).toContain("size-8");
     expect(avatar?.getAttribute("aria-label")).toBe("Coda");
+    expect(humanAvatar?.getAttribute("aria-label")).toBe("Lei");
     expect(metadata?.textContent).toContain("Coda");
     expect(metadata?.textContent).toContain("@coda");
     expect(metadata?.textContent).toContain("Developer");
+    expect(humanMetadata?.textContent).toContain("Lei");
+    expect(humanMetadata?.textContent).toContain("@lei");
+    expect(humanMetadata?.textContent).not.toContain("用户");
+    expect(bubble?.className).toContain("rounded-tl-sm");
+    expect(bubble?.className).toContain("bg-card");
+    expect(humanBubble?.className).toContain("rounded-tr-sm");
+    expect(humanBubble?.className).toContain("bg-primary");
+    expect(humanBubble?.className).toContain("text-primary-foreground");
     expect(actions).not.toBeNull();
     expect(copyButton).not.toBeNull();
     expect(time?.textContent).toBe("06-17 10:30");
     expect(time?.getAttribute("dateTime")).toBe("2026-06-17 10:30:00");
     expect(reply?.textContent).toContain("Agent 回复");
+    expect(humanReply?.textContent).toContain("用户补充");
 
     await act(async () => {
       copyButton!.click();

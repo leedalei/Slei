@@ -242,7 +242,8 @@ describe("chat to task thread flow", () => {
     const scrollStart = html.indexOf('data-slot="scroll-area"');
     const rootStart = html.indexOf('data-slot="task-thread-root-body"');
     const footerStart = html.indexOf('data-slot="sheet-footer"');
-    const rootEnd = html.indexOf('data-slot="card"', rootStart);
+    const firstReplyStart = html.indexOf("data-reply-role", rootStart);
+    const rootEnd = firstReplyStart > -1 ? firstReplyStart : footerStart;
     const rootHtml = html.slice(rootStart, rootEnd);
 
     expect(titleMatch?.[1]).toContain("sr-only");

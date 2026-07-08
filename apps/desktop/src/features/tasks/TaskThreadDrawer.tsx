@@ -10,13 +10,11 @@ import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { TaskTitleMarkdown } from "./TaskTitleMarkdown";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-const CARD_INSET_CLASS = "slei-task-thread-card rounded-lg border text-card-foreground shadow-xs backdrop-blur before:hidden after:hidden";
 const TASK_STATUSES: SleiTaskStatus[] = ["pending_assignment", "in_progress", "in_review", "done"];
 const TASK_STATUS_ICONS: Record<SleiTaskStatus, SleiIconName> = {
   pending_assignment: "user",
@@ -232,16 +230,32 @@ export function TaskThreadDrawer(input: {
             {(task.replies ?? []).map((reply) => {
               const identity = taskReplyAvatarIdentity(reply, input.mentionMembers ?? []);
               const timestamp = taskReplyTimestampLabel(reply);
+              const side = (reply.role ?? "human") === "human" ? "outgoing" : "incoming";
+              const roleDescription = taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages);
               return (
-                <Card className={`${CARD_INSET_CLASS} grid grid-cols-[2rem_minmax(0,1fr)] gap-3 p-4`} data-reply-role={reply.role ?? "human"} key={reply.id}>
-                  <MemberAvatar identity={identity} />
-                  <div className="grid min-w-0 gap-2">
-                    <div className="flex min-w-0 items-center justify-between gap-2">
+                <article
+                  className={cn(
+                    "group relative grid gap-3 px-2 py-1",
+                    side === "outgoing"
+                      ? "grid-cols-[minmax(0,42rem)_auto] justify-end justify-items-end"
+                      : "grid-cols-[auto_minmax(min(42rem,100%),1fr)] justify-start justify-items-start",
+                  )}
+                  data-message-side={side}
+                  data-reply-role={reply.role ?? "human"}
+                  key={reply.id}
+                >
+                  {side === "incoming" ? <MemberAvatar identity={identity} /> : null}
+                  <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
+                    <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
                       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
                         <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
                         {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
-                        <span aria-hidden="true">｜</span>
-                        <span className="min-w-0 flex-1 truncate">{taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages)}</span>
+                        {roleDescription ? (
+                          <>
+                            <span aria-hidden="true">｜</span>
+                            <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
+                          </>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
                         <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
@@ -257,15 +271,31 @@ export function TaskThreadDrawer(input: {
                         ) : null}
                       </div>
                     </div>
-                    <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={reply.body} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
+                    <div
+                      className={cn(
+                        "grid gap-2 rounded-2xl px-3.5 py-2.5",
+                        side === "outgoing"
+                          ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+                          : "w-full max-w-full rounded-tl-sm bg-card text-card-foreground shadow-sm ring-1 ring-border/60",
+                      )}
+                      data-slot="message-bubble"
+                    >
+                      <MarkdownMessage
+                        copyCodeLabel={input.messages.chat.copyMessage}
+                        markdown={reply.body}
+                        onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")}
+                        tone={side === "outgoing" ? "primary" : "card"}
+                      />
+                    </div>
                   </div>
-                </Card>
+                  {side === "outgoing" ? <MemberAvatar identity={identity} /> : null}
+                </article>
               );
             })}
           </div>
         </ScrollArea>
-        <SheetFooter className="sticky bottom-0 z-20 block shrink-0 bg-transparent px-5 pb-5 pt-3">
-          <form className="grid w-full gap-3" onSubmit={submitReply}>
+        <SheetFooter className="absolute inset-x-0 bottom-0 z-20 block bg-transparent px-5 pb-5 pt-3 pointer-events-none">
+          <form className="grid w-full gap-3 pointer-events-auto" onSubmit={submitReply}>
             {mention && mentionTargets.length > 0 ? (
               <MentionPicker
                 members={mentionTargets}
@@ -278,53 +308,55 @@ export function TaskThreadDrawer(input: {
               />
             ) : null}
             <div
-              className="slei-modal-composer slei-task-thread-composer relative rounded-lg border p-1 backdrop-blur-xl"
+              className="slei-composer-glass slei-modal-composer slei-task-thread-composer relative rounded-2xl border border-border/60 p-3 backdrop-blur-xl"
               data-slot="task-thread-composer"
             >
-              <Textarea
-                aria-label={input.messages.tasks.replyPlaceholder}
-                className="slei-composer-input slei-task-thread-input max-h-[min(320px,40vh)] min-h-20 resize-none border-0 bg-transparent pr-16 shadow-none placeholder:text-muted-foreground"
-                disabled={replySubmitting || statusSubmitting}
-                onChange={(event) => setReplyDraft(event.currentTarget.value)}
-                onCompositionEnd={() => setIsComposing(false)}
-                onCompositionStart={() => setIsComposing(true)}
-                onKeyDown={(event) => {
-                  const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
-                  const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
-                  if (!composing && mention && mentionTargets.length > 0) {
-                    if (event.key === "ArrowDown") {
-                      event.preventDefault();
-                      setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
-                      return;
+              <div className="relative grid" data-slot="task-thread-composer-inner">
+                <Textarea
+                  aria-label={input.messages.tasks.replyPlaceholder}
+                  className="slei-composer-input slei-task-thread-input max-h-[min(320px,40vh)] min-h-20 resize-none border-0 bg-transparent pr-16 shadow-none placeholder:text-muted-foreground"
+                  disabled={replySubmitting || statusSubmitting}
+                  onChange={(event) => setReplyDraft(event.currentTarget.value)}
+                  onCompositionEnd={() => setIsComposing(false)}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onKeyDown={(event) => {
+                    const composing = isComposerImeComposing({ composing: isComposing, nativeEvent: event.nativeEvent });
+                    const hasMentionTargets = Boolean(mention && mentionTargets.length > 0);
+                    if (!composing && mention && mentionTargets.length > 0) {
+                      if (event.key === "ArrowDown") {
+                        event.preventDefault();
+                        setSelectedMentionIndex((current) => moveMentionSelection(current, 1, mentionTargets.length));
+                        return;
+                      }
+                      if (event.key === "ArrowUp") {
+                        event.preventDefault();
+                        setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
+                        return;
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setReplyDraft(replyDraft.slice(0, mention.start));
+                        return;
+                      }
                     }
-                    if (event.key === "ArrowUp") {
+                    const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
+                    if (action === "selectMention") {
                       event.preventDefault();
-                      setSelectedMentionIndex((current) => moveMentionSelection(current, -1, mentionTargets.length));
-                      return;
+                      selectMention();
                     }
-                    if (event.key === "Escape") {
+                    if (action === "submit") {
                       event.preventDefault();
-                      setReplyDraft(replyDraft.slice(0, mention.start));
-                      return;
+                      event.currentTarget.form?.requestSubmit();
                     }
-                  }
-                  const action = composerShortcutAction({ key: event.key, shiftKey: event.shiftKey, composing, hasMentionTargets });
-                  if (action === "selectMention") {
-                    event.preventDefault();
-                    selectMention();
-                  }
-                  if (action === "submit") {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                placeholder={input.messages.tasks.replyPlaceholder}
-                ref={replyTextareaRef}
-                value={replyDraft}
-              />
-              <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit">
-                <SleiIcon className="size-4" name="arrowUp" />
-              </Button>
+                  }}
+                  placeholder={input.messages.tasks.replyPlaceholder}
+                  ref={replyTextareaRef}
+                  value={replyDraft}
+                />
+                <Button aria-label={input.messages.tasks.sendReply} className="absolute bottom-3 right-3 rounded-full" disabled={replyActionDisabled} size="icon" type="submit">
+                  <SleiIcon className="size-4" name="arrowUp" />
+                </Button>
+              </div>
             </div>
             {replyError ? <p className="text-sm text-destructive" role="alert">{replyError}</p> : null}
             {statusError ? <p className="text-sm text-destructive" role="alert">{statusError}</p> : null}
@@ -340,7 +372,7 @@ export function TaskThreadDrawer(input: {
       {typeof document === "undefined" && input.open && task ? <div hidden>{renderContent()}</div> : null}
       <SheetContent
         aria-label={input.messages.tasks.thread}
-        className="slei-task-thread-surface w-[min(100vw,680px)] gap-0 p-0 text-foreground backdrop-blur-xl before:hidden sm:max-w-[680px]"
+        className="slei-task-thread-surface w-[min(100vw,680px)] gap-0 p-0 text-foreground before:hidden sm:max-w-[680px]"
         showCloseButton={false}
         showOverlay={false}
       >
@@ -449,6 +481,7 @@ function taskReplyMember(reply: SleiTaskReply, members: SleiMember[]): SleiMembe
 }
 
 function taskReplyRoleDescription(reply: SleiTaskReply, members: SleiMember[], messages: DesktopMessages): string {
+  if ((reply.role ?? "human") === "human") return "";
   return taskReplyMember(reply, members)?.role ?? messages.chat.roleLabels[reply.role ?? "human"];
 }
 
