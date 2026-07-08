@@ -36,8 +36,10 @@ export function TaskRootEntry(input: {
   task: SleiTask;
   avatarIdentity?: MemberAvatarIdentity;
   roleDescription?: string;
+  side?: "incoming" | "outgoing";
   timestamp?: string;
 }) {
+  const side = input.side ?? "incoming";
   const replyCount = input.task.replyCount ?? input.task.replies?.length ?? 0;
   const replyCountLabel = input.messages.tasks.replyCountButton(replyCount);
   const openLabel = `${input.messages.tasks.commentThread}: ${input.task.title}, ${replyCountLabel}`;
@@ -59,14 +61,21 @@ export function TaskRootEntry(input: {
   };
   return (
     <Card
-      className={cn(CARD_FLAT_CLASS, "group relative grid grid-cols-[auto_minmax(0,1fr)] gap-3 bg-transparent px-2 py-2 transition-colors duration-[2s] hover:bg-muted/45")}
+      className={cn(
+        CARD_FLAT_CLASS,
+        "group relative grid gap-3 bg-transparent px-2 py-2 transition-colors duration-[2s]",
+        side === "outgoing"
+          ? "grid-cols-[minmax(0,42rem)_auto] justify-end justify-items-end"
+          : "grid-cols-[auto_minmax(min(42rem,100%),1fr)] justify-start justify-items-start",
+      )}
+      data-message-side={side}
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
     >
-      <MemberAvatar identity={avatarIdentity} />
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+      {side === "incoming" ? <MemberAvatar identity={avatarIdentity} /> : null}
+      <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
+        <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
+          <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
             <strong className="shrink-0 text-sm text-foreground">{author}</strong>
             {handle ? <span className="shrink-0">{handle}</span> : null}
             <span aria-hidden="true">｜</span>
@@ -104,15 +113,26 @@ export function TaskRootEntry(input: {
             ) : null}
           </div>
         </div>
-        <MarkdownMessage markdown={body ?? input.task.title} />
-        {hasSourceMessage ? null : (
-          <div className="flex min-w-0 items-end gap-3">
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {input.task.title !== body ? input.task.title : input.task.owner}
-            </span>
-          </div>
-        )}
+        <div
+          className={cn(
+            "grid gap-2 rounded-2xl px-3.5 py-2.5",
+            side === "outgoing"
+              ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+              : "w-full max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
+          )}
+          data-slot="message-bubble"
+        >
+          <MarkdownMessage markdown={body ?? input.task.title} tone={side === "outgoing" ? "primary" : "card"} />
+          {hasSourceMessage ? null : (
+            <div className="flex min-w-0 items-end gap-3">
+              <span className={cn("min-w-0 truncate text-xs", side === "outgoing" ? "text-primary-foreground/75" : "text-muted-foreground")}>
+                {input.task.title !== body ? input.task.title : input.task.owner}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
+      {side === "outgoing" ? <MemberAvatar identity={avatarIdentity} /> : null}
     </Card>
   );
 }

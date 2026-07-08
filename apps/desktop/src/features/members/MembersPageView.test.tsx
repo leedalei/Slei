@@ -356,6 +356,14 @@ describe("MembersPage agent details", () => {
     expect(runtimeCard?.className).toContain("content-start");
     expect(identityCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
     expect(runtimeCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
+    const displayNameValue = Array.from(identityCard?.querySelectorAll<HTMLElement>(".slei-editable-field p") ?? [])
+      .find((element) => element.textContent === "Coda");
+    const descriptionValue = Array.from(identityCard?.querySelectorAll<HTMLElement>(".slei-editable-field p") ?? [])
+      .find((element) => element.textContent === "Builds features.");
+    expect(displayNameValue?.className).toContain("text-sm");
+    expect(descriptionValue?.className).toContain("text-sm");
+    expect(displayNameValue?.className).not.toContain("text-[15px]");
+    expect(descriptionValue?.className).not.toContain("text-[15px]");
     expect(panel.querySelector(`[aria-label="${messages.members.editDisplayName}"]`)).not.toBeNull();
     expect(panel.querySelector(`[aria-label="${messages.members.editDescription}"]`)).not.toBeNull();
     expect(panel.querySelector(`[aria-label="${messages.members.editRuntime}"]`)).not.toBeNull();

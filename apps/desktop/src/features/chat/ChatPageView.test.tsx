@@ -2798,7 +2798,7 @@ describe("ChatPage mention panel", () => {
     expect(asTaskSwitch?.className).not.toContain("border-white/20");
   });
 
-  it("keeps timeline message selectors and actions available on transparent message rows", () => {
+  it("keeps timeline message selectors and actions available on message bubbles", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -2829,21 +2829,67 @@ describe("ChatPage mention panel", () => {
 
     expect(messageRow).not.toBeNull();
     expect(messageRow?.dataset.slot).toBe("message-row");
+    expect(messageRow?.dataset.messageSide).toBe("outgoing");
     expect(host.querySelector('[data-slot="card"][data-message-id="msg-contract"]')).toBeNull();
-    expect(messageRow?.className).toContain("border-transparent");
-    expect(messageRow?.className).toContain("bg-transparent");
-    expect(messageRow?.className).toContain("hover:bg-muted/45");
+    expect(messageRow?.className).toContain("justify-items-end");
     expect(messageRow?.className).toContain("duration-[2s]");
+    expect(messageRow?.className).not.toContain("hover:bg-muted/45");
     expect(messageRow?.className).not.toContain("bg-white/10");
     expect(messageRow?.className).not.toContain("backdrop-blur-xl");
-    expect(messageRow?.className).not.toContain("bg-card");
     expect(messageRow?.className).not.toContain("bg-primary/5");
     expect(messageRow?.className).not.toContain("hover:border-border");
     expect(messageRow?.className).not.toContain("hover:shadow");
+    const bubble = messageRow?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.className).toContain("bg-primary");
+    expect(bubble?.className).toContain("text-primary-foreground");
+    expect(bubble?.className).toContain("rounded-tr-sm");
+    expect(bubble?.className).not.toContain("rounded-br-sm");
     expect(messageRow?.querySelector('[data-slot="message-actions"]')).not.toBeNull();
     expect(messageRow?.querySelector('[data-message-thread-open="msg-contract"]')).not.toBeNull();
     expect(messageRow?.querySelector(`button[aria-label="${messages.chat.copyMessage}"]`)).not.toBeNull();
     expect(messageRow?.querySelector(`button[aria-label="${messages.chat.saveMessage}"]`)).not.toBeNull();
+  });
+
+  it("separates human and agent messages with outgoing and incoming bubbles", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        { id: "msg-human-bubble", author: "Lei", role: "human", time: "10:00", body: "用户右侧消息", channelId: "all" },
+        { id: "msg-agent-bubble", author: "Yeal", role: "agent", time: "10:01", body: "Agent 左侧消息", channelId: "all" },
+      ],
+    });
+
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+    const humanRow = host.querySelector<HTMLElement>('[data-message-id="msg-human-bubble"]');
+    const agentRow = host.querySelector<HTMLElement>('[data-message-id="msg-agent-bubble"]');
+    const humanBubble = humanRow?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
+    const agentBubble = agentRow?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
+
+    expect(humanRow?.dataset.messageSide).toBe("outgoing");
+    expect(agentRow?.dataset.messageSide).toBe("incoming");
+    expect(humanRow?.className).toContain("justify-items-end");
+    expect(agentRow?.className).toContain("justify-items-start");
+    expect(agentRow?.className).toContain("grid-cols-[auto_minmax(min(42rem,100%),1fr)]");
+    expect(humanBubble?.className).toContain("bg-primary");
+    expect(humanBubble?.className).toContain("text-primary-foreground");
+    expect(humanBubble?.className).toContain("rounded-tr-sm");
+    expect(humanBubble?.className).not.toContain("rounded-br-sm");
+    expect(agentBubble?.className).toContain("bg-card");
+    expect(agentBubble?.className).toContain("text-card-foreground");
+    expect(agentBubble?.className).toContain("rounded-tl-sm");
+    expect(agentBubble?.className).toContain("w-full");
+    expect(agentBubble?.className).not.toContain("w-fit");
+    expect(agentBubble?.className).not.toContain("max-w-[min(42rem,100%)]");
+    expect(agentBubble?.className).not.toContain("rounded-bl-sm");
   });
 
   it("adds a border only to the focused timeline message", () => {
@@ -2991,13 +3037,19 @@ describe("ChatPage mention panel", () => {
     expect(taskRootCard).not.toBeNull();
     expect(taskRootCard?.dataset.sourceMessageId).toBe("msg-task-source");
     expect(taskRootCard?.dataset.slot).toBe("card");
-    expect(taskRootCard?.className).toContain("bg-transparent");
-    expect(taskRootCard?.className).toContain("hover:bg-muted/45");
+    expect(taskRootCard?.dataset.messageSide).toBe("outgoing");
+    expect(taskRootCard?.className).toContain("justify-items-end");
     expect(taskRootCard?.className).toContain("duration-[2s]");
     expect(taskRootCard?.className).toContain("shadow-none");
     expect(taskRootCard?.className).toContain("after:hidden");
+    expect(taskRootCard?.className).not.toContain("hover:bg-muted/45");
     expect(taskRootCard?.className).not.toContain("hover:border-border");
     expect(taskRootCard?.className).not.toContain("hover:shadow");
+    const taskBubble = taskRootCard?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
+    expect(taskBubble).not.toBeNull();
+    expect(taskBubble?.className).toContain("bg-primary");
+    expect(taskBubble?.className).toContain("rounded-tr-sm");
+    expect(taskBubble?.className).not.toContain("rounded-br-sm");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
     expect(replyIcon?.className.baseVal).toContain("size-2.5");
@@ -3299,12 +3351,18 @@ describe("ChatPage mention panel", () => {
     expect(appCss).not.toContain(".slei-markdown-message {\n  color: var(--text-primary);");
   });
 
-  it("keeps task root entries visually aligned with normal transparent message rows", () => {
+  it("keeps task root entries visually aligned with normal message bubbles", () => {
     const source = readFileSync(join(process.cwd(), "src/features/chat/TaskRootEntry.tsx"), "utf8");
 
     expect(source).toContain("bg-transparent");
-    expect(source).toContain("hover:bg-muted/45");
+    expect(source).toContain("data-message-side");
+    expect(source).toContain("data-slot=\"message-bubble\"");
+    expect(source).toContain("grid-cols-[auto_minmax(min(42rem,100%),1fr)]");
+    expect(source).toContain("w-full");
+    expect(source).toContain("rounded-tr-sm");
+    expect(source).toContain("rounded-tl-sm");
     expect(source).toContain("duration-[2s]");
+    expect(source).not.toContain("hover:bg-muted/45");
     expect(source).not.toContain("hover:border-border");
     expect(source).toContain("CARD_FLAT_CLASS");
     expect(source).toContain("<Card");

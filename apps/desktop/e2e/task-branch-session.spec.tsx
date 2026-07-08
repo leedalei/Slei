@@ -148,12 +148,17 @@ describe("task branch sessions", () => {
     const taskEntryHtml = taskEntry.html;
     const taskEntryOpenTag = taskEntry.openTag;
     expect(taskEntryOpenTag).toContain("bg-transparent");
-    expect(taskEntryOpenTag).toContain("hover:bg-muted/45");
+    expect(taskEntryOpenTag).toContain('data-message-side="outgoing"');
+    expect(taskEntryOpenTag).toContain("justify-items-end");
     expect(taskEntryOpenTag).toContain("duration-[2s]");
+    expect(taskEntryOpenTag).not.toContain("hover:bg-muted/45");
     expect(taskEntryOpenTag).not.toContain("hover:border-border");
     expect(taskEntryOpenTag).toContain("shadow-none");
     expect(taskEntryOpenTag).toContain("after:hidden");
     expect(taskEntryOpenTag).not.toContain("hover:shadow");
+    expect(taskEntryHtml).toContain('data-slot="message-bubble"');
+    expect(taskEntryHtml).toContain("rounded-tr-sm");
+    expect(taskEntryHtml).not.toContain("rounded-br-sm");
     expect(taskEntryHtml).toContain('aria-label="复制"');
     expect(taskEntryHtml).toContain('aria-label="收藏"');
     expect(taskEntryHtml).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');

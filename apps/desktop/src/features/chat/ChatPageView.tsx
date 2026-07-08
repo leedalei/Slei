@@ -35,7 +35,7 @@ const COMPOSER_EXPANDED_RESERVE_PX = 256;
 const COMPOSER_RESERVE_BUFFER_PX = 24;
 const CARD_SURFACE_CLASS = "rounded-xl border-border/60 bg-card text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const MESSAGE_ROW_CLASS = "group grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors duration-[2s] hover:bg-muted/45 focus-visible:outline-none data-[focused=true]:border-primary/35";
+const MESSAGE_ROW_CLASS = "group grid gap-3 rounded-lg border border-transparent bg-transparent px-2 py-2 text-card-foreground transition-colors duration-[2s] focus-visible:outline-none data-[focused=true]:border-primary/35";
 
 type ChatComposerReserveStyle = CSSProperties & {
   "--chat-composer-reserve": string;
@@ -121,19 +121,28 @@ function MessageRow({
   className,
   focused,
   messageId,
+  side,
   tabIndex,
 }: {
   children: ReactNode;
   className?: string;
   focused?: boolean;
   messageId: string;
+  side: "incoming" | "outgoing";
   tabIndex?: number;
 }) {
   return (
     <article
-      className={cn(MESSAGE_ROW_CLASS, className)}
+      className={cn(
+        MESSAGE_ROW_CLASS,
+        side === "outgoing"
+          ? "grid-cols-[minmax(0,42rem)_auto] justify-end justify-items-end"
+          : "grid-cols-[auto_minmax(min(42rem,100%),1fr)] justify-start justify-items-start",
+        className,
+      )}
       data-focused={focused ? "true" : undefined}
       data-message-id={messageId}
+      data-message-side={side}
       data-slot="message-row"
       tabIndex={tabIndex}
     >
@@ -399,26 +408,32 @@ function MessageBody({
   copyCodeLabel,
   onCodeCopied,
   skillToken,
+  tone = "card",
 }: {
   body: string;
   copyCodeLabel: string;
   onCodeCopied: () => void;
   skillToken?: ReturnType<typeof leadingSkillSlashToken>;
+  tone?: "card" | "primary";
 }) {
   if (!skillToken) {
-    return <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={body} onCodeCopied={onCodeCopied} tone="card" />;
+    return <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={body} onCodeCopied={onCodeCopied} tone={tone} />;
   }
   const rest = skillToken.rest;
   const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
   return (
     <div
-      className={cn("slei-markdown-message mt-1 max-w-none text-sm leading-relaxed text-card-foreground", inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline")}
-      style={markdownForegroundStyle("card")}
+      className={cn(
+        "slei-markdown-message mt-1 max-w-none text-sm leading-relaxed",
+        tone === "primary" ? "text-primary-foreground" : "text-card-foreground",
+        inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline",
+      )}
+      style={markdownForegroundStyle(tone)}
     >
       <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">
         {skillToken.token}
       </span>
-      {rest ? <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={rest} onCodeCopied={onCodeCopied} tone="card" /> : null}
+      {rest ? <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={rest} onCodeCopied={onCodeCopied} tone={tone} /> : null}
     </div>
   );
 }
@@ -1108,6 +1123,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               roleDescription={messageRoleDescription(message, data.members, messages)}
                               saved={saved}
                               saveLabel={saveLabel}
+                              side={message.role === "human" ? "outgoing" : "incoming"}
                               sourceMessage={message}
                               task={sourceTask}
                               timestamp={timestamp}
@@ -1118,6 +1134,9 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       const saved = savedMessageIds.includes(message.id);
                       const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                       const timestamp = messageTimestampLabel(message);
+                      const side = message.role === "human" ? "outgoing" : "incoming";
+                      const avatar = <MemberAvatar identity={memberFromMessage(message, data.members)} />;
+                      const bodyTone = side === "outgoing" ? "primary" : "card";
                       return (
                         <div
                           className={cn("pt-3", virtualItem && "absolute left-0 top-0 w-full px-4")}
@@ -1131,12 +1150,13 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                             className={highlightedMessageId === message.id ? "slei-message--blink-border" : undefined}
                             focused={highlightedMessageId === message.id}
                             messageId={message.id}
+                            side={side}
                             tabIndex={focusedMessageId === message.id ? -1 : undefined}
                           >
-                            <MemberAvatar identity={memberFromMessage(message, data.members)} />
-                            <div className="min-w-0">
-                              <div className="flex min-w-0 items-center justify-between gap-2">
-                                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                            {side === "incoming" ? avatar : null}
+                            <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
+                              <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
+                                <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
                                   <strong className="shrink-0 text-sm text-foreground">{message.author}</strong>
                                   {message.handle ? <span className="shrink-0">{message.handle}</span> : null}
                                   <span aria-hidden="true">｜</span>
@@ -1161,30 +1181,42 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   </span>
                                 </div>
                               </div>
-                              <MessageBody
-                                body={message.body}
-                                copyCodeLabel={messages.chat.copyMessage}
-                                onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
-                                skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
-                              />
-                              <AttachmentList attachments={message.attachments ?? []} messageAttachments />
-                              {message.toolCall ? <code className="mt-2 block rounded-md border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground" data-slot="tool-call">{message.toolCall}</code> : null}
-                              {message.cards?.map((card) => (
-                                <InteractiveCard
-                                  card={card}
-                                  key={card.id}
-                                  messages={messages}
-                                  onCreate={() => {
-                                    if (card.kind === "createAgent") {
-                                      onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
-                                    } else if (card.kind === "createChannel") {
-                                      onChannelDraftCreate?.(card.draft, card.id);
-                                    }
-                                  }}
-                                  onPermissionResolve={onPermissionResolve}
+                              <div
+                                className={cn(
+                                  "grid gap-2 rounded-2xl px-3.5 py-2.5",
+                                  side === "outgoing"
+                                    ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+                                    : "w-full max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
+                                )}
+                                data-slot="message-bubble"
+                              >
+                                <MessageBody
+                                  body={message.body}
+                                  copyCodeLabel={messages.chat.copyMessage}
+                                  onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
+                                  skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
+                                  tone={bodyTone}
                                 />
-                              ))}
+                                <AttachmentList attachments={message.attachments ?? []} messageAttachments />
+                                {message.toolCall ? <code className={cn("mt-2 block rounded-md border px-2 py-1 font-mono text-xs", side === "outgoing" ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground")} data-slot="tool-call">{message.toolCall}</code> : null}
+                                {message.cards?.map((card) => (
+                                  <InteractiveCard
+                                    card={card}
+                                    key={card.id}
+                                    messages={messages}
+                                    onCreate={() => {
+                                      if (card.kind === "createAgent") {
+                                        onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
+                                      } else if (card.kind === "createChannel") {
+                                        onChannelDraftCreate?.(card.draft, card.id);
+                                      }
+                                    }}
+                                    onPermissionResolve={onPermissionResolve}
+                                  />
+                                ))}
+                              </div>
                             </div>
+                            {side === "outgoing" ? avatar : null}
                           </MessageRow>
                         </div>
                       );

@@ -7,7 +7,7 @@ import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
 
-type MarkdownTone = "foreground" | "card";
+type MarkdownTone = "foreground" | "card" | "primary";
 type MarkdownForegroundStyle = CSSProperties & {
   "--markdown-foreground"?: string;
 };
@@ -48,6 +48,7 @@ export function MarkdownMessage({
 
 export function markdownForegroundStyle(tone: MarkdownTone): MarkdownForegroundStyle | undefined {
   if (tone === "card") return { "--markdown-foreground": "var(--card-foreground)" };
+  if (tone === "primary") return { "--markdown-foreground": "var(--primary-foreground)" };
   return undefined;
 }
 

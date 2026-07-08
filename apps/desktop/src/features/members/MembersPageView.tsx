@@ -439,7 +439,7 @@ export function MembersPage(input: {
                         label={input.messages.members.displayName}
                         messages={input.messages}
                         onSave={(value) => updateMemberDetail("name", value)}
-                        readClassName="text-[15px] leading-6"
+                        readClassName="text-sm leading-6"
                         saving={effectiveSavingField === "name"}
                         sectionClassName="grid gap-2"
                         titleClassName="text-sm"
@@ -456,7 +456,7 @@ export function MembersPage(input: {
                         messages={input.messages}
                         multiline
                         onSave={(value) => updateMemberDetail("description", value)}
-                        readClassName="text-[15px] leading-6"
+                        readClassName="text-sm leading-6"
                         saving={effectiveSavingField === "description"}
                         sectionClassName="grid gap-2"
                         titleClassName="text-sm"
