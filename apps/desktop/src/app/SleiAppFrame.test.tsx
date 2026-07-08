@@ -767,7 +767,6 @@ describe("SleiAppFrame global search navigation", () => {
     expect(shell).not.toBeNull();
     expect(shell?.classList.contains("slei-app-shell")).toBe(true);
     expect(shell?.getAttribute("data-desktop-drag-region")).toBe("deep");
-    expect(container.querySelector("[data-tauri-drag-region]")).toBeNull();
     expect(shell?.style.gridTemplateColumns).toBe("");
     expect(shell?.style.getPropertyValue("--app-sidebar-width")).toBe("280px");
     expect(appCss).toContain(".slei-app-shell");
@@ -800,7 +799,6 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(chrome).not.toBeNull();
     expect(container.querySelector<HTMLElement>(".slei-app-shell")?.getAttribute("data-desktop-drag-region")).toBe("deep");
-    expect(container.querySelector("[data-tauri-drag-region]")).toBeNull();
     expect(chrome?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(nativeControlsSpace).not.toBeNull();
     expect(nativeControlsSpace?.textContent).toBe("");
@@ -1539,34 +1537,7 @@ describe("SleiAppFrame global search navigation", () => {
   it("keeps the native window and shell roots transparent so glass surfaces reveal apps behind Slei", () => {
     const frameSource = readFileSync(join(process.cwd(), "src/app/SleiAppFrame.tsx"), "utf8");
     const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
-    const cargoToml = readFileSync(join(process.cwd(), "src-tauri/Cargo.toml"), "utf8");
-    const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")) as {
-      app: {
-        macOSPrivateApi?: boolean;
-        windows: Array<{
-          transparent?: boolean;
-          backgroundColor?: [number, number, number, number];
-          windowEffects?: { effects?: string[]; state?: string; radius?: number };
-        }>;
-      };
-    };
-    const tauriLib = readFileSync(join(process.cwd(), "src-tauri/src/lib.rs"), "utf8");
 
-    expect(cargoToml).toContain('tauri = { version = "2.11.2", features = ["macos-private-api"] }');
-    expect(tauriConfig.app.macOSPrivateApi).toBe(true);
-    expect(tauriConfig.app.windows[0]?.transparent).toBe(true);
-    expect(tauriConfig.app.windows[0]?.backgroundColor).toEqual([0, 0, 0, 0]);
-    expect(tauriConfig.app.windows[0]?.windowEffects).toEqual({
-      effects: ["sidebar"],
-      state: "active",
-      radius: 0,
-    });
-    expect(tauriLib).toContain("configure_transparent_window");
-    expect(tauriLib).toContain("webview_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)))");
-    expect(tauriLib).toContain("webview_window.set_effects(");
-    expect(tauriLib).toContain(".effect(tauri::window::Effect::Sidebar)");
-    expect(tauriLib).toContain(".state(tauri::window::EffectState::Active)");
-    expect(tauriLib).toContain(".radius(0.)");
     expect(frameSource).not.toContain("overflow-hidden bg-background text-foreground");
     expect(frameSource).toContain("overflow-hidden bg-transparent text-foreground");
     expect(frameSource).not.toContain('className="slei-workspace min-h-0 min-w-0 overflow-hidden bg-background"');
@@ -1703,14 +1674,6 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(frameSource).toContain("<TooltipProvider>");
     expect(tooltipRootSource).not.toContain("<TooltipProvider>");
-  });
-
-  it("keeps the macOS traffic lights vertically centered with the app chrome brand", () => {
-    const tauriConfig = JSON.parse(readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8")) as {
-      app: { windows: Array<{ trafficLightPosition?: { x: number; y: number } }> };
-    };
-
-    expect(tauriConfig.app.windows[0]?.trafficLightPosition).toEqual({ x: 8, y: 20 });
   });
 
   it("keeps app chrome branding visually quiet", () => {

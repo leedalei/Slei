@@ -810,7 +810,6 @@ describe("ChatPage mention panel", () => {
     expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).toContain('data-desktop-drag-region="deep"');
-    expect(html).not.toContain("data-tauri-drag-region");
     expect(headerHtml).toContain("select-none");
     expect(copyButtonStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml.slice(copyButtonStart, copyButtonStart + 220)).not.toContain("data-desktop-drag-region");

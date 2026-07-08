@@ -182,7 +182,6 @@ describe("TasksPage filters", () => {
 
     expect(header).not.toBeNull();
     expect(header?.getAttribute("data-desktop-drag-region")).toBe("deep");
-    expect(container?.querySelector("[data-tauri-drag-region]")).toBeNull();
     expect(header?.className).toContain("select-none");
     expect(channelSelect).not.toBeNull();
     expect(channelSelect?.hasAttribute("data-desktop-drag-region")).toBe(false);

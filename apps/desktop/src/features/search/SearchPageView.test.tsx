@@ -230,7 +230,6 @@ describe("SearchPage global search UI", () => {
     expect(form).toBeInstanceOf(HTMLFormElement);
     expect(form?.getAttribute("data-desktop-drag-region")).toBe("deep");
     expect(searchInput.hasAttribute("data-desktop-drag-region")).toBe(false);
-    expect(rootElement.querySelector("[data-tauri-drag-region]")).toBeNull();
   });
 
   it("renders the empty query placeholder and does not call daemon search", async () => {

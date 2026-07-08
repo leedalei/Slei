@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 
 const PRODUCTION_ROOTS = [
   "apps/desktop/src",
-  "apps/desktop/src-tauri/src",
   "crates/slei-daemon/src",
 ];
 

@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 const desktopRoot = new URL("..", import.meta.url).pathname;
@@ -22,84 +21,6 @@ function expectInOrder(source: string, orderedSnippets: string[]) {
     expect(index, `${snippet} should appear after the previous startup step`).toBeGreaterThan(previousIndex);
     previousIndex = index;
   }
-}
-
-async function readRgbaPng(path: string) {
-  const png = await readFile(path);
-  expect(png.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-
-  let width = 0;
-  let height = 0;
-  let bitDepth = 0;
-  let colorType = 0;
-  const idatChunks: Buffer[] = [];
-  let offset = 8;
-
-  while (offset + 8 <= png.length) {
-    const length = png.readUInt32BE(offset);
-    const type = png.subarray(offset + 4, offset + 8).toString("latin1");
-    const data = png.subarray(offset + 8, offset + 8 + length);
-
-    if (type === "IHDR") {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      bitDepth = data[8];
-      colorType = data[9];
-    } else if (type === "IDAT") {
-      idatChunks.push(Buffer.from(data));
-    }
-
-    offset += length + 12;
-  }
-
-  expect(bitDepth).toBe(8);
-  expect(colorType).toBe(6);
-
-  const bytesPerPixel = 4;
-  const stride = width * bytesPerPixel;
-  const inflated = inflateSync(Buffer.concat(idatChunks));
-  const pixels = Buffer.alloc(width * height * bytesPerPixel);
-  let inputOffset = 0;
-
-  for (let y = 0; y < height; y += 1) {
-    const filter = inflated[inputOffset];
-    inputOffset += 1;
-    const row = inflated.subarray(inputOffset, inputOffset + stride);
-    inputOffset += stride;
-
-    for (let x = 0; x < stride; x += 1) {
-      const left = x >= bytesPerPixel ? pixels[y * stride + x - bytesPerPixel] : 0;
-      const up = y > 0 ? pixels[(y - 1) * stride + x] : 0;
-      const upLeft = x >= bytesPerPixel && y > 0 ? pixels[(y - 1) * stride + x - bytesPerPixel] : 0;
-      let value = row[x];
-
-      if (filter === 1) {
-        value = (value + left) & 0xff;
-      } else if (filter === 2) {
-        value = (value + up) & 0xff;
-      } else if (filter === 3) {
-        value = (value + Math.floor((left + up) / 2)) & 0xff;
-      } else if (filter === 4) {
-        const p = left + up - upLeft;
-        const pa = Math.abs(p - left);
-        const pb = Math.abs(p - up);
-        const pc = Math.abs(p - upLeft);
-        value = (value + (pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft)) & 0xff;
-      } else {
-        expect(filter).toBe(0);
-      }
-
-      pixels[y * stride + x] = value;
-    }
-  }
-
-  return {
-    alphaAt(x: number, y: number) {
-      return pixels[(y * width + x) * bytesPerPixel + 3];
-    },
-    height,
-    width,
-  };
 }
 
 async function icnsPngHashes(path: string) {
@@ -241,11 +162,12 @@ describe("desktop startup contract", () => {
     expect(desktopDevScript).not.toContain("SLEI_DAEMON_PID");
   });
 
-  it("fails the macOS package guardrail while the active Tauri source directory exists", () => {
+  it("passes the real repo macOS package guardrail after active Tauri code is removed", () => {
     const result = runMacosPackageVerifier(repoRoot);
 
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("active Tauri source directory must not exist");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("macOS package boundary verified");
+    expect(result.stderr).toBe("");
   });
 
   it("allows verifier-only Tauri references after the active Tauri source directory is gone", async () => {
@@ -287,25 +209,11 @@ describe("desktop startup contract", () => {
     expect(mainSource).toContain("window.loadURL(VITE_DEV_URL)");
   });
 
-  it("bundles the generated external app icon set", async () => {
-    const iconRoot = join(desktopRoot, "src-tauri/icons");
+  it("preserves the macOS app icon outside the deleted Tauri tree", async () => {
+    const iconPath = join(desktopRoot, "build/icon.icns");
 
-    const sourceIcon = await readFile(join(iconRoot, "slei-icon.svg"), "utf8");
-
-    expect(sourceIcon).toContain('stop-color="#0B9C67"');
-    expect(sourceIcon).toContain('stop-color="#16C78A"');
-    expect(sourceIcon).toContain('stroke="#FFFFFF"');
-    expect(sourceIcon).toContain('stroke-opacity="0.62"');
-    expect(sourceIcon).toContain('r="2.55"');
-    expect(sourceIcon).toContain('fill-opacity="0.88"');
-    expect(sourceIcon).not.toContain('r="3.05"');
-    await expect(sha256(join(iconRoot, "slei-icon.svg"))).resolves.toBe("362ce08df11fe71bd6a1c69a64ccd53b0d231ad0359b2a528275914384310c3e");
-    await expect(sha256(join(iconRoot, "icon.png"))).resolves.toBe("a1c046ef5fe4637ce0e1c013d0bd0b455a71527d307e6bdf945808b8f1afb255");
-    await expect(sha256(join(iconRoot, "icon.ico"))).resolves.toBe("aef0fbe8f94f0b3990d1a001cd7d12731b1cd678b4e4807a9ed727f8b9f597d0");
-    await expect(sha256(join(iconRoot, "32x32.png"))).resolves.toBe("fc43016b0fc96906b56b28d4f2fdeadf2f67834cba34d3fa08ee5ebc9354468d");
-    await expect(sha256(join(iconRoot, "128x128.png"))).resolves.toBe("39eb3e534556162eaf842367145fff46ba6810ef0d5c18371850770be30cd890");
-    await expect(sha256(join(iconRoot, "128x128@2x.png"))).resolves.toBe("8186d818fa96551b3923c0df2b2774c8ccfd78b23ef6e906266515f0608aab63");
-    await expect(icnsPngHashes(join(iconRoot, "icon.icns"))).resolves.toEqual(
+    await expect(sha256(iconPath)).resolves.toBe("78a7ada8ebf2a911b97f4586d244c8d54769a597811116501bf202ba6e4d0bd9");
+    await expect(icnsPngHashes(iconPath)).resolves.toEqual(
       expect.arrayContaining([
         "a337720e8e7c81196a9d78420c51a50f361ba65c1a6e70106e805f391d1ec968",
         "4e40025b8db4a30745ef222be57703ae278d75c58ce69a2ab3a978f6171d48d8",
@@ -315,19 +223,5 @@ describe("desktop startup contract", () => {
         "7b95f2f6c6d38d1b038d08400b1b2705a59041a79b9b140feb7438f081a69d75",
       ]),
     );
-  });
-
-  it("keeps app icon PNGs rounded with transparent corners", async () => {
-    const iconRoot = join(desktopRoot, "src-tauri/icons");
-
-    for (const fileName of ["icon.png", "128x128.png", "32x32.png"]) {
-      const icon = await readRgbaPng(join(iconRoot, fileName));
-
-      expect(icon.alphaAt(0, 0)).toBe(0);
-      expect(icon.alphaAt(icon.width - 1, 0)).toBe(0);
-      expect(icon.alphaAt(0, icon.height - 1)).toBe(0);
-      expect(icon.alphaAt(icon.width - 1, icon.height - 1)).toBe(0);
-      expect(icon.alphaAt(Math.floor(icon.width / 2), Math.floor(icon.height / 2))).toBe(255);
-    }
   });
 });

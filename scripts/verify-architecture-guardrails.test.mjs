@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import test from "node:test";
+import { tmpdir } from "node:os";
 
-import { analyzeFile } from "./verify-architecture-guardrails.mjs";
+import { analyzeFile, verifyArchitectureGuardrails } from "./verify-architecture-guardrails.mjs";
 
 function messagesFor(filePath, content) {
   return analyzeFile({ filePath, content }).map((violation) => violation.message);
@@ -298,4 +301,18 @@ test("flags production bridge paths delegated to daemon bridge mock", () => {
   );
 
   assert(createOfflineDaemonBridgeMessages.some((message) => message.includes("createDaemonBridgeMock")));
+});
+
+test("default production roots only require active desktop and daemon source trees", async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), "slei-architecture-roots-"));
+  try {
+    await mkdir(join(fixtureRoot, "apps/desktop/src/lib"), { recursive: true });
+    await mkdir(join(fixtureRoot, "crates/slei-daemon/src/services"), { recursive: true });
+    await writeFile(join(fixtureRoot, "apps/desktop/src/lib/daemon-bridge.ts"), "export const bridge = 'electron';\n");
+    await writeFile(join(fixtureRoot, "crates/slei-daemon/src/services/mod.rs"), "pub fn daemon() {}\n");
+
+    assert.deepEqual(await verifyArchitectureGuardrails({ cwd: fixtureRoot }), []);
+  } finally {
+    await rm(fixtureRoot, { force: true, recursive: true });
+  }
 });

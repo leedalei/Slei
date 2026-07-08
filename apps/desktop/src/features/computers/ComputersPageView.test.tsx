@@ -87,7 +87,6 @@ describe("ComputersPage header", () => {
     expect(html).not.toContain('<header class="select-none border-b px-6 py-5"');
     expect(html).toContain('<div class="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header"');
     expect(headerHtml).toContain('data-desktop-drag-region="deep"');
-    expect(html).not.toContain("data-tauri-drag-region");
     expect(headerHtml).toContain("Lei MacBook");
     expect(headerHtml).toContain("MateBook-Pro-Max-3.local");
   });

@@ -90,7 +90,6 @@ describe("SettingsPage header", () => {
     expect(markerStart).toBeGreaterThanOrEqual(0);
     expect(html).toContain("data-slei-page-header");
     expect(headerHtml).toContain('data-desktop-drag-region="deep"');
-    expect(html).not.toContain("data-tauri-drag-region");
     expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Language");
     expect(headerHtml).toContain("Region");

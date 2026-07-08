@@ -1,26 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { invokeMock, listenMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  listenMock: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: invokeMock,
-}));
-
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: listenMock,
-}));
-
 import { createDaemonBridge } from "./daemon-bridge";
 import type { ChannelMessageView, DesktopAgentView } from "./daemon-bridge";
 import { createDaemonBridgeMock } from "../test/daemon-bridge-mock";
 
-describe("createDaemonBridge non-Tauri fallback", () => {
+describe("createDaemonBridge desktop runtime selection", () => {
   afterEach(() => {
-    invokeMock.mockReset();
-    listenMock.mockReset();
     Reflect.deleteProperty(globalThis as Record<string, unknown>, "window");
   });
 
@@ -70,63 +55,21 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     ).rejects.toThrow("daemon offline");
   });
 
-  it("invokes list agent activity with the expected command shape", async () => {
+  it("ignores legacy desktop runtime markers and keeps the offline bridge", async () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: { __TAURI_INTERNALS__: {} },
     });
-    invokeMock.mockResolvedValueOnce({ logs: [] });
 
     const bridge = createDaemonBridge();
+    await expect(bridge.daemonStatus()).resolves.toMatchObject({ connected: false, label: "offline" });
     await expect(bridge.listAgentActivity("agent_coda")).resolves.toEqual({ logs: [] });
+    await expect(bridge.createChannel({ name: "dev" })).rejects.toThrow("daemon offline");
 
-    expect(invokeMock).toHaveBeenCalledWith("list_agent_activity_command", {
-      agentId: "agent_coda",
-      limit: 200,
-    });
-  });
-
-  it("listens for daemon event batches through the Tauri event bridge", async () => {
-    Object.defineProperty(globalThis, "window", {
-      configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
-    });
-    const unlisten = vi.fn();
-    listenMock.mockImplementationOnce(async (_eventName, handler) => {
-      handler({
-        payload: {
-          after: 7,
-          events: [
-            {
-              sequence: 8,
-              eventType: "task_thread.updated",
-              occurredAtUnixMs: 1,
-              payload: { taskId: "task_1", channelId: "all" },
-            },
-          ],
-        },
-      });
-      return unlisten;
-    });
-
-    const bridge = createDaemonBridge();
     const handler = vi.fn();
     const cleanup = await bridge.listenDaemonEvents(handler);
-
-    expect(listenMock).toHaveBeenCalledWith("slei://daemon-events", expect.any(Function));
-    expect(handler).toHaveBeenCalledWith({
-      after: 7,
-      events: [
-        {
-          sequence: 8,
-          eventType: "task_thread.updated",
-          occurredAtUnixMs: 1,
-          payload: { taskId: "task_1", channelId: "all" },
-        },
-      ],
-    });
     cleanup();
-    expect(unlisten).toHaveBeenCalledOnce();
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("returns a no-op daemon event listener while offline", async () => {
@@ -137,10 +80,9 @@ describe("createDaemonBridge non-Tauri fallback", () => {
 
     cleanup();
     expect(handler).not.toHaveBeenCalled();
-    expect(listenMock).not.toHaveBeenCalled();
   });
 
-  it("prefers the Electron preload RPC bridge over Tauri commands", async () => {
+  it("uses the Electron preload RPC bridge when present", async () => {
     const call = vi.fn(async (method: string) => {
       if (method === "preferences.list") return { preferences: { locale: "zh-CN", timeZone: "Asia/Shanghai", appearance: { theme: "light", fontSize: "md" }, notifications: { mentions: true, humanReplies: true, approvals: true } } };
       if (method === "profile.get") return { profile: null };
@@ -153,7 +95,6 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
-        __TAURI_INTERNALS__: {},
         slei: {
           rpc: { call },
           events: { subscribe: vi.fn() },
@@ -177,7 +118,52 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       "savedMessages.list",
       "search.global",
     ]);
-    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("maps Electron daemon event batches through the preload event bridge", async () => {
+    const cleanup = vi.fn();
+    const subscribe = vi.fn((_channel, handler) => {
+      handler({
+        after: 7,
+        events: [
+          {
+            sequence: 8,
+            eventType: "task_thread.updated",
+            occurredAtUnixMs: 1,
+            payload: { taskId: "task_1", channelId: "all" },
+          },
+        ],
+      });
+      return cleanup;
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        slei: {
+          rpc: { call: vi.fn() },
+          events: { subscribe },
+        },
+      },
+    });
+
+    const bridge = createDaemonBridge();
+    const handler = vi.fn();
+    const unlisten = await bridge.listenDaemonEvents(handler);
+
+    expect(subscribe).toHaveBeenCalledWith("daemon.events", expect.any(Function));
+    expect(handler).toHaveBeenCalledWith({
+      after: 7,
+      events: [
+        {
+          sequence: 8,
+          eventType: "task_thread.updated",
+          occurredAtUnixMs: 1,
+          payload: { taskId: "task_1", channelId: "all" },
+        },
+      ],
+    });
+    unlisten();
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 
   it("subscribes to daemon state through Electron events and no-ops elsewhere", async () => {
@@ -211,16 +197,23 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("invokes paged message lists and message thread commands", async () => {
+  it("maps Electron message list and message thread methods to RPC calls", async () => {
+    const call = vi.fn(async (method: string) => {
+      if (method.endsWith(".list")) return { messages: [], pageInfo: { hasMoreBefore: false } };
+      if (method === "conversations.messages.clear") return undefined;
+      if (method === "messageThreads.createFromSource") return { thread: { id: "thread_1", sourceMessageId: "msg_1", sourceKind: "channel", sourceId: "all", replyCount: 0, updatedAt: "1" } };
+      if (method === "messageThreads.reply") return { reply: { id: "reply_1", threadId: "thread_1", senderId: "human:local", role: "human", body: "hi", createdAt: "1" } };
+      throw new Error(`unexpected method ${method}`);
+    });
     Object.defineProperty(globalThis, "window", {
       configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
+      value: {
+        slei: {
+          rpc: { call },
+          events: { subscribe: vi.fn() },
+        },
+      },
     });
-    invokeMock
-      .mockResolvedValueOnce({ messages: [], pageInfo: { hasMoreBefore: false } })
-      .mockResolvedValueOnce({ messages: [], pageInfo: { hasMoreBefore: false } })
-      .mockResolvedValueOnce({ thread: { id: "thread_1", sourceMessageId: "msg_1", sourceKind: "channel", sourceId: "all", replyCount: 0, updatedAt: "1" } })
-      .mockResolvedValueOnce({ reply: { id: "reply_1", threadId: "thread_1", senderId: "human:local", role: "human", body: "hi", createdAt: "1" } });
 
     const bridge = createDaemonBridge();
 
@@ -230,21 +223,21 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     await bridge.createMessageThreadFromSource({ sourceMessageId: "msg_1", createdBy: "human:local" });
     await bridge.replyToMessageThread("thread_1", { senderId: "human:local", body: "hi" });
 
-    expect(invokeMock).toHaveBeenNthCalledWith(1, "list_channel_messages_command", {
+    expect(call).toHaveBeenNthCalledWith(1, "channels.messages.list", {
       channelId: "all",
       query: { before: 10 },
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(2, "list_conversation_messages_command", {
+    expect(call).toHaveBeenNthCalledWith(2, "conversations.messages.list", {
       conversationId: "dm:agent",
       query: { aroundMessageId: "msg_1", limit: 9 },
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(3, "clear_conversation_messages_command", {
+    expect(call).toHaveBeenNthCalledWith(3, "conversations.messages.clear", {
       conversationId: "dm:agent",
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(4, "create_message_thread_from_source_command", {
+    expect(call).toHaveBeenNthCalledWith(4, "messageThreads.createFromSource", {
       request: { sourceMessageId: "msg_1", createdBy: "human:local" },
     });
-    expect(invokeMock).toHaveBeenNthCalledWith(5, "reply_to_message_thread_command", {
+    expect(call).toHaveBeenNthCalledWith(5, "messageThreads.reply", {
       threadId: "thread_1",
       request: { senderId: "human:local", body: "hi" },
     });
@@ -266,51 +259,21 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     await expect(bridge.replyToMessageThread("thread_1", { senderId: "human:local", body: "hi" })).rejects.toThrow("daemon offline");
   });
 
-  it("invokes global search with the expected command shape", async () => {
-    Object.defineProperty(globalThis, "window", {
-      configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
-    });
-    invokeMock.mockResolvedValueOnce({
-      query: "needle",
-      totals: { agents: 0, channels: 0, messages: 0 },
-      agents: [],
-      channels: [],
-      messages: [],
-    });
-
-    const bridge = createDaemonBridge();
-    await expect(
-      bridge.globalSearch({
-        q: "needle",
-        fromId: "msg_42",
-        channelId: "dev-team",
-        timeRange: "today",
-        timeZone: "UTC",
-      }),
-    ).resolves.toMatchObject({ query: "needle" });
-
-    expect(invokeMock).toHaveBeenCalledWith("global_search_command", {
-      query: {
-        q: "needle",
-        fromId: "msg_42",
-        channelId: "dev-team",
-        timeRange: "today",
-        timeZone: "UTC",
-      },
-    });
-  });
-
-  it("invokes role preset listing and surfaces command failures", async () => {
-    Object.defineProperty(globalThis, "window", {
-      configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
-    });
-    invokeMock
+  it("maps Electron role preset listing and surfaces RPC failures", async () => {
+    const call = vi.fn()
       .mockResolvedValueOnce({
         presets: [{ id: "engineer", title: "工程师", description: "实现功能", sortOrder: 10 }],
       })
       .mockRejectedValueOnce(new Error("daemon unavailable"));
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        slei: {
+          rpc: { call },
+          events: { subscribe: vi.fn() },
+        },
+      },
+    });
 
     const bridge = createDaemonBridge();
     await expect(bridge.listAgentRolePresets()).resolves.toEqual({
@@ -318,16 +281,21 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     });
     await expect(bridge.listAgentRolePresets()).rejects.toThrow("daemon unavailable");
 
-    expect(invokeMock).toHaveBeenNthCalledWith(1, "list_agent_role_presets_command");
-    expect(invokeMock).toHaveBeenNthCalledWith(2, "list_agent_role_presets_command");
+    expect(call).toHaveBeenNthCalledWith(1, "agentRolePresets.list", {});
+    expect(call).toHaveBeenNthCalledWith(2, "agentRolePresets.list", {});
   });
 
-  it("passes avatarSeed through createAgent", async () => {
+  it("passes avatarSeed through Electron createAgent RPC", async () => {
+    const call = vi.fn(async () => ({ agent: testAgent("agent_nova", "Nova", "@Nova") }));
     Object.defineProperty(globalThis, "window", {
       configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
+      value: {
+        slei: {
+          rpc: { call },
+          events: { subscribe: vi.fn() },
+        },
+      },
     });
-    invokeMock.mockResolvedValueOnce({ agent: testAgent("agent_nova", "Nova", "@Nova") });
 
     const bridge = createDaemonBridge();
     await bridge.createAgent({
@@ -340,7 +308,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       avatarSeed: "preset-engineer",
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("create_agent_command", {
+    expect(call).toHaveBeenCalledWith("agents.create", {
       request: {
         name: "Nova",
         handle: "@Nova",
@@ -353,16 +321,21 @@ describe("createDaemonBridge non-Tauri fallback", () => {
     });
   });
 
-  it("invokes profile avatar upload with the expected command shape", async () => {
-    Object.defineProperty(globalThis, "window", {
-      configurable: true,
-      value: { __TAURI_INTERNALS__: {} },
-    });
-    invokeMock.mockResolvedValueOnce({
+  it("maps profile avatar uploads through Electron RPC", async () => {
+    const call = vi.fn(async () => ({
       profile: {
         displayName: "Lei",
         handle: "lei",
         avatar: `profile-image:${"a".repeat(64)}.png`,
+      },
+    }));
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        slei: {
+          rpc: { call },
+          events: { subscribe: vi.fn() },
+        },
       },
     });
 
@@ -380,7 +353,7 @@ describe("createDaemonBridge non-Tauri fallback", () => {
       },
     });
 
-    expect(invokeMock).toHaveBeenCalledWith("upload_profile_avatar_command", { request });
+    expect(call).toHaveBeenCalledWith("profile.avatar.upload", { request });
   });
 });
 

@@ -47,11 +47,7 @@ export function logFrontendCrash(report: FrontendCrashReport) {
     return;
   }
 
-  if (hasLegacyTauriRuntime()) {
-    void import("@tauri-apps/api/core")
-      .then(({ invoke }) => invoke("log_frontend_crash_command", { report }))
-      .catch(logCrashReportFailure);
-  }
+  console.error("[slei-frontend-crash]", report);
 }
 
 export function reportFrontendCrash(
@@ -85,8 +81,4 @@ function electronCrashRpc(): { call(method: string, payload: unknown): Promise<u
   }).slei?.rpc;
 
   return typeof candidate?.call === "function" ? { call: candidate.call } : undefined;
-}
-
-function hasLegacyTauriRuntime(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
