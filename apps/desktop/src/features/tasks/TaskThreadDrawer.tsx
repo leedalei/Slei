@@ -232,6 +232,8 @@ export function TaskThreadDrawer(input: {
               const timestamp = taskReplyTimestampLabel(reply);
               const side = (reply.role ?? "human") === "human" ? "outgoing" : "incoming";
               const roleDescription = taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages);
+              const showIdentity = side !== "outgoing";
+              const showRoleDescription = showIdentity && Boolean(roleDescription);
               return (
                 <article
                   className={cn(
@@ -247,19 +249,21 @@ export function TaskThreadDrawer(input: {
                   {side === "incoming" ? <MemberAvatar identity={identity} /> : null}
                   <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
                     <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
-                      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
-                        <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
-                        {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
-                        {roleDescription ? (
-                          <>
-                            <span aria-hidden="true">｜</span>
-                            <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
-                          </>
-                        ) : null}
-                      </div>
+                      {showIdentity ? (
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
+                          <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
+                          {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
+                          {showRoleDescription ? (
+                            <>
+                              <span aria-hidden="true">｜</span>
+                              <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
-                        <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
-                          <SleiIcon name="copy" size={14} />
+                        <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6" onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                          <SleiIcon className="size-3" name="copy" />
                         </TooltipButton>
                         {timestamp ? (
                           <>
@@ -276,7 +280,7 @@ export function TaskThreadDrawer(input: {
                         "grid gap-2 rounded-2xl px-3.5 py-2.5",
                         side === "outgoing"
                           ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
-                          : "w-full max-w-full rounded-tl-sm bg-card text-card-foreground shadow-sm ring-1 ring-border/60",
+                          : "w-full max-w-full rounded-tl-sm bg-muted/60 text-card-foreground shadow-sm ring-1 ring-border/60",
                       )}
                       data-slot="message-bubble"
                     >

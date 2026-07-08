@@ -505,7 +505,7 @@ describe("TasksPage filters", () => {
         ...tasks[0],
         replies: [
           { id: "reply-agent", sender: "Coda", role: "agent", body: "Agent 回复", time: "06-17 10:30", sentAt: "2026-06-17 10:30:00" } satisfies SleiTaskReply,
-          { id: "reply-human", sender: "Lei", handle: "@lei", role: "human", body: "用户补充", time: "06-17 10:31", sentAt: "2026-06-17 10:31:00" } satisfies SleiTaskReply,
+          { id: "reply-human", sender: "Lei", handle: "@lei", role: "human", body: "继续补充", time: "06-17 10:31", sentAt: "2026-06-17 10:31:00" } satisfies SleiTaskReply,
         ],
       },
     ]));
@@ -521,6 +521,7 @@ describe("TasksPage filters", () => {
     const humanBubble = humanReply?.querySelector<HTMLElement>('[data-slot="message-bubble"]');
     const actions = reply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
     const copyButton = actions?.querySelector<HTMLButtonElement>('button[aria-label="复制"]');
+    const copyIcon = copyButton?.querySelector<SVGElement>('[data-slei-icon="copy"]');
     const time = actions?.querySelector<HTMLTimeElement>("time");
 
     expect(replies).toHaveLength(2);
@@ -539,20 +540,25 @@ describe("TasksPage filters", () => {
     expect(metadata?.textContent).toContain("Coda");
     expect(metadata?.textContent).toContain("@coda");
     expect(metadata?.textContent).toContain("Developer");
-    expect(humanMetadata?.textContent).toContain("Lei");
-    expect(humanMetadata?.textContent).toContain("@lei");
-    expect(humanMetadata?.textContent).not.toContain("用户");
+    expect(humanMetadata).toBeNull();
+    expect(humanReply?.textContent).not.toContain("Lei");
+    expect(humanReply?.textContent).not.toContain("@lei");
+    expect(humanReply?.textContent).not.toContain("用户");
     expect(bubble?.className).toContain("rounded-tl-sm");
-    expect(bubble?.className).toContain("bg-card");
+    expect(bubble?.className).toContain("bg-muted/60");
+    expect(bubble?.className).not.toContain("bg-card");
     expect(humanBubble?.className).toContain("rounded-tr-sm");
     expect(humanBubble?.className).toContain("bg-primary");
     expect(humanBubble?.className).toContain("text-primary-foreground");
     expect(actions).not.toBeNull();
     expect(copyButton).not.toBeNull();
+    expect(copyButton?.className).toContain("size-6");
+    expect(copyButton?.className).not.toContain("[&_svg]:size-3");
+    expect(copyIcon?.className.baseVal.split(/\s+/)).toContain("size-3");
     expect(time?.textContent).toBe("06-17 10:30");
     expect(time?.getAttribute("dateTime")).toBe("2026-06-17 10:30:00");
     expect(reply?.textContent).toContain("Agent 回复");
-    expect(humanReply?.textContent).toContain("用户补充");
+    expect(humanReply?.textContent).toContain("继续补充");
 
     await act(async () => {
       copyButton!.click();

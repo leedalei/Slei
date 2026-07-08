@@ -3058,18 +3058,20 @@ describe("ChatPage mention panel", () => {
 
     for (const kind of ["createAgent", "createChannel"]) {
       const cardHtml = html.slice(html.indexOf(`data-card-kind="${kind}"`));
-      const cardOpenTag = cardHtml.slice(0, cardHtml.indexOf(">"));
+      const cardClasses = host.querySelector<HTMLElement>(`[data-card-kind="${kind}"]`)?.className ?? "";
       const actionButtonClasses = host.querySelector<HTMLElement>(`[data-card-kind="${kind}"] [data-slot="button"]`)?.className.split(/\s+/) ?? [];
 
       expect(cardHtml).toContain(`data-card-kind="${kind}"`);
       expect(cardHtml).toContain('data-slot="card"');
+      expect(cardClasses).toContain("min-w-[min(28rem,100%)]");
+      expect(cardClasses).toContain("max-w-full");
       expect(actionButtonClasses).toContain("h-7");
       expect(actionButtonClasses).toContain("px-2.5");
       expect(actionButtonClasses).toContain("text-xs");
       expect(actionButtonClasses).toContain("gap-1");
       expect(actionButtonClasses).not.toContain("h-8");
-      expect(cardOpenTag).not.toContain("shadow-[");
-      expect(cardOpenTag).not.toContain("hover:shadow");
+      expect(cardClasses).not.toContain("shadow-[");
+      expect(cardClasses).not.toContain("hover:shadow");
     }
   });
 
@@ -3133,6 +3135,8 @@ describe("ChatPage mention panel", () => {
     expect(taskBubble?.className).toContain("rounded-tr-sm");
     expect(taskBubble?.className).not.toContain("rounded-br-sm");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
+    expect(taskRootCard?.textContent).not.toContain("Lei");
+    expect(taskRootCard?.textContent).not.toContain("@lei");
     expect(taskRootCard?.textContent).not.toContain("用户");
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
     expect(replyIcon?.className.baseVal).toContain("size-2.5");

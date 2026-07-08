@@ -8,7 +8,14 @@ describe("TaskTitleMarkdown", () => {
     const html = renderToStaticMarkup(<TaskTitleMarkdown markdown={"**整理**任务\n\n- 合并代码"} />);
 
     expect(html).toContain("slei-task-title-markdown");
+    expect(html).toContain("font-normal");
     expect(html).toContain("[&amp;_p]:my-0");
+    expect(html).toContain("[&amp;_p]:font-normal");
+    expect(html).toContain("[&amp;_h1]:font-normal");
+    expect(html).toContain("[&amp;_h2]:font-normal");
+    expect(html).toContain("[&amp;_strong]:font-normal");
+    expect(html).not.toContain("[&amp;_p]:font-semibold");
+    expect(html).not.toContain("[&amp;_strong]:font-semibold");
     expect(html).toContain("<strong>整理</strong>");
     expect(html).toContain("<li>合并代码</li>");
   });

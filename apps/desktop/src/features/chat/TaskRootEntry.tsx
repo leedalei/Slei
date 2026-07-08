@@ -54,6 +54,8 @@ export function TaskRootEntry(input: {
   const author = input.sourceMessage?.author ?? input.task.owner;
   const handle = input.sourceMessage?.handle;
   const roleDescription = input.roleDescription?.trim();
+  const showIdentity = side !== "outgoing";
+  const showRoleDescription = showIdentity && Boolean(roleDescription);
   const avatarIdentity = input.avatarIdentity ?? {
     id: handle ?? author,
     name: author,
@@ -76,16 +78,18 @@ export function TaskRootEntry(input: {
       {side === "incoming" ? <MemberAvatar identity={avatarIdentity} /> : null}
       <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
         <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
-          <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
-            <strong className="shrink-0 text-sm text-foreground">{author}</strong>
-            {handle ? <span className="shrink-0">{handle}</span> : null}
-            {roleDescription ? (
-              <>
-                <span aria-hidden="true">｜</span>
-                <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
-              </>
-            ) : null}
-          </div>
+          {showIdentity ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+              <strong className="shrink-0 text-sm text-foreground">{author}</strong>
+              {handle ? <span className="shrink-0">{handle}</span> : null}
+              {showRoleDescription ? (
+                <>
+                  <span aria-hidden="true">｜</span>
+                  <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-task-root-entry-actions>
             <Button
               aria-label={openLabel}
