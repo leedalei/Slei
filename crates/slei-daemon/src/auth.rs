@@ -8,6 +8,10 @@ impl AuthToken {
         Self(token.to_string())
     }
 
+    pub fn from_string(token: String) -> Self {
+        Self(token)
+    }
+
     pub fn authorization_header(&self) -> String {
         format!("Bearer {}", self.0)
     }
