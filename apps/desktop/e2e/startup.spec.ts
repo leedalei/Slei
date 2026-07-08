@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,25 @@ function expectInOrder(source: string, orderedSnippets: string[]) {
     expect(index, `${snippet} should exist`).toBeGreaterThanOrEqual(0);
     expect(index, `${snippet} should appear after the previous startup step`).toBeGreaterThan(previousIndex);
     previousIndex = index;
+  }
+}
+
+function expectYamlValue(source: string, key: string, expectedValue: string) {
+  expect(source).toContain(`${key}: ${expectedValue}`);
+}
+
+function expectYamlListContains(source: string, parentKey: string, expectedItems: string[]) {
+  const parentIndex = source.indexOf(`${parentKey}:`);
+  expect(parentIndex, `${parentKey} should exist`).toBeGreaterThanOrEqual(0);
+
+  const nextTopLevelKey = source.slice(parentIndex + parentKey.length + 1).search(/\n\S[^:\n]*:/);
+  const section =
+    nextTopLevelKey === -1
+      ? source.slice(parentIndex)
+      : source.slice(parentIndex, parentIndex + parentKey.length + 1 + nextTopLevelKey);
+
+  for (const item of expectedItems) {
+    expect(section).toContain(`- ${item}`);
   }
 }
 
@@ -52,6 +71,17 @@ function runMacosPackageVerifier(cwd: string) {
   });
 }
 
+function runMacosPackageScriptWithArch(arch: string) {
+  return spawnSync("bash", ["scripts/package-macos.sh", "dir"], {
+    cwd: desktopRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      SLEI_PACKAGE_ARCH: arch,
+    },
+  });
+}
+
 async function createBoundaryFixture(options: { omitWorkflowDirectory?: boolean } = {}) {
   const fixtureRoot = await mkdtemp(join(tmpdir(), "slei-macos-boundary-"));
   const directories = [
@@ -71,7 +101,53 @@ async function createBoundaryFixture(options: { omitWorkflowDirectory?: boolean 
 
   await copyFile(join(repoRoot, "scripts/verify-macos-package.sh"), join(fixtureRoot, "scripts/verify-macos-package.sh"));
   await writeFile(join(fixtureRoot, "Cargo.toml"), "[workspace]\nmembers = []\n");
-  await writeFile(join(fixtureRoot, "apps/desktop/package.json"), "{}\n");
+  await mkdir(join(fixtureRoot, "apps/desktop/build"), { recursive: true });
+  await writeFile(
+    join(fixtureRoot, "apps/desktop/package.json"),
+    JSON.stringify(
+      {
+        scripts: {
+          "package:mac": "scripts/package-macos.sh dmg zip",
+          "package:mac:dir": "scripts/package-macos.sh dir",
+          "prepare:package-resources": "node scripts/prepare-package-resources.mjs",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(
+    join(fixtureRoot, "apps/desktop/electron-builder.yml"),
+    [
+      "appId: ai.slei.desktop",
+      "productName: Slei",
+      "directories:",
+      "  output: release",
+      "files:",
+      "  - dist/**",
+      "  - dist-electron/**",
+      "  - package.json",
+      "extraResources:",
+      "  - from: dist-native/darwin-arm64",
+      "    to: native/darwin-arm64",
+      "asar: true",
+      "mac:",
+      "  category: public.app-category.productivity",
+      "  icon: build/icon.icns",
+      "  hardenedRuntime: true",
+      "  entitlements: build/entitlements.mac.plist",
+      "  entitlementsInherit: build/entitlements.mac.plist",
+      "  target:",
+      "    - dmg",
+      "    - zip",
+      "artifactName: Slei-${version}-${arch}.${ext}",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(join(fixtureRoot, "apps/desktop/build/icon.icns"), "icns");
+  await writeFile(join(fixtureRoot, "apps/desktop/build/entitlements.mac.plist"), "<plist />\n");
+  await writeFile(join(fixtureRoot, "apps/desktop/scripts/package-macos.sh"), "#!/usr/bin/env bash\n");
+  await chmod(join(fixtureRoot, "apps/desktop/scripts/package-macos.sh"), 0o755);
   await writeFile(join(fixtureRoot, "apps/desktop/src/index.ts"), "export const desktopShell = 'electron';\n");
   await writeFile(join(fixtureRoot, "apps/desktop/scripts/desktop-dev.sh"), "electron dist-electron/electron/main.js\n");
   await writeFile(join(fixtureRoot, "workers/claude-agent/package.json"), "{}\n");
@@ -170,6 +246,64 @@ describe("desktop startup contract", () => {
     expect(result.stderr).toBe("");
   });
 
+  it("declares the Electron Builder macOS package contract", async () => {
+    const packageJson = JSON.parse(
+      await readFile(join(desktopRoot, "package.json"), "utf8"),
+    ) as {
+      scripts?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const builderConfig = await readFile(join(desktopRoot, "electron-builder.yml"), "utf8");
+    const packageScript = await readFile(join(desktopRoot, "scripts/package-macos.sh"), "utf8");
+
+    expectYamlValue(builderConfig, "appId", "ai.slei.desktop");
+    expectYamlValue(builderConfig, "productName", "Slei");
+    expect(builderConfig).toContain("directories:\n  output: release");
+    expect(builderConfig).toContain(["files:", "  - dist/**", "  - dist-electron/**", "  - package.json"].join("\n"));
+    expectYamlValue(builderConfig, "asar", "true");
+    expect(builderConfig).toContain("mac:\n");
+    expect(builderConfig).toContain("category: public.app-category.productivity");
+    expect(builderConfig).toContain("icon: build/icon.icns");
+    expect(builderConfig).toContain("hardenedRuntime: true");
+    expect(builderConfig).toContain("entitlements: build/entitlements.mac.plist");
+    expect(builderConfig).toContain("entitlementsInherit: build/entitlements.mac.plist");
+    expectYamlListContains(builderConfig, "target", ["dmg", "zip"]);
+    expect(builderConfig).toContain(
+      ["extraResources:", "  - from: dist-native/darwin-arm64", "    to: native/darwin-arm64"].join("\n"),
+    );
+    expectYamlValue(builderConfig, "artifactName", "Slei-${version}-${arch}.${ext}");
+    expect(packageJson.scripts?.["package:mac"]).toBe("scripts/package-macos.sh dmg zip");
+    expect(packageJson.scripts?.["package:mac:dir"]).toBe("scripts/package-macos.sh dir");
+    expect(packageJson.scripts?.["prepare:package-resources"]).toBe("node scripts/prepare-package-resources.mjs");
+    expect(packageJson.devDependencies?.["electron-builder"]).toBe("26.15.3");
+    expect(packageScript).toContain('PACKAGE_ARCH="${SLEI_PACKAGE_ARCH:-arm64}"');
+    expect(packageScript).toContain("x64|universal)");
+    expect(packageScript).toContain("cargo build --release -p slei-daemon -p slei-cli");
+    expectInOrder(packageScript, [
+      "pnpm build",
+      "pnpm build:electron",
+      "cargo build --release -p slei-daemon -p slei-cli",
+      "node scripts/bundle-claude-worker.mjs",
+      "node scripts/prepare-node-runtime.mjs",
+      "node scripts/prepare-package-resources.mjs --skip-build",
+      "node scripts/package-resource-check.mjs --root .",
+      'pnpm exec electron-builder --config electron-builder.yml --mac "${targets[@]}" --arm64',
+    ]);
+  });
+
+  it.each([
+    ["x64", "SLEI_PACKAGE_ARCH=x64 is reserved for a later packaging task; only arm64 is supported now."],
+    ["universal", "SLEI_PACKAGE_ARCH=universal is reserved for a later packaging task; only arm64 is supported now."],
+    ["riscv64", "unsupported SLEI_PACKAGE_ARCH=riscv64; only arm64 is supported now."],
+  ])("rejects unsupported package architecture %s before running package builds", (arch, expectedMessage) => {
+    const result = runMacosPackageScriptWithArch(arch);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr.trim()).toBe(expectedMessage);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).not.toContain("No such file or directory");
+  });
+
   it("allows verifier-only Tauri references after the active Tauri source directory is gone", async () => {
     const fixtureRoot = await createBoundaryFixture();
     try {
@@ -197,16 +331,22 @@ describe("desktop startup contract", () => {
 
   it("creates the standard Electron BrowserWindow shell", async () => {
     const mainSource = await readFile(join(desktopRoot, "src/electron/main.ts"), "utf8");
+    const windowOptionsSource = await readFile(join(desktopRoot, "src/electron/window-options.ts"), "utf8");
 
     expect(mainSource).toContain("new BrowserWindow({");
-    expect(mainSource).toContain("width: 1280");
-    expect(mainSource).toContain("height: 800");
+    expect(mainSource).toContain("createWindowVisualOptions({");
+    expect(windowOptionsSource).toContain("width: 1280");
+    expect(windowOptionsSource).toContain("height: 800");
     expect(mainSource).toContain('title: ""');
     expect(mainSource).toContain("contextIsolation: true");
     expect(mainSource).toContain("nodeIntegration: false");
     expect(mainSource).toContain("sandbox: true");
     expect(mainSource).toContain('preload: join(electronDirname, "preload.cjs")');
-    expect(mainSource).toContain("window.loadURL(VITE_DEV_URL)");
+    expect(mainSource).toContain("resolveRendererEntry({");
+    expect(mainSource).toContain("devUrl: VITE_DEV_URL");
+    expect(mainSource).toContain('if (rendererEntry.kind === "url")');
+    expect(mainSource).toContain("window.loadURL(rendererEntry.value)");
+    expect(mainSource).toContain("window.loadFile(rendererEntry.value)");
   });
 
   it("preserves the macOS app icon outside the deleted Tauri tree", async () => {

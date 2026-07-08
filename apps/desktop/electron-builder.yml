@@ -1,0 +1,22 @@
+appId: ai.slei.desktop
+productName: Slei
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+extraResources:
+  - from: dist-native/darwin-arm64
+    to: native/darwin-arm64
+asar: true
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.icns
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - dmg
+    - zip
+artifactName: Slei-${version}-${arch}.${ext}
