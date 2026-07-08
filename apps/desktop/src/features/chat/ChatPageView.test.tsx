@@ -3194,7 +3194,8 @@ describe("ChatPage mention panel", () => {
     const rootMarkdown = drawer?.querySelector<HTMLElement>('[data-slot="task-thread-root-body"] .slei-markdown-message');
     expect(rootMarkdown).toBeTruthy();
     expect(rootMarkdown?.classList.contains("text-sm")).toBe(true);
-    expect(rootMarkdown?.classList.contains("leading-relaxed")).toBe(true);
+    expect(rootMarkdown?.classList.contains("slei-task-title-markdown")).toBe(true);
+    expect(rootMarkdown?.classList.contains("leading-snug")).toBe(true);
     expect(rootMarkdown?.querySelector("h2")?.textContent).toBe("先看看");
     expect(rootMarkdown?.querySelector("li")?.textContent).toContain("不要立刻创建子线程");
     expect(rootMarkdown?.querySelector("code")?.textContent).toBe("inlineCode");

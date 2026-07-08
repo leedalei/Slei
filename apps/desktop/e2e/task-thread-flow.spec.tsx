@@ -131,7 +131,8 @@ describe("chat to task thread flow", () => {
     expect(html).toContain('aria-label="变更任务状态"');
     expect(html).toContain("已完成");
     expect(html).not.toContain("标记已完成");
-    expect(html).toContain("2 条回复");
+    expect(html).toContain('data-slot="task-status-divider"');
+    expect(html).not.toContain("Lei - 2 条回复");
   });
 
   it("renders task reply mention suggestions without coordinator targets", () => {
@@ -255,7 +256,8 @@ describe("chat to task thread flow", () => {
     expect(rootEnd).toBeGreaterThan(rootStart);
     expect(rootHtml).toContain("slei-markdown-message");
     expect(rootHtml).toContain("text-sm");
-    expect(rootHtml).toContain("leading-relaxed");
+    expect(rootHtml).toContain("slei-task-title-markdown");
+    expect(rootHtml).toContain("leading-snug");
     expect(rootHtml).toContain("<h2>感谢欢迎</h2>");
     expect(rootHtml).toContain("<li>agent_guide</li>");
     expect(rootHtml).toContain("<code");

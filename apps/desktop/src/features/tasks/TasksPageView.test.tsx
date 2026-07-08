@@ -528,14 +528,23 @@ describe("TasksPage filters", () => {
 
     const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
     const timeline = drawer?.querySelector<HTMLElement>('[data-slot="task-status-timeline"]');
+    const divider = drawer?.querySelector<HTMLElement>('[data-slot="task-status-divider"]');
+    const description = drawer?.querySelector<HTMLElement>('[data-slot="sheet-description"]');
     const doneNode = drawer?.querySelector<HTMLButtonElement>('[data-task-status-node="done"]');
     expect(timeline).not.toBeNull();
     expect(timeline?.className).not.toContain("bg-white");
+    expect(timeline?.className).not.toContain("bg-muted");
+    expect(timeline?.className).not.toContain("dark:bg");
     expect(timeline?.className).not.toContain("shadow");
     expect(timeline?.className).not.toContain("border");
     expect(timeline?.className).not.toContain("mx-auto");
     expect(timeline?.className).toContain("inline-grid");
     expect(timeline?.className).toContain("justify-start");
+    expect(divider).not.toBeNull();
+    expect(divider?.className).toContain("border-t");
+    expect(description?.className).toContain("sr-only");
+    expect(description?.textContent).toBe("任务讨论");
+    expect(drawer?.textContent).not.toContain("Coda - 1 条回复");
     expect(drawer?.querySelectorAll('[data-task-status-node]')).toHaveLength(4);
     expect(drawer?.querySelectorAll('[data-task-status-icon]')).toHaveLength(4);
     expect(drawer?.querySelector('[data-task-status-node="pending_assignment"]')?.className).toContain("justify-items-start");

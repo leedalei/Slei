@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
 import { defaultTimeZone, desktopVersion, localHumanPresentation, normalizeAppearanceTheme, randomProfileAvatarPresetId, type SettingsPanel, type UserProfile } from "../../app/model";
-import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, SleiIcon, sleiIcons } from "../../components";
+import { EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, SleiIcon, sleiIcons } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -304,11 +304,13 @@ export function SettingsPage(input: SettingsPageInput) {
           ) : null}
 
           {input.activePanel === "about" ? (
-            <Card className={settingsSectionCardClass}>
-              <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
-              <AboutRow label={labels.desktopVersion} value={desktopVersion} />
-              <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
-              <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
+            <Card className={cn(settingsSectionCardClass, "overflow-hidden py-0")}>
+              <CardContent className="p-0" data-settings-about-list="compact">
+                <dl className="divide-y divide-border/70" data-slot="settings-about-definition-list">
+                  <AboutRow label={labels.desktopVersion} value={desktopVersion} />
+                  <AboutRow label={labels.daemonVersion} value={input.nodes[0]?.daemonVersion ?? "unknown"} />
+                  <AboutRow label={labels.connectedComputers} value={String(input.nodes.length)} />
+                </dl>
               </CardContent>
             </Card>
           ) : null}
@@ -393,11 +395,15 @@ function NotificationSwitch(input: {
 
 function AboutRow(input: { label: string; value: string }) {
   return (
-    <DetailBlock
-      action={<Badge variant="outline">{input.value}</Badge>}
+    <div
+      className="grid min-h-12 gap-1 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4 sm:px-5"
       data-settings-about-row={aboutRowKey(input.label)}
-      title={<span className="text-sm font-normal text-muted-foreground">{input.label}</span>}
-    />
+    >
+      <dt className="min-w-0 text-muted-foreground">{input.label}</dt>
+      <dd className="min-w-0 sm:justify-self-end">
+        <Badge className="max-w-full font-medium" variant="outline">{input.value}</Badge>
+      </dd>
+    </div>
   );
 }
 

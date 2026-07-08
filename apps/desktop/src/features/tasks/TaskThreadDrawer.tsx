@@ -8,6 +8,7 @@ import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
+import { TaskTitleMarkdown } from "./TaskTitleMarkdown";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -186,7 +187,7 @@ export function TaskThreadDrawer(input: {
     return (
       <>
         <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-        <SheetHeader className="slei-task-thread-header relative border-b p-5 pr-14">
+        <SheetHeader className="slei-task-thread-header relative p-5 pb-0 pr-14">
           <TaskStatusTimeline
             blockedStatuses={blockedStatusTargets}
             disabled={statusActionDisabled}
@@ -194,6 +195,7 @@ export function TaskThreadDrawer(input: {
             onStatusRequest={setPendingStatus}
             status={timelineStatus}
           />
+          <div aria-hidden="true" className="-mx-5 mt-4 border-t border-border" data-slot="task-status-divider" />
           {pendingStatus ? (
             <div
               className="absolute left-5 top-[4.65rem] z-30 grid w-[min(24rem,calc(100%-6rem))] gap-3 rounded-lg border border-border/70 bg-popover/95 p-3 text-popover-foreground shadow-lg backdrop-blur-xl"
@@ -217,7 +219,7 @@ export function TaskThreadDrawer(input: {
             </div>
           ) : null}
           <SheetTitle className="sr-only">{task.title}</SheetTitle>
-          <SheetDescription>{task.owner} - {input.messages.tasks.replyCountButton(replyCount)}</SheetDescription>
+          <SheetDescription className="sr-only">{input.messages.tasks.thread}</SheetDescription>
           <Button aria-label={input.messages.tasks.closeThread} className="absolute right-3 top-3 size-8 [&_svg]:size-3.5" onClick={input.onClose} size="icon" type="button" variant="ghost">
             <SleiIcon className="size-4" name="x" />
           </Button>
@@ -225,7 +227,7 @@ export function TaskThreadDrawer(input: {
         <ScrollArea className="min-h-0 flex-1" ref={scrollAreaRef}>
           <div className="grid gap-3 p-5 pb-36" data-slot="task-thread-scroll-content">
             <div data-slot="task-thread-root-body">
-              <MarkdownMessage copyCodeLabel={input.messages.chat.copyMessage} markdown={task.title} onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")} />
+              <TaskTitleMarkdown markdown={task.title} />
             </div>
             {(task.replies ?? []).map((reply) => {
               const identity = taskReplyAvatarIdentity(reply, input.mentionMembers ?? []);
@@ -360,7 +362,7 @@ function TaskStatusTimeline(input: {
   return (
     <div
       aria-label={input.messages.tasks.changeStatus}
-      className="inline-grid w-auto grid-cols-[repeat(4,4.75rem)] justify-start gap-0 rounded-lg bg-muted/35 p-1 dark:bg-muted/20"
+      className="inline-grid w-auto grid-cols-[repeat(4,4.75rem)] justify-start gap-0"
       data-slot="task-status-timeline"
       role="list"
     >

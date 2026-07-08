@@ -134,10 +134,11 @@ describe("SettingsPage header", () => {
     expect(aboutHtml).toContain('data-slot="card-content"');
     expect(aboutHtml).toContain("bg-[var(--settings-section-bg)]");
     expect(aboutHtml).toContain("border-[var(--settings-section-border)]");
+    expect(aboutHtml).toContain('data-settings-about-list="compact"');
     expect(aboutHtml).toContain('data-settings-about-row="desktopVersion"');
   });
 
-  it("renders about value tags without status dots or status metadata", () => {
+  it("renders about values in a compact description list without status metadata", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(
       <SettingsPage
@@ -152,6 +153,21 @@ describe("SettingsPage header", () => {
       />,
     );
 
+    const listStart = html.indexOf('data-settings-about-list="compact"');
+    const listOpenTagStart = html.lastIndexOf("<", listStart);
+    const listOpenTagEnd = html.indexOf(">", listStart);
+    const listOpenTag = html.slice(listOpenTagStart, listOpenTagEnd);
+    const desktopRowStart = html.indexOf('data-settings-about-row="desktopVersion"');
+    const desktopRowOpenTagStart = html.lastIndexOf("<", desktopRowStart);
+    const desktopRowOpenTagEnd = html.indexOf(">", desktopRowStart);
+    const desktopRowOpenTag = html.slice(desktopRowOpenTagStart, desktopRowOpenTagEnd);
+
+    expect(listStart).toBeGreaterThanOrEqual(0);
+    expect(listOpenTag).toContain("p-0");
+    expect(html).toContain('data-slot="settings-about-definition-list"');
+    expect(html).toContain("divide-y");
+    expect(desktopRowOpenTag).toContain("min-h-12");
+    expect(desktopRowOpenTag).toContain("sm:grid-cols-[minmax(0,1fr)_auto]");
     expect(html.match(/data-slot="badge"/g)?.length).toBe(3);
     expect(html).not.toContain('data-slot="status-badge-dot"');
     expect(html).toContain('data-settings-about-row="desktopVersion"');
@@ -173,7 +189,7 @@ describe("SettingsPage header", () => {
       timeZone: "Asia/Shanghai",
     };
 
-    for (const activePanel of ["language-region", "appearance", "notifications", "about"] as const) {
+    for (const activePanel of ["language-region", "appearance", "notifications"] as const) {
       const html = renderToStaticMarkup(<SettingsPage {...shared} activePanel={activePanel} />);
       const stackMarker = 'data-settings-control-stack="true"';
       const stackStart = html.indexOf(stackMarker);
@@ -186,6 +202,10 @@ describe("SettingsPage header", () => {
       expect(stackOpenTag).not.toContain("grid gap-1");
       expect(stackOpenTag).not.toContain("grid gap-5");
     }
+
+    const aboutHtml = renderToStaticMarkup(<SettingsPage {...shared} activePanel="about" />);
+    expect(aboutHtml).not.toContain('data-settings-control-stack="true"');
+    expect(aboutHtml).toContain('data-settings-about-list="compact"');
   });
 
   it("renders setting selects with shared shadcn-style field spacing", () => {

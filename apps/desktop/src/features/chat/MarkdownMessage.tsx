@@ -13,24 +13,29 @@ type MarkdownForegroundStyle = CSSProperties & {
 };
 
 export function MarkdownMessage({
+  className,
+  codeCopyEnabled = true,
   copyCodeLabel,
   markdown,
   onCodeCopied,
   onCodeCopyFailed,
   tone = "foreground",
 }: {
+  className?: string;
+  codeCopyEnabled?: boolean;
   copyCodeLabel?: string;
   markdown: string;
   onCodeCopied?: () => void;
   onCodeCopyFailed?: (error: unknown) => void;
   tone?: MarkdownTone;
 }) {
-  const components = markdownComponents({ copyCodeLabel, onCodeCopied, onCodeCopyFailed });
+  const components = markdownComponents({ codeCopyEnabled, copyCodeLabel, onCodeCopied, onCodeCopyFailed });
   return (
     <div
       className={cn(
         "slei-markdown-message mt-1 max-w-none text-sm leading-relaxed [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_hr]:my-3 [&_hr]:border-border [&_li]:ml-4 [&_ol]:list-decimal [&_p]:my-1 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:bg-muted/60 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_strong]:font-semibold [&_table]:my-2 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-border [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_ul]:list-disc",
         tone === "card" ? "text-card-foreground" : "text-foreground",
+        className,
       )}
       style={markdownForegroundStyle(tone)}
     >
@@ -51,6 +56,7 @@ function safeMarkdownUrl(url: string): string {
 }
 
 function markdownComponents(input: {
+  codeCopyEnabled: boolean;
   copyCodeLabel?: string;
   onCodeCopied?: () => void;
   onCodeCopyFailed?: (error: unknown) => void;
@@ -58,7 +64,7 @@ function markdownComponents(input: {
   return {
     pre({ children, node: _node, ...props }) {
       const codeBlock = codeBlockFromChildren(children);
-      if (!codeBlock) return <pre {...props}>{children}</pre>;
+      if (!codeBlock || !input.codeCopyEnabled) return <pre {...props}>{children}</pre>;
       const copyLabel = input.copyCodeLabel ?? "Copy code";
       return (
         <div className="slei-code-block" data-slot="markdown-code-block">
