@@ -146,11 +146,12 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain('<div class="select-none border-b bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html).toContain('<div class="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html.slice(headerEnd, headerEnd + 260)).toContain('data-slot="separator"');
-    expect(headerHtml).toContain('data-tauri-drag-region="deep"');
+    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(html).not.toContain("data-tauri-drag-region");
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
-    expect(messageButtonHtml).not.toContain("data-tauri-drag-region");
+    expect(messageButtonHtml).not.toContain("data-desktop-drag-region");
     expect(deleteButtonStart).toBeGreaterThanOrEqual(0);
-    expect(deleteButtonHtml).not.toContain("data-tauri-drag-region");
+    expect(deleteButtonHtml).not.toContain("data-desktop-drag-region");
   });
 
   it("keeps the member header message action clickable inside the drag-enabled header", async () => {
@@ -396,7 +397,8 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
-    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground" data-tauri-drag-region="deep">@coda</span>');
+    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground" data-desktop-drag-region="deep">@coda</span>');
+    expect(html).not.toContain("data-tauri-drag-region");
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('aria-haspopup="dialog"');

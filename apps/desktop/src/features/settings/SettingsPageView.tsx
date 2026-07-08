@@ -75,10 +75,10 @@ export function SettingsPage(input: SettingsPageInput) {
             className="select-none"
             data-slot="workspace-titlebar"
             data-testid="slei-settings-panel-header"
-            data-tauri-drag-region="deep"
+            data-desktop-drag-region="deep"
             icon={settingsPanelIcon(input.activePanel)}
-            subtitle={<span data-tauri-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</span>}
-            title={<span data-tauri-drag-region="deep">{labels.panelTitle[input.activePanel]}</span>}
+            subtitle={<span data-desktop-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</span>}
+            title={<span data-desktop-drag-region="deep">{labels.panelTitle[input.activePanel]}</span>}
           />
 
           {input.activePanel === "account" ? (

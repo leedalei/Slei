@@ -410,7 +410,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
       data-active-view={input.activeView}
       data-font-size={appearance.fontSize}
       data-theme={normalizedTheme}
-      data-tauri-drag-region="deep"
+      data-desktop-drag-region="deep"
       style={shellStyle}
     >
       <Toast message={input.runtimeErrorToastMessage} onDismiss={input.onRuntimeToastDismiss} type={input.runtimeToastType} />

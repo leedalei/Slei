@@ -848,6 +848,14 @@ select:focus-visible {
   backdrop-filter: var(--chrome-surface-filter);
 }
 
+[data-desktop-drag-region="deep"] {
+  -webkit-app-region: drag;
+}
+
+[data-desktop-drag-region="deep"] :is(button, input, textarea, select, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigger"]) {
+  -webkit-app-region: no-drag;
+}
+
 .slei-app-chrome {
   position: relative;
   z-index: 1;

@@ -766,10 +766,13 @@ describe("SleiAppFrame global search navigation", () => {
 
     expect(shell).not.toBeNull();
     expect(shell?.classList.contains("slei-app-shell")).toBe(true);
-    expect(shell?.getAttribute("data-tauri-drag-region")).toBe("deep");
+    expect(shell?.getAttribute("data-desktop-drag-region")).toBe("deep");
+    expect(container.querySelector("[data-tauri-drag-region]")).toBeNull();
     expect(shell?.style.gridTemplateColumns).toBe("");
     expect(shell?.style.getPropertyValue("--app-sidebar-width")).toBe("280px");
     expect(appCss).toContain(".slei-app-shell");
+    expect(appCss).toContain('[data-desktop-drag-region="deep"]');
+    expect(appCss).toContain("-webkit-app-region: drag");
     expect(appCss).toContain("@media (max-width: 760px)");
     expect(appCss).toContain("grid-template-columns: minmax(0, 1fr)");
   });
@@ -796,14 +799,15 @@ describe("SleiAppFrame global search navigation", () => {
     const asset = readFileSync(join(process.cwd(), "src/assets/brand/slei-bubble.svg"), "utf8");
 
     expect(chrome).not.toBeNull();
-    expect(container.querySelector<HTMLElement>(".slei-app-shell")?.getAttribute("data-tauri-drag-region")).toBe("deep");
-    expect(chrome?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(container.querySelector<HTMLElement>(".slei-app-shell")?.getAttribute("data-desktop-drag-region")).toBe("deep");
+    expect(container.querySelector("[data-tauri-drag-region]")).toBeNull();
+    expect(chrome?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(nativeControlsSpace).not.toBeNull();
     expect(nativeControlsSpace?.textContent).toBe("");
     expect(nativeControlsSpace?.querySelectorAll("*")).toHaveLength(0);
     expect(divider).not.toBeNull();
     expect(brand).not.toBeNull();
-    expect(brand?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(brand?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(brand?.textContent).toBe("Slei");
     expect(brand?.querySelector(".slei-brand__name")?.textContent).toBe("Slei");
     expect(brand?.querySelector("strong")).toBeNull();

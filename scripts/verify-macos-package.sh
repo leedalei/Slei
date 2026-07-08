@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONF="apps/desktop/src-tauri/tauri.conf.json"
-
-test -f "$CONF"
-grep -q '"productName": "Slei"' "$CONF"
-grep -q '"active": true' "$CONF"
-grep -q "connect-src ipc:" "$CONF"
-if grep -q "server-url\\|api-key\\|cloud control" "$CONF"; then
-  echo "cloud control marker found in Tauri config" >&2
+if test -d apps/desktop/src-tauri; then
+  echo "active Tauri source directory must not exist" >&2
   exit 1
+fi
+
+set +e
+rg -n \
+  --glob '!scripts/verify-macos-package.sh' \
+  --glob '!scripts/verify-architecture-guardrails.mjs' \
+  "@tauri-apps|src-tauri|tauri dev" \
+  Cargo.toml apps/desktop/package.json apps/desktop/src apps/desktop/scripts scripts .github/workflows
+rg_status=$?
+set -e
+
+if [ "$rg_status" -eq 0 ]; then
+  echo "active Tauri references found" >&2
+  exit 1
+fi
+
+if [ "$rg_status" -ne 1 ]; then
+  echo "active Tauri reference scan failed" >&2
+  exit "$rg_status"
 fi
 
 test -f "workers/claude-agent/package.json"

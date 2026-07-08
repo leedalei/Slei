@@ -809,12 +809,13 @@ describe("ChatPage mention panel", () => {
 
     expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml).toContain('data-tauri-drag-region="deep"');
+    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(html).not.toContain("data-tauri-drag-region");
     expect(headerHtml).toContain("select-none");
     expect(copyButtonStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml.slice(copyButtonStart, copyButtonStart + 220)).not.toContain("data-tauri-drag-region");
+    expect(headerHtml.slice(copyButtonStart, copyButtonStart + 220)).not.toContain("data-desktop-drag-region");
     expect(membersButtonStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml.slice(membersButtonStart, membersButtonStart + 260)).not.toContain("data-tauri-drag-region");
+    expect(headerHtml.slice(membersButtonStart, membersButtonStart + 260)).not.toContain("data-desktop-drag-region");
   });
 
   it("keeps the chat workspace transparent while the composer floats in a frosted shell", () => {

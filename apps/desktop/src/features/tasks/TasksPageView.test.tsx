@@ -181,13 +181,14 @@ describe("TasksPage filters", () => {
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
 
     expect(header).not.toBeNull();
-    expect(header?.getAttribute("data-tauri-drag-region")).toBe("deep");
+    expect(header?.getAttribute("data-desktop-drag-region")).toBe("deep");
+    expect(container?.querySelector("[data-tauri-drag-region]")).toBeNull();
     expect(header?.className).toContain("select-none");
     expect(channelSelect).not.toBeNull();
-    expect(channelSelect?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(channelSelect?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(tabsList?.getAttribute("data-variant")).toBe("soft");
     expect(boardTab).toBeDefined();
-    expect(boardTab?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(boardTab?.hasAttribute("data-desktop-drag-region")).toBe(false);
   });
 
   it("keeps task toolbar filters compact and lets view tabs use the shared segmented surface", async () => {

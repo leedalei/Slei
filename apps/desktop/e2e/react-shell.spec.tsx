@@ -70,12 +70,13 @@ describe("Slei React desktop shell", () => {
 
     expect(navIndex).toBeGreaterThanOrEqual(0);
     expect(html).toContain('class="slei-workspace-sidebar');
-    expect(html).toContain('data-tauri-drag-region="deep"');
+    expect(html).toContain('data-desktop-drag-region="deep"');
     expect(html).toContain('data-slot="workspace-titlebar"');
+    expect(html).not.toContain("data-tauri-drag-region");
     expect(html).not.toContain('aria-label="关闭窗口"');
     expect(html).not.toContain('aria-label="最小化窗口"');
     expect(html).not.toContain('aria-label="最大化窗口"');
-    expect(html).not.toContain("<textarea data-tauri-drag-region");
+    expect(html).not.toContain("<textarea data-desktop-drag-region");
   });
 
   it("marks every workspace page title bar as draggable", () => {
@@ -98,9 +99,10 @@ describe("Slei React desktop shell", () => {
       );
 
       expect(html).toContain('data-slot="workspace-titlebar"');
-      expect(html).toContain('data-tauri-drag-region="deep"');
-      expect(html).not.toContain("<input data-tauri-drag-region");
-      expect(html).not.toContain("<textarea data-tauri-drag-region");
+      expect(html).toContain('data-desktop-drag-region="deep"');
+      expect(html).not.toContain("data-tauri-drag-region");
+      expect(html).not.toContain("<input data-desktop-drag-region");
+      expect(html).not.toContain("<textarea data-desktop-drag-region");
     }
   });
 

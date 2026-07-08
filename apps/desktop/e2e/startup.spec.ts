@@ -1,10 +1,13 @@
-import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 
 const desktopRoot = new URL("..", import.meta.url).pathname;
+const repoRoot = join(desktopRoot, "../..");
 
 async function sha256(path: string) {
   return createHash("sha256").update(await readFile(path)).digest("hex");
@@ -121,6 +124,45 @@ async function icnsPngHashes(path: string) {
   return hashes;
 }
 
+function runMacosPackageVerifier(cwd: string) {
+  return spawnSync("bash", ["scripts/verify-macos-package.sh"], {
+    cwd,
+    encoding: "utf8",
+  });
+}
+
+async function createBoundaryFixture(options: { omitWorkflowDirectory?: boolean } = {}) {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), "slei-macos-boundary-"));
+  const directories = [
+    "apps/desktop/src",
+    "apps/desktop/scripts",
+    "scripts",
+    "workers/claude-agent",
+    "crates/slei-daemon/src/services",
+  ];
+  if (!options.omitWorkflowDirectory) {
+    directories.push(".github/workflows");
+  }
+
+  for (const directory of directories) {
+    await mkdir(join(fixtureRoot, directory), { recursive: true });
+  }
+
+  await copyFile(join(repoRoot, "scripts/verify-macos-package.sh"), join(fixtureRoot, "scripts/verify-macos-package.sh"));
+  await writeFile(join(fixtureRoot, "Cargo.toml"), "[workspace]\nmembers = []\n");
+  await writeFile(join(fixtureRoot, "apps/desktop/package.json"), "{}\n");
+  await writeFile(join(fixtureRoot, "apps/desktop/src/index.ts"), "export const desktopShell = 'electron';\n");
+  await writeFile(join(fixtureRoot, "apps/desktop/scripts/desktop-dev.sh"), "electron dist-electron/electron/main.js\n");
+  await writeFile(join(fixtureRoot, "workers/claude-agent/package.json"), "{}\n");
+  await writeFile(join(fixtureRoot, "crates/slei-daemon/src/services/worker_launch.rs"), "pub fn worker_launch_guard() {}\n");
+  await writeFile(join(fixtureRoot, "scripts/verify-architecture-guardrails.mjs"), "const legacyPath = 'apps/desktop/src-tauri/src';\n");
+  if (!options.omitWorkflowDirectory) {
+    await writeFile(join(fixtureRoot, ".github/workflows/desktop.yml"), "name: desktop\n");
+  }
+
+  return fixtureRoot;
+}
+
 describe("desktop startup contract", () => {
   it("exposes a Vite dev entry that matches the Electron dev URL", async () => {
     const packageJson = JSON.parse(
@@ -197,6 +239,38 @@ describe("desktop startup contract", () => {
     expect(desktopDevScript).not.toContain("pnpm dev &");
     expect(desktopDevScript).not.toContain("cargo run -p slei-daemon");
     expect(desktopDevScript).not.toContain("SLEI_DAEMON_PID");
+  });
+
+  it("fails the macOS package guardrail while the active Tauri source directory exists", () => {
+    const result = runMacosPackageVerifier(repoRoot);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("active Tauri source directory must not exist");
+  });
+
+  it("allows verifier-only Tauri references after the active Tauri source directory is gone", async () => {
+    const fixtureRoot = await createBoundaryFixture();
+    try {
+      const result = runMacosPackageVerifier(fixtureRoot);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("macOS package boundary verified");
+      expect(result.stderr).toBe("");
+    } finally {
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("fails the macOS package guardrail when an active-reference scan path is missing", async () => {
+    const fixtureRoot = await createBoundaryFixture({ omitWorkflowDirectory: true });
+    try {
+      const result = runMacosPackageVerifier(fixtureRoot);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("active Tauri reference scan failed");
+    } finally {
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
   });
 
   it("creates the standard Electron BrowserWindow shell", async () => {
