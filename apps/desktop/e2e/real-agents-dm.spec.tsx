@@ -461,7 +461,7 @@ describe("real agent members and direct messages", () => {
     expect(headerHtml.indexOf('aria-label="复制"')).toBeLessThan(headerHtml.indexOf(">10:00</time>"));
   });
 
-  it("uses localized fallback role labels for unmatched direct message authors", () => {
+  it("omits fallback role labels for unmatched direct message authors", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeConversationId="dm:agent_coda"
@@ -498,7 +498,7 @@ describe("real agent members and direct messages", () => {
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml).not.toContain(">Lei<");
     expect(headerHtml).not.toContain(">@lei<");
-    expect(headerHtml).toContain("用户");
+    expect(headerHtml).not.toContain("用户");
   });
 
   it("uses the member name as the direct message detail title", () => {

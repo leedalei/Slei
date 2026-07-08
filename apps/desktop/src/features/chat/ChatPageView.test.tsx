@@ -1038,7 +1038,7 @@ describe("ChatPage mention panel", () => {
     expect(host.textContent).toContain(messages.chat.sendFailed);
   });
 
-  it("keeps long message role descriptions on one truncated header row", () => {
+  it("keeps agent role descriptions on the header row", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
     const data = createSleiFixtures({
@@ -1066,10 +1066,11 @@ describe("ChatPage mention panel", () => {
       />,
     );
 
-    expect(html).toContain("overflow-hidden whitespace-nowrap");
-    expect(html).toContain("min-w-0 flex-1 truncate");
+    expect(html).toContain('data-slot="message-header"');
+    expect(html).toContain('data-slot="message-actions"');
+    expect(html).toContain(member.role);
+    expect(html).not.toContain(messages.chat.roleLabels.agent);
     expect(html).not.toContain("shrink-0 text-sm text-foreground");
-    expect(html.match(/aria-hidden="true">｜/g)?.length).toBe(1);
   });
 
   it("uses the shared empty illustration for empty channel tasks and files panels", () => {
@@ -1218,7 +1219,7 @@ describe("ChatPage mention panel", () => {
     expect(header).not.toBeNull();
     expect(header?.textContent).not.toContain("leelei");
     expect(header?.textContent).not.toContain("@leelei");
-    expect(header?.textContent).toContain(messages.chat.roleLabels.human);
+    expect(header?.textContent).not.toContain(messages.chat.roleLabels.human);
     expect(header?.textContent).toContain("07-07 19:55");
     expect(row?.textContent).toContain("Electron safe cleanup smoke 1782405205");
   });
@@ -3089,6 +3090,7 @@ describe("ChatPage mention panel", () => {
     expect(taskBubble?.className).toContain("rounded-tr-sm");
     expect(taskBubble?.className).not.toContain("rounded-br-sm");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
+    expect(taskRootCard?.textContent).not.toContain("用户");
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
     expect(replyIcon?.className.baseVal).toContain("size-2.5");
     expect(copyIcon?.className.baseVal).toContain("size-2.5");

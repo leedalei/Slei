@@ -360,6 +360,7 @@ function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): Sle
 }
 
 function messageRoleDescription(message: SleiMessage, members: SleiMember[], messages: DesktopMessages): string {
+  if (message.role === "human") return "";
   return memberMatchingMessage(message, members)?.role ?? messages.chat.roleLabels[message.role];
 }
 
@@ -1101,6 +1102,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       const sourceTask = message.task && message.task.channelId === activeChannel.id && message.task.sourceMessageId === message.id
                         ? message.task
                         : taskBySourceMessageId.get(message.id);
+                      const roleDescription = messageRoleDescription(message, data.members, messages);
                       if (sourceTask) {
                         const saved = savedMessageIds.includes(message.id);
                         const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
@@ -1120,7 +1122,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               onOpen={() => openTaskThread(sourceTask.id)}
                               onSaveToggle={() => toggleMessageSave(message, saved)}
                               avatarIdentity={memberFromMessage(message, data.members)}
-                              roleDescription={messageRoleDescription(message, data.members, messages)}
+                              roleDescription={roleDescription || undefined}
                               saved={saved}
                               saveLabel={saveLabel}
                               side={message.role === "human" ? "outgoing" : "incoming"}
@@ -1156,9 +1158,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                             {side === "incoming" ? avatar : null}
                             <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
                               <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")} data-slot="message-header">
-                                <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
-                                  <span className="min-w-0 flex-1 truncate">{messageRoleDescription(message, data.members, messages)}</span>
-                                </div>
+                                {roleDescription ? (
+                                  <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
+                                    <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
+                                  </div>
+                                ) : null}
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
                                   <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
                                     <SleiIcon className="size-3" name="messageSquare" />

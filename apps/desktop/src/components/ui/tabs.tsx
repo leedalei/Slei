@@ -104,7 +104,7 @@ const TabsTrigger = React.forwardRef<
     ref={ref}
     data-slot="tabs-trigger"
     className={cn(
-      "t-tab relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground",
+      "t-tab relative inline-flex h-7 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-0 text-[12.5px] font-medium text-muted-foreground",
       "transition-colors duration-200 hover:text-foreground",
       "focus-visible:outline-none",
       "disabled:pointer-events-none disabled:opacity-50",

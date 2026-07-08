@@ -141,7 +141,6 @@ describe("task branch sessions", () => {
     expect(html).toContain("data-task-root-entry-actions");
     expect(html).toContain("data-task-root-entry-replies");
     expect(html).toContain("data-avatar-size");
-    expect(html).toContain("用户");
     expect(html).toContain('data-slot="card"');
     expect(html).toContain("10:00");
     const taskEntry = extractHtmlElementByAttribute(html, 'data-task-root-entry="task_1"');
@@ -162,6 +161,7 @@ describe("task branch sessions", () => {
     expect(taskEntryHtml).toContain('aria-label="复制"');
     expect(taskEntryHtml).toContain('aria-label="收藏"');
     expect(taskEntryHtml).toContain('aria-label="打开任务讨论: 实现任务分支, 0 条回复"');
+    expect(taskEntryHtml).not.toContain("用户");
     expect(taskEntryHtml.indexOf("data-task-root-entry-replies")).toBeLessThan(taskEntryHtml.indexOf("data-task-root-entry-status"));
     expect(html).not.toContain('data-message-id="msg_root"');
   });
