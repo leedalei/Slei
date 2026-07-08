@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${SLEI_VERIFY_MACOS_ARM64:-0}" = "1" ]; then
+  host_os="$(uname -s)"
+  host_machine="$(uname -m)"
+  if [ "$host_os" != "Darwin" ] || [ "$host_machine" != "arm64" ]; then
+    echo "macOS package dry-run requires an arm64 macOS runner; got $host_os/$host_machine. Use macos-15-xlarge or a self-hosted arm64 macOS runner." >&2
+    exit 1
+  fi
+fi
+
 if test -d apps/desktop/src-tauri; then
   echo "active Tauri source directory must not exist" >&2
   exit 1
@@ -34,6 +43,11 @@ test -x "apps/desktop/scripts/package-macos.sh"
 
 rg -q '"package:mac": "scripts/package-macos.sh dmg zip"' apps/desktop/package.json || {
   echo "apps/desktop package.json missing package:mac script" >&2
+  exit 1
+}
+
+rg -q '"version": "[0-9]+\.[0-9]+\.[0-9]+"' apps/desktop/package.json || {
+  echo "apps/desktop package.json missing exact Electron app version" >&2
   exit 1
 }
 

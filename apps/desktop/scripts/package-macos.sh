@@ -12,6 +12,12 @@ usage() {
 PACKAGE_ARCH="${SLEI_PACKAGE_ARCH:-arm64}"
 case "$PACKAGE_ARCH" in
   arm64)
+    host_os="$(uname -s)"
+    host_machine="$(uname -m)"
+    if [ "$host_os" != "Darwin" ] || [ "$host_machine" != "arm64" ]; then
+      echo "SLEI_PACKAGE_ARCH=arm64 requires an arm64 macOS host; got $host_os/$host_machine. Use macos-15-xlarge or a self-hosted arm64 macOS runner." >&2
+      exit 1
+    fi
     ;;
   x64|universal)
     echo "SLEI_PACKAGE_ARCH=$PACKAGE_ARCH is reserved for a later packaging task; only arm64 is supported now." >&2

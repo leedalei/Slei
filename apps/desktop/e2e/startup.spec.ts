@@ -106,6 +106,7 @@ async function createBoundaryFixture(options: { omitWorkflowDirectory?: boolean 
     join(fixtureRoot, "apps/desktop/package.json"),
     JSON.stringify(
       {
+        version: "0.1.0",
         scripts: {
           "package:mac": "scripts/package-macos.sh dmg zip",
           "package:mac:dir": "scripts/package-macos.sh dir",
@@ -250,11 +251,13 @@ describe("desktop startup contract", () => {
     const packageJson = JSON.parse(
       await readFile(join(desktopRoot, "package.json"), "utf8"),
     ) as {
+      version?: string;
       scripts?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
     const builderConfig = await readFile(join(desktopRoot, "electron-builder.yml"), "utf8");
     const packageScript = await readFile(join(desktopRoot, "scripts/package-macos.sh"), "utf8");
+    const packageVerifier = await readFile(join(repoRoot, "scripts/verify-macos-package.sh"), "utf8");
 
     expectYamlValue(builderConfig, "appId", "ai.slei.desktop");
     expectYamlValue(builderConfig, "productName", "Slei");
@@ -272,12 +275,16 @@ describe("desktop startup contract", () => {
       ["extraResources:", "  - from: dist-native/darwin-arm64", "    to: native/darwin-arm64"].join("\n"),
     );
     expectYamlValue(builderConfig, "artifactName", "Slei-${version}-${arch}.${ext}");
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.["package:mac"]).toBe("scripts/package-macos.sh dmg zip");
     expect(packageJson.scripts?.["package:mac:dir"]).toBe("scripts/package-macos.sh dir");
     expect(packageJson.scripts?.["prepare:package-resources"]).toBe("node scripts/prepare-package-resources.mjs");
     expect(packageJson.devDependencies?.["electron-builder"]).toBe("26.15.3");
     expect(packageScript).toContain('PACKAGE_ARCH="${SLEI_PACKAGE_ARCH:-arm64}"');
     expect(packageScript).toContain("x64|universal)");
+    expect(packageScript).toContain("uname -m");
+    expect(packageVerifier).toContain("SLEI_VERIFY_MACOS_ARM64");
+    expect(packageVerifier).toContain("uname -m");
     expect(packageScript).toContain("cargo build --release -p slei-daemon -p slei-cli");
     expectInOrder(packageScript, [
       "pnpm build",
@@ -289,6 +296,29 @@ describe("desktop startup contract", () => {
       "node scripts/package-resource-check.mjs --root .",
       'pnpm exec electron-builder --config electron-builder.yml --mac "${targets[@]}" --arm64',
     ]);
+  });
+
+  it("declares a real CI macOS arm64 Electron package dry run", async () => {
+    const ciWorkflow = await readFile(join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+    const packageJob = ciWorkflow.slice(ciWorkflow.indexOf("package-macos-arm64:"));
+
+    expect(packageJob).toContain("package-macos-arm64:");
+    expect(packageJob).toContain("runs-on: macos-15-xlarge");
+    expect(packageJob).toContain("SLEI_VERIFY_MACOS_ARM64: \"1\"");
+    expectInOrder(packageJob, [
+      "package-macos-arm64:",
+      "uses: actions/checkout@v4",
+      "uses: pnpm/action-setup@v4",
+      "uses: actions/setup-node@v4",
+      "uses: dtolnay/rust-toolchain@stable",
+      "pnpm install --frozen-lockfile",
+      "Verify Electron macOS package boundary",
+      "bash scripts/verify-macos-package.sh",
+      "Build Electron macOS app directory",
+      "pnpm --filter @slei/desktop package:mac:dir",
+    ]);
+    expect(ciWorkflow).not.toContain("SLEI_PACKAGE_ARCH: x64");
+    expect(ciWorkflow).not.toContain("package:mac:dir || true");
   });
 
   it.each([
