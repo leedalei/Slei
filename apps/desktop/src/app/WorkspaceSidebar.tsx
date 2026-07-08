@@ -510,7 +510,6 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
     <aside
       aria-label={input.messages.shell.workspaceSidebar.workspace}
       className="slei-workspace-sidebar h-full min-h-0 text-sidebar-foreground max-[760px]:hidden"
-      data-desktop-drag-region="deep"
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="slei-workspace-sidebar__header shrink-0 px-3 pb-2 pt-5" data-slot="workspace-sidebar-header">

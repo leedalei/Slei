@@ -18,6 +18,7 @@ import { DesktopDaemonError } from "./daemon-http";
 const electronMock = vi.hoisted(() => ({
   appGetAppPath: vi.fn(() => "/Applications/Slei.app/Contents/Resources/app.asar"),
   appGetPath: vi.fn(() => "/Users/leelei/Library/Application Support/Slei"),
+  appSetName: vi.fn(),
   browserWindowInstances: [] as Array<{
     loadFile: ReturnType<typeof vi.fn>;
     loadURL: ReturnType<typeof vi.fn>;
@@ -37,6 +38,8 @@ const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
   ipcHandle: vi.fn(),
   ipcOn: vi.fn(),
+  nativeImageCreateFromPath: vi.fn((path: string) => ({ path })),
+  setDockIcon: vi.fn(),
   registerSchemesAsPrivileged: vi.fn(),
 }));
 
@@ -64,10 +67,14 @@ vi.mock("node:crypto", () => ({
 
 vi.mock("electron", () => ({
   app: {
+    dock: {
+      setIcon: electronMock.setDockIcon,
+    },
     getAppPath: electronMock.appGetAppPath,
     getPath: electronMock.appGetPath,
     isPackaged: false,
     on: vi.fn(),
+    setName: electronMock.appSetName,
     whenReady: vi.fn(() => new Promise(() => undefined)),
   },
   BrowserWindow: Object.assign(electronMock.BrowserWindow, {
@@ -77,6 +84,9 @@ vi.mock("electron", () => ({
     handle: electronMock.ipcHandle,
     on: electronMock.ipcOn,
   },
+  nativeImage: {
+    createFromPath: electronMock.nativeImageCreateFromPath,
+  },
   protocol: {
     handle: electronMock.handle,
     registerSchemesAsPrivileged: electronMock.registerSchemesAsPrivileged,
@@ -84,6 +94,18 @@ vi.mock("electron", () => ({
 }));
 
 describe("electron main bootstrap helpers", () => {
+  it("configures Slei app identity and dock icon in development", () => {
+    (app as unknown as { isPackaged: boolean }).isPackaged = false;
+
+    createMainWindow();
+
+    expect(electronMock.appSetName).toHaveBeenCalledWith("Slei");
+    expect(electronMock.nativeImageCreateFromPath).toHaveBeenCalledWith(expect.stringContaining("build/icon.icns"));
+    expect(electronMock.setDockIcon).toHaveBeenCalledWith(expect.objectContaining({
+      path: expect.stringContaining("build/icon.icns"),
+    }));
+  });
+
   it("redacts the generated packaged daemon token when startup fails before connection", async () => {
     (app as unknown as { isPackaged: boolean }).isPackaged = true;
     lifecycleMock.ensureDaemon.mockRejectedValueOnce(

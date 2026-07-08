@@ -127,7 +127,7 @@ afterEach(async () => {
 });
 
 describe("MembersPage agent details", () => {
-  it("makes the member detail header draggable without marking action buttons as drag regions", () => {
+  it("keeps the member detail header outside native drag regions", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(renderMembersPage({ messages }));
     const headerStart = html.indexOf('data-testid="slei-member-detail-header"');
@@ -146,14 +146,14 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain('<div class="select-none border-b bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html).toContain('<div class="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header"');
     expect(html.slice(headerEnd, headerEnd + 260)).toContain('data-slot="separator"');
-    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(headerHtml).not.toContain("data-desktop-drag-region");
     expect(messageButtonStart).toBeGreaterThanOrEqual(0);
     expect(messageButtonHtml).not.toContain("data-desktop-drag-region");
     expect(deleteButtonStart).toBeGreaterThanOrEqual(0);
     expect(deleteButtonHtml).not.toContain("data-desktop-drag-region");
   });
 
-  it("keeps the member header message action clickable inside the drag-enabled header", async () => {
+  it("keeps the member header message action clickable", async () => {
     const messages = createDesktopMessages("zh-CN");
     const onMessage = vi.fn();
     const host = await mount(renderMembersPage({ messages, onMessage }));
@@ -396,7 +396,7 @@ describe("MembersPage agent details", () => {
     expect(html).not.toContain(`>${messages.members.message}<`);
     expect(html).toContain(`>${messages.members.deleteAgent}<`);
     expect(html.match(/@coda/g)).toHaveLength(1);
-    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground" data-desktop-drag-region="deep">@coda</span>');
+    expect(html).toContain('<span class="truncate text-sm font-medium text-muted-foreground">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('aria-haspopup="dialog"');

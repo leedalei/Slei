@@ -77,23 +77,21 @@ export function ComputersPage(input: {
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent"
       data-settings-embedded-detail={layout === "settings" ? "devices" : undefined}
     >
-      <div className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header" data-desktop-drag-region="deep">
+      <div className="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header">
         <PageHeader
           data-slot="workspace-titlebar"
-          data-desktop-drag-region="deep"
           icon={sleiIcons.computer}
           subtitle={(
-            <span className="grid min-w-0 gap-2" data-desktop-drag-region="deep">
-              <span className="truncate text-sm text-muted-foreground" data-desktop-drag-region="deep">{selectedNode.device.hostname}</span>
+            <span className="grid min-w-0 gap-2">
+              <span className="truncate text-sm text-muted-foreground">{selectedNode.device.hostname}</span>
               <StatusBadge
                 className="w-fit"
-                data-desktop-drag-region="deep"
                 label={selectedNode.status === "connected" ? input.messages.computers.connected : input.messages.computers.offline}
                 status={selectedNode.status}
               />
             </span>
           )}
-          title={<span data-desktop-drag-region="deep">{selectedNode.name}</span>}
+          title={<span>{selectedNode.name}</span>}
         />
       </div>
 

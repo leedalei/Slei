@@ -328,9 +328,9 @@ export function MembersPage(input: {
     >
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
       <Tabs className="contents" value={activeTab} onValueChange={(value) => setActiveTab(value as MemberTab)}>
-        <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header" data-desktop-drag-region="deep">
-          <div className="flex min-w-0 items-center gap-3" data-desktop-drag-region="deep">
-            <span className="relative inline-flex shrink-0" data-slot="member-avatar" data-desktop-drag-region="deep">
+        <div className="select-none bg-transparent px-6 py-5" data-testid="slei-member-detail-header">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="relative inline-flex shrink-0" data-slot="member-avatar">
               <MemberAvatar identity={selectedMember} large>
                 {canMessage ? (
                   <AvatarBadge asChild>
@@ -349,23 +349,21 @@ export function MembersPage(input: {
             <PageHeader
               className="min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto]"
               data-slot="workspace-titlebar"
-              data-desktop-drag-region="deep"
               icon={undefined}
               title={(
-                <span className="flex min-w-0 flex-wrap items-center gap-2" data-desktop-drag-region="deep">
-                  <span className="min-w-0 truncate" data-desktop-drag-region="deep">{memberDetails.name}</span>
-                  {showHandle ? <span className="truncate text-sm font-medium text-muted-foreground" data-desktop-drag-region="deep">{selectedMember.handle}</span> : null}
+                <span className="flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 truncate">{memberDetails.name}</span>
+                  {showHandle ? <span className="truncate text-sm font-medium text-muted-foreground">{selectedMember.handle}</span> : null}
                   <StatusBadge
                     className="w-fit"
-                    data-desktop-drag-region="deep"
                     label={input.messages.members.online}
                     status={selectedMember.runtimeStatus}
                   />
                 </span>
               )}
               subtitle={(
-                <span className="flex min-w-0 items-center gap-1.5" data-desktop-drag-region="deep">
-                  <span className="truncate text-sm text-muted-foreground" data-desktop-drag-region="deep">{memberDetails.description}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-sm text-muted-foreground">{memberDetails.description}</span>
                   <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6 [&_svg]:size-3" onClick={() => void copyDescription()} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
                     <SleiIcon className="size-3.5" name="copy" />
                   </TooltipButton>

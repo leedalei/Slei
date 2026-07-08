@@ -50,7 +50,7 @@ describe("Slei React desktop shell", () => {
     expect(html).not.toContain("Slei 智能体</strong>");
   });
 
-  it("marks shell chrome and page title bars as draggable", () => {
+  it("marks only the app shell as draggable", () => {
     const html = renderToStaticMarkup(
       <SleiAppFrame
         activeView="chat"
@@ -72,6 +72,7 @@ describe("Slei React desktop shell", () => {
     expect(html).toContain('class="slei-workspace-sidebar');
     expect(html).toContain('data-desktop-drag-region="deep"');
     expect(html).toContain('data-slot="workspace-titlebar"');
+    expect(html).not.toContain('data-slot="workspace-titlebar" data-desktop-drag-region');
     expect(html).not.toContain("data-tauri-drag-region");
     expect(html).not.toContain('aria-label="关闭窗口"');
     expect(html).not.toContain('aria-label="最小化窗口"');
@@ -79,7 +80,7 @@ describe("Slei React desktop shell", () => {
     expect(html).not.toContain("<textarea data-desktop-drag-region");
   });
 
-  it("marks every workspace page title bar as draggable", () => {
+  it("keeps every workspace page title bar outside native drag regions", () => {
     const data = createSleiFixtures({ members: createDemoMembers() });
     const views = ["chat", "search", "tasks", "members", "computers", "settings"] as const;
 
@@ -100,6 +101,7 @@ describe("Slei React desktop shell", () => {
 
       expect(html).toContain('data-slot="workspace-titlebar"');
       expect(html).toContain('data-desktop-drag-region="deep"');
+      expect(html).not.toContain('data-slot="workspace-titlebar" data-desktop-drag-region');
       expect(html).not.toContain("data-tauri-drag-region");
       expect(html).not.toContain("<input data-desktop-drag-region");
       expect(html).not.toContain("<textarea data-desktop-drag-region");

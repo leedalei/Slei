@@ -172,7 +172,7 @@ afterEach(async () => {
 });
 
 describe("TasksPage filters", () => {
-  it("makes the whole tasks header draggable while keeping filters and tabs interactive", async () => {
+  it("keeps the tasks header outside native drag regions while filters and tabs remain interactive", async () => {
     await mountTasksPage();
 
     const header = container?.querySelector('[data-testid="slei-tasks-header"]');
@@ -181,7 +181,7 @@ describe("TasksPage filters", () => {
     const boardTab = Array.from(header?.querySelectorAll('button[role="tab"]') ?? []).find((button) => button.textContent?.includes("看板"));
 
     expect(header).not.toBeNull();
-    expect(header?.getAttribute("data-desktop-drag-region")).toBe("deep");
+    expect(header?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(header?.className).toContain("select-none");
     expect(channelSelect).not.toBeNull();
     expect(channelSelect?.hasAttribute("data-desktop-drag-region")).toBe(false);

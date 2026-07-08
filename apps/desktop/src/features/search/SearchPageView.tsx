@@ -190,7 +190,7 @@ export function SearchPage({
 
   return (
     <section aria-label={messages.search.title} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-transparent">
-      <form className="border-b px-6 py-5" data-slot="workspace-titlebar" data-desktop-drag-region="deep" onSubmit={submitSearch}>
+      <form className="border-b px-6 py-5" data-slot="workspace-titlebar" onSubmit={submitSearch}>
         <div className="flex w-full flex-col justify-between gap-3 md:flex-row md:items-center" data-search-control-layout="true">
           <div aria-label={messages.search.filters.title} className="flex flex-wrap gap-2 md:justify-start" data-search-filter-panel="true">
             <FilterSelect

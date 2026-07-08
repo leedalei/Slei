@@ -122,8 +122,11 @@ describe("settings preferences", () => {
     expect(html).toContain("Lei");
     expect(html).toContain("@lei");
     expect(html).not.toContain('aria-label="编辑@"');
-    expect(html).toContain('data-settings-avatar-option="pixel-sun"');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('data-settings-account-identity="true"');
+    expect(html).toContain('data-settings-avatar-panel="true"');
+    expect(html).toContain('data-settings-avatar-randomize="true"');
+    expect(html).toContain('aria-label="随机生成头像"');
+    expect(html).toContain('data-avatar-size="large"');
   });
 
   it("renders account profile controls with the local fallback when profile is null", () => {
@@ -141,7 +144,8 @@ describe("settings preferences", () => {
     expect(html).not.toContain("账户资料暂不可用");
     expect(html).toContain('aria-label="编辑显示名称"');
     expect(html).toContain("@local");
-    expect(html).toContain('data-settings-avatar-option="pixel-sun"');
+    expect(html).toContain('data-settings-account-identity="true"');
+    expect(html).toContain('data-settings-avatar-randomize="true"');
   });
 
   it("renders pending preference and save error state without preference save buttons", () => {
@@ -189,7 +193,7 @@ describe("settings preferences", () => {
     expect(html.match(/<button(?=[^>]*role="switch")(?=[^>]*disabled="")[^>]*>/g)).toHaveLength(3);
   });
 
-  it("disables account avatar choices while any profile field is pending", () => {
+  it("disables account avatar actions while any profile field is pending", () => {
     const html = renderToStaticMarkup(
       <SettingsPage
         activePanel="account"
@@ -205,7 +209,8 @@ describe("settings preferences", () => {
     );
 
     expect(html).toContain('data-editable-saving="true"');
-    expect(html.match(/<button(?=[^>]*data-settings-avatar-option="pixel-[^"]+")(?=[^>]*disabled="")[^>]*>/g)).toHaveLength(4);
+    expect(html).toMatch(/<button(?=[^>]*data-settings-avatar-randomize="true")(?=[^>]*disabled="")[^>]*>/);
+    expect(html).toMatch(/<button(?=[^>]*data-settings-avatar-upload-trigger="true")(?=[^>]*disabled="")[^>]*>/);
   });
 
   it("consumes rejected fire-and-forget settings callbacks", async () => {

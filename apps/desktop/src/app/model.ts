@@ -167,6 +167,13 @@ export const profileAvatarPresets = [
   { id: "pixel-spark", labelKey: "pixelSpark", name: "Pixel Spark" },
 ];
 
+export function randomProfileAvatarPresetId(currentAvatar: string | undefined, random: () => number = Math.random): string {
+  const candidates = profileAvatarPresets.filter((preset) => preset.id !== currentAvatar);
+  const pool = candidates.length > 0 ? candidates : profileAvatarPresets;
+  const value = Math.min(Math.max(random(), 0), 0.999999);
+  return pool[Math.floor(value * pool.length)]?.id ?? currentAvatar ?? profileAvatarPresets[0]?.id ?? "";
+}
+
 export function isProfileImageAvatar(avatar: string | undefined): boolean {
   return /^profile-image:[a-fA-F0-9]{64}\.(png|jpg|jpeg|webp)$/.test(avatar ?? "");
 }

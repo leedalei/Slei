@@ -770,8 +770,11 @@ describe("SleiAppFrame global search navigation", () => {
     expect(shell?.style.gridTemplateColumns).toBe("");
     expect(shell?.style.getPropertyValue("--app-sidebar-width")).toBe("280px");
     expect(appCss).toContain(".slei-app-shell");
-    expect(appCss).toContain('[data-desktop-drag-region="deep"]');
+    expect(appCss).toContain('.slei-app-shell[data-desktop-drag-region="deep"]');
     expect(appCss).toContain("-webkit-app-region: drag");
+    expect(appCss).toContain(".slei-app-content,\n.slei-settings-overlay,");
+    expect(appCss).toContain("-webkit-app-region: no-drag;");
+    expect(appCss).not.toMatch(/^\[data-desktop-drag-region="deep"\] \{/m);
     expect(appCss).toContain("@media (max-width: 760px)");
     expect(appCss).toContain("grid-template-columns: minmax(0, 1fr)");
   });
@@ -803,6 +806,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(nativeControlsSpace).not.toBeNull();
     expect(nativeControlsSpace?.textContent).toBe("");
     expect(nativeControlsSpace?.querySelectorAll("*")).toHaveLength(0);
+    expect(nativeControlsSpace?.className).toContain("slei-native-window-controls-space");
     expect(divider).not.toBeNull();
     expect(brand).not.toBeNull();
     expect(brand?.hasAttribute("data-desktop-drag-region")).toBe(false);
@@ -1486,7 +1490,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
     expect(appCss).toContain("--app-chrome-height: 36px");
-    expect(appCss).toContain("--app-native-controls-width: 52px");
+    expect(appCss).toContain("--app-native-controls-width: 70px");
     expect(appCss).toContain("--app-card-gap: 8px");
     expect(appCss).toContain("--app-shell-inline-inset: 12px");
     expect(appCss).toContain("--app-shell-bottom-inset: 12px");

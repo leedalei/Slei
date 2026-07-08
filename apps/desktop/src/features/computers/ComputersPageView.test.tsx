@@ -69,7 +69,7 @@ function cleanupComputersPage(root: Root, host: HTMLElement) {
 }
 
 describe("ComputersPage header", () => {
-  it("makes the computer detail header draggable and text unselectable", () => {
+  it("keeps the computer detail header outside native drag regions and text unselectable", () => {
     const html = renderToStaticMarkup(
       <ComputersPage
         members={[]}
@@ -86,7 +86,7 @@ describe("ComputersPage header", () => {
     expect(headerHtml).toContain("data-slei-status");
     expect(html).not.toContain('<header class="select-none border-b px-6 py-5"');
     expect(html).toContain('<div class="select-none border-b px-6 py-5" data-testid="slei-computer-detail-header"');
-    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(headerHtml).not.toContain("data-desktop-drag-region");
     expect(headerHtml).toContain("Lei MacBook");
     expect(headerHtml).toContain("MateBook-Pro-Max-3.local");
   });

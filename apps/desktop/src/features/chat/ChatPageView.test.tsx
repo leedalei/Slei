@@ -785,7 +785,7 @@ describe("ChatPage mention panel", () => {
     expect(html).not.toContain('data-testid="slei-channel-project-edit"');
   });
 
-  it("makes the full channel header draggable without marking header buttons as drag regions", () => {
+  it("keeps the channel header and timeline outside native drag regions", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0 }],
@@ -809,7 +809,7 @@ describe("ChatPage mention panel", () => {
 
     expect(headerMarker).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(headerHtml).not.toContain("data-desktop-drag-region");
     expect(headerHtml).toContain("select-none");
     expect(copyButtonStart).toBeGreaterThanOrEqual(0);
     expect(headerHtml.slice(copyButtonStart, copyButtonStart + 220)).not.toContain("data-desktop-drag-region");
@@ -2122,6 +2122,10 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("relative h-full min-h-0 overflow-visible");
     expect(html).toContain('data-testid="slei-chat-timeline"');
     expect(html).toContain("h-full min-h-0 overflow-y-auto");
+    const timelineMarker = html.indexOf('data-testid="slei-chat-timeline"');
+    const timelineStart = html.lastIndexOf("<div", timelineMarker);
+    const timelineEnd = html.indexOf(">", timelineMarker);
+    expect(html.slice(timelineStart, timelineEnd)).not.toContain("data-desktop-drag-region");
     expect(html).toContain("--chat-composer-reserve:144px");
     expect(html).not.toContain("pointer-events-none translate-x-full");
   });
@@ -2408,6 +2412,11 @@ describe("ChatPage mention panel", () => {
     expect(removeButton?.className).toContain("bg-destructive");
     expect(removeButton?.className).toContain("text-white");
     expect(removeButton?.className).toContain("hover:bg-destructive/90");
+    expect(removeButton?.className).toContain("h-7");
+    expect(removeButton?.className).toContain("text-xs");
+    expect(removeButton?.className).toContain("px-2.5");
+    expect(removeButton?.className).not.toContain("h-8");
+    expect(removeButton?.className).not.toContain("px-3");
     expect(removeButton?.className).not.toContain("variant=\"ghost\"");
     expect(removeButton?.className).not.toContain("text-[14px]");
     expect(removeButton?.className).not.toContain("hover:bg-destructive/10");

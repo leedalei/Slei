@@ -47,11 +47,13 @@ describe("desktop interaction fixes", () => {
     );
 
     expect(html).toContain('data-settings-panel="account"');
-    expect(html).toContain('aria-label="像素头像选项"');
+    expect(html).toContain('data-settings-account-identity="true"');
+    expect(html).toContain('data-settings-avatar-randomize="true"');
+    expect(html).toContain('aria-label="随机生成头像"');
     expect(html).toContain("显示名称");
     expect(html).toContain("@");
     expect(html).toContain("头像");
-    expect(html).toContain("像素头像选项");
+    expect(html).toContain("随机生成一个像素头像，或上传自己的头像图片。");
     expect(html).toContain("Lei");
     expect(html).toContain("@lei");
   });

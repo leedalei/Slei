@@ -916,34 +916,32 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   return (
     <section className="relative grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-transparent" data-slot="chat-page">
       <Toast message={toast.message} onDismiss={dismissToast} type={toast.type} />
-      <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header" data-desktop-drag-region="deep">
-        <div className="min-w-0 flex-1" data-slot="workspace-titlebar" data-desktop-drag-region="deep">
-          <div className="min-w-0" data-desktop-drag-region="deep">
-            <div className="flex min-w-0 items-center gap-2" data-desktop-drag-region="deep">
+      <header className="flex min-h-16 select-none items-center justify-between gap-3 border-b bg-transparent px-4 py-3" data-testid="slei-channel-header">
+        <div className="min-w-0 flex-1" data-slot="workspace-titlebar">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
               <h1
                 aria-label={detailAriaLabel}
                 className="inline-flex max-w-full min-w-0 items-center gap-2 text-lg font-semibold"
                 data-testid={dmMember ? undefined : "slei-channel-title"}
-                data-desktop-drag-region="deep"
               >
                 {dmMember ? (
-                  <span className="inline-flex shrink-0" data-desktop-drag-region="deep">
+                  <span className="inline-flex shrink-0">
                     <SleiIcon name="chat" size={18} />
                   </span>
                 ) : null}
                 {dmMember ? (
-                  <span className="truncate" data-desktop-drag-region="deep">{detailTitle}</span>
+                  <span className="truncate">{detailTitle}</span>
                 ) : (
-                  <span className="inline-flex min-w-0 items-baseline truncate" data-desktop-drag-region="deep">
+                  <span className="inline-flex min-w-0 items-baseline truncate">
                     <span
                       aria-hidden="true"
                       className="mr-2 shrink-0 select-none text-[var(--text-color-3)] font-bold"
                       data-slot="channel-title-hash-mark"
-                      data-desktop-drag-region="deep"
                     >
                       #
                     </span>
-                    <span className="truncate" data-desktop-drag-region="deep">{detailTitle}</span>
+                    <span className="truncate">{detailTitle}</span>
                   </span>
                 )}
               </h1>
@@ -958,8 +956,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                 </>
               ) : null}
             </div>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground" data-desktop-drag-region="deep">
-              <p className="truncate" data-desktop-drag-region="deep">{detailSubtitle}</p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+              <p className="truncate">{detailSubtitle}</p>
               {showProjectEditor ? (
                 <Popover open={projectEditorOpen} onOpenChange={setProjectEditorOpen}>
                   <Tooltip>

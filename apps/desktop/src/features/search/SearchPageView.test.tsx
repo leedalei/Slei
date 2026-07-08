@@ -222,13 +222,13 @@ async function pressEnter(input: HTMLInputElement) {
 }
 
 describe("SearchPage global search UI", () => {
-  it("makes the search title bar draggable while keeping the search input interactive", async () => {
+  it("keeps the search title bar outside native drag regions while the search input stays interactive", async () => {
     const rootElement = await renderSearchPage();
     const form = rootElement.querySelector<HTMLFormElement>('form[data-slot="workspace-titlebar"]');
     const searchInput = inputByLabel(rootElement, "Global search input");
 
     expect(form).toBeInstanceOf(HTMLFormElement);
-    expect(form?.getAttribute("data-desktop-drag-region")).toBe("deep");
+    expect(form?.hasAttribute("data-desktop-drag-region")).toBe(false);
     expect(searchInput.hasAttribute("data-desktop-drag-region")).toBe(false);
   });
 

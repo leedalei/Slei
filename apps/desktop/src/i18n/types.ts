@@ -354,6 +354,7 @@ export type DesktopMessages = {
     avatar: string;
     avatarHint: string;
     avatarPresets: string;
+    avatarRandomize: string;
     avatarUpload: string;
     avatarUploadInvalid: string;
     connectedComputers: string;

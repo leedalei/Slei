@@ -5,6 +5,9 @@ export function createWindowVisualOptions({
 }: {
   platform: NodeJS.Platform;
 }): BrowserWindowConstructorOptions {
+  const macosTrafficLightDiameter = 14;
+  const appChromeHeight = 36;
+  const centeredTrafficLightY = (appChromeHeight - macosTrafficLightDiameter) / 2;
   const baseOptions: BrowserWindowConstructorOptions = {
     width: 1280,
     height: 800,
@@ -19,7 +22,7 @@ export function createWindowVisualOptions({
   return {
     ...baseOptions,
     titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 16 },
+    trafficLightPosition: { x: 16, y: centeredTrafficLightY },
     transparent: true,
     backgroundColor: "#00000000",
     vibrancy: "under-window",

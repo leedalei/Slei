@@ -68,7 +68,7 @@ afterEach(async () => {
 });
 
 describe("SettingsPage header", () => {
-  it("makes the settings panel header draggable and text unselectable", () => {
+  it("keeps the settings panel header outside native drag regions and text unselectable", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(
       <SettingsPage
@@ -89,7 +89,7 @@ describe("SettingsPage header", () => {
 
     expect(markerStart).toBeGreaterThanOrEqual(0);
     expect(html).toContain("data-slei-page-header");
-    expect(headerHtml).toContain('data-desktop-drag-region="deep"');
+    expect(headerHtml).not.toContain("data-desktop-drag-region");
     expect(headerHtml).toContain("select-none");
     expect(headerHtml).toContain("Language");
     expect(headerHtml).toContain("Region");
@@ -310,12 +310,48 @@ describe("SettingsPage header", () => {
       />,
     );
 
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+
     await act(async () => {
-      profileContainer.querySelector<HTMLButtonElement>('[data-settings-avatar-option="pixel-moon"]')?.click();
+      profileContainer.querySelector<HTMLButtonElement>('[data-settings-avatar-randomize="true"]')?.click();
     });
     await act(async () => undefined);
 
     expect(onProfileChange).toHaveBeenCalledWith({ avatar: "pixel-moon" });
+    randomSpy.mockRestore();
+  });
+
+  it("renders account identity as a compact avatar-led profile editor", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const root = await mountSettingsPage(
+      <SettingsPage
+        activePanel="account"
+        appearance={{ theme: "light", fontSize: "md" }}
+        locale="zh-CN"
+        messages={messages}
+        nodes={[localNode]}
+        notifications={{ approvals: true, humanReplies: false, mentions: true }}
+        onProfileAvatarUpload={vi.fn()}
+        onProfileChange={vi.fn()}
+        profile={{ displayName: "Lei", handle: "lei", avatar: "pixel-sun" }}
+        timeZone="Asia/Shanghai"
+      />,
+    );
+    const identityEditor = root.querySelector<HTMLElement>('[data-settings-account-identity="true"]');
+    const avatarPanel = root.querySelector<HTMLElement>('[data-settings-avatar-panel="true"]');
+    const profileFields = root.querySelector<HTMLElement>('[data-settings-profile-fields="true"]');
+    const randomizeButton = root.querySelector<HTMLButtonElement>('[data-settings-avatar-randomize="true"]');
+    const avatar = avatarPanel?.querySelector<HTMLElement>('[data-slot="avatar"]');
+    const legacyPreset = root.querySelector('[data-settings-avatar-option="pixel-sun"]');
+
+    expect(identityEditor?.className).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(avatarPanel?.className).toContain("place-items-center");
+    expect(profileFields?.textContent).toContain("显示名称");
+    expect(profileFields?.textContent).toContain("@lei");
+    expect(randomizeButton?.getAttribute("aria-label")).toBe("随机生成头像");
+    expect(randomizeButton?.className).toContain("rounded-full");
+    expect(avatar?.getAttribute("data-avatar-size")).toBe("large");
+    expect(legacyPreset).toBeNull();
   });
 
   it("renders a localized avatar upload control in the account panel", async () => {

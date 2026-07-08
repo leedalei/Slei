@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createWindowVisualOptions } from "./window-options";
 
 describe("createWindowVisualOptions", () => {
-  it("enables polished macOS chrome and keeps stable sizing", () => {
+  it("enables polished macOS chrome and centers traffic lights on the app chrome", () => {
     expect(createWindowVisualOptions({ platform: "darwin" })).toEqual(
       expect.objectContaining({
         width: 1280,
@@ -10,7 +10,7 @@ describe("createWindowVisualOptions", () => {
         minWidth: 960,
         minHeight: 640,
         titleBarStyle: "hiddenInset",
-        trafficLightPosition: { x: 16, y: 16 },
+        trafficLightPosition: { x: 16, y: 11 },
         transparent: true,
         backgroundColor: "#00000000",
         vibrancy: "under-window",

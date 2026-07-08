@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, protocol } from "electron";
 import type { WebContents } from "electron";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DAEMON_ENDPOINT, DESKTOP_DAEMON_TOKEN, VITE_DEV_URL } from "./constants.js";
@@ -45,7 +46,22 @@ const daemonEventSubscriptions = new Map<string, DaemonEventSubscription>();
 
 const electronDirname = dirname(fileURLToPath(import.meta.url));
 
+export function configureAppIdentity(): void {
+  app.setName("Slei");
+
+  if (process.platform !== "darwin" || app.isPackaged) {
+    return;
+  }
+
+  const dockIconPath = join(electronDirname, "..", "..", "build", "icon.icns");
+  if (existsSync(dockIconPath)) {
+    app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
+  }
+}
+
 export function createMainWindow(): BrowserWindow {
+  configureAppIdentity();
+
   const window = new BrowserWindow({
     ...createWindowVisualOptions({
       platform: process.platform,

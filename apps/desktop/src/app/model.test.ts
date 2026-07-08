@@ -18,6 +18,7 @@ import {
   mentionSuggestions,
   mergeMessagePage,
   profileAvatarImageUrl,
+  randomProfileAvatarPresetId,
   removeComposerSlashQuery,
   sendChatComposerMessage,
   shouldRefreshChannelMessages,
@@ -95,6 +96,12 @@ describe("profile avatar image helpers", () => {
   it("builds slei-avatar URLs for profile image avatars", () => {
     expect(profileAvatarImageUrl("profile-image:" + "b".repeat(64) + ".webp"))
       .toBe("slei-avatar:///bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.webp");
+  });
+
+  it("randomizes to a preset avatar different from the current preset when possible", () => {
+    expect(randomProfileAvatarPresetId("pixel-sun", () => 0)).toBe("pixel-moon");
+    expect(randomProfileAvatarPresetId("pixel-sun", () => 0.99)).toBe("pixel-spark");
+    expect(randomProfileAvatarPresetId("profile-image:" + "a".repeat(64) + ".png", () => 0)).toBe("pixel-sun");
   });
 });
 

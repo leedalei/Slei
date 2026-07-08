@@ -125,7 +125,7 @@
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
   --app-chrome-height: 36px;
-  --app-native-controls-width: 52px;
+  --app-native-controls-width: 70px;
   --app-card-gap: 8px;
   --app-shell-inline-inset: 12px;
   --app-shell-bottom-inset: 12px;
@@ -848,11 +848,18 @@ select:focus-visible {
   backdrop-filter: var(--chrome-surface-filter);
 }
 
-[data-desktop-drag-region="deep"] {
+.slei-app-shell[data-desktop-drag-region="deep"] {
   -webkit-app-region: drag;
 }
 
-[data-desktop-drag-region="deep"] :is(button, input, textarea, select, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigger"]) {
+.slei-app-content,
+.slei-settings-overlay,
+.slei-workspace-sidebar-card,
+.slei-workspace-card,
+[data-slot="workspace-card"],
+[data-slot="sidebar-card"],
+[data-slot="scroll-area"],
+[data-slot="scroll-area-viewport"] {
   -webkit-app-region: no-drag;
 }
 

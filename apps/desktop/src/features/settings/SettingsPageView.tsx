@@ -1,8 +1,8 @@
 import { useRef } from "react";
 import type { AppearancePreferences, AppLocale, DesktopNodeView, NotificationPreferences } from "../../lib/daemon-bridge";
 import type { DesktopMessages } from "../../i18n";
-import { defaultTimeZone, desktopVersion, localHumanPresentation, normalizeAppearanceTheme, profileAvatarPresets, type SettingsPanel, type UserProfile } from "../../app/model";
-import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, sleiIcons } from "../../components";
+import { defaultTimeZone, desktopVersion, localHumanPresentation, normalizeAppearanceTheme, randomProfileAvatarPresetId, type SettingsPanel, type UserProfile } from "../../app/model";
+import { DetailBlock, EditableDetailField, MemberAvatar, PageHeader, PreferenceRow, SleiIcon, sleiIcons } from "../../components";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,40 +75,46 @@ export function SettingsPage(input: SettingsPageInput) {
             className="select-none"
             data-slot="workspace-titlebar"
             data-testid="slei-settings-panel-header"
-            data-desktop-drag-region="deep"
             icon={settingsPanelIcon(input.activePanel)}
-            subtitle={<span data-desktop-drag-region="deep">{labels.panelSubtitle[input.activePanel]}</span>}
-            title={<span data-desktop-drag-region="deep">{labels.panelTitle[input.activePanel]}</span>}
+            subtitle={<span>{labels.panelSubtitle[input.activePanel]}</span>}
+            title={<span>{labels.panelTitle[input.activePanel]}</span>}
           />
 
           {input.activePanel === "account" ? (
             <Card className={settingsSectionCardClass}>
               <CardContent className={cn("p-4", settingsControlStackClass)} data-settings-control-stack="true">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <EditableDetailField
-                  ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
-                  error={input.profileErrors?.displayName}
-                  label={labels.displayName}
-                  messages={input.messages}
-                  onSave={(value) => input.onProfileChange?.({ displayName: value })}
-                  saving={profilePending}
-                  value={profile.displayName}
-                />
-                <DetailBlock
-                  description={labels.handleReadOnly}
-                  title={labels.handle}
-                  value={profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}
-                />
-              </div>
-
-              <Separator />
-
-              <section aria-label={labels.avatarPresets} className="grid gap-3">
-                <div className="grid gap-1">
-                  <h2 className="text-sm font-medium">{labels.avatar}</h2>
-                  <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+              <section
+                aria-label={labels.profile}
+                className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start"
+                data-settings-account-identity="true"
+              >
+                <div className="grid place-items-center gap-2 sm:w-28" data-settings-avatar-panel="true">
+                  <div className="relative rounded-full border border-border bg-muted/30 p-1 shadow-xs">
+                    <MemberAvatar
+                      identity={{
+                        id: "local-user",
+                        name: profile.displayName,
+                        handle: profile.handle,
+                        avatar: profile.avatar,
+                      }}
+                      large
+                    />
+                    <Button
+                      aria-label={labels.avatarRandomize}
+                      className="absolute -bottom-1 -right-1 size-8 rounded-full border border-background bg-background shadow-sm [&_svg]:size-3.5"
+                      data-settings-avatar-randomize="true"
+                      disabled={profilePending}
+                      onClick={() => {
+                        const avatar = randomProfileAvatarPresetId(profile.avatar);
+                        runSettingsFireAndForgetAction(() => input.onProfileChange?.({ avatar }));
+                      }}
+                      size="icon"
+                      type="button"
+                      variant="outline"
+                    >
+                      <SleiIcon name="refreshCw" />
+                    </Button>
+                  </div>
                   <input
                     accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
                     aria-label={labels.avatarUpload}
@@ -129,38 +135,35 @@ export function SettingsPage(input: SettingsPageInput) {
                     data-settings-avatar-upload-trigger="true"
                     disabled={avatarUploadDisabled}
                     onClick={() => avatarUploadInputRef.current?.click()}
-                    size="sm"
+                    size="xs"
                     type="button"
                     variant="outline"
                   >
                     {labels.avatarUpload}
                   </Button>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {profileAvatarPresets.map((preset) => (
-                    <Button
-                      aria-label={preset.name}
-                      aria-pressed={profile.avatar === preset.id ? "true" : "false"}
-                      className={cn("h-auto justify-start gap-3 px-3 py-2", profile.avatar === preset.id && "ring-2 ring-ring")}
-                      data-settings-avatar-option={preset.id}
-                      disabled={profilePending}
-                      key={preset.id}
-                      onClick={() => runSettingsFireAndForgetAction(() => input.onProfileChange?.({ avatar: preset.id }))}
-                      type="button"
-                      variant={profile.avatar === preset.id ? "secondary" : "outline"}
-                    >
-                      <MemberAvatar
-                        identity={{
-                          id: preset.id,
-                          name: preset.name,
-                          handle: `@${preset.id}`,
-                          avatar: preset.name.slice(0, 2),
-                          avatarSeed: preset.id,
-                        }}
-                      />
-                      <span>{preset.name}</span>
-                    </Button>
-                  ))}
+                <div className="grid min-w-0 gap-3" data-settings-profile-fields="true">
+                  <div className="grid gap-1">
+                    <h2 className="text-sm font-medium">{labels.avatar}</h2>
+                    <p className="text-sm text-muted-foreground">{labels.avatarHint}</p>
+                  </div>
+                  <EditableDetailField
+                    ariaLabel={`${input.messages.common.edit}${labels.displayName}`}
+                    error={input.profileErrors?.displayName}
+                    label={labels.displayName}
+                    messages={input.messages}
+                    onSave={(value) => input.onProfileChange?.({ displayName: value })}
+                    saving={profilePending}
+                    sectionClassName="grid gap-2 rounded-md border border-border/60 bg-muted/20 p-3"
+                    value={profile.displayName}
+                  />
+                  <div className="grid gap-1 rounded-md border border-border/60 bg-muted/20 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium">{labels.handle}</span>
+                      <span className="truncate font-mono text-sm text-foreground">{profile.handle.startsWith("@") ? profile.handle : `@${profile.handle}`}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{labels.handleReadOnly}</p>
+                  </div>
                 </div>
                 {input.profileErrors?.avatar ? (
                   <p className="text-sm text-destructive" role="alert">

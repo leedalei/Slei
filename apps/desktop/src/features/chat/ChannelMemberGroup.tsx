@@ -306,8 +306,8 @@ function ChannelMemberAvatar(input: {
               }}
             >
               <AlertDialogTrigger asChild>
-                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} disabled={input.mutating} size="sm" type="button" variant="destructive">
-                  <SleiIcon name="delete" size={14} />
+                <Button aria-label={input.messages.chat.removeChannelMember(input.member.name)} disabled={input.mutating} size="xs" type="button" variant="destructive">
+                  <SleiIcon name="delete" size={13} />
                   {input.messages.chat.removeChannelMemberAction}
                 </Button>
               </AlertDialogTrigger>
