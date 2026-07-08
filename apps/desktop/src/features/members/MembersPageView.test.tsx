@@ -341,6 +341,27 @@ describe("MembersPage agent details", () => {
     }
   });
 
+  it("renders the profile tab with a compact metadata layout and keeps edit actions available", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const host = await mount(renderMembersPage({ messages }));
+    const panel = activeTabPanel(host);
+    const compactLayout = panel.querySelector<HTMLElement>('[data-member-profile-layout="compact"]');
+    const identityCard = panel.querySelector<HTMLElement>('[data-member-profile-card="identity"]');
+    const runtimeCard = panel.querySelector<HTMLElement>('[data-member-runtime-card="compact"]');
+
+    expect(compactLayout).not.toBeNull();
+    expect(compactLayout?.className).toContain("lg:grid-cols-[minmax(0,1fr)_24rem]");
+    expect(identityCard?.className).toContain("p-3");
+    expect(identityCard?.className).toContain("gap-3");
+    expect(runtimeCard?.className).toContain("content-start");
+    expect(identityCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
+    expect(runtimeCard?.querySelector(".slei-editable-field h3")?.className).toContain("text-sm");
+    expect(panel.querySelector(`[aria-label="${messages.members.editDisplayName}"]`)).not.toBeNull();
+    expect(panel.querySelector(`[aria-label="${messages.members.editDescription}"]`)).not.toBeNull();
+    expect(panel.querySelector(`[aria-label="${messages.members.editRuntime}"]`)).not.toBeNull();
+    expect(panel.querySelector(`[aria-label="${messages.members.editModel}"]`)).not.toBeNull();
+  });
+
   it("shows a delete action for ordinary agents", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(

@@ -24,6 +24,7 @@ export function EditableDetailField(input: {
   readClassName?: string;
   readBadgeVariant?: ComponentProps<typeof Badge>["variant"];
   sectionClassName?: string;
+  titleClassName?: string;
   titleTag?: "h2" | "h3";
   value: string;
 }) {
@@ -92,7 +93,7 @@ export function EditableDetailField(input: {
       data-editable-saving={isSaving ? "true" : undefined}
     >
       <div className="slei-editable-field__label flex items-center justify-between gap-2">
-        <Heading className="text-base font-semibold">{input.label}</Heading>
+        <Heading className={cn("text-base font-semibold", input.titleClassName)}>{input.label}</Heading>
         {!editing ? (
           <Button
             aria-label={input.ariaLabel}

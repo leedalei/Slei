@@ -421,90 +421,116 @@ export function MembersPage(input: {
         <Separator />
 
         <ScrollArea className="min-h-0">
-          <div className="grid gap-4 p-6">
+          <div className="grid gap-3 p-4">
             <TabsContent forceMount value="profile" className="grid gap-4 data-[state=inactive]:hidden">
-              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
-                <h2 className="text-base font-semibold">{input.messages.members.profile}</h2>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <EditableDetailField
-                    ariaLabel={input.messages.members.editDisplayName}
-                    error={fieldError.name}
-                    label={input.messages.members.displayName}
-                    messages={input.messages}
-                    onSave={(value) => updateMemberDetail("name", value)}
-                    saving={effectiveSavingField === "name"}
-                    sectionClassName="grid gap-3"
-                    value={memberDetails.name}
-                  />
-                  <ControlledFieldAlert message={input.memberFieldErrors?.name} />
-                  <EditableDetailField
-                    allowEmpty
-                    ariaLabel={input.messages.members.editDescription}
-                    error={fieldError.description}
-                    label={input.messages.members.description}
-                    messages={input.messages}
-                    multiline
-                    onSave={(value) => updateMemberDetail("description", value)}
-                    saving={effectiveSavingField === "description"}
-                    sectionClassName="grid gap-3"
-                    value={memberDetails.description}
-                  />
-                  <ControlledFieldAlert message={input.memberFieldErrors?.description} />
-                </div>
-                <Separator />
-                <h2 className="text-base font-semibold">{input.messages.members.info}</h2>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <InfoItem blockId="computer" icon="cpu" label={input.messages.members.computer}>
-                    <span>{selectedNode?.name ?? selectedMember.computer}</span>
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <StatusBadge label={nodeStatus} status={nodeDotStatus} />
-                      daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
-                    </span>
-                  </InfoItem>
-                  <InfoItem blockId="created" icon="calendar" label={input.messages.members.created}>
-                    {formatMemberCreatedDate(selectedMember.created)}
-                  </InfoItem>
-                  <InfoItem blockId="creator" icon="user" label={input.messages.members.creator}>
-                    {selectedMember.creator}
-                  </InfoItem>
-                </div>
-              </Card>
+              <div
+                className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_24rem]"
+                data-member-profile-layout="compact"
+              >
+                <Card className={`${CARD_SURFACE_CLASS} grid gap-3 p-3`} data-member-profile-card="identity">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold">{input.messages.members.profile}</h2>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                    <div className="grid gap-1">
+                      <EditableDetailField
+                        ariaLabel={input.messages.members.editDisplayName}
+                        error={fieldError.name}
+                        label={input.messages.members.displayName}
+                        messages={input.messages}
+                        onSave={(value) => updateMemberDetail("name", value)}
+                        readClassName="text-[15px] leading-6"
+                        saving={effectiveSavingField === "name"}
+                        sectionClassName="grid gap-2"
+                        titleClassName="text-sm"
+                        value={memberDetails.name}
+                      />
+                      <ControlledFieldAlert message={input.memberFieldErrors?.name} />
+                    </div>
+                    <div className="grid gap-1">
+                      <EditableDetailField
+                        allowEmpty
+                        ariaLabel={input.messages.members.editDescription}
+                        error={fieldError.description}
+                        label={input.messages.members.description}
+                        messages={input.messages}
+                        multiline
+                        onSave={(value) => updateMemberDetail("description", value)}
+                        readClassName="text-[15px] leading-6"
+                        saving={effectiveSavingField === "description"}
+                        sectionClassName="grid gap-2"
+                        titleClassName="text-sm"
+                        value={memberDetails.description}
+                      />
+                      <ControlledFieldAlert message={input.memberFieldErrors?.description} />
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold">{input.messages.members.info}</h2>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <InfoItem blockId="computer" icon="cpu" label={input.messages.members.computer}>
+                      <span>{selectedNode?.name ?? selectedMember.computer}</span>
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        <StatusBadge label={nodeStatus} status={nodeDotStatus} />
+                        daemon {selectedNode?.daemonVersion ?? "v0.54.1"}
+                      </span>
+                    </InfoItem>
+                    <InfoItem blockId="created" icon="calendar" label={input.messages.members.created}>
+                      {formatMemberCreatedDate(selectedMember.created)}
+                    </InfoItem>
+                    <InfoItem blockId="creator" icon="user" label={input.messages.members.creator}>
+                      {selectedMember.creator}
+                    </InfoItem>
+                  </div>
+                </Card>
 
-              <Card className={`${CARD_SURFACE_CLASS} grid gap-4 p-4`}>
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-base font-semibold">{input.messages.members.runtimeConfig}</h2>
-                  <StatusBadge
-                    label={input.messages.status.runtime[selectedMember.runtimeStatus]}
-                    status={selectedMember.runtimeStatus}
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <EditableDetailField
-                    ariaLabel={input.messages.members.editRuntime}
-                    error={fieldError.runtime}
-                    label="Runtime"
-                    messages={input.messages}
-                    onSave={(value) => updateMemberDetail("runtime", value)}
-                    readBadgeVariant="outline"
-                    saving={effectiveSavingField === "runtime"}
-                    sectionClassName="grid gap-3"
-                    value={memberDetails.runtime}
-                  />
-                  <ControlledFieldAlert message={input.memberFieldErrors?.runtime} />
-                  <EditableDetailField
-                    ariaLabel={input.messages.members.editModel}
-                    error={fieldError.model}
-                    label={input.messages.members.model}
-                    messages={input.messages}
-                    onSave={(value) => updateMemberDetail("model", value)}
-                    readBadgeVariant="outline"
-                    saving={effectiveSavingField === "model"}
-                    sectionClassName="grid gap-3"
-                    value={memberDetails.model}
-                  />
-                  <ControlledFieldAlert message={input.memberFieldErrors?.model} />
-                </div>
-              </Card>
+                <Card
+                  className={`${CARD_SURFACE_CLASS} grid content-start gap-3 p-3`}
+                  data-member-runtime-card="compact"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold">{input.messages.members.runtimeConfig}</h2>
+                    <StatusBadge
+                      label={input.messages.status.runtime[selectedMember.runtimeStatus]}
+                      status={selectedMember.runtimeStatus}
+                    />
+                  </div>
+                  <div className="grid gap-3">
+                    <div className="grid gap-1">
+                      <EditableDetailField
+                        ariaLabel={input.messages.members.editRuntime}
+                        error={fieldError.runtime}
+                        label="Runtime"
+                        messages={input.messages}
+                        onSave={(value) => updateMemberDetail("runtime", value)}
+                        readBadgeVariant="outline"
+                        saving={effectiveSavingField === "runtime"}
+                        sectionClassName="grid gap-2"
+                        titleClassName="text-sm"
+                        value={memberDetails.runtime}
+                      />
+                      <ControlledFieldAlert message={input.memberFieldErrors?.runtime} />
+                    </div>
+                    <div className="grid gap-1">
+                      <EditableDetailField
+                        ariaLabel={input.messages.members.editModel}
+                        error={fieldError.model}
+                        label={input.messages.members.model}
+                        messages={input.messages}
+                        onSave={(value) => updateMemberDetail("model", value)}
+                        readBadgeVariant="outline"
+                        saving={effectiveSavingField === "model"}
+                        sectionClassName="grid gap-2"
+                        titleClassName="text-sm"
+                        value={memberDetails.model}
+                      />
+                      <ControlledFieldAlert message={input.memberFieldErrors?.model} />
+                    </div>
+                  </div>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent forceMount value="workspace" className="grid gap-4 data-[state=inactive]:hidden">
