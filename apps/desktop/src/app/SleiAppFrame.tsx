@@ -1324,7 +1324,9 @@ function RuntimeOnboardingModal(input: {
             {(localNode?.runtimes ?? []).map((runtime, index) => (
               <div className={cn("flex items-center justify-between gap-3 px-3 py-2", index > 0 && "border-t")} key={runtime.kind}>
                 <span>{runtime.kind}</span>
-                <Badge variant={runtime.readiness === "ready" ? "secondary" : "outline"}>{runtime.version ?? runtime.readiness}</Badge>
+                <Badge variant={runtime.readiness === "ready" ? "secondary" : "outline"}>
+                  {runtime.version ?? runtimeReadinessLabel(runtime.readiness, input.messages)}
+                </Badge>
               </div>
             ))}
           </div>
@@ -1341,4 +1343,11 @@ function RuntimeOnboardingModal(input: {
         </DialogFooter>
     </ShellDialog>
   );
+}
+
+function runtimeReadinessLabel(readiness: DesktopNodeView["runtimes"][number]["readiness"], messages: DesktopMessages): string {
+  if (readiness === "ready" || readiness === "unavailable" || readiness === "unknown") {
+    return messages.computers.readiness[readiness];
+  }
+  return readiness;
 }

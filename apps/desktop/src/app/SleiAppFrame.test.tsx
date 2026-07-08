@@ -144,6 +144,33 @@ afterEach(async () => {
 });
 
 describe("SleiAppFrame appearance preferences", () => {
+  it("localizes unavailable runtime readiness in the onboarding modal", async () => {
+    await mount(
+      <SleiAppFrame
+        activeView="chat"
+        data={createSleiFixtures()}
+        locale="zh-CN"
+        runtimeSetup={{
+          loading: false,
+          hasClaudeRuntimeReady: false,
+          nodes: [{
+            id: "local-node",
+            name: "本机设备",
+            status: "connected",
+            daemonVersion: "dev",
+            device: { hostname: "local", platform: "macos", arch: "arm64" },
+            runtimes: [{ kind: "ClaudeCode", readiness: "unavailable" as const }],
+          }],
+        }}
+      />,
+    );
+
+    const dialog = currentDialog();
+    expect(dialog.textContent).toContain("ClaudeCode");
+    expect(dialog.textContent).toContain("不可用");
+    expect(dialog.textContent).not.toContain("unavailable");
+  });
+
   it("maps daemon working agent status to a busy sidebar member", () => {
     const agent: DesktopAgentView = {
       id: "agent_coda",
