@@ -11,6 +11,21 @@ DAEMON_WATCHER_PID=""
 ELECTRON_PID=""
 CLEANED_UP="0"
 
+hydrate_user_shell_path() {
+  user_shell="${SHELL:-/bin/zsh}"
+  if [ ! -x "$user_shell" ]; then
+    return
+  fi
+
+  user_path=$("$user_shell" -lic 'printf "__SLEI_PATH__%s\n" "$PATH"' 2>/dev/null \
+    | sed -n 's/^__SLEI_PATH__//p' \
+    | tail -n 1)
+  if [ -n "$user_path" ]; then
+    PATH="$user_path:$PATH"
+    export PATH
+  fi
+}
+
 terminate_process_tree() {
   pid="$1"
   if ! kill -0 "$pid" 2>/dev/null; then
@@ -122,6 +137,8 @@ cleanup() {
 
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT TERM
+
+hydrate_user_shell_path
 
 cd "$REPO_ROOT"
 pnpm --filter @slei/claude-agent build

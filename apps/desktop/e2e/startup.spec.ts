@@ -155,7 +155,10 @@ describe("desktop startup contract", () => {
     expect(packageJson.scripts?.["build:electron"]).toBe(
       "tsc -p tsconfig.electron.json && node scripts/assert-sandbox-preload.mjs",
     );
+    expect(desktopDevScript).toContain("hydrate_user_shell_path");
+    expect(desktopDevScript).toContain("__SLEI_PATH__");
     expectInOrder(desktopDevScript, [
+      "hydrate_user_shell_path",
       "pnpm --filter @slei/claude-agent build",
       "cargo build -p slei-cli",
       "cargo build -p slei-daemon",
