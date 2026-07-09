@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { analyzeReleaseWorkflow } from "./verify-release-workflow.mjs";
+import { analyzeReleaseWorkflow, verifyReleaseWorkflow } from "./verify-release-workflow.mjs";
 
 function messagesFor(content) {
   return analyzeReleaseWorkflow(content).map((violation) => violation.message);
@@ -87,5 +90,15 @@ test("flags missing critical release workflow constraints", () => {
       messagesFor(content).some((message) => message.includes(expected)),
       `expected ${name} case to mention ${expected}`,
     );
+  }
+});
+
+test("reports missing release workflow file", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "slei-release-workflow-"));
+  try {
+    const violations = await verifyReleaseWorkflow({ cwd: directory });
+    assert(violations.some((violation) => violation.message.includes("release workflow file missing")));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
