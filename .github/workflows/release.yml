@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos-arm64:
+    runs-on: macos-15-xlarge
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches desktop package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p 'require("./apps/desktop/package.json").version')"
+          test "$TAG_VERSION" = "$PACKAGE_VERSION"
+
+      - name: Verify Electron macOS package boundary
+        env:
+          SLEI_VERIFY_MACOS_ARM64: "1"
+        run: bash scripts/verify-macos-package.sh
+
+      - name: Build macOS arm64 packages
+        run: pnpm --filter @slei/desktop package:mac
+
+      - name: Generate checksums
+        run: |
+          cd apps/desktop/release
+          shasum -a 256 Slei-* > SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --fail-on-no-commits \
+            --generate-notes \
+            apps/desktop/release/Slei-*.dmg \
+            apps/desktop/release/Slei-*.zip \
+            apps/desktop/release/SHA256SUMS.txt
