@@ -36,6 +36,18 @@ pnpm --filter @slei/desktop package:mac
 
 CI dry-run 需要可用的 arm64 macOS runner，例如 `macos-15-xlarge`，或仓库等价配置的自托管 arm64 macOS runner。若 runner 权限或资源不可用，应先配置 CI runner，不应把 `package:mac:dir` 静默跳过后报告成功。
 
+## GitHub Release 自动发布
+
+正式发布默认从 `master` 分支执行：
+
+```bash
+pnpm release:desktop 0.1.1
+```
+
+该命令会检查工作区是否干净、当前分支是否为 `master`、本地和 `origin` 是否已存在同名 tag，然后更新 `apps/desktop/package.json` 的版本号，创建 `chore(release): v0.1.1` 提交，创建并推送 `v0.1.1` tag。
+
+tag 推送后，GitHub Actions 会在 macOS arm64 runner 上构建 `.dmg` 和 `.zip`，生成 `SHA256SUMS.txt`，并使用 GitHub 自动生成的 release notes 创建 Release。该流程仍不包含签名、公证、自动更新或多平台产物。
+
 ## 生产与开发数据目录
 
 开发环境数据保持在：
