@@ -113,7 +113,7 @@ export async function releaseDesktop(rawVersion, dependencies = {}) {
   run("git", ["add", DESKTOP_PACKAGE_JSON_GIT_PATH]);
   run("git", ["commit", "-m", `chore(release): ${tag}`]);
   run("git", ["tag", tag]);
-  run("git", ["push"]);
+  run("git", ["push", "origin", "master"]);
   run("git", ["push", "origin", tag]);
 
   log(`Release ${tag} pushed. GitHub Actions will publish desktop assets.`);

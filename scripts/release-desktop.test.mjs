@@ -136,7 +136,7 @@ test("releaseDesktop checks safety gates before writing and pushes branch then t
   assertBefore(commandKeys, "node scripts/verify-release-workflow.mjs", "git commit -m chore(release): v0.1.1");
   assertBefore(commandKeys, "node --test scripts/release-desktop.test.mjs", "git commit -m chore(release): v0.1.1");
   assertBefore(commandKeys, "git add apps/desktop/package.json", "git commit -m chore(release): v0.1.1");
-  assertBefore(commandKeys, "git push", "git push origin v0.1.1");
+  assertBefore(commandKeys, "git push origin master", "git push origin v0.1.1");
   assert.equal(writes.length, 1);
   assert.equal(JSON.parse(writes[0].content).version, "0.1.1");
   assert.deepEqual(JSON.parse(writes[0].content).scripts, { test: "vitest run" });
