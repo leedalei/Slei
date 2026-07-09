@@ -20,6 +20,10 @@ function assertBefore(commandKeys, first, second) {
   assert(firstIndex < secondIndex, `expected ${first} before ${second}`);
 }
 
+function normalizeCommandKey(key) {
+  return key.replace(`${process.cwd()}/`, "");
+}
+
 test("accepts simple semver release versions", () => {
   assert.equal(parseReleaseVersion("0.1.1"), "0.1.1");
   assert.equal(parseReleaseVersion("12.34.56"), "12.34.56");
@@ -125,7 +129,7 @@ test("releaseDesktop checks safety gates before writing and pushes branch then t
     },
   });
 
-  const commandKeys = calls.map((call) => call.join(" "));
+  const commandKeys = calls.map((call) => normalizeCommandKey(call.join(" ")));
   assertBefore(commandKeys, "git status --porcelain", "writeFile apps/desktop/package.json");
   assertBefore(commandKeys, "git ls-remote --tags origin v0.1.1", "writeFile apps/desktop/package.json");
   assertBefore(commandKeys, "bash scripts/verify-macos-package.sh", "git commit -m chore(release): v0.1.1");
