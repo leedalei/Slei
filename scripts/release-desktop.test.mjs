@@ -12,6 +12,14 @@ import {
   updateDesktopPackageJson,
 } from "./release-desktop.mjs";
 
+function assertBefore(commandKeys, first, second) {
+  const firstIndex = commandKeys.indexOf(first);
+  const secondIndex = commandKeys.indexOf(second);
+  assert.notEqual(firstIndex, -1, `expected command: ${first}`);
+  assert.notEqual(secondIndex, -1, `expected command: ${second}`);
+  assert(firstIndex < secondIndex, `expected ${first} before ${second}`);
+}
+
 test("accepts simple semver release versions", () => {
   assert.equal(parseReleaseVersion("0.1.1"), "0.1.1");
   assert.equal(parseReleaseVersion("12.34.56"), "12.34.56");
@@ -118,13 +126,13 @@ test("releaseDesktop checks safety gates before writing and pushes branch then t
   });
 
   const commandKeys = calls.map((call) => call.join(" "));
-  assert(commandKeys.indexOf("git status --porcelain") < commandKeys.indexOf("writeFile apps/desktop/package.json"));
-  assert(commandKeys.indexOf("git ls-remote --tags origin v0.1.1") < commandKeys.indexOf("writeFile apps/desktop/package.json"));
-  assert(commandKeys.indexOf("bash scripts/verify-macos-package.sh") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
-  assert(commandKeys.indexOf("node scripts/verify-release-workflow.mjs") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
-  assert(commandKeys.indexOf("node --test scripts/release-desktop.test.mjs") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
-  assert(commandKeys.indexOf("git add apps/desktop/package.json") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
-  assert(commandKeys.indexOf("git push") < commandKeys.indexOf("git push origin v0.1.1"));
+  assertBefore(commandKeys, "git status --porcelain", "writeFile apps/desktop/package.json");
+  assertBefore(commandKeys, "git ls-remote --tags origin v0.1.1", "writeFile apps/desktop/package.json");
+  assertBefore(commandKeys, "bash scripts/verify-macos-package.sh", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node scripts/verify-release-workflow.mjs", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node --test scripts/release-desktop.test.mjs", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "git add apps/desktop/package.json", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "git push", "git push origin v0.1.1");
   assert.equal(writes.length, 1);
   assert.equal(JSON.parse(writes[0].content).version, "0.1.1");
   assert.deepEqual(JSON.parse(writes[0].content).scripts, { test: "vitest run" });
