@@ -94,6 +94,13 @@ vi.mock("electron", () => ({
 }));
 
 describe("electron main bootstrap helpers", () => {
+  it("sets the Slei app name before Electron readiness work starts", () => {
+    expect(electronMock.appSetName).toHaveBeenCalledWith("Slei");
+    expect(electronMock.appSetName.mock.invocationCallOrder[0]).toBeLessThan(
+      electronMock.registerSchemesAsPrivileged.mock.invocationCallOrder[0],
+    );
+  });
+
   it("configures Slei app identity and dock icon in development", () => {
     (app as unknown as { isPackaged: boolean }).isPackaged = false;
 
@@ -104,6 +111,33 @@ describe("electron main bootstrap helpers", () => {
     expect(electronMock.setDockIcon).toHaveBeenCalledWith(expect.objectContaining({
       path: expect.stringContaining("build/icon.icns"),
     }));
+  });
+
+  it("creates windows with Slei title and icon metadata in development", () => {
+    (app as unknown as { isPackaged: boolean }).isPackaged = false;
+    electronMock.browserWindowInstances.length = 0;
+
+    createMainWindow();
+
+    const window = electronMock.browserWindowInstances.at(-1);
+    expect(window?.options).toEqual(expect.objectContaining({
+      icon: expect.stringContaining("build/icon.icns"),
+      title: "Slei",
+    }));
+  });
+
+  it("keeps packaged windows using packaged app metadata for their icon", () => {
+    (app as unknown as { isPackaged: boolean }).isPackaged = true;
+    electronMock.browserWindowInstances.length = 0;
+
+    createMainWindow();
+
+    const window = electronMock.browserWindowInstances.at(-1);
+    expect(window?.options).toEqual(expect.objectContaining({
+      title: "Slei",
+    }));
+    expect(window?.options.icon).toBeUndefined();
+    (app as unknown as { isPackaged: boolean }).isPackaged = false;
   });
 
   it("redacts the generated packaged daemon token when startup fails before connection", async () => {

@@ -367,7 +367,10 @@ describe("desktop startup contract", () => {
     expect(mainSource).toContain("createWindowVisualOptions({");
     expect(windowOptionsSource).toContain("width: 1280");
     expect(windowOptionsSource).toContain("height: 800");
-    expect(mainSource).toContain('title: ""');
+    expect(mainSource).toContain('const APP_NAME = "Slei"');
+    expect(mainSource).toContain("configureAppName();");
+    expect(mainSource).toContain("resolveDevelopmentAppIconPath()");
+    expect(mainSource).toContain("title: APP_NAME");
     expect(mainSource).toContain("contextIsolation: true");
     expect(mainSource).toContain("nodeIntegration: false");
     expect(mainSource).toContain("sandbox: true");
