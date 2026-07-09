@@ -45,28 +45,44 @@ let daemonEventForwarder: EventForwarder | undefined;
 const daemonEventSubscriptions = new Map<string, DaemonEventSubscription>();
 
 const electronDirname = dirname(fileURLToPath(import.meta.url));
+const APP_NAME = "Slei";
+
+function resolveDevelopmentAppIconPath(): string | undefined {
+  if (app.isPackaged) {
+    return undefined;
+  }
+
+  const iconPath = join(electronDirname, "..", "..", "build", "icon.icns");
+  return existsSync(iconPath) ? iconPath : undefined;
+}
+
+function configureAppName(): void {
+  app.setName(APP_NAME);
+}
 
 export function configureAppIdentity(): void {
-  app.setName("Slei");
+  configureAppName();
 
-  if (process.platform !== "darwin" || app.isPackaged) {
+  if (process.platform !== "darwin") {
     return;
   }
 
-  const dockIconPath = join(electronDirname, "..", "..", "build", "icon.icns");
-  if (existsSync(dockIconPath)) {
+  const dockIconPath = resolveDevelopmentAppIconPath();
+  if (dockIconPath) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
   }
 }
 
 export function createMainWindow(): BrowserWindow {
   configureAppIdentity();
+  const developmentIconPath = resolveDevelopmentAppIconPath();
 
   const window = new BrowserWindow({
     ...createWindowVisualOptions({
       platform: process.platform,
     }),
-    title: "",
+    ...(developmentIconPath ? { icon: developmentIconPath } : {}),
+    title: APP_NAME,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -394,6 +410,7 @@ function readUnsubscribePayload(payload: unknown): string | undefined {
   return typeof subscriptionId === "string" ? subscriptionId : undefined;
 }
 
+configureAppName();
 registerElectronProtocolSchemes();
 
 void app.whenReady().then(() => {
