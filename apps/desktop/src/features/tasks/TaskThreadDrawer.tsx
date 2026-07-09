@@ -8,7 +8,6 @@ import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
-import { TaskTitleMarkdown } from "./TaskTitleMarkdown";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -224,9 +223,6 @@ export function TaskThreadDrawer(input: {
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1" ref={scrollAreaRef}>
           <div className="grid gap-3 p-5 pb-36" data-slot="task-thread-scroll-content">
-            <div data-slot="task-thread-root-body">
-              <TaskTitleMarkdown markdown={task.title} />
-            </div>
             {(task.replies ?? []).map((reply) => {
               const identity = taskReplyAvatarIdentity(reply, input.mentionMembers ?? []);
               const timestamp = taskReplyTimestampLabel(reply);

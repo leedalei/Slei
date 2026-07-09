@@ -211,7 +211,7 @@ describe("chat to task thread flow", () => {
     expect(html).not.toContain("标记待评审");
   });
 
-  it("renders the task drawer root content as message-sized markdown", () => {
+  it("renders the task root only as the first thread reply", () => {
     const data = createSleiFixtures({
       tasks: [{
         id: "T-title",
@@ -220,7 +220,7 @@ describe("chat to task thread flow", () => {
         status: "in_progress",
         channelId: "all",
         replyCount: 0,
-        replies: [{ id: "root", sender: "Theo", role: "agent", body: "根消息" }],
+        replies: [{ id: "root", sender: "Theo", role: "human", body: "## 感谢欢迎\n\n- agent_guide\n- `inlineCode`" }],
       }],
     });
 
@@ -234,35 +234,29 @@ describe("chat to task thread flow", () => {
     );
 
     const titleMatch = html.match(/<h2[^>]*data-slot="sheet-title"[^>]*class="([^"]*)"[^>]*>/);
-    const rootMatch = html.match(/<div[^>]*(?:data-slot="task-thread-root-body"[^>]*class="([^"]*)"|class="([^"]*)"[^>]*data-slot="task-thread-root-body")[^>]*>/);
-    const rootClasses = rootMatch?.[1] ?? rootMatch?.[2] ?? "";
     const scrollContentMatch = html.match(/<div[^>]*(?:data-slot="task-thread-scroll-content"[^>]*class="([^"]*)"|class="([^"]*)"[^>]*data-slot="task-thread-scroll-content")[^>]*>/);
     const scrollContentClasses = scrollContentMatch?.[1] ?? scrollContentMatch?.[2];
     const headerStart = html.indexOf('data-slot="sheet-header"');
     const scrollStart = html.indexOf('data-slot="scroll-area"');
     const rootStart = html.indexOf('data-slot="task-thread-root-body"');
     const footerStart = html.indexOf('data-slot="sheet-footer"');
-    const firstReplyStart = html.indexOf("data-reply-role", rootStart);
-    const rootEnd = firstReplyStart > -1 ? firstReplyStart : footerStart;
-    const rootHtml = html.slice(rootStart, rootEnd);
+    const firstReplyMatch = html.match(/<article[^>]*data-message-side="outgoing"[^>]*data-reply-role="human"[^>]*>[\s\S]*?<\/article>/);
+    const firstReplyStart = firstReplyMatch?.index ?? -1;
+    const firstReplyHtml = firstReplyMatch?.[0] ?? "";
 
     expect(titleMatch?.[1]).toContain("sr-only");
-    expect(rootClasses).not.toContain("mb-32");
     expect(scrollContentClasses).toContain("pb-36");
     expect(headerStart).toBeGreaterThanOrEqual(0);
     expect(scrollStart).toBeGreaterThan(headerStart);
-    expect(rootStart).toBeGreaterThanOrEqual(0);
-    expect(rootStart).toBeGreaterThan(scrollStart);
-    expect(rootStart).toBeLessThan(footerStart);
-    expect(rootEnd).toBeGreaterThan(rootStart);
-    expect(rootHtml).toContain("slei-markdown-message");
-    expect(rootHtml).toContain("text-sm");
-    expect(rootHtml).toContain("slei-task-title-markdown");
-    expect(rootHtml).toContain("leading-snug");
-    expect(rootHtml).toContain("<h2>感谢欢迎</h2>");
-    expect(rootHtml).toContain("<li>agent_guide</li>");
-    expect(rootHtml).toContain("<code");
-    expect(rootHtml).toContain("inlineCode");
+    expect(rootStart).toBe(-1);
+    expect(firstReplyStart).toBeGreaterThan(scrollStart);
+    expect(firstReplyStart).toBeLessThan(footerStart);
+    expect(firstReplyHtml).toContain("slei-markdown-message");
+    expect(firstReplyHtml).toContain("<h2>感谢欢迎</h2>");
+    expect(firstReplyHtml).toContain("<li>agent_guide</li>");
+    expect(firstReplyHtml).toContain("<code");
+    expect(firstReplyHtml).toContain("inlineCode");
+    expect(firstReplyHtml).not.toContain("slei-task-title-markdown");
   });
 
   it("keeps task drawer async errors and thread-open rejections handled in source", () => {

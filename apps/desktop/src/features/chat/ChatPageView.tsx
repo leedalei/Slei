@@ -579,6 +579,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const selectedThreadMessage = selectedThreadMessageId
     ? data.messages.find((message) => message.id === selectedThreadMessageId)
     : undefined;
+  const selectedThreadReplies = selectedThreadMessage
+    ? selectedThreadMessage.thread?.replies?.length
+      ? selectedThreadMessage.thread.replies
+      : [{ id: `root-${selectedThreadMessage.id}`, sender: selectedThreadMessage.author, role: selectedThreadMessage.role, body: selectedThreadMessage.body }]
+    : [];
   const selectedMessageThreadTask = selectedThreadMessage
     ? {
         id: selectedThreadMessage.thread?.id ?? `draft-thread-${selectedThreadMessage.id}`,
@@ -588,7 +593,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         channelId: selectedThreadMessage.channelId,
         sourceMessageId: selectedThreadMessage.id,
         replyCount: selectedThreadMessage.thread?.replyCount ?? 0,
-        replies: selectedThreadMessage.thread?.replies ?? [],
+        replies: selectedThreadReplies,
       }
     : undefined;
   const allowAsTask = true;

@@ -1490,7 +1490,9 @@ describe("SleiAppFrame global search navigation", () => {
     expect(appCss).toContain("--glass-border:");
     expect(appCss).toContain("--glass-blur:");
     expect(appCss).toContain("--app-chrome-height: 36px");
-    expect(appCss).toContain("--app-native-controls-width: 70px");
+    expect(appCss).toContain("--app-native-controls-width: 66px");
+    expect(appCss).toContain(".slei-app-chrome__divider {\n  width: 1px;\n  height: 14px;");
+    expect(appCss).toContain(".slei-app-chrome__divider {\n    height: 18px;");
     expect(appCss).toContain("--app-card-gap: 8px");
     expect(appCss).toContain("--app-shell-inline-inset: 12px");
     expect(appCss).toContain("--app-shell-bottom-inset: 12px");

@@ -125,7 +125,7 @@
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
   --app-chrome-height: 36px;
-  --app-native-controls-width: 70px;
+  --app-native-controls-width: 66px;
   --app-card-gap: 8px;
   --app-shell-inline-inset: 12px;
   --app-shell-bottom-inset: 12px;
@@ -884,7 +884,7 @@ select:focus-visible {
 
 .slei-app-chrome__divider {
   width: 1px;
-  height: 20px;
+  height: 14px;
   flex: 0 0 auto;
   background: color-mix(in srgb, var(--foreground) 16%, transparent);
 }
@@ -1459,7 +1459,7 @@ select:focus-visible {
   }
 
   .slei-app-chrome__divider {
-    height: 24px;
+    height: 18px;
   }
 
   .slei-resize-handle {

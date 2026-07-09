@@ -3330,14 +3330,16 @@ describe("ChatPage mention panel", () => {
 
     expect(onMessageThreadOpen).not.toHaveBeenCalled();
     const drawer = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"][aria-label="任务讨论"]');
-    const rootMarkdown = drawer?.querySelector<HTMLElement>('[data-slot="task-thread-root-body"] .slei-markdown-message');
-    expect(rootMarkdown).toBeTruthy();
-    expect(rootMarkdown?.classList.contains("text-sm")).toBe(true);
-    expect(rootMarkdown?.classList.contains("slei-task-title-markdown")).toBe(true);
-    expect(rootMarkdown?.classList.contains("leading-snug")).toBe(true);
-    expect(rootMarkdown?.querySelector("h2")?.textContent).toBe("先看看");
-    expect(rootMarkdown?.querySelector("li")?.textContent).toContain("不要立刻创建子线程");
-    expect(rootMarkdown?.querySelector("code")?.textContent).toBe("inlineCode");
+    const rootBody = drawer?.querySelector<HTMLElement>('[data-slot="task-thread-root-body"]');
+    const firstReply = drawer?.querySelector<HTMLElement>('[data-reply-role="human"]');
+    const firstReplyMarkdown = firstReply?.querySelector<HTMLElement>('[data-slot="message-bubble"] .slei-markdown-message');
+    expect(rootBody).toBeNull();
+    expect(firstReply?.getAttribute("data-message-side")).toBe("outgoing");
+    expect(firstReplyMarkdown).toBeTruthy();
+    expect(firstReplyMarkdown?.querySelector("h2")?.textContent).toBe("先看看");
+    expect(firstReplyMarkdown?.querySelector("li")?.textContent).toContain("不要立刻创建子线程");
+    expect(firstReplyMarkdown?.querySelector("code")?.textContent).toBe("inlineCode");
+    expect(firstReplyMarkdown?.classList.contains("slei-task-title-markdown")).toBe(false);
 
     const replyInput = document.body.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${messages.tasks.replyPlaceholder}"]`);
     expect(replyInput).toBeTruthy();
