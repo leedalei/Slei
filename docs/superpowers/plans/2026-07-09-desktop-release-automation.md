@@ -478,9 +478,22 @@ import {
   assertTagAvailable,
   desktopVersionJson,
   parseReleaseVersion,
+  releaseDesktop,
   releaseTagForVersion,
   updateDesktopPackageJson,
 } from "./release-desktop.mjs";
+
+function assertBefore(commandKeys, first, second) {
+  const firstIndex = commandKeys.indexOf(first);
+  const secondIndex = commandKeys.indexOf(second);
+  assert.notEqual(firstIndex, -1, `expected command: ${first}`);
+  assert.notEqual(secondIndex, -1, `expected command: ${second}`);
+  assert(firstIndex < secondIndex, `expected ${first} before ${second}`);
+}
+
+function normalizeCommandKey(key) {
+  return key.replace(`${process.cwd()}/`, "");
+}
 
 test("accepts simple semver release versions", () => {
   assert.equal(parseReleaseVersion("0.1.1"), "0.1.1");
@@ -498,9 +511,24 @@ test("builds v-prefixed release tag", () => {
 });
 
 test("updates desktop package json version and preserves newline", () => {
-  const input = JSON.stringify({ name: "@slei/desktop", version: "0.1.0", private: true }, null, 2) + "\n";
+  const input = JSON.stringify(
+    {
+      name: "@slei/desktop",
+      version: "0.1.0",
+      private: true,
+      scripts: { "package:mac": "scripts/package-macos.sh dmg zip" },
+      dependencies: { react: "^19.2.6" },
+    },
+    null,
+    2,
+  ) + "\n";
   const output = updateDesktopPackageJson(input, "0.1.1");
-  assert.equal(JSON.parse(output).version, "0.1.1");
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.version, "0.1.1");
+  assert.equal(parsed.name, "@slei/desktop");
+  assert.equal(parsed.private, true);
+  assert.deepEqual(parsed.scripts, { "package:mac": "scripts/package-macos.sh dmg zip" });
+  assert.deepEqual(parsed.dependencies, { react: "^19.2.6" });
   assert(output.endsWith("\n"));
 });
 
@@ -528,6 +556,49 @@ test("rejects duplicate local or origin tags", () => {
   assert.doesNotThrow(() => assertTagAvailable("v0.1.1", { localExists: false, remoteOutput: "" }));
   assert.throws(() => assertTagAvailable("v0.1.1", { localExists: true, remoteOutput: "" }), /local tag already exists/);
   assert.throws(() => assertTagAvailable("v0.1.1", { localExists: false, remoteOutput: "abc refs/tags/v0.1.1" }), /origin tag already exists/);
+});
+
+test("releaseDesktop checks safety gates before writing and pushes branch then tag", async () => {
+  const calls = [];
+  const writes = [];
+  const packageJson = JSON.stringify({ name: "@slei/desktop", version: "0.1.0", scripts: { test: "vitest run" } }, null, 2) + "\n";
+
+  await releaseDesktop("0.1.1", {
+    readFile: async (filePath) => {
+      calls.push(["readFile", filePath]);
+      return packageJson;
+    },
+    writeFile: async (filePath, content) => {
+      calls.push(["writeFile", filePath]);
+      writes.push({ filePath, content });
+    },
+    localTagExists: () => {
+      calls.push(["localTagExists", "v0.1.1"]);
+      return false;
+    },
+    log: () => {},
+    run: (command, args) => {
+      calls.push([command, ...args]);
+      const key = [command, ...args].join(" ");
+      if (key === "git rev-parse --is-inside-work-tree") return "true";
+      if (key === "git branch --show-current") return "master";
+      if (key === "git status --porcelain") return "";
+      if (key === "git ls-remote --tags origin v0.1.1") return "";
+      return "";
+    },
+  });
+
+  const commandKeys = calls.map((call) => normalizeCommandKey(call.join(" ")));
+  assertBefore(commandKeys, "git status --porcelain", "writeFile apps/desktop/package.json");
+  assertBefore(commandKeys, "git ls-remote --tags origin v0.1.1", "writeFile apps/desktop/package.json");
+  assertBefore(commandKeys, "bash scripts/verify-macos-package.sh", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node scripts/verify-release-workflow.mjs", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node --test scripts/release-desktop.test.mjs", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "git add apps/desktop/package.json", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "git push origin master", "git push origin v0.1.1");
+  assert.equal(writes.length, 1);
+  assert.equal(JSON.parse(writes[0].content).version, "0.1.1");
+  assert.deepEqual(JSON.parse(writes[0].content).scripts, { test: "vitest run" });
 });
 ```
 
@@ -610,9 +681,9 @@ export function assertTagAvailable(tag, { localExists, remoteOutput }) {
 }
 ```
 
-- [ ] **Step 2: Implement command runner utilities**
+- [ ] **Step 2: Implement dependency-injected release flow utilities**
 
-In the same file, add private helpers:
+In the same file, add private default helpers. The exported `releaseDesktop` must accept dependency overrides so tests can verify orchestration without real git side effects.
 
 ```js
 import fs from "node:fs/promises";
@@ -624,7 +695,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DESKTOP_PACKAGE_JSON = path.join(REPO_ROOT, "apps/desktop/package.json");
 
-function run(command, args, options = {}) {
+function defaultRun(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: REPO_ROOT,
     encoding: "utf8",
@@ -638,14 +709,28 @@ function run(command, args, options = {}) {
 
   return (result.stdout ?? "").trim();
 }
+
+function defaultLocalTagExists(tag) {
+  return spawnSync("git", ["rev-parse", "-q", "--verify", `refs/tags/${tag}`], {
+    cwd: REPO_ROOT,
+    stdio: "ignore",
+  }).status === 0;
+}
 ```
 
 - [ ] **Step 3: Implement side-effectful release flow**
 
-Add `async function releaseDesktop(rawVersion)`:
+Add exported `async function releaseDesktop(rawVersion, dependencies = {})`:
 
 ```js
-async function releaseDesktop(rawVersion) {
+export async function releaseDesktop(rawVersion, dependencies = {}) {
+  const {
+    readFile = fs.readFile,
+    writeFile = fs.writeFile,
+    run = defaultRun,
+    localTagExists = defaultLocalTagExists,
+    log = console.log,
+  } = dependencies;
   const version = parseReleaseVersion(rawVersion);
   const tag = releaseTagForVersion(version);
 
@@ -657,16 +742,12 @@ async function releaseDesktop(rawVersion) {
   const status = run("git", ["status", "--porcelain"], { capture: true });
   assertCleanWorkingTree(status);
 
-  const localTagExists = spawnSync("git", ["rev-parse", "-q", "--verify", `refs/tags/${tag}`], {
-    cwd: REPO_ROOT,
-    stdio: "ignore",
-  }).status === 0;
-
+  const localExists = localTagExists(tag);
   const remoteTag = run("git", ["ls-remote", "--tags", "origin", tag], { capture: true });
-  assertTagAvailable(tag, { localExists: localTagExists, remoteOutput: remoteTag });
+  assertTagAvailable(tag, { localExists, remoteOutput: remoteTag });
 
-  const packageJson = await fs.readFile(DESKTOP_PACKAGE_JSON, "utf8");
-  await fs.writeFile(DESKTOP_PACKAGE_JSON, updateDesktopPackageJson(packageJson, version));
+  const packageJson = await readFile(DESKTOP_PACKAGE_JSON, "utf8");
+  await writeFile(DESKTOP_PACKAGE_JSON, updateDesktopPackageJson(packageJson, version));
 
   run("bash", ["scripts/verify-macos-package.sh"]);
   run("node", ["scripts/verify-release-workflow.mjs"]);
@@ -676,10 +757,10 @@ async function releaseDesktop(rawVersion) {
   run("git", ["add", "apps/desktop/package.json"]);
   run("git", ["commit", "-m", `chore(release): ${tag}`]);
   run("git", ["tag", tag]);
-  run("git", ["push"]);
+  run("git", ["push", "origin", "master"]);
   run("git", ["push", "origin", tag]);
 
-  console.log(`Release ${tag} pushed. GitHub Actions will publish desktop assets.`);
+  log(`Release ${tag} pushed. GitHub Actions will publish desktop assets.`);
 }
 ```
 
