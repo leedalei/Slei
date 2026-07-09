@@ -7,6 +7,7 @@ import {
   assertTagAvailable,
   desktopVersionJson,
   parseReleaseVersion,
+  releaseDesktop,
   releaseTagForVersion,
   updateDesktopPackageJson,
 } from "./release-desktop.mjs";
@@ -27,9 +28,24 @@ test("builds v-prefixed release tag", () => {
 });
 
 test("updates desktop package json version and preserves newline", () => {
-  const input = JSON.stringify({ name: "@slei/desktop", version: "0.1.0", private: true }, null, 2) + "\n";
+  const input = JSON.stringify(
+    {
+      name: "@slei/desktop",
+      version: "0.1.0",
+      private: true,
+      scripts: { "package:mac": "scripts/package-macos.sh dmg zip" },
+      dependencies: { react: "^19.2.6" },
+    },
+    null,
+    2,
+  ) + "\n";
   const output = updateDesktopPackageJson(input, "0.1.1");
-  assert.equal(JSON.parse(output).version, "0.1.1");
+  const parsed = JSON.parse(output);
+  assert.equal(parsed.version, "0.1.1");
+  assert.equal(parsed.name, "@slei/desktop");
+  assert.equal(parsed.private, true);
+  assert.deepEqual(parsed.scripts, { "package:mac": "scripts/package-macos.sh dmg zip" });
+  assert.deepEqual(parsed.dependencies, { react: "^19.2.6" });
   assert(output.endsWith("\n"));
 });
 
@@ -60,4 +76,56 @@ test("rejects duplicate local or origin tags", () => {
     () => assertTagAvailable("v0.1.1", { localExists: false, remoteOutput: "abc refs/tags/v0.1.1" }),
     /origin tag already exists/,
   );
+});
+
+test("releaseDesktop checks safety gates before writing and pushes branch then tag", async () => {
+  const calls = [];
+  const writes = [];
+  const packageJson = JSON.stringify(
+    {
+      name: "@slei/desktop",
+      version: "0.1.0",
+      scripts: { test: "vitest run" },
+      dependencies: { react: "^19.2.6" },
+    },
+    null,
+    2,
+  ) + "\n";
+
+  await releaseDesktop("0.1.1", {
+    readFile: async (filePath) => {
+      calls.push(["readFile", filePath]);
+      return packageJson;
+    },
+    writeFile: async (filePath, content) => {
+      calls.push(["writeFile", filePath]);
+      writes.push({ filePath, content });
+    },
+    localTagExists: () => {
+      calls.push(["localTagExists", "v0.1.1"]);
+      return false;
+    },
+    log: () => {},
+    run: (command, args) => {
+      calls.push([command, ...args]);
+      const key = [command, ...args].join(" ");
+      if (key === "git rev-parse --is-inside-work-tree") return "true";
+      if (key === "git branch --show-current") return "master";
+      if (key === "git status --porcelain") return "";
+      if (key === "git ls-remote --tags origin v0.1.1") return "";
+      return "";
+    },
+  });
+
+  const commandKeys = calls.map((call) => call.join(" "));
+  assert(commandKeys.indexOf("git status --porcelain") < commandKeys.indexOf("writeFile apps/desktop/package.json"));
+  assert(commandKeys.indexOf("git ls-remote --tags origin v0.1.1") < commandKeys.indexOf("writeFile apps/desktop/package.json"));
+  assert(commandKeys.indexOf("bash scripts/verify-macos-package.sh") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
+  assert(commandKeys.indexOf("node scripts/verify-release-workflow.mjs") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
+  assert(commandKeys.indexOf("node --test scripts/release-desktop.test.mjs") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
+  assert(commandKeys.indexOf("git add apps/desktop/package.json") < commandKeys.indexOf("git commit -m chore(release): v0.1.1"));
+  assert(commandKeys.indexOf("git push") < commandKeys.indexOf("git push origin v0.1.1"));
+  assert.equal(writes.length, 1);
+  assert.equal(JSON.parse(writes[0].content).version, "0.1.1");
+  assert.deepEqual(JSON.parse(writes[0].content).scripts, { test: "vitest run" });
 });
