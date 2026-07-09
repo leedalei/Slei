@@ -351,6 +351,7 @@ git commit -m "test(desktop): guard release workflow contract"
 
 **Files:**
 - Create: `.github/workflows/release.yml`
+- Modify: `package.json`
 
 - [ ] **Step 1: Write the workflow**
 
@@ -428,7 +429,17 @@ node scripts/verify-release-workflow.mjs
 
 Expected: PASS with `release workflow verified`.
 
-- [ ] **Step 3: Run root guardrails**
+- [ ] **Step 3: Wire real workflow verification into root guardrails**
+
+Now that `.github/workflows/release.yml` exists, update `package.json` so `test:guardrails` checks the real workflow file before running the unit tests:
+
+```json
+"test:guardrails": "node scripts/verify-release-workflow.mjs && node --test scripts/verify-architecture-guardrails.test.mjs scripts/verify-release-workflow.test.mjs"
+```
+
+Do not wire the CLI before this task; Task 2 intentionally existed before the workflow file.
+
+- [ ] **Step 4: Run root guardrails**
 
 Run:
 
@@ -438,10 +449,10 @@ pnpm test:guardrails
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit workflow**
+- [ ] **Step 5: Commit workflow**
 
 ```bash
-git add .github/workflows/release.yml
+git add .github/workflows/release.yml package.json
 git commit -m "ci(desktop): publish release assets on version tags"
 ```
 
@@ -712,7 +723,7 @@ Modify root `package.json`:
 
 ```json
 "release:desktop": "node scripts/release-desktop.mjs",
-"test:guardrails": "node --test scripts/verify-architecture-guardrails.test.mjs scripts/verify-release-workflow.test.mjs scripts/release-desktop.test.mjs"
+"test:guardrails": "node scripts/verify-release-workflow.mjs && node --test scripts/verify-architecture-guardrails.test.mjs scripts/verify-release-workflow.test.mjs scripts/release-desktop.test.mjs"
 ```
 
 - [ ] **Step 7: Run all guardrails**
