@@ -107,6 +107,21 @@ async function clickSelectItem(text: string) {
   return item;
 }
 
+async function clickDropdownItem(text: string) {
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
+    .find((candidate) => candidate.textContent?.includes(text));
+  expect(item).toBeInstanceOf(HTMLElement);
+  await act(async () => {
+    item?.click();
+  });
+  await act(async () => undefined);
+  return item;
+}
+
+function openDropdownMenuContent() {
+  return document.body.querySelector<HTMLElement>('[data-slot="dropdown-menu-content"]');
+}
+
 const readyNodes = [{
   id: "local-node",
   name: "本机设备",
@@ -1189,7 +1204,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(document.body.querySelector('[data-slot="dialog-title"]')?.textContent).toContain("创建频道");
   });
 
-  it("opens channel and DM context menus from pointer, keyboard, and row more buttons", async () => {
+  it("opens channel and DM menus only from row more buttons and highlights the menu row", async () => {
     const onMemberSelect = vi.fn();
     const onViewChange = vi.fn();
     const onConversationSelect = vi.fn();
@@ -1224,52 +1239,51 @@ describe("SleiAppFrame global search navigation", () => {
     expect(allRow).toBeTruthy();
     expect(dmRow).toBeTruthy();
 
-    await act(async () => {
-      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
     expect(document.body.textContent).toContain("编辑频道");
     expect(document.body.textContent).toContain("删除频道");
+    expect(devRow?.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
 
     await act(async () => {
-      allRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     });
+    await act(async () => undefined);
+    expect(openDropdownMenuContent()).toBeNull();
+
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 all 更多操作"]'));
     expect(document.body.textContent).toContain("编辑频道");
     expect(document.body.textContent).not.toContain("删除频道");
+    expect(allRow?.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    await act(async () => undefined);
+    expect(openDropdownMenuContent()).toBeNull();
 
     await act(async () => {
       devRow?.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
     });
-    expect(document.body.textContent).toContain("编辑频道");
+    expect(openDropdownMenuContent()).toBeNull();
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]')?.click();
+      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
     });
-    expect(document.body.textContent).toContain("编辑频道");
+    expect(openDropdownMenuContent()).toBeNull();
 
-    await act(async () => {
-      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="Coda 更多操作"]'));
     expect(document.body.textContent).toContain("打开成员资料");
     expect(document.body.textContent).toContain("清空聊天记录");
     expect(document.body.textContent).toContain("删除成员");
     expect(document.body.textContent).not.toContain("打开私聊");
+    expect(dmRow?.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
 
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("打开成员资料"))
-        ?.click();
-    });
+    await clickDropdownItem("打开成员资料");
     expect(onMemberSelect).toHaveBeenCalledWith("a1");
     expect(onViewChange).toHaveBeenCalledWith("members");
 
-    await act(async () => {
-      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("清空聊天记录"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="Coda 更多操作"]'));
+    await clickDropdownItem("清空聊天记录");
     expect(document.body.textContent).toContain("确定清空与 Coda 的聊天记录");
     await act(async () => {
       Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
@@ -1279,14 +1293,8 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onConversationMessagesClear).toHaveBeenCalledWith("dm:agent_coda");
     expect(onConversationSelect).not.toHaveBeenCalled();
 
-    await act(async () => {
-      dmRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("删除成员"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="Coda 更多操作"]'));
+    await clickDropdownItem("删除成员");
     expect(document.body.textContent).toContain("确定删除 Coda 吗");
     await act(async () => {
       Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
@@ -1296,11 +1304,10 @@ describe("SleiAppFrame global search navigation", () => {
     expect(onAgentDelete).toHaveBeenCalledWith("a1");
 
     const dmWithoutConversationRow = container.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a2"]');
-    await act(async () => {
-      dmWithoutConversationRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="Cindy 更多操作"]'));
     expect(document.body.textContent).not.toContain("清空聊天记录");
     expect(document.body.textContent).toContain("删除成员");
+    expect(dmWithoutConversationRow?.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
   });
 
   it("keeps the sidebar channel delete menu item visually neutral before confirmation", async () => {
@@ -1319,10 +1326,7 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    await act(async () => {
-      container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]')
-        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
 
     const deleteItem = Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
       .find((item) => item.textContent?.includes("删除频道"));
@@ -1354,14 +1358,8 @@ describe("SleiAppFrame global search navigation", () => {
     );
     const devRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]');
 
-    await act(async () => {
-      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("编辑频道"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
+    await clickDropdownItem("编辑频道");
 
     expect(onChannelEdit).toHaveBeenCalledWith("dev");
     expect(onChannelSelect).not.toHaveBeenCalled();
@@ -1389,21 +1387,14 @@ describe("SleiAppFrame global search navigation", () => {
       />,
     );
 
-    await act(async () => {
-      container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]')
-        ?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("编辑频道"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
+    await clickDropdownItem("编辑频道");
 
     expect(onChannelSelect).toHaveBeenCalledWith("dev");
     expect(onViewChange).toHaveBeenCalledWith("chat");
   });
 
-  it("confirms channel deletion from the workspace sidebar context menu", async () => {
+  it("confirms channel deletion from the workspace sidebar menu", async () => {
     const onChannelDelete = vi.fn();
     const data = createSleiFixtures({
       channels: [
@@ -1420,22 +1411,17 @@ describe("SleiAppFrame global search navigation", () => {
         runtimeSetup={runtimeSetup}
       />,
     );
-    const devRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-dev"]');
-    const allRow = container.querySelector<HTMLElement>('[data-testid="workspace-channel-row-all"]');
-
-    await act(async () => {
-      allRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 all 更多操作"]'));
     expect(document.body.textContent).not.toContain("删除频道");
 
     await act(async () => {
-      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("删除频道"))
-        ?.click();
-    });
+    await act(async () => undefined);
+    expect(openDropdownMenuContent()).toBeNull();
+
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
+    await clickDropdownItem("删除频道");
     expect(onChannelDelete).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("确定删除 #dev？");
 
@@ -1444,14 +1430,8 @@ describe("SleiAppFrame global search navigation", () => {
     });
     expect(onChannelDelete).not.toHaveBeenCalled();
 
-    await act(async () => {
-      devRow?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    });
-    await act(async () => {
-      Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'))
-        .find((item) => item.textContent?.includes("删除频道"))
-        ?.click();
-    });
+    await clickElement(container.querySelector<HTMLButtonElement>('[aria-label="频道 dev 更多操作"]'));
+    await clickDropdownItem("删除频道");
     await act(async () => {
       document.body.querySelector<HTMLElement>('[data-slot="alert-dialog-action"]')?.click();
     });

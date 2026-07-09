@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -580,23 +580,12 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                     onOpenChange={(open) => setOpenChannelMenuId(open ? channel.id : undefined)}
                   >
                     <SelectableCard
-                      selected={selected}
+                      selected={selected || openChannelMenuId === channel.id}
                       className={sidebarListRowClassName}
                       data-channel-id={channel.id}
                       data-channel-list-item=""
                       data-testid={`workspace-channel-row-${channel.id}`}
-                      onContextMenu={(event: MouseEvent) => {
-                        event.preventDefault();
-                        setOpenChannelMenuId(channel.id);
-                      }}
-                      onKeyDown={(event: KeyboardEvent) => {
-                        if (event.key === "F10" && event.shiftKey) {
-                          event.preventDefault();
-                          setOpenChannelMenuId(channel.id);
-                        }
-                      }}
                       selectedVariant="flat"
-                      tabIndex={0}
                     >
                       <button
                         aria-current={selected ? "true" : undefined}
@@ -690,24 +679,13 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                     onOpenChange={(open) => setOpenDmMenuId(open ? member.id : undefined)}
                   >
                     <SelectableCard
-                      selected={selected}
+                      selected={selected || openDmMenuId === member.id}
                       className={sidebarListRowClassName}
                       data-conversation-id={conversationId}
                       data-direct-message-list-item=""
                       data-member-id={member.id}
                       data-testid={`workspace-dm-row-${conversation ? dmTestId(conversation) : member.id}`}
-                      onContextMenu={(event: MouseEvent) => {
-                        event.preventDefault();
-                        setOpenDmMenuId(member.id);
-                      }}
-                      onKeyDown={(event: KeyboardEvent) => {
-                        if (event.key === "F10" && event.shiftKey) {
-                          event.preventDefault();
-                          setOpenDmMenuId(member.id);
-                        }
-                      }}
                       selectedVariant="flat"
-                      tabIndex={0}
                     >
                       <button
                         aria-current={selected ? "true" : undefined}
