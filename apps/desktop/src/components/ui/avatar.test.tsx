@@ -28,8 +28,17 @@ describe("Avatar", () => {
     expect(avatarRoot).toContain('data-size="sm"');
     expect(avatarRoot).toContain("data-[size=sm]:h-6");
     expect(avatarRoot).toContain("data-[size=sm]:w-6");
-    expect(avatarRoot).toContain("h-8");
-    expect(avatarRoot).toContain("w-8");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+  });
+
+  it("keeps the primitive large avatar size at 60 pixels", () => {
+    const html = renderToStaticMarkup(<Avatar aria-label="Coda" size="lg" />);
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
+
+    expect(avatarRoot).toContain('data-size="lg"');
+    expect(avatarRoot).toContain("data-[size=lg]:h-[3.75rem]");
+    expect(avatarRoot).toContain("data-[size=lg]:w-[3.75rem]");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
   });
 
   it("renders grouped avatars and overflow count through shadcn slots", () => {

@@ -2110,9 +2110,10 @@ describe("SleiAppFrame global search navigation", () => {
     expect(statusDot?.className.split(/\s+/)).toContain("right-0");
     expect(statusDot?.parentElement).toBe(avatar);
     expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
+    expect(avatar?.getAttribute("data-size")).toBe("default");
     expect(avatar?.className.split(/\s+/)).toContain("size-7");
-    expect(avatar?.className.split(/\s+/)).toContain("border-border");
-    expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
+    expect(avatar?.className.split(/\s+/)).toContain("border-muted-foreground/30");
+    expect(avatar?.className.split(/\s+/)).not.toContain("border-border");
     expect(name?.tagName).toBe("SPAN");
     expect(name?.textContent).toBe("Coda");
     expect(name?.className).toContain("text-[14px]");
