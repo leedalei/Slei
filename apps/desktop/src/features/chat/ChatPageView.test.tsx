@@ -1816,25 +1816,37 @@ describe("ChatPage mention panel", () => {
       const scroller = host.querySelector<HTMLElement>('[data-slot="message-scroller"]');
       const viewport = host.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]');
       const items = host.querySelectorAll('[data-slot="message-scroller-item"]');
+      setMessageScrollerLayout(host);
+      await act(async () => {
+        timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
       const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"][data-slot="message-scroller-button"]');
       expect(scroller).not.toBeNull();
       expect(viewport).toBe(timeline);
       expect(items.length).toBeGreaterThanOrEqual(2);
       expect(button?.textContent).toContain("滚动到底部");
+      expect(button?.getAttribute("data-active")).toBe("true");
 
       await act(async () => {
         button?.click();
       });
 
-      expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
-      expect(host.querySelector('[data-testid="slei-scroll-to-bottom"]')).toBeNull();
+      expect(scrollTo).toHaveBeenCalledWith({ top: 600, behavior: "smooth" });
+      setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 600 });
+      await act(async () => {
+        timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      const buttonAfterScroll = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+      expect(buttonAfterScroll).not.toBeNull();
+      expect(buttonAfterScroll?.getAttribute("data-active")).toBe("false");
+      expect(buttonAfterScroll?.hasAttribute("inert")).toBe(true);
     } finally {
       requestAnimationFrame.mockRestore();
       cancelAnimationFrame.mockRestore();
     }
   });
 
-  it("renders the shadcn message scroller button when the timeline is at least 200px from the bottom", async () => {
+  it("lets the shadcn message scroller button toggle active state at the 200px edge threshold", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1854,12 +1866,18 @@ describe("ChatPage mention panel", () => {
     );
     const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
 
-    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 400 });
+    setMessageScrollerLayout(host);
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 600 });
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 399 });
     await act(async () => {
       timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
     const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
     expect(button?.textContent).toContain("滚动到底部");
+    expect(button?.getAttribute("data-active")).toBe("true");
     expect(button?.getAttribute("data-slot")).toBe("message-scroller-button");
     expect(button?.getAttribute("data-direction")).toBe("end");
     expect(button?.querySelector('[data-slei-icon="arrowDown"]')).not.toBeNull();
@@ -1876,7 +1894,10 @@ describe("ChatPage mention panel", () => {
     await act(async () => {
       timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
-    expect(host.querySelector('[data-testid="slei-scroll-to-bottom"]')).toBeNull();
+    const inactiveButton = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+    expect(inactiveButton).not.toBeNull();
+    expect(inactiveButton?.getAttribute("data-active")).toBe("false");
+    expect(inactiveButton?.hasAttribute("inert")).toBe(true);
   });
 
   it("uses virtualized timeline rendering with an older-message load hook", () => {
@@ -3594,4 +3615,24 @@ function setScrollMetrics(element: HTMLElement | null, metrics: { clientHeight: 
   Object.defineProperty(element, "clientHeight", { configurable: true, value: metrics.clientHeight });
   Object.defineProperty(element, "scrollHeight", { configurable: true, value: metrics.scrollHeight });
   Object.defineProperty(element, "scrollTop", { configurable: true, value: metrics.scrollTop, writable: true });
+}
+
+function setMessageScrollerLayout(host: HTMLElement) {
+  const viewport = host.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]');
+  if (viewport) {
+    Object.defineProperty(viewport, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ top: 0, bottom: 400, height: 400 }),
+    });
+  }
+  const items = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"]'));
+  items.forEach((item, index) => {
+    Object.defineProperty(item, "getBoundingClientRect", {
+      configurable: true,
+      value: () => {
+        const bottom = (index === items.length - 1 ? 1000 : (index + 1) * 500) - (viewport?.scrollTop ?? 0);
+        return { top: bottom - 500, bottom, height: 500 };
+      },
+    });
+  });
 }

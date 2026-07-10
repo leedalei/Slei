@@ -484,7 +484,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const scrollFrameRef = useRef<number | undefined>(undefined);
   const olderMessagesRequestInFlightRef = useRef(false);
   const pendingOlderMessagesScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | undefined>(undefined);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
   const [measuredComposerReservePx, setMeasuredComposerReservePx] = useState(COMPOSER_RESERVE_PX);
   const mention = activeMentionQuery(draft);
@@ -698,7 +697,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       requestTimelineScrollToBottom();
       return;
     }
-    setShowScrollToBottom(true);
   }, [latestTimelineMessage]);
 
   useEffect(() => {
@@ -835,10 +833,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     await onMessageThreadReplyFromSource?.(selectedThreadMessage, body);
   }
 
-  function isTimelineAtBottom() {
-    return timelineDistanceFromBottom() <= 24;
-  }
-
   function timelineDistanceFromBottom() {
     const viewport = timelineViewportRef.current;
     if (!viewport) return 0;
@@ -849,7 +843,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     const distanceFromBottom = timelineDistanceFromBottom();
     const atBottom = distanceFromBottom <= 24;
     timelineAtBottomRef.current = atBottom;
-    setShowScrollToBottom(distanceFromBottom >= SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX);
   }
 
   function requestOlderMessagesIfNearTop() {
@@ -883,7 +876,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     if (typeof window === "undefined") return undefined;
     if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
     timelineAtBottomRef.current = true;
-    setShowScrollToBottom(false);
     const frame = window.requestAnimationFrame(() => {
       const viewport = timelineViewportRef.current;
       if (!viewport) {
@@ -1287,19 +1279,15 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     })}
                     </MessageScrollerContent>
                   </MessageScrollerViewport>
-                  {showScrollToBottom ? (
-                    <MessageScrollerButton
-                      className="bottom-[var(--chat-composer-reserve)] z-20 size-8 border-white/25 bg-white/85 shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
-                      data-testid="slei-scroll-to-bottom"
-                      render={<Button onClick={requestTimelineScrollToBottom} size="icon" type="button" variant="ghost" />}
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <SleiIcon className="size-3.5" name="arrowDown" />
-                      <span className="sr-only">{messages.chat.backToBottom}</span>
-                    </MessageScrollerButton>
-                  ) : null}
+                  <MessageScrollerButton
+                    className="bottom-[var(--chat-composer-reserve)] z-20 size-8 border-white/25 bg-white/85 shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
+                    data-testid="slei-scroll-to-bottom"
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <SleiIcon className="size-3.5" name="arrowDown" />
+                    <span className="sr-only">{messages.chat.backToBottom}</span>
+                  </MessageScrollerButton>
                 </MessageScroller>
               </MessageScrollerProvider>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3" data-testid="slei-composer-shell">
