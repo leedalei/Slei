@@ -373,12 +373,16 @@ function AgentActivityPanel(input: { activity?: AgentActivityView; messages: Des
     avatar: activity.message.avatar ?? activity.message.author.slice(0, 2).toUpperCase(),
     avatarSeed: activity.message.author,
   };
+  const profession = activity.member?.profession?.trim();
   return (
-    <section aria-live="polite" className="shrink-0 border-t p-3" data-slot="agent-activity" role="status">
-      <div className={cn("flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2", failed && "border border-destructive/45 bg-destructive/10")}>
+    <section aria-live="polite" className="shrink-0 p-3" data-slot="agent-activity" role="status">
+      <div className={cn("flex min-w-0 items-center gap-2 rounded-lg bg-background px-2 py-2 shadow-[var(--agent-activity-card-shadow-sm)]", failed && "border border-destructive/45 bg-destructive/10")} data-slot="agent-activity-card">
         <MemberAvatar identity={identity} />
         <div className="min-w-0 flex-1">
-          <strong className="block truncate text-sm">{activity.member?.name ?? activity.message.author}</strong>
+          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden" data-slot="agent-activity-identity">
+            <strong className="min-w-0 flex-1 truncate text-sm">{activity.member?.name ?? activity.message.author}</strong>
+            {profession ? <Badge className="min-w-0 max-w-[55%] shrink truncate" variant="secondary">{profession}</Badge> : null}
+          </div>
           <small className={cn("block truncate text-xs text-muted-foreground", failed && "font-medium text-destructive")}>
             {label}
           </small>

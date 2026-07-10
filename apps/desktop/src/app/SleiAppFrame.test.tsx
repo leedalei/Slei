@@ -2638,6 +2638,24 @@ describe("SleiAppFrame global search navigation", () => {
     expect(html).toContain('data-slot="agent-activity"');
     expect(html).toContain("正在执行命令");
     expect(html).not.toContain("正在思考");
+
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const activityPanel = host.querySelector<HTMLElement>('[data-slot="agent-activity"]');
+    const activityCard = activityPanel?.querySelector<HTMLElement>('[data-slot="agent-activity-card"]');
+    const identity = activityCard?.querySelector<HTMLElement>('[data-slot="agent-activity-identity"]');
+    const name = identity?.querySelector<HTMLElement>("strong");
+    const profession = identity?.querySelector<HTMLElement>('[data-slot="badge"]');
+
+    expect(activityPanel?.className.split(/\s+/)).not.toContain("border-t");
+    expect(activityCard?.className).toContain("shadow-[var(--agent-activity-card-shadow-sm)]");
+    expect(identity?.className).toContain("items-center");
+    expect(name?.textContent).toBe("Coda");
+    expect(profession?.textContent).toBe("研发团队开发工程师");
+    expect(name && profession ? name.compareDocumentPosition(profession) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
+
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
+    expect(appCss).toContain("--agent-activity-card-shadow-sm:");
   });
 
   it("marks sidebar category titles as unselectable", () => {
