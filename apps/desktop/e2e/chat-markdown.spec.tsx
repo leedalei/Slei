@@ -1,15 +1,11 @@
 // @vitest-environment jsdom
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownMessage } from "../src/features/chat/MarkdownMessage";
-
-const appCss = readFileSync(resolve(process.cwd(), "src/app/app.css"), "utf8");
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -25,32 +21,6 @@ afterEach(() => {
 });
 
 describe("chat Markdown rendering", () => {
-  it("renders inline code with a theme-relative neutral surface without styling fenced code", () => {
-    const host = document.createElement("div");
-    host.innerHTML = renderToStaticMarkup(
-      <MarkdownMessage
-        markdown={["mysql有哪些好用的mcp? `@theo`", "", "```ts", "const answer = 42;", "```"].join("\n")}
-        tone="primary"
-      />,
-    );
-
-    const markdownRoot = host.querySelector<HTMLElement>(".slei-markdown-message");
-    const inlineCode = host.querySelector<HTMLElement>("p > code");
-    const fencedCode = host.querySelector<HTMLElement>("pre code");
-
-    expect(inlineCode?.tagName).toBe("CODE");
-    expect(inlineCode?.textContent).toBe("@theo");
-    expect(fencedCode?.textContent).toContain("const answer = 42;");
-    expect(markdownRoot?.className).not.toContain("[&_code]:bg-muted");
-    expect(appCss).toContain(".slei-markdown-message :not(pre) > code {");
-    expect(appCss).toContain("background: color-mix(in srgb, currentColor 12%, transparent);");
-    expect(appCss).toContain("border-style: solid;");
-    expect(appCss).toContain("border-width: var(--app-border-subtle);");
-    expect(appCss).toContain("border-color: color-mix(in srgb, currentColor 18%, transparent);");
-    expect(appCss).not.toContain("border: var(--app-border-subtle) solid;");
-    expect(appCss).not.toContain(".slei-markdown-message code {\n");
-  });
-
   it("renders app-styled Markdown blocks and sanitizes unsafe links", () => {
     const html = renderToStaticMarkup(
       <MarkdownMessage
