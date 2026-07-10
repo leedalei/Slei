@@ -2362,9 +2362,13 @@ describe("SleiAppFrame global search navigation", () => {
     const agentCheckbox = document.body.querySelector<HTMLElement>('[aria-label="选择 Agent Coda"]');
     const agentFieldSet = agentCheckbox?.closest<HTMLElement>('[data-slot="field-set"]');
     expect(agentFieldSet?.querySelector('[data-slot="field-legend"]')?.textContent).toBe("选择 Agent");
+    expect(agentFieldSet?.className).toContain("min-h-0");
     const agentList = agentCheckbox?.closest<HTMLElement>('[data-slot="scroll-area"]');
     expect(agentList?.className).toContain("bg-background");
     expect(agentList?.className).toContain("border");
+    expect(agentList?.className).toContain("min-h-0");
+    expect(agentList?.className).toContain("max-h-[min(16rem,34vh)]");
+    expect(agentList?.className).toContain("overflow-y-auto");
     expect(agentList?.className).not.toContain("border-white/20");
     expect(agentCheckbox?.className).toContain("border-input");
     expect(agentCheckbox?.className).toContain("dark:bg-input/30");

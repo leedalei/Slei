@@ -766,13 +766,13 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
       <ShellDialog closeLabel={input.messages.common.cancel} open={createOpen} onOpenChange={(open) => {
         if (!open) closeCreateChannelModal();
         else setCreateOpen(true);
-      }} className="max-h-[min(90vh,42rem)] overflow-hidden sm:max-w-lg">
+      }} className="grid max-h-[min(90vh,42rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><SleiIcon name="hash" size={20} />{input.messages.chat.createChannel}</DialogTitle>
             <DialogDescription>{input.messages.chat.createChannelDescription}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitChannel}>
-            <FieldGroup className="min-h-0">
+          <form className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4" onSubmit={submitChannel}>
+            <FieldGroup className="min-h-0 gap-5 overflow-y-auto pr-1">
               <Field>
                 <FieldLabel className="gap-1" htmlFor="slei-channel-name">
                   {input.messages.chat.channelName}
@@ -824,9 +824,9 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                 </div>
               </Field>
               {agentMembers.length > 0 ? (
-                <FieldSet>
+                <FieldSet className="min-h-0">
                   <FieldLegend>{input.messages.chat.selectAgents}</FieldLegend>
-                  <ScrollArea className="max-h-60 rounded-md border bg-background">
+                  <ScrollArea className="min-h-0 max-h-[min(16rem,34vh)] overflow-y-auto rounded-md border bg-background">
                     <div className="grid gap-1 p-2">
                       {agentMembers.map((member) => {
                         const selected = channelDraft.selectedAgentIds.includes(member.id);
@@ -857,13 +857,13 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   </ScrollArea>
                 </FieldSet>
               ) : null}
-              <DialogFooter>
-                <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
-                <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
-                  {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
-                </Button>
-              </DialogFooter>
             </FieldGroup>
+            <DialogFooter>
+              <Button disabled={creatingChannel} onClick={closeCreateChannelModal} type="button" variant="outline">{input.messages.common.cancel}</Button>
+              <Button aria-label={input.messages.chat.createChannel} className="min-w-20" disabled={creatingChannel} type="submit">
+                {creatingChannel ? <SleiIcon className="animate-spin" name="loader" size={14} /> : <><SleiIcon name="plus" size={14} />{input.messages.common.create}</>}
+              </Button>
+            </DialogFooter>
           </form>
       </ShellDialog>
 
