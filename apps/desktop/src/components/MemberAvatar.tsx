@@ -53,6 +53,5 @@ function avatarSizeClassName(size: MemberAvatarSize) {
 
 function avatarPrimitiveSize(size: MemberAvatarSize) {
   if (size === "large") return "lg";
-  if (size === "small") return "sm";
   return "default";
 }
