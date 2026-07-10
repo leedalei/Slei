@@ -7,6 +7,13 @@
 - 所有任务都必须配套严格的单元测试，确保功能完整且行为正常；涉及 UI 的任务还必须验证对应 DOM 节点的渲染与关键交互。
 - 当用户说「启动APP」或「启动 App」时，默认启动 Slei 桌面 App（`pnpm --filter @slei/desktop desktop`），不要启动网页/Vite dev server；若之前启动了网页 dev server，应先关闭它。
 
+## Workspace and Branch Policy
+
+- 默认直接在当前共享工作区和当前分支工作；禁止自行创建、切换或使用 git worktree。
+- 只有用户明确要求使用 worktree 或隔离分支时，才可以创建或进入 worktree；如果认为隔离有必要，必须先向用户说明并征得同意。
+- 不得以通用 skill、流程或“安全隔离”为由绕过本规则。
+- 启动 App、验证和代码修改都必须基于用户当前指定的工作区/分支，不得静默切换到 worktree。
+
 ## Core Architecture
 
 - Slei 的核心架构理念是：业务逻辑、状态变更、路由决策、持久化、幂等、重置和数据恢复都必须在 daemon 中处理。

@@ -1405,13 +1405,13 @@ describe("ChatPage mention panel", () => {
     expect(host.querySelector('[data-slot="toast"]')?.textContent).toContain("收藏失败：daemon offline");
   });
 
-  it("keeps a bottom sentinel for post-send timeline scrolling", () => {
+  it("keeps the message scroller and scroll-to-bottom control for post-send timeline scrolling", () => {
     const source = readChatPageSource();
 
     expect(source).toContain("MessageScrollerProvider");
     expect(source).toContain("MessageScrollerViewport");
     expect(source).toContain("MessageScrollerItem");
-    expect(source).toContain("MessageScrollerButton");
+    expect(source).toContain('data-slot="message-scroller-button"');
     expect(source).toContain("pendingScrollToBottomRef");
     expect(source).toContain("requestAnimationFrame");
     expect(source).toContain("viewport.scrollTo({");
@@ -1831,7 +1831,7 @@ describe("ChatPage mention panel", () => {
         button?.click();
       });
 
-      expect(scrollTo).toHaveBeenCalledWith({ top: 600, behavior: "smooth" });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 600, behavior: "auto" });
       setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 600 });
       await act(async () => {
         timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -1881,10 +1881,14 @@ describe("ChatPage mention panel", () => {
     expect(button?.getAttribute("data-slot")).toBe("message-scroller-button");
     expect(button?.getAttribute("data-direction")).toBe("end");
     expect(button?.querySelector('[data-slei-icon="arrowDown"]')).not.toBeNull();
-    expect(button?.className).toContain("data-[active=false]:pointer-events-none");
-    expect(button?.className).toContain("data-[active=true]:scale-100");
-    expect(button?.className).toContain("bottom-[var(--chat-composer-reserve)]");
-    expect(button?.className).not.toContain("bottom-[calc(var(--chat-composer-reserve)+0.75rem)]");
+    expect(button?.className).toContain("rounded-full");
+    expect(button?.className).toContain("pointer-events-auto");
+    expect(button?.className).toContain("translate-y-0");
+    expect(button?.className).toContain("scale-100");
+    expect(button?.className).toContain("duration-[300ms]");
+    expect(button?.className).toContain("cubic-bezier(0.34,1.36,0.64,1)");
+    expect(button?.className).toContain("bottom-[calc(var(--chat-composer-reserve)-1rem)]");
+    expect(button?.className).toContain("motion-reduce:!transition-none");
     expect(button?.className).not.toContain("bottom-2.5");
     const buttonClasses = button?.className.split(/\s+/) ?? [];
     expect(buttonClasses).not.toContain("border-primary");
@@ -1898,6 +1902,100 @@ describe("ChatPage mention panel", () => {
     expect(inactiveButton).not.toBeNull();
     expect(inactiveButton?.getAttribute("data-active")).toBe("false");
     expect(inactiveButton?.hasAttribute("inert")).toBe(true);
+    expect(inactiveButton?.className).toContain("translate-y-2");
+    expect(inactiveButton?.className).toContain("scale-90");
+    expect(inactiveButton?.className).toContain("opacity-0");
+    expect(inactiveButton?.className).toContain("duration-[180ms]");
+  });
+
+  it("shows the scroll-to-bottom button from the viewport distance in a virtualized timeline", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: Array.from({ length: 60 }, (_, index) => ({
+        id: `viewport-message-${index + 1}`,
+        author: "Lei",
+        role: "human" as const,
+        time: `11:${String(index).padStart(2, "0")}`,
+        body: `视口消息 ${index + 1}`,
+        channelId: "all",
+      })),
+    });
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+
+    setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 6000, scrollTop: 100 });
+    await act(async () => {
+      timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+    expect(button?.getAttribute("data-active")).toBe("true");
+    expect(button?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("scrolls a virtualized timeline to the viewport's exact bottom on button click", async () => {
+    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    const cancelAnimationFrame = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: Array.from({ length: 60 }, (_, index) => ({
+        id: `scroll-message-${index + 1}`,
+        author: "Lei",
+        role: "human" as const,
+        time: `12:${String(index).padStart(2, "0")}`,
+        body: `滚动消息 ${index + 1}`,
+        channelId: "all",
+      })),
+    });
+
+    try {
+      const host = await mountChatPage(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const timeline = host.querySelector<HTMLElement>('[data-testid="slei-chat-timeline"]');
+      let scrollCalls = 0;
+      const scrollTo = vi.fn((options: { top?: number }) => {
+        if (!timeline || typeof options.top !== "number") return;
+        timeline.scrollTop = options.top;
+        if (scrollCalls === 0) {
+          Object.defineProperty(timeline, "scrollHeight", { configurable: true, value: 6200 });
+        }
+        scrollCalls += 1;
+      });
+      Object.defineProperty(timeline, "scrollTo", { configurable: true, value: scrollTo });
+      setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 6000, scrollTop: 100 });
+      await act(async () => {
+        timeline?.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]')?.click();
+      });
+
+      expect(scrollTo).toHaveBeenCalledWith({ top: 5600, behavior: "auto" });
+      expect(scrollTo).toHaveBeenCalledWith({ top: 5800, behavior: "auto" });
+      expect(timeline?.scrollTop).toBe(5800);
+    } finally {
+      requestAnimationFrame.mockRestore();
+      cancelAnimationFrame.mockRestore();
+    }
   });
 
   it("uses virtualized timeline rendering with an older-message load hook", () => {
@@ -1924,9 +2022,10 @@ describe("ChatPage mention panel", () => {
 
     expect(source).toContain("initialTimelineScrollTargetRef");
     expect(source).toContain("const timelineScrollTarget =");
-    expect(source).toContain("if (timelineUsesVirtualization && timelineMessages.length > 0)");
+    expect(source).toContain("if (timelineUsesVirtualization && timelineMessages.length > 0 && !options.clampToViewport)");
     expect(source).toContain("timelineVirtualizer.scrollToOffset(timelineVirtualizer.getTotalSize() + composerReservePx");
-    expect(source).toContain("top: viewport.scrollHeight");
+    expect(source).toContain("options.clampToViewport");
+    expect(source).toContain("viewport.scrollHeight - viewport.clientHeight");
     expect(source).toContain("behavior: \"smooth\"");
     expect(source).toContain("pendingScrollToBottomRef.current = true");
     expect(source).toContain("[timelineScrollTarget, effectiveChannelView, focusedMessageId]");
@@ -3234,6 +3333,110 @@ describe("ChatPage mention panel", () => {
       expect(cardClasses).not.toContain("shadow-[");
       expect(cardClasses).not.toContain("hover:shadow");
     }
+  });
+
+  it("uses one balanced surface for creation cards without message text", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-card-only",
+          author: "Yeal",
+          role: "agent",
+          time: "10:00",
+          body: "",
+          channelId: "all",
+          cards: [
+            {
+              id: "card_agent_only",
+              kind: "createAgent",
+              state: "pending",
+              title: "创建 Theo",
+              summary: "Theo · ClaudeCode / Opus — 架构师",
+              draft: { name: "Theo" },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            },
+          ],
+        },
+      ],
+    });
+
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+    const bubble = host.querySelector<HTMLElement>('[data-message-id="msg-card-only"] [data-slot="message-bubble"]');
+    const card = host.querySelector<HTMLElement>('[data-message-id="msg-card-only"] [data-card-kind="createAgent"]');
+
+    expect(bubble?.dataset.messageCard).toBe("creation");
+    expect(bubble?.className).toContain("p-0");
+    expect(bubble?.className).toContain("bg-transparent");
+    expect(bubble?.className).toContain("border-0");
+    expect(host.querySelector('[data-message-id="msg-card-only"] .slei-markdown-message')).toBeNull();
+    expect(card?.className).toContain("rounded-xl");
+    expect(card?.className).toContain("gap-4");
+    expect(card?.className).toContain("p-4");
+    expect(card?.className).toContain("border-border/70");
+    expect(card?.className).toContain("max-[520px]:grid-cols-1");
+    expect(card?.querySelector<HTMLElement>("[data-slot=button]")?.className).toContain("max-[520px]:justify-self-start");
+    expect(card?.className).not.toContain("p-3");
+  });
+
+  it("keeps the creation card action callback on the unified surface", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onChannelDraftCreate = vi.fn();
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      messages: [
+        {
+          id: "msg-card-action",
+          author: "Yeal",
+          role: "agent",
+          time: "10:00",
+          body: "",
+          channelId: "all",
+          cards: [
+            {
+              id: "card_channel_action",
+              kind: "createChannel",
+              state: "pending",
+              title: "创建 #qa",
+              summary: "#qa",
+              draft: { name: "qa", description: "QA 协作频道", projectPaths: [], agentIds: [] },
+              actionLabel: "创建",
+              doneLabel: "DONE",
+            },
+          ],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onChannelDraftCreate={onChannelDraftCreate}
+        profile={defaultProfile}
+      />,
+    );
+    const button = host.querySelector<HTMLButtonElement>('[data-card-kind="createChannel"] [data-slot="button"]');
+
+    expect(button).not.toBeNull();
+    await act(async () => {
+      button?.click();
+    });
+
+    expect(onChannelDraftCreate).toHaveBeenCalledWith(
+      { name: "qa", description: "QA 协作频道", projectPaths: [], agentIds: [] },
+      "card_channel_action",
+    );
   });
 
   it("keeps task root entry status and source message behavior on flat rows", () => {

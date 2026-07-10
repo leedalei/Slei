@@ -10,7 +10,7 @@ import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Selectable
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
-import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from "../../components/ui/message-scroller";
+import { MessageScroller, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from "../../components/ui/message-scroller";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Switch } from "../../components/ui/switch";
@@ -107,12 +107,12 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
   const done = card.state !== "pending";
   const doneLabel = card.doneLabel === "DONE" ? messages.common.done : card.doneLabel || messages.common.done;
   return (
-    <Card className={cn(CARD_SURFACE_CLASS, "grid min-w-[min(28rem,100%)] max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3")} data-card-kind={card.kind} data-state={card.state}>
+    <Card className={cn(CARD_SURFACE_CLASS, "grid min-w-[min(28rem,100%)] max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-border/70 p-4 max-[520px]:grid-cols-1")} data-card-kind={card.kind} data-state={card.state}>
       <div className="grid min-w-0 gap-1">
-        <strong className="text-sm">{card.title}</strong>
-        <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
+        <strong className="text-sm font-semibold leading-5">{card.title}</strong>
+        <p className="truncate text-sm text-muted-foreground">{card.summary}</p>
       </div>
-      <Button disabled={done} onClick={onCreate} size="xs" type="button">
+      <Button className="shrink-0 rounded-lg max-[520px]:justify-self-start" disabled={done} onClick={onCreate} size="xs" type="button">
         {done ? doneLabel : card.actionLabel || messages.common.create}
       </Button>
     </Card>
@@ -207,6 +207,15 @@ function isTransientAgentActivity(message: SleiMessage) {
 
 function isTaskCardControlMessage(message: SleiMessage) {
   return Boolean(message.taskCard) || (message.role === "system" && message.body.trim().startsWith("task_card:"));
+}
+
+function isCreationCardOnlyMessage(message: SleiMessage) {
+  const cards = message.cards ?? [];
+  return cards.length > 0
+    && cards.every((card) => card.kind === "createAgent" || card.kind === "createChannel")
+    && !message.body.trim()
+    && !message.toolCall
+    && (message.attachments?.length ?? 0) === 0;
 }
 
 function isLinkedTaskAgentReply(message: SleiMessage, sourceMessageIds: Set<string>) {
@@ -482,8 +491,10 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const lastTimelineMessageIdRef = useRef<string | undefined>(undefined);
   const timelineAtBottomRef = useRef(true);
   const scrollFrameRef = useRef<number | undefined>(undefined);
+  const scrollToBottomSettleGenerationRef = useRef(0);
   const olderMessagesRequestInFlightRef = useRef(false);
   const pendingOlderMessagesScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | undefined>(undefined);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false);
   const [measuredComposerReservePx, setMeasuredComposerReservePx] = useState(COMPOSER_RESERVE_PX);
   const mention = activeMentionQuery(draft);
@@ -702,6 +713,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   useEffect(() => {
     return () => {
       if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
+      scrollToBottomSettleGenerationRef.current += 1;
     };
   }, []);
 
@@ -843,6 +855,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     const distanceFromBottom = timelineDistanceFromBottom();
     const atBottom = distanceFromBottom <= 24;
     timelineAtBottomRef.current = atBottom;
+    setShowScrollToBottom(distanceFromBottom >= SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX);
   }
 
   function requestOlderMessagesIfNearTop() {
@@ -872,9 +885,31 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
     requestOlderMessagesIfNearTop();
   }
 
-  function requestTimelineScrollToBottom() {
+  function settleTimelineScrollToBottom(viewport: HTMLDivElement) {
+    const generation = scrollToBottomSettleGenerationRef.current + 1;
+    scrollToBottomSettleGenerationRef.current = generation;
+    let framesRemaining = 4;
+    const settle = () => {
+      if (scrollToBottomSettleGenerationRef.current !== generation) return;
+      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (viewport.scrollTop < maxScrollTop - 1) {
+        if (typeof viewport.scrollTo === "function") {
+          viewport.scrollTo({ top: maxScrollTop, behavior: "auto" });
+        } else {
+          viewport.scrollTop = maxScrollTop;
+        }
+      }
+      if (framesRemaining <= 0) return;
+      framesRemaining -= 1;
+      window.requestAnimationFrame(settle);
+    };
+    window.requestAnimationFrame(settle);
+  }
+
+  function requestTimelineScrollToBottom(options: { clampToViewport?: boolean } = {}) {
     if (typeof window === "undefined") return undefined;
     if (scrollFrameRef.current !== undefined) window.cancelAnimationFrame(scrollFrameRef.current);
+    if (!options.clampToViewport) scrollToBottomSettleGenerationRef.current += 1;
     timelineAtBottomRef.current = true;
     const frame = window.requestAnimationFrame(() => {
       const viewport = timelineViewportRef.current;
@@ -882,7 +917,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         scrollFrameRef.current = undefined;
         return;
       }
-      if (timelineUsesVirtualization && timelineMessages.length > 0) {
+      if (timelineUsesVirtualization && timelineMessages.length > 0 && !options.clampToViewport) {
         timelineVirtualizer.scrollToOffset(timelineVirtualizer.getTotalSize() + composerReservePx, {
           align: "end",
           behavior: "smooth",
@@ -892,12 +927,17 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
       }
       if (typeof viewport.scrollTo === "function") {
         viewport.scrollTo({
-          top: viewport.scrollHeight,
-          behavior: "smooth",
+          top: options.clampToViewport
+            ? Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+            : viewport.scrollHeight,
+          behavior: options.clampToViewport ? "auto" : "smooth",
         });
       } else {
-        viewport.scrollTop = viewport.scrollHeight;
+        viewport.scrollTop = options.clampToViewport
+          ? Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+          : viewport.scrollHeight;
       }
+      if (options.clampToViewport) settleTimelineScrollToBottom(viewport);
       scrollFrameRef.current = undefined;
     });
     scrollFrameRef.current = frame;
@@ -1159,6 +1199,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                       const timestamp = messageTimestampLabel(message);
                       const side = message.role === "human" ? "outgoing" : "incoming";
+                      const creationCardOnly = isCreationCardOnlyMessage(message);
                       const avatarIdentity = memberFromMessage(message, data.members);
                       const avatar = messageMember?.type === "agent" ? (
                         <AgentProfilePopover
@@ -1228,20 +1269,26 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                   </MessageBubbleActionToolbar>
                                   <div
                                     className={cn(
-                                      "grid min-w-0 gap-2 rounded-2xl px-3.5 py-2.5",
-                                      side === "outgoing"
+                                      "grid min-w-0",
+                                      creationCardOnly
+                                        ? "w-fit max-w-full gap-3 rounded-xl border-0 bg-transparent p-0 shadow-none"
+                                        : "gap-2 rounded-2xl px-3.5 py-2.5",
+                                      !creationCardOnly && (side === "outgoing"
                                         ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
-                                        : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
+                                        : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs"),
                                     )}
+                                    data-message-card={creationCardOnly ? "creation" : undefined}
                                     data-slot="message-bubble"
                                   >
-                                    <MessageBody
-                                      body={message.body}
-                                      copyCodeLabel={messages.chat.copyMessage}
-                                      onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
-                                      skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
-                                      tone={bodyTone}
-                                    />
+                                    {message.body.trim() ? (
+                                      <MessageBody
+                                        body={message.body}
+                                        copyCodeLabel={messages.chat.copyMessage}
+                                        onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
+                                        skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
+                                        tone={bodyTone}
+                                      />
+                                    ) : null}
                                     <AttachmentList attachments={message.attachments ?? []} messageAttachments />
                                     {message.toolCall ? <code className={cn("mt-2 block rounded-md border px-2 py-1 font-mono text-xs", side === "outgoing" ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground")} data-slot="tool-call">{message.toolCall}</code> : null}
                                     {message.cards?.map((card) => (
@@ -1279,15 +1326,30 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                     })}
                     </MessageScrollerContent>
                   </MessageScrollerViewport>
-                  <MessageScrollerButton
-                    className="bottom-[var(--chat-composer-reserve)] z-20 size-8 border-white/25 bg-white/85 shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
+                  <Button
+                    aria-label={messages.chat.backToBottom}
+                    className={cn(
+                      "absolute bottom-[calc(var(--chat-composer-reserve)-1rem)] left-1/2 z-20 size-8 -translate-x-1/2 rounded-full border-white/25 bg-white/85 shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl !transition-[translate,scale,opacity] will-change-[translate,scale,opacity] hover:bg-white/95 motion-reduce:!transition-none",
+                      showScrollToBottom
+                        ? "pointer-events-auto translate-y-0 scale-100 opacity-100 !duration-[300ms] !ease-[cubic-bezier(0.34,1.36,0.64,1)]"
+                        : "pointer-events-none translate-y-2 scale-90 opacity-0 !duration-[180ms] !ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    )}
                     data-testid="slei-scroll-to-bottom"
+                    data-active={showScrollToBottom ? "true" : "false"}
+                    data-direction="end"
+                    data-size="icon"
+                    data-slot="message-scroller-button"
+                    data-variant="ghost"
+                    inert={!showScrollToBottom ? true : undefined}
+                    onClick={() => requestTimelineScrollToBottom({ clampToViewport: true })}
                     size="icon"
+                    tabIndex={showScrollToBottom ? 0 : -1}
+                    type="button"
                     variant="ghost"
                   >
                     <SleiIcon className="size-3.5" name="arrowDown" />
                     <span className="sr-only">{messages.chat.backToBottom}</span>
-                  </MessageScrollerButton>
+                  </Button>
                 </MessageScroller>
               </MessageScrollerProvider>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3" data-testid="slei-composer-shell">
