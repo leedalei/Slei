@@ -123,6 +123,7 @@ sequenceDiagram
 - Markdown codeblock 必须在右上角提供 copy icon，复制原始代码文本，成功后展示本地化“复制成功”提示。
 - 任务卡片不使用额外 border；不使用额外 task icon 角标，避免破坏原消息视觉结构。
 - 时间格式沿用消息时间展示约定，当前为 `MM-DD HH:mm`。
+- `TaskRootEntry` 的 Agent 头像和 `TaskThreadDrawer` 的 Agent 回复头像必须复用普通频道/私聊消息使用的统一成员资料卡。资料卡只展示 daemon member DTO 中的名称、职业、handle、描述和 runtime 状态；私聊入口继续受 `directMessageEnabled` 约束，不得在任务 UI 中复制另一套资料或状态规则。频道成员移除操作仍只属于频道 header 的成员资料卡上下文。
 
 ## 历史数据清理
 
@@ -155,6 +156,7 @@ sequenceDiagram
 - 手动打开普通子线程是否不会创建 task，也不会把源消息升级为任务。
 - 勾选“转为任务”和普通 Agent 显式创建任务是否才会进入 TASK，并复用同一源消息 thread。
 - Agent 回复、任务回复和附件入口是否继承源消息所在频道/私聊目标。
+- 任务源消息和任务线程回复中的 Agent 资料卡是否仍与普通频道/私聊消息共用同一组件、同一私聊规则和 daemon runtime 状态来源。
 - 任务卡片 UX 是否仍符合本 ADR 的原消息结构、右上角回复/状态/actions/time，且没有恢复 border 或 task icon 角标。
 
 ## 验证清单

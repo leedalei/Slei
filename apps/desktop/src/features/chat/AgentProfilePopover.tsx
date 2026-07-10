@@ -3,8 +3,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember, SleiChannelMemberReadiness } from "../../app/types";
 import { channelReadinessLabel } from "../../app/model";
-import { MemberAvatar, SleiIcon } from "../../components";
-import { AvatarBadge } from "../../components/ui/avatar";
+import { MemberAvatar } from "../../components";
+import { getSleiStatusIndicatorClassName } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
@@ -60,38 +60,36 @@ export function AgentProfilePopover(input: {
       </PopoverTrigger>
       <PopoverContent ref={contentRef} align={input.align ?? "end"} className="w-72 p-3" data-agent-profile-card="" data-testid={input.cardTestId ?? "slei-agent-profile-card"}>
         <div className="grid gap-3">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-            <MemberAvatar identity={input.member} large>
-              {canMessage ? (
-                <AvatarBadge asChild>
-                  <button
-                    aria-label={input.messages.members.message}
-                    data-testid={input.messageButtonTestId ?? "slei-agent-profile-message-button"}
-                    onClick={() => {
-                      input.onOpenChange(false);
-                      input.onMessage?.();
-                    }}
-                    type="button"
-                  >
-                    <SleiIcon name="messageCircleMore" />
-                  </button>
-                </AvatarBadge>
-              ) : null}
-            </MemberAvatar>
-            <div className="grid min-w-0 gap-1">
-              <strong className="truncate text-sm text-foreground">{input.member.name}</strong>
-              <span className="truncate text-xs text-muted-foreground">{input.member.handle}</span>
-              <Badge className="w-fit max-w-full truncate" variant="secondary">{input.member.profession ?? input.member.role}</Badge>
-            </div>
+          <div className="flex items-start justify-between gap-3" data-slot="agent-profile-header">
+            <MemberAvatar identity={input.member} large />
+            {input.action ? <div data-slot="agent-profile-header-action">{input.action}</div> : null}
           </div>
-          {input.member.description ? <p className="text-sm leading-relaxed text-muted-foreground">{input.member.description}</p> : null}
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-              <span aria-hidden="true" className={cn("size-1.5 rounded-full", statusDotClass(input.status))} />
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden" data-slot="agent-profile-identity">
+            <strong className="min-w-0 flex-1 truncate text-sm text-foreground">{input.member.name}</strong>
+            <Badge className="min-w-0 max-w-[60%] shrink truncate" variant="secondary">{input.member.profession ?? input.member.role}</Badge>
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-2" data-slot="agent-profile-metadata">
+            <span className="truncate text-xs text-muted-foreground">{input.member.handle}</span>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
+              <span aria-hidden="true" className={cn("size-1.5 rounded-full", statusDotClass(input.status))} data-slot="agent-profile-status-dot" />
               {statusLabel(input.status, input.messages)}
             </span>
-            {input.action}
           </div>
+          {input.member.description ? <p className="text-sm leading-relaxed text-muted-foreground" data-slot="agent-profile-description">{input.member.description}</p> : null}
+          {canMessage ? (
+            <Button
+              aria-label={input.messages.members.message}
+              className="w-full"
+              data-testid={input.messageButtonTestId ?? "slei-agent-profile-message-button"}
+              onClick={() => {
+                input.onOpenChange(false);
+                input.onMessage?.();
+              }}
+              type="button"
+            >
+              {input.messages.members.message}
+            </Button>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>
@@ -100,13 +98,12 @@ export function AgentProfilePopover(input: {
 
 function statusLabel(status: AgentProfileStatus, messages: DesktopMessages) {
   if (status.kind === "channel") return channelReadinessLabel(status.readiness, messages);
-  if (status.status === "busy") return "忙碌";
   return messages.status.runtime[status.status];
 }
 
 function statusDotClass(status: AgentProfileStatus) {
-  if (status.kind === "channel") return status.readiness === "ready" ? "bg-emerald-500" : "bg-muted-foreground/50";
-  if (status.status === "busy") return "bg-blue-500";
-  if (status.status === "offline") return "bg-muted-foreground/50";
-  return "bg-emerald-500";
+  if (status.kind === "channel") {
+    return getSleiStatusIndicatorClassName(status.readiness === "ready" ? "idle" : "offline");
+  }
+  return getSleiStatusIndicatorClassName(status.status);
 }
