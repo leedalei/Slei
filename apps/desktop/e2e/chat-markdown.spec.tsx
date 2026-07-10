@@ -25,22 +25,24 @@ afterEach(() => {
 });
 
 describe("chat Markdown rendering", () => {
-  it("renders mentions with a theme-relative neutral gray surface", () => {
+  it("renders mentions with the default secondary badge styles and inline alignment", () => {
     const html = renderToStaticMarkup(
       <MarkdownMessage markdown="mysql有哪些好用的mcp? @theo" tone="primary" />,
     );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    const mention = host.querySelector<HTMLElement>(".slei-message-mention");
     const mentionRule = appCss.match(/\.slei-markdown-message \.slei-message-mention \{[^}]+\}/)?.[0];
 
-    expect(html).toContain('class="slei-message-mention"');
-    expect(html).toContain(">@theo</span>");
-    expect(mentionRule).toContain("background: color-mix(in srgb, currentColor 26%, transparent);");
-    expect(mentionRule).toContain("border-color: color-mix(in srgb, currentColor 36%, transparent);");
-    expect(mentionRule).toContain("border-style: solid;");
-    expect(mentionRule).toContain("border-width: var(--app-border-subtle);");
-    expect(mentionRule).toContain("color: inherit;");
-    expect(mentionRule).not.toContain("var(--accent)");
-    expect(mentionRule).not.toContain("var(--card)");
-    expect(mentionRule).not.toContain("var(--primary)");
+    expect(mention?.tagName).toBe("SPAN");
+    expect(mention?.dataset.slot).toBe("badge");
+    expect(mention?.dataset.variant).toBe("secondary");
+    expect(mention?.textContent).toBe("@theo");
+    expect(mention?.classList).toContain("bg-secondary");
+    expect(mention?.classList).toContain("text-secondary-foreground");
+    expect(mention?.classList).toContain("border-transparent");
+    expect(mention?.classList).toContain("align-middle");
+    expect(mentionRule).toBeUndefined();
   });
 
   it("renders app-styled Markdown blocks and sanitizes unsafe links", () => {
@@ -175,7 +177,7 @@ describe("chat Markdown rendering", () => {
       />,
     );
 
-    expect(html).toContain('class="slei-message-mention"');
+    expect(html).toContain("slei-message-mention");
     expect(html).toContain(">@coda</span>");
     expect(html).toContain(">@lei-lee</span>");
     expect(html).toContain("<code>@raw</code>");

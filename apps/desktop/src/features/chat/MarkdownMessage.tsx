@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { SleiIcon, TooltipButton } from "../../components";
+import { Badge } from "../../components/ui/badge";
 import { copyPlainText } from "../../lib/clipboard";
 import { cn } from "@/lib/utils";
 import { sanitizeMarkdown } from "../../lib/markdown";
@@ -164,9 +165,9 @@ function renderMentionText(text: string, childIndex: number): ReactNode[] {
 
     if (mentionStart > lastIndex) nodes.push(text.slice(lastIndex, mentionStart));
     nodes.push(
-      <span className="slei-message-mention" key={`${childIndex}-${mentionStart}`}>
+      <Badge className="slei-message-mention align-middle" key={`${childIndex}-${mentionStart}`} variant="secondary">
         {mention}
-      </span>,
+      </Badge>,
     );
     lastIndex = mentionStart + mention.length;
   }

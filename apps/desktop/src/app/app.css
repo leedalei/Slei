@@ -1383,20 +1383,6 @@ select:focus-visible {
   text-decoration: underline;
 }
 
-.slei-markdown-message .slei-message-mention {
-  background: color-mix(in srgb, currentColor 26%, transparent);
-  border-color: color-mix(in srgb, currentColor 36%, transparent);
-  border-style: solid;
-  border-width: var(--app-border-subtle);
-  border-radius: 999px;
-  color: inherit;
-  display: inline-block;
-  font-weight: var(--app-weight-semibold);
-  line-height: 1.35;
-  padding: 0 0.38em;
-  white-space: nowrap;
-}
-
 .slei-markdown-message .hljs-keyword {
   color: var(--destructive);
 }
