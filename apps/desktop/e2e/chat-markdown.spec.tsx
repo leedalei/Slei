@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MarkdownMessage } from "../src/features/chat/MarkdownMessage";
+
+const appCss = readFileSync(resolve(process.cwd(), "src/app/app.css"), "utf8");
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,6 +25,24 @@ afterEach(() => {
 });
 
 describe("chat Markdown rendering", () => {
+  it("renders mentions with a theme-relative neutral gray surface", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage markdown="mysql有哪些好用的mcp? @theo" tone="primary" />,
+    );
+    const mentionRule = appCss.match(/\.slei-markdown-message \.slei-message-mention \{[^}]+\}/)?.[0];
+
+    expect(html).toContain('class="slei-message-mention"');
+    expect(html).toContain(">@theo</span>");
+    expect(mentionRule).toContain("background: color-mix(in srgb, currentColor 26%, transparent);");
+    expect(mentionRule).toContain("border-color: color-mix(in srgb, currentColor 36%, transparent);");
+    expect(mentionRule).toContain("border-style: solid;");
+    expect(mentionRule).toContain("border-width: var(--app-border-subtle);");
+    expect(mentionRule).toContain("color: inherit;");
+    expect(mentionRule).not.toContain("var(--accent)");
+    expect(mentionRule).not.toContain("var(--card)");
+    expect(mentionRule).not.toContain("var(--primary)");
+  });
+
   it("renders app-styled Markdown blocks and sanitizes unsafe links", () => {
     const html = renderToStaticMarkup(
       <MarkdownMessage
