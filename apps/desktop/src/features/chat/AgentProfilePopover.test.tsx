@@ -126,6 +126,8 @@ describe("AgentProfilePopover", () => {
       expect(statusDot).not.toBeNull();
       expect(header?.querySelector('[data-slot="avatar"]')).not.toBeNull();
       expect(header?.querySelector('[data-testid="profile-header-action"]')).not.toBeNull();
+      expect(header?.className).toContain("items-center");
+      expect(header?.className).not.toContain("items-start");
       expect(identity?.textContent).toContain("Yeal");
       expect(identity?.textContent).toContain("引导员");
       expect(metadata?.textContent).toContain("@yeal");

@@ -2114,17 +2114,21 @@ describe("SleiAppFrame global search navigation", () => {
     const name = nameContainer?.querySelector<HTMLElement>("span");
     const badge = nameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
     const directMessageList = host.querySelector<HTMLElement>('[data-slot="direct-message-list"]');
+    const row = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]');
     const rowButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="workspace-dm-row-a1"] button'));
     const menuButton = rowButtons.find((button) => button !== trigger);
 
     expect(directMessageList?.querySelector('[data-direct-message-list-item]')).not.toBeNull();
-    expect(directMessageList?.className).toContain("pr-2");
+    expect(directMessageList?.className).not.toContain("pr-2");
+    expect(row?.className).toContain("px-2.5");
     expect(trigger?.className).toContain("h-full");
-    expect(host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]')?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(trigger?.className).toContain("px-0");
+    expect(row?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
     expect(menuButton).toBeInstanceOf(HTMLElement);
     expect(menuButton?.className).toContain("shrink-0");
     expect(menuButton?.className).toContain("opacity-0");
     expect(menuButton?.className).toContain("size-6");
+    expect(menuButton?.className).not.toContain("mr-1");
     expect(statusDot?.getAttribute("role")).toBe("img");
     expect(statusDot?.className).toContain("rounded-full");
     expect(statusDot?.className.split(/\s+/)).toContain("absolute");

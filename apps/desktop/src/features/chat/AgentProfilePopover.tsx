@@ -60,7 +60,7 @@ export function AgentProfilePopover(input: {
       </PopoverTrigger>
       <PopoverContent ref={contentRef} align={input.align ?? "end"} className="w-72 p-3" data-agent-profile-card="" data-testid={input.cardTestId ?? "slei-agent-profile-card"}>
         <div className="grid gap-3">
-          <div className="flex items-start justify-between gap-3" data-slot="agent-profile-header">
+          <div className="flex items-center justify-between gap-3" data-slot="agent-profile-header">
             <MemberAvatar identity={input.member} large />
             {input.action ? <div data-slot="agent-profile-header-action">{input.action}</div> : null}
           </div>

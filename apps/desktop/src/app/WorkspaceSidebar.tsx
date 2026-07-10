@@ -667,7 +667,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                 </Button>
               </div>
             </div>
-            <div className="space-y-1 pr-2" data-slot="direct-message-list">
+            <div className="space-y-1" data-slot="direct-message-list">
               {sortedDirectMessageEntries.map((entry) => {
                 const { conversation, member } = entry;
                 const conversationId = conversation?.id;
@@ -680,7 +680,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   >
                     <SelectableCard
                       selected={selected || openDmMenuId === member.id}
-                      className={cn(sidebarListRowClassName, "h-10 min-h-10")}
+                      className={cn(sidebarListRowClassName, "h-10 min-h-10 px-2.5")}
                       data-conversation-id={conversationId}
                       data-direct-message-list-item=""
                       data-member-id={member.id}
@@ -689,7 +689,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                     >
                       <button
                         aria-current={selected ? "true" : undefined}
-                        className={cn(sidebarListTriggerClassName, "gap-2")}
+                        className={cn(sidebarListTriggerClassName, "gap-2 px-0")}
                         data-slot="direct-message-select-trigger"
                         onClick={() => selectDirectMessage(entry)}
                         type="button"
@@ -707,7 +707,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                       <DropdownMenuTrigger asChild>
                         <Button
                           aria-label={input.messages.shell.workspaceSidebar.dmMore(member.name)}
-                          className="mr-1 size-6 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100 [&_svg]:size-3"
+                          className="size-6 self-center opacity-0 transition-opacity group-hover/channel:opacity-100 group-focus-within/channel:opacity-100 focus-visible:opacity-100 [&_svg]:size-3"
                           size="icon"
                           type="button"
                           variant="ghost"

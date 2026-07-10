@@ -122,6 +122,7 @@
   --overlay-shadow-xs: 0 1px 3px color-mix(in srgb, var(--overlay-shadow-color) 18%, transparent);
   --overlay-shadow-sm: 0 2px 4px color-mix(in srgb, var(--overlay-shadow-color) 20%, transparent);
   --overlay-shadow-md: 0 4px 4px color-mix(in srgb, var(--overlay-shadow-color) 24%, transparent);
+  --popover-shadow-md: 0 10px 24px -6px var(--overlay-shadow-color), 0 3px 8px -2px var(--overlay-shadow-color);
   --glass-nav-bg: color-mix(in srgb, var(--glass-bg) 82%, transparent);
   --glass-sidebar-bg: color-mix(in srgb, var(--glass-bg) 92%, transparent);
   --app-chrome-height: 36px;
