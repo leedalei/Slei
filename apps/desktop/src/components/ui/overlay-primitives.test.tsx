@@ -247,10 +247,10 @@ describe("overlay UI primitives", () => {
       expect(content).not.toBeNull();
       expect(content?.getAttribute("role")).toBe("menu");
       expect(content?.getAttribute("data-state")).toBe("open");
-      expect(content?.className).toContain("rounded-md");
+      expect(content?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
       expect(content?.className).toContain("border");
       expect(content?.className).toContain("bg-popover");
-      expect(content?.className).toContain("shadow-md");
+      expect(content?.className).toContain("shadow-[var(--overlay-shadow-sm)]");
       expect(content?.className).not.toContain("t-dropdown");
       expect(content?.className).not.toContain("shadow-[0_0_4px_rgba");
       expect(content?.className).not.toContain("bg-white/10");
@@ -320,7 +320,8 @@ describe("overlay UI primitives", () => {
       expect(content?.getAttribute("role")).toBe("listbox");
       expect(content?.className).toContain("border-border");
       expect(content?.className).toContain("bg-popover");
-      expect(content?.className).toContain("shadow-md");
+      expect(content?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
+      expect(content?.className).toContain("shadow-[var(--overlay-shadow-sm)]");
       expect(content?.className).not.toContain("t-dropdown");
       expect(option?.getAttribute("role")).toBe("option");
       expect(option?.className).toContain("focus:bg-accent");
@@ -383,10 +384,10 @@ describe("overlay UI primitives", () => {
       const content = document.body.querySelector<HTMLElement>('[data-slot="popover-content"]');
       expect(content).not.toBeNull();
       expect(content?.textContent).toContain("Only active");
-      expect(content?.className).toContain("rounded-md");
+      expect(content?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
       expect(content?.className).toContain("border");
       expect(content?.className).toContain("bg-popover");
-      expect(content?.className).toContain("shadow-md");
+      expect(content?.className).toContain("shadow-[var(--overlay-shadow-sm)]");
       expect(content?.className).not.toContain("t-dropdown");
       expect(content?.className).not.toContain("shadow-[0_0_4px_rgba");
       expect(document.body.querySelector('[aria-label="Open filters"]')?.getAttribute("aria-expanded")).toBe("true");

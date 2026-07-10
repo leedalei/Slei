@@ -1143,7 +1143,7 @@ describe("desktop UI primitive usage", () => {
     const selectSource = readSource("components/ui/select.tsx");
 
     expect(selectSource).toContain("rounded-md border bg-transparent");
-    expect(selectSource).toContain("rounded-md border border-border shadow-md");
+    expect(selectSource).toContain("rounded-[calc(var(--radius-md)+4px)] border border-border shadow-[var(--overlay-shadow-sm)]");
     expect(selectSource).toContain("shadow-xs");
     expect(selectSource).not.toContain("rounded-lg border border-[var(--tabs-control-border)] bg-[var(--tabs-control-bg)]");
     expect(selectSource).not.toContain("rounded-lg border border-border/70 bg-popover text-popover-foreground");
@@ -1192,8 +1192,8 @@ describe("desktop UI primitive usage", () => {
       expect(source).toContain("data-[state=open]:animate-in");
       expect(source).toContain("data-[state=closed]:animate-out");
       expect(source).toContain("data-[side=bottom]:slide-in-from-top-2");
-      expect(source).toContain("rounded-md border bg-popover");
-      expect(source).toContain("shadow-md");
+      expect(source).toContain("rounded-[calc(var(--radius-md)+4px)] border bg-popover");
+      expect(source).toContain("shadow-[var(--overlay-shadow-sm)]");
       expect(source).not.toContain("shadow-[0_0_4px_rgba");
     }
 
