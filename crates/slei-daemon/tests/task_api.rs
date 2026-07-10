@@ -528,6 +528,7 @@ async fn app_state_with_agent_handle(agent_id: &str, handle: &str) -> AppState {
         runtime_kind: "ClaudeCode".to_string(),
         model: "Sonnet".to_string(),
         node_id: "local-node".to_string(),
+        profession: "工程协作 Agent".to_string(),
         description: "工程协作 Agent".to_string(),
         workspace_path: workspace_path.to_string_lossy().to_string(),
         memory_path: workspace_path

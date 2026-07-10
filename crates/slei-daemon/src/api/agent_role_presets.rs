@@ -12,7 +12,17 @@ use crate::state::AppState;
 struct AgentRolePresetView {
     id: String,
     title: String,
+    profession: String,
     description: String,
+    category_id: String,
+    sort_order: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentRolePresetCategoryView {
+    id: String,
+    title: String,
     sort_order: i64,
 }
 
@@ -25,20 +35,34 @@ pub async fn list(State(state): State<AppState>, headers: HeaderMap) -> Response
         Err(response) => return response,
     };
 
-    match state.orchestration().repos().agent_role_presets().await {
-        Ok(presets) => Json(json!({
+    let repos = state.orchestration().repos();
+    match (
+        repos.agent_role_preset_categories().await,
+        repos.agent_role_presets().await,
+    ) {
+        (Ok(categories), Ok(presets)) => Json(json!({
+            "categories": categories
+                .into_iter()
+                .map(|category| AgentRolePresetCategoryView {
+                    id: category.id,
+                    title: category.title,
+                    sort_order: category.sort_order,
+                })
+                .collect::<Vec<_>>(),
             "presets": presets
                 .into_iter()
                 .map(|preset| AgentRolePresetView {
                     id: preset.id,
                     title: preset.title,
+                    profession: preset.profession,
                     description: preset.description,
+                    category_id: preset.category_id,
                     sort_order: preset.sort_order,
                 })
                 .collect::<Vec<_>>()
         }))
         .into_response(),
-        Err(error) => (
+        (Err(error), _) | (_, Err(error)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({ "error": error.to_string() })),
         )

@@ -139,7 +139,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        assert_eq!(versions, (1..=13).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -156,7 +156,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions.last().copied(), Some(12));
+        assert_eq!(versions.last().copied(), Some(13));
     }
 
     #[tokio::test]
@@ -718,7 +718,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        assert_eq!(versions, (1..=13).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -788,6 +788,7 @@ mod tests {
                 "ClaudeCode",
                 "Sonnet",
                 "local-node",
+                "开发工程师",
                 "开发",
                 "coda",
             )
@@ -803,6 +804,7 @@ mod tests {
                 "ClaudeCode",
                 "Sonnet",
                 "local-node",
+                "开发工程师",
                 "重复",
                 "other",
             )
@@ -821,38 +823,29 @@ mod tests {
         let (url, _path) = sqlite_file_url("agent-handle-legacy-duplicates");
         let db = SleiDb::connect(&url).await.unwrap();
         db.migrate_for_test(&MIGRATIONS[..8]).await.unwrap();
-        let repos = Repositories::new(db.pool().clone());
-
-        repos
-            .upsert_agent(
-                "agent_coda",
-                "Coda",
-                "@coda",
-                "agent",
-                false,
-                "ClaudeCode",
-                "Sonnet",
-                "local-node",
-                "开发",
-                "coda",
+        for (id, name, handle, description, avatar_seed) in [
+            ("agent_coda", "Coda", "@coda", "开发", "coda"),
+            ("agent_other", "Other", "@Coda", "重复", "other"),
+        ] {
+            sqlx::query(
+                "INSERT INTO agents(
+                    id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
+                    description, workspace_path, memory_path, docs_path, avatar_seed, runtime_status
+                 )
+                 VALUES (?, ?, ?, 'agent', 0, 'ClaudeCode', 'Sonnet', 'local-node', ?, ?, ?, ?, ?, 'ready')",
             )
+            .bind(id)
+            .bind(name)
+            .bind(handle)
+            .bind(description)
+            .bind(format!("agents/{id}"))
+            .bind(format!("agents/{id}/MEMORY.md"))
+            .bind(format!("agents/{id}/docs"))
+            .bind(avatar_seed)
+            .execute(db.pool())
             .await
             .unwrap();
-        repos
-            .upsert_agent(
-                "agent_other",
-                "Other",
-                "@Coda",
-                "agent",
-                false,
-                "ClaudeCode",
-                "Sonnet",
-                "local-node",
-                "重复",
-                "other",
-            )
-            .await
-            .unwrap();
+        }
 
         let error = db.migrate().await.unwrap_err();
         let message = error.to_string();
@@ -1070,7 +1063,7 @@ mod tests {
         .fetch_all(db.pool())
         .await
         .unwrap();
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+        assert_eq!(versions, (1..=13).collect::<Vec<_>>());
     }
 
     #[tokio::test]
@@ -1241,6 +1234,19 @@ mod tests {
             assert!(preview.contains("[redacted]"));
             assert!(preview.contains("safe"));
         }
+    }
+
+    #[test]
+    fn agent_activity_payload_preview_redacts_json_sensitive_values() {
+        let preview = sanitize_activity_payload_preview(
+            r#"{"payload":{"authorization":"Bearer secret-token","password":"abc"},"safe":"visible"}"#,
+            200,
+        );
+
+        assert!(!preview.contains("secret-token"));
+        assert!(!preview.contains("abc"));
+        assert!(preview.contains("[redacted]"));
+        assert!(preview.contains("visible"));
     }
 
     #[tokio::test]
@@ -2136,6 +2142,7 @@ mod tests {
                     "Codex",
                     "GPT-5",
                     "local-node",
+                    "检索测试员",
                     &format!("needle visible agent {index:02}"),
                     &format!("needle-agent-{index:02}"),
                 )
@@ -2163,6 +2170,7 @@ mod tests {
                 "Codex",
                 "GPT-5",
                 "local-node",
+                "系统测试员",
                 "needle hidden system agent",
                 "needle-system",
             )
@@ -2178,6 +2186,7 @@ mod tests {
                 "Codex",
                 "GPT-5",
                 "local-node",
+                "内部测试员",
                 "needle hidden internal agent",
                 "needle-internal",
             )
@@ -2256,6 +2265,7 @@ mod tests {
                 "Codex",
                 "GPT-5",
                 "node-reset",
+                "重置测试员",
                 "reset test agent",
                 "reset-avatar",
             )
@@ -2683,7 +2693,7 @@ mod tests {
             .fetch_one(db.pool())
             .await
             .unwrap();
-        assert_eq!(migration_count, 12);
+        assert_eq!(migration_count, 13);
 
         let next_sequence = repos
             .append_event("test.event.after_reset", Uuid::new_v4(), "{}")
@@ -2709,6 +2719,7 @@ mod tests {
                 "ClaudeCode",
                 "Sonnet",
                 "local-node",
+                "开发工程师",
                 "开发",
                 "agent_coda",
             )
@@ -2724,6 +2735,7 @@ mod tests {
                 "Codex",
                 "GPT-5",
                 "remote-node",
+                "协调员",
                 "协调",
                 "coda-prime",
             )

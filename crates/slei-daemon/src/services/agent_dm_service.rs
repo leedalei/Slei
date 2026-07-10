@@ -128,6 +128,7 @@ impl AgentDmService {
             agent_id: agent.id.clone(),
             cwd: agent.workspace_path.clone(),
             session_id: runtime_session.session_id,
+            model: agent.model.clone(),
             resume_session,
             persist_session: true,
         })?;
@@ -145,6 +146,7 @@ impl AgentDmService {
             agent_id: &agent.id,
             handle: &agent.handle,
             name: &agent.name,
+            profession: &agent.profession,
             role: &agent.description,
             node_id: &agent.node_id,
             cwd: &agent.workspace_path,
@@ -230,6 +232,7 @@ impl AgentDmService {
                 agent_id: agent.id,
                 runtime: runtime_session.runtime_kind,
                 cwd: agent.workspace_path,
+                model: agent.model,
                 persist_session: true,
                 resume_session: true,
                 capabilities: crate::adapters::claude_worker::RuntimeCapabilities {

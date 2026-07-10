@@ -881,6 +881,7 @@ function testMockAgentWorkspaceFileContent(agent: DesktopAgentView, relativePath
     return renderInitialMemory({
       name: agent.name,
       handle: agent.handle,
+      profession: agent.profession ?? "智能体",
       description: agent.description,
       agentKind: agent.agentKind,
       channelIds: agent.channelIds,

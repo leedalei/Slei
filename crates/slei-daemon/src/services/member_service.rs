@@ -44,6 +44,8 @@ pub struct ProductAgentDraft {
     pub runtime_kind: String,
     pub model: String,
     pub node_id: String,
+    #[serde(default = "default_agent_profession")]
+    pub profession: String,
     pub description: String,
     pub avatar_seed: Option<String>,
 }
@@ -52,6 +54,7 @@ pub struct ProductAgentDraft {
 #[serde(rename_all = "camelCase")]
 pub struct ProductAgentUpdate {
     pub name: Option<String>,
+    pub profession: Option<String>,
     pub description: Option<String>,
     pub runtime_kind: Option<String>,
     pub model: Option<String>,
@@ -71,6 +74,8 @@ pub struct ProductAgentRecord {
     pub runtime_kind: String,
     pub model: String,
     pub node_id: String,
+    #[serde(default = "default_agent_profession")]
+    pub profession: String,
     pub description: String,
     pub workspace_path: String,
     pub memory_path: String,
@@ -295,6 +300,8 @@ impl MemberService {
 
         let normalized_name = validate_agent_name(&draft.name)?;
         let normalized_handle = normalize_handle(&draft.handle)?;
+        validate_agent_profession(&draft.profession)?;
+        validate_agent_description(&draft.description)?;
         if draft.runtime_kind.trim().is_empty() || draft.node_id.trim().is_empty() {
             return Err(MemberError::InvalidAgent);
         }
@@ -369,6 +376,7 @@ impl MemberService {
             runtime_kind: "ClaudeCode".to_string(),
             model: "Sonnet".to_string(),
             node_id: node_id.to_string(),
+            profession: "引导员".to_string(),
             description: "回答关于 Slei App 如何使用的问题，用于帮助和引导用户建立自己的团队。"
                 .to_string(),
             avatar_seed: None,
@@ -498,6 +506,8 @@ impl MemberService {
         fs::create_dir_all(&docs_path).map_err(MemberError::Io)?;
 
         let now = current_timestamp();
+        let profession = validate_agent_profession(&draft.profession)?;
+        let description = validate_agent_description(&draft.description)?;
         let record = ProductAgentRecord {
             id: id.clone(),
             name: draft.name.trim().to_string(),
@@ -507,7 +517,8 @@ impl MemberService {
             runtime_kind: draft.runtime_kind.trim().to_string(),
             model: draft.model.trim().to_string(),
             node_id: draft.node_id.trim().to_string(),
-            description: draft.description.trim().to_string(),
+            profession,
+            description,
             workspace_path: workspace_path.to_string_lossy().to_string(),
             memory_path: memory_path.to_string_lossy().to_string(),
             docs_path: docs_path.to_string_lossy().to_string(),
@@ -535,6 +546,7 @@ impl MemberService {
                 &record.runtime_kind,
                 &record.model,
                 &record.node_id,
+                &record.profession,
                 &record.description,
                 &record.avatar_seed,
             )
@@ -606,7 +618,10 @@ impl MemberService {
             agent.name = normalized_name;
         }
         if let Some(description) = update.description {
-            agent.description = description.trim().to_string();
+            agent.description = validate_agent_description(&description)?;
+        }
+        if let Some(profession) = update.profession {
+            agent.profession = validate_agent_profession(&profession)?;
         }
         if let Some(runtime_kind) = update.runtime_kind {
             if runtime_kind.trim().is_empty() {
@@ -858,6 +873,7 @@ fn product_agent_from_row(
         runtime_kind: row.runtime_kind.clone(),
         model: row.model,
         node_id: row.node_id,
+        profession: row.profession,
         description: row.description,
         workspace_path: row.workspace_path,
         memory_path: row.memory_path,
@@ -897,6 +913,7 @@ fn product_agent_to_update_row(agent: &ProductAgentRecord) -> AgentUpdateRow {
         runtime_kind: agent.runtime_kind.clone(),
         model: agent.model.clone(),
         node_id: agent.node_id.clone(),
+        profession: agent.profession.clone(),
         description: agent.description.clone(),
         workspace_path: agent.workspace_path.clone(),
         memory_path: agent.memory_path.clone(),
@@ -955,13 +972,31 @@ fn normalize_handle(handle: &str) -> Result<String, MemberError> {
 
 fn validate_agent_name(name: &str) -> Result<String, MemberError> {
     let trimmed = name.trim();
-    let valid =
-        !trimmed.is_empty() && !trimmed.chars().any(char::is_whitespace) && !trimmed.contains('-');
+    let valid = !trimmed.is_empty()
+        && trimmed.chars().count() <= 32
+        && !trimmed.chars().any(char::is_whitespace)
+        && !trimmed.contains('-');
     if valid {
         Ok(trimmed.to_string())
     } else {
         Err(MemberError::InvalidAgent)
     }
+}
+
+fn validate_agent_profession(profession: &str) -> Result<String, MemberError> {
+    let trimmed = profession.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 32 {
+        return Err(MemberError::InvalidAgent);
+    }
+    Ok(trimmed.to_string())
+}
+
+fn validate_agent_description(description: &str) -> Result<String, MemberError> {
+    let trimmed = description.trim();
+    if trimmed.is_empty() || trimmed.chars().count() > 300 {
+        return Err(MemberError::InvalidAgent);
+    }
+    Ok(trimmed.to_string())
 }
 
 fn load_legacy_product_agents(root: &PathBuf) -> Vec<ProductAgentRecord> {
@@ -1006,6 +1041,7 @@ fn import_legacy_product_agents(root: &PathBuf) {
                         &agent.runtime_kind,
                         &agent.model,
                         &agent.node_id,
+                        &agent.profession,
                         &agent.description,
                         &agent.avatar_seed,
                     )
@@ -1051,10 +1087,15 @@ fn default_agent_kind() -> String {
     "agent".to_string()
 }
 
+fn default_agent_profession() -> String {
+    "智能体".to_string()
+}
+
 fn agent_template_input(agent: &ProductAgentRecord) -> AgentTemplateInput<'_> {
     AgentTemplateInput {
         name: &agent.name,
         handle: &agent.handle,
+        profession: &agent.profession,
         description: &agent.description,
         agent_kind: Some(&agent.agent_kind),
         channel_ids: agent.channel_ids.iter().map(String::as_str).collect(),

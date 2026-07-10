@@ -527,6 +527,7 @@ impl InteractiveCard {
                         "runtimeKind": "ClaudeCode",
                         "model": "Sonnet",
                         "nodeId": "local-node",
+                        "profession": agent_profession(name),
                         "description": agent_description(name),
                     }),
                     action_label: "创建".to_string(),
@@ -608,6 +609,7 @@ fn validate_product_tool_draft(kind: &str, draft: &Value) -> Result<(), CardErro
             required_string(draft, "runtimeKind")?;
             required_string(draft, "model")?;
             required_string(draft, "nodeId")?;
+            required_string(draft, "profession")?;
             required_string(draft, "description")?;
         }
         "createChannel" => {
@@ -718,6 +720,14 @@ fn agent_description(name: &str) -> String {
         "QA 质保员，负责审查代码质量、安全漏洞，提出改进意见。".to_string()
     } else {
         "研发团队开发工程师，负责基于任务分解进行实际编码工作。".to_string()
+    }
+}
+
+fn agent_profession(name: &str) -> String {
+    if name.to_lowercase().contains("nancy") {
+        "QA 质保员".to_string()
+    } else {
+        "研发执行员".to_string()
     }
 }
 

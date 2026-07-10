@@ -1,3 +1,4 @@
+use serde_json::Value;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use uuid::Uuid;
 
@@ -72,6 +73,7 @@ pub struct AgentRow {
     pub runtime_kind: String,
     pub model: String,
     pub node_id: String,
+    pub profession: String,
     pub description: String,
     pub workspace_path: String,
     pub memory_path: String,
@@ -97,7 +99,17 @@ pub struct AgentSearchRow {
 pub struct AgentRolePresetRow {
     pub id: String,
     pub title: String,
+    pub profession: String,
     pub description: String,
+    pub category_id: String,
+    pub sort_order: i64,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentRolePresetCategoryRow {
+    pub id: String,
+    pub title: String,
     pub sort_order: i64,
     pub enabled: bool,
 }
@@ -106,7 +118,9 @@ pub struct AgentRolePresetRow {
 pub struct AgentRolePresetSeed {
     pub id: &'static str,
     pub title: &'static str,
+    pub profession: &'static str,
     pub description: &'static str,
+    pub category_id: &'static str,
     pub sort_order: i64,
     pub enabled: bool,
 }
@@ -115,73 +129,93 @@ pub const DEFAULT_AGENT_ROLE_PRESETS: &[AgentRolePresetSeed] = &[
     AgentRolePresetSeed {
         id: "xiaohongshu-researcher",
         title: "小红书调研员",
+        profession: "小红书调研员",
         description:
             "负责从小红书调研检索信息，整理笔记、提炼趋势、对比竞品，并输出可执行的分析结论。",
+        category_id: "market-content",
         sort_order: 10,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "research-analyst",
         title: "资料调研员",
+        profession: "资料调研员",
         description: "负责围绕指定主题收集资料、核对来源、归纳关键事实，并形成结构化调研摘要。",
+        category_id: "research-analysis",
         sort_order: 20,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "product-planner",
         title: "产品策划员",
+        profession: "产品策划员",
         description: "负责拆解用户需求、梳理使用场景、设计功能边界，并输出清晰的产品方案。",
+        category_id: "product-design",
         sort_order: 30,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "engineering-implementer",
         title: "研发执行员",
+        profession: "研发执行员",
         description: "负责根据明确需求实现代码、修复缺陷、运行验证，并及时反馈风险和阻塞。",
+        category_id: "engineering",
         sort_order: 40,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "system-architect",
         title: "系统架构师",
+        profession: "系统架构师",
         description: "负责设计系统架构、拆分模块边界、识别技术风险，并给出可落地的演进方案。",
+        category_id: "engineering",
         sort_order: 50,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "qa-reviewer",
         title: "质量审查员",
+        profession: "质量审查员",
         description:
             "负责检查交付物的正确性、边界条件、回归风险和体验问题，并给出可复现的改进建议。",
+        category_id: "quality",
         sort_order: 60,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "teaching-assistant",
         title: "教学助理",
+        profession: "教学助理",
         description: "负责把复杂知识拆成循序渐进的讲解、练习和反馈，帮助学习者理解概念并完成训练。",
+        category_id: "education",
         sort_order: 70,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "legal-researcher",
         title: "法律研究员",
+        profession: "法律研究员",
         description:
             "负责整理法律、合同和合规相关资料，提炼风险点与待确认问题，并提醒用户寻求专业律师确认。",
+        category_id: "legal-finance",
         sort_order: 80,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "finance-analyst",
         title: "财务分析员",
+        profession: "财务分析员",
         description: "负责整理预算、成本、收入和指标数据，做基础测算、趋势分析和风险提示。",
+        category_id: "legal-finance",
         sort_order: 90,
         enabled: true,
     },
     AgentRolePresetSeed {
         id: "operations-planner",
         title: "运营策划员",
+        profession: "运营策划员",
         description: "负责设计活动方案、用户触达节奏、内容排期和效果指标，并持续复盘优化。",
+        category_id: "operations",
         sort_order: 100,
         enabled: true,
     },
@@ -197,6 +231,7 @@ pub struct AgentUpdateRow {
     pub runtime_kind: String,
     pub model: String,
     pub node_id: String,
+    pub profession: String,
     pub description: String,
     pub workspace_path: String,
     pub memory_path: String,
@@ -866,13 +901,15 @@ impl Repositories {
         for preset in DEFAULT_AGENT_ROLE_PRESETS {
             sqlx::query(
                 "INSERT OR IGNORE INTO agent_role_presets(
-                    id, title, description, sort_order, enabled
+                    id, title, profession, description, category_id, sort_order, enabled
                  )
-                 VALUES (?, ?, ?, ?, ?)",
+                 VALUES (?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(preset.id)
             .bind(preset.title)
+            .bind(preset.profession)
             .bind(preset.description)
+            .bind(preset.category_id)
             .bind(preset.sort_order)
             .bind(if preset.enabled { 1 } else { 0 })
             .execute(&self.pool)
@@ -881,9 +918,26 @@ impl Repositories {
         Ok(())
     }
 
+    pub async fn agent_role_preset_categories(
+        &self,
+    ) -> Result<Vec<AgentRolePresetCategoryRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, title, sort_order, enabled
+             FROM agent_role_preset_categories
+             WHERE enabled = 1
+             ORDER BY sort_order ASC, title ASC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(agent_role_preset_category_row_from_sql)
+            .collect()
+    }
+
     pub async fn agent_role_presets(&self) -> Result<Vec<AgentRolePresetRow>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, title, description, sort_order, enabled
+            "SELECT id, title, profession, description, category_id, sort_order, enabled
              FROM agent_role_presets
              WHERE enabled = 1
              ORDER BY sort_order ASC, title ASC",
@@ -925,6 +979,7 @@ impl Repositories {
         runtime_kind: &str,
         model: &str,
         node_id: &str,
+        profession: &str,
         description: &str,
         avatar_seed: &str,
     ) -> Result<(), sqlx::Error> {
@@ -934,9 +989,9 @@ impl Repositories {
         sqlx::query(
             "INSERT INTO agents(
                 id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
-                description, workspace_path, memory_path, docs_path, avatar_seed, runtime_status
+                profession, description, workspace_path, memory_path, docs_path, avatar_seed, runtime_status
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready')
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready')
              ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 handle = excluded.handle,
@@ -945,6 +1000,7 @@ impl Repositories {
                 runtime_kind = excluded.runtime_kind,
                 model = excluded.model,
                 node_id = excluded.node_id,
+                profession = excluded.profession,
                 description = excluded.description,
                 workspace_path = excluded.workspace_path,
                 memory_path = excluded.memory_path,
@@ -961,6 +1017,7 @@ impl Repositories {
         .bind(runtime_kind)
         .bind(model)
         .bind(node_id)
+        .bind(profession)
         .bind(description)
         .bind(workspace_path)
         .bind(memory_path)
@@ -974,7 +1031,7 @@ impl Repositories {
     pub async fn agents(&self) -> Result<Vec<AgentRow>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
-                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    profession, description, workspace_path, memory_path, docs_path, avatar_seed,
                     runtime_status, created_at, updated_at
              FROM agents
              ORDER BY created_at ASC, id ASC",
@@ -990,7 +1047,7 @@ impl Repositories {
     pub async fn agent_by_id(&self, id: &str) -> Result<Option<AgentRow>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
-                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    profession, description, workspace_path, memory_path, docs_path, avatar_seed,
                     runtime_status, created_at, updated_at
              FROM agents
              WHERE id = ?",
@@ -1005,7 +1062,7 @@ impl Repositories {
     pub async fn agent_by_handle(&self, handle: &str) -> Result<Option<AgentRow>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT id, name, handle, agent_kind, system_owned, runtime_kind, model, node_id,
-                    description, workspace_path, memory_path, docs_path, avatar_seed,
+                    profession, description, workspace_path, memory_path, docs_path, avatar_seed,
                     runtime_status, created_at, updated_at
              FROM agents
              WHERE lower(handle) = lower(?)",
@@ -1032,11 +1089,13 @@ impl Repositories {
                AND (
                     name LIKE ? ESCAPE '\\'
                     OR handle LIKE ? ESCAPE '\\'
+                    OR profession LIKE ? ESCAPE '\\'
                     OR description LIKE ? ESCAPE '\\'
                )
              ORDER BY updated_at DESC, id ASC
              LIMIT ?",
         )
+        .bind(&pattern)
         .bind(&pattern)
         .bind(&pattern)
         .bind(&pattern)
@@ -1071,6 +1130,7 @@ impl Repositories {
                  runtime_kind = ?,
                  model = ?,
                  node_id = ?,
+                 profession = ?,
                  description = ?,
                  workspace_path = ?,
                  memory_path = ?,
@@ -1087,6 +1147,7 @@ impl Repositories {
         .bind(row.runtime_kind)
         .bind(row.model)
         .bind(row.node_id)
+        .bind(row.profession)
         .bind(row.description)
         .bind(row.workspace_path)
         .bind(row.memory_path)
@@ -4164,8 +4225,49 @@ async fn insert_agent_activity_event_tx(
 }
 
 pub fn sanitize_activity_payload_preview(input: &str, max_chars: usize) -> String {
+    if let Some(redacted_json) = redact_sensitive_json_text(input) {
+        return truncate_activity_payload_preview(&redacted_json, max_chars);
+    }
     let redacted = redact_sensitive_activity_text(input);
     truncate_activity_payload_preview(&redacted, max_chars)
+}
+
+fn redact_sensitive_json_text(input: &str) -> Option<String> {
+    let mut value: Value = serde_json::from_str(input).ok()?;
+    redact_sensitive_json_value(&mut value, None);
+    Some(value.to_string())
+}
+
+fn redact_sensitive_json_value(value: &mut Value, key: Option<&str>) {
+    let key_is_sensitive = key
+        .map(|candidate| {
+            let lower = candidate.to_ascii_lowercase();
+            SENSITIVE_ACTIVITY_MARKERS
+                .iter()
+                .any(|marker| lower.contains(marker))
+        })
+        .unwrap_or(false);
+    if key_is_sensitive {
+        *value = Value::String("[redacted]".to_string());
+        return;
+    }
+
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                redact_sensitive_json_value(item, None);
+            }
+        }
+        Value::Object(map) => {
+            for (key, nested) in map.iter_mut() {
+                redact_sensitive_json_value(nested, Some(key));
+            }
+        }
+        Value::String(text) => {
+            *text = redact_sensitive_activity_text(text);
+        }
+        _ => {}
+    }
 }
 
 fn redact_sensitive_activity_text(input: &str) -> String {
@@ -4807,6 +4909,7 @@ fn agent_row_from_sql(row: sqlx::sqlite::SqliteRow) -> Result<AgentRow, sqlx::Er
         runtime_kind: row.try_get("runtime_kind")?,
         model: row.try_get("model")?,
         node_id: row.try_get("node_id")?,
+        profession: row.try_get("profession")?,
         description: row.try_get("description")?,
         workspace_path: row.try_get("workspace_path")?,
         memory_path: row.try_get("memory_path")?,
@@ -4838,7 +4941,21 @@ fn agent_role_preset_row_from_sql(
     Ok(AgentRolePresetRow {
         id: row.try_get("id")?,
         title: row.try_get("title")?,
+        profession: row.try_get("profession")?,
         description: row.try_get("description")?,
+        category_id: row.try_get("category_id")?,
+        sort_order: row.try_get("sort_order")?,
+        enabled: enabled != 0,
+    })
+}
+
+fn agent_role_preset_category_row_from_sql(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<AgentRolePresetCategoryRow, sqlx::Error> {
+    let enabled: i64 = row.try_get("enabled")?;
+    Ok(AgentRolePresetCategoryRow {
+        id: row.try_get("id")?,
+        title: row.try_get("title")?,
         sort_order: row.try_get("sort_order")?,
         enabled: enabled != 0,
     })

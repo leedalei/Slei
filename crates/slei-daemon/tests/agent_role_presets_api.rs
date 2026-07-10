@@ -263,6 +263,7 @@ async fn member_service_rejects_persisted_unicode_case_duplicate_handles() {
             "ClaudeCode",
             "Sonnet",
             "local-node",
+            "智能体",
             "Uppercase non-ASCII handle.",
             "avatar-upper",
         )
@@ -278,6 +279,7 @@ async fn member_service_rejects_persisted_unicode_case_duplicate_handles() {
             "ClaudeCode",
             "Sonnet",
             "local-node",
+            "智能体",
             "Lowercase non-ASCII handle.",
             "avatar-lower",
         )

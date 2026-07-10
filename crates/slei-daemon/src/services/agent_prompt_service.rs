@@ -2,6 +2,7 @@ pub struct AgentSystemPromptInput<'a> {
     pub agent_id: &'a str,
     pub handle: &'a str,
     pub name: &'a str,
+    pub profession: &'a str,
     pub role: &'a str,
     pub node_id: &'a str,
     pub cwd: &'a str,
@@ -40,6 +41,7 @@ pub fn build_agent_system_prompt(input: AgentSystemPromptInput<'_>) -> String {
 - Agent ID: {agent_id}
 - Handle: {handle}
 - Name: {name}
+- Profession: {profession}
 - Role: {role}
 - You are an autonomous Slei agent running inside the daemon-managed runtime.
 
@@ -182,6 +184,7 @@ Format each Active Context entry with:
         agent_id = input.agent_id,
         handle = input.handle,
         name = input.name,
+        profession = input.profession,
         role = input.role,
         node_id = input.node_id,
         cwd = input.cwd,
@@ -208,6 +211,7 @@ mod tests {
             agent_id: "agent_coda",
             handle: "@coda",
             name: "Coda",
+            profession: "研发执行员",
             role: "implementation worker",
             node_id: "node_local",
             cwd: "/tmp/slei",
@@ -236,6 +240,8 @@ mod tests {
         assert!(prompt.contains("### 3. Specialized Work Request"));
         assert!(prompt.contains("Agent ID: agent_coda"));
         assert!(prompt.contains("Handle: @coda"));
+        assert!(prompt.contains("Profession: 研发执行员"));
+        assert!(prompt.contains("Role: implementation worker"));
         assert!(prompt.contains("`@all` always means Channel Group Address"));
         assert!(prompt.contains("read nearby previous messages before claiming when needed"));
         assert!(prompt.contains("Each agent may participate once"));

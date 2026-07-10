@@ -7,12 +7,14 @@ describe("default agent assets", () => {
     const memory = renderInitialMemory({
       name: "Yeal",
       handle: "@yeal",
+      profession: "引导员",
       description: "Guide",
       agentKind: "guide",
       channelIds: ["zeta", "all"],
     });
 
     expect(memory).toContain("# Yeal");
+    expect(memory).toContain("职业：引导员");
     expect(memory).toContain("创建成员或频道时通过 guide-create Skill 生成产品交互卡");
     expect(memory).not.toContain("主频道：#all");
     expect(memory).not.toContain("已加入频道：#all、#zeta");
@@ -34,6 +36,7 @@ describe("default agent assets", () => {
     const memory = renderInitialMemory({
       name: "Coda",
       handle: "@coda",
+      profession: "研发执行员",
       description: "开发 Agent",
       agentKind: "agent",
       channelIds: ["all"],

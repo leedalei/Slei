@@ -27,7 +27,8 @@ function memberWithLongMentionText(): SleiMember {
     avatar: "AR",
     type: "agent",
     runtimeStatus: "idle",
-    role: "架构设计 Agent，负责与用户头脑风暴、梳理需求、制定技术文档与验收标准，输出清晰的架构设计方案",
+    profession: "系统架构师",
+    role: "系统架构师",
     description: "负责架构设计。",
     computer: "Local",
     created: "2026-06-09",
@@ -1038,7 +1039,7 @@ describe("ChatPage mention panel", () => {
     expect(host.textContent).toContain(messages.chat.sendFailed);
   });
 
-  it("keeps agent role descriptions on the header row", () => {
+  it("keeps agent name and profession on the header row", () => {
     const messages = createDesktopMessages("zh-CN");
     const member = memberWithLongMentionText();
     const data = createSleiFixtures({
@@ -1068,9 +1069,9 @@ describe("ChatPage mention panel", () => {
 
     expect(html).toContain('data-slot="message-header"');
     expect(html).toContain('data-slot="message-actions"');
+    expect(html).toContain(member.name);
     expect(html).toContain(member.role);
     expect(html).not.toContain(messages.chat.roleLabels.agent);
-    expect(html).not.toContain("shrink-0 text-sm text-foreground");
   });
 
   it("uses the shared empty illustration for empty channel tasks and files panels", () => {
@@ -2476,6 +2477,7 @@ describe("ChatPage mention panel", () => {
           id: "agent_luna",
           name: "Luna",
           handle: "@luna",
+          profession: "产品研究 Agent",
           role: "产品研究 Agent",
           description: "负责产品研究。",
           channelReadiness: { all: "ready" },
@@ -2561,6 +2563,104 @@ describe("ChatPage mention panel", () => {
 
     expect(onMemberMessage).toHaveBeenCalledTimes(1);
     expect(onMemberMessage).toHaveBeenCalledWith("agent_luna");
+  });
+
+  it("uses the unified agent profile card from both message avatars and channel member avatars", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const onMemberMessage = vi.fn();
+    const member = {
+      ...memberWithLongMentionText(),
+      id: "agent_luna",
+      name: "Luna",
+      handle: "@luna",
+      avatar: "LU",
+      profession: "产品研究员",
+      role: "产品研究员",
+      description: "负责调研用户、整理证据并形成产品判断。",
+      runtimeStatus: "busy" as const,
+      channelReadiness: { all: "ready" as const },
+      directMessageEnabled: true,
+    };
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [member],
+      messages: [
+        {
+          id: "msg-agent-luna",
+          authorId: member.id,
+          author: member.name,
+          handle: member.handle,
+          avatar: member.avatar,
+          role: "agent",
+          time: "10:00",
+          body: "我来整理调研结论。",
+          channelId: "all",
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMemberMessage={onMemberMessage}
+        profile={defaultProfile}
+      />,
+    );
+
+    const messageFrame = host.querySelector<HTMLElement>('[data-message-id="msg-agent-luna"]');
+    expect(messageFrame?.textContent).toContain("Luna");
+    expect(messageFrame?.textContent).toContain("产品研究员");
+    expect(messageFrame?.textContent).not.toContain("负责调研用户");
+
+    await act(async () => {
+      messageFrame?.querySelector<HTMLButtonElement>('[data-testid="slei-agent-profile-trigger"]')?.click();
+    });
+
+    const messageCard = document.body.querySelector<HTMLElement>('[data-testid="slei-agent-profile-card"]');
+    expect(messageCard?.textContent).toContain("Luna");
+    expect(messageCard?.textContent).toContain("@luna");
+    expect(messageCard?.textContent).toContain("产品研究员");
+    expect(messageCard?.textContent).toContain("负责调研用户、整理证据并形成产品判断。");
+    expect(messageCard?.textContent).toContain("忙碌");
+    expect(messageCard?.textContent).not.toContain(messages.chat.removeChannelMemberAction);
+
+    await act(async () => {
+      messageCard?.querySelector<HTMLButtonElement>(`[aria-label="${messages.members.message}"]`)?.click();
+    });
+    expect(onMemberMessage).toHaveBeenCalledWith("agent_luna");
+
+    await act(async () => {
+      mountedRoot?.unmount();
+    });
+    mountedContainer?.remove();
+    mountedRoot = undefined;
+    mountedContainer = undefined;
+
+    const channelHost = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        onMemberMessage={onMemberMessage}
+        profile={defaultProfile}
+      />,
+    );
+
+    const channelAvatar = channelHost.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]');
+    expect(channelAvatar).not.toBeNull();
+    await act(async () => {
+      channelAvatar?.click();
+    });
+    await act(async () => undefined);
+
+    const channelCard = document.body.querySelector<HTMLElement>("[data-agent-profile-card]");
+    expect(channelCard).not.toBeNull();
+    expect(channelCard?.textContent).toContain("产品研究员");
+    expect(channelCard?.textContent).toContain("负责调研用户、整理证据并形成产品判断。");
+    expect(channelCard?.textContent).toContain(messages.chat.memberReady);
+    expect(channelCard?.textContent).toContain(messages.chat.removeChannelMemberAction);
   });
 
   it("does not open the member popover from hover-only pointer movement", async () => {

@@ -25,6 +25,7 @@ export type SleiChannelMemberReadiness = "joining" | "memory_syncing" | "ready" 
 export type SleiMessage = {
   id: string;
   sequence?: number;
+  authorId?: string;
   author: string;
   handle?: string;
   avatar?: string;
@@ -77,6 +78,7 @@ export type SleiTask = {
 
 export type SleiTaskReply = {
   id: string;
+  memberId?: string;
   sender: string;
   handle?: string;
   avatar?: string;
@@ -95,6 +97,7 @@ export type SleiMember = {
   agentKind?: string;
   type: "agent" | "human";
   runtimeStatus: "idle" | "busy" | "offline";
+  profession?: string;
   role: string;
   description: string;
   computer: string;

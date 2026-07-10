@@ -1609,6 +1609,7 @@ async fn channel_agent_runtime_records_activity_events_and_sanitizes_failure_pre
                     "runtimeKind": "ClaudeCode",
                     "model": "Sonnet",
                     "nodeId": "local-node",
+                    "profession": "临时测试员",
                     "description": "临时测试 Agent"
                 }
             }
@@ -2837,6 +2838,7 @@ async fn app_state_with_agent_handle_at_root(
         runtime_kind: "ClaudeCode".to_string(),
         model: "Sonnet".to_string(),
         node_id: "local-node".to_string(),
+        profession: "工程协作 Agent".to_string(),
         description: "工程协作 Agent".to_string(),
         workspace_path: workspace_path.to_string_lossy().to_string(),
         memory_path: workspace_path

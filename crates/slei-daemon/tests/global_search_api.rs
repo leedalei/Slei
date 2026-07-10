@@ -636,6 +636,7 @@ async fn upsert_agent_for_search(
             "ClaudeCode",
             "Sonnet",
             "local-node",
+            "搜索测试员",
             "needle search agent",
             id,
         )

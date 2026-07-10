@@ -79,6 +79,9 @@ impl SleiDb {
             self.add_column_if_missing("messages", "attachment_ids", "TEXT NOT NULL DEFAULT '[]'")
                 .await?;
         }
+        if version >= 13 {
+            self.repair_agent_profession_columns().await?;
+        }
         Ok(())
     }
 
@@ -186,6 +189,47 @@ impl SleiDb {
             sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_thread_id ON tasks(thread_id)")
                 .execute(&self.pool)
                 .await?;
+        }
+        Ok(())
+    }
+
+    async fn repair_agent_profession_columns(&self) -> Result<(), sqlx::Error> {
+        self.add_column_if_missing("agents", "profession", "TEXT NOT NULL DEFAULT '智能体'")
+            .await?;
+        self.add_column_if_missing("agent_role_presets", "profession", "TEXT NOT NULL DEFAULT ''")
+            .await?;
+        self.add_column_if_missing("agent_role_presets", "category_id", "TEXT NOT NULL DEFAULT 'general'")
+            .await?;
+
+        if self.table_exists("agent_role_presets").await?
+            && self.column_exists("agent_role_presets", "profession").await?
+        {
+            sqlx::query("UPDATE agent_role_presets SET profession = title WHERE profession = ''")
+                .execute(&self.pool)
+                .await?;
+        }
+        if self.table_exists("agent_role_presets").await?
+            && self.column_exists("agent_role_presets", "category_id").await?
+        {
+            sqlx::query(
+                "UPDATE agent_role_presets
+                 SET category_id = CASE id
+                     WHEN 'xiaohongshu-researcher' THEN 'market-content'
+                     WHEN 'research-analyst' THEN 'research-analysis'
+                     WHEN 'product-planner' THEN 'product-design'
+                     WHEN 'engineering-implementer' THEN 'engineering'
+                     WHEN 'system-architect' THEN 'engineering'
+                     WHEN 'qa-reviewer' THEN 'quality'
+                     WHEN 'teaching-assistant' THEN 'education'
+                     WHEN 'legal-researcher' THEN 'legal-finance'
+                     WHEN 'finance-analyst' THEN 'legal-finance'
+                     WHEN 'operations-planner' THEN 'operations'
+                     ELSE 'general'
+                 END
+                 WHERE category_id = 'general'",
+            )
+            .execute(&self.pool)
+            .await?;
         }
         Ok(())
     }

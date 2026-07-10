@@ -11,6 +11,7 @@ pub struct CreateSessionRequest {
     pub agent_id: String,
     pub cwd: String,
     pub session_id: String,
+    pub model: String,
     pub resume_session: bool,
     pub persist_session: bool,
 }
@@ -21,6 +22,7 @@ pub struct RuntimeSession {
     pub agent_id: String,
     pub runtime: String,
     pub cwd: String,
+    pub model: String,
     pub persist_session: bool,
     pub resume_session: bool,
     pub capabilities: RuntimeCapabilities,
@@ -45,6 +47,7 @@ impl ClaudeWorkerAdapter {
             agent_id: request.agent_id,
             runtime: "ClaudeCode".to_string(),
             cwd: request.cwd,
+            model: request.model,
             persist_session: request.persist_session,
             resume_session: request.resume_session,
             capabilities: RuntimeCapabilities {
@@ -69,6 +72,7 @@ impl ClaudeWorkerAdapter {
                 "agent_id": session.agent_id,
                 "runtime": session.runtime,
                 "cwd": session.cwd,
+                "model": session.model,
                 "persist_session": session.persist_session,
                 "resume_session": session.resume_session,
             },
@@ -108,6 +112,7 @@ impl ClaudeWorkerAdapter {
                 "agent_id": session.agent_id,
                 "runtime": session.runtime,
                 "cwd": session.cwd,
+                "model": session.model,
                 "persist_session": session.persist_session,
                 "resume_session": true,
             }

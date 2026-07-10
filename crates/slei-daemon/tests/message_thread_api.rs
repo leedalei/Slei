@@ -654,6 +654,7 @@ async fn thread_reply_with_visible_mention_launches_agent_without_main_timeline_
                 runtime_kind: "ClaudeCode".to_string(),
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
+                profession: "智能体".to_string(),
                 description: "coding agent".to_string(),
                 avatar_seed: None,
             },
