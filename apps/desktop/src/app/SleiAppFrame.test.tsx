@@ -2077,8 +2077,17 @@ describe("SleiAppFrame global search navigation", () => {
     expect(selectedDm?.className).not.toContain("text-accent-foreground");
   });
 
-  it("renders direct message rows with the status dot inside the avatar and a regular 14px name", () => {
-    const members = createDemoMembers();
+  it("renders direct message rows with the status dot inside the avatar, a sidebar avatar, and a profession badge", () => {
+    const longProfession = "资深平台架构与交付协调负责人".repeat(3);
+    const members = createDemoMembers().map((member, index) => (
+      index === 0
+        ? {
+            ...member,
+            profession: longProfession,
+            role: "后备角色",
+          }
+        : member
+    ));
     const data = createSleiFixtures({
       members,
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" }],
@@ -2101,22 +2110,101 @@ describe("SleiAppFrame global search navigation", () => {
       ? directChildren[0] as HTMLElement
       : directChildren[0]?.querySelector<HTMLElement>('[data-slot="avatar"]');
     const statusDot = avatar?.querySelector<HTMLElement>('[aria-label="idle"]');
-    const name = directChildren[1] as HTMLElement | undefined;
+    const nameContainer = trigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
+    const name = nameContainer?.querySelector<HTMLElement>("span");
+    const badge = nameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+    const rowButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="workspace-dm-row-a1"] button'));
+    const menuButton = rowButtons.find((button) => button !== trigger);
 
+    expect(trigger?.className).toContain("h-full");
+    expect(host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]')?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(menuButton).toBeInstanceOf(HTMLElement);
+    expect(menuButton?.className).toContain("shrink-0");
+    expect(menuButton?.className).toContain("opacity-0");
+    expect(menuButton?.className).toContain("size-6");
     expect(statusDot?.getAttribute("role")).toBe("img");
     expect(statusDot?.className).toContain("rounded-full");
     expect(statusDot?.className.split(/\s+/)).toContain("absolute");
     expect(statusDot?.className.split(/\s+/)).toContain("bottom-0");
     expect(statusDot?.className.split(/\s+/)).toContain("right-0");
     expect(statusDot?.parentElement).toBe(avatar);
-    expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
-    expect(avatar?.className.split(/\s+/)).toContain("size-7");
-    expect(avatar?.className.split(/\s+/)).toContain("border-border");
-    expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
+    expect(avatar?.getAttribute("data-avatar-size")).toBe("sidebar");
+    expect(avatar?.getAttribute("data-size")).toBe("default");
+    expect(avatar?.className.split(/\s+/)).toContain("size-[2.125rem]");
+    expect(avatar?.className.split(/\s+/)).toContain("border-muted-foreground/30");
+    expect(avatar?.className.split(/\s+/)).not.toContain("border-border");
+    expect(nameContainer?.className).toContain("flex");
+    expect(nameContainer?.className).toContain("min-w-0");
+    expect(nameContainer?.className).toContain("flex-1");
+    expect(nameContainer?.className).toContain("items-center");
+    expect(nameContainer?.className).toContain("gap-1.5");
+    expect(nameContainer?.className).toContain("overflow-hidden");
+    expect(nameContainer?.className).toContain("whitespace-nowrap");
     expect(name?.tagName).toBe("SPAN");
     expect(name?.textContent).toBe("Coda");
     expect(name?.className).toContain("text-[14px]");
     expect(name?.className).toContain("font-normal");
+    expect(badge?.getAttribute("data-variant")).toBe("secondary");
+    expect(badge?.textContent).toBe(longProfession);
+    expect(badge?.className).toContain("min-w-0");
+    expect(badge?.className).toContain("max-w-[55%]");
+    expect(badge?.className).toContain("shrink");
+    expect(badge?.className).toContain("truncate");
+  });
+
+  it("renders direct message badges from profession first, then role, and hides empty badges", () => {
+    const members = createDemoMembers().slice(0, 3).map((member, index) => ({
+      ...member,
+      profession: index === 0 ? "  首席体验架构师  " : index === 1 ? "   " : " ",
+      role: index === 0 ? "后备角色" : index === 1 ? "  解决方案顾问  " : "   ",
+    }));
+    const data = createSleiFixtures({
+      members,
+      channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" }],
+    });
+
+    const html = renderToStaticMarkup(
+      <SleiAppFrame
+        activeView="chat"
+        data={data}
+        locale="zh-CN"
+        runtimeSetup={{ ...runtimeSetup, nodes: data.nodes }}
+      />,
+    );
+    const host = document.createElement("div");
+    host.innerHTML = html;
+
+    const firstTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"] [data-slot="direct-message-select-trigger"]');
+    const firstNameContainer = firstTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
+    const firstBadge = firstNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+    const firstRow = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]');
+
+    const secondTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a2"] [data-slot="direct-message-select-trigger"]');
+    const secondNameContainer = secondTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
+    const secondBadge = secondNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+
+    const thirdTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a3"] [data-slot="direct-message-select-trigger"]');
+    const thirdNameContainer = thirdTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
+    const thirdBadge = thirdNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+
+    const channelRow = host.querySelector<HTMLElement>('[data-testid="workspace-channel-row-all"]');
+
+    expect(firstBadge?.textContent).toBe("首席体验架构师");
+    expect(firstBadge?.getAttribute("data-variant")).toBe("secondary");
+    expect(firstBadge?.className).toContain("min-w-0");
+    expect(firstBadge?.className).toContain("max-w-[55%]");
+    expect(firstBadge?.className).toContain("shrink");
+    expect(firstBadge?.className).toContain("truncate");
+    expect(firstRow?.className).toContain("h-10");
+    expect(firstRow?.className).toContain("min-h-10");
+    expect(firstTrigger?.className).toContain("h-full");
+
+    expect(secondBadge?.textContent).toBe("解决方案顾问");
+    expect(secondBadge?.getAttribute("data-variant")).toBe("secondary");
+
+    expect(thirdBadge).toBeNull();
+    expect(channelRow?.className).toContain("h-[32px]");
+    expect(channelRow?.className).toContain("min-h-[32px]");
   });
 
   it("shows every direct-message enabled agent before a DM conversation exists", async () => {

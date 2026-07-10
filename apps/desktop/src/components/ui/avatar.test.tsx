@@ -6,16 +6,39 @@ import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount } fr
 describe("Avatar", () => {
   it("renders the default shadcn avatar without glow decoration", () => {
     const html = renderToStaticMarkup(<Avatar aria-label="Coda" />);
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
 
-    expect(html).toContain('data-slot="avatar"');
-    expect(html).toContain("h-8");
-    expect(html).toContain("w-8");
-    expect(html).toContain("border border-border");
-    expect(html).not.toContain("border-border/40");
+    expect(avatarRoot).toContain('data-slot="avatar"');
+    expect(avatarRoot).toContain("h-8");
+    expect(avatarRoot).toContain("w-8");
+    expect(avatarRoot).toContain('data-size="default"');
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+    expect(avatarRoot).not.toContain("border-border");
+    expect(avatarRoot).not.toContain("border-border/40");
     expect(html).not.toContain("bg-linear");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
     expect(html).not.toContain("blur-[3px]");
+  });
+
+  it("keeps the primitive small avatar size at 24 pixels", () => {
+    const html = renderToStaticMarkup(<Avatar aria-label="Coda" size="sm" />);
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
+
+    expect(avatarRoot).toContain('data-size="sm"');
+    expect(avatarRoot).toContain("data-[size=sm]:h-6");
+    expect(avatarRoot).toContain("data-[size=sm]:w-6");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+  });
+
+  it("keeps the primitive large avatar size at 60 pixels", () => {
+    const html = renderToStaticMarkup(<Avatar aria-label="Coda" size="lg" />);
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
+
+    expect(avatarRoot).toContain('data-size="lg"');
+    expect(avatarRoot).toContain("data-[size=lg]:h-[3.75rem]");
+    expect(avatarRoot).toContain("data-[size=lg]:w-[3.75rem]");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
   });
 
   it("renders grouped avatars and overflow count through shadcn slots", () => {
@@ -25,12 +48,16 @@ describe("Avatar", () => {
         <AvatarGroupCount>+3</AvatarGroupCount>
       </AvatarGroup>,
     );
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
+    const avatarGroupCount = html.match(/<div[^>]*data-slot="avatar-group-count"[^>]*>/)?.[0];
 
     expect(html).toContain('data-slot="avatar-group"');
-    expect(html).toContain('data-slot="avatar"');
-    expect(html).toContain('data-slot="avatar-group-count"');
+    expect(avatarRoot).toContain('data-slot="avatar"');
+    expect(avatarGroupCount).toContain('data-slot="avatar-group-count"');
     expect(html).toContain("+3");
-    expect(html).toContain("border border-border");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+    expect(avatarRoot).not.toContain("border-border");
+    expect(avatarGroupCount).toContain("border border-border");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
   });

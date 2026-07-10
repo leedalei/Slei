@@ -132,8 +132,8 @@ describe("MemberAvatar", () => {
       expect(avatar?.getAttribute("data-avatar-size")).toBe("default");
       expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("pixelated");
       expect(avatar?.className.split(/\s+/)).toContain("border");
-      expect(avatar?.className.split(/\s+/)).toContain("border-border");
-      expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
+      expect(avatar?.className.split(/\s+/)).toContain("border-muted-foreground/30");
+      expect(avatar?.className.split(/\s+/)).not.toContain("border-border");
       expect(image).not.toBeNull();
       expect(image?.getAttribute("src")).toBe(createMemberAvatar(identity));
       expect(image?.getAttribute("alt")).toBe("");
@@ -291,6 +291,7 @@ describe("MemberAvatar", () => {
       const fallback = host.querySelector<HTMLElement>('[data-slot="avatar-fallback"]');
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("large");
+      expect(avatar?.getAttribute("data-size")).toBe("lg");
       expect(avatar?.className).toContain("size-[3.75rem]");
       expect(avatar?.className).not.toContain("size-16");
       expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("pixelated");
@@ -318,12 +319,40 @@ describe("MemberAvatar", () => {
       const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
+      expect(avatar?.getAttribute("data-size")).toBe("default");
       expect(avatar?.className.split(/\s+/)).toContain("size-7");
       expect(avatar?.className.split(/\s+/)).toContain("border");
-      expect(avatar?.className.split(/\s+/)).toContain("border-border");
+      expect(avatar?.className.split(/\s+/)).toContain("border-muted-foreground/30");
+      expect(avatar?.className.split(/\s+/)).not.toContain("border-border");
       expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-16");
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
+  it("renders the sidebar avatar size at 34 pixels", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "LW",
+      avatarSeed: "lin-wen-sidebar",
+      handle: "lin",
+      id: "member-sidebar",
+      name: "Lin Wen",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} size="sidebar" />);
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+
+      expect(avatar?.getAttribute("data-avatar-size")).toBe("sidebar");
+      expect(avatar?.getAttribute("data-size")).toBe("default");
+      expect(avatar?.className.split(/\s+/)).toContain("size-[2.125rem]");
+      expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
+      expect(avatar?.className.split(/\s+/)).not.toContain("size-7");
+      expect(avatar?.className.split(/\s+/)).not.toContain("size-[3.75rem]");
     } finally {
       cleanupMemberAvatar(root, host);
     }

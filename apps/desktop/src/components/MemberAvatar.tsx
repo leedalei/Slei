@@ -7,7 +7,7 @@ import { createMemberAvatarImage, memberAvatarFallback, type MemberAvatarIdentit
 import { cn } from "../lib/utils";
 import { StatusDot } from "./StatusIndicators";
 
-type MemberAvatarSize = "small" | "default" | "large";
+type MemberAvatarSize = "small" | "default" | "sidebar" | "large";
 
 export function MemberAvatar(input: {
   children?: ReactNode;
@@ -47,11 +47,11 @@ export function MemberAvatar(input: {
 function avatarSizeClassName(size: MemberAvatarSize) {
   if (size === "large") return "size-[3.75rem]";
   if (size === "small") return "size-7";
+  if (size === "sidebar") return "size-[2.125rem]";
   return "size-8";
 }
 
 function avatarPrimitiveSize(size: MemberAvatarSize) {
   if (size === "large") return "lg";
-  if (size === "small") return "sm";
   return "default";
 }
