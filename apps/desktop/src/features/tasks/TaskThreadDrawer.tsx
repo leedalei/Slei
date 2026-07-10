@@ -270,7 +270,7 @@ export function TaskThreadDrawer(input: {
                         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
                           <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
                           {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
-                          {showRoleDescription ? <Badge className="max-w-full truncate border-border/60 bg-muted/60 text-muted-foreground" data-slot="message-role-badge" variant="secondary">{roleDescription}</Badge> : null}
+                          {showRoleDescription ? <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge> : null}
                         </div>
                     </div>
                     ) : null}
