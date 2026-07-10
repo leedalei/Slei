@@ -2110,7 +2110,7 @@ describe("SleiAppFrame global search navigation", () => {
       ? directChildren[0] as HTMLElement
       : directChildren[0]?.querySelector<HTMLElement>('[data-slot="avatar"]');
     const statusDot = avatar?.querySelector<HTMLElement>('[aria-label="idle"]');
-    const nameContainer = directChildren[1] as HTMLElement | undefined;
+    const nameContainer = trigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
     const name = nameContainer?.querySelector<HTMLElement>("span");
     const badge = nameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
     const rowButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="workspace-dm-row-a1"] button'));
@@ -2175,16 +2175,16 @@ describe("SleiAppFrame global search navigation", () => {
     host.innerHTML = html;
 
     const firstTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"] [data-slot="direct-message-select-trigger"]');
-    const firstNameContainer = Array.from(firstTrigger?.children ?? [])[1] as HTMLElement | undefined;
+    const firstNameContainer = firstTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
     const firstBadge = firstNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
     const firstRow = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]');
 
     const secondTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a2"] [data-slot="direct-message-select-trigger"]');
-    const secondNameContainer = Array.from(secondTrigger?.children ?? [])[1] as HTMLElement | undefined;
+    const secondNameContainer = secondTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
     const secondBadge = secondNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
 
     const thirdTrigger = host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a3"] [data-slot="direct-message-select-trigger"]');
-    const thirdNameContainer = Array.from(thirdTrigger?.children ?? [])[1] as HTMLElement | undefined;
+    const thirdNameContainer = thirdTrigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
     const thirdBadge = thirdNameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
 
     const channelRow = host.querySelector<HTMLElement>('[data-testid="workspace-channel-row-all"]');

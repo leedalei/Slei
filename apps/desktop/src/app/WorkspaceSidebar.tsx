@@ -695,7 +695,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         type="button"
                       >
                         <MemberAvatar identity={member} size="sidebar" status={member.runtimeStatus} />
-                        <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap" data-slot="direct-message-name">
                           <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
                           {member.profession?.trim() || member.role?.trim() ? (
                             <Badge className="min-w-0 max-w-[55%] shrink truncate" variant="secondary">
