@@ -1074,6 +1074,86 @@ describe("ChatPage mention panel", () => {
     expect(html).not.toContain(messages.chat.roleLabels.agent);
   });
 
+  it("renders message role badges in channel and DM contexts", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      id: "agent_role_badge",
+      name: "Role Badge Agent",
+      handle: "@role-badge-agent",
+      profession: "消息体验架构师",
+      role: "消息体验架构师",
+    };
+    const conversation = {
+      id: "dm_role_badge",
+      kind: "dm" as const,
+      agentId: member.id,
+      createdAt: "0",
+      updatedAt: "0",
+    };
+
+    const renderRoleBadge = (channelId: string, activeConversation?: typeof conversation) => {
+      const data = createSleiFixtures({
+        conversations: [conversation],
+        members: [member],
+        messages: [
+          {
+            id: activeConversation ? "msg_dm_role_badge" : "msg_channel_role_badge",
+            authorId: member.id,
+            author: member.name,
+            handle: member.handle,
+            role: "agent",
+            time: "10:00",
+            body: "需要展示统一角色 Badge。",
+            channelId,
+          },
+          ...(activeConversation
+            ? []
+            : [{
+                id: "msg_human_without_role_badge",
+                author: "Lei",
+                role: "human" as const,
+                time: "10:01",
+                body: "人类消息不应显示角色 Badge。",
+                channelId,
+              }]),
+        ],
+      });
+      const html = renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          activeConversation={activeConversation}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      );
+      const host = staticMarkupHost(html);
+      const messageId = activeConversation ? "msg_dm_role_badge" : "msg_channel_role_badge";
+      const messageRow = host.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+      const badge = messageRow?.querySelector<HTMLElement>('[data-slot="message-role-badge"]');
+
+      expect(messageRow).not.toBeNull();
+      expect(messageRow?.dataset.messageSide).toBe("incoming");
+      expect(messageRow?.textContent).toContain(member.profession);
+      expect(badge).not.toBeNull();
+      expect(badge?.textContent?.trim()).toBe(member.profession);
+      expect(badge?.classList.contains("bg-muted/60")).toBe(true);
+      expect(badge?.classList.contains("text-muted-foreground")).toBe(true);
+      expect(badge?.classList.contains("border-border/60")).toBe(true);
+
+      if (!activeConversation) {
+        const humanRow = host.querySelector<HTMLElement>('[data-message-id="msg_human_without_role_badge"]');
+        expect(humanRow).not.toBeNull();
+        expect(humanRow?.dataset.messageSide).toBe("outgoing");
+        expect(humanRow?.querySelector('[data-slot="message-role-badge"]')).toBeNull();
+      }
+    };
+
+    renderRoleBadge("all");
+    renderRoleBadge(conversation.id, conversation);
+  });
+
   it("uses the shared empty illustration for empty channel tasks and files panels", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
@@ -2630,7 +2710,7 @@ describe("ChatPage mention panel", () => {
     expect(card?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
     expect(card?.className).toContain("border");
     expect(card?.className).toContain("bg-popover");
-    expect(card?.className).toContain("shadow-[var(--overlay-shadow-md)]");
+    expect(card?.className).toContain("shadow-[var(--popover-shadow-md)]");
     expect(card?.className).not.toContain("shadow-[0_0_4px");
     expect(removeButton?.textContent?.trim()).toBe("移除");
     expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
@@ -3511,6 +3591,155 @@ describe("ChatPage mention panel", () => {
     expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-3");
     expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).every((button) => button.className.includes("[&_svg]:size-3"))).toBe(true);
     expect(taskRootCard?.textContent).toContain("把这条变成任务。");
+  });
+
+  it("renders task source-card role badge for an incoming agent message", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      id: "agent_task_source_badge",
+      name: "Task Source Agent",
+      handle: "@task-source-agent",
+      profession: "任务源消息工程师",
+      role: "任务源消息工程师",
+    };
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_agent_task_source_badge",
+          authorId: member.id,
+          author: member.name,
+          handle: member.handle,
+          role: "agent",
+          time: "10:00",
+          body: "这是 Agent 发起的任务源消息。",
+          channelId: "all",
+        },
+      ],
+      tasks: [
+        {
+          id: "task_agent_source_badge",
+          title: "处理 Agent 任务源",
+          owner: member.name,
+          status: "in_progress",
+          channelId: "all",
+          sourceMessageId: "msg_agent_task_source_badge",
+          replies: [
+            {
+              id: "reply_agent_task_source_badge",
+              memberId: member.id,
+              sender: member.name,
+              handle: member.handle,
+              role: "agent",
+              body: "任务源回复。",
+            },
+          ],
+        },
+      ],
+    });
+
+    const host = staticMarkupHost(
+      renderToStaticMarkup(
+        <ChatPage
+          activeChannel={data.channels[0]}
+          data={data}
+          messages={messages}
+          profile={defaultProfile}
+        />,
+      ),
+    );
+    const taskRootCard = host.querySelector<HTMLElement>('[data-task-root-entry="task_agent_source_badge"]');
+    const badges = taskRootCard?.querySelectorAll<HTMLElement>('[data-slot="message-role-badge"]') ?? [];
+
+    expect(taskRootCard).not.toBeNull();
+    expect(taskRootCard?.getAttribute("data-message-side")).toBe("incoming");
+    expect(badges).toHaveLength(1);
+    const badge = badges[0];
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent?.trim()).toBe(member.profession);
+    expect(badge?.classList.contains("bg-muted/60")).toBe(true);
+    expect(badge?.classList.contains("text-muted-foreground")).toBe(true);
+    expect(badge?.classList.contains("border-border/60")).toBe(true);
+  });
+
+  it("renders task thread reply role badge for an incoming agent reply", async () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = {
+      ...memberWithLongMentionText(),
+      id: "agent_thread_reply_badge",
+      name: "Thread Reply Agent",
+      handle: "@thread-reply-agent",
+      profession: "线程回复工程师",
+      role: "线程回复工程师",
+    };
+    const data = createSleiFixtures({
+      channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
+      members: [member],
+      messages: [
+        {
+          id: "msg_agent_thread_source_badge",
+          authorId: member.id,
+          author: member.name,
+          handle: member.handle,
+          role: "agent",
+          time: "10:00",
+          body: "打开任务线程查看回复。",
+          channelId: "all",
+        },
+      ],
+      tasks: [
+        {
+          id: "task_thread_reply_badge",
+          title: "验证线程回复 Badge",
+          owner: member.name,
+          status: "in_progress",
+          channelId: "all",
+          sourceMessageId: "msg_agent_thread_source_badge",
+          replies: [
+            {
+              id: "reply_thread_agent_badge",
+              memberId: member.id,
+              sender: member.name,
+              handle: member.handle,
+              role: "agent",
+              body: "这是 Agent 的线程回复。",
+            },
+          ],
+        },
+      ],
+    });
+
+    const host = await mountChatPage(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    );
+    const openThreadButton = host.querySelector<HTMLButtonElement>('[data-task-root-entry-replies]');
+
+    expect(openThreadButton).not.toBeNull();
+    await act(async () => {
+      openThreadButton?.click();
+    });
+
+    const drawer = document.body.querySelector<HTMLElement>('[data-slot="task-thread-scroll-content"]');
+    const reply = drawer?.querySelector<HTMLElement>('[data-reply-role="agent"]');
+    const badges = reply?.querySelectorAll<HTMLElement>('[data-slot="message-role-badge"]') ?? [];
+
+    expect(drawer).not.toBeNull();
+    expect(reply).not.toBeNull();
+    expect(reply?.getAttribute("data-message-side")).toBe("incoming");
+    expect(badges).toHaveLength(1);
+    const badge = badges[0];
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent?.trim()).toBe(member.profession);
+    expect(badge?.classList.contains("bg-muted/60")).toBe(true);
+    expect(badge?.classList.contains("text-muted-foreground")).toBe(true);
+    expect(badge?.classList.contains("border-border/60")).toBe(true);
   });
 
   it("keeps only the composer input recessed while the outer surface stays flat", async () => {

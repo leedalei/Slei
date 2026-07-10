@@ -1241,7 +1241,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                 {roleDescription ? (
                                   <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
                                     {messageMember?.type === "agent" ? <strong className="shrink-0 text-sm text-foreground">{messageMember.name}</strong> : null}
-                                    <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge>
+                                    <Badge className="max-w-full truncate border-border/60 bg-muted/60 text-muted-foreground" data-slot="message-role-badge" variant="secondary">{roleDescription}</Badge>
                                   </div>
                                 ) : null}
                               </div>

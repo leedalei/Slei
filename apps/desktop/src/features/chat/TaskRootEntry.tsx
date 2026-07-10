@@ -95,7 +95,7 @@ export function TaskRootEntry(input: {
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
               <strong className="shrink-0 text-sm text-foreground">{author}</strong>
               {handle ? <span className="shrink-0">{handle}</span> : null}
-              {showRoleDescription ? <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge> : null}
+              {showRoleDescription ? <Badge className="max-w-full truncate border-border/60 bg-muted/60 text-muted-foreground" data-slot="message-role-badge" variant="secondary">{roleDescription}</Badge> : null}
             </div>
           ) : null}
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
