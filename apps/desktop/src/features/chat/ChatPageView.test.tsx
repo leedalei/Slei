@@ -2521,6 +2521,7 @@ describe("ChatPage mention panel", () => {
 
     const card = document.body.querySelector('[data-testid="slei-channel-member-info-card"]');
     const removeButton = document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.chat.removeChannelMember("Luna")}"]`);
+    const profileHeader = card?.querySelector<HTMLElement>('[data-slot="agent-profile-header"]');
     expect(card).not.toBeNull();
     expect(card?.textContent).toContain("Luna");
     expect(card?.textContent).toContain("@luna");
@@ -2545,6 +2546,9 @@ describe("ChatPage mention panel", () => {
     expect(removeButton?.className).not.toContain("variant=\"ghost\"");
     expect(removeButton?.className).not.toContain("text-[14px]");
     expect(removeButton?.className).not.toContain("hover:bg-destructive/10");
+    expect(profileHeader).not.toBeNull();
+    expect(profileHeader?.querySelector('[data-slot="avatar"]')).not.toBeNull();
+    expect(profileHeader?.contains(removeButton ?? null)).toBe(true);
   });
 
   it("opens direct message navigation from the channel member info card", async () => {
@@ -2578,8 +2582,14 @@ describe("ChatPage mention panel", () => {
       host.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-avatar-trigger"]')?.click();
     });
 
+    const messageButton = document.body.querySelector<HTMLButtonElement>('[data-testid="slei-channel-member-message-button"]');
+    expect(messageButton?.textContent?.trim()).toBe(messages.members.message);
+    expect(messageButton?.className.split(/\s+/)).toContain("w-full");
+    expect(messageButton?.className).toContain("bg-primary");
+    expect(messageButton?.querySelector("svg")).toBeNull();
+
     await act(async () => {
-      document.body.querySelector<HTMLButtonElement>(`[aria-label="${messages.members.message}"]`)?.click();
+      messageButton?.click();
     });
 
     expect(onMemberMessage).toHaveBeenCalledTimes(1);
@@ -2646,9 +2656,17 @@ describe("ChatPage mention panel", () => {
     expect(messageCard?.textContent).toContain("负责调研用户、整理证据并形成产品判断。");
     expect(messageCard?.textContent).toContain("忙碌");
     expect(messageCard?.textContent).not.toContain(messages.chat.removeChannelMemberAction);
+    const messageStatusDot = messageCard?.querySelector<HTMLElement>('[data-slot="agent-profile-status-dot"]');
+    expect(messageStatusDot).not.toBeNull();
+    expect(messageStatusDot?.className).toContain("bg-amber-500");
+    expect(messageStatusDot?.className).not.toContain("bg-blue-500");
+    expect(messageCard?.querySelector('[data-slot="avatar-badge"]')).toBeNull();
+    const profileMessageButton = messageCard?.querySelector<HTMLButtonElement>('[data-testid="slei-agent-profile-message-button"]');
+    expect(profileMessageButton?.textContent?.trim()).toBe(messages.members.message);
+    expect(profileMessageButton?.className.split(/\s+/)).toContain("w-full");
 
     await act(async () => {
-      messageCard?.querySelector<HTMLButtonElement>(`[aria-label="${messages.members.message}"]`)?.click();
+      profileMessageButton?.click();
     });
     expect(onMemberMessage).toHaveBeenCalledWith("agent_luna");
 
