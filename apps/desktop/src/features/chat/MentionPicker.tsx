@@ -1,6 +1,6 @@
 import type { DesktopMessages } from "../../i18n";
 import type { SleiMember } from "../../app/types";
-import { MemberAvatar, SelectableCard, StatusDot } from "../../components";
+import { MemberAvatar, SelectableCard } from "../../components";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -37,11 +37,10 @@ export function MentionPicker({
                   type="button"
                   variant="ghost"
                 >
-                  <MemberAvatar identity={member} />
+                  <MemberAvatar identity={member} status={member.runtimeStatus} />
                   <span className="grid min-w-0 flex-1 gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                       <strong className="truncate text-sm">{member.name}</strong>
-                      <StatusDot status={member.runtimeStatus} />
                     </span>
                     <small className="block truncate text-xs font-normal text-muted-foreground">{member.role}</small>
                   </span>

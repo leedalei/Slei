@@ -28,7 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import { MemberAvatar, SelectableCard, SleiIcon, StatusDot, type ToastType } from "../components";
+import { MemberAvatar, SelectableCard, SleiIcon, type ToastType } from "../components";
 import type { ChannelReceipt, ConversationView } from "../lib/daemon-bridge";
 import type { DesktopMessages } from "../i18n";
 import { localHumanPresentation, stripChannelHash, type AppView, type SettingsOverlayPanel, type UserProfile } from "./model";
@@ -694,8 +694,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         onClick={() => selectDirectMessage(entry)}
                         type="button"
                       >
-                        <StatusDot className="size-1.5" status={member.runtimeStatus} />
-                        <MemberAvatar identity={member} size="small" />
+                        <MemberAvatar identity={member} size="small" status={member.runtimeStatus} />
                         <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
                       </button>
                       <DropdownMenuTrigger asChild>

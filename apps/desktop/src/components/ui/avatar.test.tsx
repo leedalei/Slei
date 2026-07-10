@@ -10,6 +10,8 @@ describe("Avatar", () => {
     expect(html).toContain('data-slot="avatar"');
     expect(html).toContain("h-8");
     expect(html).toContain("w-8");
+    expect(html).toContain("border border-border");
+    expect(html).not.toContain("border-border/40");
     expect(html).not.toContain("bg-linear");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
@@ -28,6 +30,7 @@ describe("Avatar", () => {
     expect(html).toContain('data-slot="avatar"');
     expect(html).toContain('data-slot="avatar-group-count"');
     expect(html).toContain("+3");
+    expect(html).toContain("border border-border");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
   });

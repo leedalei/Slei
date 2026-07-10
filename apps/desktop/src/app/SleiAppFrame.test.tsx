@@ -2077,7 +2077,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(selectedDm?.className).not.toContain("text-accent-foreground");
   });
 
-  it("renders direct message rows with a smaller leading status dot, larger avatar, and regular 14px name", () => {
+  it("renders direct message rows with the status dot inside the avatar and a regular 14px name", () => {
     const members = createDemoMembers();
     const data = createSleiFixtures({
       members,
@@ -2097,17 +2097,22 @@ describe("SleiAppFrame global search navigation", () => {
     host.innerHTML = html;
     const trigger = host.querySelector<HTMLElement>('[data-slot="direct-message-select-trigger"]');
     const directChildren = Array.from(trigger?.children ?? []);
-    const statusDot = directChildren[0] as HTMLElement | undefined;
-    const avatar = directChildren[1]?.matches('[data-slot="avatar"]')
-      ? directChildren[1] as HTMLElement
-      : directChildren[1]?.querySelector<HTMLElement>('[data-slot="avatar"]');
-    const name = directChildren[2] as HTMLElement | undefined;
+    const avatar = directChildren[0]?.matches('[data-slot="avatar"]')
+      ? directChildren[0] as HTMLElement
+      : directChildren[0]?.querySelector<HTMLElement>('[data-slot="avatar"]');
+    const statusDot = avatar?.querySelector<HTMLElement>('[aria-label="idle"]');
+    const name = directChildren[1] as HTMLElement | undefined;
 
     expect(statusDot?.getAttribute("role")).toBe("img");
     expect(statusDot?.className).toContain("rounded-full");
-    expect(statusDot?.className.split(/\s+/)).toContain("size-1.5");
+    expect(statusDot?.className.split(/\s+/)).toContain("absolute");
+    expect(statusDot?.className.split(/\s+/)).toContain("bottom-0");
+    expect(statusDot?.className.split(/\s+/)).toContain("right-0");
+    expect(statusDot?.parentElement).toBe(avatar);
     expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
-    expect(avatar?.className.split(/\s+/)).toContain("size-6");
+    expect(avatar?.className.split(/\s+/)).toContain("size-7");
+    expect(avatar?.className.split(/\s+/)).toContain("border-border");
+    expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
     expect(name?.tagName).toBe("SPAN");
     expect(name?.textContent).toBe("Coda");
     expect(name?.className).toContain("text-[14px]");

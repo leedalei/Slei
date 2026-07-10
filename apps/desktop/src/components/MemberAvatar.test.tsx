@@ -132,7 +132,8 @@ describe("MemberAvatar", () => {
       expect(avatar?.getAttribute("data-avatar-size")).toBe("default");
       expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("pixelated");
       expect(avatar?.className.split(/\s+/)).toContain("border");
-      expect(avatar?.className.split(/\s+/)).toContain("border-border/40");
+      expect(avatar?.className.split(/\s+/)).toContain("border-border");
+      expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
       expect(image).not.toBeNull();
       expect(image?.getAttribute("src")).toBe(createMemberAvatar(identity));
       expect(image?.getAttribute("alt")).toBe("");
@@ -301,7 +302,7 @@ describe("MemberAvatar", () => {
     }
   });
 
-  it("renders the small avatar size at 24 pixels for compact message rows", async () => {
+  it("renders the small avatar size at 28 pixels with a visible 1px border", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
       avatar: "LW",
@@ -317,9 +318,38 @@ describe("MemberAvatar", () => {
       const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("small");
-      expect(avatar?.className.split(/\s+/)).toContain("size-6");
+      expect(avatar?.className.split(/\s+/)).toContain("size-7");
+      expect(avatar?.className.split(/\s+/)).toContain("border");
+      expect(avatar?.className.split(/\s+/)).toContain("border-border");
+      expect(avatar?.className.split(/\s+/)).not.toContain("border-border/40");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-16");
+    } finally {
+      cleanupMemberAvatar(root, host);
+    }
+  });
+
+  it("renders runtime status inside the avatar at the bottom right", async () => {
+    installImageMock("loaded");
+    const identity: MemberAvatarIdentity = {
+      avatar: "YG",
+      avatarSeed: "yeal-status",
+      handle: "yeal",
+      id: "member-status",
+      name: "Yeal",
+    };
+
+    const { host, root } = await renderMemberAvatar(<MemberAvatar identity={identity} size="small" status="busy" />);
+
+    try {
+      const avatar = host.querySelector<HTMLElement>('[data-slot="avatar"]');
+      const status = avatar?.querySelector<HTMLElement>('[aria-label="busy"]');
+
+      expect(status).not.toBeNull();
+      expect(status?.parentElement).toBe(avatar);
+      expect(status?.className).toContain("absolute");
+      expect(status?.className).toContain("bottom-0");
+      expect(status?.className).toContain("right-0");
     } finally {
       cleanupMemberAvatar(root, host);
     }

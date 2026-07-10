@@ -2,12 +2,20 @@ import type { ReactNode } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+import type { SleiMember } from "../app/types";
 import { createMemberAvatarImage, memberAvatarFallback, type MemberAvatarIdentity } from "./member-avatar";
 import { cn } from "../lib/utils";
+import { StatusDot } from "./StatusIndicators";
 
 type MemberAvatarSize = "small" | "default" | "large";
 
-export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvatarIdentity; large?: boolean; size?: MemberAvatarSize }) {
+export function MemberAvatar(input: {
+  children?: ReactNode;
+  identity: MemberAvatarIdentity;
+  large?: boolean;
+  size?: MemberAvatarSize;
+  status?: SleiMember["runtimeStatus"];
+}) {
   const { identity, large = false } = input;
   const size = large ? "large" : input.size ?? "default";
   const avatarImage = createMemberAvatarImage(identity);
@@ -15,7 +23,7 @@ export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvat
   return (
     <Avatar
       aria-label={identity.name}
-      className={cn("border border-border/40 bg-background", avatarSizeClassName(size))}
+      className={cn("bg-background", avatarSizeClassName(size))}
       size={avatarPrimitiveSize(size)}
       data-avatar-image-rendering={avatarImage?.imageRendering ?? "fallback"}
       data-avatar-size={size}
@@ -28,6 +36,9 @@ export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvat
         />
       ) : null}
       <AvatarFallback className={size === "small" ? "text-[10px] leading-none" : undefined}>{fallback}</AvatarFallback>
+      {input.status ? (
+        <StatusDot className="absolute bottom-0 right-0 z-10 size-2 ring-2 ring-background" status={input.status} />
+      ) : null}
       {input.children}
     </Avatar>
   );
@@ -35,7 +46,7 @@ export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvat
 
 function avatarSizeClassName(size: MemberAvatarSize) {
   if (size === "large") return "size-[3.75rem]";
-  if (size === "small") return "size-6";
+  if (size === "small") return "size-7";
   return "size-8";
 }
 

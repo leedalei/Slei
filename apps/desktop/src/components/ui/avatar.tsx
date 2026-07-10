@@ -17,7 +17,7 @@ const Avatar = React.forwardRef<
     data-slot="avatar"
     data-size={size}
     className={cn(
-      "group/avatar relative flex h-8 w-8 shrink-0 rounded-full select-none data-[size=lg]:h-[3.75rem] data-[size=lg]:w-[3.75rem] data-[size=sm]:h-6 data-[size=sm]:w-6",
+      "group/avatar relative flex h-8 w-8 shrink-0 rounded-full border border-border select-none data-[size=lg]:h-[3.75rem] data-[size=lg]:w-[3.75rem] data-[size=sm]:h-6 data-[size=sm]:w-6",
       className,
     )}
     {...props}
@@ -79,7 +79,7 @@ function AvatarGroupCount({ className, ...props }: React.ComponentProps<"div">) 
   return (
     <div
       data-slot="avatar-group-count"
-      className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-muted text-xs font-medium text-muted-foreground ring-2 ring-background", className)}
+      className={cn("relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-xs font-medium text-muted-foreground ring-2 ring-background", className)}
       {...props}
     />
   )
