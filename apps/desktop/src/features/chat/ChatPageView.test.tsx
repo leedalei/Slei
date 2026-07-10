@@ -149,6 +149,8 @@ describe("ChatPage DM skill message highlight", () => {
     );
 
     expect(html).toContain("slei-message-skill");
+    expect(html).toContain("slei-message-text");
+    expect(html).toContain('data-message-text="true"');
     expect(html).toContain("/memory");
     expect(html).toContain("<strong>重点</strong>");
   });
@@ -2278,6 +2280,8 @@ describe("ChatPage mention panel", () => {
 
     expect(html).toContain("<h3>主流框架</h3>");
     expect(html).toContain("<strong>Tiptap</strong>");
+    expect(html).toContain('data-message-text="true"');
+    expect(html).toContain("slei-message-text");
     expect(html).not.toContain("### 主流框架");
     expect(html).not.toContain("**Tiptap**");
   });
@@ -2305,6 +2309,32 @@ describe("ChatPage mention panel", () => {
     expect(headerHtml).not.toContain('data-testid="slei-channel-member-count"');
     expect(headerHtml).not.toContain('data-testid="slei-channel-member-add-trigger"');
     expect(headerHtml).not.toContain('data-testid="slei-channel-view-tabs"');
+  });
+
+  it("marks direct message bodies as message text without marking metadata", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = memberWithLongMentionText();
+    const conversation = { id: "dm_agent_architect", kind: "dm" as const, agentId: member.id, createdAt: "0", updatedAt: "0" };
+    const data = createSleiFixtures({
+      conversations: [conversation],
+      members: [member],
+      messages: [{ id: "msg-dm-text", author: member.name, role: "agent", time: "10:00", body: "私聊正文", channelId: conversation.id }],
+    });
+    const host = staticMarkupHost(renderToStaticMarkup(
+      <ChatPage
+        activeChannel={data.channels[0]}
+        activeConversation={conversation}
+        data={data}
+        messages={messages}
+        profile={defaultProfile}
+      />,
+    ));
+    const message = host.querySelector<HTMLElement>('[data-message-id="msg-dm-text"]');
+    const messageText = message?.querySelector<HTMLElement>('[data-message-text="true"].slei-message-text');
+
+    expect(messageText?.textContent).toContain("私聊正文");
+    expect(message?.querySelector('[data-slot="message-time"]')?.closest(".slei-message-text")).toBeNull();
+    expect(message?.querySelector('[data-slot="message-header"]')?.closest(".slei-message-text")).toBeNull();
   });
 
   it("keeps the main chat layout one column without an offscreen member panel", () => {
@@ -3230,6 +3260,8 @@ describe("ChatPage mention panel", () => {
     expect(agentBubble?.className).toContain("w-fit");
     expect(agentBubble?.className).toContain("max-w-full");
     expect(agentBubble?.className).not.toContain("rounded-bl-sm");
+    expect(humanBubble?.querySelector('[data-message-text="true"].slei-message-text')).not.toBeNull();
+    expect(agentBubble?.querySelector('[data-message-text="true"].slei-message-text')).not.toBeNull();
     expect(agentRow?.querySelector<HTMLElement>('[data-slot="message-actions"]')?.className).toContain("right-2");
     expect(agentRow?.querySelector<HTMLElement>('[data-slot="message-time"]')?.className).toContain("shrink-0");
   });
@@ -3380,6 +3412,7 @@ describe("ChatPage mention panel", () => {
     expect(bubble?.className).toContain("bg-transparent");
     expect(bubble?.className).toContain("border-0");
     expect(host.querySelector('[data-message-id="msg-card-only"] .slei-markdown-message')).toBeNull();
+    expect(host.querySelector('[data-message-id="msg-card-only"] .slei-message-text')).toBeNull();
     expect(card?.className).toContain("rounded-xl");
     expect(card?.className).toContain("gap-4");
     expect(card?.className).toContain("p-4");
@@ -3499,6 +3532,7 @@ describe("ChatPage mention panel", () => {
     expect(taskBubble?.className).toContain("bg-primary");
     expect(taskBubble?.className).toContain("rounded-tr-sm");
     expect(taskBubble?.className).not.toContain("rounded-br-sm");
+    expect(taskBubble?.querySelector('[data-message-text="true"].slei-message-text')).not.toBeNull();
     expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-actions"]')?.className).toContain("left-2");
     expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-time"]')?.className).toContain("shrink-0");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
@@ -3703,6 +3737,7 @@ describe("ChatPage mention panel", () => {
     expect(rootBody).toBeNull();
     expect(firstReply?.getAttribute("data-message-side")).toBe("outgoing");
     expect(firstReplyMarkdown).toBeTruthy();
+    expect(firstReplyMarkdown?.matches('[data-message-text="true"].slei-message-text')).toBe(true);
     expect(firstReplyMarkdown?.querySelector("h2")?.textContent).toBe("先看看");
     expect(firstReplyMarkdown?.querySelector("li")?.textContent).toContain("不要立刻创建子线程");
     expect(firstReplyMarkdown?.querySelector("code")?.textContent).toBe("inlineCode");

@@ -30,8 +30,8 @@ describe("settings preferences", () => {
     expect(html).toContain("个人");
     expect(html).toContain("个人资料");
     expect(html).toContain("slei-workspace-sidebar");
-    expect(html).toContain('data-font-size="md"');
-    expect(html).toContain("--app-font-size:14px");
+    expect(html).toContain('data-message-text-size="md"');
+    expect(html).not.toContain("--app-font-size");
     expect(html).not.toContain("Runtime / 诊断");
     expect(html).not.toContain("诊断");
   });
@@ -253,14 +253,15 @@ describe("settings preferences", () => {
       />,
     );
 
-    expect(appearanceHtml).toContain("字体大小");
+    expect(appearanceHtml).toContain("消息文本大小");
+    expect(appearanceHtml).toContain("配置界面的颜色主题和消息文本大小。");
     expect(appearanceHtml).toContain('data-slei-preference-row-label');
     expect(appearanceHtml).toContain(">主题</span>");
     expect(appearanceHtml).toContain('role="group" aria-labelledby=');
     expect(appearanceHtml).not.toContain('aria-label="主题"');
     expect(appearanceHtml).toContain('data-theme="dark"');
-    expect(appearanceHtml).toContain('data-font-size="lg"');
-    expect(appearanceHtml).toContain("--app-font-size:16px");
+    expect(appearanceHtml).toContain('data-message-text-size="lg"');
+    expect(appearanceHtml).not.toContain("--app-font-size");
     expect(appearanceHtml).toContain('data-settings-font-size-option="lg"');
     expect(appearanceHtml).toContain('data-settings-theme-option="light"');
     expect(appearanceHtml).toContain('data-settings-theme-option="dark"');

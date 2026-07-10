@@ -524,6 +524,8 @@ describe("TasksPage filters", () => {
     const copyIcon = copyButton?.querySelector<SVGElement>('[data-slei-icon="copy"]');
     const time = reply?.querySelector<HTMLTimeElement>('[data-slot="message-time"] time');
     const humanActions = humanReply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
+    const messageText = bubble?.querySelector<HTMLElement>('[data-message-text="true"].slei-message-text');
+    const humanMessageText = humanBubble?.querySelector<HTMLElement>('[data-message-text="true"].slei-message-text');
 
     expect(replies).toHaveLength(2);
     expect(reply?.dataset.messageSide).toBe("incoming");
@@ -551,6 +553,8 @@ describe("TasksPage filters", () => {
     expect(humanBubble?.className).toContain("rounded-tr-sm");
     expect(humanBubble?.className).toContain("bg-primary");
     expect(humanBubble?.className).toContain("text-primary-foreground");
+    expect(messageText).not.toBeNull();
+    expect(humanMessageText).not.toBeNull();
     expect(actions).not.toBeNull();
     expect(actions?.parentElement?.dataset.slot).toBe("message-bubble-frame");
     expect(actions?.className).toContain("absolute");

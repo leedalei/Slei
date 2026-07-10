@@ -142,7 +142,7 @@ export function TaskRootEntry(input: {
               )}
               data-slot="message-bubble"
             >
-              <MarkdownMessage markdown={body ?? input.task.title} tone={side === "outgoing" ? "primary" : "card"} />
+              <MarkdownMessage markdown={body ?? input.task.title} messageText tone={side === "outgoing" ? "primary" : "card"} />
               {hasSourceMessage ? null : (
                 <div className="flex min-w-0 items-end gap-3">
                   <span className={cn("min-w-0 truncate text-xs", side === "outgoing" ? "text-primary-foreground/75" : "text-muted-foreground")}>

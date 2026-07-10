@@ -121,6 +121,7 @@ sequenceDiagram
 - 任务线程抽屉顶部状态控制使用 timeline 节点展示四个状态；点击可迁移节点必须先弹出二次确认，确认后再调用 daemon 状态更新 API。0 回复任务的后续节点必须 disabled，不能打开确认框。不得同时保留独立 Select/底部单一状态按钮造成入口不一致。
 - 任务线程回复新增后，daemon 必须发出 `task_thread.updated` 事件；desktop 通过事件 replay 刷新当前打开的对应线程和任务摘要。不得对打开的任务线程内容做固定间隔轮询，也不得在 UI 本地伪造 Agent 新回复。
 - Markdown codeblock 必须在右上角提供 copy icon，复制原始代码文本，成功后展示本地化“复制成功”提示。
+- 外观设置中的“消息文本大小”必须与普通频道/私聊消息保持同一规则：只调整任务源消息正文和任务线程回复正文（包括频道内嵌任务详情与独立任务抽屉），不得影响任务标题、作者/handle、时间、状态、附件、卡片、工具调用或其他 Markdown 内容。
 - 任务卡片不使用额外 border；不使用额外 task icon 角标，避免破坏原消息视觉结构。
 - 时间格式沿用消息时间展示约定，当前为 `MM-DD HH:mm`。
 - `TaskRootEntry` 的 Agent 头像和 `TaskThreadDrawer` 的 Agent 回复头像必须复用普通频道/私聊消息使用的统一成员资料卡。资料卡只展示 daemon member DTO 中的名称、职业、handle、描述和 runtime 状态；私聊入口继续受 `directMessageEnabled` 约束，不得在任务 UI 中复制另一套资料或状态规则。频道成员移除操作仍只属于频道 header 的成员资料卡上下文。

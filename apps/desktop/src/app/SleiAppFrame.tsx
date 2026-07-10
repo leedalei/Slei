@@ -204,11 +204,8 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     ? findActiveAgentActivities(input.data, activeChannel, activeConversation, activeSessionId)
     : [];
   const activeAgentActivity = selectAgentActivityForTick(activeAgentActivities, 0);
-  const fontSize = fontSizeValue(appearance.fontSize);
-  const textTokenValues = useMemo(() => fontSizeTextTokenValues(appearance.fontSize), [appearance.fontSize]);
   const shellStyle = {
     "--app-sidebar-width": `${input.sidebarWidth ?? 260}px`,
-    "--app-font-size": fontSize,
   } as CSSProperties;
   const sidebarChatSelectionActive = input.activeView === "chat";
   const settingsMemberItems: SettingsOverlayNavItem[] = input.data.members.map((member) => ({
@@ -228,35 +225,17 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     if (typeof document === "undefined") return undefined;
 
     const root = document.documentElement;
-    const previousFontSize = root.style.fontSize;
-    const previousAppFontSize = root.style.getPropertyValue("--app-font-size");
-    const previousTextTokenValues = Object.fromEntries(
-      Object.keys(textTokenValues).map((key) => [key, root.style.getPropertyValue(key)]),
-    );
-
-    root.style.fontSize = fontSize;
-    root.style.setProperty("--app-font-size", fontSize);
-    for (const [key, value] of Object.entries(textTokenValues)) {
-      root.style.setProperty(key, value);
-    }
+    const previousMessageTextSize = root.getAttribute("data-message-text-size");
+    root.setAttribute("data-message-text-size", appearance.fontSize);
 
     return () => {
-      root.style.fontSize = previousFontSize;
-      if (previousAppFontSize) {
-        root.style.setProperty("--app-font-size", previousAppFontSize);
+      if (previousMessageTextSize === null) {
+        root.removeAttribute("data-message-text-size");
       } else {
-        root.style.removeProperty("--app-font-size");
-      }
-      for (const key of Object.keys(textTokenValues)) {
-        const previousValue = previousTextTokenValues[key];
-        if (previousValue) {
-          root.style.setProperty(key, previousValue);
-        } else {
-          root.style.removeProperty(key);
-        }
+        root.setAttribute("data-message-text-size", previousMessageTextSize);
       }
     };
-  }, [fontSize, textTokenValues]);
+  }, [appearance.fontSize]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -408,7 +387,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
     <div
       className={cn("slei-app-shell grid h-screen min-h-0 overflow-hidden bg-transparent text-foreground", normalizedTheme)}
       data-active-view={input.activeView}
-      data-font-size={appearance.fontSize}
+      data-message-text-size={appearance.fontSize}
       data-theme={normalizedTheme}
       data-desktop-drag-region="deep"
       style={shellStyle}
@@ -936,51 +915,6 @@ function ComputerCreateModal(input: {
         </form>
     </ShellDialog>
   );
-}
-
-function fontSizeValue(size: AppearancePreferences["fontSize"]) {
-  return {
-    sm: "14px",
-    md: "14px",
-    lg: "16px",
-  }[size];
-}
-
-function fontSizeTextTokenValues(size: AppearancePreferences["fontSize"]) {
-  const tokenValues = {
-    sm: {
-      "--text-xs": "10px",
-      "--text-sm": "12px",
-      "--text-base": "14px",
-      "--text-md": "14px",
-      "--text-lg": "15px",
-      "--text-xl": "17px",
-      "--text-2xl": "23px",
-      "--text-display": "29px",
-    },
-    md: {
-      "--text-xs": "11px",
-      "--text-sm": "13px",
-      "--text-base": "14px",
-      "--text-md": "14px",
-      "--text-lg": "16px",
-      "--text-xl": "18px",
-      "--text-2xl": "24px",
-      "--text-display": "30px",
-    },
-    lg: {
-      "--text-xs": "12px",
-      "--text-sm": "14px",
-      "--text-base": "16px",
-      "--text-md": "16px",
-      "--text-lg": "17px",
-      "--text-xl": "19px",
-      "--text-2xl": "25px",
-      "--text-display": "31px",
-    },
-  } as const;
-
-  return tokenValues[size];
 }
 
 function ShellDialog(input: {

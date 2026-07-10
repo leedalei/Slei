@@ -299,6 +299,7 @@ export function TaskThreadDrawer(input: {
                           <MarkdownMessage
                             copyCodeLabel={input.messages.chat.copyMessage}
                             markdown={reply.body}
+                            messageText
                             onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")}
                             tone={side === "outgoing" ? "primary" : "card"}
                           />

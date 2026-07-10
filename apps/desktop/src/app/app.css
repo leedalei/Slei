@@ -1197,6 +1197,39 @@ select:focus-visible {
   }
 }
 
+[data-message-text-size="sm"] .slei-message-text {
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 14px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+  --text-2xl: 23px;
+  --text-display: 29px;
+}
+
+[data-message-text-size="md"] .slei-message-text {
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+  --text-display: 30px;
+}
+
+[data-message-text-size="lg"] .slei-message-text {
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-md: 16px;
+  --text-lg: 17px;
+  --text-xl: 19px;
+  --text-2xl: 25px;
+  --text-display: 31px;
+}
+
 .slei-markdown-message {
   color: var(--markdown-foreground, var(--text-primary));
   display: grid;

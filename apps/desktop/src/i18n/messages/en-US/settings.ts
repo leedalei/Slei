@@ -4,7 +4,7 @@ export const settings = {
   account: "Account",
   accountSubtitle: "Set display name, @ handle, and avatar.",
   appearance: "Appearance",
-  appearanceSubtitle: "Configure interface theme and font size.",
+  appearanceSubtitle: "Configure interface theme and message text size.",
   approvalNotifications: "Approval notifications",
   avatar: "Avatar",
   avatarHint: "Generate a pixel avatar or upload your own image.",
@@ -16,7 +16,7 @@ export const settings = {
   daemonVersion: "Daemon version",
   desktopVersion: "Desktop version",
   displayName: "Display name",
-  fontSize: "Font size",
+  fontSize: "Message text size",
   fontSizes: {
     sm: "Small",
     md: "Standard",
@@ -67,7 +67,7 @@ export const settings = {
   panelSubtitle: {
     account: "Set display name, @ handle, and avatar.",
     "language-region": "Set interface language and time zone.",
-    appearance: "Configure interface theme and font size.",
+    appearance: "Configure interface theme and message text size.",
     notifications: "Control mentions, human replies, and approval notifications.",
     about: "Review desktop and local daemon version information.",
   },

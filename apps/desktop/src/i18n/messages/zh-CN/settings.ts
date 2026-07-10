@@ -4,7 +4,7 @@ export const settings = {
   account: "账户",
   accountSubtitle: "设置展示名称、@ handle 和头像。",
   appearance: "外观",
-  appearanceSubtitle: "配置界面的颜色主题和字体大小。",
+  appearanceSubtitle: "配置界面的颜色主题和消息文本大小。",
   approvalNotifications: "审批通知",
   avatar: "头像",
   avatarHint: "随机生成一个像素头像，或上传自己的头像图片。",
@@ -16,7 +16,7 @@ export const settings = {
   daemonVersion: "Daemon 版本",
   desktopVersion: "桌面端版本",
   displayName: "显示名称",
-  fontSize: "字体大小",
+  fontSize: "消息文本大小",
   fontSizes: {
     sm: "小",
     md: "标准",
@@ -67,7 +67,7 @@ export const settings = {
   panelSubtitle: {
     account: "设置展示名称、@ handle 和头像。",
     "language-region": "设置界面语言和时区。",
-    appearance: "配置界面的颜色主题和字体大小。",
+    appearance: "配置界面的颜色主题和消息文本大小。",
     notifications: "控制提及、人工回复和审批类通知。",
     about: "查看当前桌面端和本地 daemon 的版本信息。",
   },

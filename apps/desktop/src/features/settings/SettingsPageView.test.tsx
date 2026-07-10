@@ -68,6 +68,29 @@ afterEach(async () => {
 });
 
 describe("SettingsPage header", () => {
+  it("labels the preference as message text size in Chinese and English", () => {
+    for (const locale of ["zh-CN", "en-US"] as const) {
+      const messages = createDesktopMessages(locale);
+      const html = renderToStaticMarkup(
+        <SettingsPage
+          activePanel="appearance"
+          appearance={{ theme: "light", fontSize: "md" }}
+          locale={locale}
+          messages={messages}
+          nodes={[localNode]}
+          notifications={{ approvals: true, humanReplies: false, mentions: true }}
+          profile={null}
+          timeZone="Asia/Shanghai"
+        />,
+      );
+
+      expect(html).toContain(locale === "zh-CN" ? "消息文本大小" : "Message text size");
+      expect(html).toContain(locale === "zh-CN"
+        ? "配置界面的颜色主题和消息文本大小。"
+        : "Configure interface theme and message text size.");
+    }
+  });
+
   it("keeps the settings panel header outside native drag regions and text unselectable", () => {
     const messages = createDesktopMessages("en-US");
     const html = renderToStaticMarkup(

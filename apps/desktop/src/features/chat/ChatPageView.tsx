@@ -300,6 +300,7 @@ function ChannelTaskList({ messages, onTaskThreadOpen, tasks }: { messages: Desk
                   className="mt-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
                   copyCodeLabel={messages.chat.copyMessage}
                   markdown={reply.body}
+                  messageText
                   tone="card"
                 />
               </article>
@@ -440,17 +441,18 @@ function MessageBody({
   tone?: "card" | "primary";
 }) {
   if (!skillToken) {
-    return <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={body} onCodeCopied={onCodeCopied} tone={tone} />;
+    return <MarkdownMessage copyCodeLabel={copyCodeLabel} markdown={body} messageText onCodeCopied={onCodeCopied} tone={tone} />;
   }
   const rest = skillToken.rest;
   const inlineRest = rest && !rest.startsWith("\n") && !rest.startsWith("\r");
   return (
     <div
       className={cn(
-        "slei-markdown-message mt-1 max-w-none text-sm leading-relaxed",
+        "slei-markdown-message slei-message-text mt-1 max-w-none text-sm leading-relaxed",
         tone === "primary" ? "text-primary-foreground" : "text-card-foreground",
         inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline",
       )}
+      data-message-text="true"
       style={markdownForegroundStyle(tone)}
     >
       <span className="slei-message-skill mr-1 inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 font-mono text-xs font-medium text-accent-foreground">

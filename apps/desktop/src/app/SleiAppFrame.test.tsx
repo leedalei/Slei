@@ -341,10 +341,12 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(onRuntimeToastDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("syncs the font size preference to the document root and restores it on unmount", async () => {
+  it("scopes the font size preference to message text without changing global typography", async () => {
     document.documentElement.style.fontSize = "13px";
     document.documentElement.style.setProperty("--app-font-size", "13px");
     document.documentElement.style.setProperty("--text-sm", "12px");
+    document.documentElement.style.setProperty("--text-base", "15px");
+    document.documentElement.setAttribute("data-message-text-size", "legacy");
 
     const container = await mount(
       <SleiAppFrame
@@ -357,11 +359,13 @@ describe("SleiAppFrame appearance preferences", () => {
       />,
     );
 
-    expect(container.querySelector("[data-font-size='lg']")).not.toBeNull();
-    expect(document.documentElement.style.fontSize).toBe("16px");
-    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("16px");
-    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("16px");
+    expect(container.querySelector("[data-message-text-size='lg']")).not.toBeNull();
+    expect(container.querySelector("[data-font-size]")).toBeNull();
+    expect(document.documentElement.getAttribute("data-message-text-size")).toBe("lg");
+    expect(document.documentElement.style.fontSize).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
+    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("15px");
 
     await act(async () => {
       mountedRoot?.render(
@@ -377,10 +381,11 @@ describe("SleiAppFrame appearance preferences", () => {
     });
     await act(async () => undefined);
 
-    expect(document.documentElement.style.fontSize).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("14px");
+    expect(document.documentElement.getAttribute("data-message-text-size")).toBe("sm");
+    expect(document.documentElement.style.fontSize).toBe("13px");
+    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("13px");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
-    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("14px");
+    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("15px");
 
     await act(async () => {
       mountedRoot?.unmount();
@@ -390,41 +395,19 @@ describe("SleiAppFrame appearance preferences", () => {
     expect(document.documentElement.style.fontSize).toBe("13px");
     expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("13px");
     expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("12px");
+    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("15px");
+    expect(document.documentElement.getAttribute("data-message-text-size")).toBe("legacy");
   });
 
-  it("updates tokens used by explicit text utility nodes", async () => {
-    const container = await mount(
-      <SleiAppFrame
-        activeView="settings"
-        appearance={{ theme: "light", fontSize: "lg" }}
-        data={createSleiFixtures()}
-        initialSettingsPanel="appearance"
-        locale="zh-CN"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
+  it("defines all three font size mappings only under the message text scope", () => {
+    const appCss = readFileSync(join(process.cwd(), "src/app/app.css"), "utf8");
 
-    const description = container.querySelector<HTMLElement>("[data-testid='slei-settings-panel-header'] p");
-
-    expect(description).not.toBeNull();
-    expect(description?.className).toContain("text-sm");
-    expect(document.documentElement.style.getPropertyValue("--text-sm")).toBe("14px");
-  });
-
-  it("keeps the standard font size at a 14px body baseline", async () => {
-    await mount(
-      <SleiAppFrame
-        activeView="chat"
-        appearance={{ theme: "light", fontSize: "md" }}
-        data={createSleiFixtures()}
-        locale="zh-CN"
-        runtimeSetup={runtimeSetup}
-      />,
-    );
-
-    expect(document.documentElement.style.fontSize).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--app-font-size")).toBe("14px");
-    expect(document.documentElement.style.getPropertyValue("--text-base")).toBe("14px");
+    expect(appCss).toContain('[data-message-text-size="sm"] .slei-message-text');
+    expect(appCss).toContain('[data-message-text-size="md"] .slei-message-text');
+    expect(appCss).toContain('[data-message-text-size="lg"] .slei-message-text');
+    expect(appCss).toContain("--text-sm: 12px;");
+    expect(appCss).toContain("--text-sm: 13px;");
+    expect(appCss).toContain("--text-sm: 14px;");
   });
 
   it("wires settings account avatar upload to the provided callback", async () => {
