@@ -680,7 +680,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                   >
                     <SelectableCard
                       selected={selected || openDmMenuId === member.id}
-                      className={sidebarListRowClassName}
+                      className={cn(sidebarListRowClassName, "h-10 min-h-10")}
                       data-conversation-id={conversationId}
                       data-direct-message-list-item=""
                       data-member-id={member.id}
@@ -694,8 +694,15 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                         onClick={() => selectDirectMessage(entry)}
                         type="button"
                       >
-                        <MemberAvatar identity={member} size="small" status={member.runtimeStatus} />
-                        <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
+                        <MemberAvatar identity={member} size="sidebar" status={member.runtimeStatus} />
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                          <span className="min-w-0 truncate text-[14px] font-normal leading-5">{member.name}</span>
+                          {member.profession?.trim() || member.role?.trim() ? (
+                            <Badge className="min-w-0 max-w-[55%] shrink truncate" variant="secondary">
+                              {member.profession?.trim() || member.role?.trim()}
+                            </Badge>
+                          ) : null}
+                        </span>
                       </button>
                       <DropdownMenuTrigger asChild>
                         <Button
