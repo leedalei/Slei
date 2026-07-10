@@ -2113,9 +2113,12 @@ describe("SleiAppFrame global search navigation", () => {
     const nameContainer = trigger?.querySelector<HTMLElement>('[data-slot="direct-message-name"]');
     const name = nameContainer?.querySelector<HTMLElement>("span");
     const badge = nameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+    const directMessageList = host.querySelector<HTMLElement>('[data-slot="direct-message-list"]');
     const rowButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="workspace-dm-row-a1"] button'));
     const menuButton = rowButtons.find((button) => button !== trigger);
 
+    expect(directMessageList?.querySelector('[data-direct-message-list-item]')).not.toBeNull();
+    expect(directMessageList?.className).toContain("pr-2");
     expect(trigger?.className).toContain("h-full");
     expect(host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]')?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
     expect(menuButton).toBeInstanceOf(HTMLElement);
@@ -2130,7 +2133,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(statusDot?.parentElement).toBe(avatar);
     expect(avatar?.getAttribute("data-avatar-size")).toBe("sidebar");
     expect(avatar?.getAttribute("data-size")).toBe("default");
-    expect(avatar?.className.split(/\s+/)).toContain("size-[2.125rem]");
+    expect(avatar?.className.split(/\s+/)).toContain("size-[1.875rem]");
     expect(avatar?.className.split(/\s+/)).toContain("border-muted-foreground/30");
     expect(avatar?.className.split(/\s+/)).not.toContain("border-border");
     expect(nameContainer?.className).toContain("flex");

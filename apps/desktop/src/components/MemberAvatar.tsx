@@ -47,7 +47,7 @@ export function MemberAvatar(input: {
 function avatarSizeClassName(size: MemberAvatarSize) {
   if (size === "large") return "size-[3.75rem]";
   if (size === "small") return "size-7";
-  if (size === "sidebar") return "size-[2.125rem]";
+  if (size === "sidebar") return "size-[1.875rem]";
   return "size-8";
 }
 
