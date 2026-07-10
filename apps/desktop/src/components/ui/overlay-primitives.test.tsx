@@ -250,7 +250,7 @@ describe("overlay UI primitives", () => {
       expect(content?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
       expect(content?.className).toContain("border");
       expect(content?.className).toContain("bg-popover");
-      expect(content?.className).toContain("shadow-[var(--overlay-shadow-sm)]");
+      expect(content?.className).toContain("shadow-[var(--dropdown-shadow-sm)]");
       expect(content?.className).not.toContain("t-dropdown");
       expect(content?.className).not.toContain("shadow-[0_0_4px_rgba");
       expect(content?.className).not.toContain("bg-white/10");

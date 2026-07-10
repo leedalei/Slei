@@ -1384,6 +1384,7 @@ describe("SleiAppFrame global search navigation", () => {
     expect(document.body.textContent).toContain("清空聊天记录");
     expect(document.body.textContent).toContain("删除成员");
     expect(document.body.textContent).not.toContain("打开私聊");
+    expect(openDropdownMenuContent()?.className).toContain("shadow-[var(--dropdown-shadow-sm)]");
     expect(dmRow?.className).toContain("bg-[var(--workspace-sidebar-active-bg)]");
 
     await clickDropdownItem("打开成员资料");

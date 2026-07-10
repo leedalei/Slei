@@ -1184,6 +1184,7 @@ describe("desktop UI primitive usage", () => {
 
   it("keeps dropdown and popover primitives on shadcn Radix content APIs", () => {
     const appCss = readSource("app/app.css");
+    expect(appCss).toContain("--dropdown-shadow-sm: 0 6px 14px -6px var(--overlay-shadow-color), 0 2px 5px -2px var(--overlay-shadow-color);");
     expect(appCss).toContain("--popover-shadow-md: 0 10px 24px -6px var(--overlay-shadow-color), 0 3px 8px -2px var(--overlay-shadow-color);");
 
     for (const file of [
@@ -1196,7 +1197,7 @@ describe("desktop UI primitive usage", () => {
       expect(source).toContain("data-[state=closed]:animate-out");
       expect(source).toContain("data-[side=bottom]:slide-in-from-top-2");
       expect(source).toContain("rounded-[calc(var(--radius-md)+4px)] border bg-popover");
-      expect(source).toContain(file.endsWith("popover.tsx") ? "shadow-[var(--popover-shadow-md)]" : "shadow-[var(--overlay-shadow-sm)]");
+      expect(source).toContain(file.endsWith("popover.tsx") ? "shadow-[var(--popover-shadow-md)]" : "shadow-[var(--dropdown-shadow-sm)]");
       expect(source).not.toContain("shadow-[0_0_4px_rgba");
     }
 
