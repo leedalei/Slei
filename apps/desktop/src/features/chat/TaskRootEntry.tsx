@@ -4,11 +4,10 @@ import { MemberAvatar, SleiIcon, SleiIconSwap, TooltipButton, type MemberAvatarI
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { cn } from "../../lib/utils";
+import { MessageBubbleActionToolbar, MESSAGE_BUBBLE_ACTION_BUTTON_CLASS, MESSAGE_BUBBLE_ACTION_ICON_CLASS, MessageBubbleTime } from "./MessageBubbleChrome";
 import { MarkdownMessage } from "./MarkdownMessage";
 
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
-const TASK_ROOT_ACTION_BUTTON_CLASS = "size-6 [&_svg]:size-2.5";
-const TASK_ROOT_ACTION_ICON_CLASS = "size-2.5";
 
 const STATUS_CLASS: Record<SleiTask["status"], string> = {
   pending_assignment: "text-amber-700 dark:text-amber-300",
@@ -77,6 +76,7 @@ export function TaskRootEntry(input: {
     >
       {side === "incoming" ? <MemberAvatar identity={avatarIdentity} /> : null}
       <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
+        {showIdentity || input.task.status ? (
         <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
           {showIdentity ? (
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
@@ -90,55 +90,65 @@ export function TaskRootEntry(input: {
               ) : null}
             </div>
           ) : null}
-          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-task-root-entry-actions>
-            <Button
-              aria-label={openLabel}
-              className="h-6 shrink-0 gap-1 rounded-md px-1.5 text-[11px] [&_svg]:size-2.5"
-              data-task-root-entry-replies
-              onClick={input.onOpen}
-              type="button"
-              variant="ghost"
-            >
-              <SleiIcon className={TASK_ROOT_ACTION_ICON_CLASS} name="messageSquare" />
-              {replyCountLabel}
-            </Button>
-            <span aria-hidden="true">｜</span>
+          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <span className={cn("inline-flex items-center gap-1 whitespace-nowrap font-medium", STATUS_CLASS[input.task.status])} data-task-root-entry-status>
               <span className={cn("size-2 rounded-full", STATUS_DOT_CLASS[input.task.status])} data-task-root-entry-status-dot />
               {input.messages.tasks.status[input.task.status]}
             </span>
-            <span aria-hidden="true">｜</span>
-            <TooltipButton aria-label={copyLabel} className={TASK_ROOT_ACTION_BUTTON_CLASS} onClick={() => void input.onCopy?.()} size="icon" tooltip={copyLabel} type="button" variant="ghost">
-              <SleiIcon className={TASK_ROOT_ACTION_ICON_CLASS} name="copy" />
-            </TooltipButton>
-            <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} className={TASK_ROOT_ACTION_BUTTON_CLASS} onClick={() => void input.onSaveToggle?.()} size="icon" tooltip={saveLabel} type="button" variant="ghost">
-              <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" className={TASK_ROOT_ACTION_ICON_CLASS} iconClassName={TASK_ROOT_ACTION_ICON_CLASS} inactiveName="bookmarkOutline" />
-            </TooltipButton>
-            {timestamp ? (
-              <>
-                <span aria-hidden="true">｜</span>
-                <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>{timestamp}</time>
-              </>
-            ) : null}
           </div>
         </div>
-        <div
-          className={cn(
-            "grid gap-2 rounded-2xl px-3.5 py-2.5",
-            side === "outgoing"
-              ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
-              : "w-full max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
-          )}
-          data-slot="message-bubble"
-        >
-          <MarkdownMessage markdown={body ?? input.task.title} tone={side === "outgoing" ? "primary" : "card"} />
-          {hasSourceMessage ? null : (
-            <div className="flex min-w-0 items-end gap-3">
-              <span className={cn("min-w-0 truncate text-xs", side === "outgoing" ? "text-primary-foreground/75" : "text-muted-foreground")}>
-                {input.task.title !== body ? input.task.title : input.task.owner}
-              </span>
+        ) : null}
+        <div className={cn("flex min-w-0 max-w-[min(46rem,100%)] items-end gap-2", side === "outgoing" ? "justify-end" : "justify-start")} data-slot="message-bubble-line">
+          {side === "outgoing" && timestamp ? (
+            <MessageBubbleTime>
+              <time className="whitespace-nowrap" dateTime={timestamp}>{timestamp}</time>
+            </MessageBubbleTime>
+          ) : null}
+          <div className="group/bubble relative min-w-0 max-w-[min(42rem,100%)]" data-slot="message-bubble-frame">
+            <MessageBubbleActionToolbar data-task-root-entry-actions side={side}>
+              <Button
+                aria-label={openLabel}
+                className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS}
+                data-task-root-entry-replies
+                onClick={input.onOpen}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <SleiIcon className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} name="messageSquare" />
+                <span className="sr-only">{replyCountLabel}</span>
+              </Button>
+              <TooltipButton aria-label={copyLabel} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} onClick={() => void input.onCopy?.()} size="icon" tooltip={copyLabel} type="button" variant="ghost">
+                <SleiIcon className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} name="copy" />
+              </TooltipButton>
+              <TooltipButton aria-label={saveLabel} aria-pressed={input.saved ? "true" : "false"} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} onClick={() => void input.onSaveToggle?.()} size="icon" tooltip={saveLabel} type="button" variant="ghost">
+                <SleiIconSwap active={Boolean(input.saved)} activeName="bookmark" className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} iconClassName={MESSAGE_BUBBLE_ACTION_ICON_CLASS} inactiveName="bookmarkOutline" />
+              </TooltipButton>
+            </MessageBubbleActionToolbar>
+            <div
+              className={cn(
+                "grid min-w-0 gap-2 rounded-2xl px-3.5 py-2.5",
+                side === "outgoing"
+                  ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+                  : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
+              )}
+              data-slot="message-bubble"
+            >
+              <MarkdownMessage markdown={body ?? input.task.title} tone={side === "outgoing" ? "primary" : "card"} />
+              {hasSourceMessage ? null : (
+                <div className="flex min-w-0 items-end gap-3">
+                  <span className={cn("min-w-0 truncate text-xs", side === "outgoing" ? "text-primary-foreground/75" : "text-muted-foreground")}>
+                    {input.task.title !== body ? input.task.title : input.task.owner}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+          {side === "incoming" && timestamp ? (
+            <MessageBubbleTime>
+              <time className="whitespace-nowrap" dateTime={timestamp}>{timestamp}</time>
+            </MessageBubbleTime>
+          ) : null}
         </div>
       </div>
       {side === "outgoing" ? <MemberAvatar identity={avatarIdentity} /> : null}

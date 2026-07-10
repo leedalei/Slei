@@ -6,6 +6,7 @@ import { activeMentionQuery, composerShortcutAction, insertMention, isComposerIm
 import { MemberAvatar, SleiIcon, Toast, TOAST_VISIBLE_MS, TooltipButton, type MemberAvatarIdentity, type SleiIconName, type ToastType } from "../../components";
 import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
+import { MessageBubbleActionToolbar, MESSAGE_BUBBLE_ACTION_BUTTON_CLASS, MESSAGE_BUBBLE_ACTION_ICON_CLASS, MessageBubbleTime } from "../chat/MessageBubbleChrome";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
 import { Button } from "@/components/ui/button";
@@ -244,8 +245,8 @@ export function TaskThreadDrawer(input: {
                 >
                   {side === "incoming" ? <MemberAvatar identity={identity} /> : null}
                   <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
-                    <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
-                      {showIdentity ? (
+                    {showIdentity ? (
+                    <div className="flex w-full min-w-0 items-center justify-between gap-2 max-w-full">
                         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
                           <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
                           {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
@@ -256,36 +257,46 @@ export function TaskThreadDrawer(input: {
                             </>
                           ) : null}
                         </div>
-                      ) : null}
-                      <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
-                        <TooltipButton aria-label={input.messages.chat.copyMessage} className="size-6" onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
-                          <SleiIcon className="size-3" name="copy" />
-                        </TooltipButton>
-                        {timestamp ? (
-                          <>
-                            <span aria-hidden="true">｜</span>
-                            <time className="whitespace-nowrap tabular-nums" dateTime={reply.sentAt ?? timestamp}>
-                              {timestamp}
-                            </time>
-                          </>
-                        ) : null}
-                      </div>
                     </div>
-                    <div
-                      className={cn(
-                        "grid gap-2 rounded-2xl px-3.5 py-2.5",
-                        side === "outgoing"
-                          ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
-                          : "w-full max-w-full rounded-tl-sm bg-muted/60 text-card-foreground shadow-sm ring-1 ring-border/60",
-                      )}
-                      data-slot="message-bubble"
-                    >
-                      <MarkdownMessage
-                        copyCodeLabel={input.messages.chat.copyMessage}
-                        markdown={reply.body}
-                        onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")}
-                        tone={side === "outgoing" ? "primary" : "card"}
-                      />
+                    ) : null}
+                    <div className={cn("flex min-w-0 max-w-[min(46rem,100%)] items-end gap-2", side === "outgoing" ? "justify-end" : "justify-start")} data-slot="message-bubble-line">
+                      {side === "outgoing" && timestamp ? (
+                        <MessageBubbleTime>
+                          <time className="whitespace-nowrap" dateTime={reply.sentAt ?? timestamp}>
+                            {timestamp}
+                          </time>
+                        </MessageBubbleTime>
+                      ) : null}
+                      <div className="group/bubble relative min-w-0 max-w-[min(42rem,100%)]" data-slot="message-bubble-frame">
+                        <MessageBubbleActionToolbar side={side} slot="task-reply-actions">
+                          <TooltipButton aria-label={input.messages.chat.copyMessage} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} onClick={() => void copyTaskReply(reply)} size="icon" tooltip={input.messages.chat.copyMessage} type="button" variant="ghost">
+                            <SleiIcon className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} name="copy" />
+                          </TooltipButton>
+                        </MessageBubbleActionToolbar>
+                        <div
+                          className={cn(
+                            "grid min-w-0 gap-2 rounded-2xl px-3.5 py-2.5",
+                            side === "outgoing"
+                              ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+                              : "w-fit max-w-full rounded-tl-sm bg-muted/60 text-card-foreground shadow-sm ring-1 ring-border/60",
+                          )}
+                          data-slot="message-bubble"
+                        >
+                          <MarkdownMessage
+                            copyCodeLabel={input.messages.chat.copyMessage}
+                            markdown={reply.body}
+                            onCodeCopied={() => showToast(input.messages.chat.copySuccess, "success")}
+                            tone={side === "outgoing" ? "primary" : "card"}
+                          />
+                        </div>
+                      </div>
+                      {side === "incoming" && timestamp ? (
+                        <MessageBubbleTime>
+                          <time className="whitespace-nowrap" dateTime={reply.sentAt ?? timestamp}>
+                            {timestamp}
+                          </time>
+                        </MessageBubbleTime>
+                      ) : null}
                     </div>
                   </div>
                   {side === "outgoing" ? <MemberAvatar identity={identity} /> : null}

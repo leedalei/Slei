@@ -448,17 +448,19 @@ describe("real agent members and direct messages", () => {
     const messageStart = html.indexOf('data-message-id="current-1"');
     const rowHtml = html.slice(html.lastIndexOf("<article", messageStart), html.indexOf("</article>", messageStart));
     const headerStart = rowHtml.indexOf('data-slot="message-header"');
-    const headerHtml = rowHtml.slice(rowHtml.lastIndexOf("<div", headerStart), rowHtml.indexOf("<div class=\"slei-markdown-message", headerStart));
+    const headerHtml = rowHtml.slice(rowHtml.lastIndexOf("<div", headerStart), rowHtml.indexOf('data-slot="message-bubble-line"', headerStart));
+    const bubbleLineHtml = rowHtml.slice(rowHtml.indexOf('data-slot="message-bubble-line"'));
 
     expect(messageStart).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml).not.toContain(">Coda<");
-    expect(headerHtml).not.toContain(">@coda<");
+    expect(rowHtml).not.toContain(">Coda<");
+    expect(rowHtml).not.toContain(">@coda<");
     expect(headerHtml).toContain("研发团队开发工程师");
-    expect(headerHtml).toContain("10:00");
-    expect(headerHtml).toContain('aria-label="复制"');
-    expect(headerHtml).not.toContain(">复制</button>");
-    expect(headerHtml.indexOf('aria-label="复制"')).toBeLessThan(headerHtml.indexOf(">10:00</time>"));
+    expect(bubbleLineHtml).toContain("10:00");
+    expect(bubbleLineHtml).toContain('data-slot="message-time"');
+    expect(bubbleLineHtml).toContain('aria-label="复制"');
+    expect(bubbleLineHtml).not.toContain(">复制</button>");
+    expect(bubbleLineHtml.indexOf('aria-label="复制"')).toBeLessThan(bubbleLineHtml.indexOf(">10:00</time>"));
   });
 
   it("omits fallback role labels for unmatched direct message authors", () => {
@@ -492,13 +494,13 @@ describe("real agent members and direct messages", () => {
     const messageStart = html.indexOf('data-message-id="current-1"');
     const rowHtml = html.slice(html.lastIndexOf("<article", messageStart), html.indexOf("</article>", messageStart));
     const headerStart = rowHtml.indexOf('data-slot="message-header"');
-    const headerHtml = rowHtml.slice(rowHtml.lastIndexOf("<div", headerStart), rowHtml.indexOf("<div class=\"slei-markdown-message", headerStart));
 
     expect(messageStart).toBeGreaterThanOrEqual(0);
-    expect(headerStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml).not.toContain(">Lei<");
-    expect(headerHtml).not.toContain(">@lei<");
-    expect(headerHtml).not.toContain("用户");
+    expect(headerStart).toBe(-1);
+    expect(rowHtml).not.toContain(">Lei<");
+    expect(rowHtml).not.toContain(">@lei<");
+    expect(rowHtml).not.toContain("用户");
+    expect(rowHtml).toContain('data-slot="message-time"');
   });
 
   it("uses the member name as the direct message detail title", () => {

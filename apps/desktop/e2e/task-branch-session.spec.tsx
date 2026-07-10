@@ -163,7 +163,7 @@ describe("task branch sessions", () => {
     expect(taskEntryHtml).not.toContain(">Lei<");
     expect(taskEntryHtml).not.toContain(">@lei<");
     expect(taskEntryHtml).not.toContain("用户");
-    expect(taskEntryHtml.indexOf("data-task-root-entry-replies")).toBeLessThan(taskEntryHtml.indexOf("data-task-root-entry-status"));
+    expect(taskEntryHtml.indexOf("data-task-root-entry-status")).toBeLessThan(taskEntryHtml.indexOf("data-task-root-entry-replies"));
     expect(html).not.toContain('data-message-id="msg_root"');
   });
 

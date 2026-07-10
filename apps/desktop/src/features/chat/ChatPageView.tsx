@@ -24,6 +24,7 @@ import { MentionPicker } from "./MentionPicker";
 import { ComposerCommandPicker, type ComposerCommandOption } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 import { ChannelMemberGroup } from "./ChannelMemberGroup";
+import { MessageBubbleActionToolbar, MESSAGE_BUBBLE_ACTION_BUTTON_CLASS, MESSAGE_BUBBLE_ACTION_ICON_CLASS, MessageBubbleTime } from "./MessageBubbleChrome";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
@@ -1167,64 +1168,79 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           >
                             {side === "incoming" ? avatar : null}
                             <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
+                              {roleDescription ? (
                               <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")} data-slot="message-header">
                                 {roleDescription ? (
                                   <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
                                     <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
                                   </div>
                                 ) : null}
-                                <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
-                                  <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className="size-6" data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
-                                    <SleiIcon className="size-3" name="messageSquare" />
-                                  </TooltipButton>
-                                  <TooltipButton aria-label={messages.chat.copyMessage} className="size-6" onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
-                                    <SleiIcon className="size-3" name="copy" />
-                                  </TooltipButton>
-                                  <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className="size-6" onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
-                                    <SleiIconSwap active={saved} activeName="bookmark" className="size-3" iconClassName="size-3" inactiveName="bookmarkOutline" />
-                                  </TooltipButton>
-                                  <span aria-hidden="true">｜</span>
-                                  <span className="inline-flex items-center gap-1">
-                                    <time className="whitespace-nowrap tabular-nums" dateTime={timestamp}>
+                              </div>
+                              ) : null}
+                              <div className={cn("flex min-w-0 max-w-[min(46rem,100%)] items-end gap-2", side === "outgoing" ? "justify-end" : "justify-start")} data-slot="message-bubble-line">
+                                {side === "outgoing" ? (
+                                  <MessageBubbleTime>
+                                    <time className="whitespace-nowrap" dateTime={timestamp}>
                                       {timestamp}
                                     </time>
                                     <MessageStatusSquare status={message.status} />
-                                  </span>
+                                  </MessageBubbleTime>
+                                ) : null}
+                                <div className="group/bubble relative min-w-0 max-w-[min(42rem,100%)]" data-slot="message-bubble-frame">
+                                  <MessageBubbleActionToolbar side={side}>
+                                    <TooltipButton aria-label={`${messages.tasks.commentThread}: ${message.author}`} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} data-message-thread-open={message.id} onClick={() => openMessageThread(message)} size="icon" tooltip={messages.tasks.commentThread} type="button" variant="ghost">
+                                      <SleiIcon className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} name="messageSquare" />
+                                    </TooltipButton>
+                                    <TooltipButton aria-label={messages.chat.copyMessage} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} onClick={() => void copyMessage(message)} size="icon" tooltip={messages.chat.copyMessage} type="button" variant="ghost">
+                                      <SleiIcon className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} name="copy" />
+                                    </TooltipButton>
+                                    <TooltipButton aria-label={saveLabel} aria-pressed={saved ? "true" : "false"} className={MESSAGE_BUBBLE_ACTION_BUTTON_CLASS} onClick={() => void toggleMessageSave(message, saved)} size="icon" tooltip={saveLabel} type="button" variant="ghost">
+                                      <SleiIconSwap active={saved} activeName="bookmark" className={MESSAGE_BUBBLE_ACTION_ICON_CLASS} iconClassName={MESSAGE_BUBBLE_ACTION_ICON_CLASS} inactiveName="bookmarkOutline" />
+                                    </TooltipButton>
+                                  </MessageBubbleActionToolbar>
+                                  <div
+                                    className={cn(
+                                      "grid min-w-0 gap-2 rounded-2xl px-3.5 py-2.5",
+                                      side === "outgoing"
+                                        ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
+                                        : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
+                                    )}
+                                    data-slot="message-bubble"
+                                  >
+                                    <MessageBody
+                                      body={message.body}
+                                      copyCodeLabel={messages.chat.copyMessage}
+                                      onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
+                                      skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
+                                      tone={bodyTone}
+                                    />
+                                    <AttachmentList attachments={message.attachments ?? []} messageAttachments />
+                                    {message.toolCall ? <code className={cn("mt-2 block rounded-md border px-2 py-1 font-mono text-xs", side === "outgoing" ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground")} data-slot="tool-call">{message.toolCall}</code> : null}
+                                    {message.cards?.map((card) => (
+                                      <InteractiveCard
+                                        card={card}
+                                        key={card.id}
+                                        messages={messages}
+                                        onCreate={() => {
+                                          if (card.kind === "createAgent") {
+                                            onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
+                                          } else if (card.kind === "createChannel") {
+                                            onChannelDraftCreate?.(card.draft, card.id);
+                                          }
+                                        }}
+                                        onPermissionResolve={onPermissionResolve}
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
-                              </div>
-                              <div
-                                className={cn(
-                                  "grid gap-2 rounded-2xl px-3.5 py-2.5",
-                                  side === "outgoing"
-                                    ? "w-fit max-w-[min(42rem,100%)] rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
-                                    : "w-full max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
-                                )}
-                                data-slot="message-bubble"
-                              >
-                                <MessageBody
-                                  body={message.body}
-                                  copyCodeLabel={messages.chat.copyMessage}
-                                  onCodeCopied={() => showToast(messages.chat.copySuccess, "success")}
-                                  skillToken={dmMember ? leadingSkillSlashToken(message.body, dmMember.skills ?? []) : null}
-                                  tone={bodyTone}
-                                />
-                                <AttachmentList attachments={message.attachments ?? []} messageAttachments />
-                                {message.toolCall ? <code className={cn("mt-2 block rounded-md border px-2 py-1 font-mono text-xs", side === "outgoing" ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground" : "bg-muted text-muted-foreground")} data-slot="tool-call">{message.toolCall}</code> : null}
-                                {message.cards?.map((card) => (
-                                  <InteractiveCard
-                                    card={card}
-                                    key={card.id}
-                                    messages={messages}
-                                    onCreate={() => {
-                                      if (card.kind === "createAgent") {
-                                        onAgentDraftCreate?.(card.draft as Partial<AgentDraftInput>, card.id);
-                                      } else if (card.kind === "createChannel") {
-                                        onChannelDraftCreate?.(card.draft, card.id);
-                                      }
-                                    }}
-                                    onPermissionResolve={onPermissionResolve}
-                                  />
-                                ))}
+                                {side === "incoming" ? (
+                                  <MessageBubbleTime>
+                                    <time className="whitespace-nowrap" dateTime={timestamp}>
+                                      {timestamp}
+                                    </time>
+                                    <MessageStatusSquare status={message.status} />
+                                  </MessageBubbleTime>
+                                ) : null}
                               </div>
                             </div>
                             {side === "outgoing" ? avatar : null}

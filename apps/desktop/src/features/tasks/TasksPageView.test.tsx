@@ -522,7 +522,8 @@ describe("TasksPage filters", () => {
     const actions = reply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
     const copyButton = actions?.querySelector<HTMLButtonElement>('button[aria-label="复制"]');
     const copyIcon = copyButton?.querySelector<SVGElement>('[data-slei-icon="copy"]');
-    const time = actions?.querySelector<HTMLTimeElement>("time");
+    const time = reply?.querySelector<HTMLTimeElement>('[data-slot="message-time"] time');
+    const humanActions = humanReply?.querySelector<HTMLElement>('[data-slot="task-reply-actions"]');
 
     expect(replies).toHaveLength(2);
     expect(reply?.dataset.messageSide).toBe("incoming");
@@ -551,9 +552,14 @@ describe("TasksPage filters", () => {
     expect(humanBubble?.className).toContain("bg-primary");
     expect(humanBubble?.className).toContain("text-primary-foreground");
     expect(actions).not.toBeNull();
+    expect(actions?.parentElement?.dataset.slot).toBe("message-bubble-frame");
+    expect(actions?.className).toContain("absolute");
+    expect(actions?.className).toContain("right-2");
+    expect(actions?.className).toContain("group-hover/bubble:opacity-100");
+    expect(humanActions?.className).toContain("left-2");
     expect(copyButton).not.toBeNull();
     expect(copyButton?.className).toContain("size-6");
-    expect(copyButton?.className).not.toContain("[&_svg]:size-3");
+    expect(copyButton?.className).toContain("[&_svg]:size-3");
     expect(copyIcon?.className.baseVal.split(/\s+/)).toContain("size-3");
     expect(time?.textContent).toBe("06-17 10:30");
     expect(time?.getAttribute("dateTime")).toBe("2026-06-17 10:30:00");
