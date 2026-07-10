@@ -105,7 +105,6 @@ describe("AgentProfilePopover", () => {
         onMessage={onMessage}
         onOpenChange={onOpenChange}
         open
-        status={{ kind: "runtime", status: "busy" }}
       />,
     );
 
@@ -163,7 +162,6 @@ describe("AgentProfilePopover", () => {
         messages={messages}
         onOpenChange={() => undefined}
         open
-        status={{ kind: "runtime", status: "idle" }}
       />,
     );
 
@@ -200,7 +198,6 @@ describe("AgentProfilePopover", () => {
         onMessage={vi.fn()}
         onOpenChange={() => undefined}
         open
-        status={{ kind: "runtime", status: "busy" }}
       />,
     );
 

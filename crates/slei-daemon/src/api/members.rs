@@ -7,6 +7,7 @@ use serde_json::json;
 use std::fs;
 use std::path::{Component, Path as FsPath, PathBuf};
 
+use crate::services::channel_service::ChannelMemberReadiness;
 use crate::services::member_service::{
     MemberError, ProductAgentDraft, ProductAgentRecord, ProductAgentUpdate,
 };
@@ -117,12 +118,37 @@ pub async fn bootstrap_guide(State(state): State<AppState>, headers: HeaderMap) 
         .await
     {
         Ok((agent, created)) => {
-            if let Err(error) = state
+            let membership = match state
                 .channels()
-                .ensure_default_agent_membership(&agent.id)
+                .add_agent_to_channel_with_outcome("all", &agent.id)
                 .await
             {
-                return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+                }
+            };
+            if matches!(
+                membership.member.readiness,
+                ChannelMemberReadiness::Joining | ChannelMemberReadiness::MemorySyncing
+            ) {
+                if let Err(error) = state
+                    .memory_maintainer()
+                    .sync_added_channel_member("all", &agent.id)
+                    .await
+                {
+                    return error_response(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string());
+                }
+                if let Err(error) = state
+                    .channel_orchestrator()
+                    .start_channel_agent_join_report("all", &agent.id)
+                    .await
+                {
+                    eprintln!(
+                        "slei guide join report failed to start: agent_id={} error={error}",
+                        agent.id
+                    );
+                }
             }
             let (conversation, _) = match state.conversations().create_dm(&agent.id).await {
                 Ok(receipt) => receipt,

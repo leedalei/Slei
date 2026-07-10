@@ -356,7 +356,7 @@ export function MembersPage(input: {
                   {showHandle ? <span className="min-w-0 truncate text-sm font-medium text-muted-foreground">{selectedMember.handle}</span> : null}
                   <StatusBadge
                     className="w-fit"
-                    label={input.messages.members.online}
+                    label={input.messages.status.runtime[selectedMember.runtimeStatus]}
                     status={selectedMember.runtimeStatus}
                   />
                 </span>

@@ -1,18 +1,13 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 import type { DesktopMessages } from "../../i18n";
-import type { SleiMember, SleiChannelMemberReadiness } from "../../app/types";
-import { channelReadinessLabel } from "../../app/model";
+import type { SleiMember } from "../../app/types";
 import { MemberAvatar } from "../../components";
 import { getSleiStatusIndicatorClassName } from "../../components/StatusBadge";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { cn } from "../../lib/utils";
-
-export type AgentProfileStatus =
-  | { kind: "runtime"; status: SleiMember["runtimeStatus"] }
-  | { kind: "channel"; readiness: SleiChannelMemberReadiness | undefined; channelId: string };
 
 export function AgentProfilePopover(input: {
   action?: ReactNode;
@@ -25,7 +20,6 @@ export function AgentProfilePopover(input: {
   onMessage?: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  status: AgentProfileStatus;
   triggerClassName?: string;
   triggerTestId?: string;
 }) {
@@ -71,8 +65,8 @@ export function AgentProfilePopover(input: {
           <div className="flex min-w-0 items-center justify-between gap-2" data-slot="agent-profile-metadata">
             <span className="truncate text-xs text-muted-foreground">{input.member.handle}</span>
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-              <span aria-hidden="true" className={cn("size-1.5 rounded-full", statusDotClass(input.status))} data-slot="agent-profile-status-dot" />
-              {statusLabel(input.status, input.messages)}
+              <span aria-hidden="true" className={cn("size-1.5 rounded-full", getSleiStatusIndicatorClassName(input.member.runtimeStatus))} data-slot="agent-profile-status-dot" />
+              {input.messages.status.runtime[input.member.runtimeStatus]}
             </span>
           </div>
           {input.member.description ? <p className="text-sm leading-relaxed text-muted-foreground" data-slot="agent-profile-description">{input.member.description}</p> : null}
@@ -94,16 +88,4 @@ export function AgentProfilePopover(input: {
       </PopoverContent>
     </Popover>
   );
-}
-
-function statusLabel(status: AgentProfileStatus, messages: DesktopMessages) {
-  if (status.kind === "channel") return channelReadinessLabel(status.readiness, messages);
-  return messages.status.runtime[status.status];
-}
-
-function statusDotClass(status: AgentProfileStatus) {
-  if (status.kind === "channel") {
-    return getSleiStatusIndicatorClassName(status.readiness === "ready" ? "idle" : "offline");
-  }
-  return getSleiStatusIndicatorClassName(status.status);
 }

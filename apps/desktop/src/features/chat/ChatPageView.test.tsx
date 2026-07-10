@@ -2600,7 +2600,8 @@ describe("ChatPage mention panel", () => {
           profession: "产品研究 Agent",
           role: "产品研究 Agent",
           description: "负责产品研究。",
-          channelReadiness: { all: "ready" },
+          runtimeStatus: "busy",
+          channelReadiness: { all: "joining" },
         },
       ],
     });
@@ -2625,8 +2626,8 @@ describe("ChatPage mention panel", () => {
     expect(card?.textContent).toContain("Luna");
     expect(card?.textContent).toContain("@luna");
     expect(card?.textContent).toContain("产品研究 Agent");
-    expect(card?.textContent).toContain(messages.chat.memberReady);
-    expect(card?.textContent).not.toContain("ready");
+    expect(card?.textContent).toContain(messages.status.runtime.busy);
+    expect(card?.textContent).not.toContain(messages.chat.memberJoining);
     expect(card?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
     expect(card?.className).toContain("border");
     expect(card?.className).toContain("bg-popover");
@@ -2797,7 +2798,7 @@ describe("ChatPage mention panel", () => {
     expect(channelCard).not.toBeNull();
     expect(channelCard?.textContent).toContain("产品研究员");
     expect(channelCard?.textContent).toContain("负责调研用户、整理证据并形成产品判断。");
-    expect(channelCard?.textContent).toContain(messages.chat.memberReady);
+    expect(channelCard?.textContent).toContain(messages.status.runtime.busy);
     expect(channelCard?.textContent).toContain(messages.chat.removeChannelMemberAction);
   });
 

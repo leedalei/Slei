@@ -246,10 +246,14 @@ export function replaceChannelMessages(current: SleiMessage[], channelMessages: 
   ];
 }
 
+const BUSY_AGENT_RUNTIME_STATES = new Set(["working", "running", "busy", "blocked", "waiting_approval", "waitingApproval", "approval"]);
+
 export function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeView[], messages: DesktopMessages = createDesktopMessages("zh-CN")): SleiMember {
   const node = nodes.find((candidate) => candidate.id === agent.nodeId);
+  const runtimeAvailable = node?.status !== "offline"
+    && node?.runtimes.some((runtime) => runtime.kind === agent.runtimeKind && runtime.readiness === "ready") === true;
   const runtimeStatus = agent.runtimeThread?.status;
-  const isBusy = runtimeStatus === "working" || runtimeStatus === "running" || runtimeStatus === "busy";
+  const isBusy = runtimeStatus ? BUSY_AGENT_RUNTIME_STATES.has(runtimeStatus) : false;
   return {
     id: agent.id,
     name: agent.name,
@@ -258,7 +262,7 @@ export function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeV
     avatarSeed: agent.avatarSeed,
     agentKind: agent.agentKind,
     type: "agent",
-    runtimeStatus: node?.status === "offline" ? "offline" : isBusy ? "busy" : "idle",
+    runtimeStatus: !runtimeAvailable ? "offline" : isBusy ? "busy" : "idle",
     profession: agent.profession || (agent.agentKind === "guide" ? messages.chat.guide : messages.agentCreate.fallbackAgent),
     role: agent.profession || (agent.agentKind === "guide"
         ? messages.chat.guide

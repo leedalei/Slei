@@ -8,6 +8,7 @@ use slei_daemon::app::build_router;
 use slei_daemon::auth::AuthToken;
 use slei_daemon::services::card_service::InteractiveCardView;
 use slei_daemon::services::channel_service::{ChannelDraft, PermissionPreset};
+use slei_daemon::services::claim_service::AgentStatusUpdate;
 use slei_daemon::services::conversation_service::ConversationService;
 use slei_daemon::state::AppState;
 use slei_storage::db::SleiDb;
@@ -342,7 +343,7 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     let root = make_temp_dir("guide-bootstrap-real");
     let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
     state.nodes().set_runtime_ready_for_tests("1.2.3");
-    let app = build_router(state);
+    let app = build_router(state.clone());
 
     let first = post_json(
         &app,
@@ -367,6 +368,29 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
         .unwrap()
         .find("session_")
         .is_none());
+
+    let all_members = get_json(&app, &token, "/v1/channels/all/members").await;
+    assert_eq!(all_members.status(), StatusCode::OK);
+    let all_members_body = response_json(all_members).await;
+    assert_eq!(
+        all_members_body["members"][0]["agentId"],
+        "agent_guide_local_node"
+    );
+    assert_eq!(
+        all_members_body["members"][0]["readiness"],
+        "memory_syncing"
+    );
+    let guide_commands = state.worker_commands();
+    assert!(
+        guide_commands.iter().any(|command| {
+            command["type"] == "start_run"
+                && command["session"]["agent_id"] == "agent_guide_local_node"
+                && command["input"]["prompt"]
+                    .as_str()
+                    .is_some_and(|prompt| prompt.contains("频道 #all"))
+        }),
+        "guide bootstrap commands: {guide_commands:?}"
+    );
 
     let workspace = PathBuf::from(guide["workspacePath"].as_str().unwrap());
     assert!(workspace.ends_with("agent_guide_local_node"));
@@ -461,6 +485,59 @@ async fn guide_bootstrap_creates_real_yeal_agent_dm_skills_and_all_membership() 
     assert!(agents
         .iter()
         .any(|agent| agent["id"] == "agent_guide_local_node"));
+}
+
+#[tokio::test]
+async fn daemon_restart_recovers_interrupted_agent_status_to_idle() {
+    let token = AuthToken::from_static("test-token");
+    let root = make_temp_dir("agent-status-restart-recovery");
+    let state = AppState::for_tests_with_agent_root(token.clone(), root.clone());
+    state.nodes().set_runtime_ready_for_tests("1.2.3");
+    let app = build_router(state.clone());
+
+    let created = post_json(
+        &app,
+        &token,
+        "/v1/agents/guide/bootstrap",
+        Some("bootstrap-guide-for-status-recovery"),
+        json!({}),
+    )
+    .await;
+    assert_eq!(created.status(), StatusCode::CREATED);
+    state
+        .claims()
+        .update_agent_status(
+            "agent_guide_local_node",
+            AgentStatusUpdate {
+                state: "working".to_string(),
+                phase: Some("处理中".to_string()),
+                reason: None,
+                run_id: Some("run_interrupted".to_string()),
+                channel_id: Some("all".to_string()),
+                message_id: Some("msg_interrupted".to_string()),
+                task_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    drop(app);
+    drop(state);
+
+    let restarted = AppState::for_tests_with_agent_root(token.clone(), root);
+    let restarted_app = build_router(restarted);
+    let agents = response_json(get_json(&restarted_app, &token, "/v1/agents").await).await;
+    assert_eq!(agents["agents"][0]["runtimeThread"]["status"], "idle");
+    let activity = response_json(
+        get_json(
+            &restarted_app,
+            &token,
+            "/v1/agents/agent_guide_local_node/activity?limit=20",
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(activity["logs"][0]["state"], "idle");
+    assert_eq!(activity["logs"][0]["reason"], "daemon restarted");
 }
 
 #[tokio::test]
@@ -1103,10 +1180,7 @@ async fn guide_create_request_starts_runtime_without_user_text_cards() {
     assert_eq!(sent_body["message"]["cards"], json!([]));
 
     let commands = state.worker_commands();
-    let start_run = commands
-        .iter()
-        .find(|command| command["type"] == "start_run")
-        .expect("guide create request should start runtime");
+    let start_run = start_run_command_with_prompt(&commands, "帮我创建一个叫 Nancy 的 QA Agent");
     assert_eq!(start_run["session"]["agent_id"], "agent_guide_local_node");
     assert_eq!(
         start_run["input"]["prompt"],
@@ -1142,7 +1216,9 @@ async fn guide_product_tool_appends_card_message_and_completion_is_idempotent() 
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
-    let run_id = state.worker_commands()[0]["run_id"]
+    let commands = state.worker_commands();
+    let run_id = start_run_command_with_prompt(&commands, "帮我创建一个叫 Nancy 的 QA Agent")
+        ["run_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1328,7 +1404,8 @@ async fn guide_product_tool_rejects_invalid_card_payloads() {
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
-    let run_id = state.worker_commands()[0]["run_id"]
+    let commands = state.worker_commands();
+    let run_id = start_run_command_with_prompt(&commands, "帮我创建一个成员")["run_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1404,7 +1481,8 @@ async fn guide_product_tool_appends_create_channel_card_message() {
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
-    let run_id = state.worker_commands()[0]["run_id"]
+    let commands = state.worker_commands();
+    let run_id = start_run_command_with_prompt(&commands, "帮我创建一个 QA 频道")["run_id"]
         .as_str()
         .unwrap()
         .to_string();
@@ -1501,10 +1579,7 @@ async fn guide_dm_without_card_shortcut_starts_runtime() {
     assert_eq!(sent.status(), StatusCode::CREATED);
 
     let commands = state.worker_commands();
-    let start_run = commands
-        .iter()
-        .find(|command| command["type"] == "start_run")
-        .expect("guide chat should start runtime");
+    let start_run = start_run_command_with_prompt(&commands, "你好");
     assert_eq!(start_run["session"]["agent_id"], "agent_guide_local_node");
     assert_eq!(start_run["input"]["prompt"], "你好");
     let system_prompt = start_run["input"]["system_prompt"].as_str().unwrap();
@@ -3185,6 +3260,22 @@ async fn dm_runtime_events_append_to_conversation() {
         .as_str()
         .unwrap()
         .to_string();
+    state
+        .claims()
+        .update_agent_status(
+            &agent_id,
+            AgentStatusUpdate {
+                state: "idle".to_string(),
+                phase: Some("空闲".to_string()),
+                reason: Some("test setup".to_string()),
+                run_id: None,
+                channel_id: None,
+                message_id: None,
+                task_id: None,
+            },
+        )
+        .await
+        .unwrap();
 
     let sent = post_json(
         &app,
@@ -3195,6 +3286,11 @@ async fn dm_runtime_events_append_to_conversation() {
     )
     .await;
     assert_eq!(sent.status(), StatusCode::CREATED);
+    let running_agents = response_json(get_json(&app, &token, "/v1/agents").await).await;
+    assert_eq!(
+        running_agents["agents"][0]["runtimeThread"]["status"],
+        "working"
+    );
     let commands = state.worker_commands();
     let run_id = start_run_command_with_prompt(&commands, "请给我一个方案")["run_id"]
         .as_str()
@@ -3215,6 +3311,11 @@ async fn dm_runtime_events_append_to_conversation() {
         .handle_worker_event(json!({ "type": "completed", "run_id": run_id }))
         .await
         .unwrap();
+    let completed_agents = response_json(get_json(&app, &token, "/v1/agents").await).await;
+    assert_eq!(
+        completed_agents["agents"][0]["runtimeThread"]["status"],
+        "idle"
+    );
 
     let messages = response_json(
         get_json(

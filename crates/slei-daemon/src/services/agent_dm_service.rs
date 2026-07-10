@@ -11,6 +11,7 @@ use crate::adapters::claude_worker::{
 use crate::adapters::worker_rpc::{WorkerEvent, WorkerRpcError};
 use crate::services::agent_prompt_service::{build_agent_system_prompt, AgentSystemPromptInput};
 use crate::services::card_service::{CardError, CardService, InteractiveCardView};
+use crate::services::claim_service::{AgentStatusUpdate, ClaimError, ClaimService};
 use crate::services::conversation_service::{
     ConversationError, ConversationMessageRecord, ConversationService,
 };
@@ -30,6 +31,7 @@ pub struct AgentDmService {
     worker: ClaudeWorkerAdapter,
     runs: AgentDmRunStore,
     reset_runtime: ResetRuntimeState,
+    claims: ClaimService,
     repos: Repositories,
 }
 
@@ -78,6 +80,7 @@ impl AgentDmService {
         reset_runtime: ResetRuntimeState,
         repos: Repositories,
     ) -> Self {
+        let claims = ClaimService::new(repos.clone());
         Self {
             conversations,
             cards,
@@ -86,6 +89,7 @@ impl AgentDmService {
             worker,
             runs,
             reset_runtime,
+            claims,
             repos,
         }
     }
@@ -185,6 +189,8 @@ impl AgentDmService {
                 None,
                 Some("running"),
             )
+            .await?;
+        self.update_status(&record, &run_id, "working", Some("正在处理私聊"), None)
             .await?;
         self.record_activity(
             &record,
@@ -300,6 +306,9 @@ impl AgentDmService {
                     .await?;
             }
             Some("completed") => {
+                self.runs.inner.lock().await.runs.remove(run_id);
+                self.update_status(&record, run_id, "idle", Some("空闲"), Some("run completed"))
+                    .await?;
                 self.record_activity(
                     &record,
                     run_id,
@@ -335,6 +344,9 @@ impl AgentDmService {
                     .await?;
             }
             Some("failed") => {
+                self.runs.inner.lock().await.runs.remove(run_id);
+                self.update_status(&record, run_id, "idle", Some("空闲"), Some("run failed"))
+                    .await?;
                 let message = event
                     .get("message")
                     .and_then(Value::as_str)
@@ -526,6 +538,31 @@ impl AgentDmService {
         Ok(())
     }
 
+    async fn update_status(
+        &self,
+        record: &AgentDmRunRecord,
+        run_id: &str,
+        state: &str,
+        phase: Option<&str>,
+        reason: Option<&str>,
+    ) -> Result<(), AgentDmError> {
+        self.claims
+            .update_agent_status(
+                &record.agent_id,
+                AgentStatusUpdate {
+                    state: state.to_string(),
+                    phase: phase.map(str::to_string),
+                    reason: reason.map(str::to_string),
+                    run_id: Some(run_id.to_string()),
+                    channel_id: None,
+                    message_id: Some(record.message_id.clone()),
+                    task_id: None,
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
     async fn record_activity(
         &self,
         record: &AgentDmRunRecord,
@@ -698,6 +735,8 @@ fn worker_tool_name(event: &Value) -> &str {
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentDmError {
+    #[error(transparent)]
+    Claim(#[from] ClaimError),
     #[error(transparent)]
     Conversation(#[from] ConversationError),
     #[error(transparent)]

@@ -1209,7 +1209,6 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                           onMessage={messageMember.directMessageEnabled === false ? undefined : () => onMemberMessage?.(messageMember.id)}
                           onOpenChange={(open) => setActiveProfileMessageId(open ? message.id : undefined)}
                           open={activeProfileMessageId === message.id}
-                          status={{ kind: "runtime", status: messageMember.runtimeStatus }}
                           triggerClassName="size-8"
                         >
                           <MemberAvatar identity={messageMember} />

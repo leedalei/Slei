@@ -214,11 +214,108 @@ describe("SleiAppFrame appearance preferences", () => {
       status: "connected",
       daemonVersion: "dev",
       device: { hostname: "local", platform: "macos", arch: "arm64" },
-      runtimes: [],
+      runtimes: [{ kind: "ClaudeCode", readiness: "ready" }],
     }], createDesktopMessages("zh-CN"));
 
     expect(member.runtimeStatus).toBe("busy");
     expect(member.activity).toBe("正在处理任务线程回复");
+  });
+
+  it("keeps a daemon-blocked agent visibly busy while it waits", () => {
+    const agent: DesktopAgentView = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "实现工程师。",
+      workspacePath: "/tmp/coda",
+      memoryPath: "/tmp/coda/MEMORY.md",
+      docsPath: "/tmp/coda/docs",
+      avatarSeed: "Coda",
+      runtimeThread: {
+        runtimeKind: "ClaudeCode",
+        status: "blocked",
+        createdAt: "2026-06-29T00:00:00Z",
+      },
+      createdAt: "2026-06-29T00:00:00Z",
+      updatedAt: "2026-06-29T00:00:00Z",
+    };
+    const nodes = [{
+      id: "local-node",
+      name: "本机",
+      status: "connected" as const,
+      daemonVersion: "dev",
+      device: { hostname: "local", platform: "macos", arch: "arm64" },
+      runtimes: [{ kind: "ClaudeCode", readiness: "ready" as const }],
+    }];
+
+    const member = memberFromAgentView(agent, nodes, createDesktopMessages("zh-CN"));
+
+    expect(member.runtimeStatus).toBe("busy");
+  });
+
+  it("maps an agent without an available daemon runtime to offline", () => {
+    const agent: DesktopAgentView = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "missing-node",
+      description: "实现工程师。",
+      workspacePath: "/tmp/coda",
+      memoryPath: "/tmp/coda/MEMORY.md",
+      docsPath: "/tmp/coda/docs",
+      avatarSeed: "Coda",
+      runtimeThread: {
+        runtimeKind: "ClaudeCode",
+        status: "idle",
+        createdAt: "2026-06-29T00:00:00Z",
+      },
+      createdAt: "2026-06-29T00:00:00Z",
+      updatedAt: "2026-06-29T00:00:00Z",
+    };
+
+    const member = memberFromAgentView(agent, [], createDesktopMessages("zh-CN"));
+
+    expect(member.runtimeStatus).toBe("offline");
+  });
+
+  it("maps an agent on an unavailable daemon runtime to offline", () => {
+    const agent: DesktopAgentView = {
+      id: "agent_coda",
+      name: "Coda",
+      handle: "@coda",
+      runtimeKind: "ClaudeCode",
+      model: "Sonnet",
+      nodeId: "local-node",
+      description: "实现工程师。",
+      workspacePath: "/tmp/coda",
+      memoryPath: "/tmp/coda/MEMORY.md",
+      docsPath: "/tmp/coda/docs",
+      avatarSeed: "Coda",
+      runtimeThread: {
+        runtimeKind: "ClaudeCode",
+        status: "working",
+        createdAt: "2026-06-29T00:00:00Z",
+      },
+      createdAt: "2026-06-29T00:00:00Z",
+      updatedAt: "2026-06-29T00:00:00Z",
+    };
+    const nodes = [{
+      id: "local-node",
+      name: "本机",
+      status: "connected" as const,
+      daemonVersion: "dev",
+      device: { hostname: "local", platform: "macos", arch: "arm64" },
+      runtimes: [{ kind: "ClaudeCode", readiness: "unavailable" as const }],
+    }];
+
+    const member = memberFromAgentView(agent, nodes, createDesktopMessages("zh-CN"));
+
+    expect(member.runtimeStatus).toBe("offline");
   });
 
   it("wires the runtime toast close control to the prop-owned dismiss callback", async () => {

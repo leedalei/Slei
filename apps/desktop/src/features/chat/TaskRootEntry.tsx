@@ -179,7 +179,6 @@ function TaskRootProfileAvatar(input: {
       onMessage={input.member.directMessageEnabled === false ? undefined : () => input.onMemberMessage?.(input.member.id)}
       onOpenChange={setProfileOpen}
       open={profileOpen}
-      status={{ kind: "runtime", status: input.member.runtimeStatus }}
       triggerClassName="size-8"
     >
       <MemberAvatar identity={input.member} />

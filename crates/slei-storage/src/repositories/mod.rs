@@ -2747,6 +2747,55 @@ impl Repositories {
         .transpose()
     }
 
+    pub async fn recover_interrupted_agent_statuses(&self) -> Result<u64, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let interrupted = sqlx::query(
+            "SELECT agent_id
+             FROM agent_statuses
+             WHERE lower(state) IN ('working', 'running', 'busy')",
+        )
+        .fetch_all(&mut *tx)
+        .await?;
+        let result = sqlx::query(
+            "UPDATE agent_statuses
+             SET state = 'idle',
+                 phase = '空闲',
+                 reason = 'daemon restarted',
+                 run_id = NULL,
+                 channel_id = NULL,
+                 message_id = NULL,
+                 task_id = NULL,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE lower(state) IN ('working', 'running', 'busy')",
+        )
+        .execute(&mut *tx)
+        .await?;
+        for row in interrupted {
+            insert_agent_activity_event_tx(
+                &mut tx,
+                NewAgentActivityEventRow {
+                    agent_id: row.try_get("agent_id")?,
+                    run_id: None,
+                    channel_id: None,
+                    message_id: None,
+                    task_id: None,
+                    event_kind: "status.updated".to_string(),
+                    severity: "info".to_string(),
+                    summary: "idle".to_string(),
+                    payload_preview: None,
+                    tool_name: None,
+                    ok: None,
+                    state: Some("idle".to_string()),
+                    phase: Some("空闲".to_string()),
+                    reason: Some("daemon restarted".to_string()),
+                },
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(result.rows_affected())
+    }
+
     pub async fn record_agent_activity(
         &self,
         agent_id: &str,

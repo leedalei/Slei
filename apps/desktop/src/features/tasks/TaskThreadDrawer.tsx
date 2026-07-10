@@ -257,7 +257,6 @@ export function TaskThreadDrawer(input: {
                         onMessage={replyMember.directMessageEnabled === false ? undefined : () => input.onMemberMessage?.(replyMember.id)}
                         onOpenChange={(open) => setActiveProfileReplyId(open ? reply.id : undefined)}
                         open={activeProfileReplyId === reply.id}
-                        status={{ kind: "runtime", status: replyMember.runtimeStatus }}
                         triggerClassName="size-8"
                       >
                         <MemberAvatar identity={replyMember} />

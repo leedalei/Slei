@@ -95,7 +95,6 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
       <AvatarGroup className="items-center">
         {visibleMembers.map((member) => (
           <ChannelMemberAvatar
-            channelId={input.channelId}
             key={member.id}
             member={member}
             messages={input.messages}
@@ -216,7 +215,6 @@ export function ChannelMemberGroup(input: ChannelMemberGroupProps) {
 }
 
 function ChannelMemberAvatar(input: {
-  channelId: string;
   confirmingRemoveId: string | undefined;
   member: SleiMember;
   messages: DesktopMessages;
@@ -227,7 +225,6 @@ function ChannelMemberAvatar(input: {
   open: boolean;
   setConfirmingRemoveId: (memberId: string | undefined) => void;
 }) {
-  const readiness = input.member.channelReadiness?.[input.channelId];
   const confirming = input.confirmingRemoveId === input.member.id;
   const action = (
     <AlertDialog
@@ -277,7 +274,6 @@ function ChannelMemberAvatar(input: {
       onMessage={input.onMessage}
       onOpenChange={input.onOpenChange}
       open={input.open}
-      status={{ kind: "channel", readiness, channelId: input.channelId }}
       triggerClassName="size-8"
       triggerTestId="slei-channel-member-avatar-trigger"
     >

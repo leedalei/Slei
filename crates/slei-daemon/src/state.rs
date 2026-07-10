@@ -474,6 +474,10 @@ async fn repositories_for_data_root(data_root: PathBuf) -> (Repositories, Option
     db.migrate().await.expect("migrate application db");
     let repos = Repositories::new(db.pool().clone());
     repos
+        .recover_interrupted_agent_statuses()
+        .await
+        .expect("recover interrupted agent statuses");
+    repos
         .seed_default_agent_role_presets()
         .await
         .expect("seed agent role presets");

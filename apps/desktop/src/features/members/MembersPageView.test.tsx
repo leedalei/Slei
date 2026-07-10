@@ -206,6 +206,21 @@ describe("MembersPage agent details", () => {
     expect(headerHtml).not.toContain(`>${messages.members.message}<`);
   });
 
+  it("labels a busy member header from the canonical runtime status", () => {
+    const messages = createDesktopMessages("zh-CN");
+    const member = { ...agentMember("agent_coda"), runtimeStatus: "busy" as const };
+    const html = renderToStaticMarkup(renderMembersPage({
+      data: createSleiFixtures({ members: [member] }),
+      messages,
+    }));
+    const headerStart = html.indexOf('data-testid="slei-member-detail-header"');
+    const headerEnd = html.indexOf("</header>", headerStart);
+    const headerHtml = html.slice(headerStart, headerEnd);
+
+    expect(headerHtml).toContain(messages.status.runtime.busy);
+    expect(headerHtml).not.toContain(`>${messages.members.online}<`);
+  });
+
   it("keeps the page title text free of avatar fallback glyphs", async () => {
     const host = await mount(renderMembersPage());
 
