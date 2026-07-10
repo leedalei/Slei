@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { createMemberAvatarImage, memberAvatarFallback, type MemberAvatarIdentity } from "./member-avatar";
+import { cn } from "../lib/utils";
 
 type MemberAvatarSize = "small" | "default" | "large";
 
@@ -14,7 +15,7 @@ export function MemberAvatar(input: { children?: ReactNode; identity: MemberAvat
   return (
     <Avatar
       aria-label={identity.name}
-      className={avatarSizeClassName(size)}
+      className={cn("border border-border/40 bg-background", avatarSizeClassName(size))}
       size={avatarPrimitiveSize(size)}
       data-avatar-image-rendering={avatarImage?.imageRendering ?? "fallback"}
       data-avatar-size={size}

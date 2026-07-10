@@ -1128,7 +1128,7 @@ describe("ChatPage mention panel", () => {
     expect(html).toContain("empty-data.png");
   });
 
-  it("renders copy and star actions before the full message send time", () => {
+  it("renders message actions as a hover toolbar and keeps time beside the lower bubble corner", () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1162,6 +1162,10 @@ describe("ChatPage mention panel", () => {
     const host = document.createElement("div");
     host.innerHTML = messageHtml;
     const actionButtons = Array.from(host.querySelectorAll<HTMLElement>('[data-slot="message-actions"] button'));
+    const actionToolbar = host.querySelector<HTMLElement>('[data-slot="message-actions"]');
+    const bubbleFrame = host.querySelector<HTMLElement>('[data-slot="message-bubble-frame"]');
+    const bubbleLine = host.querySelector<HTMLElement>('[data-slot="message-bubble-line"]');
+    const messageTime = host.querySelector<HTMLElement>('[data-slot="message-time"]');
     const threadIcon = host.querySelector<SVGElement>('[data-message-thread-open="msg_timestamp"] [data-slei-icon="messageSquare"]');
     const copyIcon = host.querySelector<SVGElement>('[data-slei-icon="copy"]');
     const bookmarkIcon = host.querySelector<SVGElement>('[data-slei-icon="bookmarkOutline"]');
@@ -1171,7 +1175,15 @@ describe("ChatPage mention panel", () => {
     expect(messageHtml).toContain("06-16 09:08");
     expect(messageHtml).not.toContain("09:08:07");
     expect(messageHtml).not.toContain("06-16</span><span>09:08:07");
-    expect(messageHtml).toContain("flex shrink-0 items-center gap-1");
+    expect(actionToolbar?.parentElement).toBe(bubbleFrame);
+    expect(actionToolbar?.className).toContain("absolute");
+    expect(actionToolbar?.className).toContain("left-2");
+    expect(actionToolbar?.className).toContain("group-hover/bubble:opacity-100");
+    expect(actionToolbar?.className).toContain("group-focus-within/bubble:opacity-100");
+    expect(bubbleLine?.className).toContain("items-end");
+    expect(messageTime?.className).toContain("shrink-0");
+    expect(messageTime?.className).toContain("tabular-nums");
+    expect(actionToolbar?.className).not.toContain("flex shrink-0 items-center gap-1");
     expect(messageHtml).not.toContain("min-w-[7.5rem]");
     expect(actionButtons).toHaveLength(3);
     expect(actionButtons.every((button) => button.className.includes("size-6"))).toBe(true);
@@ -1183,7 +1195,7 @@ describe("ChatPage mention panel", () => {
     expect(timestampIndex).toBeGreaterThan(-1);
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);
-    expect(timestampIndex).toBeGreaterThan(saveIndex);
+    expect(timestampIndex).toBeLessThan(copyIndex);
   });
 
   it("hides author name and handle from normal timeline message headers", () => {
@@ -1215,12 +1227,14 @@ describe("ChatPage mention panel", () => {
     const host = staticMarkupHost(html);
     const row = host.querySelector<HTMLElement>('[data-message-id="msg_no_identity_header"]');
     const header = row?.querySelector<HTMLElement>('[data-slot="message-header"]');
+    const time = row?.querySelector<HTMLElement>('[data-slot="message-time"]');
 
-    expect(header).not.toBeNull();
-    expect(header?.textContent).not.toContain("leelei");
-    expect(header?.textContent).not.toContain("@leelei");
-    expect(header?.textContent).not.toContain(messages.chat.roleLabels.human);
-    expect(header?.textContent).toContain("07-07 19:55");
+    expect(header).toBeNull();
+    expect(time).not.toBeNull();
+    expect(time?.textContent).toContain("07-07 19:55");
+    expect(row?.textContent).not.toContain("leelei");
+    expect(row?.textContent).not.toContain("@leelei");
+    expect(row?.textContent).not.toContain(messages.chat.roleLabels.human);
     expect(row?.textContent).toContain("Electron safe cleanup smoke 1782405205");
   });
 
@@ -2968,10 +2982,11 @@ describe("ChatPage mention panel", () => {
     expect(agentBubble?.className).toContain("bg-card");
     expect(agentBubble?.className).toContain("text-card-foreground");
     expect(agentBubble?.className).toContain("rounded-tl-sm");
-    expect(agentBubble?.className).toContain("w-full");
-    expect(agentBubble?.className).not.toContain("w-fit");
-    expect(agentBubble?.className).not.toContain("max-w-[min(42rem,100%)]");
+    expect(agentBubble?.className).toContain("w-fit");
+    expect(agentBubble?.className).toContain("max-w-full");
     expect(agentBubble?.className).not.toContain("rounded-bl-sm");
+    expect(agentRow?.querySelector<HTMLElement>('[data-slot="message-actions"]')?.className).toContain("right-2");
+    expect(agentRow?.querySelector<HTMLElement>('[data-slot="message-time"]')?.className).toContain("shrink-0");
   });
 
   it("adds a border only to the focused timeline message", () => {
@@ -3134,16 +3149,18 @@ describe("ChatPage mention panel", () => {
     expect(taskBubble?.className).toContain("bg-primary");
     expect(taskBubble?.className).toContain("rounded-tr-sm");
     expect(taskBubble?.className).not.toContain("rounded-br-sm");
+    expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-actions"]')?.className).toContain("left-2");
+    expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-time"]')?.className).toContain("shrink-0");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
     expect(taskRootCard?.textContent).not.toContain("Lei");
     expect(taskRootCard?.textContent).not.toContain("@lei");
     expect(taskRootCard?.textContent).not.toContain("用户");
     expect(taskRootCard?.querySelector("[data-task-root-entry-replies]")).not.toBeNull();
-    expect(replyIcon?.className.baseVal).toContain("size-2.5");
-    expect(copyIcon?.className.baseVal).toContain("size-2.5");
-    expect(bookmarkIcon?.className.baseVal).toContain("size-2.5");
-    expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-2.5");
-    expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).every((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(true);
+    expect(replyIcon?.className.baseVal).toContain("size-3");
+    expect(copyIcon?.className.baseVal).toContain("size-3");
+    expect(bookmarkIcon?.className.baseVal).toContain("size-3");
+    expect(taskRootCard?.querySelector(".t-icon-swap")?.className).toContain("size-3");
+    expect(Array.from(taskRootCard?.querySelectorAll("button") ?? []).every((button) => button.className.includes("[&_svg]:size-3"))).toBe(true);
     expect(taskRootCard?.textContent).toContain("把这条变成任务。");
   });
 
@@ -3445,9 +3462,12 @@ describe("ChatPage mention panel", () => {
 
     expect(source).toContain("bg-transparent");
     expect(source).toContain("data-message-side");
+    expect(source).toContain("data-slot=\"message-bubble-line\"");
+    expect(source).toContain("data-slot=\"message-bubble-frame\"");
     expect(source).toContain("data-slot=\"message-bubble\"");
     expect(source).toContain("grid-cols-[auto_minmax(min(42rem,100%),1fr)]");
-    expect(source).toContain("w-full");
+    expect(source).toContain("MessageBubbleTime");
+    expect(source).toContain("shrink-0");
     expect(source).toContain("rounded-tr-sm");
     expect(source).toContain("rounded-tl-sm");
     expect(source).toContain("duration-[2s]");

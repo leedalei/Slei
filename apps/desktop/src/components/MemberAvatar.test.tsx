@@ -131,6 +131,8 @@ describe("MemberAvatar", () => {
       expect(avatar?.getAttribute("aria-label")).toBe("Lin Wen");
       expect(avatar?.getAttribute("data-avatar-size")).toBe("default");
       expect(avatar?.getAttribute("data-avatar-image-rendering")).toBe("pixelated");
+      expect(avatar?.className.split(/\s+/)).toContain("border");
+      expect(avatar?.className.split(/\s+/)).toContain("border-border/40");
       expect(image).not.toBeNull();
       expect(image?.getAttribute("src")).toBe(createMemberAvatar(identity));
       expect(image?.getAttribute("alt")).toBe("");
