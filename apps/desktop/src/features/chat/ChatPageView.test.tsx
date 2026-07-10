@@ -3225,6 +3225,7 @@ describe("ChatPage mention panel", () => {
       expect(cardHtml).toContain('data-slot="card"');
       expect(cardClasses).toContain("min-w-[min(28rem,100%)]");
       expect(cardClasses).toContain("max-w-full");
+      expect(cardClasses).not.toContain("mt-2");
       expect(actionButtonClasses).toContain("h-7");
       expect(actionButtonClasses).toContain("px-2.5");
       expect(actionButtonClasses).toContain("text-xs");

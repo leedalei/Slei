@@ -107,7 +107,7 @@ function InteractiveCard({ card, messages, onCreate, onPermissionResolve }: { ca
   const done = card.state !== "pending";
   const doneLabel = card.doneLabel === "DONE" ? messages.common.done : card.doneLabel || messages.common.done;
   return (
-    <Card className={cn(CARD_SURFACE_CLASS, "mt-2 grid min-w-[min(28rem,100%)] max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3")} data-card-kind={card.kind} data-state={card.state}>
+    <Card className={cn(CARD_SURFACE_CLASS, "grid min-w-[min(28rem,100%)] max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-primary/20 p-3")} data-card-kind={card.kind} data-state={card.state}>
       <div className="grid min-w-0 gap-1">
         <strong className="text-sm">{card.title}</strong>
         <p className="truncate text-xs text-muted-foreground">{card.summary}</p>
