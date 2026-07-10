@@ -1393,7 +1393,10 @@ describe("ChatPage mention panel", () => {
   it("keeps a bottom sentinel for post-send timeline scrolling", () => {
     const source = readChatPageSource();
 
-    expect(source).toContain("timelineViewportRef");
+    expect(source).toContain("MessageScrollerProvider");
+    expect(source).toContain("MessageScrollerViewport");
+    expect(source).toContain("MessageScrollerItem");
+    expect(source).toContain("MessageScrollerButton");
     expect(source).toContain("pendingScrollToBottomRef");
     expect(source).toContain("requestAnimationFrame");
     expect(source).toContain("viewport.scrollTo({");
@@ -1795,7 +1798,13 @@ describe("ChatPage mention panel", () => {
         );
       });
 
-      const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
+      const scroller = host.querySelector<HTMLElement>('[data-slot="message-scroller"]');
+      const viewport = host.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]');
+      const items = host.querySelectorAll('[data-slot="message-scroller-item"]');
+      const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"][data-slot="message-scroller-button"]');
+      expect(scroller).not.toBeNull();
+      expect(viewport).toBe(timeline);
+      expect(items.length).toBeGreaterThanOrEqual(2);
       expect(button?.textContent).toContain("滚动到底部");
 
       await act(async () => {
@@ -1810,7 +1819,7 @@ describe("ChatPage mention panel", () => {
     }
   });
 
-  it("shows the existing scroll-to-bottom button when the timeline is at least 200px from the bottom", async () => {
+  it("renders the shadcn message scroller button when the timeline is at least 200px from the bottom", async () => {
     const messages = createDesktopMessages("zh-CN");
     const data = createSleiFixtures({
       channels: [{ id: "all", name: "all", description: "测试频道", unread: 0 }],
@@ -1836,20 +1845,17 @@ describe("ChatPage mention panel", () => {
     });
     const button = host.querySelector<HTMLButtonElement>('[data-testid="slei-scroll-to-bottom"]');
     expect(button?.textContent).toContain("滚动到底部");
+    expect(button?.getAttribute("data-slot")).toBe("message-scroller-button");
+    expect(button?.getAttribute("data-direction")).toBe("end");
     expect(button?.querySelector('[data-slei-icon="arrowDown"]')).not.toBeNull();
-    expect(button?.className).toContain("h-8");
-    expect(button?.className).toContain("px-3.5");
-    expect(button?.className).toContain("border-white/25");
-    expect(button?.className).toContain("bg-white/85");
-    expect(button?.className).toContain("backdrop-blur-xl");
-    expect(button?.className).toContain("hover:bg-white/95");
+    expect(button?.className).toContain("data-[active=false]:pointer-events-none");
+    expect(button?.className).toContain("data-[active=true]:scale-100");
     expect(button?.className).toContain("bottom-[var(--chat-composer-reserve)]");
     expect(button?.className).not.toContain("bottom-[calc(var(--chat-composer-reserve)+0.75rem)]");
     expect(button?.className).not.toContain("bottom-2.5");
     const buttonClasses = button?.className.split(/\s+/) ?? [];
     expect(buttonClasses).not.toContain("border-primary");
     expect(buttonClasses).not.toContain("text-primary");
-    expect(button?.className).toContain("text-xs");
 
     setScrollMetrics(timeline, { clientHeight: 400, scrollHeight: 1000, scrollTop: 401 });
     await act(async () => {
