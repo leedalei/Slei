@@ -2531,7 +2531,7 @@ describe("ChatPage mention panel", () => {
     expect(card?.className).toContain("rounded-[calc(var(--radius-md)+4px)]");
     expect(card?.className).toContain("border");
     expect(card?.className).toContain("bg-popover");
-    expect(card?.className).toContain("shadow-[var(--overlay-shadow-sm)]");
+    expect(card?.className).toContain("shadow-[var(--overlay-shadow-md)]");
     expect(card?.className).not.toContain("shadow-[0_0_4px");
     expect(removeButton?.textContent?.trim()).toBe("移除");
     expect(card?.textContent).not.toContain(messages.chat.removeChannelMember("Luna"));
