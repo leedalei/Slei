@@ -2078,7 +2078,16 @@ describe("SleiAppFrame global search navigation", () => {
   });
 
   it("renders direct message rows with the status dot inside the avatar, a sidebar avatar, and a profession badge", () => {
-    const members = createDemoMembers();
+    const longProfession = "资深平台架构与交付协调负责人".repeat(3);
+    const members = createDemoMembers().map((member, index) => (
+      index === 0
+        ? {
+            ...member,
+            profession: longProfession,
+            role: "后备角色",
+          }
+        : member
+    ));
     const data = createSleiFixtures({
       members,
       channels: [{ id: "all", name: "all", description: "默认团队频道", unread: 0, activeSessionId: "session:all" }],
@@ -2104,8 +2113,15 @@ describe("SleiAppFrame global search navigation", () => {
     const nameContainer = directChildren[1] as HTMLElement | undefined;
     const name = nameContainer?.querySelector<HTMLElement>("span");
     const badge = nameContainer?.querySelector<HTMLElement>('[data-slot="badge"]');
+    const rowButtons = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-testid="workspace-dm-row-a1"] button'));
+    const menuButton = rowButtons.find((button) => button !== trigger);
 
     expect(trigger?.className).toContain("h-full");
+    expect(host.querySelector<HTMLElement>('[data-testid="workspace-dm-row-a1"]')?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(menuButton).toBeInstanceOf(HTMLElement);
+    expect(menuButton?.className).toContain("shrink-0");
+    expect(menuButton?.className).toContain("opacity-0");
+    expect(menuButton?.className).toContain("size-6");
     expect(statusDot?.getAttribute("role")).toBe("img");
     expect(statusDot?.className).toContain("rounded-full");
     expect(statusDot?.className.split(/\s+/)).toContain("absolute");
@@ -2129,7 +2145,11 @@ describe("SleiAppFrame global search navigation", () => {
     expect(name?.className).toContain("text-[14px]");
     expect(name?.className).toContain("font-normal");
     expect(badge?.getAttribute("data-variant")).toBe("secondary");
-    expect(badge?.textContent).toBe("研发团队开发工程师");
+    expect(badge?.textContent).toBe(longProfession);
+    expect(badge?.className).toContain("min-w-0");
+    expect(badge?.className).toContain("max-w-[55%]");
+    expect(badge?.className).toContain("shrink");
+    expect(badge?.className).toContain("truncate");
   });
 
   it("renders direct message badges from profession first, then role, and hides empty badges", () => {
