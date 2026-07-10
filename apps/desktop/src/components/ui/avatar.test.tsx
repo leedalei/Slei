@@ -6,12 +6,14 @@ import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount } fr
 describe("Avatar", () => {
   it("renders the default shadcn avatar without glow decoration", () => {
     const html = renderToStaticMarkup(<Avatar aria-label="Coda" />);
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
 
-    expect(html).toContain('data-slot="avatar"');
-    expect(html).toContain("h-8");
-    expect(html).toContain("w-8");
-    expect(html).toContain("border border-border");
-    expect(html).not.toContain("border-border/40");
+    expect(avatarRoot).toContain('data-slot="avatar"');
+    expect(avatarRoot).toContain("h-8");
+    expect(avatarRoot).toContain("w-8");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+    expect(avatarRoot).not.toContain("border-border");
+    expect(avatarRoot).not.toContain("border-border/40");
     expect(html).not.toContain("bg-linear");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
@@ -25,12 +27,16 @@ describe("Avatar", () => {
         <AvatarGroupCount>+3</AvatarGroupCount>
       </AvatarGroup>,
     );
+    const avatarRoot = html.match(/<span[^>]*data-slot="avatar"[^>]*>/)?.[0];
+    const avatarGroupCount = html.match(/<div[^>]*data-slot="avatar-group-count"[^>]*>/)?.[0];
 
     expect(html).toContain('data-slot="avatar-group"');
-    expect(html).toContain('data-slot="avatar"');
-    expect(html).toContain('data-slot="avatar-group-count"');
+    expect(avatarRoot).toContain('data-slot="avatar"');
+    expect(avatarGroupCount).toContain('data-slot="avatar-group-count"');
     expect(html).toContain("+3");
-    expect(html).toContain("border border-border");
+    expect(avatarRoot).toContain("border border-muted-foreground/30");
+    expect(avatarRoot).not.toContain("border-border");
+    expect(avatarGroupCount).toContain("border border-border");
     expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("border-white/");
   });
