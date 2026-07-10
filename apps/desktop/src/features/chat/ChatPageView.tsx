@@ -10,6 +10,7 @@ import { Empty, MemberAvatar, memberFromMessage, MessageStatusSquare, Selectable
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
+import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from "../../components/ui/message-scroller";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { Switch } from "../../components/ui/switch";
@@ -1080,25 +1081,31 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         <div className="grid min-h-0 overflow-visible" data-testid="slei-channel-workspace">
           {effectiveChannelView === "chat" ? (
             <div className="relative h-full min-h-0 overflow-visible" data-testid="slei-channel-chat-column" style={composerReserveStyle}>
-              <div className="relative h-full min-h-0 overflow-visible">
-                {olderMessagesLoading ? (
-                  <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-transparent px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
-                    {messages.chat.loadingOlderMessages}
-                  </div>
-                ) : null}
-                <div
-                  aria-label={messages.chat.timeline}
-                  className="slei-chat-timeline-scrollbar h-full min-h-0 overflow-y-auto"
-                  data-testid="slei-chat-timeline"
-                  onScroll={handleTimelineScroll}
-                  ref={timelineViewportRef}
-                  tabIndex={0}
-                >
-                  <div
-                    className={cn("relative", timelineVirtualItems.length === 0 && "grid gap-1 px-4 py-3 pb-[var(--chat-composer-reserve)]")}
-                    data-testid="slei-chat-timeline-content"
-                    style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize() + composerReservePx}px` } : undefined}
+              <MessageScrollerProvider defaultScrollPosition="end" scrollEdgeThreshold={SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX}>
+                <MessageScroller className="relative h-full min-h-0 overflow-visible">
+                  {olderMessagesLoading ? (
+                    <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 flex justify-center bg-transparent px-4 py-2 text-xs text-muted-foreground" data-testid="slei-older-messages-loading" role="status">
+                      {messages.chat.loadingOlderMessages}
+                    </div>
+                  ) : null}
+                  <MessageScrollerViewport
+                    aria-label={messages.chat.timeline}
+                    className="slei-chat-timeline-scrollbar h-full min-h-0 overflow-y-auto"
+                    data-testid="slei-chat-timeline"
+                    onScroll={handleTimelineScroll}
+                    ref={timelineViewportRef}
+                    tabIndex={0}
                   >
+                    <MessageScrollerContent
+                      className={cn(
+                        "relative",
+                        timelineVirtualItems.length === 0
+                          ? "grid gap-1 px-4 py-3 pb-[var(--chat-composer-reserve)]"
+                          : "block gap-0",
+                      )}
+                      data-testid="slei-chat-timeline-content"
+                      style={timelineVirtualItems.length > 0 ? { height: `${timelineVirtualizer.getTotalSize() + composerReservePx}px` } : undefined}
+                    >
                     {renderedTimelineItems.length === 0 ? (
                       <div className="grid min-h-60 place-items-center px-4 py-8">
                         <Empty
@@ -1119,10 +1126,12 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                         const timestamp = messageTimestampLabel(message);
                         return (
-                          <div
+                          <MessageScrollerItem
                             className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                            data-message-id={undefined}
                             data-index={virtualItem?.index}
                             key={key}
+                            messageId={message.id}
                             ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                             style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                           >
@@ -1141,7 +1150,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               task={sourceTask}
                               timestamp={timestamp}
                             />
-                          </div>
+                          </MessageScrollerItem>
                         );
                       }
                       const saved = savedMessageIds.includes(message.id);
@@ -1151,21 +1160,23 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       const avatar = <MemberAvatar identity={memberFromMessage(message, data.members)} />;
                       const bodyTone = side === "outgoing" ? "primary" : "card";
                       return (
-                        <div
-                          className={cn("pt-3", virtualItem && "absolute left-0 top-0 w-full px-4")}
+                        <MessageScrollerItem
+                          className={cn(virtualItem && "absolute left-0 top-0 w-full px-4")}
+                          data-message-id={undefined}
                           data-index={virtualItem?.index}
-                          data-slot="timeline-message-frame"
                           key={key}
+                          messageId={message.id}
                           ref={virtualItem ? timelineVirtualizer.measureElement : undefined}
                           style={virtualItem ? { transform: `translateY(${virtualItem.start}px)` } : undefined}
                         >
-                          <MessageRow
-                            className={highlightedMessageId === message.id ? "slei-message--blink-border" : undefined}
-                            focused={highlightedMessageId === message.id}
-                            messageId={message.id}
-                            side={side}
-                            tabIndex={focusedMessageId === message.id ? -1 : undefined}
-                          >
+                          <div className="pt-3" data-slot="timeline-message-frame">
+                            <MessageRow
+                              className={highlightedMessageId === message.id ? "slei-message--blink-border" : undefined}
+                              focused={highlightedMessageId === message.id}
+                              messageId={message.id}
+                              side={side}
+                              tabIndex={focusedMessageId === message.id ? -1 : undefined}
+                            >
                             {side === "incoming" ? avatar : null}
                             <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
                               {roleDescription ? (
@@ -1244,26 +1255,28 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               </div>
                             </div>
                             {side === "outgoing" ? avatar : null}
-                          </MessageRow>
-                        </div>
+                            </MessageRow>
+                          </div>
+                        </MessageScrollerItem>
                       );
                     })}
-                  </div>
-                </div>
-                {showScrollToBottom ? (
-                  <Button
-                    className="absolute bottom-[var(--chat-composer-reserve)] left-1/2 z-20 h-8 -translate-x-1/2 border-white/25 bg-white/85 px-3.5 text-xs shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
-                    data-testid="slei-scroll-to-bottom"
-                    onClick={requestTimelineScrollToBottom}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <SleiIcon className="size-3.5" name="arrowDown" />
-                    {messages.chat.backToBottom}
-                  </Button>
-                ) : null}
-              </div>
+                    </MessageScrollerContent>
+                  </MessageScrollerViewport>
+                  {showScrollToBottom ? (
+                    <MessageScrollerButton
+                      className="bottom-[var(--chat-composer-reserve)] z-20 size-8 border-white/25 bg-white/85 shadow-[0_2px_4px_rgba(0,0,0,0.10)] backdrop-blur-xl hover:bg-white/95"
+                      data-testid="slei-scroll-to-bottom"
+                      render={<Button onClick={requestTimelineScrollToBottom} size="icon" type="button" variant="ghost" />}
+                      size="icon"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <SleiIcon className="size-3.5" name="arrowDown" />
+                      <span className="sr-only">{messages.chat.backToBottom}</span>
+                    </MessageScrollerButton>
+                  ) : null}
+                </MessageScroller>
+              </MessageScrollerProvider>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 overflow-visible px-4 py-3" data-testid="slei-composer-shell">
                 {composerOverlayOpen ? (
                   <div className="pointer-events-auto absolute inset-x-4 bottom-full z-40 mx-auto mb-2 grid max-w-full gap-2 overflow-visible" data-testid="slei-composer-overlay">
