@@ -1193,7 +1193,7 @@ describe("desktop UI primitive usage", () => {
       expect(source).toContain("data-[state=closed]:animate-out");
       expect(source).toContain("data-[side=bottom]:slide-in-from-top-2");
       expect(source).toContain("rounded-[calc(var(--radius-md)+4px)] border bg-popover");
-      expect(source).toContain("shadow-[var(--overlay-shadow-sm)]");
+      expect(source).toContain(file.endsWith("popover.tsx") ? "shadow-[var(--overlay-shadow-md)]" : "shadow-[var(--overlay-shadow-sm)]");
       expect(source).not.toContain("shadow-[0_0_4px_rgba");
     }
 
