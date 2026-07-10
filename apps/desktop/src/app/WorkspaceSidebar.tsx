@@ -667,7 +667,7 @@ export function WorkspaceSidebar(input: WorkspaceSidebarProps) {
                 </Button>
               </div>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 pr-2" data-slot="direct-message-list">
               {sortedDirectMessageEntries.map((entry) => {
                 const { conversation, member } = entry;
                 const conversationId = conversation?.id;

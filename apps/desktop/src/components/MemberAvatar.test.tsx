@@ -332,7 +332,7 @@ describe("MemberAvatar", () => {
     }
   });
 
-  it("renders the sidebar avatar size at 34 pixels", async () => {
+  it("renders the sidebar avatar size at 30 pixels", async () => {
     installImageMock("loaded");
     const identity: MemberAvatarIdentity = {
       avatar: "LW",
@@ -349,7 +349,7 @@ describe("MemberAvatar", () => {
 
       expect(avatar?.getAttribute("data-avatar-size")).toBe("sidebar");
       expect(avatar?.getAttribute("data-size")).toBe("default");
-      expect(avatar?.className.split(/\s+/)).toContain("size-[2.125rem]");
+      expect(avatar?.className.split(/\s+/)).toContain("size-[1.875rem]");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-8");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-7");
       expect(avatar?.className.split(/\s+/)).not.toContain("size-[3.75rem]");
