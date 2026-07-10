@@ -125,6 +125,7 @@ export function conversationMessageToSleiMessage(message: ConversationMessageVie
   return {
     id: message.id,
     sequence: message.sequence,
+    authorId: message.authorId,
     author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
     handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
@@ -185,6 +186,7 @@ export function channelMessageToSleiMessage(message: ChannelMessageView, members
   return {
     id: message.id,
     sequence: message.sequence,
+    authorId: message.authorId,
     author: member?.name ?? (isHuman ? humanProfile.displayName : message.authorId),
     handle: member?.handle ?? (isHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isHuman ? humanProfile.avatar : undefined),
@@ -257,9 +259,10 @@ export function memberFromAgentView(agent: DesktopAgentView, nodes: DesktopNodeV
     agentKind: agent.agentKind,
     type: "agent",
     runtimeStatus: node?.status === "offline" ? "offline" : isBusy ? "busy" : "idle",
-    role: agent.agentKind === "guide"
+    profession: agent.profession || (agent.agentKind === "guide" ? messages.chat.guide : messages.agentCreate.fallbackAgent),
+    role: agent.profession || (agent.agentKind === "guide"
         ? messages.chat.guide
-        : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent,
+        : agent.description.split("。")[0] || messages.agentCreate.fallbackAgent),
     description: agent.description,
     computer: node?.name ?? agent.nodeId,
     nodeId: agent.nodeId,
@@ -482,6 +485,7 @@ function taskThreadMessageToReply(message: TaskThreadMessageView, members: SleiM
         : message.senderId);
   return {
     id: message.id,
+    memberId: member?.id,
     sender,
     handle: member?.handle ?? (isLocalHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isLocalHuman ? humanProfile.avatar : undefined),
@@ -499,6 +503,7 @@ function messageThreadReplyToReply(message: MessageThreadReplyView, members: Sle
   const isLocalHuman = message.senderId === "human:local" || message.senderId === `human:${humanProfile.handle.replace(/^@/, "")}`;
   return {
     id: message.id,
+    memberId: member?.id,
     sender: member?.name ?? (role === "system" ? messages.common.system : isLocalHuman ? humanProfile.displayName : message.senderId),
     handle: member?.handle ?? (isLocalHuman ? displayUserHandle(humanProfile.handle) : undefined),
     avatar: member?.avatar ?? (isLocalHuman ? humanProfile.avatar : undefined),
@@ -551,6 +556,7 @@ export function createChannelAgentActivityMessages(outcome: SendChannelMessageOu
   const member = members.find((candidate) => candidate.id === agentId);
   return [{
     id: `agent-activity-${outcome.messageId}-${agentId}`,
+    authorId: agentId,
     author: member?.name ?? agentId,
     handle: member?.handle,
     avatar: member?.avatar,
@@ -569,6 +575,7 @@ function createClaimedAgentActivityMessage(messageId: string, agentId: string, s
   const now = new Date().toISOString();
   return {
     id: `agent-activity-${messageId}-${agentId}`,
+    authorId: agentId,
     author: member?.name ?? source.author,
     handle: member?.handle,
     avatar: member?.avatar,

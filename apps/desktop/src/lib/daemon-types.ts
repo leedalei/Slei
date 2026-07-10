@@ -109,6 +109,7 @@ export type DesktopAgentView = {
   runtimeKind: string;
   model: string;
   nodeId: string;
+  profession?: string;
   description: string;
   workspacePath: string;
   memoryPath: string;
@@ -140,20 +141,30 @@ export type AgentCreateRequest = {
   runtimeKind: string;
   model: string;
   nodeId: string;
+  profession?: string;
   description: string;
   avatarSeed?: string;
 };
 
-export type AgentUpdateRequest = Partial<Pick<AgentCreateRequest, "name" | "runtimeKind" | "model" | "nodeId" | "description">>;
+export type AgentUpdateRequest = Partial<Pick<AgentCreateRequest, "name" | "runtimeKind" | "model" | "nodeId" | "profession" | "description">>;
+
+export type AgentRolePresetCategoryView = {
+  id: string;
+  title: string;
+  sortOrder: number;
+};
 
 export type AgentRolePresetView = {
   id: string;
   title: string;
+  profession?: string;
   description: string;
+  categoryId?: string;
   sortOrder: number;
 };
 
 export type AgentRolePresetReceipt = {
+  categories?: AgentRolePresetCategoryView[];
   presets: AgentRolePresetView[];
 };
 

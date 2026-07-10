@@ -35,6 +35,7 @@ export type AgentDraftInput = {
   runtimeKind: string;
   model: string;
   nodeId: string;
+  profession: string;
   description: string;
   avatarSeed?: string;
 };

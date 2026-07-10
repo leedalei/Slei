@@ -187,15 +187,14 @@ describe("real agent members and direct messages", () => {
     expect(html).toContain(">名字<");
     expect(html).not.toContain(">@handle<");
     expect(html).toContain(">运行环境<");
-    expect(html).toContain(">成员信息<");
+    expect(html).toContain(">职业设定<");
     expect(html).toContain(">关联设备 / 运行时<");
     expect(html).toContain(">模型<");
-    expect(html).toContain(">描述<");
     expect(html).not.toContain(">描述来源<");
     expect(html).toContain('aria-label="关联设备"');
     expect(html).toContain('aria-label="运行时"');
-    expect(html.match(/class="text-destructive">\*<\/span>/g) ?? []).toHaveLength(2);
-    expect(html).toMatch(/<button\b[^>]*type="submit"[\s\S]*?>创建<\/button>/);
+    expect(html.match(/class="text-destructive">\*<\/span>/g) ?? []).toHaveLength(1);
+    expect(html).toMatch(/<button\b[^>]*type="button"[\s\S]*?>下一步<\/button>/);
   });
 
   it("moves running and pending agent activity to the sidebar while keeping terminal replies in chat", () => {
@@ -452,7 +451,8 @@ describe("real agent members and direct messages", () => {
 
     expect(messageStart).toBeGreaterThanOrEqual(0);
     expect(headerStart).toBeGreaterThanOrEqual(0);
-    expect(headerHtml).not.toContain(">Coda<");
+    expect(headerHtml).toContain(">Coda<");
+    expect(headerHtml).toContain("研发团队开发工程师");
     expect(headerHtml).not.toContain(">@coda<");
     expect(headerHtml).toContain("研发团队开发工程师");
     expect(headerHtml).toContain("10:00");

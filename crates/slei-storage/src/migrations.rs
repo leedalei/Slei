@@ -137,6 +137,8 @@ pub const MIGRATION_0009: &str = include_str!("../migrations/0009_agent_handle_l
 pub const MIGRATION_0010: &str = include_str!("../migrations/0010_agent_message_todos.sql");
 pub const MIGRATION_0011: &str = include_str!("../migrations/0011_agent_role_presets.sql");
 pub const MIGRATION_0012: &str = include_str!("../migrations/0012_channel_message_attachments.sql");
+pub const MIGRATION_0013: &str =
+    include_str!("../migrations/0013_agent_profession_and_preset_categories.sql");
 
 pub const MIGRATIONS: &[(i64, &str)] = &[
     (1, MIGRATION_0001),
@@ -151,4 +153,5 @@ pub const MIGRATIONS: &[(i64, &str)] = &[
     (10, MIGRATION_0010),
     (11, MIGRATION_0011),
     (12, MIGRATION_0012),
+    (13, MIGRATION_0013),
 ];

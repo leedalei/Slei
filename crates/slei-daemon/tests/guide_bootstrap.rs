@@ -57,6 +57,7 @@ async fn product_agents_survive_app_state_reload_without_legacy_json_index() {
                 runtime_kind: "ClaudeCode".to_string(),
                 model: "Sonnet".to_string(),
                 node_id: "local-node".to_string(),
+                profession: "智能体".to_string(),
                 description: "负责实现任务".to_string(),
                 avatar_seed: None,
             },
@@ -129,6 +130,7 @@ async fn legacy_agent_index_import_does_not_overwrite_existing_sqlite_agents() {
             "agent_legacy",
             ProductAgentUpdate {
                 name: Some("FreshSQLiteName".to_string()),
+                profession: None,
                 description: Some("fresh sqlite description".to_string()),
                 runtime_kind: None,
                 model: None,

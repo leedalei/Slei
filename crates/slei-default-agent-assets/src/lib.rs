@@ -14,6 +14,7 @@ const SKILLS_JSON: &str = include_str!("../../../resources/default-agent-assets/
 pub struct AgentTemplateInput<'a> {
     pub name: &'a str,
     pub handle: &'a str,
+    pub profession: &'a str,
     pub description: &'a str,
     pub agent_kind: Option<&'a str>,
     pub channel_ids: Vec<&'a str>,
@@ -49,6 +50,7 @@ pub fn initial_memory(input: &AgentTemplateInput<'_>) -> String {
         MEMORY_TEMPLATE,
         &[
             ("name", input.name),
+            ("profession", input.profession),
             ("description", input.description),
             ("handle", input.handle),
             ("key_knowledge", &render_key_knowledge(input)),
@@ -147,6 +149,7 @@ mod tests {
         AgentTemplateInput {
             name: "Yeal",
             handle: "@yeal",
+            profession: "引导员",
             description: "Slei guide",
             agent_kind: Some("guide"),
             channel_ids: vec!["zeta", "all"],
@@ -158,6 +161,7 @@ mod tests {
         let memory = initial_memory(&guide_input());
 
         assert!(memory.contains("# Yeal"));
+        assert!(memory.contains("职业：引导员"));
         assert!(memory.contains("创建成员或频道时通过 guide-create Skill 生成产品交互卡"));
         assert!(!memory.contains("主频道：#all"));
         assert!(!memory.contains("已加入频道：#all、#zeta"));
@@ -180,6 +184,7 @@ mod tests {
         let memory = initial_memory(&AgentTemplateInput {
             name: "Coda",
             handle: "@coda",
+            profession: "研发执行员",
             description: "Writes code",
             agent_kind: Some("agent"),
             channel_ids: vec![],
@@ -205,6 +210,7 @@ mod tests {
         let agent_skills = standard_skill_assets(&AgentTemplateInput {
             name: "Coda",
             handle: "@coda",
+            profession: "研发执行员",
             description: "Writes code",
             agent_kind: Some("agent"),
             channel_ids: vec![],

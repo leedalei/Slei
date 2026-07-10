@@ -1335,6 +1335,7 @@ slei-cli task update {task_id} --status in_review
             agent_id: agent.id.clone(),
             cwd: agent.workspace_path.clone(),
             session_id: Uuid::new_v4().to_string(),
+            model: agent.model.clone(),
             resume_session: false,
             persist_session: false,
         }) {
@@ -1387,6 +1388,7 @@ slei-cli task update {task_id} --status in_review
             agent_id: &agent.id,
             handle: &agent.handle,
             name: &agent.name,
+            profession: &agent.profession,
             role: &agent.description,
             node_id: &agent.node_id,
             cwd: &agent.workspace_path,

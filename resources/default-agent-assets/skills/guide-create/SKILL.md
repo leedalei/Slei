@@ -23,7 +23,8 @@ Use this skill when the user asks Yeal to create, add, set up, or prepare one or
    - `runtimeKind`: default `ClaudeCode`.
    - `model`: default `Sonnet`.
    - `nodeId`: default `local-node` unless the user names another device.
-   - `description`: one concise role paragraph that includes responsibilities, expected collaboration style, and any constraints the user gave.
+   - `profession`: short role or job title, 1-32 characters. Put the job title here, not in `description`.
+   - `description`: one concise role paragraph, up to 300 characters, that includes responsibilities, expected collaboration style, and any constraints the user gave.
 3. Normalize each channel draft:
    - `name`: short channel name without a leading `#`, lowercase kebab case when the user did not specify exact capitalization.
    - `description`: one concise sentence about the channel purpose. Default to `团队会话频道` when omitted.
@@ -51,6 +52,7 @@ Call `slei_propose_interactive_card` with an object payload.
     "runtimeKind": "ClaudeCode",
     "model": "Sonnet",
     "nodeId": "local-node",
+    "profession": "<short role title>",
     "description": "<agent role and operating instructions>"
   },
   "actionLabel": "创建",
@@ -98,7 +100,8 @@ Tool call:
     "runtimeKind": "ClaudeCode",
     "model": "Sonnet",
     "nodeId": "local-node",
-    "description": "架构评审 Agent，负责审查技术方案、识别风险、提出可执行的改进建议，并在需要时把问题拆给实现 Agent。"
+    "profession": "架构评审员",
+    "description": "负责审查技术方案、识别风险、提出可执行的改进建议，并在需要时把问题拆给实现 Agent。"
   },
   "actionLabel": "创建",
   "doneLabel": "DONE"
@@ -122,7 +125,8 @@ Call the tool once per agent:
     "runtimeKind": "ClaudeCode",
     "model": "Sonnet",
     "nodeId": "local-node",
-    "description": "开发 Agent，负责按需求实现代码、修复缺陷、运行必要验证，并把风险和阻塞清楚反馈给团队。"
+    "profession": "开发工程师",
+    "description": "负责按需求实现代码、修复缺陷、运行必要验证，并把风险和阻塞清楚反馈给团队。"
   },
   "actionLabel": "创建",
   "doneLabel": "DONE"
@@ -140,7 +144,8 @@ Call the tool once per agent:
     "runtimeKind": "ClaudeCode",
     "model": "Sonnet",
     "nodeId": "local-node",
-    "description": "QA Agent，负责从验收标准、边界条件和回归风险出发检查交付物，并给出可复现的问题描述。"
+    "profession": "QA 工程师",
+    "description": "负责从验收标准、边界条件和回归风险出发检查交付物，并给出可复现的问题描述。"
   },
   "actionLabel": "创建",
   "doneLabel": "DONE"
@@ -158,7 +163,8 @@ Call the tool once per agent:
     "runtimeKind": "ClaudeCode",
     "model": "Sonnet",
     "nodeId": "local-node",
-    "description": "文档 Agent，负责整理需求、决策、操作说明和发布说明，确保内容准确、结构清晰、便于团队复用。"
+    "profession": "文档工程师",
+    "description": "负责整理需求、决策、操作说明和发布说明，确保内容准确、结构清晰、便于团队复用。"
   },
   "actionLabel": "创建",
   "doneLabel": "DONE"

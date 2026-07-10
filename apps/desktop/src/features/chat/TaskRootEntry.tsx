@@ -1,10 +1,13 @@
 import type { DesktopMessages } from "../../i18n";
-import type { SleiMessage, SleiTask } from "../../app/types";
+import { useState } from "react";
+import type { SleiMember, SleiMessage, SleiTask } from "../../app/types";
 import { MemberAvatar, SleiIcon, SleiIconSwap, TooltipButton, type MemberAvatarIdentity } from "../../components";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card } from "../../components/ui/card";
 import { cn } from "../../lib/utils";
 import { MarkdownMessage } from "./MarkdownMessage";
+import { AgentProfilePopover } from "./AgentProfilePopover";
 
 const CARD_FLAT_CLASS = "rounded-lg border-transparent bg-transparent text-card-foreground shadow-none backdrop-blur-none before:hidden after:hidden";
 const TASK_ROOT_ACTION_BUTTON_CLASS = "size-6 [&_svg]:size-2.5";
@@ -36,6 +39,8 @@ export function TaskRootEntry(input: {
   task: SleiTask;
   avatarIdentity?: MemberAvatarIdentity;
   roleDescription?: string;
+  profileMember?: SleiMember;
+  onMemberMessage?: (memberId: string) => void;
   side?: "incoming" | "outgoing";
   timestamp?: string;
 }) {
@@ -75,19 +80,22 @@ export function TaskRootEntry(input: {
       data-task-root-entry={input.task.id}
       data-source-message-id={input.sourceMessage?.id}
     >
-      {side === "incoming" ? <MemberAvatar identity={avatarIdentity} /> : null}
+      {side === "incoming" ? (
+        input.profileMember ? (
+          <TaskRootProfileAvatar
+            member={input.profileMember}
+            messages={input.messages}
+            onMemberMessage={input.onMemberMessage}
+          />
+        ) : <MemberAvatar identity={avatarIdentity} />
+      ) : null}
       <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
         <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
           {showIdentity ? (
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
               <strong className="shrink-0 text-sm text-foreground">{author}</strong>
               {handle ? <span className="shrink-0">{handle}</span> : null}
-              {showRoleDescription ? (
-                <>
-                  <span aria-hidden="true">｜</span>
-                  <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
-                </>
-              ) : null}
+              {showRoleDescription ? <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge> : null}
             </div>
           ) : null}
           <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-task-root-entry-actions>
@@ -143,5 +151,28 @@ export function TaskRootEntry(input: {
       </div>
       {side === "outgoing" ? <MemberAvatar identity={avatarIdentity} /> : null}
     </Card>
+  );
+}
+
+function TaskRootProfileAvatar(input: {
+  member: SleiMember;
+  messages: DesktopMessages;
+  onMemberMessage?: (memberId: string) => void;
+}) {
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  return (
+    <AgentProfilePopover
+      align="start"
+      member={input.member}
+      messages={input.messages}
+      onMessage={input.member.directMessageEnabled === false ? undefined : () => input.onMemberMessage?.(input.member.id)}
+      onOpenChange={setProfileOpen}
+      open={profileOpen}
+      status={{ kind: "runtime", status: input.member.runtimeStatus }}
+      triggerClassName="size-8"
+    >
+      <MemberAvatar identity={input.member} />
+    </AgentProfilePopover>
   );
 }

@@ -9,6 +9,7 @@ import {
 export type AgentTemplateInput = {
   name: string;
   handle: string;
+  profession: string;
   description: string;
   agentKind?: string;
   channelIds?: string[];
@@ -25,6 +26,7 @@ export function renderInitialMemory(input: AgentTemplateInput): string {
   return renderTemplate(INITIAL_MEMORY_TEMPLATE, {
     name: input.name,
     handle: input.handle,
+    profession: input.profession,
     description: input.description,
     key_knowledge: renderKeyKnowledge(input),
   });

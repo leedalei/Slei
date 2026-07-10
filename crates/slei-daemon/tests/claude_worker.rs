@@ -21,6 +21,7 @@ fn claude_worker_create_session_reports_claude_mvp_capabilities() {
             agent_id: "agent_coda".to_string(),
             cwd: "/workspace/app".to_string(),
             session_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            model: "Sonnet".to_string(),
             resume_session: false,
             persist_session: true,
         })
@@ -41,6 +42,7 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
             agent_id: "agent_coda".to_string(),
             cwd: "/workspace/app".to_string(),
             session_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            model: "Opus".to_string(),
             resume_session: true,
             persist_session: true,
         })
@@ -60,6 +62,7 @@ fn claude_worker_start_run_and_cancel_write_private_worker_commands() {
 
     let commands = transport.commands();
     assert_eq!(commands[0]["type"], "start_run");
+    assert_eq!(commands[0]["session"]["model"], "Opus");
     assert_eq!(commands[0]["session"]["persist_session"], true);
     assert_eq!(commands[0]["session"]["resume_session"], true);
     assert_eq!(
@@ -119,7 +122,7 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
             "name": "Coda",
             "handle": "@codadmactivity",
             "runtimeKind": "ClaudeCode",
-            "model": "Sonnet",
+            "model": "Opus",
             "nodeId": "local-node",
             "description": "研发团队开发工程师。"
         }),
@@ -166,6 +169,11 @@ async fn dm_runtime_records_output_delta_and_completed_activity_events() {
         .and_then(|command| command["run_id"].as_str())
         .expect("DM runtime should have started")
         .to_string();
+    let start_run = commands
+        .iter()
+        .find(|command| command["run_id"] == run_id)
+        .expect("DM runtime start_run command should be recorded");
+    assert_eq!(start_run["session"]["model"], "Opus");
 
     state
         .handle_worker_event(json!({

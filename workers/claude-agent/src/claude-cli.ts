@@ -315,6 +315,7 @@ function claudeModelName(model: string | undefined): string | undefined {
   if (label === "sonnet") return "sonnet";
   if (label === "opus") return "opus";
   if (label === "haiku") return "haiku";
+  if (label === "fable") return "fable";
   return normalized;
 }
 

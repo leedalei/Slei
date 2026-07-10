@@ -76,6 +76,8 @@ function regularAvatarText(avatar: string | undefined): string | undefined {
 }
 
 export function memberFromMessage(message: SleiMessage, members: SleiMember[]): MemberAvatarIdentity {
+  const memberById = message.authorId ? members.find((candidate) => candidate.id === message.authorId) : undefined;
+  if (memberById) return memberById;
   const normalizedHandle = message.handle?.toLowerCase();
   const normalizedAuthor = message.author.toLowerCase();
   const member = members.find(

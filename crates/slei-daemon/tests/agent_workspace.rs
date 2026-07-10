@@ -1164,7 +1164,8 @@ async fn guide_product_tool_appends_card_message_and_completion_is_idempotent() 
                     "runtimeKind": "ClaudeCode",
                     "model": "Sonnet",
                     "nodeId": "local-node",
-                    "description": "QA 质保员，负责审查代码质量。"
+                    "profession": "QA 质保员",
+                    "description": "负责审查代码质量。"
                 },
                 "actionLabel": "创建",
                 "doneLabel": "DONE"
@@ -1243,7 +1244,8 @@ async fn guide_product_tool_appends_card_message_and_completion_is_idempotent() 
                     "runtimeKind": "ClaudeCode",
                     "model": "Sonnet",
                     "nodeId": "local-node",
-                    "description": "QA 质保员，负责审查代码质量。"
+                    "profession": "QA 质保员",
+                    "description": "负责审查代码质量。"
                 },
                 "actionLabel": "创建",
                 "doneLabel": "DONE"
@@ -1531,11 +1533,14 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "开发工程师"
         }),
     )
     .await;
     assert_eq!(first.status(), StatusCode::CREATED);
+    let first_body: Value = serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.unwrap()).unwrap();
+    assert_eq!(first_body["agent"]["profession"], "开发工程师");
 
     let duplicate = post_json(
         &app,
@@ -1548,6 +1553,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "duplicate handle"
         }),
     )
@@ -1565,6 +1571,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "case-insensitive duplicate handle"
         }),
     )
@@ -1592,6 +1599,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "引导员",
             "description": "must conflict with the system guide handle"
         }),
     )
@@ -1609,6 +1617,7 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "missing-node",
+            "profession": "远程执行员",
             "description": "bad node"
         }),
     )
@@ -1626,11 +1635,48 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
             "runtimeKind": "ImaginaryRuntime",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "运行时测试员",
             "description": "bad runtime"
         }),
     )
     .await;
     assert_eq!(bad_runtime.status(), StatusCode::BAD_REQUEST);
+
+    let long_profession = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-long-profession"),
+        json!({
+            "name": "LongProfession",
+            "handle": "@longprofession",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "profession": "职".repeat(33),
+            "description": "valid description"
+        }),
+    )
+    .await;
+    assert_eq!(long_profession.status(), StatusCode::BAD_REQUEST);
+
+    let long_description = post_json(
+        &app,
+        &token,
+        "/v1/agents",
+        Some("create-long-description"),
+        json!({
+            "name": "LongDescription",
+            "handle": "@longdescription",
+            "runtimeKind": "ClaudeCode",
+            "model": "Sonnet",
+            "nodeId": "local-node",
+            "profession": "资料调研员",
+            "description": "描".repeat(301)
+        }),
+    )
+    .await;
+    assert_eq!(long_description.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

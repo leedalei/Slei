@@ -24,6 +24,7 @@ import { MentionPicker } from "./MentionPicker";
 import { ComposerCommandPicker, type ComposerCommandOption } from "./SkillSlashPicker";
 import { TaskRootEntry } from "./TaskRootEntry";
 import { ChannelMemberGroup } from "./ChannelMemberGroup";
+import { AgentProfilePopover } from "./AgentProfilePopover";
 
 export type ChannelEmbeddedView = "chat" | "tasks" | "files";
 
@@ -355,6 +356,10 @@ function ChannelFileList({ files, messages }: { files: ChannelFileEntry[]; messa
 }
 
 function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): SleiMember | undefined {
+  if (message.authorId) {
+    const member = members.find((candidate) => candidate.id === message.authorId);
+    if (member) return member;
+  }
   const normalizedHandle = message.handle?.toLowerCase();
   const normalizedAuthor = message.author.toLowerCase();
   return members.find(
@@ -366,7 +371,8 @@ function memberMatchingMessage(message: SleiMessage, members: SleiMember[]): Sle
 
 function messageRoleDescription(message: SleiMessage, members: SleiMember[], messages: DesktopMessages): string {
   if (message.role === "human") return "";
-  return memberMatchingMessage(message, members)?.role ?? messages.chat.roleLabels[message.role];
+  const member = memberMatchingMessage(message, members);
+  return member?.profession ?? member?.role ?? messages.chat.roleLabels[message.role];
 }
 
 function messageTimestampLabel(message: SleiMessage): string {
@@ -457,6 +463,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>(focusedMessageId);
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
   const [selectedThreadMessageId, setSelectedThreadMessageId] = useState<string | undefined>(undefined);
+  const [activeProfileMessageId, setActiveProfileMessageId] = useState<string | undefined>(undefined);
   const [projectEditorOpen, setProjectEditorOpen] = useState(false);
   const [projectDraftPaths, setProjectDraftPaths] = useState<string[]>(activeChannel.projectPaths ?? []);
   const [projectSaving, setProjectSaving] = useState(false);
@@ -582,7 +589,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
   const selectedThreadReplies = selectedThreadMessage
     ? selectedThreadMessage.thread?.replies?.length
       ? selectedThreadMessage.thread.replies
-      : [{ id: `root-${selectedThreadMessage.id}`, sender: selectedThreadMessage.author, role: selectedThreadMessage.role, body: selectedThreadMessage.body }]
+      : [{ id: `root-${selectedThreadMessage.id}`, memberId: selectedThreadMessage.authorId, sender: selectedThreadMessage.author, role: selectedThreadMessage.role, body: selectedThreadMessage.body }]
     : [];
   const selectedMessageThreadTask = selectedThreadMessage
     ? {
@@ -1113,6 +1120,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                         ? message.task
                         : taskBySourceMessageId.get(message.id);
                       const roleDescription = messageRoleDescription(message, data.members, messages);
+                      const messageMember = memberMatchingMessage(message, data.members);
                       if (sourceTask) {
                         const saved = savedMessageIds.includes(message.id);
                         const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
@@ -1129,9 +1137,11 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               copyLabel={messages.chat.copyMessage}
                               messages={messages}
                               onCopy={() => copyMessage(message)}
+                              onMemberMessage={onMemberMessage}
                               onOpen={() => openTaskThread(sourceTask.id)}
                               onSaveToggle={() => toggleMessageSave(message, saved)}
                               avatarIdentity={memberFromMessage(message, data.members)}
+                              profileMember={messageMember}
                               roleDescription={roleDescription || undefined}
                               saved={saved}
                               saveLabel={saveLabel}
@@ -1147,7 +1157,21 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                       const saveLabel = saved ? messages.chat.unsaveMessage : messages.chat.saveMessage;
                       const timestamp = messageTimestampLabel(message);
                       const side = message.role === "human" ? "outgoing" : "incoming";
-                      const avatar = <MemberAvatar identity={memberFromMessage(message, data.members)} />;
+                      const avatarIdentity = memberFromMessage(message, data.members);
+                      const avatar = messageMember?.type === "agent" ? (
+                        <AgentProfilePopover
+                          align="start"
+                          member={messageMember}
+                          messages={messages}
+                          onMessage={messageMember.directMessageEnabled === false ? undefined : () => onMemberMessage?.(messageMember.id)}
+                          onOpenChange={(open) => setActiveProfileMessageId(open ? message.id : undefined)}
+                          open={activeProfileMessageId === message.id}
+                          status={{ kind: "runtime", status: messageMember.runtimeStatus }}
+                          triggerClassName="size-8"
+                        >
+                          <MemberAvatar identity={messageMember} />
+                        </AgentProfilePopover>
+                      ) : <MemberAvatar identity={avatarIdentity} />;
                       const bodyTone = side === "outgoing" ? "primary" : "card";
                       return (
                         <div
@@ -1170,7 +1194,8 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                               <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")} data-slot="message-header">
                                 {roleDescription ? (
                                   <div className={cn("flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground", side === "outgoing" && "justify-end text-right")}>
-                                    <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
+                                    {messageMember?.type === "agent" ? <strong className="shrink-0 text-sm text-foreground">{messageMember.name}</strong> : null}
+                                    <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge>
                                   </div>
                                 ) : null}
                                 <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="message-actions">
@@ -1424,6 +1449,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
           setSelectedThreadMessageId(undefined);
         }}
         onReply={selectedThreadMessage && (selectedThreadMessage.thread?.id ? onMessageThreadReply : onMessageThreadReplyFromSource) ? replyToSelectedMessageThread : undefined}
+        onMemberMessage={onMemberMessage}
         mentionMembers={data.members}
         open={Boolean(selectedMessageThreadTask)}
         task={selectedMessageThreadTask}
@@ -1436,6 +1462,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
         }}
         onReply={onTaskReply}
         onStatusChange={onTaskStatusChange}
+        onMemberMessage={onMemberMessage}
         mentionMembers={data.members}
         open={Boolean(selectedTask)}
         task={selectedTask}

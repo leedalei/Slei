@@ -750,6 +750,7 @@ impl ChannelService {
                 "unknown",
                 "unknown",
                 "local",
+                "智能体",
                 "",
                 agent_id,
             )

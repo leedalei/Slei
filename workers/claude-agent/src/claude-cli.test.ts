@@ -94,6 +94,24 @@ describe("Claude CLI runtime helpers", () => {
     expect(nonPersistentArgs).not.toContain("--resume");
   });
 
+  it("omits Claude CLI model args when the session model is empty", () => {
+    const args = buildClaudeCliArgs(
+      startRunCommand({ model: "" }),
+      { mcpConfigPath: "/tmp/slei-mcp.json" },
+    );
+
+    expect(args).not.toContain("--model");
+  });
+
+  it("normalizes Claude CLI model aliases from display labels", () => {
+    const args = buildClaudeCliArgs(
+      startRunCommand({ model: "Fable" }),
+      { mcpConfigPath: "/tmp/slei-mcp.json" },
+    );
+
+    expect(followsFlag(args, "--model")).toBe("fable");
+  });
+
   it("folds non-resume context into the CLI prompt", () => {
     const args = buildClaudeCliArgs(
       startRunCommand({

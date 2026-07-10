@@ -315,6 +315,7 @@ async fn product_tool_card_reload_restores_full_payload_and_message_id() {
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "负责实现任务"
         },
         "actionLabel": "创建",
@@ -395,6 +396,7 @@ async fn product_tool_create_agent_card_rejects_name_or_handle_that_create_agent
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "负责实现任务"
         },
         "actionLabel": "创建",
@@ -423,6 +425,7 @@ async fn product_tool_create_agent_card_rejects_name_or_handle_that_create_agent
             "runtimeKind": "ClaudeCode",
             "model": "Sonnet",
             "nodeId": "local-node",
+            "profession": "开发工程师",
             "description": "负责实现任务"
         },
         "actionLabel": "创建",

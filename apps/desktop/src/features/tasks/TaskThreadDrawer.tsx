@@ -8,6 +8,8 @@ import { useAutosizeTextarea } from "../../components/useAutosizeTextarea";
 import { copyPlainText } from "../../lib/clipboard";
 import { MarkdownMessage } from "../chat/MarkdownMessage";
 import { MentionPicker } from "../chat/MentionPicker";
+import { AgentProfilePopover } from "../chat/AgentProfilePopover";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -31,6 +33,7 @@ export function TaskThreadDrawer(input: {
   onClose: () => void;
   onReply?: (taskId: string, body: string) => Promise<void> | void;
   onStatusChange?: (taskId: string, status: SleiTaskStatus) => Promise<void> | void;
+  onMemberMessage?: (memberId: string) => void;
 }) {
   const [replyDraft, setReplyDraft] = useState(input.initialReplyDraft ?? "");
   const [replySubmitting, setReplySubmitting] = useState(false);
@@ -39,6 +42,7 @@ export function TaskThreadDrawer(input: {
   const [statusError, setStatusError] = useState("");
   const [pendingStatus, setPendingStatus] = useState<SleiTaskStatus | null>(null);
   const [toast, setToast] = useState<{ message: string; type: ToastType }>({ message: "", type: "info" });
+  const [activeProfileReplyId, setActiveProfileReplyId] = useState<string | undefined>();
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [isComposing, setIsComposing] = useState(false);
   const task = input.task;
@@ -228,6 +232,7 @@ export function TaskThreadDrawer(input: {
               const timestamp = taskReplyTimestampLabel(reply);
               const side = (reply.role ?? "human") === "human" ? "outgoing" : "incoming";
               const roleDescription = taskReplyRoleDescription(reply, input.mentionMembers ?? [], input.messages);
+              const replyMember = taskReplyMember(reply, input.mentionMembers ?? []);
               const showIdentity = side !== "outgoing";
               const showRoleDescription = showIdentity && Boolean(roleDescription);
               return (
@@ -242,19 +247,29 @@ export function TaskThreadDrawer(input: {
                   data-reply-role={reply.role ?? "human"}
                   key={reply.id}
                 >
-                  {side === "incoming" ? <MemberAvatar identity={identity} /> : null}
+                  {side === "incoming" ? (
+                    replyMember?.type === "agent" ? (
+                      <AgentProfilePopover
+                        align="start"
+                        member={replyMember}
+                        messages={input.messages}
+                        onMessage={replyMember.directMessageEnabled === false ? undefined : () => input.onMemberMessage?.(replyMember.id)}
+                        onOpenChange={(open) => setActiveProfileReplyId(open ? reply.id : undefined)}
+                        open={activeProfileReplyId === reply.id}
+                        status={{ kind: "runtime", status: replyMember.runtimeStatus }}
+                        triggerClassName="size-8"
+                      >
+                        <MemberAvatar identity={replyMember} />
+                      </AgentProfilePopover>
+                    ) : <MemberAvatar identity={identity} />
+                  ) : null}
                   <div className={cn("grid min-w-0 gap-1.5", side === "outgoing" ? "justify-items-end" : "justify-items-start")} data-slot="message-content">
                     <div className={cn("flex w-full min-w-0 items-center gap-2", side === "outgoing" ? "max-w-[min(42rem,100%)] justify-end" : "max-w-full justify-between")}>
                       {showIdentity ? (
                         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs text-muted-foreground" data-slot="task-reply-metadata">
                           <strong className="shrink-0 text-sm text-foreground">{identity.name}</strong>
                           {identity.handle ? <span className="shrink-0">{identity.handle}</span> : null}
-                          {showRoleDescription ? (
-                            <>
-                              <span aria-hidden="true">｜</span>
-                              <span className="min-w-0 flex-1 truncate">{roleDescription}</span>
-                            </>
-                          ) : null}
+                          {showRoleDescription ? <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge> : null}
                         </div>
                       ) : null}
                       <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-slot="task-reply-actions">
@@ -471,6 +486,10 @@ function taskReplyAvatarIdentity(reply: SleiTaskReply, members: SleiMember[]): M
 }
 
 function taskReplyMember(reply: SleiTaskReply, members: SleiMember[]): SleiMember | undefined {
+  if (reply.memberId) {
+    const member = members.find((candidate) => candidate.id === reply.memberId);
+    if (member) return member;
+  }
   const normalizedSender = normalizeTaskReplyAuthor(reply.sender);
   const normalizedHandle = reply.handle ? normalizeTaskReplyAuthor(reply.handle) : "";
   return members.find((candidate) => {
@@ -482,7 +501,8 @@ function taskReplyMember(reply: SleiTaskReply, members: SleiMember[]): SleiMembe
 
 function taskReplyRoleDescription(reply: SleiTaskReply, members: SleiMember[], messages: DesktopMessages): string {
   if ((reply.role ?? "human") === "human") return "";
-  return taskReplyMember(reply, members)?.role ?? messages.chat.roleLabels[reply.role ?? "human"];
+  const member = taskReplyMember(reply, members);
+  return member?.profession ?? member?.role ?? messages.chat.roleLabels[reply.role ?? "human"];
 }
 
 function taskReplyTimestampLabel(reply: SleiTaskReply): string {

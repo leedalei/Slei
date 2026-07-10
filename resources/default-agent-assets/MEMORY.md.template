@@ -1,6 +1,8 @@
 # {{name}}
 
 ## Role
+职业：{{profession}}
+
 {{description}}
 
 ## Team
