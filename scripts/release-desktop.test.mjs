@@ -132,10 +132,10 @@ test("releaseDesktop checks safety gates before writing and pushes branch then t
   const commandKeys = calls.map((call) => normalizeCommandKey(call.join(" ")));
   assertBefore(commandKeys, "git status --porcelain", "writeFile apps/desktop/package.json");
   assertBefore(commandKeys, "git ls-remote --tags origin v0.1.1", "writeFile apps/desktop/package.json");
-  assertBefore(commandKeys, "bash scripts/verify-macos-package.sh", "git commit -m chore(release): v0.1.1");
-  assertBefore(commandKeys, "node scripts/verify-release-workflow.mjs", "git commit -m chore(release): v0.1.1");
-  assertBefore(commandKeys, "node --test scripts/release-desktop.test.mjs", "git commit -m chore(release): v0.1.1");
-  assertBefore(commandKeys, "git add apps/desktop/package.json", "git commit -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "bash scripts/verify-macos-package.sh", "git commit --allow-empty -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node scripts/verify-release-workflow.mjs", "git commit --allow-empty -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "node --test scripts/release-desktop.test.mjs", "git commit --allow-empty -m chore(release): v0.1.1");
+  assertBefore(commandKeys, "git add apps/desktop/package.json", "git commit --allow-empty -m chore(release): v0.1.1");
   assertBefore(commandKeys, "git push origin master", "git push origin v0.1.1");
   assert.equal(writes.length, 1);
   assert.equal(JSON.parse(writes[0].content).version, "0.1.1");

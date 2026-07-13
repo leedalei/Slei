@@ -111,7 +111,7 @@ export async function releaseDesktop(rawVersion, dependencies = {}) {
   run("node", ["--test", "scripts/release-desktop.test.mjs"]);
 
   run("git", ["add", DESKTOP_PACKAGE_JSON_GIT_PATH]);
-  run("git", ["commit", "-m", `chore(release): ${tag}`]);
+  run("git", ["commit", "--allow-empty", "-m", `chore(release): ${tag}`]);
   run("git", ["tag", tag]);
   run("git", ["push", "origin", "master"]);
   run("git", ["push", "origin", tag]);
