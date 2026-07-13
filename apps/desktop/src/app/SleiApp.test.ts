@@ -7,7 +7,6 @@ import {
   conversationMessageToSleiMessage,
   createChannelAgentActivityMessages,
   debugLaunchEnabledFromSearch,
-  failStaleAgentActivities,
   findActiveAgentActivities,
   hasPendingAgentActivity,
   hasUnsettledChannelMemberReadiness,
@@ -18,6 +17,7 @@ import {
   markAgentActivityFailedByDiagnostic,
   applyPreferenceMutation,
   createProfileAvatarUploadRequest,
+  reconcileAgentActivitiesWithMembers,
   removeCompletedAgentActivityByDiagnostic,
   daemonEventNeedsAgentRefresh,
   taskThreadIdFromDaemonEvent,
@@ -443,6 +443,42 @@ describe("createChannelAgentReplyMessage", () => {
     });
   });
 
+  it("restores a failed activity from daemon diagnostics when an earlier idle reconciliation removed its placeholder", () => {
+    const source = {
+      id: "msg_route_1",
+      author: "Lei",
+      role: "human",
+      time: "08:00",
+      body: "@nova 看一下",
+      channelId: "content",
+    } satisfies SleiMessage;
+    const member = {
+      ...dataWithDmAgent().members[0],
+      id: "agent_nova",
+      name: "Nova",
+      handle: "@nova",
+      runtimeStatus: "idle" as const,
+    };
+
+    const messages = markAgentActivityFailedByDiagnostic([source], {
+      sequence: 67,
+      eventType: "channel_agent_runtime.failed",
+      entityId: "event_67",
+      payload: "run_id=run_1 agent_id=agent_nova channel_id=content source_message_id=msg_route_1",
+      createdAt: "2026-06-11 09:58:39",
+    }, [member]);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      id: "agent-activity-msg_route_1-agent_nova",
+      authorId: "agent_nova",
+      author: "Nova",
+      status: "failed",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
+    });
+  });
+
   it("removes pending agent activity when daemon reports delivery completed without a visible reply", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",
@@ -469,9 +505,10 @@ describe("createChannelAgentReplyMessage", () => {
     expect(messages).toEqual([]);
   });
 
-  it("marks stale pending agent activity failed so the sidebar stops thinking", () => {
+  it("keeps a pending agent activity while daemon reports the agent is busy", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",
+      authorId: "agent_nova",
       author: "Nova",
       handle: "@nova",
       avatar: "NO",
@@ -484,38 +521,19 @@ describe("createChannelAgentReplyMessage", () => {
       sourceMessageId: "msg_route_1",
       toolCall: "channel_agent_reply",
     } satisfies SleiMessage;
-    const fresh = {
-      ...pending,
-      id: "agent-activity-msg_route_2-agent_nova",
-      sentAt: "2026-06-15T08:02:30.000Z",
-      sourceMessageId: "msg_route_2",
-    } satisfies SleiMessage;
+    const member = {
+      ...dataWithDmAgent().members[0],
+      id: "agent_nova",
+      runtimeStatus: "busy" as const,
+    };
 
-    const result = failStaleAgentActivities(
-      [pending, fresh],
-      Date.parse("2026-06-15T08:03:01.000Z"),
-      120_000,
-    );
-
-    expect(result.failedActivities.map((message) => message.id)).toEqual(["agent-activity-msg_route_1-agent_nova"]);
-    expect(result.messages.map((message) => [message.id, message.status])).toEqual([
-      ["agent-activity-msg_route_1-agent_nova", "failed"],
-      ["agent-activity-msg_route_2-agent_nova", "pending"],
-    ]);
+    expect(reconcileAgentActivitiesWithMembers([pending], [member])).toEqual([pending]);
   });
 
-  it("does not mark stale agent activity failed after a visible channel reply exists", () => {
-    const human = {
-      id: "msg_route_1",
-      author: "Lei",
-      role: "human",
-      time: "08:00",
-      sentAt: "2026-06-15T08:00:00.000Z",
-      body: "@nova 报个到",
-      channelId: "content",
-    } satisfies SleiMessage;
+  it("removes a pending activity instead of reporting an error after daemon returns the agent to idle", () => {
     const pending = {
       id: "agent-activity-msg_route_1-agent_nova",
+      authorId: "agent_nova",
       author: "Nova",
       handle: "@nova",
       avatar: "NO",
@@ -524,30 +542,48 @@ describe("createChannelAgentReplyMessage", () => {
       sentAt: "2026-06-15T08:00:00.000Z",
       body: "",
       channelId: "content",
-      status: "running",
+      status: "pending",
       sourceMessageId: "msg_route_1",
       toolCall: "channel_agent_reply",
     } satisfies SleiMessage;
-    const reply = {
-      id: "msg_agent_1",
+    const member = {
+      ...dataWithDmAgent().members[0],
+      id: "agent_nova",
+      runtimeStatus: "idle" as const,
+    };
+
+    expect(reconcileAgentActivitiesWithMembers([pending], [member])).toEqual([]);
+  });
+
+  it("keeps an explicit daemon failure visible after the agent returns to idle", () => {
+    const failed = {
+      id: "agent-activity-msg_route_1-agent_nova",
+      authorId: "agent_nova",
       author: "Nova",
-      handle: "@nova",
       role: "agent",
-      time: "08:01",
-      sentAt: "2026-06-15T08:01:00.000Z",
-      body: "到。",
+      time: "08:00",
+      body: "",
       channelId: "content",
-      status: "done",
+      status: "failed",
+      sourceMessageId: "msg_route_1",
+      toolCall: "channel_agent_reply",
     } satisfies SleiMessage;
+    const member = {
+      ...dataWithDmAgent().members[0],
+      id: "agent_nova",
+      runtimeStatus: "idle" as const,
+    };
 
-    const result = failStaleAgentActivities(
-      [human, pending, reply],
-      Date.parse("2026-06-15T08:03:01.000Z"),
-      120_000,
-    );
+    expect(reconcileAgentActivitiesWithMembers([failed], [member])).toEqual([failed]);
+  });
 
-    expect(result.failedActivities).toEqual([]);
-    expect(result.messages).toEqual([human, pending, reply]);
+  it("reconciles pending activities from daemon status without a local timeout failure path", () => {
+    const source = readFileSync(new URL("./SleiApp.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("messages: reconcileAgentActivitiesWithMembers(current.messages, members)");
+    expect(source).toContain('"agent-status-reconcile-failed"');
+    expect(source).not.toContain("failStaleAgentActivities");
+    expect(source).not.toContain("stale-activity-timeout");
   });
 
   it("does not select a stale channel activity after a visible agent reply exists", () => {

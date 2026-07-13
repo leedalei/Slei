@@ -703,12 +703,16 @@ export function daemonEventNeedsAgentRefresh(event: DaemonEventView): boolean {
     || event.eventType.startsWith("channel_agent_runtime.");
 }
 
-export function markAgentActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView): SleiMessage[] {
+export function markAgentActivityFailedByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView, members: SleiMember[] = []): SleiMessage[] {
   if (!diagnosticEventNeedsToast(event)) return messages;
   const messageId = diagnosticPayloadValue(event, "message_id") ?? diagnosticPayloadValue(event, "source_message_id");
   if (!messageId) return messages;
+  const agentId = diagnosticPayloadValue(event, "agent_id");
+  const activityMessages = agentId
+    ? replaceChannelAgentActivityForClaim(messages, messageId, agentId, members)
+    : messages;
   let changed = false;
-  const nextMessages = messages.map((message) => {
+  const nextMessages = activityMessages.map((message) => {
     const matchesAgent = message.toolCall === "channel_agent_reply" && channelAgentActivitySourceId(message) === messageId;
     if (!matchesAgent || message.status === "failed") {
       return message;
@@ -716,7 +720,7 @@ export function markAgentActivityFailedByDiagnostic(messages: SleiMessage[], eve
     changed = true;
     return { ...message, status: "failed" as const };
   });
-  return changed ? nextMessages : messages;
+  return changed ? nextMessages : activityMessages;
 }
 
 export function keepOnlyClaimedAgentActivityByDiagnostic(messages: SleiMessage[], event: DiagnosticEventView, members: SleiMember[] = []): SleiMessage[] {
@@ -765,36 +769,28 @@ export function removeCompletedAgentActivityByDiagnostic(messages: SleiMessage[]
   return nextMessages.length === messages.length ? messages : nextMessages;
 }
 
-export const CHANNEL_AGENT_ACTIVITY_STALE_MS = 120_000;
-
-export function failStaleAgentActivities(
-  messages: SleiMessage[],
-  nowMs = Date.now(),
-  staleMs = CHANNEL_AGENT_ACTIVITY_STALE_MS,
-): { messages: SleiMessage[]; failedActivities: SleiMessage[] } {
-  const failedActivities: SleiMessage[] = [];
-  const nextMessages = messages.map((message) => {
-    if (!isPendingAgentActivity(message)) return message;
-    const sourceMessageId = channelAgentActivitySourceId(message);
-    if (sourceMessageId && hasChannelAgentResultAfterSource(messages, sourceMessageId)) return message;
-    const sentAtMs = Date.parse(message.sentAt ?? "");
-    if (!Number.isFinite(sentAtMs) || nowMs - sentAtMs < staleMs) return message;
-    const failed = { ...message, status: "failed" as const };
-    failedActivities.push(failed);
-    return failed;
-  });
-  return {
-    messages: failedActivities.length > 0 ? nextMessages : messages,
-    failedActivities,
-  };
-}
-
 function isPendingAgentActivity(message: SleiMessage) {
   return (
     message.role === "agent" &&
     (message.status === "pending" || message.status === "running") &&
     message.toolCall === "channel_agent_reply"
   );
+}
+
+export function reconcileAgentActivitiesWithMembers(messages: SleiMessage[], members: SleiMember[]): SleiMessage[] {
+  let changed = false;
+  const nextMessages = messages.filter((message) => {
+    if (!isPendingAgentActivity(message)) return true;
+    const member = members.find((candidate) =>
+      candidate.id === message.authorId
+      || candidate.name === message.author
+      || candidate.handle === message.handle
+    );
+    if (!member || member.runtimeStatus === "busy") return true;
+    changed = true;
+    return false;
+  });
+  return changed ? nextMessages : messages;
 }
 
 export function hasPendingAgentActivity(messages: SleiMessage[], channelId?: string): boolean {
@@ -1301,7 +1297,7 @@ export function SleiApp() {
           return createEmptySleiData({ ...current, messages: removeCompletedAgentActivityByDiagnostic(updatedMessages, event) });
         });
         if (diagnosticEventNeedsToast(event)) {
-          setData((current) => createEmptySleiData({ ...current, messages: markAgentActivityFailedByDiagnostic(current.messages, event) }));
+          setData((current) => createEmptySleiData({ ...current, messages: markAgentActivityFailedByDiagnostic(current.messages, event, current.members) }));
           showAppToast(formatDiagnosticEventToast(messages.common.operationFailed, event), "error");
         }
       }
@@ -1321,25 +1317,17 @@ export function SleiApp() {
   }, [bridge, messages.common.operationFailed]);
 
   useEffect(() => {
-    const failStaleActivities = () => {
-      let failedActivities: SleiMessage[] = [];
-      setData((current) => {
-        const result = failStaleAgentActivities(current.messages);
-        failedActivities = result.failedActivities;
-        if (failedActivities.length === 0) return current;
-        return createEmptySleiData({ ...current, messages: result.messages });
+    if (!hasPendingAgentActivity(data.messages)) return undefined;
+    const interval = window.setInterval(() => {
+      void refreshAgentMembersIntoState().catch((error: unknown) => {
+        logAppEvent(bridge, "channel-agent-reply", "agent-status-reconcile-failed", {
+          error: formatLogError(error),
+        });
+        showBackendServiceErrorToast(error);
       });
-      if (failedActivities.length === 0) return;
-      const names = failedActivities.map((message) => message.author).filter(Boolean).join(", ");
-      showAppToast(names ? `${messages.chat.agentRunFailed}：${names}` : messages.chat.agentRunFailed, "error");
-      logAppEvent(bridge, "channel-agent-reply", "stale-activity-timeout", {
-        activityIds: failedActivities.map((message) => message.id),
-      });
-    };
-    failStaleActivities();
-    const interval = window.setInterval(failStaleActivities, 10_000);
+    }, 10_000);
     return () => window.clearInterval(interval);
-  }, [bridge, messages.chat.agentRunFailed]);
+  }, [bridge, data.messages]);
 
   useEffect(() => {
     if (!activeChannelId || !hasPendingAgentActivity(data.messages, activeChannelId)) return;
@@ -1695,7 +1683,11 @@ export function SleiApp() {
       mergeAgentViewsIntoMembers(data.members, agentReceipt.agents, runtimeSetup.nodes, messages),
     );
     members = await loadSleiChannelMemberReadiness(bridge, data.channels, members);
-    setData((current) => createEmptySleiData({ ...current, members }));
+    setData((current) => createEmptySleiData({
+      ...current,
+      members,
+      messages: reconcileAgentActivitiesWithMembers(current.messages, members),
+    }));
   }
 
   async function refreshChannelsAfterCreate(channelId: string) {

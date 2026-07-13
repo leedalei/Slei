@@ -284,6 +284,8 @@ Agent 应在耗时或用户可感知阶段调用 `slei-cli agent status`，例�
 
 daemon 必须持久化最新状态，并把每次状态上报追加到 `agent_activity_logs`。同一张活动日志还记录 daemon 观察到的 runtime 诊断事件，包括 `run`、`input`、`output`、`tool`、`completed` 和 `failed`。该日志用于 debug 和最近活动展示，不参与路由决策、claim 判断或任务调度。每个 Agent 只保留最近 200 条，超过后删除最旧记录。
 
+Desktop 的频道 Agent 活动卡必须以 daemon Agent 状态和 runtime 诊断为事实源：只有 daemon 明确返回失败诊断时才显示“运行报错”，不得由 UI 根据固定运行时长把 `pending` / `running` 本地改写为 `failed`。UI 可以在存在 pending 活动时定期重拉 Agent 状态；daemon 仍为 busy 时保留活动卡，daemon 回到 idle/offline 时清理尚未收到完成事件的临时活动卡。这样既允许长时间运行，也能在完成诊断漏收时收敛旧卡片，而不会伪造错误 toast。
+
 ## MEMORY 与 Active Context
 
 `MEMORY.md` 的 `Active Context` 是短生命周期进程恢复当前工作的核心机制：
