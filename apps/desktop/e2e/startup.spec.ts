@@ -64,10 +64,11 @@ async function icnsPngHashes(path: string) {
   return hashes;
 }
 
-function runMacosPackageVerifier(cwd: string) {
+function runMacosPackageVerifier(cwd: string, env: NodeJS.ProcessEnv = process.env) {
   return spawnSync("bash", ["scripts/verify-macos-package.sh"], {
     cwd,
     encoding: "utf8",
+    env,
   });
 }
 
@@ -339,6 +340,22 @@ describe("desktop startup contract", () => {
     const fixtureRoot = await createBoundaryFixture();
     try {
       const result = runMacosPackageVerifier(fixtureRoot);
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("macOS package boundary verified");
+      expect(result.stderr).toBe("");
+    } finally {
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("runs the macOS package guardrail without ripgrep", async () => {
+    const fixtureRoot = await createBoundaryFixture();
+    try {
+      const result = runMacosPackageVerifier(fixtureRoot, {
+        ...process.env,
+        PATH: "/usr/bin:/bin",
+      });
 
       expect(result.status).toBe(0);
       expect(result.stdout).toContain("macOS package boundary verified");
