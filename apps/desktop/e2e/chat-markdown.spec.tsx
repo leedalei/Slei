@@ -25,15 +25,18 @@ afterEach(() => {
 });
 
 describe("chat Markdown rendering", () => {
-  it("renders mentions with the default secondary badge styles and inline alignment", () => {
+  it("softens mentions inside primary message bubbles without losing badge semantics", () => {
     const html = renderToStaticMarkup(
       <MarkdownMessage markdown="mysql有哪些好用的mcp? @theo" tone="primary" />,
     );
     const host = document.createElement("div");
     host.innerHTML = html;
+    const markdown = host.querySelector<HTMLElement>(".slei-markdown-message");
     const mention = host.querySelector<HTMLElement>(".slei-message-mention");
-    const mentionRule = appCss.match(/\.slei-markdown-message \.slei-message-mention \{[^}]+\}/)?.[0];
+    const primaryMentionRule = appCss.match(/\.slei-markdown-message\[data-markdown-tone="primary"\] \.slei-message-mention \{[^}]+\}/)?.[0];
 
+    expect(markdown?.dataset.markdownTone).toBe("primary");
+    expect(markdown?.classList).not.toContain("mt-1");
     expect(mention?.tagName).toBe("SPAN");
     expect(mention?.dataset.slot).toBe("badge");
     expect(mention?.dataset.variant).toBe("secondary");
@@ -42,7 +45,21 @@ describe("chat Markdown rendering", () => {
     expect(mention?.classList).toContain("text-secondary-foreground");
     expect(mention?.classList).toContain("border-transparent");
     expect(mention?.classList).toContain("align-middle");
-    expect(mentionRule).toBeUndefined();
+    expect(primaryMentionRule).toContain("background: var(--markdown-surface-strong);");
+    expect(primaryMentionRule).toContain("color: var(--markdown-foreground);");
+  });
+
+  it("defines tone-aware surfaces and details for Markdown on primary message bubbles", () => {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage markdown={"> context\n\n`inline` [link](https://example.com)\n\n| A | B |\n| - | - |\n| 1 | 2 |"} tone="primary" />,
+    );
+
+    expect(html).toContain('data-markdown-tone="primary"');
+    expect(appCss).toContain('.slei-markdown-message[data-markdown-tone="primary"] {');
+    expect(appCss).toContain("--markdown-surface: color-mix(in srgb, var(--primary-foreground) 9%, transparent);");
+    expect(appCss).toContain("--markdown-border: color-mix(in srgb, var(--primary-foreground) 16%, transparent);");
+    expect(appCss).toContain("--markdown-detail: color-mix(in srgb, var(--primary-foreground) 76%, transparent);");
+    expect(appCss).toContain("color: var(--markdown-link, var(--primary));");
   });
 
   it("renders app-styled Markdown blocks and sanitizes unsafe links", () => {

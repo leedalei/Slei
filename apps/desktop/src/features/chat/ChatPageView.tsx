@@ -448,10 +448,11 @@ function MessageBody({
   return (
     <div
       className={cn(
-        "slei-markdown-message slei-message-text mt-1 max-w-none text-sm leading-relaxed",
+        "slei-markdown-message slei-message-text max-w-none text-sm leading-relaxed",
         tone === "primary" ? "text-primary-foreground" : "text-card-foreground",
         inlineRest && "[&>.slei-markdown-message]:mt-0 [&>.slei-markdown-message]:inline [&>.slei-markdown-message>p:first-child]:inline",
       )}
+      data-markdown-tone={tone}
       data-message-text="true"
       style={markdownForegroundStyle(tone)}
     >
@@ -1273,7 +1274,7 @@ export function ChatPage({ activeChannel, activeConversation, data, focusedMessa
                                       "grid min-w-0",
                                       creationCardOnly
                                         ? "w-fit max-w-full gap-3 rounded-xl border-0 bg-transparent p-0 shadow-none"
-                                        : "gap-2 rounded-2xl px-3.5 py-2.5",
+                                        : "gap-2 rounded-2xl p-3",
                                       !creationCardOnly && (side === "outgoing"
                                         ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
                                         : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs"),

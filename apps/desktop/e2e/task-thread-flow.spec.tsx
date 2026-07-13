@@ -252,6 +252,9 @@ describe("chat to task thread flow", () => {
     expect(firstReplyStart).toBeGreaterThan(scrollStart);
     expect(firstReplyStart).toBeLessThan(footerStart);
     expect(firstReplyHtml).toContain("slei-markdown-message");
+    expect(firstReplyHtml).toContain("rounded-2xl p-3");
+    expect(firstReplyHtml).not.toContain("rounded-2xl px-3.5 py-2.5");
+    expect(firstReplyHtml).not.toContain("slei-markdown-message mt-1");
     expect(firstReplyHtml).toContain("<h2>感谢欢迎</h2>");
     expect(firstReplyHtml).toContain("<li>agent_guide</li>");
     expect(firstReplyHtml).toContain("<code");

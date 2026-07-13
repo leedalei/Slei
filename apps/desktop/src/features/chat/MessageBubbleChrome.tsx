@@ -22,10 +22,11 @@ export function MessageBubbleActionToolbar({
     <div
       {...props}
       className={cn(
-        "pointer-events-none absolute top-0 z-20 flex h-8 -translate-y-1/2 items-center gap-0.5 rounded-xl border border-border/70 bg-background/95 px-1 text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity duration-150 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100 group-focus-within/bubble:pointer-events-auto group-focus-within/bubble:opacity-100",
+        "slei-message-actions pointer-events-none absolute top-0 z-20 flex h-7 -translate-y-[70%] items-center gap-0.5 rounded-xl border px-1 opacity-0 backdrop-blur-md transition-[background-color,border-color,color,box-shadow,opacity] duration-200 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100 group-focus-within/bubble:pointer-events-auto group-focus-within/bubble:opacity-100",
         side === "outgoing" ? "left-2" : "right-2",
         className,
       )}
+      data-message-side={side}
       data-slot={slot}
     >
       {children}

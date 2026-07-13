@@ -135,7 +135,7 @@ export function TaskRootEntry(input: {
             </MessageBubbleActionToolbar>
             <div
               className={cn(
-                "grid min-w-0 gap-2 rounded-2xl px-3.5 py-2.5",
+                "grid min-w-0 gap-2 rounded-2xl p-3",
                 side === "outgoing"
                   ? "w-fit max-w-full rounded-tr-sm bg-primary text-primary-foreground shadow-sm"
                   : "w-fit max-w-full rounded-tl-sm border border-border/70 bg-card text-card-foreground shadow-xs",
