@@ -1115,6 +1115,178 @@ async fn agent_message_todo_agent_no_mention_message_starts_one_todo_only_run_wi
 }
 
 #[tokio::test]
+async fn agent_message_todo_completed_broadcast_run_retries_skipped_pending_todos_serially() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_nova", "@nova-win"),
+    ])
+    .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda", "agent_nova"]).await;
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "大家都看一下，先认领的人回复".to_string(),
+            attachment_ids: Vec::new(),
+            idempotency_key: "broadcast-claim-race".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let coda_broadcast_run_id = run_id_for_agent(&state, "agent_coda");
+    let nova_broadcast_run_id = run_id_for_agent(&state, "agent_nova");
+
+    let winner = state
+        .claims()
+        .claim_message(&outcome.message_id, "agent_alice")
+        .await
+        .unwrap();
+    assert!(winner.claimed);
+    for agent_id in ["agent_coda", "agent_nova"] {
+        let todo = state
+            .agent_message_todos()
+            .create_pending_from_failed_claim(&outcome.message_id, agent_id, "agent_alice")
+            .await
+            .unwrap();
+        assert!(todo.is_some());
+    }
+
+    let trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_alice",
+            "我已认领并回复，其他人继续处理待办。",
+            "broadcast-claim-race-trigger",
+        )
+        .await
+        .unwrap();
+    let delivered = state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&trigger)
+        .await
+        .unwrap();
+    assert!(delivered.is_empty());
+    assert_eq!(start_run_commands(&state).len(), 3);
+
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": coda_broadcast_run_id,
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(start_run_commands(&state).len(), 4);
+    assert!(prompt_for_agent(&state, "agent_coda").contains("大家都看一下，先认领的人回复"));
+    let coda_todo_run_id = run_id_for_agent(&state, "agent_coda");
+    assert_ne!(coda_todo_run_id, coda_broadcast_run_id);
+
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": nova_broadcast_run_id,
+        }))
+        .await
+        .unwrap();
+    assert_eq!(
+        start_run_commands(&state).len(),
+        4,
+        "only one todo-only run may be active in a channel"
+    );
+
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": coda_todo_run_id,
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(start_run_commands(&state).len(), 5);
+    assert!(prompt_for_agent(&state, "agent_nova").contains("大家都看一下，先认领的人回复"));
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_coda", Some("done"))
+            .await
+            .len(),
+        1
+    );
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_nova", Some("running"))
+            .await
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn agent_message_todo_completed_run_does_not_reuse_agent_trigger_older_than_source() {
+    let state =
+        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
+            .await;
+    create_dev_channel_with_agents(&state, &["agent_alice", "agent_coda"]).await;
+
+    let old_trigger = state
+        .messages()
+        .send_agent_channel_message(
+            "#dev",
+            "agent_alice",
+            "这是上一轮已经结束的回复。",
+            "older-agent-trigger",
+        )
+        .await
+        .unwrap();
+    state
+        .channel_orchestrator()
+        .broadcast_existing_channel_message(&old_trigger)
+        .await
+        .unwrap();
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "这是新一轮群体问题。".to_string(),
+            attachment_ids: Vec::new(),
+            idempotency_key: "newer-broadcast-source".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+    let coda_broadcast_run_id = run_id_for_agent(&state, "agent_coda");
+    state
+        .claims()
+        .claim_message(&outcome.message_id, "agent_alice")
+        .await
+        .unwrap();
+    state
+        .agent_message_todos()
+        .create_pending_from_failed_claim(&outcome.message_id, "agent_coda", "agent_alice")
+        .await
+        .unwrap();
+
+    state
+        .handle_worker_event(json!({
+            "type": "completed",
+            "run_id": coda_broadcast_run_id,
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(start_run_commands(&state).len(), 2);
+    assert_eq!(
+        todos_for_agent_status(&state, "agent_coda", Some("pending"))
+            .await
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn agent_message_todo_for_task_source_prompts_task_thread_reply() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])

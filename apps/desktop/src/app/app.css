@@ -1462,9 +1462,14 @@ select:focus-visible {
   color: color-mix(in srgb, var(--primary-foreground) 78%, transparent);
 }
 
+.slei-message-actions button:hover,
+.slei-message-actions button:focus-visible {
+  background: transparent;
+  color: var(--foreground);
+}
+
 .slei-message-actions[data-message-side="outgoing"] button:hover,
 .slei-message-actions[data-message-side="outgoing"] button:focus-visible {
-  background: color-mix(in srgb, var(--primary-foreground) 12%, transparent);
   color: var(--primary-foreground);
 }
 

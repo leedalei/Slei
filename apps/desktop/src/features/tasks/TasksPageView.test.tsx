@@ -562,7 +562,8 @@ describe("TasksPage filters", () => {
     expect(actions?.className).toContain("group-hover/bubble:opacity-100");
     expect(humanActions?.className).toContain("left-2");
     expect(copyButton).not.toBeNull();
-    expect(copyButton?.className).toContain("size-6");
+    expect(copyButton?.className).toContain("size-4");
+    expect(copyButton?.className).toContain("hover:bg-transparent");
     expect(copyButton?.className).toContain("[&_svg]:size-3");
     expect(copyIcon?.className.baseVal.split(/\s+/)).toContain("size-3");
     expect(time?.textContent).toBe("06-17 10:30");

@@ -92,6 +92,7 @@ pub struct ChannelOrchestratorService {
     reset_runtime: ResetRuntimeState,
     outcome_idempotency: Arc<Mutex<HashMap<String, SendChannelMessageOutcome>>>,
     send_lock: Arc<AsyncMutex<()>>,
+    todo_dispatch_lock: Arc<AsyncMutex<()>>,
     channel_agent_runs: Arc<AsyncMutex<HashMap<String, ChannelAgentRunRecord>>>,
 }
 
@@ -142,6 +143,7 @@ impl ChannelOrchestratorService {
             reset_runtime,
             outcome_idempotency: Arc::new(Mutex::new(HashMap::new())),
             send_lock: Arc::new(AsyncMutex::new(())),
+            todo_dispatch_lock: Arc::new(AsyncMutex::new(())),
             channel_agent_runs: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
@@ -758,6 +760,11 @@ impl ChannelOrchestratorService {
                     "idle",
                     Some("空闲"),
                     Some("run completed"),
+                )
+                .await?;
+                self.advance_pending_todo_after_completed_run(
+                    &record.channel_id,
+                    &record.source_message_id,
                 )
                 .await?;
                 Ok(true)
@@ -1709,6 +1716,7 @@ slei-cli task update {task_id} --status in_review
         channel_id: &str,
         trigger_message: &MessageRecord,
     ) -> Result<Option<String>, ChannelOrchestratorError> {
+        let _dispatch_guard = self.todo_dispatch_lock.lock().await;
         let pending_todos = self
             .agent_message_todos
             .list(AgentMessageTodoListQuery {
@@ -1719,6 +1727,34 @@ slei-cli task update {task_id} --status in_review
                 limit: Some(50),
             })
             .await?;
+        if pending_todos.is_empty() {
+            return Ok(None);
+        }
+
+        let active_run_ids = self
+            .channel_agent_runs
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let has_active_todo_run = self
+            .agent_message_todos
+            .list(AgentMessageTodoListQuery {
+                agent_id: None,
+                channel_id: Some(channel_id.to_string()),
+                status: Some("running".to_string()),
+                include_deleted: false,
+                limit: None,
+            })
+            .await?
+            .iter()
+            .filter_map(|todo| todo.run_id.as_ref())
+            .any(|run_id| active_run_ids.contains(run_id));
+        if has_active_todo_run {
+            return Ok(None);
+        }
+
         let channel_members = self.channels.channel_members(channel_id).await?;
         let member_ids = channel_members
             .iter()
@@ -1760,6 +1796,35 @@ slei-cli task update {task_id} --status in_review
         }
 
         Ok(None)
+    }
+
+    async fn advance_pending_todo_after_completed_run(
+        &self,
+        channel_id: &str,
+        source_message_id: &str,
+    ) -> Result<(), ChannelOrchestratorError> {
+        let channel_messages = self.messages.channel_messages(channel_id).await;
+        let Some(source_index) = channel_messages
+            .iter()
+            .position(|message| message.id == source_message_id)
+        else {
+            return Ok(());
+        };
+        let trigger_message =
+            channel_messages
+                .into_iter()
+                .skip(source_index)
+                .rev()
+                .find(|message| {
+                    message.kind == MessageKind::Agent
+                        && !has_explicit_mention_marker(message.body.as_deref().unwrap_or_default())
+                });
+        if let Some(trigger_message) = trigger_message {
+            let _ = self
+                .start_next_pending_todo_for_channel(channel_id, &trigger_message)
+                .await?;
+        }
+        Ok(())
     }
 
     async fn delivery_target_agent_ids_for_message(

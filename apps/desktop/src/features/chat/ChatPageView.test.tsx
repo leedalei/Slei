@@ -1186,7 +1186,10 @@ describe("ChatPage mention panel", () => {
     expect(actionToolbar?.className).toContain("left-2");
     expect(actionToolbar?.className).toContain("group-hover/bubble:opacity-100");
     expect(actionToolbar?.className).toContain("group-focus-within/bubble:opacity-100");
-    expect(actionToolbar?.className).toContain("h-7");
+    expect(actionToolbar?.className).toContain("px-1");
+    expect(actionToolbar?.className).toContain("py-0.5");
+    expect(actionToolbar?.className).toContain("rounded");
+    expect(actionToolbar?.className).not.toContain("h-5");
     expect(actionToolbar?.className).toContain("-translate-y-[70%]");
     expect(actionToolbar?.className).not.toContain("h-8");
     expect(actionToolbar?.className).toContain("duration-200");
@@ -1198,12 +1201,15 @@ describe("ChatPage mention panel", () => {
     expect(actionToolbar?.className).not.toContain("flex shrink-0 items-center gap-1");
     expect(messageHtml).not.toContain("min-w-[7.5rem]");
     expect(actionButtons).toHaveLength(3);
-    expect(actionButtons.every((button) => button.className.includes("size-6"))).toBe(true);
+    expect(actionButtons.every((button) => button.className.includes("size-4"))).toBe(true);
+    expect(actionButtons.every((button) => button.className.includes("hover:bg-transparent"))).toBe(true);
     expect(actionButtons.some((button) => button.className.includes("[&_svg]:size-2.5"))).toBe(false);
     expect(threadIcon?.className.baseVal).toContain("size-3");
     expect(copyIcon?.className.baseVal).toContain("size-3");
     expect(bookmarkIcon?.className.baseVal).toContain("size-3");
     expect(host.querySelector(".t-icon-swap")?.className).toContain("size-3");
+    expect(appCss).toContain(".slei-message-actions button:hover,");
+    expect(appCss).toContain("background: transparent;");
     expect(timestampIndex).toBeGreaterThan(-1);
     expect(copyIndex).toBeGreaterThan(-1);
     expect(saveIndex).toBeGreaterThan(copyIndex);

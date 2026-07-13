@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 
 export type MessageBubbleSide = "incoming" | "outgoing";
 
-export const MESSAGE_BUBBLE_ACTION_BUTTON_CLASS = "size-6 [&_svg]:size-3";
+export const MESSAGE_BUBBLE_ACTION_BUTTON_CLASS = "size-4 rounded-sm p-0 hover:bg-transparent hover:text-foreground dark:hover:bg-transparent [&_svg]:size-3";
 export const MESSAGE_BUBBLE_ACTION_ICON_CLASS = "size-3";
 
 export function MessageBubbleActionToolbar({
@@ -22,7 +22,7 @@ export function MessageBubbleActionToolbar({
     <div
       {...props}
       className={cn(
-        "slei-message-actions pointer-events-none absolute top-0 z-20 flex h-7 -translate-y-[70%] items-center gap-0.5 rounded-xl border px-1 opacity-0 backdrop-blur-md transition-[background-color,border-color,color,box-shadow,opacity] duration-200 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100 group-focus-within/bubble:pointer-events-auto group-focus-within/bubble:opacity-100",
+        "slei-message-actions pointer-events-none absolute top-0 z-20 flex -translate-y-[70%] items-center gap-0.5 rounded border px-1 py-0.5 opacity-0 backdrop-blur-md transition-[border-color,color,box-shadow,opacity] duration-200 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100 group-focus-within/bubble:pointer-events-auto group-focus-within/bubble:opacity-100",
         side === "outgoing" ? "left-2" : "right-2",
         className,
       )}

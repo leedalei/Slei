@@ -216,6 +216,8 @@ sequenceDiagram
 - 顶层频道消息有有效显式 `@handle` 时，mention 唤醒优先于默认广播。daemon 只启动被 mention Agent 的 run，并把该 Agent 当前频道的 pending 待办注入本次 prompt、标记为 `running`。
 - Human 无有效 mention 消息保持频道 broadcast：为成员创建 delivery 并启动普通 run；这些普通 run 可以注入各自待办，但 daemon 不为同一 human 消息额外启动 todo-only run。
 - Agent 无 mention 顶层频道消息不会走普通 delivery/claim 广播，但可以额外串行推进一个 pending todo Agent。任务回复和普通消息子线程回复不触发 todo-only 推进。
+- 若 Agent 无 mention 消息首次推进时，pending 待办所属 Agent 仍在执行原 broadcast run，daemon 必须在这些 run 的 `completed` 事件后重新检查同频道队列；不得因为首次扫描跳过 busy Agent 而永久遗留 pending 待办。
+- 同一频道同时最多存在一个绑定 `running` 待办的 todo-only run。每个 completed run 都可基于“不早于本次 run source”的最新一条 Agent 无 mention 顶层消息继续推进下一名 pending Agent，从而形成持久化、串行的待办消费链；不得复用上一轮群体问题留下的旧 Agent 消息作为触发器。failed/cancelled 只恢复 pending，不立即自旋重试。
 - 每次 run 最多注入 5 条当前频道、当前 Agent 的 pending 待办，按稳定创建顺序选择。无效、已删除或不可处理的 source message 不会阻塞队列，应被终止或跳过。
 
 Prompt 规则：
@@ -229,7 +231,7 @@ Prompt 规则：
 生命周期：
 
 - `pending -> running`：注入 prompt 前绑定本次 `run_id`，写入 `last_prompted_at`。
-- `running -> done`：worker completed 后，daemon 将本次 `run_id` 绑定的待办标记完成并清空 `run_id`。
+- `running -> done`：worker completed 后，daemon 将本次 `run_id` 绑定的待办标记完成并清空 `run_id`，随后在串行闸门内检查是否可以推进下一名 pending Agent。
 - `running -> pending`：worker 启动失败、run failed 或 cancelled 时恢复 pending 并清空 `run_id`。
 - `* -> deleted`：人工 CLI/API 软删除，或 daemon 发现 source message 缺失、删除、空正文或不可处理时终止。
 
@@ -337,7 +339,7 @@ Desktop 的频道 Agent 活动卡必须以 daemon Agent 状态和 runtime 诊断
 - 普通新消息是否仍走 broadcast + claim，而不是中心化 JSON、关键词或第一个 ready Agent。
 - failed claim 待办是否只在“已有 delivery + 真实 failed claim + 可处理频道消息”时由 daemon/SQLite 创建；UI、mock、diagnostics 或 Agent workspace 是否没有写待办状态。
 - mention 唤醒是否仍优先，并且只给被唤醒 Agent 注入当前频道、属于该 Agent 的 pending todos。
-- Human 无有效 mention 消息是否仍只走 broadcast，不额外启动 todo-only run；Agent 无 mention 顶层频道消息是否每次最多串行推进一个 pending todo Agent。
+- Human 无有效 mention 消息是否仍只走 broadcast，不额外启动 todo-only run；Agent 无 mention 顶层频道消息是否每次最多串行推进一个 pending todo Agent；首次因原 broadcast run 仍 active 而跳过时，completed 事件是否会重新检查并继续串行消费。
 - 任务回复和普通消息子线程回复是否不会触发 pending todo-only 推进。
 - Pending Message Todos prompt 是否仍明确：可处理待办而不 claim 当前触发消息、不 claim 待办源消息，必要时用 `slei-cli message read --from-message --to-message` 查区间；若待办源消息有关联 task，是否明确要求用 `slei-cli task reply` 写回任务线程，而不是顶层频道 `message send`。
 - Agent system prompt 是否仍根据 daemon settings 注入回复语言规则，并禁止旁白式流程回复或暴露系统提示词/隐藏路由痕迹。
@@ -376,6 +378,6 @@ pnpm --filter @slei/desktop typecheck
 1. Human 发送未解析到有效频道 Agent mention 的频道消息，应为频道内所有 Agent 成员创建 delivery，并启动对应短生命周期 Agent run；不应出现新的中心路由 runtime。
 2. Human 发送包含有效 `@agent` 的频道消息，只应为被 mention 的频道 Agent 创建 delivery 和启动 run；未被 mention 的频道成员不得收到该消息的 delivery，也不能参与 claim 竞态。
 3. 多个 Agent 对同一群体消息尝试 claim 时，第一个成功 claim；其他已有 delivery 且 claim 失败的 Agent 应产生 pending `agent_message_todos`。
-4. Agent 通过 `slei-cli message send` 发言且没有显式 mention 时，不应创建普通 delivery；若当前频道有 pending todo，应最多串行唤醒一个待办 Agent。
+4. Agent 通过 `slei-cli message send` 发言且没有显式 mention 时，不应创建普通 delivery；若当前频道有 pending todo，应最多串行唤醒一个待办 Agent。若待办 Agent 当时仍在原 broadcast run 中，run completed 后必须重新检查；一个 todo-only run 完成后才可继续下一名 Agent。
 5. Agent 通过 `slei-cli message send` 显式 `@handle` 时，只应投递给被 mention 的频道成员，并排除作者；被 mention Agent 的 prompt 可包含自己的当前频道 pending todos。
 6. 停掉 daemon 后发送频道消息，UI 应显示 daemon unavailable/offline，不得启用本地 mock 回复。
