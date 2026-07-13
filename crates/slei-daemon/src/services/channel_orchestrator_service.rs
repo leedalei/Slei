@@ -1772,10 +1772,22 @@ slei-cli task update {task_id} --status in_review
             .map(|member| member.agent_id.clone())
             .collect::<HashSet<_>>();
         let mut targets = match message.kind {
-            MessageKind::Human => channel_members
-                .iter()
-                .map(|member| member.agent_id.clone())
-                .collect::<Vec<_>>(),
+            MessageKind::Human => {
+                let body = message.body.as_deref().unwrap_or_default();
+                let mentioned_agent_ids = if has_explicit_all_mention(body) {
+                    Vec::new()
+                } else {
+                    self.resolve_explicit_mentions(body, &member_ids).await
+                };
+                if mentioned_agent_ids.is_empty() {
+                    channel_members
+                        .iter()
+                        .map(|member| member.agent_id.clone())
+                        .collect::<Vec<_>>()
+                } else {
+                    mentioned_agent_ids
+                }
+            }
             MessageKind::Agent => {
                 let body = message.body.as_deref().unwrap_or_default();
                 self.resolve_explicit_mentions(body, &member_ids).await
@@ -2252,6 +2264,10 @@ fn has_explicit_mention_marker(body: &str) -> bool {
         }
     }
     false
+}
+
+fn has_explicit_all_mention(body: &str) -> bool {
+    !explicit_handles_from_persisted_handles(body, &["@all".to_string()]).is_empty()
 }
 
 fn explicit_handles_from_persisted_handles(

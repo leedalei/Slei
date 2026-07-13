@@ -399,6 +399,51 @@ async fn broadcast_channel_message_creates_deliveries_for_all_regular_targets() 
 }
 
 #[tokio::test]
+async fn explicit_all_mention_remains_a_group_broadcast() {
+    let state =
+        app_state_with_agent_handles(&[("agent_all", "@all"), ("agent_coda", "@coda-win")]).await;
+    state
+        .channels()
+        .create_channel(
+            ChannelDraft {
+                name: "dev".to_string(),
+                description: None,
+                permission: PermissionPreset::Controlled,
+            },
+            "create-dev-all-mention",
+        )
+        .await
+        .unwrap();
+    for agent_id in ["agent_all", "agent_coda"] {
+        state
+            .channels()
+            .add_agent_to_channel("dev", agent_id)
+            .await
+            .unwrap();
+    }
+
+    let outcome = state
+        .channel_orchestrator()
+        .send_channel_message(SendChannelMessageInput {
+            channel_id: "dev".to_string(),
+            author_id: "human_lei".to_string(),
+            body: "@all 大家检查一下".to_string(),
+            attachment_ids: Vec::new(),
+            idempotency_key: "send-all-mention".to_string(),
+            as_task: false,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome.assignee_agent_ids,
+        vec!["agent_all".to_string(), "agent_coda".to_string()]
+    );
+    assert_broadcast_deliveries_running(&state, &outcome.message_id, &["agent_all", "agent_coda"])
+        .await;
+}
+
+#[tokio::test]
 async fn user_plain_channel_message_broadcasts_pending_deliveries_to_all_channel_agents() {
     let state = app_state_with_agent_specs(&[
         TestAgentSpec::regular("agent_alice", "@alice-win"),
@@ -497,7 +542,7 @@ async fn user_plain_channel_message_broadcasts_pending_deliveries_to_all_channel
 }
 
 #[tokio::test]
-async fn mentioned_channel_message_still_broadcasts_deliveries_without_central_routing() {
+async fn mentioned_channel_message_only_delivers_to_target_without_central_routing() {
     let state =
         app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
             .await;
@@ -526,7 +571,7 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_central_r
         .send_channel_message(SendChannelMessageInput {
             channel_id: "dev".to_string(),
             author_id: "human_lei".to_string(),
-            body: "@alice-win 你先看一下，Coda 也可以决定是否 claim".to_string(),
+            body: "@alice-win 你先看一下，Coda 不应参与 claim".to_string(),
             attachment_ids: Vec::new(),
             idempotency_key: "send-mention-broadcast-delivery".to_string(),
             as_task: false,
@@ -536,23 +581,15 @@ async fn mentioned_channel_message_still_broadcasts_deliveries_without_central_r
 
     assert_eq!(outcome.action, "broadcast_delivered");
     assert_eq!(outcome.coordinator_run_id, None);
-    assert_eq!(
-        outcome.assignee_agent_ids,
-        vec!["agent_alice".to_string(), "agent_coda".to_string()]
-    );
+    assert_eq!(outcome.assignee_agent_ids, vec!["agent_alice".to_string()]);
     assert_broadcast_runs_started(
         &state,
-        &["agent_alice", "agent_coda"],
+        &["agent_alice"],
         &outcome.message_id,
         &["@alice-win 你先看一下"],
         &[],
     );
-    assert_broadcast_deliveries_running(
-        &state,
-        &outcome.message_id,
-        &["agent_alice", "agent_coda"],
-    )
-    .await;
+    assert_broadcast_deliveries_running(&state, &outcome.message_id, &["agent_alice"]).await;
 }
 
 #[tokio::test]
@@ -1614,10 +1651,13 @@ async fn normal_channel_message_replay_uses_broadcast_delivery() {
 }
 
 #[tokio::test]
-async fn explicit_multi_mention_routes_all_targets_with_broadcast_delivery() {
-    let state =
-        app_state_with_agent_handles(&[("agent_alice", "@alice-win"), ("agent_coda", "@coda-win")])
-            .await;
+async fn explicit_multi_mention_only_routes_mentioned_targets() {
+    let state = app_state_with_agent_handles(&[
+        ("agent_alice", "@alice-win"),
+        ("agent_coda", "@coda-win"),
+        ("agent_bob", "@bob-win"),
+    ])
+    .await;
     state
         .channels()
         .create_channel(
@@ -1630,7 +1670,7 @@ async fn explicit_multi_mention_routes_all_targets_with_broadcast_delivery() {
         )
         .await
         .unwrap();
-    for agent_id in ["agent_alice", "agent_coda"] {
+    for agent_id in ["agent_alice", "agent_coda", "agent_bob"] {
         state
             .channels()
             .add_agent_to_channel("dev", agent_id)
@@ -3236,9 +3276,8 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
     assert_eq!(explicit_single["outcome"]["coordinatorRunId"], Value::Null);
     assert_eq!(
         explicit_single["outcome"]["assigneeAgentIds"],
-        json!(["agent_alice", "agent_coda"])
+        json!(["agent_alice"])
     );
-
     let explicit_multi = post_json(
         &app,
         &token,
@@ -3296,7 +3335,7 @@ async fn public_channel_message_api_covers_normal_mentions_consultation_and_exec
     assert_broadcast_deliveries_running(
         &state,
         explicit_single["outcome"]["messageId"].as_str().unwrap(),
-        &["agent_alice", "agent_coda"],
+        &["agent_alice"],
     )
     .await;
     assert_broadcast_deliveries_running(
