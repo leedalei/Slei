@@ -774,6 +774,7 @@ describe("MembersPage agent details", () => {
         onListAgentActivity: async () => ({
           logs: [log],
         }),
+        timeZone: "Asia/Shanghai",
       }),
     );
 
@@ -789,6 +790,18 @@ describe("MembersPage agent details", () => {
     expect(row?.textContent).not.toContain("message");
     expect(row?.textContent).not.toContain("state");
     expect(row?.textContent).not.toContain("msg_51999709e5f243388faaf416608793c4");
+  });
+
+  it("renders activity times in the configured application timezone", async () => {
+    const log = activityLog();
+    const container = await mount(
+      renderMembersPage({
+        onListAgentActivity: async () => ({ logs: [log] }),
+        timeZone: "UTC",
+      }),
+    );
+
+    expect(container.querySelector('[data-activity-log-line="time"]')?.textContent).toBe("2026-06-17 08:00:00");
   });
 
   it("renders an empty activity state when daemon has no rows", async () => {

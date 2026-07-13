@@ -362,6 +362,7 @@ export function SleiAppFrame(input: SleiAppFrameProps) {
             onListAgentWorkspace={input.onListAgentWorkspace}
             onReadAgentWorkspaceFile={input.onReadAgentWorkspaceFile}
             savingMemberField={input.savingMemberField}
+            timeZone={input.timeZone ?? defaultTimeZone}
           />
         )}
         renderDevices={() => (
@@ -823,7 +824,7 @@ function renderWorkspace(
     );
   }
   if (activeView === "tasks") return <TasksRoute activeTaskId={activeTaskId} data={data} messages={messages} onTaskReply={onTaskReply} onTaskStatusChange={onTaskStatusChange} onTaskThreadClose={onTaskThreadClose} onTaskThreadOpen={onTaskThreadOpen} />;
-  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} memberFieldErrors={memberFieldErrors} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentActivity={onListAgentActivity} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} savingMemberField={savingMemberField} />;
+  if (activeView === "members") return <MembersRoute activeMemberId={activeMemberId} data={data} memberFieldErrors={memberFieldErrors} messages={messages} nodes={runtimeSetup.nodes} onAgentDelete={onAgentDelete} onAgentUpdate={onAgentUpdate} onMessage={onMemberMessage} onOpenAgentPath={onOpenAgentPath} onListAgentActivity={onListAgentActivity} onListAgentWorkspace={onListAgentWorkspace} onReadAgentWorkspaceFile={onReadAgentWorkspaceFile} savingMemberField={savingMemberField} timeZone={timeZone} />;
   if (activeView === "computers") {
     return (
       <ComputersRoute

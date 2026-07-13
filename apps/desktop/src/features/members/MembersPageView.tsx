@@ -58,6 +58,7 @@ export function MembersPage(input: {
   layout?: "workspace" | "settings";
   messages: DesktopMessages;
   nodes: DesktopNodeView[];
+  timeZone?: string;
   memberFieldErrors?: Record<string, string>;
   onAgentDelete?: (agentId: string) => Promise<void> | void;
   onAgentUpdate?: (agentId: string, update: Partial<AgentDraftInput>) => Promise<void> | void;
@@ -673,6 +674,7 @@ export function MembersPage(input: {
                       log={log}
                       messages={input.messages}
                       onTogglePayload={() => toggleActivityPayload(log.id)}
+                      timeZone={input.timeZone}
                     />
                   ))}
                 </div>
@@ -695,6 +697,7 @@ function ActivityLogRow(input: {
   log: AgentActivityLogView;
   messages: DesktopMessages;
   onTogglePayload: () => void;
+  timeZone?: string;
 }) {
   const meta = [
     input.log.severity,
@@ -712,7 +715,7 @@ function ActivityLogRow(input: {
           <p className="break-words text-sm font-medium" data-activity-log-line="summary">{input.log.summary}</p>
         </div>
         <time className="text-xs text-muted-foreground sm:justify-self-end" data-activity-log-line="time" dateTime={input.log.createdAt}>
-          {formatActivityLogTime(input.log.createdAt)}
+          {formatActivityLogTime(input.log.createdAt, input.timeZone)}
         </time>
       </div>
       {input.log.payloadPreview ? (
@@ -748,8 +751,8 @@ function channelActivityLabel(channelId: string) {
   return channelId.startsWith("#") ? channelId : `#${channelId}`;
 }
 
-function formatActivityLogTime(value: string) {
-  return formatLocalRecordDateTime(value);
+function formatActivityLogTime(value: string, timeZone?: string) {
+  return formatLocalRecordDateTime(value, timeZone);
 }
 
 function memberDetailErrorMessage(error: unknown) {
