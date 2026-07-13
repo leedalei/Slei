@@ -4,15 +4,26 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
 jobs:
   macos-arm64:
-    runs-on: macos-15-xlarge
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -29,7 +40,7 @@ jobs:
 
       - name: Verify tag matches desktop package version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TAG_VERSION="${RELEASE_TAG#v}"
           PACKAGE_VERSION="$(node -p 'require("./apps/desktop/package.json").version')"
           test "$TAG_VERSION" = "$PACKAGE_VERSION"
 
@@ -50,7 +61,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$RELEASE_TAG" \
             --verify-tag \
             --fail-on-no-commits \
             --generate-notes \

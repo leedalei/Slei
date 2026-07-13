@@ -34,7 +34,7 @@ pnpm --filter @slei/desktop package:mac
 
 该命令构建 `.dmg` 和 `.zip`。签名和公证配置在 V2 中只做预留；没有 Apple Developer 凭据时，不应阻塞 V2 的本地目录包和基础打包验证。
 
-CI dry-run 需要可用的 arm64 macOS runner，例如 `macos-15-xlarge`，或仓库等价配置的自托管 arm64 macOS runner。若 runner 权限或资源不可用，应先配置 CI runner，不应把 `package:mac:dir` 静默跳过后报告成功。
+CI dry-run 使用标准 arm64 macOS runner `macos-15`，其用量优先计入 GitHub 套餐包含的 Actions 分钟；超出额度后可能产生费用。也可以使用仓库等价配置的自托管 arm64 macOS runner。若 runner 权限或资源不可用，应先配置 CI runner，不应把 `package:mac:dir` 静默跳过后报告成功。
 
 ## GitHub Release 自动发布
 
@@ -47,6 +47,8 @@ pnpm release:desktop 0.1.1
 该命令会检查工作区是否干净、当前分支是否为 `master`、本地和 `origin` 是否已存在同名 tag，然后更新 `apps/desktop/package.json` 的版本号，创建 `chore(release): v0.1.1` 提交，创建并推送 `v0.1.1` tag。
 
 tag 推送后，GitHub Actions 会在 macOS arm64 runner 上构建 `.dmg` 和 `.zip`，生成 `SHA256SUMS.txt`，并使用 GitHub 自动生成的 release notes 创建 Release。该流程仍不包含签名、公证、自动更新或多平台产物。
+
+若 tag 已存在、但对应 Release 因 Actions runner 或外部服务故障而未创建，可以在 GitHub Actions 中手动运行 Release workflow，并把既有 tag（例如 `v0.1.0`）作为 `tag` 输入。工作流会检出该 tag、校验其版本并创建 Release，不移动或覆盖 tag。
 
 ## 生产与开发数据目录
 

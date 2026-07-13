@@ -5,7 +5,7 @@ if [ "${SLEI_VERIFY_MACOS_ARM64:-0}" = "1" ]; then
   host_os="$(uname -s)"
   host_machine="$(uname -m)"
   if [ "$host_os" != "Darwin" ] || [ "$host_machine" != "arm64" ]; then
-    echo "macOS package dry-run requires an arm64 macOS runner; got $host_os/$host_machine. Use macos-15-xlarge or a self-hosted arm64 macOS runner." >&2
+    echo "macOS package dry-run requires an arm64 macOS runner; got $host_os/$host_machine. Use macos-15 or a self-hosted arm64 macOS runner." >&2
     exit 1
   fi
 fi

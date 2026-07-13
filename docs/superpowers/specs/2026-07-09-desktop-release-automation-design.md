@@ -73,6 +73,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish
+        required: true
+        type: string
 ```
 
 权限：
@@ -82,12 +88,12 @@ permissions:
   contents: write
 ```
 
-Job 使用 `macos-15-xlarge`，与现有 V2 arm64 打包要求一致。步骤：
+Job 使用标准 arm64 runner `macos-15`，其用量优先计入 GitHub 套餐包含的 Actions 分钟；超出额度后可能产生费用。工作流把 tag push 的 ref 或手动输入的既有 tag 统一映射为 `RELEASE_TAG`。步骤：
 
 1. checkout。
 2. 使用与 CI 一致的 setup action：`pnpm/action-setup@v4` 配置 pnpm 10、`actions/setup-node@v4` 配置 Node 22、`dtolnay/rust-toolchain@stable` 配置 Rust stable。
 3. `pnpm install --frozen-lockfile`。
-4. 校验 `GITHUB_REF_NAME` 去掉 `v` 后等于 `apps/desktop/package.json` 的 `version`。
+4. 检出 `RELEASE_TAG`，并校验其去掉 `v` 后等于 `apps/desktop/package.json` 的 `version`。
 5. 运行 `bash scripts/verify-macos-package.sh`。
 6. 运行 `pnpm --filter @slei/desktop package:mac`。
 7. 在 `apps/desktop/release` 生成 `SHA256SUMS.txt`：
@@ -103,7 +109,7 @@ Job 使用 `macos-15-xlarge`，与现有 V2 arm64 打包要求一致。步骤：
      env:
        GH_TOKEN: ${{ github.token }}
      run: |
-       gh release create "$GITHUB_REF_NAME" \
+       gh release create "$RELEASE_TAG" \
          --verify-tag \
          --fail-on-no-commits \
          --generate-notes \
@@ -124,9 +130,10 @@ Job 使用 `macos-15-xlarge`，与现有 V2 arm64 打包要求一致。步骤：
 
 - 文件存在。
 - 监听 `v*.*.*` tag。
-- 使用 `macos-15-xlarge`。
+- 支持通过 `workflow_dispatch` 输入既有 tag 重试失败的发布。
+- 使用标准 arm64 runner `macos-15`。
 - 配置 `contents: write`。
-- 包含 tag 与 `apps/desktop/package.json` version 一致性校验。
+- 检出 `RELEASE_TAG`，并包含 tag 与 `apps/desktop/package.json` version 一致性校验。
 - 执行 `bash scripts/verify-macos-package.sh`。
 - 执行 `pnpm --filter @slei/desktop package:mac`。
 - 生成 `SHA256SUMS.txt`。

@@ -30,7 +30,7 @@ jobs:
       - run: pnpm --filter @slei/desktop build
 
   package-macos-arm64:
-    runs-on: macos-15-xlarge
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

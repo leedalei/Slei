@@ -20,8 +20,12 @@ export function analyzeReleaseWorkflow(content) {
     pushViolation(violations, "release workflow must trigger on v*.*.* tags");
   }
 
-  if (!content.includes("macos-15-xlarge")) {
-    pushViolation(violations, "release workflow must use macos-15-xlarge");
+  if (!hasAll(content, ["workflow_dispatch:", "inputs:", "tag:", "required: true"])) {
+    pushViolation(violations, "release workflow must allow workflow_dispatch for an existing tag");
+  }
+
+  if (!/^\s*runs-on:\s*macos-15\s*$/m.test(content)) {
+    pushViolation(violations, "release workflow must use macos-15");
   }
 
   if (!hasAll(content, ["permissions:", "contents: write"])) {
@@ -30,12 +34,16 @@ export function analyzeReleaseWorkflow(content) {
 
   if (
     !hasAll(content, [
-      "GITHUB_REF_NAME#v",
+      "RELEASE_TAG#v",
       "apps/desktop/package.json",
       'test "$TAG_VERSION" = "$PACKAGE_VERSION"',
     ])
   ) {
     pushViolation(violations, "release workflow must verify tag version matches apps/desktop/package.json version");
+  }
+
+  if (!hasAll(content, ["RELEASE_TAG:", "github.ref_name", "inputs.tag", "ref: ${{ env.RELEASE_TAG }}"])) {
+    pushViolation(violations, "release workflow must check out the requested RELEASE_TAG");
   }
 
   if (!content.includes("bash scripts/verify-macos-package.sh")) {
@@ -52,6 +60,10 @@ export function analyzeReleaseWorkflow(content) {
 
   if (!content.includes("gh release create")) {
     pushViolation(violations, "release workflow must create a GitHub Release with gh release create");
+  }
+
+  if (!content.includes('gh release create "$RELEASE_TAG"')) {
+    pushViolation(violations, "release workflow must create the GitHub Release for RELEASE_TAG");
   }
 
   if (!hasAll(content, ["GH_TOKEN:", "github.token"])) {

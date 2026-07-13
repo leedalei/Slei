@@ -303,7 +303,8 @@ describe("desktop startup contract", () => {
     const packageJob = ciWorkflow.slice(ciWorkflow.indexOf("package-macos-arm64:"));
 
     expect(packageJob).toContain("package-macos-arm64:");
-    expect(packageJob).toContain("runs-on: macos-15-xlarge");
+    expect(packageJob).toContain("runs-on: macos-15");
+    expect(packageJob).not.toContain("runs-on: macos-15-xlarge");
     expect(packageJob).toContain("SLEI_VERIFY_MACOS_ARM64: \"1\"");
     expectInOrder(packageJob, [
       "package-macos-arm64:",
