@@ -38,6 +38,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Install verifier dependency for existing tags
+        if: github.event_name == 'workflow_dispatch'
+        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
+
       - name: Verify tag matches desktop package version
         run: |
           TAG_VERSION="${RELEASE_TAG#v}"

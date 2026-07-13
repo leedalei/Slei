@@ -46,6 +46,9 @@ jobs:
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
+      - name: Install verifier dependency for existing tags
+        if: github.event_name == 'workflow_dispatch'
+        run: command -v rg >/dev/null 2>&1 || brew install ripgrep
       - name: Verify tag matches desktop package version
         run: |
           TAG_VERSION="\${RELEASE_TAG#v}"
@@ -84,6 +87,7 @@ test("flags missing critical release workflow constraints", () => {
     ["manual tag retry", VALID_WORKFLOW.replace("workflow_dispatch:", "manual_dispatch:"), "workflow_dispatch"],
     ["macOS arm64 runner", VALID_WORKFLOW.replace("macos-15", "macos-15-xlarge"), "macos-15"],
     ["manual checkout ref", VALID_WORKFLOW.replace("ref: ${{ env.RELEASE_TAG }}", "ref: master"), "RELEASE_TAG"],
+    ["legacy tag verifier dependency", VALID_WORKFLOW.replace("brew install ripgrep", "echo skip"), "ripgrep"],
     ["contents write", VALID_WORKFLOW.replace("contents: write", "contents: read"), "contents: write"],
     ["version check", VALID_WORKFLOW.replace('test "$TAG_VERSION" = "$PACKAGE_VERSION"', "echo skip"), "version"],
     ["package command", VALID_WORKFLOW.replace("pnpm --filter @slei/desktop package:mac", "pnpm test"), "package:mac"],

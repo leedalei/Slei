@@ -46,6 +46,16 @@ export function analyzeReleaseWorkflow(content) {
     pushViolation(violations, "release workflow must check out the requested RELEASE_TAG");
   }
 
+  if (
+    !hasAll(content, [
+      "if: github.event_name == 'workflow_dispatch'",
+      "command -v rg",
+      "brew install ripgrep",
+    ])
+  ) {
+    pushViolation(violations, "release workflow must install ripgrep when retrying an existing tag");
+  }
+
   if (!content.includes("bash scripts/verify-macos-package.sh")) {
     pushViolation(violations, "release workflow must run bash scripts/verify-macos-package.sh");
   }
