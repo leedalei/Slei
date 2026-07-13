@@ -64,6 +64,7 @@ pub struct DevelopmentResetReceipt {
 }
 
 impl ResetService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         data_root: PathBuf,
         orchestration: OrchestrationStore,

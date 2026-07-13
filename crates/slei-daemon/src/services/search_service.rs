@@ -388,9 +388,8 @@ fn matched_fields<'a>(
 ) -> Vec<String> {
     fields
         .into_iter()
-        .filter_map(|(name, value)| {
-            contains_case_insensitive(value, query).then(|| name.to_string())
-        })
+        .filter(|(_, value)| contains_case_insensitive(value, query))
+        .map(|(name, _)| name.to_string())
         .collect()
 }
 

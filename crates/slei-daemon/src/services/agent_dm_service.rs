@@ -70,6 +70,7 @@ struct AgentDmState {
 }
 
 impl AgentDmService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         conversations: ConversationService,
         cards: CardService,
@@ -563,6 +564,7 @@ impl AgentDmService {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn record_activity(
         &self,
         record: &AgentDmRunRecord,
@@ -678,6 +680,7 @@ impl AgentDmRunStore {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn permission_approval_card(
     card_id: &str,
     request_id: &str,

@@ -69,6 +69,7 @@ impl OrchestrationStore {
         self.repos.agent_inbox_events(agent_id).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn record_memory_event(
         &self,
         id: Uuid,

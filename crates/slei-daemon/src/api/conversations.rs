@@ -138,7 +138,7 @@ pub async fn messages(
                     .thread_summary_for_source_message(&message.id)
                     .await
                 {
-                    value["thread"] = serde_json::to_value(thread).unwrap_or_else(|_| json!(null));
+                    value["thread"] = serde_json::to_value(thread).unwrap_or(json!(null));
                 }
                 rendered.push(value);
             }

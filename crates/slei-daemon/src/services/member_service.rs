@@ -476,6 +476,7 @@ impl MemberService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_product_agent_record_with_channels_locked(
         &self,
         draft: ProductAgentDraft,
@@ -951,10 +952,7 @@ async fn repositories_for_data_root(data_root: PathBuf) -> Repositories {
 }
 
 fn member_storage_error(error: sqlx::Error) -> MemberError {
-    MemberError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        error.to_string(),
-    ))
+    MemberError::Io(std::io::Error::other(error.to_string()))
 }
 
 fn normalize_handle(handle: &str) -> Result<String, MemberError> {
@@ -999,19 +997,19 @@ fn validate_agent_description(description: &str) -> Result<String, MemberError> 
     Ok(trimmed.to_string())
 }
 
-fn load_legacy_product_agents(root: &PathBuf) -> Vec<ProductAgentRecord> {
+fn load_legacy_product_agents(root: &Path) -> Vec<ProductAgentRecord> {
     fs::read_to_string(root.join("agents/index.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Vec<ProductAgentRecord>>(&raw).ok())
         .unwrap_or_default()
 }
 
-fn import_legacy_product_agents(root: &PathBuf) {
+fn import_legacy_product_agents(root: &Path) {
     let agents = load_legacy_product_agents(root);
     if agents.is_empty() {
         return;
     }
-    let root = root.clone();
+    let root = root.to_path_buf();
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -1211,7 +1209,7 @@ fn replace_active_context(memory: &mut String, fact: &str) {
             .find("\n## ")
             .map(|relative| after_heading + relative)
             .unwrap_or(memory.len());
-        memory.replace_range(start..end, &replacement.trim_end_matches('\n'));
+        memory.replace_range(start..end, replacement.trim_end_matches('\n'));
         if !memory.ends_with('\n') {
             memory.push('\n');
         }

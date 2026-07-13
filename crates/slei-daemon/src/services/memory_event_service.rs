@@ -159,7 +159,7 @@ impl MemoryEventService {
                     Uuid::new_v4(),
                     agent_id,
                     MEMORY_CLEANUP_COMPLETED,
-                    Some(&source_message_id),
+                    Some(source_message_id),
                     Some(document_path),
                     Some(document_section),
                     "ready",

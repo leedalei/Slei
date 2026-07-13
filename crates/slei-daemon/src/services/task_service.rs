@@ -226,6 +226,7 @@ impl TaskService {
         Ok(task)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_from_source_with_assignment(
         &self,
         channel_id: &str,

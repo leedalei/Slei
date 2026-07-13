@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_lock)]
+
 use std::fs;
 use std::sync::Mutex;
 
@@ -441,7 +443,7 @@ async fn dev_reset_queued_behind_channel_send_guard_does_not_deadlock_inner_laun
     let activity_guard = state.reset().runtime().begin_launch().await.unwrap();
     let reset_task = tokio::spawn(post_dev_reset(state.clone(), token));
     tokio::time::sleep(Duration::from_millis(25)).await;
-    assert!(reset_task.is_finished() == false);
+    assert!(!reset_task.is_finished());
 
     let outcome = timeout(
         Duration::from_millis(500),
@@ -683,7 +685,7 @@ async fn dev_reset_queued_behind_task_reply_guard_does_not_deadlock_inner_launch
     let activity_guard = state.reset().runtime().begin_launch().await.unwrap();
     let reset_task = tokio::spawn(post_dev_reset(state.clone(), token));
     tokio::time::sleep(Duration::from_millis(25)).await;
-    assert!(reset_task.is_finished() == false);
+    assert!(!reset_task.is_finished());
 
     let receipt = timeout(
         Duration::from_millis(500),

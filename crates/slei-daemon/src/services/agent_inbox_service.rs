@@ -100,6 +100,7 @@ impl AgentInboxService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_task_handoff_with_details(
         &self,
         agent_id: &str,
@@ -123,6 +124,7 @@ impl AgentInboxService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_task_followup_with_details(
         &self,
         agent_id: &str,
@@ -178,6 +180,7 @@ impl AgentInboxService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn push_with_details(
         &self,
         agent_id: &str,

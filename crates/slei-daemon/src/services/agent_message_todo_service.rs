@@ -148,7 +148,7 @@ impl AgentMessageTodoService {
                     note: normalize_optional(input.note),
                 },
                 &durable_key,
-                |todo| todo_response_payload(todo),
+                todo_response_payload,
             )
             .await
             .map_err(storage_error)?;
@@ -177,7 +177,7 @@ impl AgentMessageTodoService {
                 status,
                 normalize_optional(input.note).as_deref(),
                 &durable_key,
-                |todo| todo_response_payload(todo),
+                todo_response_payload,
             )
             .await
             .map_err(storage_error)?;
@@ -232,7 +232,7 @@ impl AgentMessageTodoService {
                 },
                 normalize_optional(input.note).as_deref(),
                 &durable_key,
-                |todos| todos_response_payload(todos),
+                todos_response_payload,
             )
             .await
             .map_err(storage_error)?;

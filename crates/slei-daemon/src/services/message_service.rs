@@ -362,6 +362,7 @@ impl MessageService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_human_channel_message_with_session_and_attachments(
         &self,
         channel_id: &str,
@@ -458,6 +459,7 @@ impl MessageService {
         Ok(resolved)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn read_agent_messages(
         &self,
         channel: &str,

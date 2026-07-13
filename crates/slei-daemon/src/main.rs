@@ -231,7 +231,7 @@ mod tests {
             false,
         )
         .expect("build child CLI environment");
-        let paths = std::env::split_paths(&OsString::from(env.path)).collect::<Vec<_>>();
+        let paths = std::env::split_paths(&env.path).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![repo_cli, bundled_node, bundled_native]);
     }
@@ -252,7 +252,7 @@ mod tests {
             true,
         )
         .expect("build child CLI environment");
-        let paths = std::env::split_paths(&OsString::from(env.path)).collect::<Vec<_>>();
+        let paths = std::env::split_paths(&env.path).collect::<Vec<_>>();
 
         assert_eq!(paths, vec![bundled_node, bundled_native]);
     }

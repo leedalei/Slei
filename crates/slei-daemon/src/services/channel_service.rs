@@ -942,10 +942,7 @@ fn map_workspace_insert_error(error: sqlx::Error) -> ChannelError {
 }
 
 fn channel_storage_error(error: sqlx::Error) -> ChannelError {
-    ChannelError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        error.to_string(),
-    ))
+    ChannelError::Io(std::io::Error::other(error.to_string()))
 }
 
 fn idempotent_channel_id(payload: &str) -> String {
@@ -967,12 +964,8 @@ fn idempotent_channel_id(payload: &str) -> String {
 }
 
 fn idempotent_mount(payload: &str) -> Result<(String, WorkspaceMount), ChannelError> {
-    let value = serde_json::from_str::<serde_json::Value>(payload).map_err(|error| {
-        ChannelError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            error.to_string(),
-        ))
-    })?;
+    let value = serde_json::from_str::<serde_json::Value>(payload)
+        .map_err(|error| ChannelError::Io(std::io::Error::other(error.to_string())))?;
     let channel_id = value
         .get("channelId")
         .and_then(|id| id.as_str())

@@ -969,6 +969,7 @@ impl Repositories {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn upsert_agent(
         &self,
         id: &str,
@@ -1039,9 +1040,7 @@ impl Repositories {
         .fetch_all(&self.pool)
         .await?;
 
-        rows.into_iter()
-            .map(|row| agent_row_from_sql(row))
-            .collect()
+        rows.into_iter().map(agent_row_from_sql).collect()
     }
 
     pub async fn agent_by_id(&self, id: &str) -> Result<Option<AgentRow>, sqlx::Error> {
@@ -1205,6 +1204,7 @@ impl Repositories {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn upsert_channel_idempotent(
         &self,
         id: &str,
@@ -2796,6 +2796,7 @@ impl Repositories {
         Ok(result.rows_affected())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn record_agent_activity(
         &self,
         agent_id: &str,
@@ -3426,6 +3427,7 @@ impl Repositories {
         self.count_rows("agent_inbox_events").await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert_memory_update_event(
         &self,
         id: Uuid,

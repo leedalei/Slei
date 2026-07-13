@@ -57,7 +57,7 @@ pub async fn get(State(state): State<AppState>, headers: HeaderMap) -> Response 
         .map(|runtime| runtime.kind)
         .unwrap_or_else(|| "unknown".to_string());
 
-    let service = DiagnosticsService::default();
+    let service = DiagnosticsService;
     let snapshot = service
         .snapshot(DiagnosticsInput {
             node_name,

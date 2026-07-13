@@ -127,12 +127,9 @@ async fn settings_preferences_api_requires_auth_and_round_trips_locale_notificat
     assert_eq!(json["preferences"]["notifications"]["mentions"], true);
     assert_eq!(json["preferences"]["notifications"]["humanReplies"], false);
     assert_eq!(json["preferences"]["notifications"]["approvals"], true);
-    assert!(
-        serde_json::to_string(&json)
-            .unwrap()
-            .contains("settings-token")
-            == false
-    );
+    assert!(!serde_json::to_string(&json)
+        .unwrap()
+        .contains("settings-token"));
 }
 
 #[tokio::test]

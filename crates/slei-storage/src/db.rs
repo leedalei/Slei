@@ -196,20 +196,32 @@ impl SleiDb {
     async fn repair_agent_profession_columns(&self) -> Result<(), sqlx::Error> {
         self.add_column_if_missing("agents", "profession", "TEXT NOT NULL DEFAULT '智能体'")
             .await?;
-        self.add_column_if_missing("agent_role_presets", "profession", "TEXT NOT NULL DEFAULT ''")
-            .await?;
-        self.add_column_if_missing("agent_role_presets", "category_id", "TEXT NOT NULL DEFAULT 'general'")
-            .await?;
+        self.add_column_if_missing(
+            "agent_role_presets",
+            "profession",
+            "TEXT NOT NULL DEFAULT ''",
+        )
+        .await?;
+        self.add_column_if_missing(
+            "agent_role_presets",
+            "category_id",
+            "TEXT NOT NULL DEFAULT 'general'",
+        )
+        .await?;
 
         if self.table_exists("agent_role_presets").await?
-            && self.column_exists("agent_role_presets", "profession").await?
+            && self
+                .column_exists("agent_role_presets", "profession")
+                .await?
         {
             sqlx::query("UPDATE agent_role_presets SET profession = title WHERE profession = ''")
                 .execute(&self.pool)
                 .await?;
         }
         if self.table_exists("agent_role_presets").await?
-            && self.column_exists("agent_role_presets", "category_id").await?
+            && self
+                .column_exists("agent_role_presets", "category_id")
+                .await?
         {
             sqlx::query(
                 "UPDATE agent_role_presets

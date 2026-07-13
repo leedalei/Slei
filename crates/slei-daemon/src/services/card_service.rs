@@ -806,10 +806,7 @@ fn repositories_blocking(data_root: PathBuf) -> Repositories {
 }
 
 fn card_storage_error(error: sqlx::Error) -> CardError {
-    CardError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        error.to_string(),
-    ))
+    CardError::Io(std::io::Error::other(error.to_string()))
 }
 
 fn validate_action(proposal: &CardProposal) -> Result<(), CardError> {

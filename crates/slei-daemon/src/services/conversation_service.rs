@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -548,6 +548,7 @@ impl ConversationService {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn append_message_with_metadata(
         &self,
         conversation_id: &str,
@@ -983,7 +984,7 @@ impl ConversationState {
         }
     }
 
-    async fn load(repos: &Repositories, root: &PathBuf) -> Result<Self, ConversationError> {
+    async fn load(repos: &Repositories, root: &Path) -> Result<Self, ConversationError> {
         let rows = repos.conversations().await.map_err(storage_error)?;
         let mut state = Self::loaded_empty();
         for row in rows {
@@ -1047,7 +1048,7 @@ impl ConversationState {
         Ok(state)
     }
 
-    fn load_legacy_json(root: &PathBuf) -> Self {
+    fn load_legacy_json(root: &Path) -> Self {
         let mut conversations = load_index(root);
         let mut state = Self::loaded_empty();
         state.sessions = load_sessions(root);
@@ -1088,7 +1089,7 @@ impl ConversationState {
     }
 }
 
-fn load_index(root: &PathBuf) -> Vec<ConversationRecord> {
+fn load_index(root: &Path) -> Vec<ConversationRecord> {
     fs::read_to_string(root.join("conversations/index.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Vec<ConversationRecord>>(&raw).ok())
@@ -1096,7 +1097,7 @@ fn load_index(root: &PathBuf) -> Vec<ConversationRecord> {
 }
 
 fn load_messages(
-    root: &PathBuf,
+    root: &Path,
     conversation_id: &str,
     legacy_session_id: Option<&str>,
 ) -> Vec<ConversationMessageRecord> {
@@ -1112,7 +1113,7 @@ fn load_messages(
     messages
 }
 
-fn load_sessions(root: &PathBuf) -> HashMap<String, ConversationSessionRecord> {
+fn load_sessions(root: &Path) -> HashMap<String, ConversationSessionRecord> {
     fs::read_to_string(root.join("conversations/sessions.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Vec<ConversationSessionRecord>>(&raw).ok())
@@ -1122,7 +1123,7 @@ fn load_sessions(root: &PathBuf) -> HashMap<String, ConversationSessionRecord> {
         .collect()
 }
 
-fn load_attachments(root: &PathBuf) -> HashMap<String, ConversationAttachmentRecord> {
+fn load_attachments(root: &Path) -> HashMap<String, ConversationAttachmentRecord> {
     fs::read_to_string(root.join("attachments/index.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Vec<ConversationAttachmentRecord>>(&raw).ok())
@@ -1385,14 +1386,14 @@ fn attachment_from_row(row: ConversationAttachmentRow) -> ConversationAttachment
     }
 }
 
-fn messages_path(root: &PathBuf, conversation_id: &str) -> PathBuf {
+fn messages_path(root: &Path, conversation_id: &str) -> PathBuf {
     let safe_id = safe_conversation_id(conversation_id);
     root.join("conversations/messages")
         .join(format!("{safe_id}.json"))
 }
 
 fn safe_conversation_id(conversation_id: &str) -> String {
-    conversation_id.replace(':', "_").replace('/', "_")
+    conversation_id.replace([':', '/'], "_")
 }
 
 fn idempotent_message_matches_key(message: &ConversationMessageRecord, key: &str) -> bool {
@@ -1467,9 +1468,7 @@ fn backfill_conversation_runtime_from_session(
     state: &mut ConversationState,
     session: &ConversationSessionRecord,
 ) -> Option<ConversationRecord> {
-    if session.runtime_session.is_none() {
-        return None;
-    }
+    session.runtime_session.as_ref()?;
     let conversation = state.conversations.get_mut(&session.conversation_id)?;
     if conversation.active_session_id.as_deref() != Some(session.id.as_str()) {
         return None;
@@ -1551,7 +1550,7 @@ fn clear_session_messages(
     for attachment_id in removed_attachment_ids.difference(&referenced_attachment_ids) {
         if let Some(attachment) = state.attachments.remove(attachment_id) {
             if let Some(path) = attachment.cache_path.as_deref() {
-                let _ = fs::remove_file(&path);
+                let _ = fs::remove_file(path);
                 if let Some(parent) = std::path::Path::new(&path).parent() {
                     let _ = fs::remove_dir(parent);
                 }
@@ -1599,7 +1598,7 @@ fn clear_all_messages(
     for attachment_id in removed_attachment_ids.difference(&referenced_attachment_ids) {
         if let Some(attachment) = state.attachments.remove(attachment_id) {
             if let Some(path) = attachment.cache_path.as_deref() {
-                let _ = fs::remove_file(&path);
+                let _ = fs::remove_file(path);
                 if let Some(parent) = std::path::Path::new(&path).parent() {
                     let _ = fs::remove_dir(parent);
                 }
@@ -1675,8 +1674,5 @@ pub enum ConversationError {
 }
 
 fn storage_error(error: sqlx::Error) -> ConversationError {
-    ConversationError::Io(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        error.to_string(),
-    ))
+    ConversationError::Io(std::io::Error::other(error.to_string()))
 }

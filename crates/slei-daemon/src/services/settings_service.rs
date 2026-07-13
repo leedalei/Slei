@@ -71,19 +71,10 @@ pub struct SettingsService {
     repos: Option<Repositories>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct SettingsState {
     profile: Option<UserProfile>,
     preferences: UserPreferences,
-}
-
-impl Default for SettingsState {
-    fn default() -> Self {
-        Self {
-            profile: None,
-            preferences: system_default_preferences(),
-        }
-    }
 }
 
 impl SettingsService {
@@ -599,6 +590,10 @@ fn preferences_from_row(row: UserPreferencesRow) -> UserPreferences {
     }
 }
 
+fn settings_storage_error(error: sqlx::Error) -> SettingsError {
+    SettingsError::Storage(error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -648,8 +643,4 @@ mod tests {
 
         assert_eq!(dimensions, (2049, 1));
     }
-}
-
-fn settings_storage_error(error: sqlx::Error) -> SettingsError {
-    SettingsError::Storage(error.to_string())
 }

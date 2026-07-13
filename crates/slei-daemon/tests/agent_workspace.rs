@@ -1614,7 +1614,8 @@ async fn agent_create_validates_handle_uniqueness_node_and_runtime() {
     )
     .await;
     assert_eq!(first.status(), StatusCode::CREATED);
-    let first_body: Value = serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.unwrap()).unwrap();
+    let first_body: Value =
+        serde_json::from_slice(&to_bytes(first.into_body(), usize::MAX).await.unwrap()).unwrap();
     assert_eq!(first_body["agent"]["profession"], "开发工程师");
 
     let duplicate = post_json(

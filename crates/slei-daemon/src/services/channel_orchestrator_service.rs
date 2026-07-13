@@ -110,6 +110,7 @@ struct ChannelAgentRunRecord {
 }
 
 impl ChannelOrchestratorService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         messages: MessageService,
         channels: ChannelService,
@@ -1260,6 +1261,7 @@ slei-cli task update {task_id} --status in_review
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn start_channel_agent_run_once(
         &self,
         agent_id: &str,
@@ -1286,6 +1288,7 @@ slei-cli task update {task_id} --status in_review
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn start_channel_agent_run_once_with_run_id(
         &self,
         run_id: &str,
@@ -1313,8 +1316,7 @@ slei-cli task update {task_id} --status in_review
         let source_message = self.messages.message(source_message_id).await.ok();
         let session_id = source_message
             .as_ref()
-            .and_then(|message| message.session_id.clone())
-            .or_else(|| None);
+            .and_then(|message| message.session_id.clone());
         let session_id = match session_id {
             Some(session_id) => Some(session_id),
             None => self
@@ -1504,6 +1506,7 @@ slei-cli task update {task_id} --status in_review
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn record_channel_agent_activity(
         &self,
         record: &ChannelAgentRunRecord,
@@ -1920,6 +1923,7 @@ slei-cli task update {task_id} --status in_review
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_task_handoff_once(
         &self,
         agent_id: &str,
@@ -1959,6 +1963,7 @@ slei-cli task update {task_id} --status in_review
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_task_followup_once(
         &self,
         agent_id: &str,
@@ -2041,6 +2046,7 @@ slei-cli task update {task_id} --status in_review
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn persist_routing_context_packages(
         &self,
         decision_id: Uuid,
