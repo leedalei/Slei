@@ -9,6 +9,12 @@
 
 > 当前处于早期开发阶段。生产打包以 **macOS arm64** 为主；Windows / Linux 与正式签名公证尚未作为正式发布目标。
 
+## 界面预览
+
+<p align="center">
+  <img src="docs/readme/chat-channel.png" alt="Slei 频道聊天界面：侧边栏、#all 频道与引导员欢迎消息" width="960" />
+</p>
+
 ## 它能做什么
 
 - **本地优先**：业务状态与运行数据默认留在本机（`~/.slei`），daemon 不可用时 UI 展示离线/空状态，而不是切换到本地假数据。
