@@ -128,7 +128,6 @@ SLEI_ENABLE_DEV_RESET=1 pnpm dev:reset
 
 - `apps/desktop`: Electron + React 桌面应用。
 - `apps/desktop/src/electron`: Electron main/preload、daemon RPC、事件转发和本地安全协议。
-- `apps/desktop/src-tauri`: V1 中保留的旧 Tauri 参考路径，V2 会物理删除或归档。
 - `crates/slei-daemon`: 本地 daemon 和 API。
 - `crates/slei-storage`: SQLite schema、migration 和 repository。
 - `crates/slei-domain`: 领域模型。
