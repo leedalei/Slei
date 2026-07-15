@@ -190,20 +190,14 @@ pnpm --filter @slei/desktop package:mac
 
 | 文档 | 内容 |
 | --- | --- |
-| [`AGENTS.md`](AGENTS.md) | 贡献与实现约束（daemon 边界、持久化、UI 标准） |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 贡献流程、测试要求与 PR 约定 |
+| [`AGENTS.md`](AGENTS.md) | 实现约束（daemon 边界、持久化、UI 标准） |
 | [`docs/architecture/`](docs/architecture/) | ADR：进程边界、频道路由、任务卡片、安全清单等 |
 | [`docs/desktop/electron-v2-packaging.md`](docs/desktop/electron-v2-packaging.md) | Electron 打包、数据目录与验包 |
 
 ## 贡献
 
-欢迎 Issue 与 PR。提交前建议：
-
-1. 阅读 [`AGENTS.md`](AGENTS.md) 与相关 ADR，尤其是 daemon / UI 边界与 SQLite 持久化约定。  
-2. 为行为变更补充单元测试；涉及 UI 时覆盖关键 DOM 渲染与交互。  
-3. 本地跑通 `pnpm lint`、`pnpm typecheck`、`pnpm test`，以及影响到的 `cargo test`。  
-4. PR 描述写清动机、行为变化与验证方式。
-
-当前默认主分支为 `master`。
+欢迎 Issue 与 Pull Request。完整流程与约束见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；实现细节请对照 [`AGENTS.md`](AGENTS.md)。
 
 ## 项目状态
 
