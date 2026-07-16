@@ -124,6 +124,16 @@ describe("SettingsOverlay", () => {
     expect(container.querySelector('[data-testid="detail-account"]')).toBeTruthy();
   });
 
+  it("lets panel descriptions shrink and show an ellipsis instead of clipping", async () => {
+    const { container } = await mountOverlay({ activePanel: "about" });
+    const aboutButton = buttonByText(container, messages.settings.overlay.panels.about);
+    const description = aboutButton.querySelector("span > span:last-child");
+
+    expect(description?.className).toContain("min-w-0");
+    expect(description?.className).toContain("truncate");
+    expect(aboutButton.querySelector("span.grid.min-w-0.flex-1")).toBeTruthy();
+  });
+
   it("places the return-to-chat control in the bottom settings slot without rendering settings search", async () => {
     const { container } = await mountOverlay();
     const footer = container.querySelector('[data-testid="slei-settings-overlay-footer"]');

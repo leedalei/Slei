@@ -348,7 +348,7 @@ export function MembersPage(input: {
               </MemberAvatar>
             </span>
             <PageHeader
-              className="min-w-0 flex-1 flex-wrap"
+              className="min-w-0 flex-1"
               data-slot="workspace-titlebar"
               icon={undefined}
               title={(
@@ -372,7 +372,7 @@ export function MembersPage(input: {
               )}
               actions={(
                 <>
-                  <div className="px-4 py-2" data-testid="slei-member-detail-tabs">
+                  <div className="px-0 py-2" data-testid="slei-member-detail-tabs">
                     <TabsList aria-label={input.messages.members.memberConfig} variant="line">
                       <TabsTrigger value="profile">{input.messages.members.profile}</TabsTrigger>
                       <TabsTrigger value="workspace">{input.messages.members.workspace}</TabsTrigger>
@@ -385,12 +385,13 @@ export function MembersPage(input: {
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
+                          aria-label={input.messages.members.deleteAgent}
                           disabled={deleting}
+                          size="xs"
                           type="button"
                           variant="destructive"
                         >
-                          <SleiIcon name="delete" />
-                          {input.messages.members.deleteAgent}
+                          <SleiIcon name="delete" size={13} />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>

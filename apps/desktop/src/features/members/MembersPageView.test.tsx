@@ -134,7 +134,7 @@ describe("MembersPage agent details", () => {
     const headerEnd = html.indexOf("</header>", headerStart);
     const headerHtml = html.slice(headerStart, headerEnd);
     const messageButtonStart = headerHtml.indexOf('data-testid="slei-member-header-message-button"');
-    const deleteButtonStart = headerHtml.indexOf(`>${messages.members.deleteAgent}<`);
+    const deleteButtonStart = headerHtml.indexOf(`aria-label="${messages.members.deleteAgent}"`);
     const messageButtonHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", messageButtonStart), headerHtml.indexOf("</button>", messageButtonStart));
     const deleteButtonHtml = headerHtml.slice(headerHtml.lastIndexOf("<button", deleteButtonStart), headerHtml.indexOf("</button>", deleteButtonStart));
 
@@ -237,7 +237,7 @@ describe("MembersPage agent details", () => {
 
     expect(markerIndex).toBeGreaterThanOrEqual(0);
     expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).not.toContain("border-b px-4 py-2");
-    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("px-4 py-2");
+    expect(html.slice(Math.max(0, markerIndex - 180), markerIndex + 180)).toContain("px-0 py-2");
     const tabsHtml = html.slice(markerIndex, markerIndex + 3200);
     expect(tabsHtml).toContain('data-slot="tabs-list"');
     expect(tabsHtml).toContain('data-variant="line"');
@@ -429,7 +429,8 @@ describe("MembersPage agent details", () => {
     const detailBlocks = Array.from(host.querySelectorAll<HTMLElement>("[data-member-detail-block]"));
 
     expect(header?.className).toContain("overflow-hidden");
-    expect(header?.querySelector("[data-slei-page-header-actions]")?.className).toContain("flex-wrap");
+    expect(header?.querySelector("[data-slei-page-header-actions]")?.className).toContain("justify-end");
+    expect(header?.querySelector("[data-slei-page-header-actions]")?.className).not.toContain("w-full");
     expect(subtitle?.className).toContain("min-w-0");
     expect(subtitle?.innerHTML).toContain("whitespace-normal break-words");
     expect(subtitle?.innerHTML).not.toContain("truncate text-sm text-muted-foreground");
@@ -495,13 +496,19 @@ describe("MembersPage agent details", () => {
 
     expect(html).toContain(`aria-label="${messages.members.message}"`);
     expect(html).not.toContain(`>${messages.members.message}<`);
-    expect(html).toContain(`>${messages.members.deleteAgent}<`);
+    expect(html).toContain(`aria-label="${messages.members.deleteAgent}"`);
     expect(html.match(/@coda/g)).toHaveLength(1);
     expect(html).toContain('<span class="min-w-0 truncate text-sm font-medium text-muted-foreground">@coda</span>');
     expect(html).toContain('aria-label="Copy"');
     expect(html).not.toContain('<p class="text-sm text-muted-foreground">Developer</p>');
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain("data-slei-page-header-actions");
+    const deleteLabelStart = html.indexOf(`aria-label="${messages.members.deleteAgent}"`);
+    const deleteButton = html.slice(html.lastIndexOf("<button", deleteLabelStart), html.indexOf("</button>", deleteLabelStart));
+    expect(deleteButton).toContain("h-7");
+    expect(deleteButton).toContain(`aria-label="${messages.members.deleteAgent}"`);
+    expect(deleteButton).toContain('data-slei-icon="delete"');
+    expect(deleteButton).not.toContain(`>${messages.members.deleteAgent}<`);
     expect(html).not.toContain(messages.members.deleteAgentConfirm("Coda"));
     expect(html).toContain("Capabilities");
     expect(html).toContain("ClaudeCode");
@@ -511,8 +518,8 @@ describe("MembersPage agent details", () => {
     const messages = createDesktopMessages("zh-CN");
     const html = renderToStaticMarkup(renderMembersPage({ messages }));
 
-    expect(html).toContain(">删除<");
-    expect(html).not.toContain(">删除智能体<");
+    expect(html).toContain('aria-label="删除"');
+    expect(html).not.toContain('aria-label="删除智能体"');
   });
 
   it("shows the profile description only in the editable description field", () => {

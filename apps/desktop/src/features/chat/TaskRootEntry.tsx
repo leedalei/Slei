@@ -98,7 +98,13 @@ export function TaskRootEntry(input: {
               {showRoleDescription ? <Badge className="max-w-full truncate" variant="secondary">{roleDescription}</Badge> : null}
             </div>
           ) : null}
-          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground" data-task-root-entry-metadata>
+            {replyCount > 0 ? (
+              <>
+                <span className="whitespace-nowrap" data-task-root-entry-reply-count>{replyCountLabel}</span>
+                <span aria-hidden="true">{" ｜ "}</span>
+              </>
+            ) : null}
             <span className={cn("inline-flex items-center gap-1 whitespace-nowrap font-medium", STATUS_CLASS[input.task.status])} data-task-root-entry-status>
               <span className={cn("size-2 rounded-full", STATUS_DOT_CLASS[input.task.status])} data-task-root-entry-status-dot />
               {input.messages.tasks.status[input.task.status]}
