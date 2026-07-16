@@ -1,91 +1,142 @@
 # Slei
 
-Slei 是一个本地优先的桌面协作应用。当前开发形态由 React/Vite 桌面 UI、Electron shell、Rust daemon、SQLite 存储和 Claude Agent worker 组成。
+[![CI](https://github.com/leedalei/Slei/actions/workflows/ci.yml/badge.svg)](https://github.com/leedalei/Slei/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)](#打包发布)
+[![Status](https://img.shields.io/badge/status-early%20development-orange)](#项目状态)
 
-## 环境准备
+**Slei** 是一个本地优先（local-first）的桌面协作应用：在频道里与多个 AI Agent 一起工作，把消息、任务、认领与状态都落在本机 daemon 与 SQLite 中，而不是依赖云端控制面。
 
-- Node.js 和 pnpm。
-- Rust stable toolchain；仓库通过 `rust-toolchain.toml` 固定使用 stable，并需要 `rustfmt`、`clippy` 组件。
-- macOS 上运行 Electron 桌面壳需要本机图形环境；Rust 构建仍需要 Xcode Command Line Tools。
+> 当前处于早期开发阶段。生产打包以 **macOS arm64** 为主；Windows / Linux 与正式签名公证尚未作为正式发布目标。
 
-首次拉取仓库后安装依赖：
+## 界面预览
+
+<p align="center">
+  <img src="docs/readme/chat-channel.png" alt="Slei 频道聊天界面：侧边栏、#all 频道与引导员欢迎消息" width="960" />
+</p>
+
+## 它能做什么
+
+- **本地优先**：业务状态与运行数据默认留在本机（`~/.slei`），daemon 不可用时 UI 展示离线/空状态，而不是切换到本地假数据。
+- **多 Agent 频道协作**：人工消息可 `@mention` 指定 Agent，或广播给频道成员；Agent 通过原子 claim 自主认领并回复。
+- **任务工作区**：任务卡片是源消息的展示状态；看板/列表共享同一套委派任务模型，支持任务线程回复。
+- **本机控制面**：Rust daemon 负责消息投递、claim、任务、幂等、reset 与恢复；桌面 UI 只负责展示与触发 API。
+- **Claude Code runtime**：通过打包后的 Claude Agent worker 在本机执行；需要本机已登录 Claude Code，Slei 不会代替安装或登录。
+
+## 技术架构
+
+```text
+┌─────────────────┐   typed RPC / events   ┌──────────────────┐
+│  Desktop UI     │◄──────────────────────►│  Electron main   │
+│  React + Vite   │                        │  shell/lifecycle │
+└─────────────────┘                        └────────┬─────────┘
+                                                    │
+                                                    ▼
+                                           ┌──────────────────┐
+                                           │  slei-daemon     │
+                                           │  HTTP + WS API   │
+                                           └────────┬─────────┘
+                                                    │
+                    ┌───────────────────────────────┼───────────────────────────────┐
+                    ▼                               ▼                               ▼
+             ┌─────────────┐                 ┌─────────────┐                 ┌─────────────┐
+             │ SQLite      │                 │ slei-cli    │                 │ Claude      │
+             │ slei-storage│                 │ Agent tools │                 │ Agent worker│
+             └─────────────┘                 └─────────────┘                 └─────────────┘
+```
+
+核心约定：
+
+- **Daemon 是唯一业务控制面**：路由、持久化、幂等、reset 与数据恢复都在 daemon。
+- **UI 是展示壳**：渲染 daemon DTO，收集输入，呈现 loading / error / empty。
+- **SQLite 是生产状态源**：可变产品状态经 `crates/slei-storage` 访问，不把生产状态散落在 JSON 文件里。
+
+更多决策见 [`docs/architecture/`](docs/architecture/)；贡献与实现约束见 [`AGENTS.md`](AGENTS.md)。
+
+## 环境要求
+
+| 依赖 | 说明 |
+| --- | --- |
+| **Node.js** | CI 使用 22；建议 22+ |
+| **pnpm** | CI 使用 10.x |
+| **Rust** | `rust-toolchain.toml` 固定 **stable**，需 `rustfmt`、`clippy` |
+| **macOS** | 运行 Electron 桌面壳需要本机图形环境；构建还需 Xcode Command Line Tools |
+| **Claude Code** | 本机已安装并可登录，供 Agent runtime 使用 |
+
+首次拉取后：
 
 ```sh
 pnpm install
 ```
 
-## 启动 APP
+## 快速开始
 
-从仓库根目录运行：
-
-```sh
-pnpm --filter @slei/desktop desktop
-```
-
-这个命令会执行 `apps/desktop/scripts/desktop-dev.sh`，依次完成：
-
-1. 构建 `@slei/claude-agent` worker。
-2. 构建 `slei-cli` 和 `slei-daemon`。
-3. 启动 Vite dev server，固定监听 `127.0.0.1:1420`。
-4. 编译 Electron main/preload 到 `apps/desktop/dist-electron`。
-5. 启动 Electron 桌面窗口，由 Electron main 连接或拉起本地 daemon。
-
-启动成功后：
-
-- daemon API: `http://127.0.0.1:4319`
-- daemon events: `ws://127.0.0.1:4319/v1/events/ws`
-- Vite dev server: `http://127.0.0.1:1420/`
-- Electron 会打开桌面窗口，这是完整 APP 的主要入口。
-
-停止开发进程时，在启动命令所在终端按 `Ctrl-C`。如果本次 Electron 启动前 daemon 端口是空闲的，脚本会清理本次启动的 daemon 和 agent worker；如果已有外部 daemon，脚本不会抢占或强杀它。
-
-## 常见启动方式
-
-完整桌面 APP：
+从仓库根目录启动完整桌面 App：
 
 ```sh
 pnpm --filter @slei/desktop desktop
 ```
 
-只启动 daemon：
+该命令会：
+
+1. 构建 `@slei/claude-agent` worker  
+2. 构建 `slei-cli` 与 `slei-daemon`  
+3. 启动 Vite（`127.0.0.1:1420`）  
+4. 编译 Electron main/preload  
+5. 打开 Electron 窗口，并由 main 连接或拉起本地 daemon  
+
+默认本地端点：
+
+| 服务 | 地址 |
+| --- | --- |
+| Daemon API | `http://127.0.0.1:4319` |
+| Daemon events | `ws://127.0.0.1:4319/v1/events/ws` |
+| Vite dev server | `http://127.0.0.1:1420/` |
+
+在启动终端按 `Ctrl-C` 停止。若本次启动前 daemon 端口空闲，脚本会清理本次拉起的 daemon / worker；若已有外部 daemon，不会抢占或强杀。
+
+### 其他启动方式
 
 ```sh
+# 只跑 daemon
 cargo run -p slei-daemon
-```
 
-只启动前端 dev server：
-
-```sh
+# 只跑 Web 前端（不会启动 Electron，也不会自动拉起 daemon）
 pnpm --filter @slei/desktop dev
 ```
 
-注意：只跑 `pnpm --filter @slei/desktop dev` 只能打开 Web 前端页面，不会启动 Electron shell，也不会自动启动 daemon。需要验证完整桌面集成时请使用 `desktop` 命令。
+验证完整桌面集成时请使用 `desktop` 命令，而不是单独的 `dev`。
 
-如果 Vite 端口被占用，或 dev server 没能在等待时间内 ready，可能看到：
+若出现 `[slei-desktop] timed out waiting for Vite`，先检查端口占用，或先单独启动 daemon 再跑桌面命令。
 
-```text
-[slei-desktop] timed out waiting for Vite
-```
+## 配置
 
-可以先检查端口占用，或单独运行 daemon，等看到 `slei-daemon listening on 127.0.0.1:4319` 后，再运行完整桌面命令：
+| 变量 | 作用 | 默认 |
+| --- | --- | --- |
+| `SLEI_DATA_ROOT` | 数据根目录 | `~/.slei` |
+| `SLEI_DAEMON_ADDR` | daemon 监听地址 | `127.0.0.1:4319` |
+| `SLEI_DAEMON_ENDPOINT` | 开发 reset 等脚本使用的 HTTP 入口 | `http://127.0.0.1:4319` |
+| `SLEI_DAEMON_TOKEN` | 本地会话 token | `desktop-session-token` |
+| `SLEI_ENABLE_DEV_RESET` | 显式开启开发 reset | 未设置则拒绝 reset |
 
-```sh
-cargo run -p slei-daemon
-pnpm --filter @slei/desktop desktop
-```
-
-## 常用开发命令
-
-根目录命令：
+开发 reset（清空可变产品状态与运行期 agent workspace）：
 
 ```sh
-pnpm test
+SLEI_ENABLE_DEV_RESET=1 pnpm dev:reset
+```
+
+## 开发与测试
+
+根目录：
+
+```sh
+pnpm test              # 工作区测试 + guardrails
 pnpm typecheck
 pnpm lint
 pnpm test:guardrails
 ```
 
-桌面应用命令：
+桌面应用：
 
 ```sh
 pnpm --filter @slei/desktop test
@@ -94,46 +145,80 @@ pnpm --filter @slei/desktop lint
 pnpm --filter @slei/desktop build
 ```
 
-Rust 测试示例：
+Rust：
 
 ```sh
-cargo test
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo test -p slei-daemon
 cargo test -p slei-storage
 ```
 
-## 开发数据和 reset
+CI 还会校验 locale、契约与 macOS 打包边界（见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。
 
-默认数据根目录是 `~/.slei`，也可以通过 `SLEI_DATA_ROOT` 覆盖。daemon 默认监听地址是 `127.0.0.1:4319`，可以通过 `SLEI_DAEMON_ADDR` 覆盖。
+## 目录结构
 
-开发 reset 需要显式开关：
-
-```sh
-SLEI_ENABLE_DEV_RESET=1 pnpm dev:reset
+```text
+apps/desktop/                 Electron + React 桌面应用
+apps/desktop/src/electron/    Electron main/preload、daemon RPC、事件转发
+crates/slei-daemon/           本地 daemon 与 HTTP/WS API
+crates/slei-storage/          SQLite schema、migration、repository
+crates/slei-domain/           领域模型
+crates/slei-protocol/         daemon / UI / worker 协议类型
+crates/slei-cli/              Agent 调用的 CLI 入口
+packages/protocol-client/     前端协议客户端
+packages/i18n/                UI 文案
+workers/claude-agent/         Claude Agent worker
+resources/                    内置静态资源（如默认 agent assets）
+docs/architecture/            架构决策记录（ADR）
+docs/desktop/                 桌面打包与桌面专属说明
+scripts/                      开发、校验与发布脚本
 ```
 
-`pnpm dev:reset` 会调用本地 daemon 的 `POST /v1/dev/reset`。默认 endpoint 是 `http://127.0.0.1:4319`，默认 token 是 `desktop-session-token`；必要时可通过 `SLEI_DAEMON_ENDPOINT` 和 `SLEI_DAEMON_TOKEN` 覆盖。
+## 打包发布
 
-## 架构约束
+当前官方打包路径面向 **macOS arm64**：
 
-- 业务逻辑、状态变更、路由决策、持久化、幂等、reset 和数据恢复必须在 daemon 中处理。
-- UI shell 只负责展示 daemon 返回的数据、收集用户输入、触发 daemon command/API，以及呈现 loading、error、empty 状态。
-- 可变产品状态默认存储在 SQLite 中，并通过 `crates/slei-storage` 的 schema/repository 访问。
-- Production 代码不要用 mock、demo、sample 或 fake seed 数据填充真实界面。
-- 如果 daemon 不可用，UI 应展示离线或空状态，而不是启用另一套本地 mock 系统。
+```sh
+# 产出 app 目录（便于本地验包）
+pnpm --filter @slei/desktop package:mac:dir
 
-更多项目规则见 `AGENTS.md`。
+# 产出 .dmg / .zip
+pnpm --filter @slei/desktop package:mac
+```
 
-## 目录概览
+打 tag `v*.*.*`（需与 `apps/desktop/package.json` 的 `version` 一致）会触发 [Release workflow](.github/workflows/release.yml)。更多边界说明见 [`docs/desktop/electron-v2-packaging.md`](docs/desktop/electron-v2-packaging.md)。
 
-- `apps/desktop`: Electron + React 桌面应用。
-- `apps/desktop/src/electron`: Electron main/preload、daemon RPC、事件转发和本地安全协议。
-- `crates/slei-daemon`: 本地 daemon 和 API。
-- `crates/slei-storage`: SQLite schema、migration 和 repository。
-- `crates/slei-domain`: 领域模型。
-- `crates/slei-protocol`: daemon/UI/worker 之间的协议类型。
-- `packages/protocol-client`: 前端使用的协议客户端。
-- `packages/i18n`: UI 文案。
-- `workers/claude-agent`: Claude Agent worker。
-- `docs/architecture`: 架构决策和设计说明。
-- `docs/superpowers`: 历史规格和实施计划。
+> 正式代码签名 / 公证、自动更新、Windows / Linux 安装包仍在后续范围。
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 贡献流程、测试要求与 PR 约定 |
+| [`AGENTS.md`](AGENTS.md) | 实现约束（daemon 边界、持久化、UI 标准） |
+| [`docs/architecture/`](docs/architecture/) | ADR：进程边界、频道路由、任务卡片、安全清单等 |
+| [`docs/desktop/electron-v2-packaging.md`](docs/desktop/electron-v2-packaging.md) | Electron 打包、数据目录与验包 |
+
+## 贡献
+
+欢迎 Issue 与 Pull Request。完整流程与约束见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；实现细节请对照 [`AGENTS.md`](AGENTS.md)。
+
+## 项目状态
+
+- **成熟度**：早期 / MVP 持续迭代  
+- **桌面底座**：Electron（已收口，不再维护 Tauri 路径）  
+- **平台**：开发与发布以 macOS arm64 为主  
+- **Runtime**：Claude Code worker（OpenCode / Codex 等 adapter 仍为后续规划，见 ADR 0004）
+
+## 安全说明
+
+- Daemon token 由 Electron main 持有，前端不直接持有敏感凭证。  
+- 可变业务数据默认在本地 SQLite；请勿把带真实数据的开发目录提交进仓库。  
+- 安全相关检查项见 [`docs/architecture/security-mvp-checklist.md`](docs/architecture/security-mvp-checklist.md)。  
+- 若发现安全问题，请优先私下联系维护者，避免在公开 Issue 中贴出可利用细节。
+
+## License
+
+本项目采用 [MIT License](LICENSE)。
