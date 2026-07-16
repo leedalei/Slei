@@ -128,9 +128,9 @@ export function SettingsOverlayNav({
         variant="ghost"
       >
         <SleiIcon className="size-4 shrink-0" name={settingsOverlayPanelIcons[panel]} />
-        <span className="grid min-w-0 gap-0.5">
+        <span className="grid min-w-0 flex-1 gap-0.5">
           <span className="truncate text-sm font-medium">{labels.panels[panel]}</span>
-          <span className="line-clamp-2 text-xs font-normal text-muted-foreground">
+          <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
             {labels.panelDescriptions[panel]}
           </span>
         </span>

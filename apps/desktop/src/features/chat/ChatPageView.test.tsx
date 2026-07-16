@@ -3557,6 +3557,14 @@ describe("ChatPage mention panel", () => {
     expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-actions"]')?.className).toContain("left-2");
     expect(taskRootCard?.querySelector<HTMLElement>('[data-slot="message-time"]')?.className).toContain("shrink-0");
     expect(taskRootCard?.querySelector("[data-task-root-entry-status]")?.textContent).toContain(messages.tasks.status.in_progress);
+    const taskMetadata = taskRootCard?.querySelector<HTMLElement>('[data-task-root-entry-metadata]');
+    const replyCount = taskRootCard?.querySelector<HTMLElement>('[data-task-root-entry-reply-count]');
+    const status = taskRootCard?.querySelector<HTMLElement>('[data-task-root-entry-status]');
+    expect(taskMetadata?.textContent).toBe(`${messages.tasks.replyCountButton(1)} ｜ ${messages.tasks.status.in_progress}`);
+    expect(replyCount?.textContent).toBe(messages.tasks.replyCountButton(1));
+    expect(replyCount).not.toBeNull();
+    expect(status).not.toBeNull();
+    expect(replyCount!.compareDocumentPosition(status!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(taskRootCard?.textContent).not.toContain("Lei");
     expect(taskRootCard?.textContent).not.toContain("@lei");
     expect(taskRootCard?.textContent).not.toContain("用户");

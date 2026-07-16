@@ -15,6 +15,18 @@
   <img src="docs/readme/chat-channel.png" alt="Slei 频道聊天界面：侧边栏、#all 频道与引导员欢迎消息" width="960" />
 </p>
 
+<p align="center">
+  <img src="docs/readme/channel-chat.png" alt="Slei 频道聊天界面：多 Agent 协作与消息回复" width="960" />
+</p>
+
+<p align="center">
+  <img src="docs/readme/task-board.png" alt="Slei 任务视图：任务列表与任务详情" width="960" />
+</p>
+
+<p align="center">
+  <img src="docs/readme/agent-profile.png" alt="Slei Agent 资料页：运行时配置与设备状态" width="960" />
+</p>
+
 ## 它能做什么
 
 - **本地优先**：业务状态与运行数据默认留在本机（`~/.slei`），daemon 不可用时 UI 展示离线/空状态，而不是切换到本地假数据。
